@@ -3,7 +3,7 @@
 = Fork governance — specification v1.2
 :toc: left
 :toclevels: 4
-:revdate: 2026-10-28
+:revdate: 2026-11-04
 :revnumber: 1.2
 :status: normative
 
@@ -24,7 +24,11 @@ three: DEED syntax, K9-DEED conformance, Hypatia verdict grid.
 of the lane verdicts, never an independent judgement.
 
 *Posting engine*:: `fork-governance-reusable.yml`. The only component that
-writes to a pull request.
+writes to a pull request, except on a pull request from a fork (§4.1).
+
+*Publisher*:: `fork-governance-publish-reusable.yml`, called from a
+`workflow_run` workflow. It writes the comment the posting engine rendered but
+could not post because a fork's run has a read-only token (§4.1).
 
 == 2. The comment contract
 
@@ -200,9 +204,35 @@ badge message MUST be neutral (`attention`), not a label from one family.
    summary matters most, and a summary that does not appear when something
    broke reads as a pass.
 
+=== 4.1 Pull requests from forks
+
+On a pull request from a fork GitHub gives the run a read-only token whatever
+the workflow grants, so the posting engine cannot write. It still renders the
+comment and the step summary, and uploads `body.md` with
+`{pr_number, head_sha, run_id}` as the `fork-governance-comment` artifact
+instead of posting.
+
+The publisher runs when the "Fork governance" run completes, from the default
+branch's copy of its workflow and with the base repository's token, so nothing
+the fork changed runs in it. The artifact was written by the fork's code and is
+data, never instructions:
+
+. `pr_number` MUST name an open pull request whose head is the triggering
+  run's `head_sha` and whose head repository is that run's. A run cannot
+  address any pull request but its own; a run whose pull request has moved on
+  publishes nothing, because the newer run will.
+. The body MUST start with the marker (§2.1) and fit in one comment.
+. The publisher uses the same marker-and-author lookup as the posting engine,
+  so a pull request still has exactly one comment (§5).
+. The published comment ends with a line naming the run it was rendered by.
+  The publisher cannot make a fork's verdicts honest; branch protection
+  requires the lane checks, never the comment (ADOPTION §4).
+
 == 5. Single poster
 
-A repository MUST have exactly one poster for these lanes. Where a lane's
+A repository MUST have exactly one poster for these lanes. The publisher
+(§4.1) is not a second poster: it writes only what the posting engine rendered
+and could not post, through the same comment. Where a lane's
 reusable also posts (some forks call a local copy that does), the repository
 MUST disable one of the two. Two comments carrying the same lane but different
 runs is two verdicts, and a reader has no way to know which is current.
@@ -233,7 +263,12 @@ head, uploads the `fleet-report-backs` artifact. Not a lane: no grid, no summary
 row (LANES, "The fleet report-backs").
 | `verdict` (posting engine)
 | `contents: read`, `actions: read`, `pull-requests: write`
-| Downloads two artifacts, writes one comment.
+| Downloads two artifacts, writes one comment. On a fork's pull request the
+token is read-only and it uploads the comment instead (§4.1).
+| `publish` (publisher, `workflow_run`)
+| `actions: read`, `pull-requests: write`
+| Downloads the fork run's comment artifact, checks it, writes one comment.
+Never checks out code.
 |===
 
 The posting engine MUST NOT be given `contents: write`. It has no reason to
@@ -250,6 +285,7 @@ commenting job that can rewrite it.
 | A lane could not run | orange row, orange summary | as the lane reports
 | Artifact missing but job green | orange row | green
 | Comment could not be posted | none | red — a governance run that cannot report is a failure
+| Pull request from a fork | posted by the publisher (§4.1) | as the lanes report; the publisher's own run is red if it cannot post
 | An acknowledgement has passed its `expires_at` | unchanged | as the finding now grades — the entry stops suppressing before the date is noticed
 |===
 

@@ -3,7 +3,7 @@
 = Fork governance — adopting it in a repository
 :toc: left
 :toclevels: 3
-:revdate: 2026-10-28
+:revdate: 2026-11-04
 
 This is the operator's guide. It assumes you want the same comment, in the same
 order, on every pull request in a repository, and that the repository already
@@ -225,6 +225,46 @@ changes rather than interpreting the pin as an egress waiver.
 renderer from. Pass the same `<SHA>` as the `uses:` pins: two refs that can
 drift are two renderers that can disagree.
 
+=== Pull requests from forks
+
+On a pull request from a fork, GitHub gives the run a read-only token whatever
+the workflow grants, so the `verdict` job cannot write the comment. It renders
+it anyway and uploads it as the `fork-governance-comment` artifact. Add a
+second workflow, `.github/workflows/fork-governance-publish.yml`, to post it:
+
+[source,yaml]
+----
+# SPDX-License-Identifier: MPL-2.0
+name: Fork governance publish
+
+on:
+  workflow_run:
+    workflows: ["Fork governance"]
+    types: [completed]
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    uses: hyperpolymath/standards/.github/workflows/fork-governance-publish-reusable.yml@<SHA>
+    permissions:
+      actions: read
+      pull-requests: write
+----
+
+The `workflows:` entry must match the `name:` of the file above. A
+`workflow_run` workflow always runs the default branch's copy with the base
+repository's token, so it only takes effect once merged, and nothing the fork
+changed runs in it. It treats the artifact as data: it posts only to the open
+pull request whose head is the commit the run built, and only a body that
+carries the fork-governance marker. It cannot make a fork's verdicts honest —
+a fork's run renders its own comment — which is why branch protection
+requires the lane checks, never the comment (§4).
+
+Without this file the lanes still run on fork pull requests, and the summary
+is in the run's step summary; only the comment is missing.
+
 == 3. Remove the duplicate triggers
 
 If the repository already calls a lane on `pull_request`, remove that trigger
@@ -265,6 +305,9 @@ green and one orange, and no indication which one the comment is describing.
    broken.
 . Break something deliberately — add an unparsable `.deed` — and confirm the
    DEED row turns red and the summary with it.
+. From a fork, open a pull request. The `verdict` job uploads
+   `fork-governance-comment` instead of posting, and "Fork governance publish"
+   then posts the same comment, marked as published from a fork run.
 
 == 6. Repositories with no DEED or K9 files
 
@@ -283,7 +326,8 @@ apply.
 
 == 7. Rollback
 
-Delete `.github/workflows/fork-governance.yml`, and delete the bot's existing
+Delete `.github/workflows/fork-governance.yml` and
+`.github/workflows/fork-governance-publish.yml`, and delete the bot's existing
 comment. Nothing else is installed: the lanes are read-only, the posting engine
 holds nothing, and no repository state is created on a branch.
 

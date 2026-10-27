@@ -77,9 +77,13 @@ workflows:
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124'
     '.github/workflows/elixir-ci.yml': []
+    '.github/workflows/fork-governance-publish-reusable.yml':
+        - 'actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333'
+    '.github/workflows/fork-governance-publish.yml': []
     '.github/workflows/fork-governance-reusable.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333'
+        - 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9'
     '.github/workflows/fork-governance.yml':
         - 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9'
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
