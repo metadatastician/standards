@@ -161,14 +161,11 @@ done
 # ── No third pin by default ──────────────────────────────────────────────
 # MEASURED 2026-10-31: three steps staged helpers from the literal
 # 317101e03b8f (2026-09-14) while main had moved 194 files under scripts/.
-# A literal pin is permitted only where a comment records the scoped path it
-# was chosen for; the scorecard reconciler is the one such site. Anything else
-# must be job.workflow_sha so it cannot rot.
+# Literal helper pins are rejected. Helper checkouts must use job.workflow_sha.
 literals="$(grep -nE '^[[:space:]]*ref:[[:space:]]*[0-9a-f]{40}' "$GOVERNANCE" || true)"
-unexplained="$(printf '%s\n' "$literals" | grep -vE '^(\s*)$' || true)"
-if [ -n "$unexplained" ]; then
+if [ -n "$literals" ]; then
   fail "governance still stages a helper from a literal commit; use \${{ job.workflow_sha }} (a literal goes stale silently — standards#946/#1119/#1290's sibling class):
-$unexplained"
+$literals"
 fi
 
 # The job workflow-identity properties are unavailable on GHES, where the
