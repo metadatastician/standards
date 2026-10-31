@@ -42,11 +42,105 @@ Why it is not merged: this environment has no signing key, and the ruleset
 requires signed commits plus code-owner review. `--admin` bypass was not used
 and will not be — the requirement is the point.
 
+== 1a. Correction: what actually causes the zero-job runs
+
+This section was added after the rest of the document was published. Two
+statements made earlier in the investigation were **wrong**, and a consumer
+acting on them would edit the wrong thing. Read this before section 6.
+
+=== Retracted
+
+. *"The rewritten `actions.lock` (SHA-spelled keys migrated to tag-spelled keys)
+  is what made the run stop starting."* — **falsified.**
+. *"The pre-transfer slug `hyperpolymath/standards` is not the cause, because the
+  repository still redirects."* — **falsified.** The redirect is real for the
+  REST API; it is not how `uses:` is resolved at run creation.
+
+=== What was measured
+
+All 32 workflow files at the dead head were staged and inspected with this
+repository's own gates (`d06745a4` in `burble`):
+
+[cols="1,3"]
+|===
+|check |result
+
+|`check-lock-sync.sh` (dead head)
+|*in sync* — "every `uses:` is locked under its own workflow path, and every
+lockfile entry is referenced"
+|`close-lock.sh --check`
+|closed, no dangling edges
+|`check-lock-pin-contract.sh`
+<|**20 violations / 32 records** — but the *same* gate on the green head
+`02989e63` gives **20 / 40**, and the violating key sets are identical except
+`docker/login-action@v4.6.0` → `v4.7.0`. Tag-spelled keys were already present
+in the lock that ran 21 jobs.
+|the triggered workflow itself
+|`.github/workflows/governance.yml` is blob `ef73f89de7cd` at `02989e63`,
+`ff29bf2c` **and** `d06745a4` — byte-identical, same single `uses:` line
+|===
+
+The lock and the workflow content therefore cannot explain the change. What does:
+
+[TIP]
+Same commit, both outcomes. `cadastra` @ `23ddc1b724`: `governance.yml`
+(`hyperpolymath/standards/…@e3b9929c`) → **0 jobs**; `OpenSSF Compliance`
+(no such call) → **1 job**. `svalinn` @ `210628b0a7`: `hypatia-scan.yml` and
+`secret-scanner.yml` (`hyperpolymath/standards/…@fad242d3`) → **0 jobs each**;
+`instant-sync.yml` (`peter-evans/repository-dispatch@v4.0.1` only) → **1 job**.
+
+[cols="2,1,1,2"]
+|===
+|consumer |pin |`uses:` slug |governance run
+
+|`kyq` |`cf8f9121` |**`metadatastician/standards`** |21 jobs (success path)
+|`cadastra` |`e3b9929c` |`hyperpolymath/standards` |0 jobs
+|`svalinn` |`fad242d3` |`hyperpolymath/standards` |0 jobs
+|`burble` |`01c9b0c9` |`hyperpolymath/standards` |21 jobs on 2026-10-21 → **0**
+jobs on 2026-10-26, unchanged blob
+|===
+
+`burble` brackets the break exactly: run `39678123406` (push, 2026-10-21,
+display name `Governance`) = 21 jobs, success; run `40286584836` (push,
+2026-10-26, display name `.github/workflows/governance.yml`, log archive 404)
+= **0 jobs**, failure. A run whose *name* falls back to the file path is the
+run-creation-level rejection, and it is distinguishable from the older
+pin-level failure shape described in section 4 (`15 jobs, 12 of them one-step`).
+
+Fleet sweep on 2026-10-31 (100 most recent runs per repository, counted by
+display-name shape — validated against five sampled runs, every one with
+`jobs=0`):
+
+[cols="2,1,1"]
+|===
+|repository |runs named by path, ≤ 2026-10-25 |2026-10-26…2026-10-31
+
+|`burble` · `svalinn` · `cadastra` · `odraz` · `marid` |0 |≥1 per day, every day
+|`lintel` (first run in window 10-27) |— |7 → 4 → 1 per day
+|**`kyq`** (canonical slug) |0 |**0** (newest run 2026-10-28)
+|===
+
+=== Consequence
+
+The defect is consumer-side and is a **slug**, not a pin: six repositories call
+`hyperpolymath/standards/…@<40-hex>` and have not started since 2026-10-26.
+The repair is to point the same 40-hex SHA at `metadatastician/standards/…`.
+That is a change in *those* repositories, so this document can only specify it
+— section 6 now does, and the ordering in section 8 still applies. Nothing here
+requires an Actions admission, allowlist or policy change; canonical-slug calls
+create jobs today, and non-reusable workflows in the same repositories at the
+same commits create jobs.
+
+NOTE: the tag-spelled lock keys are still a real contract debt (canon rule 10)
+and should be relocked with `scripts/relock-sha-keys.sh`. They are **not** the
+outage, and fixing them first would not have restarted anything.
+
 == 2. Scope: a narrow repair, not a policy upgrade
 
-The decision a consumer needs: **narrow repair**. Consumers pinned to the
-startup-dead commits must repin to the merge commit of this PR. No consumer
-needs the 454-commit `75bd5994` policy set to become healthy again.
+The decision a consumer needs: **narrow repair**. No consumer needs the
+454-commit `75bd5994` policy set to become healthy again. Consumers that have
+not started since 2026-10-26 need a **slug** change first (section 1a), then
+may repin to the merge commit on the normal cadence.
 
 Evidence that no policy moved, measured as a diff `main..<published SHA>`:
 
@@ -218,6 +312,10 @@ That is deliberate: proving it means a consumer repin, and the ordering matters
 brief calls for. **Do not treat this document, or a green canary, as that
 proof.**
 
+The probe must be made through the **canonical** slug. A remote call that spells
+`hyperpolymath/standards/…` is now rejected at run creation (section 1a), so it
+would produce a zero-job run that proves nothing about this commit.
+
 == 5. Audit of the shared source's own references
 
 === Source-resolution expressions and helper refs, by commit
@@ -300,16 +398,28 @@ mistake (a copied *lock verifier*).
 
 == 6. Consumer migration
 
-Two classes of consumer. The first *must* act; the second may.
+Two axes, and they are independent. **Slug** decides whether the run starts at
+all; **pin** decides what runs. Section 1a is the authority on the first.
 
-. **Startup-dead pins — repin required.** `svalinn` (`fad242d3`),
-  `odraz` (`da2c748a`), `cadastra` (`e3b9929c`), `lintel` (`e16a2317`). Each
-  pin's own `lock-selfcheck` verdict is POISON (51 / 56 / 36 / 6 self-SHA
-  records; `cadastra` also has 1 dangling edge), and each has a governance run
-  with zero jobs or one-step jobs. Repin to the merge commit of this PR.
-. **Healthy pins — optional.** `burble`, `marid` (`01c9b0c9`) and `main` itself
-  are SELF-CONSISTENT and run policy. They gain the third-pin and float
-  repairs, not a fix for an outage. Repin on the normal cadence.
+. **Pre-transfer slug — slug repair required, all six.**
+  `svalinn` (`fad242d3`), `odraz` (`da2c748a`), `cadastra` (`e3b9929c`),
+  `lintel` (`e16a2317`), `burble`, `marid` (`01c9b0c9`) all call
+  `hyperpolymath/standards/…` and have created no jobs since 2026-10-26.
+  Change the owner to `metadatastician/standards/…` and **keep the 40-hex SHA
+  exactly as it is**. One such edit, on one repository, creating a job with
+  more than one step is both the repair and the proof that the remote path
+  works (section 4).
+. **Startup-dead pins — repin after the slug is fixed.**
+  The four pins above also carry POISON `lock-selfcheck` verdicts (51 / 56 / 36
+  / 6 self-SHA records; `cadastra` also has 1 dangling edge). Repin to the merge
+  commit of this PR *once merged* — this is the older, pin-level failure shape
+  (`15 jobs, 12 of them one-step`), and it is **not** what started happening on
+  2026-10-26.
+. **SELF-CONSISTENT pins — optional.** `main` itself is SELF-CONSISTENT and runs
+  policy; it gains the third-pin and float repairs on the normal cadence.
+  `burble` and `marid` were listed here as healthy in the published version of
+  this document; their *lock* is healthy, their **caller slug is not**, which is
+  why they must still act on the first item.
 
 Steps, in order:
 
@@ -394,11 +504,20 @@ indistinguishable from no guard.
   retired rather than rebased; (b) note that PI006 (self-SHA record) and
   `invalid_actions_lock` already agree with the guards here — no rule change is
   requested, and none is offered.
-* **cyo (downstream adoption).** The migration list is section 6. The two asks
-  that need an owner: sequence the four startup-dead repins so the probe run
-  (step 5) happens on one repository first, and hold every other consumer at its
-  current pin until that probe is green. A wave of simultaneous repins converts
-  four known-dead callers into an unknown number of differently-dead ones.
+* **cyo (downstream adoption).** The migration list is section 6. The asks that
+  need an owner: (a) land the **slug** repair on one repository first — same
+  40-hex SHA, canonical owner — and confirm that one run creates a job with more
+  than one step before touching the other five; (b) then sequence the four
+  startup-dead repins. A wave of simultaneous edits converts six known-dead
+  callers into an unknown number of differently-dead ones, and it also destroys
+  the single-variable comparison that made this diagnosis possible (section 1a
+  rests on workflows differing only in whether they call a remote slug).
+* **Sweep for the slug estate-wide.** Section 1a covers six repositories this
+  document measured, not the estate. The same `grep -r 'hyperpolymath/standards'`
+  over `.github/workflows/` should be run by whoever owns the remaining
+  callers — 811 caller files were counted for the shared-workflow audit
+  (section 7), and the count of pre-transfer-slug spellings among them was not
+  measured here. Do not state a fleet-wide number without it.
 * **gitbot-fleet (automation).** The lock-sync automation must run the pipeline,
   never `gh actions-lock` alone (it cannot emit job-level or through edges), and
   must never "fix" a failing guard by editing the guard. The stale patch above is
@@ -423,3 +542,7 @@ indistinguishable from no guard.
 . The only relaxed condition in the diff is the job-level lock-sync note, whose
    justification is a measurement (#968), not convenience.
 . New gates fail closed: exit 2 on anything they cannot inspect.
+. This correction touches documentation only — the diff for it is
+   `docs/GOVERNANCE-SOURCE-HANDOFF.adoc` and nothing else. If any workflow, lock
+   or `config/` file appears in it, the correction has been conflated with a
+   repair and should be split.
