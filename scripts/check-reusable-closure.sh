@@ -347,7 +347,9 @@ emit_rows() {
   for k in "${!REACHED[@]}"; do IFS='|' read -r a b c <<<"$k"; printf '%s\t%s\t%s\n' "$a" "$b" "$c"; done | LC_ALL=C sort
 }
 
-if [ "$WRITE_BASELINE" -eq 1 ]; then
+if [ "$WRITE_BASELINE" -eq 1 ] && [ "$unresolved" -gt 0 ]; then
+  echo "::error::not writing $BASELINE: ${unresolved} callee workflow(s) could not be read, so the closure is partial." >&2
+elif [ "$WRITE_BASELINE" -eq 1 ]; then
   {
     printf '%s\n' "# Reviewed closure of remote reusable workflows (standards#968, #1290)."
     printf '%s\n' "# Produced by scripts/check-reusable-closure.sh --write-baseline; a change"
