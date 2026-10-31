@@ -117,6 +117,8 @@ if [ "$SELF_REPO_GIVEN" -eq 0 ]; then
       SELF_REPO_ALIASES='metadatastician/standards hyperpolymath/standards' ;;
   esac
 fi
+# is_self_repo CANDIDATE: return success if the lowercase repository slug
+# matches the configured self repository or an enabled alias.
 is_self_repo() {
   local candidate=$1 alias
   [ "$candidate" = "$SELF_REPO_LC" ] && return 0

@@ -242,8 +242,9 @@ literal_hit() {
   done < "$TMP/reach.tsv"
   return 1
 }
-# closure_keeps PATH REF: the reviewed closure names this dependency for this
-# workflow. Compared case-insensitively on owner/repo, refs exact.
+# closure_keeps PATH REF: return success if the closure file names this
+# workflow and dependency, comparing both fields case-insensitively. Return 1
+# if the file is absent or no row matches.
 closure_keeps() {
   [ -n "$CLOSURE" ] && [ -f "$CLOSURE" ] || return 1
   awk -F'\t' -v p="$1" -v r="$2" '

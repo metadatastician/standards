@@ -156,7 +156,10 @@ is_job_level() {
 
 is_sha() { printf '%s' "$1" | grep -Eq '^[0-9a-f]{40}$'; }
 
-# resolve_callee OWNER REPO REF PATH -> prints a file, or returns 1.
+# resolve_callee OWNER REPO REF PATH: print the cached or fetched workflow
+# file path. Return 1 on a cache miss in offline mode or an unsuccessful fetch
+# or decode. If CACHE is configured, copying a fetched file there is attempted;
+# a copy failure does not prevent returning the fetched file.
 resolve_callee() {
   local owner=$1 repo=$2 ref=$3 path=$4 cached
   cached="$CACHE/$owner/$repo/$ref/$(printf '%s' "$path" | tr '/' '_')"
@@ -210,16 +213,19 @@ while IFS=$'\t' read -r kind a b; do
   esac
 done < <(cat "$TMP/lock.wf" "$TMP/lock.deps")
 
-# uses_of FILE: every scalar uses: value in a workflow document, one per line.
+# uses_of FILE: print every string uses: value in a workflow document, one
+# per line. Return a nonzero status if the YAML or JSON processing fails.
 uses_of() {
   yq -o json -I 0 '.' "$1" 2>/dev/null |
     jq -r '[.. | objects | select(has("uses")) | .uses | select(type == "string")] | .[]' 2>/dev/null
 }
 
-# walk_callee RAW DEPTH — collect the closure of one remote reusable call.
-# RAW is the `uses:` value as written, because the workflow PATH inside it is
-# what must be fetched; the lockfile key (owner/repo@ref) is derived from it and
-# is used only for cycle detection and for comparison.
+# walk_callee RAW DEPTH [TOP]: collect refs reached from a reusable call in
+# REACHED, attributed to CURWF and TOP (defaulting to RAW's normalized key).
+# RAW is the full uses: value, including the workflow path. The depth argument
+# is compared to the configured DEPTH limit; calls beyond it or already visited
+# by full value are skipped. Return 1 if a callee cannot be read or parsed;
+# unreadable callees also increment unresolved.
 WALKED=""
 walk_callee() {
   local raw=$1 depth=$2 top=${3:-}
