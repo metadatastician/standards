@@ -317,11 +317,12 @@ got=0; ( cd "$d" && bash "$GUARD" empty --cache "$CACHE" --offline >"$tmp/out" 2
 [ "$got" -eq 0 ] && ok 'a directory with no remote reusable call is a stated vacuous pass' \
   || bad "vacuous population: wanted 0, got $got"
 
-d=$(new_tree unparsable); caller "$d" "$SHA_A"
+d=$(new_tree unparsable)
 printf 'jobs: [unclosed\n' >"$d/.github/workflows/broken.yml"
 printf 'version: v0.0.3\nworkflows:\ndependencies:\n' >"$d/.github/workflows/actions.lock"
 printf '' >"$d/.github/workflows/actions-lock.closure.tsv"
 expect 'an unparsable workflow is a failure, not a silent skip' 1 "$d"
+expect_msg 'the parse failure is named' 'does not parse as YAML'
 
 # ── 8. --write-baseline records what was reviewed, and removing a row is the
 #      only way to change it ───────────────────────────────────────────────
