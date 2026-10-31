@@ -1,0 +1,294 @@
+= Shared `actions.lock` regeneration and closure policy
+:toc:
+:toclevels: 3
+:icons: font
+
+// SPDX-License-Identifier: CC-BY-SA-4.0
+// SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+
+This is the estate-wide recommendation requested from the shared-governance
+thread, with the measurements it rests on, the reconciliation it required with
+`hyperpolymath/unified-dataset-vocab` PR #81, and the blockers that are still
+open. It builds on https://github.com/metadatastician/standards/issues/968[#968]
+(actions.lock step-level desync) and
+https://github.com/metadatastician/standards/issues/1290[#1290] (records the
+runner refuses), and it does not weaken any required check: every gate named
+here is either added or unchanged, and the one behaviour that changes is a
+clear false positive measured across 159 repositories.
+
+== The problem, stated precisely
+
+Four different defects share one symptom (a run that creates **zero jobs**), and
+no single existing tool sees more than two of them:
+
+[cols="1,3,3"]
+|===
+|# |defect |who sees it today
+
+|1
+|a step-level `uses:` has no per-workflow lock entry
+|`check-lock-sync.sh` (clause 1), `.githooks/validate-actions-lock.sh`
+
+|2
+|a record exists but the runner refuses it (`.ref` repeats its own SHA)
+|`check-lock-pin-contract.sh`, `lock-selfcheck.sh`
+
+|3
+|a ref named in the lock has no record, or a record's nested `uses:` is unclosed
+|`close-lock.sh --check`, `lock-selfcheck.sh`
+
+|4
+|**a dependency reached only through a remote reusable workflow, and an edge and
+its target removed together**
+|nothing — `gh actions-lock` says so itself, and a closure check is
+self-referential
+|===
+
+Defect 4 is the reason for this document. `gh actions-lock` documents that it
+does not lock remote job-level reusable workflow calls. A dangling-edge check
+then proves the lockfile is internally consistent — which it remains if someone
+deletes the call site *and* the record in one commit.
+
+== What was measured (2026-10-31)
+
+[cols="2,3,4"]
+|===
+|observation |measurement |what it establishes
+
+|`hyperpolymath/unified-dataset-vocab` PR #81, merged `4921ac0d`
+|`.github/workflows/secret-scanner.yml` calls
+`hyperpolymath/cicd-suite/.github/workflows/secret-scanner-reusable.yml@4404c3c0…`;
+the lock records `actions/checkout@3d3c42e5…` **under the calling workflow** and
+records **no** `hyperpolymath/cicd-suite@4404c3c0…` record at all. Runs
+`5fdfb6a8` (PR head) and `4921ac0d` (merge): **3 jobs**, steps 10/3/3 — green
+|both representations start: through-ref on the caller entry, and no reusable
+record. The pre-migration pin `c65436ee` had **no lock entry for that workflow
+at all** and produced 0-job failures (`e094c697`, `8c76cad3`)
+
+|#968, 159 repositories
+|job-level refs absent from the lock, 12 of 12 sampled runs creating jobs; 39
+repositories with *step-level* misses had `startup_failure`
+|the job-level *ref itself* is not what the runner validates. Requiring it was a
+false positive, and demanding it steered developers into defect 3
+
+|`metadatastician/svalinn` at its failing run `40108154356` (head `13b58931`)
+|its **own** `.github/workflows/actions.lock` carries 10 records whose `ref:`
+repeats the key's SHA, including
+`'actions/checkout@3d3c42e5…': ref: '3d3c42e5…'` — the exact action named in the
+run annotation
+|the caller's lock is implicated, not only the callee's. #1290's mechanism
+("the lock consulted is the defining repo's, so no caller can fix it") is
+incomplete: repairing `standards` alone cannot have cured svalinn
+
+|this repository, after remediation
+|`check-reusable-closure.sh --write-baseline` → 3 remote reusable sites, 3
+resolved, 7 reviewed closure rows across `ci-pipeline.yml` (→
+`secret-scanner-reusable`, `rust-ci-reusable` at `d55304a0`) and `mirror.yml`
+(→ `mirror-reusable` at `70019048`)
+|the repository already depends on refs it can only see by reading the callee
+|===
+
+=== One trap this measurement exposed in our own tooling
+
+The first version of the closure walk keyed its cycle detection on
+`owner/repo@ref`. `ci-pipeline.yml` calls **two different workflow files at the
+same ref**, so the second one was silently skipped and its closure
+(`setup-zig`, `rust-cache`) never examined — a guard that reported
+`failures: 0` while under-collecting. It is now keyed on the full
+`workflow-path@ref`, and
+`scripts/tests/check-reusable-closure-test.sh` has a case for it. That is the
+argument for regression tests in this area: the failure mode of a closure
+checker is *silence*.
+
+== The recommended shared approach
+
+Five obligations, each with the tool that owns it. They are ordered as a
+pipeline because each depends on the previous one's output.
+
+. **Representation** — `scripts/check-lock-pin-contract.sh`.
+  Every record's `ref:` names a reviewed ref, `commit:` is `sha1-<the key's
+  SHA>` with matching provenance ids, the key is SHA-pinned, and the lock is
+  closed. Exit **2**, never 0, on anything it cannot inspect. One exemption, and
+  it is narrow: a caller-side reusable edge for this repository (either slug),
+  a record carrying a `uses:` list, `ref` identical to the key's SHA.
+. **Sync, both directions** — `scripts/check-lock-sync.sh`.
+  Step-level refs must be locked under their own workflow path (fatal);
+  job-level reusable refs absent from the lock are **reported, not fatal**
+  (measured above); orphaned entries and entries for deleted workflows remain
+  fatal.
+. **Closure of what the lock names** — `close-lock.sh --check`.
+  Every ref under `workflows:` and inside a record's `uses:` has a top-level
+  record. This is necessary and it is *not* completeness.
+. **Completeness against the callee graph** —
+  `scripts/check-reusable-closure.sh` **(new)**.
+  Reads every remote job-level `uses:` at its pinned SHA (cache or API),
+  collects the transitive `uses:` of the called files, and requires each ref to
+  be recorded in one of the two places the runner accepts: the calling
+  workflow's entry, or the `uses:` of a reusable record the workflow actually
+  reaches. Then it compares the result with a **reviewed baseline**
+  (`.github/workflows/actions-lock.closure.tsv`) and fails on any row that
+  disappeared — which is the only mechanism that catches an edge and its target
+  being dropped together. Missing baseline, unreadable callee, unparsable
+  workflow: exit 2.
+. **Preservation through regeneration** — `scripts/prune-stale.sh --closure`
+  (defaults to that baseline when present) refuses to prune a ref the reviewed
+  closure names; `relock-sha-keys.sh` re-keys tag-spelled entries to the inline
+  SHA the YAML pins; `gitbot-fleet`'s `fix-lock-self-sha-refs.sh` maps a
+  self-SHA `ref:` back to a tag and deliberately leaves caller-side reusable
+  records alone. **No step may rewrite a reviewed tag to a SHA, or a SHA to a
+  bare tag.**
+
+The pipeline, in order, for a regeneration:
+
+[source,bash]
+----
+gh actions-lock --no-migrate-local-actions --no-narrow   # never --migrate-local-actions
+scripts/relock-sha-keys.sh
+scripts/complete-job-refs.sh
+scripts/close-lock.sh
+scripts/prune-stale.sh              # consults the closure baseline
+scripts/check-reusable-closure.sh .github/workflows --repo OWNER/REPO
+scripts/check-lock-pin-contract.sh
+scripts/check-lock-sync.sh
+----
+
+=== What a reviewer must look for in the diff
+
+This is the part that no tool can do, and it is short enough to be a checklist:
+
+* no `ref:` changed from a reviewed **tag** to a 40-hex SHA, and no `ref:`
+  introduced that repeats its key's SHA;
+* no record disappeared that the closure baseline still names (the guard fails
+  on this; the reviewer confirms the *baseline* diff is empty, or explains it);
+* every `commit:` still conjugates its key, and every id pair survived;
+* the baseline gained rows only for dependencies someone can point at;
+* nothing was "fixed" by editing a gate.
+
+=== `gh actions-lock --verify-local` is one input, never proof
+
+It cannot see job-level calls (upstream), it cannot see a ref reached through a
+remote reusable, and it passes a lockfile that has been closed by deleting
+things. Measured in #968: it reported *"All 30 workflows have complete lockfile
+coverage"* on a tree whose `mirror.yml` then died at startup. Treat it as the
+regenerator's own self-consistency check: necessary, insufficient.
+
+== Reconciliation with `unified-dataset-vocab` PR #81
+
+#81 records the through-ref (`actions/checkout@3d3c42e5…`) under
+`.github/workflows/secret-scanner.yml` and records **no** reusable record. That
+shape starts (3 jobs, measured) and it is **accepted** by:
+
+* `check-lock-sync.sh` — the job-level ref is a NOTE, not a failure (was: a
+  failure; that was the reconciliation);
+* `check-lock-pin-contract.sh` — unaffected: a leaf record with a tag `ref:` is
+  exactly what it wants;
+* `check-reusable-closure.sh` — shape (a) of the two it accepts;
+* `prune-stale.sh` — the baseline keeps the ref (without it, the ref looks
+  unused to both parsers and to a literal grep, and *would be pruned*; this is
+  the concrete data-loss this policy prevents).
+
+The estate's other shape — a `hyperpolymath/cicd-suite@<sha>` record carrying a
+nested `uses:` — is also accepted, because `close-lock.sh` writes it and locks
+in that shape are already green.
+
+**Recommendation:** prefer #81's shape when regenerating, because the through-ref
+lives in the per-workflow entry that `gh actions-lock` and `check-lock-sync.sh`
+both read, so it survives a regeneration that is not followed by
+`close-lock.sh`; a record-with-`uses:` is a second copy of the same fact and can
+diverge from it. Do **not** convert existing locks for this alone: both shapes
+are verified, and churn in the lock is itself a risk.
+
+== Blockers and open questions
+
+. **Upstream: `gh actions-lock` cannot emit job-level or through edges.** Every
+  regeneration in every repository therefore has to be followed by
+  `complete-job-refs.sh` + `close-lock.sh` + the closure guard in the same pull
+  request. Automation that runs only the CLI will keep producing lockfiles that
+  silently lose a dependency. *Blocker for fleet automation:* the lock-sync bot
+  must call the pipeline, not the CLI.
+. **The callee-lock mechanism in #1290 is not established.** `svalinn` carried
+  the poisoned record in its own lock, so "no caller can fix it" is not
+  supported by that run alone. Until someone runs a controlled pair — caller
+  locked correctly with a poisoned callee, and the reverse — **both** locks must
+  be validated, which is what this policy does. Do not downgrade the callee-side
+  guard on the strength of either story.
+. **`gawk` is a hard precondition in `prune-stale.sh` and the fleet copy of
+  `check-lock-sync.sh`.** Where `/usr/bin/awk` is `mawk`, `prune-stale.sh` exits
+  1 without touching the lock. A caller that ignores the exit code sees an
+  unmodified lock and concludes "nothing was stale" — a vacuous pass. This
+  sandbox is such a host: the new prune-stale cases are **skipped, not passed**,
+  and are exercised on the runner. Fixing it (POSIX-only `awk`) is a separate
+  change; do not let a wrapper swallow that exit code.
+. **The baseline can rot in the other direction.** A legitimate dependency
+  removal now requires a baseline edit in the same pull request. That is
+  intended, but it needs to be in the contribution guide, or reviewers will
+  reach for `--write-baseline` reflexively and the artefact becomes a rubber
+  stamp.
+. **Network dependence.** Reading a callee at its pinned SHA is an API call.
+  Offline CI needs a cache (`--cache DIR --offline`), and a fork PR has a
+  read-only token — rate limits, not permissions, are the failure mode. The
+  guard exits 2 rather than assuming an unread callee is fine.
+. **Dynamic references are out of scope for every tool here**: a `uses:` built
+  from an expression, `git clone …standards.git` inside a `run:` body, and a
+  composite action fetched at run time. They are review questions, not silent
+  passes.
+
+== Regression corpus
+
+[cols="2,1,5"]
+|===
+|suite |cases |what it pins down
+
+|`scripts/tests/check-reusable-closure-test.sh`
+|27
+|both accepted shapes; depth-2 reachability; two files at one `repo@ref`;
+**dropped closure** via the baseline; branch ref on a job-level call; a reusable
+record whose `ref:` is not the requested ref; a leaf record whose `ref:` repeats
+its own SHA; a step-level ref absent from the entry; missing baseline and
+unreadable callee as exit 2; unparsable workflow as 1; stated vacuous pass;
+`--write-baseline` round-trip
+
+|`scripts/tests/check-lock-sync-test.sh`
+|14
+|job-level-only workflow with no entry is **not** fatal (#968, #81); step-level
+missing entry still is; orphan/stale/deleted-workflow entries still are
+
+|`scripts/tests/prune-stale-test.sh`
+|+4
+|a ref reached only through a remote reusable is **kept** by the closure
+manifest; an unrelated ref is still pruned; `--no-closure` restores the
+two-oracle behaviour
+
+|`scripts/tests/check-lock-pin-contract-test.sh`
+|23
+|representation, provenance and closure, including the two exemptions
+|===
+
+Run them together before a repin sweep:
+
+[source,bash]
+----
+for t in check-lock-pin-contract-test.sh check-lock-sync-test.sh \
+         check-reusable-closure-test.sh prune-stale-test.sh \
+         lock-selfcheck-test.sh close-lock-test.sh; do
+  bash scripts/tests/$t || echo "RED: $t"
+done
+----
+
+== Rollout
+
+. Land this policy and the two new controls in `metadatastician/standards`.
+. Publish, then test the exact commit (`scripts/tests/governance-canary-test.sh
+  <sha>`) before any caller repins.
+. Per repository: run the pipeline, review the checklist diff, commit the
+  baseline with the lock in **one** commit, and make the closure guard a
+  required context beside the sync gate.
+. **gitbot-fleet**: the lock-sync automation calls the pipeline above and never
+  `gh actions-lock` alone; it must not "fix" a failing guard by editing the
+  guard, and it must preserve caller-side reusable records whose `ref` is a SHA.
+. **Hypatia**: PI006 (self-SHA record) and `invalid_actions_lock` already agree
+  with clauses 1 and 3 here; the closure baseline adds the missing "was this
+  here before?" dimension. No rule change is needed on either side.
+. **cyo / consumers**: a repin does not repair a caller's own lock. Each caller
+  must run the pipeline against its own `.github/workflows` — measured on
+  `svalinn`, whose own lock carried the record the runner refused.

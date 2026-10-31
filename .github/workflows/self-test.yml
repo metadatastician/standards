@@ -83,6 +83,42 @@ jobs:
       - name: Reject former-owner workflow coordinates
         run: bash scripts/check-workflow-coordinates.sh
 
+      # Every checkout of THIS repository from a shared workflow must name the
+      # commit it came from. MEASURED 2026-10-31: three steps staged helpers
+      # from the literal 317101e03b8f (2026-09-14) while main had moved 202
+      # files (+29,544/−1,736 lines) under scripts/, so every consumer was judged by six-week-old
+      # gate code — and standards' own self-lint path (which runs its local
+      # tree) could never notice. A branch here would be worse still.
+      - name: Standards helper checkouts are immutable and fresh
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          COMPARE="${BASE_SHA:-$GITHUB_SHA}"
+          bash scripts/check-standards-helper-pins.sh .github/workflows --compare "$COMPARE"
+
+      - name: Lock-gate pin is not stale
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          COMPARE="${BASE_SHA:-$GITHUB_SHA}"
+          bash scripts/check-lock-gate-pin-freshness.sh "$COMPARE"
+
+      # The fixture-driven controls for the guards above. They live in
+      # scripts/tests/ and the general suite runs them too, but that suite is
+      # red on main (dismiss-code-scanning-alerts-test.sh) and stops at its
+      # first failure, so a control that is only "in the suite" is a control
+      # nobody sees the result of. Named here so their verdict is never
+      # contingent on an unrelated red.
+      - name: Guard controls (fixture-driven)
+        run: |
+          set -euo pipefail
+          bash scripts/tests/check-lock-pin-contract-test.sh
+          bash scripts/tests/check-standards-helper-pins-test.sh
+          bash scripts/tests/check-reusable-closure-test.sh
+          bash scripts/tests/governance-canary-test.sh
+
       - name: Run tests/*.sh and scripts/tests/*.sh
         run: bash scripts/run-shell-test-suite.sh
 
@@ -140,13 +176,6 @@ jobs:
       # SHA, so a PR that edits a helper is not asked to pin to its own
       # unborn merge commit; on main it is HEAD, so the bump owed after such a
       # PR lands shows up immediately instead of rotting silently.
-      - name: Lock-gate pin is not stale
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: |
-          set -euo pipefail
-          COMPARE="${BASE_SHA:-$GITHUB_SHA}"
-          bash scripts/check-lock-gate-pin-freshness.sh "$COMPARE"
 
   hypatia-projection:
     name: Hypatia single-scan projection contract

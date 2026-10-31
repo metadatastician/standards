@@ -123,7 +123,13 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: metadatastician/standards
-          ref: main
+          # This reusable's own commit, not `main`. A caller pinned here must
+          # get the CHANGELOG policy of the standards commit it pinned: the
+          # canonical cliff.toml decides what reaches a release note, and a
+          # float means one push to standards can rewrite the changelog of
+          # every already-pinned caller with no review in their repository.
+          # scripts/check-standards-helper-pins.sh holds this shape.
+          ref: ${{ job.workflow_sha }}
           path: standards
 
       - name: Install git-cliff

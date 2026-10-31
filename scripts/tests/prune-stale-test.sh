@@ -133,6 +133,52 @@ grep -qxF "        - 'o/nested@$S'" "$c/.github/workflows/actions.lock" \
 ! grep -qF "o/unused@" "$c/.github/workflows/actions.lock" \
   && ok "ref used by no workflow or composite still pruned" || bad "ref used by no workflow or composite still pruned"
 
+# ── the reviewed closure vetoes pruning ──────────────────────────────────────
+# A ref reached only through a REMOTE reusable workflow appears in neither the
+# workflow text nor any local composite, so both oracles say "nothing uses it".
+# hyperpolymath/unified-dataset-vocab#81 ships exactly this shape and runs.
+# probe exactly as the script does: without an awk that has 3-argument match()
+# prune-stale refuses to run at all, and asserting on an unmodified lock would
+# report a vacuous pass.
+GAWK_OK=0
+for cand in gawk awk; do
+  if command -v "$cand" >/dev/null 2>&1 \
+     && echo x | "$cand" '{ if (match($0, /(x)/, m) && m[1] == "x") exit 0; exit 1 }' 2>/dev/null; then
+    GAWK_OK=1; break
+  fi
+done
+if [ "$GAWK_OK" -eq 0 ]; then
+  echo "SKIP: no awk with 3-argument match() here, so prune-stale cannot run — its closure veto is NOT asserted in this sandbox (it runs on the runner)"
+else
+k="$WORK/k/.github/workflows"; mkdir -p "$k"
+cat > "$k/secret-scanner.yml" <<EOF
+jobs:
+  scan:
+    uses: hyperpolymath/cicd-suite/.github/workflows/secret-scanner-reusable.yml@$S
+EOF
+cat > "$k/actions.lock" <<EOF
+workflows:
+    '.github/workflows/secret-scanner.yml':
+        - 'actions/checkout@$A'
+        - 'o/unrelated@$B'
+dependencies:
+EOF
+printf '.github/workflows/secret-scanner.yml\thyperpolymath/cicd-suite@%s\tactions/checkout@%s\n' "$S" "$A" \
+  > "$k/actions-lock.closure.tsv"
+(cd "$WORK/k" && bash "$TARGET") >/dev/null 2>&1
+grep -qxF "        - 'actions/checkout@$A'" "$k/actions.lock" \
+  && ok "ref reached through a remote reusable is kept by the closure manifest" \
+  || bad "ref reached through a remote reusable is kept by the closure manifest"
+! grep -qF "o/unrelated@" "$k/actions.lock" \
+  && ok "the closure manifest does not keep a genuinely unrelated ref" \
+  || bad "the closure manifest does not keep a genuinely unrelated ref"
+(cd "$WORK/k" && bash "$TARGET" --no-closure) >/dev/null 2>&1
+! grep -qF "actions/checkout@$A" "$k/actions.lock" \
+  && ok "--no-closure restores the two-oracle behaviour (the ref is pruned)" \
+  || bad "--no-closure restores the two-oracle behaviour (the ref is pruned)"
+
+fi
+
 mkdir -p "$WORK/n/.github/workflows"; (cd "$WORK/n" && bash "$TARGET") >/dev/null 2>&1; st=$?
 [ "$st" = 1 ] && ok "no lockfile → exit 1" || bad "no lockfile → exit 1 (got $st)"
 

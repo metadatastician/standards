@@ -160,7 +160,15 @@ FNR == 1 { nown = split(substr(owners[FILENAME], 2), own, SUBSEP) }
       next
     }
     n = norm(raw)
-    if (n != "") for (i = 1; i <= nown; i++) { uses[own[i], n] = 1; useslist[own[i]] = useslist[own[i]] " " n }
+    if (n == "") next
+    for (i = 1; i <= nown; i++) {
+      uses[own[i], n] = 1
+      # A job-level reusable call is owner/repo/.github/workflows/<f>@ref; a
+      # step-level action is anything else. The split is load-bearing: clause 1
+      # requires only the second kind (see the note on clause 1 below).
+      if (raw ~ /\/\.github\/workflows\/[^@]+\.ya?ml@/) joblist[own[i]] = joblist[own[i]] " " n
+      else                                                    useslist[own[i]] = useslist[own[i]] " " n
+    }
   }
 }
 
@@ -177,7 +185,22 @@ END {
       bad = 1
     }
 
-    # --- direction 1: every uses: must be locked under THIS path ---
+    # --- direction 1: every STEP-LEVEL uses: must be locked under THIS path ---
+    #
+    # A job-level reusable ref that is absent from the lockfile is HARMLESS.
+    # MEASURED (standards#968, 2026-09-22): 159 repositories carry job-level
+    # refs the lock does not; 12 of 12 sampled created jobs, and
+    # the hyperpolymath/standards mirror.yml has a literally empty entry while
+    # calling a reusable and running 7 jobs. Demanding it also steers a
+    # developer into the FATAL state, because `gh actions-lock` cannot backfill
+    # a job-level ref: the only way to go green was to hand-add a per-workflow
+    # entry with no record, which is exactly the dangling edge that kills a run.
+    # The reconciliation case is hyperpolymath/unified-dataset-vocab#81: it
+    # records the through-ref (actions/checkout) and no reusable record at all,
+    # and its caller runs 3 jobs with 10/3/3 steps.
+    # A job-level ref that IS recorded is still checked: closure belongs to
+    # check-lock-pin-contract.sh (which delegates to close-lock.sh --check), and
+    # the dependency set it brings in belongs to check-reusable-closure.sh.
     nu = split(useslist[wf], u, " ")
     delete uniq; missing = ""
     for (j = 1; j <= nu; j++) {
@@ -191,6 +214,15 @@ END {
       else
         printf "FAIL %s\n     refs missing from the lockfile:%s\n", key, missing
       bad = 1
+    }
+
+    # job-level refs absent from the lockfile: reported, never fatal.
+    nj = split(joblist[wf], v, " ")
+    delete jseen
+    for (j = 1; j <= nj; j++) {
+      if (v[j] == "" || (v[j] in jseen)) continue
+      jseen[v[j]] = 1
+      if (!((key SUBSEP v[j]) in lock)) jnote = jnote sprintf("\n  %s: %s (allowed — measured harmless, standards#968)", key, v[j])
     }
 
     # --- direction 2: every lock entry must be referenced by this workflow ---
@@ -216,6 +248,8 @@ END {
     }
     if (!found) { printf "FAIL %s\n     lockfile entry for a workflow file that does not exist\n", p; bad = 1 }
   }
+
+  if (jnote != "") print "NOTE: job-level reusable refs absent from the lockfile (not fatal; see standards#968):" jnote
 
   if (bad) {
     print ""
