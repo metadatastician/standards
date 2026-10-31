@@ -80,7 +80,16 @@ CLOSURE=""
 CLOSURE_SET=0
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    --closure) CLOSURE="${2:-}"; CLOSURE_SET=1; shift 2 ;;
+    --closure)
+      [ "$#" -ge 2 ] || {
+        echo "prune-stale: --closure needs a file" >&2
+        exit 2
+      }
+      [ -n "$2" ] && [ -f "$2" ] || {
+        echo "prune-stale: closure manifest is not a regular file: $2" >&2
+        exit 2
+      }
+      CLOSURE="$2"; CLOSURE_SET=1; shift 2 ;;
     --no-closure) CLOSURE_SET=1; CLOSURE=""; shift ;;
     *) WF_DIR="$1"; shift ;;
   esac
