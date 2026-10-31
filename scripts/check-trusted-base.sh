@@ -173,6 +173,7 @@ rust-hs	core	rust-or-hs-unsafe	unsafePerformIO | unsafeCoerce
 CATALOGUE
 )"
 
+# Print the script's header comments as usage text.
 usage() {
   sed -n '2,160p' "${BASH_SOURCE[0]}" | sed -n 's/^# \{0,1\}//p'
 }

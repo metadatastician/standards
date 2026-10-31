@@ -265,10 +265,11 @@ throttle() {
 }
 
 # Search GitHub for query, using slug for cache filenames. Write repository and
-# path pairs as TSV to $OUT/cache/<slug>.items.jsonl and print a TSV metadata
-# record with status, total, fetched count, and query checksum. A matching
-# successful cache is reused. Return 3 for a cached failure or a failed API
-# request after any rate-limit retry; API failures are recorded in the cache.
+# path pairs as TSV to $OUT/cache/<slug>.items.jsonl. Print a TSV metadata
+# record with status, total, fetched count, and query checksum on success or a
+# cached failure. Reuse a matching successful cache. Return 3 for a cached
+# failure or a failed API request after any rate-limit retry; a new API failure
+# is recorded in the cache without printing its metadata record.
 code_search() {
   local slug="$1" query="$2"
   local items="$OUT/cache/${slug}.items.jsonl"
