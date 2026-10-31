@@ -59,6 +59,20 @@ jobs:
             echo "has_baseline=false" >> $GITHUB_OUTPUT
           fi
 
+      # `job.workflow_sha` names the standards commit for this job's helper
+      # checkouts and is documented as unavailable on GitHub Enterprise Server,
+      # where it resolves EMPTY — and `ref: ''` is not a failure, it is a silent
+      # checkout of standards' DEFAULT BRANCH. Assert it, so that failure names
+      # itself instead of quietly changing which tooling judged the caller.
+      - name: Assert this reusable's own commit resolved
+        env:
+          SELF_WORKFLOW_SHA: ${{ job.workflow_sha }}
+        run: |
+          if ! printf '%s' "$SELF_WORKFLOW_SHA" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "::error::job.workflow_sha resolved to '${SELF_WORKFLOW_SHA:-<empty>}', not a 40-hex commit, so the standards helper checkout below would follow the default branch. The job workflow-identity properties are unavailable on GitHub Enterprise Server."
+            exit 1
+          fi
+          echo "Standards helper source: $SELF_WORKFLOW_SHA"
       - name: Checkout pinned standards history
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -106,6 +120,20 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
+      # `job.workflow_sha` names the standards commit for this job's helper
+      # checkouts and is documented as unavailable on GitHub Enterprise Server,
+      # where it resolves EMPTY — and `ref: ''` is not a failure, it is a silent
+      # checkout of standards' DEFAULT BRANCH. Assert it, so that failure names
+      # itself instead of quietly changing which tooling judged the caller.
+      - name: Assert this reusable's own commit resolved
+        env:
+          SELF_WORKFLOW_SHA: ${{ job.workflow_sha }}
+        run: |
+          if ! printf '%s' "$SELF_WORKFLOW_SHA" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "::error::job.workflow_sha resolved to '${SELF_WORKFLOW_SHA:-<empty>}', not a 40-hex commit, so the standards helper checkout below would follow the default branch. The job workflow-identity properties are unavailable on GitHub Enterprise Server."
+            exit 1
+          fi
+          echo "Standards helper source: $SELF_WORKFLOW_SHA"
       - name: Checkout UUID validator (ESTATE-UUID-V8)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -138,6 +166,20 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
+      # `job.workflow_sha` names the standards commit for this job's helper
+      # checkouts and is documented as unavailable on GitHub Enterprise Server,
+      # where it resolves EMPTY — and `ref: ''` is not a failure, it is a silent
+      # checkout of standards' DEFAULT BRANCH. Assert it, so that failure names
+      # itself instead of quietly changing which tooling judged the caller.
+      - name: Assert this reusable's own commit resolved
+        env:
+          SELF_WORKFLOW_SHA: ${{ job.workflow_sha }}
+        run: |
+          if ! printf '%s' "$SELF_WORKFLOW_SHA" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "::error::job.workflow_sha resolved to '${SELF_WORKFLOW_SHA:-<empty>}', not a 40-hex commit, so the standards helper checkout below would follow the default branch. The job workflow-identity properties are unavailable on GitHub Enterprise Server."
+            exit 1
+          fi
+          echo "Standards helper source: $SELF_WORKFLOW_SHA"
       - name: Checkout UUID validator (ESTATE-UUID-V8)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -167,6 +209,20 @@ jobs:
           repository: ${{ github.repository }}
           ref: ${{ github.sha }}
 
+      # `job.workflow_sha` names the standards commit for this job's helper
+      # checkouts and is documented as unavailable on GitHub Enterprise Server,
+      # where it resolves EMPTY — and `ref: ''` is not a failure, it is a silent
+      # checkout of standards' DEFAULT BRANCH. Assert it, so that failure names
+      # itself instead of quietly changing which tooling judged the caller.
+      - name: Assert this reusable's own commit resolved
+        env:
+          SELF_WORKFLOW_SHA: ${{ job.workflow_sha }}
+        run: |
+          if ! printf '%s' "$SELF_WORKFLOW_SHA" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "::error::job.workflow_sha resolved to '${SELF_WORKFLOW_SHA:-<empty>}', not a 40-hex commit, so the standards helper checkout below would follow the default branch. The job workflow-identity properties are unavailable on GitHub Enterprise Server."
+            exit 1
+          fi
+          echo "Standards helper source: $SELF_WORKFLOW_SHA"
       - name: Checkout standards for the allowlist gate
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -205,6 +261,20 @@ jobs:
     permissions:
       contents: read
     steps:
+      # `job.workflow_sha` names the standards commit for this job's helper
+      # checkouts and is documented as unavailable on GitHub Enterprise Server,
+      # where it resolves EMPTY — and `ref: ''` is not a failure, it is a silent
+      # checkout of standards' DEFAULT BRANCH. Assert it, so that failure names
+      # itself instead of quietly changing which tooling judged the caller.
+      - name: Assert this reusable's own commit resolved
+        env:
+          SELF_WORKFLOW_SHA: ${{ job.workflow_sha }}
+        run: |
+          if ! printf '%s' "$SELF_WORKFLOW_SHA" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "::error::job.workflow_sha resolved to '${SELF_WORKFLOW_SHA:-<empty>}', not a 40-hex commit, so the standards helper checkout below would follow the default branch. The job workflow-identity properties are unavailable on GitHub Enterprise Server."
+            exit 1
+          fi
+          echo "Standards helper source: $SELF_WORKFLOW_SHA"
       - name: Checkout standards for the live policy gate
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -357,6 +427,20 @@ jobs:
       # reusable's own standards commit), NOT main: a script fetched from main
       # changed every pinned caller's verdict on each standards push. (Unlike
       # github.workflow_sha, which is the caller's SHA, job.workflow_sha is ours.)
+      # `job.workflow_sha` names the standards commit for this job's helper
+      # checkouts and is documented as unavailable on GitHub Enterprise Server,
+      # where it resolves EMPTY — and `ref: ''` is not a failure, it is a silent
+      # checkout of standards' DEFAULT BRANCH. Assert it, so that failure names
+      # itself instead of quietly changing which tooling judged the caller.
+      - name: Assert this reusable's own commit resolved
+        env:
+          SELF_WORKFLOW_SHA: ${{ job.workflow_sha }}
+        run: |
+          if ! printf '%s' "$SELF_WORKFLOW_SHA" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "::error::job.workflow_sha resolved to '${SELF_WORKFLOW_SHA:-<empty>}', not a 40-hex commit, so the standards helper checkout below would follow the default branch. The job workflow-identity properties are unavailable on GitHub Enterprise Server."
+            exit 1
+          fi
+          echo "Standards helper source: $SELF_WORKFLOW_SHA"
       - name: Check out standards for the baseline filter
         if: needs.workflow-staleness.outputs.has_baseline == 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -814,6 +898,20 @@ jobs:
       # A reusable workflow only auto-checks-out its own YAML, not sibling
       # scripts. Sparse-check-out standards' scripts/ to get
       # check-package-policy.sh, mirroring the baseline-filter job above.
+      # `job.workflow_sha` names the standards commit for this job's helper
+      # checkouts and is documented as unavailable on GitHub Enterprise Server,
+      # where it resolves EMPTY — and `ref: ''` is not a failure, it is a silent
+      # checkout of standards' DEFAULT BRANCH. Assert it, so that failure names
+      # itself instead of quietly changing which tooling judged the caller.
+      - name: Assert this reusable's own commit resolved
+        env:
+          SELF_WORKFLOW_SHA: ${{ job.workflow_sha }}
+        run: |
+          if ! printf '%s' "$SELF_WORKFLOW_SHA" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "::error::job.workflow_sha resolved to '${SELF_WORKFLOW_SHA:-<empty>}', not a 40-hex commit, so the standards helper checkout below would follow the default branch. The job workflow-identity properties are unavailable on GitHub Enterprise Server."
+            exit 1
+          fi
+          echo "Standards helper source: $SELF_WORKFLOW_SHA"
       - name: Check out standards for the package-policy gate
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -1149,6 +1247,20 @@ jobs:
         run: echo "::warning::EditorConfig check found formatting issues (advisory only — see the 'EditorConfig check' step's own log above; repos opt into blocking locally when ready)."
       # Sparse-check-out standards' scripts/ for the docs gate (a reusable
       # workflow only auto-checks-out its own YAML, not sibling scripts).
+      # `job.workflow_sha` names the standards commit for this job's helper
+      # checkouts and is documented as unavailable on GitHub Enterprise Server,
+      # where it resolves EMPTY — and `ref: ''` is not a failure, it is a silent
+      # checkout of standards' DEFAULT BRANCH. Assert it, so that failure names
+      # itself instead of quietly changing which tooling judged the caller.
+      - name: Assert this reusable's own commit resolved
+        env:
+          SELF_WORKFLOW_SHA: ${{ job.workflow_sha }}
+        run: |
+          if ! printf '%s' "$SELF_WORKFLOW_SHA" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "::error::job.workflow_sha resolved to '${SELF_WORKFLOW_SHA:-<empty>}', not a 40-hex commit, so the standards helper checkout below would follow the default branch. The job workflow-identity properties are unavailable on GitHub Enterprise Server."
+            exit 1
+          fi
+          echo "Standards helper source: $SELF_WORKFLOW_SHA"
       - name: Check out standards for the docs gate
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -1512,6 +1624,20 @@ jobs:
         with:
           repository: ${{ github.repository }}
           ref: ${{ github.sha }}
+      # `job.workflow_sha` names the standards commit for this job's helper
+      # checkouts and is documented as unavailable on GitHub Enterprise Server,
+      # where it resolves EMPTY — and `ref: ''` is not a failure, it is a silent
+      # checkout of standards' DEFAULT BRANCH. Assert it, so that failure names
+      # itself instead of quietly changing which tooling judged the caller.
+      - name: Assert this reusable's own commit resolved
+        env:
+          SELF_WORKFLOW_SHA: ${{ job.workflow_sha }}
+        run: |
+          if ! printf '%s' "$SELF_WORKFLOW_SHA" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "::error::job.workflow_sha resolved to '${SELF_WORKFLOW_SHA:-<empty>}', not a 40-hex commit, so the standards helper checkout below would follow the default branch. The job workflow-identity properties are unavailable on GitHub Enterprise Server."
+            exit 1
+          fi
+          echo "Standards helper source: $SELF_WORKFLOW_SHA"
       - name: Checkout standards for the lock gate
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -1658,6 +1784,20 @@ jobs:
           # same merge commit but is always fetchable.
           ref: ${{ github.sha }}
           path: caller
+      # `job.workflow_sha` names the standards commit for this job's helper
+      # checkouts and is documented as unavailable on GitHub Enterprise Server,
+      # where it resolves EMPTY — and `ref: ''` is not a failure, it is a silent
+      # checkout of standards' DEFAULT BRANCH. Assert it, so that failure names
+      # itself instead of quietly changing which tooling judged the caller.
+      - name: Assert this reusable's own commit resolved
+        env:
+          SELF_WORKFLOW_SHA: ${{ job.workflow_sha }}
+        run: |
+          if ! printf '%s' "$SELF_WORKFLOW_SHA" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "::error::job.workflow_sha resolved to '${SELF_WORKFLOW_SHA:-<empty>}', not a 40-hex commit, so the standards helper checkout below would follow the default branch. The job workflow-identity properties are unavailable on GitHub Enterprise Server."
+            exit 1
+          fi
+          echo "Standards helper source: $SELF_WORKFLOW_SHA"
       - name: Checkout standards (for the check script)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -1689,6 +1829,20 @@ jobs:
           # same merge commit but is always fetchable.
           ref: ${{ github.sha }}
           path: caller
+      # `job.workflow_sha` names the standards commit for this job's helper
+      # checkouts and is documented as unavailable on GitHub Enterprise Server,
+      # where it resolves EMPTY — and `ref: ''` is not a failure, it is a silent
+      # checkout of standards' DEFAULT BRANCH. Assert it, so that failure names
+      # itself instead of quietly changing which tooling judged the caller.
+      - name: Assert this reusable's own commit resolved
+        env:
+          SELF_WORKFLOW_SHA: ${{ job.workflow_sha }}
+        run: |
+          if ! printf '%s' "$SELF_WORKFLOW_SHA" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "::error::job.workflow_sha resolved to '${SELF_WORKFLOW_SHA:-<empty>}', not a 40-hex commit, so the standards helper checkout below would follow the default branch. The job workflow-identity properties are unavailable on GitHub Enterprise Server."
+            exit 1
+          fi
+          echo "Standards helper source: $SELF_WORKFLOW_SHA"
       - name: Checkout standards (for the check script)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -1719,6 +1873,20 @@ jobs:
           # exception. A shallow clone has neither.
           fetch-depth: 0
 
+      # `job.workflow_sha` names the standards commit for this job's helper
+      # checkouts and is documented as unavailable on GitHub Enterprise Server,
+      # where it resolves EMPTY — and `ref: ''` is not a failure, it is a silent
+      # checkout of standards' DEFAULT BRANCH. Assert it, so that failure names
+      # itself instead of quietly changing which tooling judged the caller.
+      - name: Assert this reusable's own commit resolved
+        env:
+          SELF_WORKFLOW_SHA: ${{ job.workflow_sha }}
+        run: |
+          if ! printf '%s' "$SELF_WORKFLOW_SHA" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "::error::job.workflow_sha resolved to '${SELF_WORKFLOW_SHA:-<empty>}', not a 40-hex commit, so the standards helper checkout below would follow the default branch. The job workflow-identity properties are unavailable on GitHub Enterprise Server."
+            exit 1
+          fi
+          echo "Standards helper source: $SELF_WORKFLOW_SHA"
       - name: Check out standards repo for shared scripts
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -1791,6 +1959,20 @@ jobs:
           # exception. A shallow clone has neither.
           fetch-depth: 0
 
+      # `job.workflow_sha` names the standards commit for this job's helper
+      # checkouts and is documented as unavailable on GitHub Enterprise Server,
+      # where it resolves EMPTY — and `ref: ''` is not a failure, it is a silent
+      # checkout of standards' DEFAULT BRANCH. Assert it, so that failure names
+      # itself instead of quietly changing which tooling judged the caller.
+      - name: Assert this reusable's own commit resolved
+        env:
+          SELF_WORKFLOW_SHA: ${{ job.workflow_sha }}
+        run: |
+          if ! printf '%s' "$SELF_WORKFLOW_SHA" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "::error::job.workflow_sha resolved to '${SELF_WORKFLOW_SHA:-<empty>}', not a 40-hex commit, so the standards helper checkout below would follow the default branch. The job workflow-identity properties are unavailable on GitHub Enterprise Server."
+            exit 1
+          fi
+          echo "Standards helper source: $SELF_WORKFLOW_SHA"
       - name: Check out standards repo for shared scripts
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -1860,6 +2042,20 @@ jobs:
           repository: ${{ github.repository }}
           ref: ${{ github.sha }}
           persist-credentials: false
+      # `job.workflow_sha` names the standards commit for this job's helper
+      # checkouts and is documented as unavailable on GitHub Enterprise Server,
+      # where it resolves EMPTY — and `ref: ''` is not a failure, it is a silent
+      # checkout of standards' DEFAULT BRANCH. Assert it, so that failure names
+      # itself instead of quietly changing which tooling judged the caller.
+      - name: Assert this reusable's own commit resolved
+        env:
+          SELF_WORKFLOW_SHA: ${{ job.workflow_sha }}
+        run: |
+          if ! printf '%s' "$SELF_WORKFLOW_SHA" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "::error::job.workflow_sha resolved to '${SELF_WORKFLOW_SHA:-<empty>}', not a 40-hex commit, so the standards helper checkout below would follow the default branch. The job workflow-identity properties are unavailable on GitHub Enterprise Server."
+            exit 1
+          fi
+          echo "Standards helper source: $SELF_WORKFLOW_SHA"
       - name: Checkout standards for the checker
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -1913,6 +2109,20 @@ jobs:
             echo "pkg=false" >> "$GITHUB_OUTPUT"
             echo "::notice::No package.json: 0 JavaScript manifests, nothing for the $RUNTIME leg to check."
           fi
+      # `job.workflow_sha` names the standards commit for this job's helper
+      # checkouts and is documented as unavailable on GitHub Enterprise Server,
+      # where it resolves EMPTY — and `ref: ''` is not a failure, it is a silent
+      # checkout of standards' DEFAULT BRANCH. Assert it, so that failure names
+      # itself instead of quietly changing which tooling judged the caller.
+      - name: Assert this reusable's own commit resolved
+        env:
+          SELF_WORKFLOW_SHA: ${{ job.workflow_sha }}
+        run: |
+          if ! printf '%s' "$SELF_WORKFLOW_SHA" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "::error::job.workflow_sha resolved to '${SELF_WORKFLOW_SHA:-<empty>}', not a 40-hex commit, so the standards helper checkout below would follow the default branch. The job workflow-identity properties are unavailable on GitHub Enterprise Server."
+            exit 1
+          fi
+          echo "Standards helper source: $SELF_WORKFLOW_SHA"
       - name: Checkout standards for the checker
         if: steps.has.outputs.pkg == 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

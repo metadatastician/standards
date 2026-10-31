@@ -173,15 +173,30 @@ fi
 
 # The job workflow-identity properties are unavailable on GHES, where the
 # expression resolves EMPTY and actions/checkout then follows the default
-# branch. Each job that stages helpers from job.workflow_sha must assert the
-# value before using it.
-for job in 'language-policy' 'workflow-lint'; do
+# branch: a float wearing a pin's clothes. EVERY job that stages a standards
+# helper from job.workflow_sha must assert it resolved, and the list is DERIVED
+# from the file rather than hardcoded — a hardcoded pair was true for two jobs
+# and false for the other fifteen until it was measured (2026-10-31).
+assert_sites="$(awk '
+  /^  [a-zA-Z0-9_-]+:[[:space:]]*$/ { job = $1; sub(/:$/, "", job); injob = 1 }
+  injob && /repository:[[:space:]]*(meta)?(datastician|hyperpolymath)\/standards[[:space:]]*$/ { repo = 1 }
+  injob && repo && /ref:[[:space:]]*\$\{\{[[:space:]]*(job\.workflow_sha|inputs\.[A-Za-z0-9_-]+[[:space:]]*\|\|[[:space:]]*job\.workflow_sha)/ { print job; repo = 0 }
+  injob && /^  [a-zA-Z0-9_-]+:[[:space:]]*$/ && $0 !~ /^  [a-zA-Z0-9_-]+:[[:space:]]*$/{ repo = 0 }
+' "$GOVERNANCE" | sort -u)"
+[ -n "$assert_sites" ] || fail "no job stages a standards helper from job.workflow_sha — the derivation found nothing, so this assertion would be vacuous; if the file really changed shape, change this test deliberately"
+for job in $assert_sites; do
   block="$(awk -v id="$job" '$0=="  "id":" {p=1; next} p && /^  [a-zA-Z0-9_-]+:$/ {exit} p {print}' "$GOVERNANCE")"
   printf '%s\n' "$block" | grep -Fq "Assert this reusable's own commit resolved" ||
-    fail "job '$job' stages helpers from job.workflow_sha without asserting it resolved"
+    fail "job '$job' stages helpers from job.workflow_sha without asserting it resolved (GHES resolves it empty, and ref: '' follows the default branch)"
   printf '%s\n' "$block" | grep -Fq "SELF_WORKFLOW_SHA" ||
     fail "job '$job' assertion does not read job.workflow_sha"
+  # The assertion must come BEFORE the checkout it protects.
+  a="$(printf '%s\n' "$block" | grep -n "Assert this reusable's own commit resolved" | head -1 | cut -d: -f1)"
+  c="$(printf '%s\n' "$block" | grep -n 'ref: \${{ job.workflow_sha }}\|ref: \${{ inputs\..*|| job.workflow_sha }}' | head -1 | cut -d: -f1)"
+  [ -n "$c" ] && [ "$a" -lt "$c" ] ||
+    fail "job '$job' asserts the commit AFTER the helper checkout it is supposed to protect"
 done
+echo "  (asserted job.workflow_sha resolution in $(printf '%s\n' "$assert_sites" | wc -l | tr -d ' ') job(s): $(printf '%s ' $assert_sites))"
 
 # The floating helper checkouts the same measurement found must stay fixed:
 # a branch ref for a standards helper means one push to standards changes the

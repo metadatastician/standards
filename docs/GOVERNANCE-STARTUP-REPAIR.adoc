@@ -261,7 +261,8 @@ checkout fails with "No commit found for SHA".
 
 `job.workflow_sha` is documented as unavailable on GitHub Enterprise Server,
 where it resolves **empty** — and `ref: ''` is not a failure, it is a silent
-checkout of the default branch. Each job that stages helpers this way now
+checkout of the default branch. Every job that stages helpers this way — all
+**17**, derived by `governance-reusable-contract-test.sh` rather than listed —
 asserts the value is 40-hex *before* the checkout can float (`Assert this
 reusable's own commit resolved`), so that failure names itself.
 
@@ -529,8 +530,8 @@ Per-site rollback if only one change misbehaves:
 == Residual risk and follow-ups
 
 * `job.workflow_sha` is unavailable on GHES. The estate is github.com; a GHES
-  port needs a different key, and the assertion steps make that a loud failure
-  rather than a silent float.
+  port needs a different key, and the assertion step in all 17 helper-staging
+  jobs makes that a loud failure rather than a silent float.
 * A moved tag is invisible to every check here (`close-lock.sh` documents the
   measured tolerance). Remote reachability stays with
   `check-action-pins-resolve.sh` and `lock-selfcheck.sh`'s separate probe.

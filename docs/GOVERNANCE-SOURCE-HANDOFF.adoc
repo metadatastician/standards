@@ -1,0 +1,423 @@
+= Shared governance source: repair, verification and consumer handoff
+:toc:
+:toclevels: 3
+:icons: font
+
+// SPDX-License-Identifier: CC-BY-SA-4.0
+// SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+
+This is the ownership record for the shared governance source in
+`metadatastician/standards` and the handoff to its consumers. It states exactly
+what was repaired, what was **not** (there is no duplicate lock-record fix), the
+published source, the verification that was run, and what a consumer must do —
+with the one trap that makes a naive repin dangerous.
+
+== 1. Published source
+
+[cols="1,3"]
+|===
+|what |value
+
+|branch |`arena/99ac590e-standards`
+|published SHA |``TODO_SHA``
+|pull request |https://github.com/metadatastician/standards/pull/1381[standards#1381]
+|status |pushed, immutable, **not merged**
+|===
+
+The commit is immutable in the ordinary sense: it is a content-addressed object
+on a pushed branch, anyone can `git fetch origin <sha>` and reproduce every
+result below. It is **not** the merge target, and that distinction matters:
+
+IMPORTANT: this repository's ruleset allows **squash and rebase** merges only,
+and requires signed commits. Both merge methods *rewrite* the commits in this
+branch. So the SHA above will **not** be an ancestor of `main` after merge — a
+squash merge deletes it from history outright. **Do not pin a consumer to it.**
+Consumers pin the **merge commit on `main`**, after re-running the canary there
+(section 6, step 2). The SHA above is the evidence that the repair is real, not
+the thing to consume.
+
+Why it is not merged: this environment has no signing key, and the ruleset
+requires signed commits plus code-owner review. `--admin` bypass was not used
+and will not be — the requirement is the point.
+
+== 2. Scope: a narrow repair, not a policy upgrade
+
+The decision a consumer needs: **narrow repair**. Consumers pinned to the
+startup-dead commits must repin to the merge commit of this PR. No consumer
+needs the 454-commit `75bd5994` policy set to become healthy again.
+
+Evidence that no policy moved, measured as a diff `main..<published SHA>`:
+
+[cols="3,1,4"]
+|===
+|property |result |how it was checked
+
+|job ids and job names in all four changed reusables | **unchanged** | `git diff` of the `^  <job>:` / `^    name:` lines, four files, byte-identical
+|required contexts | **unchanged** | no edit to `config/**` or any gates manifest; the required-context source (`gates.json` under `config/rulesets`) is not in the diff
+|permissions granted by the reusables | **unchanged** | the diff contains no `permissions:`, `secrets:`, `contents:`, `pull-requests:` or `actions:` line
+|`uses:` refs (the lock's key space) | **unchanged** | `actions.lock` is byte-identical to `main`'s; every edit is a *checkout of this repository* or a `run:` step, neither of which the lock keys
+|action admission (allowlist) | **unchanged** | no allowlist file touched, no new third-party action introduced
+|===
+
+The one behaviour that changed is a **measured false positive**, not a
+requirement: `check-lock-sync.sh` no longer fails a workflow whose only
+unlocked `uses:` is a job-level reusable call (159 repositories measured in
+#968; 12 of 12 sampled runs create jobs; `unified-dataset-vocab` #81 ships the
+shape and runs 3 jobs). Step-level misses, orphaned entries, entries for deleted
+workflows and every closure rule stay fatal.
+
+=== What was repaired, and what was deliberately not
+
+[cols="2,4"]
+|===
+|class |state
+
+|lock record whose `ref:` repeats its own SHA (the class that killed
+`svalinn`)
+|**already correct on `main`** (`ref: v7.0.1`, matching `sha1-`, 0 contract
+violations). **Not touched.** A second edit would be a duplicate and
+unverifiable.
+|floating helper checkout (`ref: main`) — `changelog-reusable.yml`
+|fixed → `${{ job.workflow_sha }}`; live evidence below
+|floating standards-source input default (`main`) —
+`readme-derive-reusable.yml`, `fork-governance-reusable.yml`
+|fixed → empty default, `${{ inputs.x || job.workflow_sha }}`; the fetch became
+`git fetch` (a SHA is not a branch) and stopped naming the pre-transfer slug
+|stale literal third pin `317101e03b8f` (2026-09-14) in `governance-reusable.yml`
+|fixed → `${{ job.workflow_sha }}`, **34 standards checkouts, 0 failures**,
+was 202 files / +29,544−1,736 lines of `scripts/` behind
+|`job.workflow_sha` resolving empty on GHES (`ref: ''` = default branch)
+|asserted 40-hex in **all 17** helper-staging jobs; the contract test derives
+that list from the file, so it cannot silently shrink to the two jobs it used
+to name
+|Heredoc'd helper logic and copied lock verifiers in consumers
+|out of scope here; `scripts/check-copied-lock-step.sh` reports them per repo
+|===
+
+== 3. Lock and closure verification
+
+[cols="3,1,4"]
+|===
+|check |result |scope
+
+|`scripts/check-lock-pin-contract.sh`
+|0 violations, 2 exemptions
+|representation + `commit`↔key provenance + closure, on this repository's lock
+|`scripts/close-lock.sh --check`
+|closed
+|no dangling edge under `workflows:` or inside a record's `uses:`
+|`.githooks/validate-actions-lock.sh`
+|28 SHA-pinned refs among 30 lock keys, 0 doctrine exceptions
+|`uses:` ⊆ lock, both directions
+|`scripts/check-lock-sync.sh`
+|in sync
+|step-level refs locked under their own path; job-level absent = NOTE
+|`scripts/check-reusable-closure.sh`
+|3 reusable sites, 3 resolved, 7 reviewed baseline rows
+|refs reached through remote reusables, and dropped-closure detection against
+`.github/workflows/actions-lock.closure.tsv`
+|`scripts/lock-selfcheck.sh`
+|SELF-CONSISTENT
+|"is this SHA safe to pin a caller to?"
+|`scripts/check-standards-helper-pins.sh`
+|34 sites, 0 failures
+|every standards helper checkout immutable (and fresh, with `--compare`)
+|===
+
+`actions.lock` itself is **byte-identical to `main`'s**: no `uses:` ref moved,
+so no regeneration was required and none was done. Representation, provenance
+and closure are therefore verified *as they will be consumed*, not as they were
+regenerated.
+
+== 4. Execution evidence: setup **and** governance
+
+The scanner canary passing does not establish governance health, so the
+measurement below is the governance reusable itself, at the published SHA.
+
+[cols="3,1,5"]
+|===
+|workflow at the published SHA |result |what it establishes
+
+|**Governance** (run 41221313923)
+|**success, 21 jobs**
+|the reusable *started* (setup) and *executed policy*: every job ran 6–14 steps,
+not one. Job list in the table below.
+|Fork governance
+|success
+|the `canon-ref` default change (`inputs.canon-ref || job.workflow_sha`) starts
+and renders
+|Secret Scanner
+|success
+|scanner canary — **explicitly not** governance health
+|Lock Self-Check · Lock Sync Gate · Actions Lockfile Gate
+|success
+|the lock controls themselves pass in the required path
+|Scorecard · CodeQL · UUID v8 conformance · Required contexts
+|success
+|nothing else regressed
+|Self Test
+|failure — pre-existing
+|`dismiss-code-scanning-alerts-test.sh` exits 1; identical step and annotation
+on `main` at `1725bebd`. The guard steps and the fixture-driven controls run
+**before** that step and are green.
+|===
+
+Every governance job, with its step count — the shape that distinguishes a
+running gate from a startup corpse:
+
+[cols="4,1,4,1"]
+|===
+|job |steps |job |steps
+
+|Language / package anti-pattern policy |12 |Guix packaging policy (Nix retired) |7
+|Code quality + docs |13 |Trusted-base reduction policy |7
+|Workflow security linter |13 |UUID v7 conformance |7
+|Validate Hypatia Baseline |14 |UUID v8 conformance |7
+|JS runtimes — bun / deno / pnpm |11 each |Well-Known (RFC 9116 + RSR) |7
+|JS runtimes — environment provisions Bun first |8 |Licence consistency |7
+|Security policy checks |9 |Debt ratchet |7
+|Check Workflow Staleness |8 |Actions lockfile verify |7
+|Exemption ratchet |8 |Allowlist Preflight |7
+|Live Actions policy (credentialed advisory) |6 | | |
+|===
+
+Contrast, same measurement method, on a startup-dead consumer: `svalinn`
+run 40108154356 — **15 jobs, 12 of them with exactly one step (`Set up job`)**,
+3 skipped, no policy step executed. One step per job is the signature of a dead
+run, not a passing one.
+
+=== The repaired step, executed live
+
+The third-pin repair is not inferred from the diff; the job that carries it ran:
+
+....
+1 success  Set up job
+2 success  Assert this reusable's own commit resolved          <- added by this PR
+3 success  Run actions/checkout@3d3c42e5… (v7.0.1)
+4 success  Checkout the pinned Standards policy helpers        <- the repaired checkout
+5 success  Check for TypeScript
+...
+19 success Complete job
+....
+
+=== What is still not proven, and why
+
+`governance-reusable.yml` is exercised here by a **local** call
+(`./.github/workflows/governance-reusable.yml`), so `job.workflow_sha` resolved
+to the *calling commit*. A consumer calls it **remotely** at a pinned SHA, where
+the same expression resolves to *that* SHA. The remote-resolution mechanism
+itself is exercised in this repository today — `ci-pipeline.yml` calls
+`secret-scanner-reusable.yml@d55304a0` remotely and it ran 3 jobs with 10/3/3
+steps at the published SHA — but the *governance* reusable has not yet been
+called remotely at this SHA by anyone.
+
+That is deliberate: proving it means a consumer repin, and the ordering matters
+(publish → test → repin). It is section 6, step 2, and it is the gate the user's
+brief calls for. **Do not treat this document, or a green canary, as that
+proof.**
+
+== 5. Audit of the shared source's own references
+
+=== Source-resolution expressions and helper refs, by commit
+
+Every checkout whose `repository:` is `metadatastician/standards` or its
+pre-transfer slug `hyperpolymath/standards`, classified by its `ref:`
+(`sites` counts checkouts; measured 2026-10-31):
+
+[cols="1,1,1,1,1,3"]
+|===
+|commit |sites |`job.workflow_sha` |`ref: main` |literal |verdict
+
+|`fad242d3` (2026-09-07) |20 |10 |**9** |1 |float: 9 checkouts followed `main`
+|`da2c748a` (2026-09-10) |22 |4 |**9** |9 |float + five distinct literals
+|`e3b9929c` (2026-09-22) |24 |8 |**8** |8 |float, plus the stale third pin appears
+|`e16a2317` (2026-10-18) |31 |24 |1 |6 |one float left; third pin stale
+|`75bd5994` (2026-10-19) |31 |24 |1 |6 |same
+|`01c9b0c9` (2026-10-20) |33 |26 |1 |6 |same
+|`1725bebd` (`main`) |34 |27 |**1** |5 |one float (changelog) + one bare input
+(`${{ inputs.canon-ref }}`, defaulting to `main`) + the stale third pin ×3
+|published SHA |34 |**34** |0 |0 |every one immutable
+|===
+
+Notable literals, by commit, because "a literal" is two different things:
+
+* `6b0bfce6…` in `hypatia-scan-reusable.yml` — a pinned Hypatia source (not a
+  float). Present at `fad242d3`…`e16a2317`.
+* `591cea1b…` → `5a0891e9…` in `scorecard-reusable.yml` — a **path-scoped**
+  pin: only the reconciler script is staged from it, and that file has not
+  changed since 2026-10-06, so the freshness predicate calls it fresh. Kept
+  deliberately; churning it would be noise.
+* `317101e0…` in `governance-reusable.yml` ×3 — the **stale third pin**, 202
+  files behind at `main`. This is the one that made consumers run September
+  tooling. Repaired.
+* `874ffe58…`, `9c256b67…`, `938264d8…` — older generations of the same third
+  pin and of `ci-pipeline.yml`, seen only in historical trees.
+
+`${{ github.sha }}` and `${{ github.workflow_sha }}` appear 13–15 times in every
+commit — but at **no** commit do they appear on a checkout of *this* repository;
+they are caller-repository checkouts, where they are correct. The invalid forms
+this source actually carried are `ref: main` and stale literals, not
+`github.workflow_sha`.
+
+=== Hypatia references
+
+Measured, all commits:
+
+* `hypatia-scan-reusable.yml` **pins** its sources: vetted 40-hex defaults
+  (`hypatia-ref: adb2f41d…`, `panic-ref: 410a8f82…`, `pons-ref: bca1ea28…` at
+  `main`; `hypatia-ref: 51ab6496…` at `e16a2317`). No floating HEAD default.
+* The file contains a guard that **rejects** `HYPATIA_REF = "HEAD"` explicitly.
+  The estate's "Hypatia HEAD clone" pattern exists in Hypatia's own workflows;
+  it is not present in the shared governance source at any measured commit.
+* The Hypatia baseline consumer is already implemented upstream:
+  `validate-hypatia-baseline` job (14 steps, success) plus
+  `.machine_readable/hypatia-baseline.schema.json`.
+
+CAUTION: `hyperpolymath/gitbot-fleet` carries
+`docs/upstream-proposals/standards--hypatia-baseline-consumer/workflows/governance-reusable.yml.patch`.
+It is **stale and must not be applied as written**: it adds a second
+baseline-validation job beside the one `main` already has, pins
+`actions/checkout@de0fac2e… # v6.0.2` (the estate pins v7.0.1 `3d3c42e5…`, and
+that SHA has no lock record — applying it dies at `Set up job`), and fetches the
+schema from `raw.githubusercontent.com/…/main/…`, i.e. a float inside a
+governance job. If that proposal is still wanted, it is rebased onto the
+repaired file with the v7.0.1 pin, a step-level lock entry, and a pinned schema
+ref — as a PR against this repository, never as a local variant.
+
+=== Divergent copies
+
+`filename:governance-reusable.yml` across both organisations returns exactly
+three paths, and none is a consumer copy: this repository's reusable, this
+repository's `fork-governance-reusable.yml` (substring match), and the
+gitbot-fleet **patch** above. Against **811 caller files** (`62`
+`metadatastician` + `749` `hyperpolymath`, by `governance-reusable.yml@`), that
+is: **no consumer has copied the shared workflow**. The estate is consuming it
+correctly, by reference. Keep it that way — a local copy cannot receive this
+repair, and `scripts/check-copied-lock-step.sh` exists to catch the reverse
+mistake (a copied *lock verifier*).
+
+== 6. Consumer migration
+
+Two classes of consumer. The first *must* act; the second may.
+
+. **Startup-dead pins — repin required.** `svalinn` (`fad242d3`),
+  `odraz` (`da2c748a`), `cadastra` (`e3b9929c`), `lintel` (`e16a2317`). Each
+  pin's own `lock-selfcheck` verdict is POISON (51 / 56 / 36 / 6 self-SHA
+  records; `cadastra` also has 1 dangling edge), and each has a governance run
+  with zero jobs or one-step jobs. Repin to the merge commit of this PR.
+. **Healthy pins — optional.** `burble`, `marid` (`01c9b0c9`) and `main` itself
+  are SELF-CONSISTENT and run policy. They gain the third-pin and float
+  repairs, not a fix for an outage. Repin on the normal cadence.
+
+Steps, in order:
+
+. **Merge** this PR (a signed, linear merge — the ruleset's, not a bypass).
+. **Test the exact commit you will pin**, not the branch:
++
+
+[source,bash]
+----
+git fetch origin main && git checkout --detach origin/main
+bash scripts/tests/governance-canary-test.sh "$(git rev-parse HEAD)"
+bash scripts/check-reusable-closure.sh .github/workflows --repo metadatastician/standards
+bash scripts/lock-selfcheck.sh "$(git rev-parse HEAD)"
+----
+
++
+A red canary means **do not repin** — read the named finding, fix the source,
+repeat. `governance-canary-test.sh <sha>` extracts that commit with
+`git archive` and tests *it*, so the result belongs to the SHA you pass.
+. **Repin the consumer's `uses:` to the 40-hex merge commit** (`@<sha>`); a tag
+  or branch re-creates the class this repair removes.
+. **Repair the consumer's own lock in the same PR.** This is not optional and it
+  is the part the fleet has been getting wrong: `svalinn` carried the poisoned
+  record **in its own `.github/workflows/actions.lock`** at the failing run, so a
+  corrected callee alone would not have saved it. Run the pipeline:
+
+[source,bash]
+----
+gh actions-lock --no-migrate-local-actions --no-narrow
+scripts/relock-sha-keys.sh && scripts/complete-job-refs.sh && scripts/close-lock.sh
+scripts/prune-stale.sh                      # consults the closure baseline
+scripts/check-lock-pin-contract.sh && scripts/check-lock-sync.sh
+----
+
+. **Probe the remote path before trusting it** (this is the evidence that does
+  not yet exist for `governance-reusable.yml` at a consumer). One job, its own
+  workflow, `workflow_dispatch` only, calling the reusable at the pinned SHA
+  with the policy that matters least. Success = a job with more than one step.
+  One step = still dead; read the annotation, do not merge the repin.
+. **Re-measure and record**: the governance run URL, the job count, and the step
+  count of `Language / package anti-pattern policy`. One step per job is a
+  startup failure wearing a green check's clothes — it is not a policy result.
+. **Keep the required checks.** Do not add `continue-on-error`, do not demote a
+  gate to `::warning::`, do not widen `allowed-actions` to make a repin pass, and
+  do not take an admin bypass. If a gate fails after the repin, it is finding
+  something real; that is the repair working.
+
+Consumers passing `canon-ref:` (fork-governance) or `standards-ref:`
+(readme-derive) with a **branch** must change to a 40-hex commit or delete the
+input — the new defaults do not float.
+
+== 7. Rollback
+
+[cols="2,4"]
+|===
+|scope |action
+
+|whole change
+|`git revert -m1 <merge-sha>`. No `uses:` ref and no lock record changed, so the
+revert restores `main`'s behaviour exactly — including, deliberately, the stale
+literal third pin and the two floating helper checkouts. There is no partial
+state to repair.
+|one consumer
+|repin that consumer back to its previous standards SHA and re-run its own
+pipeline (`gh actions-lock …` → `close-lock.sh`). Its lock is *not* restored by
+the repin: if the consumer's lock was edited in the same PR, revert that commit
+too, because the two were verified together.
+|one site here
+|third-pin sites: restore `ref: 317101e03b8f…` (and accept that
+`check-standards-helper-pins.sh --compare` reds it). Floating sites: restore the
+previous `ref:`/`default:`. Guards: remove the step and delete the script — but
+**never** relax a guard's rules to keep a lock green; a widened guard is
+indistinguishable from no guard.
+|===
+
+== 8. Coordination, and what is blocked
+
+* **Hypatia (source ownership).** The shared source owns the workflow; Hypatia
+  owns the baseline contract. Two asks: (a) confirm that
+  `validate-hypatia-baseline` + `.machine_readable/hypatia-baseline.schema.json`
+  in this repository is the current contract, so the gitbot-fleet patch can be
+  retired rather than rebased; (b) note that PI006 (self-SHA record) and
+  `invalid_actions_lock` already agree with the guards here — no rule change is
+  requested, and none is offered.
+* **cyo (downstream adoption).** The migration list is section 6. The two asks
+  that need an owner: sequence the four startup-dead repins so the probe run
+  (step 5) happens on one repository first, and hold every other consumer at its
+  current pin until that probe is green. A wave of simultaneous repins converts
+  four known-dead callers into an unknown number of differently-dead ones.
+* **gitbot-fleet (automation).** The lock-sync automation must run the pipeline,
+  never `gh actions-lock` alone (it cannot emit job-level or through edges), and
+  must never "fix" a failing guard by editing the guard. The stale patch above is
+  the concrete example of the failure mode to avoid.
+* **Blockers.** (1) The merge itself: no signing key in this environment, and
+  the ruleset requires signed commits + code-owner review — so the published SHA
+  is a branch commit and the merge must be done by an owner, not bypassed.
+  (2) Issue-comment API returns **403** for this token, so the cross-links to
+  #968/#1290 live as PR comments; they need reposting by an actor with issue
+  write access. (3) `gawk` is a hard precondition of `prune-stale.sh`; on a
+  `mawk` host it exits 1 without touching the lock, which a wrapper that ignores
+  the exit code reads as "nothing was stale".
+
+== 9. What a reviewer should check in this diff
+
+. `actions.lock` is untouched — `git diff main -- .github/workflows/actions.lock`
+   is empty. If it is not, the change is not what this document describes.
+. No job id or `name:` moved in the four reusables, so no required context moved.
+. Every `ref:` on a standards checkout is `${{ job.workflow_sha }}`,
+   `${{ inputs.x || job.workflow_sha }}`, or the one path-scoped scorecard
+   literal — and every such job asserts the value first.
+. The only relaxed condition in the diff is the job-level lock-sync note, whose
+   justification is a measurement (#968), not convenience.
+. New gates fail closed: exit 2 on anything they cannot inspect.
