@@ -1,0 +1,543 @@
+= Governance startup repair: the lock record, the third pin, the floating helper
+:toc:
+:toclevels: 3
+:icons: font
+
+// SPDX-License-Identifier: CC-BY-SA-4.0
+// SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+
+== Scope, and an honest statement of the outcome
+
+Two different failures travel under the name "governance is red", and this
+change is about only one of them.
+
+*STARTUP* is the half that fails before any policy exists. GitHub validates a
+reusable workflow against the *defining* repository's `.github/workflows/actions.lock`
+as it exists **at the pinned commit**. A record the runner will not accept, or a
+dangling edge in the lock, kills the run at `Set up job`: zero steps, no
+finding, no annotation on most surfaces, and a conclusion of `failure` that a
+required-context check reads as *absent* rather than *failed*.
+
+*POLICY* is the half the checks were written for. It only runs once startup
+succeeds, so a startup defect is invisible to every gate that reasons about
+what the checks found.
+
+What this change does:
+
+. Repairs the classes of startup defect that were still unguarded in
+  `metadatastician/standards` (a lock record the runner rejects, a stale literal
+  helper pin, a floating helper checkout).
+. Adds the missing control per class, so the defect cannot be re-committed
+  silently — each with a regression corpus that exercises both the passing and
+  the failing direction.
+. Publishes a canary that runs **both halves** on the same source, including on
+  any published commit, so a caller can be repinned to something that was
+  measured rather than assumed.
+
+What it does **not** do, stated so a green is not misread:
+
+* It does not fix any consumer repository. Every consumer is pinned to a
+  standards commit, and a standards change reaches a consumer only when the
+  consumer re-pins. Migration is section <<migration>>, and it is a per-repo
+  decision (see <<coordination>>).
+* It does not verify remote reachability, tag movement, allowlist admission or
+  policy validity. Those belong to `scripts/check-action-pins-resolve.sh`,
+  `scripts/close-lock.sh`, `scripts/check-allowed-actions.sh` and the policy
+  jobs respectively.
+* It does not claim that `main`'s lock is *correct* in any deeper sense than the
+  contract it now states. A passing contract is a statement about
+  representations the runner rejects, not about whether an action's pinned
+  commit should be trusted.
+
+== The measured failure
+
+`metadatastician/svalinn`, pinned to standards `fad242d35291`, workflow run
+https://github.com/metadatastician/svalinn/actions/runs/40108154356[40108154356]
+(2026-10-24): fifteen governance jobs, twelve of them failing with **one step
+each** — `Set up job` — and every remaining job skipped for want of a `needs`.
+Not one policy step ran. The annotation names the cause:
+
+....
+Unable to resolve action `actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1`:
+invalid lockfile pin. Run `gh actions-lock` to update the lockfile
+....
+
+The record at `fad242d3` was:
+
+[source,yaml]
+----
+dependencies:
+    'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1':
+        ref: '3d3c42e5aac5ba805825da76410c181273ba90b1'   # <-- the pin's own SHA
+        commit: 'sha1-3d3c42e5aac5ba805825da76410c181273ba90b1'
+----
+
+`ref:` must name the *reviewed* ref (`v7.0.1`) that resolves to the pin. A raw
+SHA there is not a stricter pin; it is a record the runner refuses.
+
+=== The consumer census, measured
+
+The column that decides whether a pin can start at all is this repository's own
+`scripts/lock-selfcheck.sh`, run against each consumer's pinned standards commit.
+It is the tool the estate uses for exactly this question ("is this SHA safe to
+pin a caller to?"), so its verdict is the one quoted. `contract violations` is
+the new guard's independent count on the same file; the two agree on every row
+in *verdict*, and they count different things (self-SHA records vs records that
+break the representation contract by any means).
+
+[cols="2,2,3,5"]
+|===
+|consumer |pinned standards commit |`lock-selfcheck` verdict |observed
+
+|`metadatastician/svalinn`
+|`fad242d3` (2026-09-07)
+|POISON — 51 self-SHA record(s)
+|15 jobs: 12 dead at `Set up job` (one step each), 3 skipped (run 40108154356)
+
+|`metadatastician/odraz`
+|`da2c748a` (2026-09-10)
+|POISON — 56 self-SHA record(s)
+|run 38811452675 `startup_failure`; run 40837852944 `failure` with **zero jobs**
+
+|`metadatastician/cadastra`
+|`e3b9929c` (2026-09-22)
+|POISON — 36 self-SHA record(s) **and 1 dangling edge**
+|run 40943144620 `failure`, **zero jobs**
+
+|`metadatastician/lintel`
+|`e16a2317` (2026-10-18)
+|POISON — 6 self-SHA record(s)
+|run 40736091140: **zero jobs** — the run-level signature
+
+|`metadatastician/burble`, `marid`
+|`01c9b0c9` (2026-10-20)
+|SELF-CONSISTENT
+|run 39678123406 green: 21 jobs, 6–13 steps each — policy executed
+
+|`metadatastician/standards` (main)
+|`1725bebd` (2026-10-29)
+|SELF-CONSISTENT
+|—
+|===
+
+The `lintel` row is exactly the four leaves
+https://github.com/metadatastician/standards/issues/1290[standards#1290] names,
+and `lock-selfcheck` attributes each to the workflow that reaches it:
+`github/codeql-action@b96794f0` from `codeql-reusable.yml`,
+`hypatia-scan-reusable.yml` and `scorecard-reusable.yml`;
+`goto-bus-stop/setup-zig@abea47f8` and `swatinem/rust-cache@6323deb1` from
+`rust-ci-reusable.yml`; `webfactory/ssh-agent@e8387483` from
+`mirror-reusable.yml`.
+
+The correlation is exact and it runs in both directions: every consumer whose
+pin is POISON has a governance run with either zero jobs or a job list that dies
+at `Set up job`, and the one pin that is SELF-CONSISTENT has a green run with
+policy steps in it. That is the strongest statement the run API supports, and it
+is the reason the migration below repins **only** to a SHA whose verdict was
+measured, never to "latest".
+
+=== The control arrived late — that is the actual defect
+
+`lock-selfcheck.sh` did not contain the self-SHA rule at any of the four POISON
+pins. Measured by reading the file out of each commit:
+
+[cols="1,1,3"]
+|===
+|commit |date |self-SHA rule in that commit's `lock-selfcheck.sh`
+
+|`fad242d3` |2026-09-07 |absent
+|`da2c748a` |2026-09-10 |absent
+|`e3b9929c` |2026-09-22 |absent
+|`e16a2317` |2026-10-18 |absent
+|`75bd5994` |2026-10-19 |**present** (9 references), together with the corrected lock
+|`01c9b0c9` |2026-10-20 |present
+|`1725bebd` (main) |2026-10-29 |present
+|===
+
+So #1290's acceptance criterion 3 was really satisfied at `75bd5994`, in the
+same commit that corrected the records: the guard and the repair landed
+together, a day after the last POISON pin. Everything consumers were pinned to
+before that date could not be detected by any control in existence at that date.
+That, and not the absence of a task, is why the class survived a month — and why
+this PR keeps the guard *and* states the migration, since a guard only protects
+commits that are written after it.
+
+=== What main already had right — no duplicate fix
+
+`main` at `1725bebd` records `ref: v7.0.1` with the matching `sha1-` commit, and
+the whole lock passes the contract below: **0 violations**, two caller-side
+reusable edges legitimately exempt. The nine leaves corrected by
+https://github.com/metadatastician/standards/pull/1271[#1271] and the four from
+[#1290] are all in place. **No record in this repository's lock was changed by
+this PR** — a second correction would be a duplicate, and it would also be
+unverifiable, because the shapes it would "fix" are no longer there.
+
+The previously identified "corrected source" `75bd5994` is
+`compare fad242d3...75bd5994 → ahead_by: 454`, 300 files, and it adds four
+required contexts (`UUID v7 conformance`, `UUID v8 conformance`,
+`JS runtimes — environment provisions Bun first`, `JS runtimes — ${matrix.runtime}`)
+with 881 changed lines in `governance-reusable.yml` alone. Its lock is
+startup-clean (0 violations), but repinning the estate to it is a **policy
+upgrade**, not a startup repair. It is not proposed here.
+
+== What was still unguarded, and what this PR does about it
+
+=== 1. No single gate that holds representation, provenance and closure
+
+`#1290` closes with: *"a guard is added so a leaf entry whose `ref:` equals the
+40-hex SHA in its own key cannot be committed again … nothing enforces the
+rule."* For commits written after `75bd5994` that is no longer true —
+`lock-selfcheck.sh` carries the rule, and it attributes each hit to the workflow
+that reaches it. What no single gate does is hold the three properties that
+together make a lock consumable:
+
+* **representation** — `ref` names a reviewed ref, never the pin's own SHA and
+  never a 40-hex at all;
+* **provenance** — `commit` is `sha1-<the key's SHA>` and the key is SHA-pinned
+  (canon rule 10), checked as a conjugation rather than as two shapes;
+* **closure** — every ref under `workflows:` and every nested `uses:` has a
+  record (`close-lock.sh --check`, standards#963).
+
+`lock-selfcheck.sh` is workflow-driven: it starts from the `uses:` refs a commit
+actually uses, which is the right question for "is this SHA safe to pin" but not
+for "is this file internally well-formed" — a record nothing references yet, or
+a `commit:` that disagrees with its key while still naming a valid object,
+falls outside it. `close-lock.sh --check` owns closure and provenance but is not
+in the required gate path, and `update-actions-lock.sh --verify` is shaped for
+the lock-sync bot's job. So the three properties are spread across tools that
+each answer one.
+
+Added `scripts/check-lock-pin-contract.sh`, adopted from
+`hyperpolymath/cicd-suite#66` and extended as that PR's own guidance requires —
+it says of itself *"checks lock representation only; it does not verify remote
+existence, workflow closure, allowlist admission, or policy validity"*. So:
+
+* every rule of the cicd-suite guard is kept (ref must name a reviewed ref;
+  `commit` must be `sha1-<40 hex>` and agree with the key; an untested schema is
+  `UNINSPECTED` rather than clean; an empty population is not a pass);
+* **closure is added to the same gate**, delegating to `close-lock.sh --check`,
+  so representation and closure cannot be run one without the other;
+* **provenance is conjugated**, not just shape-checked (`commit` ↔ key SHA,
+  `owner_id`/`repo_id` present), and a tag-keyed record (`actions/setup-python@v2`,
+  measured at `fad242d3`) is refused as a moving target;
+* the **caller-side exemption** is exactly the one `#1290` states, and no wider:
+  this repository (either slug — the transfer kept repository ID 1116521501),
+  a record that carries a nested `uses:` list, and `ref` exactly equal to the
+  key's own SHA. A leaf record for the same repository is still RED; another
+  repository's reusable edge is still RED; `--self-repo` disables the alias on
+  request;
+* failing closed is explicit: no yq/jq, no lock, a non-mapping `dependencies`, a
+  schema version nobody has reviewed, an empty population, or a lock whose
+  record count `close-lock.sh` would misread all exit **2 (NOT INSPECTED)**, never 0.
+
+Wired into `.github/workflows/actions-lock-gate.yml` (the required
+`uses ⊆ actions.lock` gate), beside an explicit `close-lock.sh --check` step.
+
+=== 2. A stale literal helper pin (third-pin class, standards#946/#1119)
+
+`governance-reusable.yml` staged its policy helpers, its duplicate-key linter
+and its pin-existence gate from the literal
+`317101e03b8fe642589498f4bdb84541ab466062` — *2026-09-14*, while `main` had moved
+**202 files, +29,544/−1,736 lines** under `scripts/` (measured 2026-10-31).
+Consumers were being judged by six-week-old gate code, including:
+
+* `scripts/check-action-pins-resolve.sh`: +158/−13, the orphan-pin/ancestry
+  probe from issue #782 — the check that a pinned reusable commit is reachable
+  from the default branch rather than a real-but-orphaned object;
+* `scripts/check-workflow-duplicate-keys.sh`: +37/−2, KYAML normalisation —
+  without it a flow-style workflow produced 14 phantom duplicates (2026-10-01).
+
+Nothing noticed, for the same structural reason as #946: standards' own
+self-lint branch runs *its local tree* in those steps, so only consumers saw the
+frozen copy — and a PR that fixes a helper could not bump the pin, because the
+bump would have had to name a commit that did not exist yet.
+
+Repaired to `ref: ${{ job.workflow_sha }}` at all three sites — the reusable's
+own commit, i.e. exactly the standards commit the caller pinned. This is the
+same expression the lock gate has used since #1119, so the file now has one
+rule instead of two. `github.workflow_sha` / `github.sha` are still refused
+there: inside a called reusable they name the **caller's** commit and the
+checkout fails with "No commit found for SHA".
+
+`job.workflow_sha` is documented as unavailable on GitHub Enterprise Server,
+where it resolves **empty** — and `ref: ''` is not a failure, it is a silent
+checkout of the default branch. Each job that stages helpers this way now
+asserts the value is 40-hex *before* the checkout can float (`Assert this
+reusable's own commit resolved`), so that failure names itself.
+
+=== 3. Floating helper checkouts
+
+Three shared workflows named a branch for a standards source, so one push to
+standards silently changed the policy of every already-pinned caller:
+
+[cols="3,2,3"]
+|===
+|workflow |was |now
+
+|`changelog-reusable.yml`
+|`ref: main` for the canonical `cliff.toml`
+|`ref: ${{ job.workflow_sha }}`
+
+|`readme-derive-reusable.yml`
+|`standards-ref` defaulted to `main`, fetched with `git clone --branch` (which
+cannot express a commit at all)
+|`standards-ref` defaults to empty → `${{ inputs.standards-ref || job.workflow_sha }}`,
+fetched with `git fetch origin <ref>` and checked out detached
+
+|`fork-governance-reusable.yml`
+|`canon-ref` defaulted to `main`
+|`canon-ref` defaults to empty → `${{ inputs.canon-ref || job.workflow_sha }}`;
+a caller may still pass a 40-hex commit deliberately
+|===
+
+`readme-derive-reusable.yml`'s fetch also moves from the pre-transfer slug
+`hyperpolymath/standards` to `metadatastician/standards` (issue #1340 tracks the
+remaining instances of that coordinate; the redirect works today, which is why
+it was not urgent — it is corrected here because the fetch was being rewritten
+anyway).
+
+=== 4. A guard for the class, not just the instance
+
+`scripts/check-standards-helper-pins.sh` walks every workflow, finds every
+`actions/checkout` whose `repository:` is this repository, and requires the
+`ref:` to be one of exactly two shapes: `${{ job.workflow_sha }}` (optionally
+behind a documented `inputs.<name> ||` override) or a 40-hex commit. Anything
+else is red, with a message that says which mistake was made — a branch, a tag,
+`github.sha`, `github.workflow_sha`, a bare input, or no `ref` at all. With
+`--compare REF` it additionally applies the path-scoped freshness predicate from
+`check-lock-gate-pin-freshness.sh` to literal pins: the pin must contain `REF`
+over the paths that step actually stages, so an unrelated commit cannot redden a
+correct pin and a stale one cannot hide.
+
+Wired into `.github/workflows/self-test.yml` with `--compare "$BASE_SHA"`, so a
+PR that edits a helper is not asked to pin to its own unborn merge commit, while
+a stale pin on `main` is red immediately.
+
+== Verification
+
+All commands are offline and deterministic; `yq` is mikefarah v4 and `jq` is
+present on GitHub-hosted `ubuntu-latest`.
+
+[cols="4,1,6"]
+|===
+|command |result |what it establishes
+
+|`bash scripts/tests/check-lock-pin-contract-test.sh`
+|23/23
+|The historical raw-SHA record is rejected and the corrected record accepted;
+the caller-side exemption holds *and* its boundary holds; tag-keyed and
+missing-provenance records, commit/key disagreement and a dangling closure edge
+are all rejected; every not-inspected state is exit 2; **this repository's own
+lock passes**.
+
+|`bash scripts/tests/check-standards-helper-pins-test.sh`
+|18/18
+|branch, tag, `HEAD`, `github.sha`, `github.workflow_sha`, bare input and
+missing `ref` are rejected; `job.workflow_sha` and `inputs.x || job.workflow_sha`
+accepted; freshness is path-scoped (stale-over-staged-path red, unchanged path
+green); unparseable workflow and missing directory are not clean.
+
+|`bash scripts/tests/governance-canary-test.sh`
+|11/11
+|*Startup*: coverage, representation/provenance/closure clean, **and the two
+measured killers are caught as negative controls** (self-SHA ref; dangling edge).
+*Policy*: the shipped UUID and duplicate-key gates execute against a canary
+consumer pinned by digest, pass clean, and still fail when one defect is seeded.
+
+|`bash scripts/tests/governance-canary-test.sh fad242d3`
+|RED (exit 1)
+|The canary is not vacuous: run against the commit that actually broke svalinn,
+it refuses to certify and says why (no contract guard shipped; gates absent).
+
+|`bash scripts/check-lock-pin-contract.sh`
+|0 violations, 2 exemptions
+|`main`'s own lock, after the change.
+
+|`bash scripts/close-lock.sh --check .github/workflows/actions.lock`
+|closed
+|Dependency closure over every `workflows:` entry and every nested `uses:`.
+
+|`bash scripts/check-standards-helper-pins.sh .github/workflows --compare HEAD`
+|34 sites, 0 failures
+|Every standards helper checkout is immutable and fresh (was: 3 stale literals,
+2 floating, 1 unscanned `git clone`).
+|===
+
+=== On the runner, not only in the sandbox
+
+Local results are necessary and not sufficient: the guards have to run in
+GitHub's own environment against the real corpus. Measured on PR #1381:
+
+[cols="3,1,6"]
+|===
+|job / step |result |note
+
+|`uses ⊆ actions.lock` → *actions.lock representation, provenance and closure*
+|success
+|The contract guard executes in the required gate path against this repository's
+lock, including the delegated `close-lock.sh --check`.
+
+|`uses ⊆ actions.lock` → *actions.lock is transitively closed*
+|success
+|Closure named as its own obligation, so it does not depend on another script's
+internals.
+
+|`Repo self-tests` → *Standards helper checkouts are immutable and fresh*
+|success
+|The generalised third-pin guard over all 68 workflows, with `--compare` against
+the PR base — 34 standards checkouts, 0 failures.
+
+|`Repo self-tests` → *Lock-gate pin is not stale*
+|success
+|The original subject of that guard, still asserted separately.
+
+|`Repo self-tests` → *Guard controls (fixture-driven)*
+|success
+|All three regression suites **and the two-phase canary** run on the runner,
+including the canary's digest check, `git archive` extraction and both policy
+directions.
+
+|`Repo self-tests` → *Run tests/\*.sh and scripts/tests/\*.sh*
+|failure — **pre-existing**
+|`scripts/tests/dismiss-code-scanning-alerts-test.sh` exits 1. The identical
+step fails on `main` at `1725bebd` with the identical annotation, and it fails
+identically on the base tree, so it is not caused here and is not claimed fixed.
+It is why the guard steps above were moved *ahead* of the suite, and why the
+three controls have their own step: a red step skips everything after it.
+|===
+
+=== Lock regeneration and dependency closure
+
+**No `uses:` ref changed in this PR**, so no lock regeneration was required and
+none was done: `.github/workflows/actions.lock` is byte-identical to `main`'s.
+The changes are `ref:` values on checkouts of *this* repository plus new local
+`run:` steps, neither of which the lock keys. That is verified rather than
+asserted — the contract guard, `close-lock.sh --check`, and the
+`uses ⊆ actions.lock` gate (`.githooks/validate-actions-lock.sh`, 28
+SHA-pinned refs among 30 lock keys) all run in the canary and in CI.
+
+One test-environment caveat, stated so nobody reads a green too widely: three
+pre-existing suites (`check-actions-lock-gate-test.sh`,
+`check-lockfile-drift-test.sh`, `check-workflow-duplicate-keys-test.sh`) report
+identical failures at the base commit as on this branch in a sandbox where
+mikefarah `yq` is unavailable and a stand-in parser is used. They are green on
+the runner, and they are unaffected by this change either way — the identical
+result at base is the evidence.
+
+== Migration
+
+Ordered; nothing here is safe to compress.
+
+. **Merge this PR.** The merge commit is the first standards commit that carries
+  the guards. Callers do not move by themselves.
+. **Publish, then test the exact commit you intend to pin:**
+  `bash scripts/tests/governance-canary-test.sh <merge-sha>` — the argument makes
+  the canary extract and test that commit with `git archive` rather than the
+  working tree. A red here means do not repin.
+. **Re-pin consumers, immutable commit only.** In each consumer's
+  `.github/workflows/governance.yml`:
++
+[source,yaml]
+----
+jobs:
+  governance:
+    uses: metadatastician/standards/.github/workflows/governance-reusable.yml@<TESTED_40_HEX>
+----
++
+A tag or branch here re-creates the class this PR removes.
+. **Check the consumer's own lock and admission afterwards.** The consumer's
+  lock records the reusable call; its allowlist must admit the reference
+  (`scripts/check-allowed-actions.sh`). Neither is changed by this PR.
+. **Re-measure the canary consumer** (`svalinn`, `lintel`, `cadastra`, `odraz`
+  are currently startup-dead; `burble` and `marid` are the green controls) and
+  record the run URL. A governance run that shows one step per job is still a
+  startup failure, not a policy result.
+. **Only then** consider whether to move to a newer standards source carrying
+  the four extra required contexts of `75bd5994`. That is a separate, reviewed
+  policy upgrade: it adds contexts to the ruleset and changes policy behaviour.
+
+Consumers that explicitly pass `canon-ref:` (fork-governance) or
+`standards-ref:` (readme-derive) with a branch should change those inputs to a
+40-hex commit or drop them. The new defaults do not float.
+
+== Rollback
+
+Revert this PR (`git revert -m1 <merge-sha>`, or `gh pr revert`). Because no
+lock record and no `uses:` ref changed, a revert restores the previous
+behaviour exactly — including, deliberately, the three stale literal pins and
+the two floating helper checkouts. There is no partial state to repair.
+
+Per-site rollback if only one change misbehaves:
+
+* third-pin sites: restore `ref: 317101e03b8fe642589498f4bdb84541ab466062` in
+  `governance-reusable.yml` (accepting that it is stale and will be reported by
+  `check-standards-helper-pins.sh --compare`);
+* floating-helper sites: restore the previous `ref:`/`default:` values in
+  `changelog-reusable.yml`, `readme-derive-reusable.yml` or
+  `fork-governance-reusable.yml`;
+* guards: remove the step from `actions-lock-gate.yml` / `self-test.yml` and
+  delete the two scripts. **Do not** relax a guard's rules to keep it green: a
+  guard that has been widened to pass is indistinguishable from no guard.
+
+== Coordination
+
+* **standards#1290** — acceptance criterion 3 is implemented by
+  `scripts/check-lock-pin-contract.sh` (comment posted with this PR). Criteria 1
+  and 2 were already met on `main`; criterion 4 (re-measure a post-fix caller)
+  is `<<migration>>` step 5 and needs the consumer owners.
+* **cyo** — the consumers this unblocks are in the `metadatastician` org. The
+  repin list and the measured before/after runs are in <<migration>>; a repin is
+  a consumer decision, not a standards one.
+* **Hypatia** — `hypatia-scan-reusable.yml` is unaffected by the pin changes
+  (its standards checkouts already used `job.workflow_sha`), but the same
+  `hypatia-ref` / `panic-ref` / `pons-ref` vetted-SHA defaults remain the
+  precedent for "no floating HEAD" and are unchanged. Hypatia reports a
+  non-closed lock as `invalid_actions_lock`; the new gate agrees with it rather
+  than restating it.
+* **gitbot-fleet** — the lock-sync automation must preserve **tag refs** and
+  composite closure rather than rewriting refs to raw SHAs (the defect that
+  created this outage), and must not "fix" a failing contract guard by editing
+  the guard. `scripts/update-actions-lock.sh` already treats `sha-as-ref` as an
+  advisory category; the contract guard is the enforcing half.
+* **cicd-suite#66** — the representation guard and its guidance are adopted and
+  cited in `scripts/check-lock-pin-contract.sh`; the closure and provenance
+  halves that PR explicitly did not claim are added here, and its statement that
+  a passing fixture is not proof of a working consumer job is honoured by the
+  canary and by <<migration>>.
+
+=== Two open items, measured and closed as non-defects
+
+* **Four workflows carry no lock key.** `lock-sync-gate.yml`, `scorecard.yml`,
+  `secret-scanner.yml` and `self-ci.yml` appear under neither `workflows:` in the
+  lock nor among the records. Measured by parsing each file: **all four contain
+  zero external `uses:`** (only `run:` steps and `./`-relative composite
+  actions), so there is nothing for a lock to key and nothing the runner
+  validates. Unkeyed is correct here, not a gap — and if one of them ever gains
+  a third-party `uses:`, `.githooks/validate-actions-lock.sh` fails, because
+  coverage is asserted in both directions in the required gate.
+* **Two caller-side records record `ref:` equal to their own SHA.**
+  `metadatastician/standards@70019048…` and `…@d55304a0…` are reusable-workflow
+  edges, and standards#1290 records them as correct as-is: the requested ref of
+  a reusable call *is* the commit. This is why the adopted cicd-suite#66 guard is
+  not applied verbatim — unmodified, it fails this repository's own lock on those
+  two records, and "make the guard pass" would then mean corrupting valid
+  records. The exemption is three-claused (this repository, a record carrying a
+  `uses:` list, `ref` identical to the key's SHA); the guard reports what it
+  exempted (`caller-side reusable edges exempted: 2`) so the exemption is never
+  silent.
+
+== Residual risk and follow-ups
+
+* `job.workflow_sha` is unavailable on GHES. The estate is github.com; a GHES
+  port needs a different key, and the assertion steps make that a loud failure
+  rather than a silent float.
+* A moved tag is invisible to every check here (`close-lock.sh` documents the
+  measured tolerance). Remote reachability stays with
+  `check-action-pins-resolve.sh` and `lock-selfcheck.sh`'s separate probe.
+* `scorecard-reusable.yml` keeps its path-scoped literal pin
+  (`5a0891e9e58b`, only `scripts/reconcile-scorecard-actions-lock.rb`), which the
+  guard reports as fresh because that file has not changed since 2026-10-06. It
+  passes the freshness predicate and is not churned here.
+* `git clone …standards.git` inside a `run:` body is not seen by the static
+  guard (it is neither a checkout step nor a reusable call). The one instance in
+  this repository is fixed; a future one is a review question, not a silent pass.

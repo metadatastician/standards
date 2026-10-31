@@ -33,3 +33,26 @@ jobs:
 
       - name: "Every SHA-pinned uses: must be in the lockfile"
         run: bash .githooks/validate-actions-lock.sh
+
+      # Coverage above proves every `uses:` HAS a record. It says nothing about
+      # whether the runner will ACCEPT that record, and the runner rejects a
+      # leaf whose `ref:` repeats its own SHA ("invalid lockfile pin") at
+      # `Set up job` — before any policy step, in every caller of this
+      # repository, with the reason visible only on the run page.
+      # MEASURED: metadatastician/svalinn run 40108154356 on standards
+      # fad242d3, 12/12 governance jobs dead at setup. standards#1271 corrected
+      # nine such leaves; #1290 measured four that survived and asked for a
+      # guard "so a leaf entry whose ref: equals the 40-hex SHA in its own key
+      # cannot be committed again". This is that guard, adopted from
+      # hyperpolymath/cicd-suite#66 and extended with provenance conjugation
+      # and the closure check (see the script header for what it does NOT
+      # prove).
+      - name: "actions.lock representation, provenance and closure"
+        run: bash scripts/check-lock-pin-contract.sh .github/workflows/actions.lock
+
+      # Explicit, even though check-lock-pin-contract.sh delegates to
+      # close-lock.sh --check: a reader of this workflow should see closure
+      # named as its own obligation (standards#963, cicd-squabbler#101), not
+      # infer it from another script's internals.
+      - name: "actions.lock is transitively closed"
+        run: bash scripts/close-lock.sh --check .github/workflows/actions.lock

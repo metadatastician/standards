@@ -83,10 +83,16 @@ on:
         required: false
         default: "github-actions[bot]"
       canon-ref:
-        description: "Ref of metadatastician/standards holding the renderer. Pin it in production."
+        description: >-
+          Ref of metadatastician/standards holding the renderer. Leave EMPTY
+          to use this reusable's own commit (job.workflow_sha), which is the
+          standards commit the caller pinned. Setting it to a branch (the old
+          default, "main") makes every already-pinned caller run whatever
+          standards pushed most recently — a float, not a pin; a 40-hex
+          commit is accepted when a caller deliberately needs another one.
         type: string
         required: false
-        default: "main"
+        default: ""
 
 permissions: {}
 
@@ -117,7 +123,11 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: metadatastician/standards
-          ref: ${{ inputs.canon-ref }}
+          # `inputs.canon-ref` when a caller names one, otherwise this
+          # reusable's own commit. Never a silent branch: the empty-string
+          # default previously meant `main`, so one push to standards changed
+          # the renderer of every already-pinned caller.
+          ref: ${{ inputs.canon-ref || job.workflow_sha }}
           path: .fork-governance-canon
           persist-credentials: false
           sparse-checkout: scripts/fork-governance-render.sh

@@ -442,6 +442,21 @@ jobs:
     permissions:
       contents: read
     steps:
+      # `job.workflow_sha` names the standards commit for the helper
+      # checkouts in this job. It is documented as unavailable on GitHub
+      # Enterprise Server, where it resolves EMPTY — and `ref: ''` is not a
+      # failure, it is a silent checkout of standards' DEFAULT BRANCH: a float
+      # wearing a pin's clothes. Assert it, so that failure names itself
+      # instead of quietly changing which tooling judged the caller.
+      - name: Assert this reusable's own commit resolved
+        env:
+          SELF_WORKFLOW_SHA: ${{ job.workflow_sha }}
+        run: |
+          if ! printf '%s' "$SELF_WORKFLOW_SHA" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "::error::job.workflow_sha resolved to '${SELF_WORKFLOW_SHA:-<empty>}', not a 40-hex commit, so the standards helper checkout below would follow the default branch. The job workflow-identity properties are unavailable on GitHub Enterprise Server."
+            exit 1
+          fi
+          echo "Standards helper source: $SELF_WORKFLOW_SHA"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ github.repository }}
@@ -467,20 +482,31 @@ jobs:
       # this repo into `.standards-checkout/`, then run the script from
       # there.
       #
-      # The checkout is pinned to an immutable standards commit, not `main`.
-      # `github.workflow_sha` cannot serve: it resolves to the caller repo's
-      # commit SHA (not standards'), so the fetch fails with exit 128
-      # ("No commit found for SHA"). Hence a literal SHA, bumped in the same
-      # PR as any helper change. scripts/tests/governance-reusable-contract-
-      # test.sh asserts exactly this with `ref: [0-9a-f]{40}`: following
-      # moving `main` would let one standards push silently change the
-      # behaviour of every already-pinned caller, with no review in their
-      # repos.
+      # The checkout names THIS reusable's own commit, never `main`.
+      #
+      # It used to be the literal 317101e03b8f (2026-09-14). That is the
+      # third-pin class standards#946/#1119 cured once for the lock gate and
+      # left standing here (measured 2026-10-31: 202 files, +29,544/-1,736
+      # lines under scripts/ had changed since, including the orphan-pin
+      # ancestry probe in
+      # check-action-pins-resolve.sh, #782, and the KYAML normalisation in
+      # check-workflow-duplicate-keys.sh): every consumer was judged by
+      # six-week-old gate code, and no PR here could test a helper fix because
+      # the bump had to name a commit that did not exist yet.
+      #
+      # `job.workflow_sha` is the commit of the workflow file that DEFINES
+      # this job — i.e. exactly the standards commit the caller pinned — so
+      # the helper is never older than the caller asked for and still cannot
+      # follow `main`. `github.workflow_sha` / `github.sha` are the CALLER's
+      # commit and would fail with "No commit found for SHA". These four
+      # properties are unavailable on GitHub Enterprise Server, which is why
+      # "Check for TypeScript" below asserts the resolved value before using
+      # it. scripts/check-standards-helper-pins.sh holds this shape.
       - name: Checkout the pinned Standards policy helpers
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: metadatastician/standards
-          ref: 317101e03b8fe642589498f4bdb84541ab466062
+          ref: ${{ job.workflow_sha }}
           path: .standards-checkout
           # Sparse-checkout only the scripts dir to keep this fast.
           sparse-checkout: |
@@ -1305,6 +1331,21 @@ jobs:
     permissions:
       contents: read
     steps:
+      # `job.workflow_sha` names the standards commit for the helper
+      # checkouts in this job. It is documented as unavailable on GitHub
+      # Enterprise Server, where it resolves EMPTY — and `ref: ''` is not a
+      # failure, it is a silent checkout of standards' DEFAULT BRANCH: a float
+      # wearing a pin's clothes. Assert it, so that failure names itself
+      # instead of quietly changing which tooling judged the caller.
+      - name: Assert this reusable's own commit resolved
+        env:
+          SELF_WORKFLOW_SHA: ${{ job.workflow_sha }}
+        run: |
+          if ! printf '%s' "$SELF_WORKFLOW_SHA" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "::error::job.workflow_sha resolved to '${SELF_WORKFLOW_SHA:-<empty>}', not a 40-hex commit, so the standards helper checkout below would follow the default branch. The job workflow-identity properties are unavailable on GitHub Enterprise Server."
+            exit 1
+          fi
+          echo "Standards helper source: $SELF_WORKFLOW_SHA"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ github.repository }}
@@ -1321,7 +1362,12 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: metadatastician/standards
-          ref: 317101e03b8fe642589498f4bdb84541ab466062
+          # This reusable's own commit (see the same expression in
+          # `language-policy`): the linter is the linter of the standards
+          # commit the caller pinned, never older and never `main`. The old
+          # literal 317101e03b8f froze consumers on 2026-09-14 tooling and
+          # could not be bumped by the PR that fixed a helper.
+          ref: ${{ job.workflow_sha }}
           path: .standards-dupkey
           sparse-checkout: |
             scripts/check-workflow-duplicate-keys.sh
@@ -1425,10 +1471,13 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: metadatastician/standards
-          # Immutable pin, for the same reason as the policy-helper checkout
-          # above: following `main` lets one standards push change the
-          # behaviour of every already-pinned caller with no review.
-          ref: 317101e03b8fe642589498f4bdb84541ab466062
+          # This reusable's own commit, for the same reason as the
+          # policy-helper checkout above: it is the caller's pin, so one push
+          # to standards cannot change the behaviour of an already-pinned
+          # caller, and no third pin exists to go stale (the literal this
+          # replaces, 317101e03b8f, missed the orphan-pin ancestry probe that
+          # #782 added to check-action-pins-resolve.sh).
+          ref: ${{ job.workflow_sha }}
           path: .standards-checkout
           persist-credentials: false
           sparse-checkout: |
