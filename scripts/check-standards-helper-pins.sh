@@ -141,7 +141,10 @@ for wf in "$WF_DIR"/*.yml "$WF_DIR"/*.yaml; do
     # judged over the whole tree, because that is what it runs.
     scope="${paths:-.}"
     # shellcheck disable=SC2086
-    diverged="$(git diff --name-only "$ref" "$COMPARE" -- $scope 2>/dev/null)"
+    if ! diverged="$(git diff --name-only "$ref" "$COMPARE" -- $scope 2>/dev/null)"; then
+      echo "::error file=$wf::$label: git diff between $ref and $COMPARE failed — freshness could not be verified." >&2
+      fail=$((fail + 1)); continue
+    fi
     if [ -n "$diverged" ]; then
       echo "::error file=$wf::$label: staged from $ref, which does NOT contain what is on $COMPARE over: $(printf '%s ' $scope)" >&2
       printf '%s\n' "$diverged" | sed 's/^/      stale: /' >&2
