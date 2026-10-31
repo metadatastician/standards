@@ -99,6 +99,8 @@ if [ -z "$SELF_REPO" ]; then
     *github.com[:/]*/*.git) SELF_REPO="${remote#*github.com}"; SELF_REPO="${SELF_REPO#[:/]}"; SELF_REPO="${SELF_REPO%.git}" ;;
     *github.com[:/]*/*)     SELF_REPO="${remote#*github.com}"; SELF_REPO="${SELF_REPO#[:/]}" ;;
   esac
+  # No GitHub origin (for example a `git archive` extraction): use the canonical slug.
+  [ -n "$SELF_REPO" ] || SELF_REPO="metadatastician/standards"
 fi
 SELF_REPO_LC="$(printf '%s' "$SELF_REPO" | tr 'A-Z' 'a-z')"
 
