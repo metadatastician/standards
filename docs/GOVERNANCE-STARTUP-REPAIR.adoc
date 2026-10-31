@@ -395,8 +395,7 @@ the PR base — 34 standards checkouts, 0 failures.
 |`Repo self-tests` → *Guard controls (fixture-driven)*
 |success
 |All three regression suites **and the two-phase canary** run on the runner,
-including the canary's digest check, `git archive` extraction and both policy
-directions.
+including the canary's digest check and both policy directions.
 
 |`Repo self-tests` → *Run tests/\*.sh and scripts/tests/\*.sh*
 |failure — **pre-existing**
