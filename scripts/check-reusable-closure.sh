@@ -232,7 +232,11 @@ walk_callee() {
   local key; key="$(norm "$raw")"
   [ -n "$top" ] || top="$key"
   [ -n "$key" ] || return 0
-  [ "$depth" -gt "$DEPTH" ] && return 0
+  if [ "$depth" -gt "$DEPTH" ]; then
+    echo "::error::$key: reusable chain is deeper than --depth $DEPTH, so its closure was never inspected. Raise --depth." >&2
+    unresolved=$((unresolved + 1))
+    return 1
+  fi
   # Cycle detection keys on the FILE, not on owner/repo@ref: two different
   # workflow files called at the same ref are two different `uses:` sets, and
   # collapsing them silently under-collects the closure.
