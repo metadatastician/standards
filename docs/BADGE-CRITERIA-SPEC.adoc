@@ -2,6 +2,7 @@
 // Copyright (c) 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
 
 = Readiness Badge Criteria (BC) v0.1 — DRAFT
+// doctrine-coverage: on
 :toc: left
 :toclevels: 3
 :sectnums:
@@ -301,12 +302,16 @@ Rendering:
 
 == Criteria a badge must satisfy
 
+// Review-only: the generator that audited these was retired 2026-10-09; the check column is documentation
+
 Written as MUST / SHOULD / COULD with an executable `check` per row, in
 the vocabulary of `scorecard.schema.json`, so that a badge assertion could
 be audited by the same generator that audited specs (retired 2026-10-09).
 `<S>` is the subject repository root; `<axis>` is the lowercase axis name.
 
 === MUST
+
+// Review-only: the BC-M* rows carry check commands but no lane runs them; same retirement as above
 
 [cols="1,4,4",options="header"]
 |===

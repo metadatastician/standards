@@ -264,6 +264,31 @@ see §1.2. A worked example: before 2026-09-22 the Deno job announced a ban with
 a `::warning::`, which cannot fail a job, while lint-checking the banned thing. When adding a gate, verify it *both* ways: that it passes on clean
 input *and* fails on a deliberately planted violation.
 
+=== 3.1 Scope of the Python ban — OPEN QUESTION (do not treat as settled)
+
+The Python ban is currently enforced against **tracked artefacts**:
+`git ls-files '*.py'`. It says nothing about **toolchain declarations**, and the
+gap is live rather than theoretical: a repository that tracks zero `.py` files
+but ships a `mise.toml` declaring `python`, `pytest`, `black`, `ruff` and
+`isort` passes the gate today.
+
+Undecided, and deliberately not decided here:
+
+* Does the ban extend to `mise.toml` / `.tool-versions`, `devcontainer.json`
+  images and features, `guix.scm` / `flake.nix` / `Containerfile` package lists,
+  `pyproject.toml` / `requirements.txt` / lock files, and recipe bodies that
+  invoke `python -m …`?
+* If yes: ~416 repositories, most of which are not Julia, and many of which use
+  Python at arm's length without shipping a line of it. It would need the same
+  exemption/budget machinery as the trusted base — not a blanket failure.
+* If no: the gate should say "this bans committed source" in one sentence, so
+  the next reviewer does not read "no exceptions" and conclude that a toolchain
+  declaration is a violation.
+
+The reasoning, the measured example and the proposed shape of either answer are
+in `docs/audits/2026-10-30-trusted-base-marker-widening.adoc` § "Doctrine gap
+raised, not resolved". An owner ruling is required before any gate changes.
+
 == 4. Amending this document
 
 This file is the authority cited by `scripts/check-package-policy.sh`. If you

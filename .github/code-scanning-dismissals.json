@@ -20,7 +20,7 @@
     {
       "alert_number": null,
       "comment": "security-events: write is the ONLY permission that can upload SARIF to code scanning; it cannot be expressed as read. The reusable this job calls declares the same permission, and GitHub rejects a run at startup when the caller grants less than the callee requests (startup_failure, zero jobs) - so downgrading this to read does not reduce privilege, it silently disables code scanning. See standards#451 and the in-file comment.",
-      "line": 27,
+      "line": 26,
       "path": ".github/workflows/hypatia-scan.yml",
       "reason": "won't fix",
       "rule_id": "TokenPermissionsID"
@@ -28,7 +28,7 @@
     {
       "alert_number": null,
       "comment": "Same structural requirement as the caller above: the scan job uploads its own SARIF, so security-events: write is the minimum this reusable can declare. Workflow-level actions/contents stay read.",
-      "line": 91,
+      "line": 98,
       "path": ".github/workflows/hypatia-scan-reusable.yml",
       "reason": "won't fix",
       "rule_id": "TokenPermissionsID"
@@ -76,7 +76,7 @@
     {
       "alert_number": null,
       "comment": "Same structural requirement as codeql.yml and hypatia-scan.yml: this job is the caller of hypatia-scan-reusable.yml, which uploads SARIF and therefore declares security-events: write. A caller may not grant less than the callee declares - the run then dies at startup with zero jobs - so there is no lower-privilege spelling of this workflow. Workflow level stays contents: read.",
-      "line": 230,
+      "line": 275,
       "path": ".github/workflows/fork-governance.yml",
       "reason": "won't fix",
       "rule_id": "TokenPermissionsID"

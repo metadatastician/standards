@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 // SPDX-FileCopyrightText: 2025-2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 = CI/CD Signal Discipline
+// doctrine-coverage: on
 :toc: macro
 :toclevels: 2
 
@@ -227,6 +228,8 @@ They generalise to any large-scale automated investigation.
 
 === Never report a proxy as a finding
 
+// Review-only: no gate can tell whether a number is a proxy; the spot-check against ground truth is a human step
+
 An early conclusion — "340 workflows have never parsed" — was inferred from the
 platform API returning a file path where a workflow name was expected. The
 inference was plausible and *false*: spot-checking three of them found all three
@@ -238,6 +241,8 @@ State the proxy explicitly, and spot-check it against ground truth before any
 number derived from it is reported — let alone acted upon.
 
 === Distinguish "absent" from "unreadable"
+
+// Review-only: the survey does not report workflow API failures in its pin census
 
 The same audit recorded "no applications installed" for all 424 repositories.
 The truth was that the permission to read that endpoint was missing and the
@@ -342,6 +347,8 @@ estate. Design spec: `docs/superpowers/specs/2026-09-02-cicd-regularisation-desi
 Machine-readable form: `config/rulesets/gates.json`.
 
 === MUST list (every repository)
+
+// Review-only: a routing table: each row is enforced in its own lane and reported through the verdict grid
 
 [cols="2,1,1,3",options="header"]
 |===

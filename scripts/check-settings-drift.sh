@@ -2,6 +2,10 @@
 # SPDX-License-Identifier: MPL-2.0
 # Copyright (c) 2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 set -eo pipefail
+#
+# For docs/REPO-SETTINGS.adoc § "Private repositories on a Free account",
+# this report-only check skips security_and_analysis on private repositories.
+# It neither applies settings nor classifies them as N/A.
 
 # check-settings-drift.sh — detect estate settings moving without anyone noticing.
 #

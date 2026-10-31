@@ -100,16 +100,16 @@ check "the old deep-recon line does not match the corrected dismissal" \
   "[ \"\$(plan <(mk 206 TokenPermissionsID .github/workflows/deep-recon-reusable.yml 70))\" = '' ]"
 check "the old Hypatia reusable line is no longer dismissed" \
   "[ \"\$(plan <(mk 207 TokenPermissionsID .github/workflows/hypatia-scan-reusable.yml 62))\" = '' ]"
-check "shifted Hypatia caller comment cannot authorize dismissal" \
-  "[ \"\$(plan <(mk 210 TokenPermissionsID .github/workflows/hypatia-scan.yml 26))\" = '' ]"
-check "shifted reusable-workflow comment cannot authorize dismissal" \
-  "[ \"\$(plan <(mk 211 TokenPermissionsID .github/workflows/hypatia-scan-reusable.yml 90))\" = '' ]"
-check "shifted fork-governance comment cannot authorize dismissal" \
-  "[ \"\$(plan <(mk 212 TokenPermissionsID .github/workflows/fork-governance.yml 229))\" = '' ]"
+check "the comment line above the Hypatia caller permission is not the dismissal" \
+  "[ \"\$(plan <(mk 210 TokenPermissionsID .github/workflows/hypatia-scan.yml 25))\" = '' ]"
+check "the comment line above the reusable-workflow permission is not the dismissal" \
+  "[ \"\$(plan <(mk 211 TokenPermissionsID .github/workflows/hypatia-scan-reusable.yml 97))\" = '' ]"
+check "the comment line above the fork-governance permission is not the dismissal" \
+  "[ \"\$(plan <(mk 212 TokenPermissionsID .github/workflows/fork-governance.yml 274))\" = '' ]"
 check "the old fork-governance line is no longer dismissed" \
   "[ \"\$(plan <(mk 208 TokenPermissionsID .github/workflows/fork-governance.yml 81))\" = '' ]"
 check "the current fork-governance permission line is matched" \
-  "[ \"\$(plan <(mk 209 TokenPermissionsID .github/workflows/fork-governance.yml 230))\" = '209 ' ]"
+  "[ \"\$(plan <(mk 209 TokenPermissionsID .github/workflows/fork-governance.yml 275))\" = '209 ' ]"
 check "aggregate rule with a real path does not inherit the SASTID entry" \
   "[ \"\$(plan <(mk 204 SASTID .github/workflows/ci.yml 12))\" = '' ]"
 check "unlisted rule id: no match" \

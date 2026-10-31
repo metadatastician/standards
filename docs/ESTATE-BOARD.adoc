@@ -1,4 +1,5 @@
 = ESTATE-BOARD
+// doctrine-coverage: on
 :revdate: 2026-09-15T08:58:14Z
 :toc: left
 :toclevels: 2
@@ -68,6 +69,8 @@ NOTE: `sha_pinning_required` lives on `repos/{R}/actions/permissions`, *not* on 
 Related, and closed by the same measurement: no repository has an empty `patterns_allowed` (the floor is 92 patterns; 47 repositories carry 118) and *zero* repositories have `verified_allowed: false`. The allow-list widening ruling has already been executed estate-wide, which retires the class-4 failure mode entirely.
 
 == Coverage and exclusions -- stated, never silent
+
+// Review-only: the board is generated and states its exclusions; no gate can forbid an unwritten omission
 
 [cols="3,1,5",options="header"]
 |===

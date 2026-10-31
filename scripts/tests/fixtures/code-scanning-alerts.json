@@ -4,13 +4,13 @@
       "number": 101,
       "state": "open",
       "rule": { "id": "TokenPermissionsID", "severity": "high" },
-      "most_recent_instance": { "location": { "path": ".github/workflows/hypatia-scan.yml", "start_line": 27 } }
+      "most_recent_instance": { "location": { "path": ".github/workflows/hypatia-scan.yml", "start_line": 26 } }
     },
     {
       "number": 102,
       "state": "open",
       "rule": { "id": "TokenPermissionsID", "severity": "high" },
-      "most_recent_instance": { "location": { "path": ".github/workflows/hypatia-scan-reusable.yml", "start_line": 91 } }
+      "most_recent_instance": { "location": { "path": ".github/workflows/hypatia-scan-reusable.yml", "start_line": 98 } }
     },
     {
       "number": 103,

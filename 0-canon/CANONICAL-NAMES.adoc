@@ -2,6 +2,7 @@
 // SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 = Canonical Names — Anti-Normalisation Register
 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+// doctrine-coverage: on
 :toc: macro
 :icons: font
 
@@ -102,6 +103,9 @@ DEPRECATED NAMES — DO NOT REINTRODUCE (estate mandate 2026-06-30):
 
 == Deprecated names — do not reintroduce (MANDATE, 2026-06-30)
 
+// Enforced-by: scripts/check-canonical-names.sh
+// The guard checks reintroduction of 6a2 and agent_instructions only.
+
 Distinct from the mis-expansion register above: these are estate names that
 have been *renamed*. The old form is **deprecated** and must not be
 reintroduced anywhere (paths, prose, tooling, config). This is the owner's
@@ -142,6 +146,264 @@ estate-wide, `standards` included.
   See groove ADR 0009 and the **The Joinery** row in the *Register* above.
   Do not revert `spline`→`weft`.
 |===
+
+== What a repository rename mechanically entails
+
+A rename is not `git mv` plus a find-and-replace. It is four artefacts, one
+proof or one recorded decision, and one gate — and the gate is worthless unless
+the register it reads is written before the rename, not after.
+
+This section exists so the next rename is not an improvisation. The worked
+example throughout is
+`JuliaPackageSpitter.jl/docs/decisions/0002-reconcile-repository-and-package-name.adoc`
+(2026-10-04, retiring `JuliaPackage-Reuse-Audit.jl`).
+
+=== First: what exactly was retired — an illegality, or a decision?
+
+These are different, and conflating them is the most common way a rename turns
+into an argument.
+
+[cols="2,2,3,3",options="header"]
+|===
+| Retired form | Status | Why | What may be said about it
+
+| `JuliaPackage-Reuse-Audit.jl`
+| **PROVED illegal** as a Julia identifier
+| `-` is not an identifier character; it is the subtraction operator, so
+  `JuliaPackage-Reuse-Audit` parses as `JuliaPackage - Reuse - Audit`, and `.`
+  after a name is field access. No module, no `struct`, no symbol prefix can
+  carry it. Proved, not asserted: `proofs/agda/IdentifierCharset.agda` (where
+  `IdentChar` has no constructor for `-`) and `proofs/agda/RetiredNames.agda`
+  (each retired name is not a `LegalIdent`).
+| *It could never have compiled.* Stronger than deprecated: any code using it
+  as a symbol was broken on arrival — including `extern fn
+  juliapackage-reuse-audit_init()` in the Zig/C FFI layer, where a hyphen is
+  equally illegal. A rename is not a preference here; it is the repair.
+
+| `JULIAPACKAGE_REUSE_AUDIT`
+| **Retired by decision** — a perfectly legal identifier
+| Uppercase letters and `_` are legal in a Julia identifier, in Idris2, in C,
+  in almost everything. Nothing about it is ill-formed. It was retired because
+  the thing it named (a "reuse audit") was roadmap work three minor versions
+  away, while the code was a scaffolder, and one name for one thing beat two
+  names for none.
+| *Legality is not permission.* This form has to be retired by a written
+  decision with a reason, and enforced by a register — because no compiler,
+  parser or proof will ever reject it for you. Do not dress a decision up as a
+  proof, and do not leave a real illegality as a convention.
+|===
+
+The consequence for tooling: an illegal name can be rejected mechanically by
+the language. A legal-but-retired name can only be rejected by a *register of
+retired spellings* plus a policy that says the register wins. That is the whole
+reason the register exists.
+
+=== 1. The register of retired names
+
+Location: `docs/naming/retired-names.txt` in the repository that renamed.
+
+[source]
+----
+# SPDX-License-Identifier: CC-BY-SA-4.0
+#
+# One retired SPELLING per line. '#' starts a comment.
+#
+# Retired 2026-10-04 by docs/decisions/0002-...adoc: the repository was named
+# for a "reuse audit" capability that is still unimplemented roadmap work,
+# while the package, the README, the description and the registry entry all
+# describe a scaffolder.
+JuliaPackage-Reuse-Audit.jl
+JuliaPackage-Reuse-Audit
+juliapackage-reuse-audit
+----
+
+Rules that make the register do work:
+
+* **Register spellings, not "the name".** A literal scanner checks what is
+  written in it. One entry checks one spelling. The three above are three
+  entries because the estate had already used all three — the `.jl` suffix in
+  prose, the bare name in a URL, and the lowercase form in a C/Zig symbol
+  prefix. A register with one entry is a register that misses two.
+* **The register is data, the decision record is the argument.** The ADR
+  explains and evidences; the register is what the gate reads. Neither restates
+  the other.
+* **Write it before the rename.** Register first, then edit: the tree you are
+  about to touch is then already under the check, and the pre-rename state is
+  your negative control.
+* **Generate, do not retype.** `JuliaPackageSpitter.jl` generates
+  `proofs/agda/RetiredNames.agda` from this file
+  (`scripts/gen-identity-agda.sh --mode retired`), so the proof and the gate
+  cannot drift apart.
+
+The estate-level register is the *Deprecated names* table in this document. It
+lists estate-wide retirements (`6a2`, `agent_instructions`, `weft`); a
+repository-local rename uses its own `docs/naming/retired-names.txt`. A local
+rename does **not** add a row here unless the owner mandates it estate-wide.
+
+=== 2. The allowlist of files that keep them as historical record
+
+Location: `docs/naming/retired-names-allowlist.txt`, one **exact path** per
+line, each with a reason.
+
+Historical record legitimately contains the retired name, and the point of the
+allowlist is that a reader can see *all* of it in one place:
+
+[cols="2,3",options="header"]
+|===
+| Belongs in the allowlist | Does not belong
+
+| the changelog — a rename that is not in the changelog did not happen
+| production code, tests, build config, anything that could be fixed
+
+| the decision record that retired the name, with its evidence
+| a directory prefix or a glob (`docs/**`, `9-archive/`) — that is an escape
+  hatch, not a record
+
+| the register and the allowlist themselves, so the rule can state what it
+  forbids and a reviewer can see the exemptions without opening the gate
+| a file that merely mentions the old name in passing and could be reworded
+
+| a generated module that carries the characters as data
+| a `.gitignore`-style pattern
+
+| negative-control fixtures that reproduce the pre-rename defect
+| "everything under `docs/`"
+|===
+
+Two mechanical properties, both deliberate:
+
+* **Exact match, no prefixes.** `CHANGELOG.adoc` does not exempt
+  `CHANGELOG.adoc.bak`. A prefix rule turns one exemption into an unbounded
+  family of them, and the next file to be added under that path is exempt
+  before anyone has read it.
+* **Every entry carries a reason.** The list is a historical record, not an
+  escape hatch; adding to it is a reviewable act, and the reason is the price
+  of the entry.
+
+=== 3. The spelling-insensitive tree check
+
+Reference implementation: `scripts/check-retired-names.sh` in this repository.
+It is opt-in — no register, no-op — so it is safe to call from a shared workflow
+across repositories that have never renamed anything.
+
+Whole-tree scans are **report-only by default**: findings are printed and the script exits
+0. `--strict` is what turns the literal and path passes into a build failure, and
+that flag is the caller's decision — a repository mid-migration runs it without
+`--strict` until its tree is clean, then adds the flag. A run without `--strict`
+is a report, not a gate when scanning the whole tree. `--diff BASE` exits 1
+for a matching added line or added or renamed destination path even without
+`--strict`.
+
+Three passes, in order of authority:
+
+. **Literal scan (fails the build).** `grep -F -f retired-names.txt` over every
+   *tracked* file, minus the allowlist. Tracked, so an untracked build artefact
+   is not a repository-state defect and `.gitignore` means what it says.
+   Findings are deduplicated on `path:line`, because one line matched by two
+   spellings is one problem.
+. **Path scan (fails the build).** The same patterns against every tracked
+   *path*. A directory called `juliapackage-reuse-audit-old/` is a surviving
+   retired name even when every file inside it is clean, and a content-only
+   scan cannot see it. Directory names, file names and symlinks are part of the
+   identity.
+. **Normalised scan (`--spellings`, report-only, always).** Every token in the
+   tree is lowercased and stripped of `.` `_` `-`, then compared with the
+   normalised form of each register entry. This finds
+   `JuliaPackage_Reuse_Audit.jl`, `juliapacakge-reuse-audit`,
+   `JULIAPACKAGE_REUSE_AUDIT` — spellings a three-entry literal register cannot
+   see. It is *always* report-only because it is a heuristic: it cannot see a
+   name split across words (`Julia Package Reuse Audit`) and it can collide
+   with unrelated text. Its job is to tell the register author which spelling
+   they missed, not to fail a build.
+
+Fail-closed details, because a check that passes when it cannot look is worse
+than no check:
+
+* no register → clean no-op, exit 0 (most of the estate);
+* register present but empty → **failure**: that is precisely the state a
+  rename leaves behind when the mechanics were skipped;
+* register or allowlist unreadable → failure, never a skip;
+* `--diff BASE` checks added lines and added or renamed destination paths, for a
+  migration in progress that inherited text and paths it did not write.
+
+=== 4. The mechanics, in order
+
+. **Decide the direction and record it.** Rename the repository to the package,
+   not the package to the repository: the package name is what compilers,
+   registries and `Pkg.add` resolve. State the direction explicitly in the
+   decision record, with the evidence table (name / description / package /
+   registry / code) that shows which surface is the outlier.
+. **Register the spellings.** Before touching the repository.
+. **Allowlist the historical record, with reasons.**
+. **Prove what is provable.** If the retired name was illegal, prove it, and
+   generate the proof module from the register. `IdentifierCharset.agda` +
+   `RetiredNames.agda` + `PackageNaming.agda` (the rule `repository =
+   package ++ ".jl"`, proved injective, with a unique witness, a round trip,
+   and a proof that it is not the identity) are the reference shape.
+. **Rename and update every self-reference.** GitHub repository name first;
+   then URLs and clone instructions, the registry entry, container tags,
+   badges, docs, and any symbol prefix that was built from the old name. The
+   GitHub redirect is a courtesy, not a plan.
+. **Run the tree check against the pre-rename commit** and watch it fail. That
+   failure is the negative control: without it, a green run proves only that
+   the scanner was not looking.
+. **Gate it, under a consequence-named job.** Follow
+   `docs/CICD-SIGNAL-DISCIPLINE.adoc`: name the job for its consequence, and do
+   **not** add it to `required_status_checks` until it has reported once on the
+   default branch — otherwise you create a phantom required context.
+. **Publish the consumer list.** Registry entries, mirrors, estate copies and
+   spec templates that still name the old repository are *flagged, not fixed*
+   (see below).
+. **Changelog.** A rename that is not in the changelog did not happen.
+
+=== 5. What a rename does not fix
+
+* **Registry entries elsewhere.** `julia-professional-registry`'s
+  `Package.toml` still carries `repo = "…/JuliaPackage-Reuse-Audit.jl.git"`.
+  The redirect covers it; the registry should not carry a retired name. File it
+  against the registry — do not silently rewrite another repository's data.
+* **Mirrors, archives and estate copies.** `julia-ecosystem/packages/`,
+  `verisimdb-data/scans/`, and this repository's own spec templates keep the
+  old name. That is the allowlist's job, not a scanner's.
+* **Forks.** A fork named after the old repository runs the gate against its
+  own name and goes red. That is the rule applied honestly, not a defect; the
+  reference implementation skips with a note when the owner is not
+  `hyperpolymath`.
+* **Clone URLs, container tags, toolbox names and shell histories.** They keep
+  working through the redirect until someone recreates them, which is how the
+  old name survives longest.
+
+=== 6. Interaction with the estate mandate (`6a2` → `descriptiles`, `agent_instructions` → `bot_directives`, 2026-06-30)
+
+The mandate is estate-wide and its rule is **flag, don't fix**. Two constraints
+follow, and neither is optional:
+
+* **One repository's rename is not a reason to accelerate the migration.** The
+  mandate touches directory names that many tools key on
+  (`.machine_readable/agent_instructions/`, `.machine_readable/6a2/`).
+  Scheduling it is the owner's call; a repository that has just renamed itself
+  is not evidence that the estate is ready.
+* **Coordinate, do not sequence blindly.** `JuliaPackageSpitter.jl` allowlists
+  `.machine_readable/agent_instructions/methodology.a2ml` **by path**. When
+  that directory moves to `bot_directives/`, the exact-path allowlist entry
+  stops matching and its identity gate fails. That is the *intended* failure
+  direction — a stale allowlist entry should fail loudly rather than silently
+  widen — but it means whoever moves the directory updates the allowlist
+  entries in the same pull request, or the gate reds for a reason unrelated to
+  the change. The same asymmetry is why the allowlist forbids globs: a glob
+  would have kept passing after the move, silently.
+
+=== 7. Flagged, not renamed
+
+* `docs/proofs/spec-templates/T3-standard/julia-pkg/JuliaPackage-Reuse-Audit.jl.adoc`
+  — **this repository's own spec template** still names the retired repository,
+  in its title, its `Repo Path` line and its `cd /var/mnt/eclipse/repos/...`
+  step. It is a worked example that a human is meant to read as a record of a
+  real spec, so rewriting it in place would silently change the record. Per the
+  rule: flagged here, not renamed. Apply the rename when the template is next
+  revised for an unrelated reason, in a commit that says so.
+* Estate copies listed in
+  `JuliaPackageSpitter.jl/docs/decisions/0002-…adoc` § Consequences (Negative).
 
 == Adding a name
 

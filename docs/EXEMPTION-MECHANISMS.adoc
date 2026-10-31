@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 = Exemption mechanisms in the hyperpolymath estate
+// doctrine-coverage: on
 :toc:
 
 Five exemption layers exist in the estate. Each addresses a
@@ -180,6 +181,8 @@ PR's lifetime, deleted at merge by a workflow.
 A formal proposal should pick one and document it explicitly.
 
 == Anti-patterns to reject
+
+// Review-only: review rules; only the no-wildcard bullet is gated, by scripts/check-exemption-ratchet.sh
 
 These have been attempted and should be refused at review:
 

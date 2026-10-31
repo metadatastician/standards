@@ -1,0 +1,662 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+// SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell (hyperpolymath)
+= Trusted-base marker widening — survey, rollout and pin-bump list
+:revdate: 2026-10-30
+:status: PROPOSED — survey complete, enforcement not enabled estate-wide
+:policy: link:../TRUSTED-BASE-REDUCTION-POLICY.adoc[Trusted-Base Reduction Policy]
+:signal: link:../CICD-SIGNAL-DISCIPLINE.adoc[CI/CD Signal Discipline]
+
+== Why this exists
+
+`scripts/check-trusted-base.sh` detected Agda assumptions with one pattern:
+`^postulate`. A development can be postulate-free and still be unsound — an Agda
+`{-# TERMINATING #-}`, a `--type-in-type`, a `{!!}` hole, `primTrustMe`, a Lean
+`@[implemented_by]` or `native_decide`, a Coq `Parameter`, an Idris2 `?hole`.
+Every one of those makes "proved" mean something weaker than the reader thinks.
+
+This document is the *measurement* half of that change. It records what the
+proposed marker set finds across the repositories that call the governance
+bundle, what the numbers do and do not mean, how enforcement is rolled out
+per repository, which callers need a pin bump to see any of it, and one doctrine
+question that is deliberately left open.
+
+Detection changed first and enforcement second, in that order, on purpose. The
+policy text is in the :policy:[Trusted-Base Reduction Policy] § "Extended tier".
+
+== What changed
+
+[cols="1,3",options="header"]
+|===
+| Surface | Change
+
+| `scripts/check-trusted-base.sh`
+| Two tiers. 17 new *extended* markers; the original markers are now *core* and
+  behave exactly as before. New `--list-markers`, `--tier`, `--extended-mode`;
+  new `.trusted-base-budget`; `JUSTIFIED:` / `OWED:` / `DEBT:` recognised as
+  inline discharge tokens; comment/string-aware scanning extended to Agda and
+  Idris2 (with Agda `{-# … #-}` pragmas preserved, because they are markers).
+
+| `scripts/estate-trusted-base-survey.sh`
+| New. Measures a marker set across callers of the governance bundle and
+  publishes a hit list. Scope-aware: refuses to publish from a token that can
+  only see one repository.
+
+| `docs/TRUSTED-BASE-REDUCTION-POLICY.adoc`
+| Marker table split by tier; "Extended tier" section with the budget mechanism,
+  the deliberately-not-detected list, and why the prover invocation is not
+  standardised.
+
+| `0-canon/CANONICAL-NAMES.adoc`
+| New § "What a repository rename mechanically entails" (separate change, same
+  window).
+
+| `scripts/check-retired-names.sh`
+| New. Reference implementation of the rename mechanics: register, allowlist,
+  literal + path + spelling-insensitive scans.
+|===
+
+== Method, and its limits
+
+I say "survey" and not "census" because GitHub code search is a *proxy*. Three
+measured facts about that proxy, each of which changes how the numbers below
+should be read:
+
+. **It is scoped to the token.** A fine-grained app token granted one repository
+   surveys one repository, and its zero is indistinguishable from a real zero.
+   The first attempt in this sandbox — with a token that could see one
+   repository — produced "0 callers, 0 hits", which is exactly what a clean
+   estate would also produce. The survey script now probes scope and exits 2
+   with `NEEDS-SCOPE` rather than publishing that.
+. **It is not stable between runs.** The same caller query returned *914* and
+   then *1,184* results within the same session. Indexing is eventual.
+. **It is capped at 1,000 results per query.** The caller query exceeded the cap
+   in both runs. The caller set below is therefore a *lower bound*, and the
+   script prints `truncated` next to any query that hit the ceiling instead of
+   presenting the clipped number as complete.
+
+Consequences applied throughout: every count is labelled with its query status;
+markers that cannot be expressed as a search are listed as `not-expressed`
+rather than dropped; and the per-repository table is built from *all* visible
+repositories with caller status as a column, so a truncated caller query cannot
+silently remove a repository from the finding set.
+
+A checkout-based run of `check-trusted-base.sh` inside each repository remains
+the authoritative measurement. This survey decides *where to look first* and
+*what number to start a budget at*; it does not decide whether a repository is
+sound.
+
+=== Scope of the run
+
+[cols="1,2",options="header"]
+|===
+| Quantity | Value
+
+| Owner surveyed | `hyperpolymath`
+| Repositories visible to the token | 398
+| Governance callers found | 306 (lower bound; the query was truncated)
+| Marker set | `all` (core + extended)
+| Date | 2026-10-30
+| Raw output | `out/trusted-base-survey/` (`counts.tsv`, `hits.tsv`,
+  `hits-all.tsv`, `pins.tsv`) and the generated `HIT-LIST.md` — gitignored by
+  `/out/`, so regenerate rather than expect it in a clone
+|==
+
+== The hit list
+
+=== Summary of the run
+
+[cols="4,2",options="header"]
+|===
+| Quantity | Value
+
+| Repositories visible to the token | 398
+| Governance callers (lower bound — the caller query was truncated at GitHub's 1,000-result cap) | 306
+| Marker instances across those callers | 965
+| Caller repositories carrying at least one marker | 92
+|===
+
+* **49 of the 60 Agda `{-# TERMINATING #-}` hits are the same file** —
+  `verification/proofs/agda/Properties.agda`, present in 49 repositories. That is
+  one decision repeated 49 times, not 49 decisions: triage it once, apply it
+  everywhere.
+* **The four hits in `JuliaPackageSpitter.jl` are all in
+  `tests/trusted-base-fixtures/`**, its own detector fixtures, which its
+  `.trusted-base-ignore` already exempts by path. The repository with the
+  strictest proof discipline in the estate registers as a hit under a naive
+  scan. This is the clearest single argument for report-and-budget over
+  fail-on-sight.
+
+=== Per-marker counts
+
+NOTE: These rows are the per-QUERY results of the 2026-10-30 run, before the
+survey's marker table was re-keyed to the checker's own catalogue. Three things
+changed afterwards and none of them can *lower* a number:
+
+* the survey now refuses to run when a catalogue id has no row (it exits 2 and
+  names the missing ids), and it groups rows by id, so a marker with several
+  spellings prints one aggregated row;
+* the rows named `coq-admit-admitted` / `coq-axiom` / `coq-admit-dot` here are
+  one catalogue marker, `coq-axiom-or-admit`, queried three ways;
+* spellings that had no query at all in this run — Agda `--allow-unsolved-metas`,
+  `--no-termination-check`, `--no-positivity-check`, `--no-coverage-check`,
+  `--no-projection-likeness-check`, and `--no-universe-check`,
+  Lean `unsafe def` / `partial def`, Haskell `unsafePerformIO` / `unsafeCoerce`,
+  F* `admit()` — are counted by nothing in this table.
+
+A re-run is therefore the authoritative number, and these counts are a floor,
+not a total.
+
+[cols="3,1,1,1,1",options="header"]
+|===
+| Marker | Tier | Results | Repos | Query status
+
+| `coq-admit-admitted`
+| core
+| 87
+| 59
+| complete
+
+| `coq-axiom`
+| core
+| 69
+| 11
+| complete
+
+| `coq-admit-dot`
+| core
+| 3
+| 1
+| complete
+
+| `lean-sorry`
+| core
+| 25
+| 16
+| complete
+
+| `lean-axiom`
+| core
+| 42
+| 15
+| complete
+
+| `agda-postulate`
+| core
+| 106
+| 28
+| complete
+
+| `idris-believe_me`
+| core
+| 225
+| 62
+| complete
+
+| `idris-really_believe_me`
+| core
+| 1
+| 1
+| complete
+
+| `idris-assert_total`
+| core
+| 144
+| 45
+| complete
+
+| `idris-partial`
+| core
+| 239
+| 34
+| complete
+
+| `fstar-assume-val`
+| core
+| 1
+| 1
+| complete
+
+| `dafny-axiom`
+| extended
+| 0
+| 0
+| complete
+
+| `agda-terminating-pragma`
+| extended
+| 60
+| 54
+| complete
+
+| `agda-non-covering-pragma`
+| extended
+| 0
+| 0
+| complete
+
+| `agda-unsound-flag`
+| extended
+| 1
+| 1
+| complete
+
+| `agda-primtrustme`
+| extended
+| 0
+| 0
+| complete
+
+| `agda-hole`
+| extended
+| NA
+| 0
+| not-expressed
+
+| `idris-hole`
+| extended
+| NA
+| 0
+| not-expressed
+
+| `lean-implemented-by`
+| extended
+| 0
+| 0
+| complete
+
+| `lean-extern`
+| extended
+| 5
+| 3
+| complete
+
+| `lean-native-decide`
+| extended
+| 1
+| 1
+| complete
+
+| `lean-admit-tactic`
+| extended
+| 12
+| 8
+| complete
+
+| `lean-unsafe-def`
+| extended
+| 1
+| 1
+| complete
+
+| `coq-parameter-or-conjecture`
+| extended
+| 138
+| 8
+| complete
+
+| `coq-give-up`
+| extended
+| 0
+| 0
+| complete
+
+| `fstar-bare-assume`
+| extended
+| 1
+| 1
+| complete
+
+|===
+
+`not-expressed` is a marker GitHub code search cannot find at all: Agda `{!!}`
+and Idris2 `?hole`. Only a checkout-based run detects them, which is why they are
+named rather than omitted.
+
+Five markers returned a genuine zero — Dafny `{:axiom}`, Agda
+`{-# NON_COVERING #-}`, Agda `primTrustMe`, Lean `@[implemented_by]`, Coq
+`give_up`. A zero from a query that *completed* is a real finding: the widening
+adds detection for constructs the estate is not currently using, which is what a
+detector should do before someone uses one.
+
+=== The five named proof-bearing repositories
+
+[cols="2,1,1,4",options="header"]
+|===
+| Repository | core hits | extended hits | Where
+
+| `JuliaPackageSpitter.jl`
+| 2
+| 2
+| tests/trusted-base-fixtures
+
+| `EpistemicTypes.jl`
+| 1
+| 1
+| verification/proofs/agda,verification/proofs/coq
+
+| `firmboot`
+| 4
+| 3
+| proofs/lean,proofs/lean/Firmboot proofs/lean/controls
+
+| `kitchenspeak`
+| 18
+| 1
+| proofs/agda,verification/proofs/agda verification/proofs/coq,verification/proofs/idris2 verification/proofs/idris2/ABI
+
+| `ResidualEvidenceTypes.jl`
+| 1
+| 1
+| verification/proofs/agda,verification/proofs/coq
+
+|===
+
+`JuliaPackageSpitter.jl`'s two "core" hits are `postulate` occurrences in
+fixtures, not in `proofs/agda/`; its real development carries none, consistent
+with its stated trusted base of four Agda builtins and zero postulates.
+`firmboot`'s third extended hit is `proofs/lean/controls/ExtraAxiom.lean` — a
+negative control, like JuliaPackageSpitter's fixtures. A widening that failed
+these repositories on sight would have punished the two most disciplined proof
+developments in the estate.
+
+=== The repositories with the most instances
+
+[cols="4,1",options="header"]
+|===
+| Repository | Marker instances
+
+| `hyperpolymath/developer-ecosystem`
+| 160
+
+| `hyperpolymath/proven-servers`
+| 128
+
+| `hyperpolymath/proven`
+| 84
+
+| `hyperpolymath/typed-wasm`
+| 41
+
+| `hyperpolymath/affinescript`
+| 41
+
+| `hyperpolymath/ephapax`
+| 37
+
+| `hyperpolymath/absolute-zero`
+| 33
+
+| `hyperpolymath/echidna`
+| 23
+
+| `hyperpolymath/trope-checker`
+| 19
+
+| `hyperpolymath/kitchenspeak`
+| 19
+
+| `hyperpolymath/snifs`
+| 18
+
+| `hyperpolymath/lithoglyph`
+| 17
+
+| `hyperpolymath/verisimdb`
+| 16
+
+| `hyperpolymath/ordinal-notation`
+| 15
+
+| `hyperpolymath/haec`
+| 15
+
+|===
+
+These are the triage order, not the blame list. `developer-ecosystem` and
+`proven-servers` are aggregation repositories: their counts are mostly copies of
+the same modules, so the decision count is far below the instance count.
+
+== What the numbers do not mean
+
+* **They are not a defect count.** A `{-# TERMINATING #-}` with a written
+  termination argument is the pragma working as designed. The count is the size
+  of the conversation.
+* **`postulate` in `*/proofs/agda/reject/` is a negative control**, not a hole.
+  Several Julia packages carry `reject/Postulate.agda` fixtures whose whole
+  purpose is to be rejected by their own gate. These are the repositories most
+  likely to be red-boarded by a naive widening, and the least deserving of it.
+  Their correct disposition is `.trusted-base-ignore`, scoped to the fixture
+  directory — which is what the mechanism is for.
+* **A file count is not an effort estimate.** Five `believe_me` in one module
+  that share one extraction boundary are one decision, not five.
+
+== Rollout
+
+Nothing is enabled estate-wide by this change. Per repository, in this order:
+
+. **Report (automatic).** Every caller that bumps its pin gets `report` mode by
+   default: findings printed, `::warning file=…,line=…` annotations on the pull
+   request, exit 0.
+. **Triage.** For each finding, choose a disposition: discharge (fix),
+   `TRUSTED:` + refutation budget (§b), `AXIOM:` + citation (§c), `JUSTIFIED:`
+   + written argument (§c-adjacent, the `{-# TERMINATING #-}` case),
+   `DEBT:` + owner + date (§d), or a scoped `.trusted-base-ignore` path for
+   negative-control fixtures.
+. **Budget.** Commit `.trusted-base-budget` with `mode: budget` and the
+   *post-triage* number. It may only go down.
+. **Strict.** Once the number is zero, switch to `mode: strict`, which is the
+   same thing as a budget of zero but reads as an intent.
+
+Repositories with real proof developments should go first, because they are the
+ones the gate is for: `EpistemicTypes.jl` (epistemic-types), `firmboot`,
+`kitchenspeak`, `ResidualEvidenceTypes.jl` (residual-evidence-types) and
+`JuliaPackageSpitter.jl`. They are also the five least likely to be homogeneous,
+which is the point: `JuliaPackageSpitter.jl` imports nothing and runs Agda under
+`--safe --without-K --double-check --ignore-interfaces -W error` with a
+builtin-only Prelude, while a repository using `agda-stdlib` cannot use
+`--no-libraries` and is not `--safe`-compatible in the same way. Its *flags* are
+not the standard; its *discipline* is.
+
+== Pin-bump list, and why nothing propagates
+
+Reusable workflows are pinned by full SHA in callers. Merging this change to
+`standards` changes the behaviour of exactly one set of repositories: those that
+bump `governance-reusable.yml` to a revision at or after the merge. Everyone
+else keeps the detector they pinned, which is the intended property — a
+standards push must not silently change the enforcement running in 400
+repositories.
+
+The `trusted-base` job checks out the script at
+`${{ job.workflow_sha }}` — the caller's pin — so the script and the workflow
+move together. There is no second pin to bump for this job.
+
+=== What the pin census measured
+
+The census is **partial**, and says so: 56 of the 306 known callers were read
+before the run was stopped (two API calls per caller, ~15 minutes per hundred).
+Every number below is therefore a floor, from an alphabetically-early slice of
+the estate, and the completion command is given so the list can be finished
+without re-deriving the method.
+
+[cols="2,1,2",options="header"]
+|===
+| Measured | Value | Why it matters
+
+| Callers censused | 56 of 306 | partial, explicitly
+| Pinned reusable-workflow rows | 248 | ~4.4 per repository
+| Distinct governance-reusable.yml pins | 18 (across 52 repositories) | the
+  estate is on eighteen different revisions of one workflow. A behaviour change
+  merged today reaches *none* of them until each bumps.
+| Distinct pins overall (all workflows) | 34 |
+| Most common governance pin | `81dbf2dd…` (11 repositories) |
+| Second most common | `da2c748a…` (7) |
+|==
+
+The `governance-reusable.yml` pin distribution, in full:
+
+[cols="4,1",options="header"]
+|===
+| Pinned SHA | Repositories
+
+| `81dbf2dd854b1444fd6236fa2352474383b2c2b9` | 11
+| `da2c748aad55c1a1dcba00b60fe4a35017bc6540` | 7
+| `84355587cb2a1f86e6882de83514a32db2646e7a` | 5
+| `94572e612a7bf11f8e6343d19adadf17ef2a3de3` | 4
+| `8f2ee50841e216cd8c192eeb68953118190f105c` | 4
+| `092dedada188f56c5915f74a5fd40aac093742c3` | 4
+| `571cc734cd69fb846032ec77a662aa8ee4fc32cd` | 3
+| `fad242d35291de1898242d6737ba02b74a59a2f2` | 2
+| `8f31a5a4ba591d544b65f91f6d78b136e07756f0` | 2
+| `257869d3061d5a8ed1529bf34225d90a2416d51a` | 2
+| seven further SHAs | 1 each
+|===
+
+=== Producing the list
+
+[source,bash]
+----
+# 1. the caller set and their current pins (writes pins.tsv; ~2 API calls/caller)
+bash scripts/estate-trusted-base-survey.sh --owner hyperpolymath --pins
+
+# 2. open a bump PR per caller (dry-run by default; --fix stages the edit only)
+bash scripts/propagate-workflow-pins.sh --to <merge-commit-sha>
+----
+
+`pins.tsv` from the survey is the authoritative bump list for the run:
+`repo`, `workflow`, `pinned-sha`. A caller is in scope for this change iff its
+`governance-reusable.yml` pin is an ancestor of the merge commit, which
+`scripts/lib/pin-ancestry.sh` decides — the same assertion every pin bumper
+uses.
+
+Note that the pin census reads **both owner spellings** of this repository,
+`metadatastician/standards` and `hyperpolymath/standards`. The first run matched
+one and reported 306 callers with zero pins; nothing about that output
+distinguished "nobody pins anything" from "the pattern was wrong".
+
+=== Two pins, one caller
+
+`JuliaPackageSpitter.jl` pins **two revisions of the same repository in one
+caller**, confirmed by this census:
+
+[cols="2,3",options="header"]
+|===
+| Workflow | Pin
+
+| `governance-reusable.yml` | `8f2ee50841e216cd8c192eeb68953118190f105c`
+| `mirror-reusable.yml`     | `8f2ee50841e216cd8c192eeb68953118190f105c`
+| `scorecard-reusable.yml`  | `8f2ee50841e216cd8c192eeb68953118190f105c`
+| `secret-scanner-reusable.yml` | `74d2f66f575246cf6e313ae7775f44df6e097ff2`
+|===
+
+Bumping the governance pin for this change must not silently move the
+secret-scanner pin, and vice versa: they are independent decisions with
+independent blast radii, and a tool that rewrites "all standards pins to one
+SHA" would hide the second decision inside the first. Bump one, review, bump the
+other. `scripts/propagate-workflow-pins.sh` rewrites every standards pin at or
+behind the target, which is the right default for a routine catch-up and the
+wrong tool for a targeted bump — use `--to` with a review, not a sweep.
+
+=== If a check's name has to change
+
+It does not here. The `trusted-base` job keeps its key and its name
+(`Trusted-base reduction policy`), so every caller's required context string
+(`<caller job key> / Trusted-base reduction policy`) stays valid. Any future
+rename must follow :signal:[CI/CD Signal Discipline] § "Changing a check safely"
+— add, require both, drop the old requirement, remove the old context — and must
+never rename and re-require in one step.
+
+The same discipline applies with force to `secret-scanner.yml`, whose own header
+records that the job key MUST stay `scan` because the estate-wide
+Secret-Scan-Floor ruleset requires the context `scan / gitleaks`. Renaming that
+job is not a local edit; it is a change to a required context in every
+repository that has the ruleset.
+
+== Doctrine gap raised, not resolved: the language policy checks artefacts, not toolchains
+
+Raised as a question, not applied. The estate language policy bans Python by
+running, in `governance-reusable.yml`:
+
+[source,bash]
+----
+PY_FILES=$(git ls-files '*.py' | grep -v venv | grep -v __pycache__ || [ $? -eq 1 ])
+----
+
+That is a check on tracked *artefacts*. It says nothing about **toolchain
+declarations**, and the gap is not hypothetical:
+`JuliaPackageSpitter.jl` ships a `mise.toml` declaring `python`, `pytest`,
+`black`, `ruff` and `isort` and passes the gate, because it tracks zero `.py`
+files.
+
+Generalising the question:
+
+[cols="2,2",options="header"]
+|===
+| Declaration surface | Would the current gate see it?
+
+| `mise.toml` / `.tool-versions` | no — not a `.py` file
+| `devcontainer.json` image + features | no
+| `guix.scm`, `flake.nix`, `Containerfile` / `Dockerfile` package lists | no
+| `Justfile` / `Mustfile` recipe bodies invoking `python -m …` | no
+| `pyproject.toml`, `requirements.txt`, `Pipfile` | no
+| Poetry/uv lock files | no
+| `package.json` scripts invoking Python | no
+|==
+
+So: **does the policy intend to cover these?** The honest answer is that
+nobody has decided, and the decision is not small:
+
+* If it *does*, it applies to ~416 repositories, most of which are not Julia,
+  and many of which legitimately use Python at arm's length (a documentation
+  tool, a CI helper, a data reduction step) without shipping a line of it. A
+  blanket failure would red the estate on day one and be ignored.
+* If it *does not*, then the ban is about what is committed as source, and the
+  gate should say so in one sentence, so that the next reviewer does not read
+  "Python is fully banned — no exceptions" and conclude that the `mise.toml` is
+  a violation.
+
+Either way the shape of the answer is already known from this document: extend
+detection and the disposition machinery *together*, report-and-budget anything
+new, and never fail-on-sight across an estate that is not homogeneous. The
+trusted-base tiering is the template.
+
+=== One correction offered to the request that produced this document
+
+The request listed `%default total` as an Idris2 escape hatch alongside
+`assert_total` and `believe_me`. It is the opposite: `%default total` makes the
+totality checker mandatory, and `%default partial` is the hole. Detecting
+`%default total` would have red-boarded precisely the well-disciplined Idris2
+repositories in the estate. It is not detected, and
+`scripts/tests/check-trusted-base-test.sh` asserts that it is not — the
+assertion runs in the "deliberately not detected" family, which is as
+load-bearing as the detection family.
+
+The same reasoning removed `Hypothesis` and `Variable` from the Coq set: inside
+a `Section` they are binders discharged at `Qed`, not axioms, and a text scan
+cannot tell them apart from a file-scope axiom without a parser.
+
+== Flagged, not fixed
+
+* `docs/proofs/spec-templates/T3-standard/julia-pkg/JuliaPackage-Reuse-Audit.jl.adoc`
+  still names the retired repository (`JuliaPackage-Reuse-Audit.jl`) in its
+  title, its `Repo Path` and its `cd` step. It is a worked example a human reads
+  as a record, so it is flagged and not rewritten — see
+  `0-canon/CANONICAL-NAMES.adoc` § "Flagged, not renamed".
+* Estate copies that still cite the retired name (registry entries, mirrors,
+  `verisimdb-data/scans/`, `julia-ecosystem/packages/`) are listed in
+  `JuliaPackageSpitter.jl/docs/decisions/0002-reconcile-repository-and-package-name.adoc`
+  § Consequences (Negative) and are not rewritten here.
+
+== Rollback
+
+Every piece is independently reversible:
+
+* **A repository** returns to the old detector by leaving its pin alone. No
+  action, no revert.
+* **A single repository** sets `--extended-mode=report` in its budget file (or
+  deletes the file) and the extended tier stops being able to fail it. The core
+  tier is untouched.
+* **The estate** reverts `scripts/check-trusted-base.sh` in one commit; callers
+  that had already bumped fall back to the previous behaviour on their next
+  pin bump, and in the meantime the script they pinned still reports the core
+  tier exactly as before.
+* **The survey** writes only local files. There is nothing to roll back.

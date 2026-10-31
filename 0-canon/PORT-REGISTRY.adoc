@@ -1,6 +1,9 @@
 == Port Registry — hyperpolymath ecosystem
+// doctrine-coverage: on
 
 === RULE: Every project MUST use a unique port. No two projects share a port.
+
+// Review-only: no gate reads this registry; it is checkable and should become a gate rather than prose
 
 *NOTE:* Port assignments are being migrated to
 `+hyperpolymath/verisim-data+` per Issue #495. This file will be retired

@@ -14,19 +14,41 @@ This document is the canonical estate-wide policy for managing
 unconditional, unproven primitives that every formal-methods toolchain
 provides for ergonomic or extraction-boundary reasons:
 
-[cols="1,2", options="header"]
+[cols="1,1,3", options="header"]
 |===
-| Language | Escape hatches in scope
+| Language | Tier | Escape hatches in scope
 
-| Coq      | `Axiom`, `Admitted`, `admit.`
-| Lean     | `axiom`, `sorry`, `noncomputable`
-| Agda     | top-level `postulate`
-| Idris2   | `believe_me`, `really_believe_me`, `assert_total`, top-level `partial`
-| F\*      | `assume val`, `admit_p`
-| Dafny    | top-level `:axiom`
-| Cross-lang | `TODO PROOF` / `OWED:` / `FIXME PROOF` markers
-| Rust/Haskell | `unsafePerformIO`, `unsafeCoerce` (where used in soundness-relevant positions)
+| Coq      | core     | `Axiom`, `Admitted`, `admit.`
+| Coq      | extended | `Parameter(s)`, `Conjecture(s)`, the `admit` and `give_up` tactics
+| Lean     | core     | `axiom`, `sorry`
+| Lean     | extended | `@[implemented_by]`, `@[extern]`, `native_decide`, `Lean.trustCompiler`, `Lean.ofReduceBool`, `admit`, `unsafe def`, `partial def`
+| Agda     | core     | top-level `postulate`
+| Agda     | extended | `{-# TERMINATING #-}`, `{-# NON_TERMINATING #-}`, `{-# NON_COVERING #-}`, `--type-in-type`, `--no-{termination,positivity,coverage,projection-likeness}-check`, `--allow-unsolved-metas`, `primTrustMe`, `{!!}`
+| Idris2   | core     | `believe_me`, `really_believe_me`, `assert_total`, top-level `partial`, `%default partial`
+| Idris2   | extended | `?hole` (unsolved goal)
+| F\*      | core     | `assume val`, `admit_p`
+| F\*      | extended | bare `assume`, `admit()`
+| Dafny    | extended | `{:axiom}`
+| Rust/Haskell | core | `unsafePerformIO`, `unsafeCoerce` (where used in soundness-relevant positions)
 |===
+
+*Tiers were introduced on 2026-10-30* (see § "Extended tier" below). A `core`
+marker is enforced exactly as it has been since standards#211: undocumented is a
+failure. An `extended` marker is *reported* and *budgeted*, never failed on
+sight.
+
+Two entries from the original table are gone, deliberately:
+
+* **Lean `noncomputable`** — it is not in the detector and was not a soundness
+  hole: it says "this definition has no code", which reduces the trusted
+  computing base rather than enlarging the trusted base. Listing it here was a
+  claim the tooling never made good on.
+* **Cross-language `TODO PROOF` / `FIXME PROOF`** — the enforcement script has
+  never grepped these, and should not: a TODO is a schedule, not a soundness
+  hole, and grepping prose for "TODO" in 416 repositories measures the prose,
+  not the proofs. `OWED:` is different and *is* honoured — as one of the
+  inline discharge tokens (§ "Annotation conventions"), which is what it always
+  was in the Idris2 form.
 
 The 2026-05-26 estate proof-debt audit (link:{audit}[#195]) found these
 markers spread across ~30 active repos, with concentrations of
@@ -181,9 +203,9 @@ postulate
   ∥_∥ : Set → Set
 ----
 
-The leading-comment marker (`TRUSTED:` / `AXIOM:` / `OWED:`) is itself
-part of the contract — the audit script in section "Enforcement" below
-greps for it. Choose the marker by run-time vs proof-time scope:
+The leading-comment marker is itself part of the contract — the audit script in
+section "Enforcement" below greps for it. Choose the marker by run-time vs
+proof-time scope:
 
 * `TRUSTED:` — run-time soundness break (`believe_me`, `unsafe`,
   `unsafePerformIO`, `assume val`, `:axiom`). Pair with disposition (b)
@@ -195,6 +217,203 @@ greps for it. Choose the marker by run-time vs proof-time scope:
   cross-language self-documented debt marker. Pair with either (c)
   NECESSARY AXIOM (with citation) or (d) DEBT (with deadline and
   owner).
+* `JUSTIFIED:` — a written argument accepted in place of a proof (2026-10-30).
+  This is the correct token for the *defensible* extended-tier cases, of which
+  `{-# TERMINATING #-}` beside a termination argument is the canonical one: the
+  pragma is the author asserting termination where the checker cannot see it,
+  and the argument is the evidence. Without a token that says "argued, not
+  proved", the only options were `AXIOM:` (false — it is not a metatheoretic
+  axiom) or silence (and then the marker reads as naked debt).
+* `DEBT:` — known, owned and dated, pointing at a §(d) entry.
+
+A note on history: `OWED:` was documented as recognised by
+`scripts/check-trusted-base.sh` from the day this policy landed, but the script
+only ever grepped `TRUSTED:` and `AXIOM:`. Every `||| OWED:`-annotated Idris2
+assumption — 280 of them in `hyperpolymath/proven` alone — therefore read as
+naked debt. The script now honours `OWED:`, `JUSTIFIED:` and `DEBT:`. That is
+the repair of a false finding, not a relaxation of a gate.
+
+== Extended tier: widening detection without red-boarding the estate (2026-10-30)
+
+The original gate recognised one class of marker per language. A development can
+be *postulate-free and still unsound*: an Agda `{-# TERMINATING #-}` waives the
+termination checker, `--type-in-type` makes the logic inconsistent outright, a
+Lean `@[implemented_by]` swaps a proved definition for an unverified one at
+runtime, a Coq `Parameter` is an `Axiom` under another name. Any one of them
+destroys the meaning of "proved". So detection was widened.
+
+=== Why the new markers are not hard failures
+
+The estate's proof-bearing repositories are not homogeneous, and the same token
+is a defect in one and a defensible choice in another:
+
+* `{-# TERMINATING #-}` beside a written termination argument is the pragma
+  being used as designed;
+* a `{!!}` goal in a work-in-progress module is a TODO, not a lie;
+* `postulate` in a teaching example is the point of the example.
+
+If the widening had landed as fail-on-sight across ~416 repositories, the
+cheapest way for a red repository to get green would have been an entry in
+`.trusted-base-ignore` — which suppresses the finding permanently and destroys
+the signal the gate existed to create. A gate that costs one honest sentence
+gets obeyed; a gate that costs an afternoon gets bypassed.
+
+So markers are split into two tiers, and only the *new* ones are budgeted:
+
+[cols="1,1,2,2",options="header"]
+|===
+| Tier | Undocumented marker | Exit | Rationale
+
+| core
+| fails
+| 1
+| Behaviour unchanged since standards#211. Every core marker here has been in
+  scope for months; the estate has had its chance to document them.
+
+| extended
+| is reported; disposition depends on the mode
+| 0 in `report`; 1 in `budget` only when the undocumented count EXCEEDS the
+  declared budget; 1 in `strict` when any extended marker is undocumented. A
+  repository inside its budget exits 0.
+| New on 2026-10-30. A repository cannot be failed for a rule that did not
+  exist yesterday.
+|===
+
+All three discharge routes apply identically to both tiers: an inline
+`TRUSTED:` / `AXIOM:` / `OWED:` / `JUSTIFIED:` / `DEBT:` comment, an entry in
+`docs/proof-debt.md`, or a path fragment in `.trusted-base-ignore`.
+
+=== The three modes and the budget file
+
+`.trusted-base-budget` in the repository root, optional:
+
+[source]
+----
+# The number the survey measured, never a number that makes the board green.
+mode: budget
+extended-undocumented: 37
+----
+
+[cols="1,2,3",options="header"]
+|===
+| Mode | Fails when | Use
+
+| `report` (default)
+| never
+| The state every repository is in on the day the widening lands. Findings are
+  printed and annotated (`::warning file=…,line=…`), and the machine-readable
+  `TRUSTED-BASE-SUMMARY` line carries the counts for the estate board.
+
+| `budget`
+| undocumented extended > declared budget
+| After triage. The number is the count the maintainer accepts *after*
+  classifying what is defensible, not the count the scanner produced.
+
+| `strict`
+| undocumented extended > 0
+| Target state. Reachable once every extended marker is either discharged or
+  annotated.
+|===
+
+Precedence: `--extended-mode=` / `$TRUSTED_BASE_EXTENDED_MODE` >
+`.trusted-base-budget` > `report`. `--tier=core|extended|all` narrows the scan
+(useful while triaging). A malformed budget file is exit 2 — a configuration
+error must not read as a clean run.
+
+The budget is a *ratchet*: it may decrease in any commit; raising it is a policy
+change and needs a `Ratchet-exception:` line in the commit message, exactly as
+`scripts/check-exemption-ratchet.sh` requires for the other ledgers.
+
+⚠ *That ratchet does not yet cover this file.* `check-exemption-ratchet.sh`
+compares ledger ENTRY COUNTS at the PR base and at HEAD; a budget is one integer
+value, and `scripts/count-ledger-entries.sh` has no format that yields it. So
+today a raised ceiling is a review obligation, not a mechanical one. Wiring it
+is a known follow-up: teach the counter a `budget:` mode that prints
+`extended-undocumented`, then add `.trusted-base-budget` to `LEDGERS`. Until
+then, `mode: strict` is the only mechanically enforced setting — it needs no
+base to compare against, which is exactly why the tiers are ordered this way.
+
+=== Survey first, enforce second
+
+`scripts/estate-trusted-base-survey.sh` measures the marker set across every
+repository that calls the governance bundle and publishes a hit list, before
+anything is enabled. Its constraints are the interesting part:
+
+* GitHub's code-search API is scoped to the token. A fine-grained token granted
+  one repository returns one repository, and its zero resembles a real zero.
+  The script probes scope and *refuses to publish* a hit list it cannot stand
+  behind.
+* A code search is a proxy. Two runs on the same estate returned 914 and 1,184
+  results for the same caller query, and any single query caps at 1,000. Both
+  facts are printed next to the numbers rather than smoothed away; see
+  `docs/CICD-SIGNAL-DISCIPLINE.adoc` § "Never report a proxy as a finding".
+* Two markers cannot be expressed as a search at all (Agda `{!!}`, Idris2
+  `?hole`). They are listed as `not-expressed` rather than omitted, because a
+  hit list that hides what it could not see is worse than no hit list.
+
+`--list-markers` on the check script prints the marker catalogue as TSV
+(language, tier, id, description). It is the single source of truth the survey
+and this document are checked against.
+
+=== What the widening deliberately does not detect
+
+Each of these would flag healthy code, and a gate that reds a healthy repository
+is a gate that will be removed:
+
+[cols="2,3",options="header"]
+|===
+| Not detected | Why
+
+| Idris2 `%default total`
+| It is the *strict* setting: it makes the totality checker mandatory. The hole
+  is `%default partial`, which is detected. Flagging `%default total` would
+  red-board every well-disciplined Idris2 repository, which is precisely the
+  population most deserving of a green board.
+
+| Coq `Hypothesis` / `Variable` / `Context` in a `Section`
+| These are binders discharged at `Qed`, not axioms. Distinguishing a section
+  binder from a file-scope axiom needs a parser; guessing "axiom" is wrong in
+  the overwhelmingly common case. The file-scope spellings — `Parameter`,
+  `Conjecture` — are detected, and `Print Assumptions` remains the authoritative
+  check.
+
+| Agda `{-# BUILTIN #-}`, `{-# COMPILE #-}`; Lean `@[simp]`, `noncomputable`
+| They change compilation, not the trusted base.
+
+| Prover *invocation* flags
+| See below. There is no estate-wide "correct" way to invoke Agda, Lean or Coq.
+|===
+
+=== Why the prover invocation is not standardised
+
+`JuliaPackageSpitter.jl` runs Agda under
+`--safe --without-K --double-check --ignore-interfaces -W error` with a
+builtin-only Prelude and no libraries, and gets a trusted base of four builtins
+and zero postulates. That configuration is excellent *for a development that
+imports nothing*. It is not a rule:
+
+* `--no-libraries` requires a builtin-only Prelude. A repository using
+  `agda-stdlib` cannot pass it, and would have to vendor or re-derive the
+  standard library to comply.
+* `--safe` interacts with the pragmas and flags now detected here; a repository
+  mid-migration from `{-# TERMINATING #-}` may need it off for a release.
+* The same applies to Lean (`--noBuild`? lake profiles), Coq (`-w`, `-q`) and
+  Idris2 (`--check-total`): the flags that make one development strict make
+  another unusable.
+
+What *is* estate-wide is the disposition requirement: every escape hatch is
+documented, and the count is visible. How a repository invokes its prover is
+its own business, recorded in its own workflow — where its pin, its version
+assertion and its negative controls live.
+
+=== Rollout, and what a pinned caller sees
+
+Reusable workflows are pinned **by SHA** in callers, so nothing here propagates
+automatically. `governance-reusable.yml`'s `trusted-base` job checks the script
+out at `job.workflow_sha` — the caller's pin — so a caller keeps the detector it
+pinned until it bumps. The pin-bump list for this change, and the requirement
+not to rename the job (the required context is derived from it), are published
+in `docs/audits/2026-10-30-trusted-base-marker-widening.adoc`.
 
 == Enforcement
 
@@ -202,17 +421,23 @@ Enforcement landed at link:{enforcement}[standards#211] as
 `scripts/check-trusted-base.sh`, wired into `governance-reusable.yml`
 as a `trusted-base` job. The script:
 
-. Greps every soundness-relevant escape hatch in the caller repo
-  (`Axiom`, `Admitted`, `admit.`, `axiom`, `sorry`, top-level `postulate`,
-  `believe_me`, `really_believe_me`, `assert_total`, top-level `partial`,
-  `assume val`, `admit_p`, `:axiom`, plus cross-language `TODO PROOF` /
-  `OWED:` / `FIXME PROOF` markers in soundness-relevant positions).
+. Greps every soundness-relevant escape hatch in the caller repo, in two tiers
+  (the catalogue is printed by `--list-markers`; the tables above are the
+  normative list). Matching is comment- and string-aware per language: Coq
+  nested `(* *)` with multiline strings, Lean nesting `/- -/` and `--`, and
+  Haskell-style `{- -}` / `--` for Agda and Idris2 — with Agda `{-# … #-}`
+  pragmas copied through verbatim, since those pragmas are themselves markers.
 . Verifies each is one of:
-.. preceded within 5 lines by a `TRUSTED:`, `AXIOM:`, or `OWED:` leading comment, OR
+.. preceded by a `TRUSTED:`, `AXIOM:`, `OWED:`, `JUSTIFIED:` or `DEBT:` leading
+   comment (the comment block is walked back up to 15 lines), OR
 .. enumerated by path in `docs/proof-debt.md` (or `.adoc`, or `PROOF-NEEDS.md`), OR
 .. exempted via a path-fragment substring match in `.trusted-base-ignore`.
-. Fails CI when a marker is naked (no annotation, no proof-debt entry, no
-  ignore-file exemption).
+. Fails CI when a *core* marker is naked (no annotation, no proof-debt entry, no
+  ignore-file exemption). Extended markers are reported, and their disposition
+  follows `.trusted-base-budget` (§ "Extended tier").
+. Emits `TRUSTED-BASE-SUMMARY tier=… core_total=… extended_undocumented=…` on
+  every run that finds a marker, in every mode, so counts can be trended without
+  parsing prose.
 . No-ops cleanly on repos with zero proof-bearing files (true for most
   of the estate).
 
@@ -304,6 +529,7 @@ first (rough P0/P1/P2 ordering):
 | 2026-05-26 | `scripts/check-trusted-base.sh` filed and merged (standards#211); wired into `governance-reusable.yml` as the `trusted-base` job.
 | 2026-05-26 | Seed `docs/proof-debt.md` landed for `standards` itself (standards#213) as the schema reference.
 | 2026-05-27 | Fill-in pass: Idris2 `OWED:` + 0-multiplicity form, Lean annotation block, Enforcement cross-link to #211 (this PR). Status promoted from PROPOSED → ADOPTED.
+| 2026-10-30 | Marker set widened (17 extended markers across Agda, Idris2, Lean, Coq, F\*, Dafny) with a two-tier model: core unchanged and failing, extended reported and budgeted. `.trusted-base-budget`, `JUSTIFIED:`, `--list-markers`, and `scripts/estate-trusted-base-survey.sh` added. `OWED:` / `DEBT:` recognition repaired (it was documented but not implemented). Survey and hit list published in `docs/audits/2026-10-30-trusted-base-marker-widening.adoc`.
 | TBD       | Per-repo `docs/proof-debt.md` files seeded across P0/P1 repos via the triage prompts that this policy unblocks.
 |===
 

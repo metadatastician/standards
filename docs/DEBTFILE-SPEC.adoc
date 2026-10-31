@@ -2,6 +2,7 @@
 = Debtfile Specification
 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 v1.1.0, 2026-09-14
+// doctrine-coverage: on
 :toc:
 :toclevels: 3
 
@@ -182,6 +183,8 @@ metadata; its `--write` pass preserves it unchanged while updating only `count` 
 
 === No fallback
 
+// Enforced-by: scripts/run-debtfile.sh, scripts/count-ledger-entries.sh
+
 A probe that fails to run, exits non-zero, or prints anything but an integer is
 a *hard failure*. There is deliberately no `|| echo 0`.
 
@@ -260,6 +263,8 @@ is still a header — the estate has a separate incident from a linter that
 checked only the first line.)
 
 === The register must not count itself
+
+// Review-only: no probe excludes its own specification and entry from the count yet; the cause is below
 
 A textual probe will match the Debtfile entry that describes it, and the
 specification that documents it. Both files necessarily contain the very string
