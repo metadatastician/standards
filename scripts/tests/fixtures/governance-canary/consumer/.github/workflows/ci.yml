@@ -1,0 +1,24 @@
+# SPDX-License-Identifier: MPL-2.0
+# Canary consumer workflow. Immutable content: see ../MANIFEST.sha256.
+# Deliberately ordinary: one SHA-pinned action, no duplicate keys, a
+# least-privilege permissions block — the shape a governed caller should have.
+name: Canary CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Canary check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout caller
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Report
+        run: echo "canary"

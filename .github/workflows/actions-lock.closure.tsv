@@ -1,0 +1,11 @@
+# Reviewed closure of remote reusable workflows (standards#968, #1290).
+# Produced by scripts/check-reusable-closure.sh --write-baseline; a change
+# here is a change to what this repository trusts, so review the diff.
+# workflow<TAB>reusable-call<TAB>ref reached at startup
+.github/workflows/ci-pipeline.yml	metadatastician/standards@d55304a01b5260b0511aae0d14ed8b8770b00293	actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+.github/workflows/ci-pipeline.yml	metadatastician/standards@d55304a01b5260b0511aae0d14ed8b8770b00293	dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8
+.github/workflows/ci-pipeline.yml	metadatastician/standards@d55304a01b5260b0511aae0d14ed8b8770b00293	goto-bus-stop/setup-zig@abea47f85e598557f500fa1fd2ab7464fcb39406
+.github/workflows/ci-pipeline.yml	metadatastician/standards@d55304a01b5260b0511aae0d14ed8b8770b00293	swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+.github/workflows/mirror.yml	metadatastician/standards@70019048f862250c04346f27e6ca196ff7aa187a	actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+.github/workflows/mirror.yml	metadatastician/standards@70019048f862250c04346f27e6ca196ff7aa187a	dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8
+.github/workflows/mirror.yml	metadatastician/standards@70019048f862250c04346f27e6ca196ff7aa187a	webfactory/ssh-agent@e83874834305fe9a4a2997156cb26c5de65a8555
