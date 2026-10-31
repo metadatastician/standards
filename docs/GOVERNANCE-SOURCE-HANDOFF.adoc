@@ -19,7 +19,9 @@ with the one trap that makes a naive repin dangerous.
 |what |value
 
 |branch |`arena/99ac590e-standards`
-|published SHA |`4f77cfe5323225c71a2557ffaa302ddc25e91be8`
+|published SHA |`4f77cfe5323225c71a2557ffaa302ddc25e91be8` — the commit every
+result in this document was measured against. Later commits on the branch touch
+documentation only; confirm with `git log --oneline 4f77cfe..origin/arena/99ac590e-standards`.
 |pull request |https://github.com/metadatastician/standards/pull/1381[standards#1381]
 |status |pushed, immutable, **not merged**
 |===
