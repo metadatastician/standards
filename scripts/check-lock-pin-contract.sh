@@ -34,13 +34,16 @@
 #     ref, commit must be `sha1-<40 hex>` agreeing with the key, unknown
 #     schema is UNINSPECTED rather than clean, empty population is not a pass);
 #   * it adds the standards-specific exemption #1290 states explicitly —
-#     a CALLER-SIDE record for this repository's own reusable workflows
-#     (`metadatastician/standards@<sha>` carrying a nested `uses:` list) is a
-#     reusable-workflow edge, not a leaf action, and legitimately records the
-#     requested ref verbatim. Exempting it is not a widening: it is confined
-#     to (a) this repository — either of its two slugs, because the transfer
-#     kept the repository ID and old locks name the old one, (b) records that
-#     carry a `uses:` list, (c) `ref` exactly equal to the key's own SHA.
+#     a CALLER-SIDE record (`owner/repo@<sha>` carrying a nested `uses:` LIST)
+#     is a reusable-workflow edge, not a leaf action, and legitimately records
+#     the requested ref verbatim. Exempting it is not a widening: it is
+#     confined to (a) a record whose `uses:` is an actual non-empty LIST (a
+#     malformed `uses:` mapping is a violation, not an edge), (b) `ref`
+#     exactly equal to the key's own SHA. Repository identity is NOT part of
+#     the test: the closure rule (check-reusable-closure.sh) already requires a
+#     reusable record's `ref` to be the ref the caller named, so exempting
+#     only this repository made the documented record-with-`uses` shape
+#     impossible for a third-party reusable (`hyperpolymath/cicd-suite@<sha>`).
 #     Anything else is still RED.
 #   * it conjugates the two halves of provenance (`commit` ↔ key SHA) rather
 #     than only checking shapes;
@@ -161,8 +164,16 @@ COUNT="$(printf '%s' "$JSON" | jq -r '.dependencies | length')"
   not_inspected "the lock keys no dependencies; zero records is no assurance"
 
 # One row per record: key, ref type, ref, commit type, commit, owner_id,
-# repo_id, whether the record carries a nested `uses:` (i.e. it is a
-# reusable-workflow edge, not a leaf action).
+# repo_id, whether the record carries a nested `uses:` LIST (i.e. it is a
+# reusable-workflow edge, not a leaf action), and whether it carries a `uses:`
+# of some OTHER shape (which is a violation, not an edge).
+#
+# The fields are joined with the ASCII unit separator, NOT with a tab, and read
+# back with `IFS=$'\x1f'`. A tab is an IFS *whitespace* character to `read`, so
+# `a<TAB><TAB>b` collapses to two fields and every later column shifts left: a
+# record with one of owner_id/repo_id absent would silently borrow the next
+# field, and the provenance failure would never be reported. A non-whitespace
+# separator preserves empty fields.
 ROWS="$(printf '%s' "$JSON" | jq -r '
   .dependencies | to_entries[] |
   [ .key,
@@ -172,8 +183,9 @@ ROWS="$(printf '%s' "$JSON" | jq -r '
     (if (.value.commit | type) == "string" then .value.commit else "" end),
     (if (.value.owner_id | type) == "number" then (.value.owner_id|tostring) else "" end),
     (if (.value.repo_id  | type) == "number" then (.value.repo_id |tostring) else "" end),
-    (if (.value.uses != null) then "yes" else "no" end)
-  ] | @tsv
+    (if (.value.uses | type) == "array" and (.value.uses | length) > 0 then "yes" else "no" end),
+    (if (.value.uses != null) and ((.value.uses | type) != "array") then "yes" else "no" end)
+  ] | map(tostring) | join("\u001f")
 ')" || not_inspected "could not enumerate .dependencies records"
 
 failed=0
@@ -181,15 +193,21 @@ count=0
 exempt=0
 fail() { echo "$*"; failed=$((failed + 1)); }
 
-while IFS=$'\t' read -r key reftype ref committtype commit owner_id repo_id has_uses; do
+while IFS= read -r row; do
+  [ -n "$row" ] || continue
+  IFS=$'\x1f' read -r key reftype ref committtype commit owner_id repo_id has_uses bad_uses <<< "$row"
   [ -n "$key" ] || continue
   count=$((count + 1))
 
   # ── key shape ────────────────────────────────────────────────────────
-  case "$key" in
-    *@*) ;;
-    *) fail "INVALID ${key}: key is not 'owner/repo@ref'"; continue ;;
-  esac
+  # Exactly `owner/repo@ref`. Testing only for an `@` accepted keys such as
+  # `not-a-repo@<40-hex>` and `/repo@<40-hex>`, whose remaining fields can be
+  # perfectly valid — the record is then reported as conforming even though the
+  # key cannot name an action at all.
+  if ! printf '%s' "$key" | grep -Eq '^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+@[^@/]+$'; then
+    fail "INVALID ${key}: key is not 'owner/repo@ref' (no sub-path, no extra '/', exactly one '@')"
+    continue
+  fi
   repo_lc="$(printf '%s' "${key%@*}" | tr 'A-Z' 'a-z')"
   pin="${key##*@}"
   pin_lc="$(printf '%s' "$pin" | tr 'A-Z' 'a-z')"
@@ -201,16 +219,32 @@ while IFS=$'\t' read -r key reftype ref committtype commit owner_id repo_id has_
     fail "INVALID ${key}: key ref is not a 40-hex commit — lock keys must be SHA-pinned (canon rule 10)"
   fi
 
+  # ── record.uses ──────────────────────────────────────────────────────
+  # A reusable-workflow edge lists the refs it reaches. A `uses:` of any other
+  # shape (a scalar, a mapping) is NOT an edge: treating it as one granted the
+  # raw-SHA exemption below to a record `close-lock.sh` sees no edge for.
+  if [ "$bad_uses" = "yes" ]; then
+    fail "INVALID ${key}: uses must be a LIST of 'owner/repo@ref' entries (got $(printf '%s' "$JSON" | jq -r --arg k "$key" '.dependencies[$k].uses | type'))"
+    has_uses="no"
+  fi
+
   # ── record.ref ───────────────────────────────────────────────────────
   if [ "$reftype" != "string" ] || [ -z "$ref" ]; then
     fail "INVALID ${key}: ref must be a non-empty string naming the reviewed ref (got ${reftype})"
   elif printf '%s' "$ref" | grep -Eq '^[0-9a-fA-F]{40}$'; then
-    # The historical defect. Permitted ONLY for a caller-side record of this
-    # repository's own reusable workflows (standards#1290), where the
-    # requested ref genuinely IS the caller's pin and no tag exists to name.
-    if [ "$has_uses" = "yes" ] && is_self_repo "$repo_lc"; then
+    # The historical defect. Permitted ONLY for a reusable-workflow edge whose
+    # `ref` is exactly the SHA in its own key, where the requested ref
+    # genuinely IS the caller's pin and no tag exists to name. A leaf action
+    # never qualifies (it has no `uses:` list), and a record whose `ref`
+    # differs from its key's SHA never qualifies either.
+    ref_lc="$(printf '%s' "$ref" | tr 'A-Z' 'a-z')"
+    if [ "$has_uses" = "yes" ] && [ "$ref_lc" = "$pin_lc" ]; then
       exempt=$((exempt + 1))
-      echo "  ok (caller-side reusable edge) ${key}: ref repeats the pin by design"
+      if is_self_repo "$repo_lc"; then
+        echo "  ok (caller-side reusable edge) ${key}: ref repeats the pin by design"
+      else
+        echo "  ok (third-party reusable edge) ${key}: ref repeats the pin by design"
+      fi
     else
       fail "INVALID ${key}: ref repeats the commit SHA; it must name the reviewed branch/tag (runner: 'invalid lockfile pin', standards#1271/#1290)"
     fi

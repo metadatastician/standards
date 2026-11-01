@@ -100,18 +100,23 @@ CACHE=""
 OFFLINE=0
 DEPTH=6
 REPO="${GITHUB_REPOSITORY:-}"
+need_value() {  # $1 option, $2 remaining argc
+  [ "$2" -ge 2 ] && [ -n "${3:-}" ] ||
+    { echo "::error::$1 needs a value — NOT INSPECTED, which is not a pass." >&2; exit 2; }
+}
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    --baseline) BASELINE="${2:-}"; shift 2 ;;
+    --baseline) need_value "$1" "$#" "${2:-}"; BASELINE="$2"; shift 2 ;;
     --write-baseline) WRITE_BASELINE=1; shift ;;
-    --cache) CACHE="${2:-}"; shift 2 ;;
+    --cache) need_value "$1" "$#" "${2:-}"; CACHE="$2"; shift 2 ;;
     --offline) OFFLINE=1; shift ;;
-    --depth) DEPTH="${2:-6}"; shift 2 ;;
-    --repo) REPO="${2:-}"; shift 2 ;;
+    --depth) need_value "$1" "$#" "${2:-}"; DEPTH="$2"; shift 2 ;;
+    --repo) need_value "$1" "$#" "${2:-}"; REPO="$2"; shift 2 ;;
     -h|--help) sed -n '2,90p' "${BASH_SOURCE[0]}"; exit 0 ;;
     *) WF_DIR="$1"; shift ;;
   esac
 done
+case "$DEPTH" in ''|*[!0-9]*) echo "::error::--depth must be a non-negative integer (got '$DEPTH') — NOT INSPECTED." >&2; exit 2 ;; esac
 
 not_inspected() { echo "::error::$* — NOT INSPECTED, which is not a pass." >&2; exit 2; }
 
@@ -217,7 +222,9 @@ done < <(cat "$TMP/lock.wf" "$TMP/lock.deps")
 # per line. Return a nonzero status if the YAML or JSON processing fails.
 uses_of() {
   yq -o json -I 0 '.' "$1" 2>/dev/null |
-    jq -r '[.. | objects | select(has("uses")) | .uses | select(type == "string")] | .[]' 2>/dev/null
+    jq -r '[(.jobs // {}) | to_entries[] | .value | objects | .uses // empty],
+           [(.jobs // {}) | to_entries[] | .value | objects | (.steps // [])[] | objects | .uses // empty]
+           | .[] | select(type == "string")' 2>/dev/null
 }
 
 # walk_callee RAW DEPTH [TOP]: collect refs reached from a reusable call in
@@ -239,9 +246,13 @@ walk_callee() {
   fi
   # Cycle detection keys on the FILE, not on owner/repo@ref: two different
   # workflow files called at the same ref are two different `uses:` sets, and
-  # collapsing them silently under-collects the closure.
-  case " $WALKED " in *" $raw "*) return 0 ;; esac
-  WALKED="$WALKED $raw"
+  # collapsing them silently under-collects the closure. It is also SCOPED TO
+  # THE TOP-LEVEL CALL: two top-level reusables in one workflow that both reach
+  # the same nested file are two different edges, and remembering the file
+  # globally made the second traversal return here without attributing its
+  # dependencies to the second edge.
+  case " $WALKED " in *" $top|$raw "*) return 0 ;; esac
+  WALKED="$WALKED $top|$raw"
   CHAINKEYS="$CHAINKEYS $key"
 
   local path=${raw%@*} ref=${raw##*@}
@@ -257,13 +268,44 @@ walk_callee() {
   fi
   resolved_sites=$((resolved_sites + 1))
 
-  local uses n nn
+  local uses n nn child
   uses="$(uses_of "$file")" || { echo "::error::$key: $wfpath at $ref does not parse as YAML" >&2; return 1; }
   while IFS= read -r n; do
     [ -n "$n" ] || continue
-    if is_job_level "$n"; then
-      PARENT["$(norm "$n")"]="$key"
-      walk_callee "$n" $((depth + 1)) "$top" || return 1
+    case "$n" in
+      ./*)
+        # A LOCAL call inside a REMOTE reusable workflow is not "this
+        # repository at this commit": it is that repository at that ref (a
+        # local call cannot name a ref of its own). Left to `norm` it returned
+        # empty, and the nested file's own dependencies were dropped from the
+        # closure entirely.
+        child="$owner/$repo/${n#./}@$ref"
+        ;;
+      ../*)
+        echo "::error::$key: nested call '$n' escapes the repository root; a ../-relative reusable cannot be resolved at a pinned ref." >&2
+        return 1
+        ;;
+      *) child="$n" ;;
+    esac
+    if is_job_level "$child"; then
+      local cref=${child##*@} ckey
+      # Nested calls get the SAME immutability rule as top-level ones: a
+      # branch or tag reached through a SHA-pinned callee is still a float,
+      # and this recursion used to resolve and certify it.
+      if ! is_sha "$cref"; then
+        echo "::error::$key: nested job-level uses '$child' is not SHA-pinned. A SHA-pinned reusable that calls another at a branch makes the closure describe whatever that ref pointed at today." >&2
+        return 1
+      fi
+      ckey="$(norm "$child")"
+      [ -n "$ckey" ] || { echo "::error::$key: nested call '$n' does not name a readable owner/repo" >&2; return 1; }
+      # ...and the same record/ref conjugation: a nested callee's lock record
+      # must carry the ref the caller named, not a tag it was rewritten to.
+      if [ -n "${RECREF[$ckey]:+x}" ] && [ "${RECREF[$ckey]}" != "$cref" ]; then
+        echo "::error::$key: the record '$ckey' carries ref: '${RECREF[$ckey]}' but this reusable names '$cref'. A reusable record's ref must be the ref that was requested." >&2
+        return 1
+      fi
+      PARENT["$ckey"]="$key"
+      walk_callee "$child" $((depth + 1)) "$top" || return 1
     else
       nn="$(norm "$n")"
       [ -n "$nn" ] || continue
@@ -370,13 +412,27 @@ elif [ "$WRITE_BASELINE" -eq 1 ]; then
 fi
 
 if [ "$WRITE_BASELINE" -eq 0 ] && [ -f "$BASELINE" ]; then
+  # The baseline is compared in BOTH directions. Comparing only "is every
+  # reviewed row still reachable" let a NEW edge through: add a remote call and
+  # its through-ref records to the lock and nothing on the reviewed artefact
+  # changes, so the gate exited 0 on trust nobody reviewed.
+  declare -A BASE=()
   while IFS=$'\t' read -r bwf bjr bar; do
     case "$bwf" in ''|'#'*) continue ;; esac
+    BASE["$bwf|$bjr|$bar"]=1
     if [ -z "${REACHED["$bwf|$bjr|$bar"]:-}" ]; then
       echo "::error file=$bwf::DROPPED CLOSURE — the reviewed baseline ($BASELINE) has $bjr -> $bar, and this source no longer reaches it. The lockfile can still be closed in this state (an edge and its target removed together leave no dangling pointer), so no other gate sees this. Restore the call, or remove the row in a pull request that says why." >&2
       fail=$((fail + 1))
     fi
   done <"$BASELINE"
+
+  for k in "${!REACHED[@]}"; do
+    IFS='|' read -r rwf rjr rar <<<"$k"
+    [ -n "${BASE["$k"]:-}" ] && continue
+    echo "::error file=$rwf::UNREVIEWED CLOSURE — this source reaches $rjr -> $rar, and that row is not in the reviewed baseline ($BASELINE). A new remote edge (or a new dependency behind one) is a change to what this repository trusts: regenerate with --write-baseline and let it be reviewed in the pull request." >&2
+    fail=$((fail + 1))
+  done
+  unset BASE
 fi
 
 # 5b. a LEAF record whose ref: repeats its own SHA is the record the runner
@@ -387,8 +443,14 @@ for k in "${!RECREF[@]}"; do
   key_sha=${k##*@}
   is_sha "$key_sha" || continue
   [ "${RECREF[$k]}" = "$key_sha" ] || continue
-  if [ -n "${JOBREF[$k]:-}" ]; then
-    notes="${notes}  $k: ref repeats the key's SHA, but a workflow in this repository calls it as a reusable at that commit — accepted (standards#1290)"$'\n'
+  if [ -n "${JOBREF[$k]:-}" ] || [ -n "${PARENT[$k]:-}" ]; then
+    # JOBREF: a workflow here calls it at top level. PARENT: a reusable this
+    # workflow reaches calls it NESTED. Both mean the same thing — the ref
+    # genuinely IS the commit that was requested — and only the top-level case
+    # used to be exempt, which made a nested reusable record impossible to
+    # state: the record/ref conjugation above requires `ref` == the named SHA,
+    # and this check then rejected exactly that.
+    notes="${notes}  $k: ref repeats the key's SHA, but this repository reaches it as a reusable at that commit — accepted (standards#1290)"$'\n'
   else
     echo "::error::$k: ref: '$key_sha' repeats the record's own SHA. GitHub rejects this record at 'Set up job' ('invalid lockfile pin') for every caller. Name the reviewed tag that resolves to it (gitbot-fleet fix-lock-self-sha-refs.sh, or 'gh actions-lock' for a step-level action)." >&2
     fail=$((fail + 1))

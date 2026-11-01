@@ -93,24 +93,54 @@ selfreusable() {  # $1 record ref, $2 "uses" or "leaf", $3 repo
 }
 
 selfreusable "$sha" uses "$SELF_REPO"
-assert 'caller-side reusable edge may repeat its pin in ref' 0 "$tmp/lock.yml" --self-repo "$SELF_REPO"
+assert 'a reusable edge may repeat its pin in ref' 0 "$tmp/lock.yml" --self-repo "$SELF_REPO"
 
 selfreusable "$sha" leaf "$SELF_REPO"
 assert 'same repository, but a LEAF record: exemption does not apply' 1 "$tmp/lock.yml" --self-repo "$SELF_REPO"
 
+# DOCTRINE CHANGE (review finding, 2026-10-31): the exemption used to be
+# confined to this repository's own slug. That made the documented
+# record-with-`uses:` closure shape IMPOSSIBLE for a third-party reusable:
+# check-reusable-closure.sh requires a reusable record's `ref` to equal the ref
+# the caller named, so a SHA-pinned call to `someoneelse/standards@<sha>` could
+# only be recorded as `ref: <sha>` — which this guard then rejected. The test is
+# now the SHAPE (a non-empty `uses:` list, `ref` exactly equal to the key's
+# SHA), which is what the runner actually distinguishes; `--self-repo` labels
+# the exemption as caller-side or third-party and no longer gates it.
 selfreusable "$sha" uses 'someoneelse/standards'
-assert "another repository's reusable edge gets no exemption" 1 "$tmp/lock.yml" --self-repo "$SELF_REPO"
+assert "a third-party reusable edge is exempt on shape, not on identity" 0 "$tmp/lock.yml" --self-repo "$SELF_REPO"
 
 selfreusable "$sha" uses "$SELF_REPO"
-assert 'the exemption is inert when --self-repo names a different repository' 1 "$tmp/lock.yml" --self-repo 'example/other'
+assert '--self-repo no longer gates the exemption (it labels it)' 0 "$tmp/lock.yml" --self-repo 'example/other'
+
+# ...but the shape test still has hard boundaries. A `uses:` that is not a LIST
+# is not an edge: treating a mapping as one granted the exemption to a record
+# close-lock.sh sees no edge for.
+{
+  printf 'version: v0.0.3\ndependencies:\n    '\''%s@%s'\'':\n        ref: %s\n        commit: sha1-%s\n        owner_id: 297579217\n        repo_id: 1116521501\n        uses: {checkout: %s}\n' \
+    "$SELF_REPO" "$sha" "$sha" "$sha" "actions/checkout@$sha"
+} > "$tmp/lock.yml"
+assert 'a non-list uses: is rejected, not treated as an edge' 1 "$tmp/lock.yml" --self-repo "$SELF_REPO"
+
+# ...and the ref must be the SAME SHA as the key. A 40-hex ref that differs
+# from the pin is the historical defect wearing an edge's clothes.
+selfreusable '1111111111111111111111111111111111111111' uses "$SELF_REPO"
+assert "a reusable edge whose ref is a different SHA is still rejected" 1 "$tmp/lock.yml" --self-repo "$SELF_REPO"
 
 # The repository was transferred; its ID did not change. A lock written before
 # the transfer names the old slug for the same repository, and old locks are
-# exactly what a pinned caller is judged by. Recognising both slugs is confined
-# to these two — see the guard's header.
+# exactly what a pinned caller is judged by. Both slugs remain recognised — the
+# label differs, the verdict does not.
 selfreusable "$sha" uses 'hyperpolymath/standards'
-assert 'a caller-side edge written under the pre-transfer slug is exempt (default derivation)' 0 "$tmp/lock.yml"
-assert 'the pre-transfer slug is NOT exempt when --self-repo asks narrowly' 1 "$tmp/lock.yml" --self-repo "$SELF_REPO"
+assert 'a reusable edge written under the pre-transfer slug is exempt' 0 "$tmp/lock.yml"
+assert 'and it is still exempt when --self-repo asks narrowly' 0 "$tmp/lock.yml" --self-repo "$SELF_REPO"
+
+# ── key shape: an `@` is not enough ──────────────────────────────────────
+for bad in 'not-a-repo' '/repo' 'owner/repo/sub@'"$sha" 'owner@name/repo'; do
+  printf 'version: v0.0.3\ndependencies:\n    '\''%s@%s'\'':\n        ref: v7.0.1\n        commit: sha1-%s\n        owner_id: 44036562\n        repo_id: 197814629\n' \
+    "${bad%@*}" "$sha" "$sha" > "$tmp/lock.yml"
+  assert "malformed key '$bad' is rejected" 1 "$tmp/lock.yml" --self-repo "$SELF_REPO"
+done
 
 # ── key immutability, provenance, closure ────────────────────────────────
 printf 'version: v0.0.3\ndependencies:\n    '\''actions/setup-python@v2'\'':\n        ref: v2\n        commit: sha1-%s\n        owner_id: 44036562\n        repo_id: 192625525\n' "$sha" > "$tmp/lock.yml"
@@ -118,6 +148,15 @@ assert 'a tag-keyed record (moving target) is rejected' 1 "$tmp/lock.yml" --self
 
 printf 'version: v0.0.3\ndependencies:\n    '\''actions/checkout@%s'\'':\n        ref: v7.0.1\n        commit: sha1-%s\n' "$sha" "$sha" > "$tmp/lock.yml"
 assert 'a record with no owner_id/repo_id provenance is rejected' 1 "$tmp/lock.yml" --self-repo "$SELF_REPO"
+
+# One HALF of the provenance missing, in each direction. These are the cases a
+# tab-separated row could not report: `read` treats a tab as IFS whitespace, so
+# `owner_id<TAB><TAB>yes` collapsed and the surviving field borrowed the next
+# column, leaving both ids non-empty and the record "conforming".
+printf 'version: v0.0.3\ndependencies:\n    '\''actions/checkout@%s'\'':\n        ref: v7.0.1\n        commit: sha1-%s\n        owner_id: 44036562\n' "$sha" "$sha" > "$tmp/lock.yml"
+assert 'a record with repo_id absent (owner_id present) is rejected' 1 "$tmp/lock.yml" --self-repo "$SELF_REPO"
+printf 'version: v0.0.3\ndependencies:\n    '\''actions/checkout@%s'\'':\n        ref: v7.0.1\n        commit: sha1-%s\n        repo_id: 197814629\n' "$sha" "$sha" > "$tmp/lock.yml"
+assert 'a record with owner_id absent (repo_id present) is rejected' 1 "$tmp/lock.yml" --self-repo "$SELF_REPO"
 
 # A workflows: entry naming a ref with no top-level record: the startup-fatal
 # dangling edge of close-lock.sh/cicd-squabbler#101. The representation is
