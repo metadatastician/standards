@@ -108,44 +108,22 @@ else
   STARTUP_RC=1
 fi
 
-# 1a-bis. every REMOTE JOB-LEVEL reusable call has its own record. The local
-# hook skips reusable-workflow refs by design (the lockfile does not model
-# them), and the contract guard below only inspects records that already exist,
-# so this class was invisible to the whole STARTUP phase: a new SHA-pinned
-# `owner/repo/.github/workflows/x.yml@sha` call with no `owner/repo@sha` record
-# ships a source whose callers can die during setup.
-reuse_missing=""
-reuse_sites=0
-if [ -d "$SRC/.github/workflows" ]; then
-  lock_keys="$(yq -o json -I 0 '.' "$SRC/.github/workflows/actions.lock" 2>/dev/null |
-    jq -r '(.dependencies // {}) | keys[] | split("@") | "\(.[0] | ascii_downcase)@\(.[1])"' 2>/dev/null)"
-  for wf in "$SRC"/.github/workflows/*.yml "$SRC"/.github/workflows/*.yaml; do
-    [ -f "$wf" ] || continue
-    calls="$(yq -o json -I 0 '.' "$wf" 2>/dev/null |
-      jq -r '(.jobs // {}) | to_entries[] | .value | objects | .uses // empty' 2>/dev/null)" || {
-      bad "could not enumerate remote reusable calls in ${wf##*/} (yq/jq failed)"
-      STARTUP_RC=1
-      continue
-    }
-    while IFS= read -r call; do
-      [ -n "$call" ] || continue
-      case "$call" in
-        ./*|../*) continue ;;                       # local: its own entry
-        */.github/workflows/*@*) : ;;
-        *) continue ;;
-      esac
-      reuse_sites=$((reuse_sites + 1))
-      ckey="$(printf '%s' "${call%@*}" | awk -F/ '{print tolower($1 "/" $2)}')@${call##*@}"
-      printf '%s\n' "$lock_keys" | grep -qxF -- "$ckey" ||
-        reuse_missing="$reuse_missing $ckey (called by ${wf##*/})"
-    done <<< "$calls"
-  done
-fi
-if [ -n "$reuse_missing" ]; then
-  bad "SHA-pinned remote reusable call(s) with no lockfile record — a caller dies at startup:$reuse_missing"
+# 1a-bis. reached dependencies may be locked under the calling workflow or
+# under the reusable's own record. check-lock-sync validates both supported
+# locations; a direct record for every remote reusable call is not required.
+sync=0
+if ! have scripts/check-lock-sync.sh; then
+  bad "this source ships no workflow lock-sync guard"
   STARTUP_RC=1
 else
-  ok "every remote reusable call (${reuse_sites} site(s)) has an owner/repo@sha record"
+  out="$(bash "$SRC/scripts/check-lock-sync.sh" "$SRC/.github/workflows" 2>&1)" || sync=$?
+  if [ "$sync" -eq 0 ]; then
+    ok "workflow lock sync accepts both supported reusable dependency locations"
+  else
+    printf '%s\n' "$out" | sed 's/^/    /'
+    bad "workflow lock sync failed (exit $sync)"
+    STARTUP_RC=1
+  fi
 fi
 
 # 1b. every record is one the runner accepts, and the lock is closed
@@ -320,7 +298,7 @@ echo "governance-canary: passed=$pass failed=$fail (startup=${STARTUP_RC} policy
 [ "$fail" -eq 0 ] || exit 1
 echo "CANARY GREEN: startup clean, and the gates listed above execute and still fail"
 echo "what they exist to fail. NOT exercised here: scripts/check-action-pins-resolve.sh"
-echo "(it asks GitHub whether each pin resolves, so it needs the network), the lock"
+echo "(it asks GitHub whether each pin resolves, so it needs the network), other lock"
 echo "verifiers, and allowlist admission. Those are exercised by the governance jobs"
 echo "themselves; this canary does not stand in for them."
 exit 0
