@@ -114,38 +114,70 @@ No Mathlib, in Lean or elsewhere: a missing tactic or lemma is reproved by
 hand in the core library. A proof that needs a large external library to
 compile is a dependency, not a proof the estate owns.
 
-=== 2.1 Canonical Agda checks and reconciliation evidence (2026-11-01)
+=== 2.1 Canonical Agda invocation (2026-11-01)
 
-Theory proofs MUST be checked with the pinned Agda toolchain using:
+First-party Agda theory proof entrypoints shall use the following
+default, explicitly in local recipes and CI:
 
-[source,bash]
+[source,shell]
 ----
-agda --safe --without-K --cubical-compatible path/to/Theorem.agda
+agda --safe --without-K --cubical-compatible <module.agda>
 ----
 
-The capital K is significant. Never silently remove one of the flags.
-The compatibility flag is not a Cubical Agda proof. Unavailable or
-incompatible checkers are recorded as open, not proven.
+The Agda CLI option is \`--without-K\` with a capital K.
+\`--cubical-compatible\` is not the same as full \`--cubical\`.
+Pin and record the Agda version and standard library with each
+source commit and proof result. Missing tools, incompatible
+dependencies or failed theorems are open obligations: do not
+silently skip proofs or weaken compiler flags to make a check green.
 
-Every theory theorem records its identity, original proof language,
-source revision/digest, Agda statement/digest, translation or re-proof
-route, checker version, exact command and result, assumptions/postulates,
-and an auditable run reference. Rocq/Coq and Lean have separately recorded
-witness and theorem-statement checks, digest, toolchain, route
-(transported or re-proved), result and axioms.
+Theory proofs genuinely needing full Cubical Agda or incompatible
+options require an explicit, separately reviewed proof profile.
+Prior \`--safe\` or \`--safe --without-K\` successes are historical
+evidence, not receipts for this new combined profile.
 
-Acceptance of a transported witness only verifies its translated
-statement. Until source/target statements and assumptions are compared,
-the translation boundary remains assumed/argued. A failed translation,
-missing checker, timeout or rejected witness is not a refutation of the
-theorem and must not erase previously valid evidence.
+Existing Idris2 source/ABI proofs, Rust/Creusot and Ada/SPARK
+engineering checks remain active as their source repos reconcile
+theory: a translated model does not prove runtime refinement.
 
-Proof status uses the existing closed vocabulary in section 5;
-per-checker outcomes and transport routes are additional metadata,
-not newly invented proof status tokens. Imported receipts, search hits
-and AI confidence cannot substitute for an executed kernel check.
-Proof Burrower remains a general discovery/evidence tool while
-ECHIDNA is responsible for the eventual reconciliation pipeline.
+=== 2.2 Lean and Rocq/Coq correspondence evidence
+
+The independent witness policy in section 2 operates per *theorem*,
+not on matching filenames. Record for the Agda source and each
+target prover: exact proposition, assumptions, type/universe
+discipline, source revision, compiler/library versions, invocation
+and observed result. Declare \`transported\`, \`re-proved\` or
+\`unavailable\` and record the separate justification connecting
+their semantics and statements. A successful compilation in each
+prover does not establish that all proved the same proposition.
+
+Keep distinguishable statuses: AGDA-PENDING, AGDA-VERIFIED,
+COQ-CHECKED, LEAN-CHECKED, BRIDGE-PENDING, RECONCILED,
+COUNTEREXAMPLE, QUARANTINED. A reconciled claim requires a checked
+bridge or justified statement correspondence, independent kernel
+results and explicit residual assumptions. A prover cannot inspect
+an arbitrary Agda witness by name alone.
+
+Mathesis may catalogue proof receipts, but source projects retain
+local proof ownership. ECHIDNA is the longer-term automation
+destination, not a prerequisite for current independent checks.
+Do not force independent type, trope or identity projects into a
+Hypatia-specific proof architecture.
+
+=== 2.3 Evidence-first event-chain rollout
+
+. Preserve and test existing proof gates before any migration.
+. Enforce this Agda invocation in the actual project scripts and CI.
+. Recover an exact theory theorem, port or independently reprove it
+  faithfully in Agda and retain all assumptions.
+. Check a semantically matched statement in Rocq and Lean.
+. Establish and record the bridge, including unresolved assumptions.
+. Retain OPEN statuses and revalidation triggers rather than
+  claiming estate-wide reconciliation from policy adoption.
+
+This text records a policy, not successful proof executions. The
+implementation PRs and their CI receipts establish those separately.
+
 == 3. Existing proofs
 
 Proofs written before this ruling are re-homed by kind, not rewritten for
