@@ -80,7 +80,12 @@ leaf v0.0.3 'null' "\"sha1-$sha\""
 assert 'null ref is rejected' 1 "$tmp/lock.yml" --self-repo "$SELF_REPO"
 
 # ── the standards#1290 exemption, and its exact boundary ─────────────────
-selfreusable() {  # $1 record ref, $2 "uses" or "leaf", $3 repo
+# selfreusable RECORD-REF uses|leaf REPO [caller|nocaller]
+# The guard now requires IDENTITY, not just a `uses:` list: the record must be
+# called as a job-level reusable workflow by some workflow beside the lock, or a
+# composite action's transitive `uses:` list would buy the raw-SHA exemption.
+selfreusable() {  # $1 record ref, $2 "uses" or "leaf", $3 repo, $4 caller (default)
+  rm -f "$tmp/mirror.yml"
   {
     printf 'version: v0.0.3\nworkflows:\n    '\''.github/workflows/mirror.yml'\'':\n        - '\''%s@%s'\''\ndependencies:\n' "$3" "$sha"
     printf '    '\''%s@%s'\'':\n        ref: %s\n        commit: sha1-%s\n        owner_id: 297579217\n        repo_id: 1116521501\n' \
@@ -90,6 +95,9 @@ selfreusable() {  # $1 record ref, $2 "uses" or "leaf", $3 repo
       printf "    'actions/checkout@%s':\n        ref: v7.0.1\n        commit: sha1-%s\n        owner_id: 44036562\n        repo_id: 197814629\n" "$sha" "$sha"
     fi
   } > "$tmp/lock.yml"
+  if [ "$2" = uses ] && [ "${4:-caller}" = caller ]; then
+    printf 'name: mirror\non: [push]\njobs:\n  m:\n    uses: %s/.github/workflows/mirror-reusable.yml@%s\n' "$3" "$sha" > "$tmp/mirror.yml"
+  fi
 }
 
 selfreusable "$sha" uses "$SELF_REPO"
@@ -112,6 +120,13 @@ assert "a third-party reusable edge is exempt on shape, not on identity" 0 "$tmp
 
 selfreusable "$sha" uses "$SELF_REPO"
 assert '--self-repo no longer gates the exemption (it labels it)' 0 "$tmp/lock.yml" --self-repo 'example/other'
+
+# IDENTITY, not shape: a composite action carries a transitive `uses:` list too,
+# so a record with uses: and ref==SHA is NOT exempt unless a workflow calls it as
+# a job-level reusable. Without this, `actions/upload-pages-artifact@<sha>` could
+# rewrite its ref to its own SHA and pass — the exact runner-invalid shape.
+selfreusable "$sha" uses 'actions/upload-pages-artifact' nocaller
+assert 'a composite-action record is NOT exempt on its uses: list alone' 1 "$tmp/lock.yml" --self-repo "$SELF_REPO"
 
 # ...but the shape test still has hard boundaries. A `uses:` that is not a LIST
 # is not an edge: treating a mapping as one granted the exemption to a record

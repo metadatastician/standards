@@ -100,10 +100,17 @@ CACHE=""
 OFFLINE=0
 DEPTH=6
 REPO="${GITHUB_REPOSITORY:-}"
-# need_value OPTION REMAINING_ARGC VALUE: require a nonempty option value.
-# Exit 2 with an error if fewer than two arguments remain or VALUE is empty.
-need_value() {  # $1 option, $2 remaining argc
-  [ "$2" -ge 2 ] && [ -n "${3:-}" ] ||
+# need_value OPTION REMAINING_ARGC VALUE: require a nonempty option value that
+# is not itself an option. Exit 2 with an error otherwise.
+# `--cache --offline` used to consume `--offline` as a directory and leave
+# OFFLINE=0 — a command that asked for no network access would make network
+# requests — and `--baseline --write-baseline` silently disabled write mode.
+need_value() {  # $1 option, $2 remaining argc, $3 value
+  case "${3:-}" in
+    '') echo "::error::$1 needs a value — NOT INSPECTED, which is not a pass." >&2; exit 2 ;;
+    --*) echo "::error::$1 needs a value but was followed by the option '$3' — NOT INSPECTED, which is not a pass." >&2; exit 2 ;;
+  esac
+  [ "$2" -ge 2 ] ||
     { echo "::error::$1 needs a value — NOT INSPECTED, which is not a pass." >&2; exit 2; }
 }
 while [ "$#" -gt 0 ]; do
@@ -230,6 +237,65 @@ uses_of() {
            | .[] | select(type == "string")' 2>/dev/null
 }
 
+# local_action OWNER REPO REF PATH DEPTH TOP: collect the `uses:` of a local
+# COMPOSITE ACTION inside a remote reusable — `<PATH>/action.yml` (or
+# `action.yaml`) at that ref — attributing every external ref to TOP, and
+# following a further local composite the same way. Unreadable is unresolved,
+# never silently empty.
+local_action() {
+  local owner=$1 repo=$2 ref=$3 path=$4 depth=$5 top=$6
+  local id="$owner/$repo@$ref#$path"
+  case " $WALKED " in *" $id "*) return 0 ;; esac
+  WALKED="$WALKED $id"
+  if [ "$depth" -gt "$DEPTH" ]; then
+    echo "::error::$owner/$repo@$ref#$path: local action chain is deeper than --depth $DEPTH, so its closure was never inspected. Raise --depth." >&2
+    unresolved=$((unresolved + 1))
+    return 1
+  fi
+  local file="" cand
+  for cand in "$path/action.yml" "$path/action.yaml"; do
+    if file="$(resolve_callee "$owner" "$repo" "$ref" "$cand")"; then break; fi
+    file=""
+  done
+  if [ -z "$file" ]; then
+    echo "::error::$owner/$repo@$ref#$path: the local composite action $path could not be read at $ref (no action.yml/action.yaml in the fetched tree). An unread composite is NOT a closed closure; pass --cache with a fetched copy, or drop --offline." >&2
+    unresolved=$((unresolved + 1))
+    return 1
+  fi
+  local uses n nn
+  # A composite action's `uses:` live under `runs.steps`, NOT under `jobs` —
+  # reading it with the workflow extractor returns nothing, which is how the
+  # composite's real actions used to vanish from the closure.
+  uses="$(yq -o json -I 0 '.' "$file" 2>/dev/null |
+    jq -r '(.runs.steps // [])[] | objects | .uses // empty | select(type == "string")' 2>/dev/null)" ||
+    { echo "::error::$owner/$repo@$ref#$path: $path/action.yml does not parse as YAML" >&2; unresolved=$((unresolved + 1)); return 1; }
+  while IFS= read -r n; do
+    [ -n "$n" ] || continue
+    case "$n" in
+      ./*)
+        local_action "$owner" "$repo" "$ref" "${n#./}" $((depth + 1)) "$top" || return 1
+        continue
+        ;;
+      ../*)
+        echo "::error::$owner/$repo@$ref#$path: nested call '$n' escapes the repository root; it cannot be resolved at a pinned ref." >&2
+        unresolved=$((unresolved + 1))
+        return 1
+        ;;
+    esac
+    if is_job_level "$n"; then
+      # A composite action cannot call a reusable workflow; that is malformed
+      # rather than traversable, and the runner rejects it.
+      echo "::error::$owner/$repo@$ref#$path: local composite action calls the reusable workflow '$n', which a composite cannot do." >&2
+      unresolved=$((unresolved + 1))
+      return 1
+    fi
+    nn="$(norm "$n")"
+    [ -n "$nn" ] || continue
+    REACHED["$CURWF|$top|$nn"]=1
+  done <<< "$uses"
+  return 0
+}
+
 # walk_callee RAW DEPTH [TOP]: collect refs reached from a reusable call in
 # REACHED, attributed to CURWF and TOP (defaulting to RAW's normalized key).
 # RAW is the full uses: value, including the workflow path. DEPTH starts at 1;
@@ -279,12 +345,25 @@ walk_callee() {
     [ -n "$n" ] || continue
     case "$n" in
       ./*)
-        # A LOCAL call inside a REMOTE reusable workflow is not "this
-        # repository at this commit": it is that repository at that ref (a
-        # local call cannot name a ref of its own). Left to `norm` it returned
-        # empty, and the nested file's own dependencies were dropped from the
-        # closure entirely.
-        child="$owner/$repo/${n#./}@$ref"
+        # A LOCAL call inside a REMOTE reusable is not "this repository at this
+        # commit": it is that repository at that ref. Two kinds, and they must
+        # not be conflated:
+        #   * `./.github/workflows/<f>.yml` — a local reusable WORKFLOW, which
+        #     resolves like any other reusable call at the same ref;
+        #   * anything else (`./.github/actions/x`) — a local COMPOSITE ACTION,
+        #     whose own `uses:` live in its action.yml. Rewriting that to
+        #     `owner/repo/.github/actions/x@ref` invented an edge to the
+        #     repository itself and never read the composite, so the actions it
+        #     really runs were missing from the closure.
+        case "${n#./}" in
+          .github/workflows/*.yml|.github/workflows/*.yaml)
+            child="$owner/$repo/${n#./}@$ref"
+            ;;
+          *)
+            local_action "$owner" "$repo" "$ref" "${n#./}" $((depth + 1)) "$top" || return 1
+            continue
+            ;;
+        esac
         ;;
       ../*)
         echo "::error::$key: nested call '$n' escapes the repository root; a ../-relative reusable cannot be resolved at a pinned ref." >&2

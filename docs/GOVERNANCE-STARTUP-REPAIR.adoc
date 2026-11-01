@@ -463,11 +463,15 @@ Consumers that explicitly pass `canon-ref:` (fork-governance) or
 
 == Rollback
 
-Revert this PR (`git revert <commit-on-main>`, or `gh pr revert`). The ruleset
-squash- or rebase-merges, so the result on `main` is a single-parent commit and
-`-m 1` (the mainline-parent option, which applies only to reverting a real merge
-commit) is not part of this command. Because no
-lock record and no `uses:` ref changed, a revert restores the previous
+Revert this PR. The ruleset squash-merges or rebase-merges, so there is no
+merge commit and `-m 1` does not apply:
+
+* after a **squash** merge, `git revert <squash-commit>` (or `gh pr revert 1382`);
+* after a **rebase** merge, one commit per branch commit lands on `main`, so
+  revert them all in reverse order:
+  `git revert --no-commit <sha-N> … <sha-1> && git commit`.
+
+Because no lock record and no `uses:` ref changed, a revert restores the previous
 behaviour exactly — including, deliberately, the three stale literal pins and
 the two floating helper checkouts. There is no partial state to repair.
 

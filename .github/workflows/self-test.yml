@@ -89,25 +89,22 @@ jobs:
       # files (+29,544/−1,736 lines) under scripts/, so every consumer was judged by six-week-old
       # gate code — and standards' own self-lint path (which runs its local
       # tree) could never notice. A branch here would be worse still.
-      # COMPARE is the PROPOSED tree, not the base: comparing a pin against the
-      # commit the pull request started from cannot see the helper edits the
-      # pull request makes, so a pin that is stale with respect to this change
-      # passed with a green tick. (On a push, head == the pushed commit.)
+      # COMPARE is the TREE THIS RUN TESTS: on a pull_request event that is the
+      # merge commit the checkout contains, not the contributor's branch tip and
+      # not the base. Comparing against the base cannot see the pull request's
+      # own helper edits; comparing against the branch tip cannot see a helper
+      # the base branch moved after the branch was cut. The merge commit is the
+      # only revision that contains both, so a pin stale with respect to either
+      # is caught. (On a push, GITHUB_SHA is the pushed commit.)
       - name: Standards helper checkouts are immutable and fresh
-        env:
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
-          COMPARE="${HEAD_SHA:-$GITHUB_SHA}"
-          bash scripts/check-standards-helper-pins.sh .github/workflows --compare "$COMPARE"
+          bash scripts/check-standards-helper-pins.sh .github/workflows --compare "$GITHUB_SHA"
 
       - name: Lock-gate pin is not stale
-        env:
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
-          COMPARE="${HEAD_SHA:-$GITHUB_SHA}"
-          bash scripts/check-lock-gate-pin-freshness.sh "$COMPARE"
+          bash scripts/check-lock-gate-pin-freshness.sh "$GITHUB_SHA"
 
       # The fixture-driven controls for the guards above. They live in
       # scripts/tests/ and the general suite runs them too, but that suite is

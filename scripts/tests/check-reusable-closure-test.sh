@@ -658,5 +658,91 @@ else
   ok 'the with:-input value never enters the closure'
 fi
 
+# ── 15. a following option is a MISSING value, not a value ───────────────
+# `--cache --offline` consumed the option as a directory and left offline mode
+# off: a run that asked to prohibit network access made network requests.
+d=$(new_tree optflip); caller "$d" "$SHA_A"
+got=0; run_guard "$d" --cache --offline || got=$?
+[ "$got" -eq 2 ] && ok '--cache followed by --offline is a missing value (exit 2)' \
+  || bad "--cache --offline: wanted 2, got $got"
+got=0; run_guard "$d" --baseline --write-baseline || got=$?
+[ "$got" -eq 2 ] && ok '--baseline followed by --write-baseline is a missing value (exit 2)' \
+  || bad "--baseline --write-baseline: wanted 2, got $got"
+got=0; run_guard "$d" --depth -1 || got=$?
+[ "$got" -eq 2 ] && ok 'a negative --depth is refused (exit 2)' \
+  || bad "--depth -1: wanted 2, got $got"
+
+# ── 16. a local COMPOSITE ACTION inside a remote reusable is not a workflow ──
+# `uses: ./.github/actions/setup` used to be rewritten to
+# `owner/repo/.github/actions/setup@sha` — an invented edge to the repository
+# itself — while the actions the composite actually runs went uncollected.
+cache_put hyperpolymath cicd-suite "$SHA_A" .github/workflows/with-composite.yml \
+'name: with composite
+on: workflow_call
+jobs:
+  c:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./.github/actions/setup
+'
+cache_put hyperpolymath cicd-suite "$SHA_A" .github/actions/setup/action.yml \
+'name: setup
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@'"$SHA_B"'
+    - uses: hyperpolymath/setup-rust@'"$SHA_D"'
+'
+d=$(new_tree composite)
+cat >"$d/.github/workflows/secret-scanner.yml" <<YAML
+name: Secret Scanner
+on: [push]
+jobs:
+  scan:
+    uses: $CICD/.github/workflows/with-composite.yml@$SHA_A
+YAML
+cat >"$d/.github/workflows/actions.lock" <<YAML
+version: 'v0.0.3'
+workflows:
+    '.github/workflows/secret-scanner.yml': []
+dependencies:
+    '$CICD@$SHA_A':
+        ref: '$SHA_A'
+        commit: 'sha1-$SHA_A'
+        owner_id: 6759885
+        repo_id: 1326697643
+        uses:
+            - 'actions/checkout@$SHA_B'
+            - 'hyperpolymath/setup-rust@$SHA_D'
+YAML
+printf '%s\t%s\t%s\n%s\t%s\t%s\n' \
+  ".github/workflows/secret-scanner.yml" "$CICD@$SHA_A" "actions/checkout@$SHA_B" \
+  ".github/workflows/secret-scanner.yml" "$CICD@$SHA_A" "hyperpolymath/setup-rust@$SHA_D" \
+  >"$d/.github/workflows/actions-lock.closure.tsv"
+expect 'a local composite action inside a remote reusable is traversed' 0 "$d"
+if grep -qF "$CICD/.github/actions/setup@" "$d/.github/workflows/actions-lock.closure.tsv"; then
+  bad 'the composite action path was invented as a reached dependency'
+else
+  ok 'the composite action is not recorded as a bogus edge to the repository'
+fi
+if grep -qF "hyperpolymath/setup-rust@$SHA_D" "$d/.github/workflows/actions-lock.closure.tsv"; then
+  ok 'the action the composite runs is collected'
+else
+  bad 'the action the composite runs is missing from the closure'
+fi
+# ...and an unreadable composite is UNRESOLVED, never silently empty.
+rm -rf "$CACHE/hyperpolymath/cicd-suite/$SHA_A/.github_actions_setup_action.yml"
+got=0; run_guard "$d" || got=$?
+[ "$got" -eq 2 ] && ok 'an unreadable composite action is NOT INSPECTED (exit 2)' \
+  || bad "unreadable composite: wanted 2, got $got"
+cache_put hyperpolymath cicd-suite "$SHA_A" .github/actions/setup/action.yml \
+'name: setup
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@'"$SHA_B"'
+    - uses: hyperpolymath/setup-rust@'"$SHA_D"'
+'
+
 printf '\n%s\n' "check-reusable-closure: passed=$pass failed=$fail"
 [ "$fail" -eq 0 ] || exit 1

@@ -126,6 +126,46 @@ else
   fi
 fi
 
+# 1a-ter. every dependency the REVIEWED CLOSURE says is reached must still be
+# locked in one of the two places the runner looks for it: this workflow's own
+# entry, or the reusable record's nested `uses:`. check-lock-sync recognises a
+# closure-backed entry as "referenced" (direction 2), which is what makes the
+# unified-dataset-vocab#81 shape pass — but recognising an entry is not the same
+# as requiring the reached dependency to be present. Delete a reusable entry and
+# its record together and the lock stays closed, sync stays green, and the
+# dependency is gone: the canary would still certify startup.
+closure_baseline="$SRC/.github/workflows/actions-lock.closure.tsv"
+if [ ! -f "$closure_baseline" ]; then
+  bad "this source has no reviewed closure baseline, so Start up coverage cannot be certified against one"
+  STARTUP_RC=1
+else
+  unlocked_reach=""
+  reach_rows=0
+  lockjson="$(yq -o json -I 0 '.' "$SRC/.github/workflows/actions.lock" 2>/dev/null)"
+  while IFS=$'\t' read -r cwf cre ref; do
+    case "$cwf" in ''|'#'*) continue ;; esac
+    [ -n "$ref" ] || continue
+    reach_rows=$((reach_rows + 1))
+    # The two places the runner looks, and only these two: the CALLING
+    # workflow's entry, or the nested `uses:` of the reusable THIS row names.
+    # Scanning every record instead would accept a dependency that happens to
+    # be locked for some unrelated reusable.
+    locked="$(printf '%s' "$lockjson" | jq -r --arg wf "$cwf" --arg cre "$cre" --arg d "$ref" '
+      ((.workflows[$wf] // []) | index($d)) != null
+      or (((.dependencies // {})[$cre].uses) // [] | index($d) != null)' 2>/dev/null)"
+    [ "$locked" = "true" ] || unlocked_reach="$unlocked_reach $cwf: $ref"
+  done < "$closure_baseline"
+  if [ "$reach_rows" -eq 0 ]; then
+    bad "the reviewed closure baseline has no rows — a vacuous pass is not coverage"
+    STARTUP_RC=1
+  elif [ -n "$unlocked_reach" ]; then
+    bad "reached dependencies recorded in NEITHER supported location (a caller dies at startup):$unlocked_reach"
+    STARTUP_RC=1
+  else
+    ok "every reviewed reached dependency (${reach_rows} row(s)) is locked where the runner looks"
+  fi
+fi
+
 # 1b. every record is one the runner accepts, and the lock is closed
 contract=0
 if ! have scripts/check-lock-pin-contract.sh; then

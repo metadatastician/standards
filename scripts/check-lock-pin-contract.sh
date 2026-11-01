@@ -188,6 +188,41 @@ ROWS="$(printf '%s' "$JSON" | jq -r '
   ] | map(tostring) | if any(.[]; contains("\u001f") or contains("\n") or contains("\r")) then error("lock record contains a field or row delimiter") else join("\u001f") end
 ')" || not_inspected "could not enumerate .dependencies records"
 
+# ── which records really ARE reusable-workflow edges ─────────────────────
+# A `uses:` list on a record does NOT make it a reusable-workflow edge: a
+# COMPOSITE ACTION carries its own transitive `uses:` list too (this
+# repository's `actions/upload-pages-artifact@…` record is one). Granting the
+# raw-SHA exemption on that shape alone let a leaf composite record rewrite its
+# `ref:` to its own SHA and pass, which is exactly the representation the
+# runner rejects. The exemption therefore requires the identity the runner
+# resolves: some workflow in this repository must call that key as a JOB-LEVEL
+# reusable workflow (`owner/repo/.github/workflows/<file>@<ref>`).
+#
+# The caller set is read from the workflows beside the lockfile. A workflow that
+# cannot be parsed makes this UNINSPECTED rather than "no callers": an
+# uninspected caller set would silently withdraw every exemption, and a gate
+# that cannot see must not guess.
+CALLERS=""
+WFDIR="$(dirname "$LOCK")"
+if [ -d "$WFDIR" ]; then
+  for wfile in "$WFDIR"/*.yml "$WFDIR"/*.yaml; do
+    [ -f "$wfile" ] || continue
+    wjson="$(yq -o json -I 0 '.' "$wfile" 2>&1)" ||
+      not_inspected "$wfile does not parse, so reusable-call identity cannot be established"
+    CALLERS="$CALLERS
+$(printf '%s' "$wjson" | jq -r '
+  (.jobs // {}) | to_entries[] | .value | objects | .uses // empty
+  | select(type == "string")
+  | select(test("^[^./][^@]*/\\.github/workflows/[^@]+@[^@]+$"))
+  | capture("^(?<o>[^/]+)/(?<r>[^/]+)/.+@(?<ref>.+)$")
+  | ((.o | ascii_downcase) + "/" + (.r | ascii_downcase) + "@" + .ref)' 2>/dev/null)"
+  done
+fi
+# is_reusable_caller KEY: this key is called as a job-level reusable workflow.
+is_reusable_caller() {
+  printf '%s\n' "$CALLERS" | grep -qxF -- "$1"
+}
+
 failed=0
 count=0
 exempt=0
@@ -238,7 +273,7 @@ while IFS= read -r row; do
     # never qualifies (it has no `uses:` list), and a record whose `ref`
     # differs from its key's SHA never qualifies either.
     ref_lc="$(printf '%s' "$ref" | tr 'A-Z' 'a-z')"
-    if [ "$has_uses" = "yes" ] && [ "$ref_lc" = "$pin_lc" ]; then
+    if [ "$has_uses" = "yes" ] && [ "$ref_lc" = "$pin_lc" ] && is_reusable_caller "${repo_lc}@${pin_lc}"; then
       exempt=$((exempt + 1))
       if is_self_repo "$repo_lc"; then
         echo "  ok (caller-side reusable edge) ${key}: ref repeats the pin by design"
@@ -246,7 +281,11 @@ while IFS= read -r row; do
         echo "  ok (third-party reusable edge) ${key}: ref repeats the pin by design"
       fi
     else
-      fail "INVALID ${key}: ref repeats the commit SHA; it must name the reviewed branch/tag (runner: 'invalid lockfile pin', standards#1271/#1290)"
+      if [ "$has_uses" = "yes" ] && [ "$ref_lc" = "$pin_lc" ]; then
+        fail "INVALID ${key}: ref repeats the commit SHA, and no workflow here calls this key as a job-level reusable workflow — a record carrying a \`uses:\` list is not thereby a reusable edge (a composite action has one too). Name the reviewed tag, or, if this really is a reusable call, add the workflow that calls it."
+      else
+        fail "INVALID ${key}: ref repeats the commit SHA; it must name the reviewed branch/tag (runner: 'invalid lockfile pin', standards#1271/#1290)"
+      fi
     fi
   fi
 
