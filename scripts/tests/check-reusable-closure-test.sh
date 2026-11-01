@@ -434,6 +434,14 @@ printf '%s\t%s\t%s\n%s\t%s\t%s\n' \
   >"$d/.github/workflows/actions-lock.closure.tsv"
 expect 'a nested record whose ref was rewritten to a tag is rejected' 1 "$d"
 expect_msg 'the rewritten nested ref is named' "carries ref: 'v2.0.0'"
+cp "$d/.github/workflows/actions-lock.closure.tsv" "$tmp/nestedref-baseline.tsv"
+expect 'a nested record/ref mismatch refuses to write the baseline' 1 "$d" --write-baseline
+expect_msg 'the mismatched nested record explains why the baseline was preserved' 'traversal was incomplete'
+if cmp -s "$tmp/nestedref-baseline.tsv" "$d/.github/workflows/actions-lock.closure.tsv"; then
+  ok 'a nested record/ref mismatch leaves the existing baseline unchanged'
+else
+  bad 'a nested record/ref mismatch changed the existing baseline'
+fi
 
 # ── 10. a LOCAL call inside a remote reusable belongs to the CALLEE repo ──
 cache_put hyperpolymath cicd-suite "$SHA_A" .github/workflows/local-caller.yml \
