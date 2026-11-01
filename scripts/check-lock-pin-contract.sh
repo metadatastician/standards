@@ -185,7 +185,7 @@ ROWS="$(printf '%s' "$JSON" | jq -r '
     (if (.value.repo_id  | type) == "number" then (.value.repo_id |tostring) else "" end),
     (if (.value.uses | type) == "array" and (.value.uses | length) > 0 then "yes" else "no" end),
     (if (.value.uses != null) and ((.value.uses | type) != "array") then "yes" else "no" end)
-  ] | map(tostring) | join("\u001f")
+  ] | map(tostring) | if any(.[]; contains("\u001f") or contains("\n") or contains("\r")) then error("lock record contains a field or row delimiter") else join("\u001f") end
 ')" || not_inspected "could not enumerate .dependencies records"
 
 failed=0
