@@ -114,6 +114,70 @@ No Mathlib, in Lean or elsewhere: a missing tactic or lemma is reproved by
 hand in the core library. A proof that needs a large external library to
 compile is a dependency, not a proof the estate owns.
 
+=== 2.1 Canonical Agda invocation (2026-11-01)
+
+First-party Agda theory proof entrypoints shall use the following
+default, explicitly in local recipes and CI:
+
+[source,shell]
+----
+agda --safe --without-K --cubical-compatible <module.agda>
+----
+
+The Agda CLI option is \`--without-K\` with a capital K.
+\`--cubical-compatible\` is not the same as full \`--cubical\`.
+Pin and record the Agda version and standard library with each
+source commit and proof result. Missing tools, incompatible
+dependencies or failed theorems are open obligations: do not
+silently skip proofs or weaken compiler flags to make a check green.
+
+Theory proofs genuinely needing full Cubical Agda or incompatible
+options require an explicit, separately reviewed proof profile.
+Prior \`--safe\` or \`--safe --without-K\` successes are historical
+evidence, not receipts for this new combined profile.
+
+Existing Idris2 source/ABI proofs, Rust/Creusot and Ada/SPARK
+engineering checks remain active as their source repos reconcile
+theory: a translated model does not prove runtime refinement.
+
+=== 2.2 Lean and Rocq/Coq correspondence evidence
+
+The independent witness policy in section 2 operates per *theorem*,
+not on matching filenames. Record for the Agda source and each
+target prover: exact proposition, assumptions, type/universe
+discipline, source revision, compiler/library versions, invocation
+and observed result. Declare \`transported\`, \`re-proved\` or
+\`unavailable\` and record the separate justification connecting
+their semantics and statements. A successful compilation in each
+prover does not establish that all proved the same proposition.
+
+Keep distinguishable statuses: AGDA-PENDING, AGDA-VERIFIED,
+COQ-CHECKED, LEAN-CHECKED, BRIDGE-PENDING, RECONCILED,
+COUNTEREXAMPLE, QUARANTINED. A reconciled claim requires a checked
+bridge or justified statement correspondence, independent kernel
+results and explicit residual assumptions. A prover cannot inspect
+an arbitrary Agda witness by name alone.
+
+Mathesis may catalogue proof receipts, but source projects retain
+local proof ownership. ECHIDNA is the longer-term automation
+destination, not a prerequisite for current independent checks.
+Do not force independent type, trope or identity projects into a
+Hypatia-specific proof architecture.
+
+=== 2.3 Evidence-first event-chain rollout
+
+. Preserve and test existing proof gates before any migration.
+. Enforce this Agda invocation in the actual project scripts and CI.
+. Recover an exact theory theorem, port or independently reprove it
+  faithfully in Agda and retain all assumptions.
+. Check a semantically matched statement in Rocq and Lean.
+. Establish and record the bridge, including unresolved assumptions.
+. Retain OPEN statuses and revalidation triggers rather than
+  claiming estate-wide reconciliation from policy adoption.
+
+This text records a policy, not successful proof executions. The
+implementation PRs and their CI receipts establish those separately.
+
 == 3. Existing proofs
 
 Proofs written before this ruling are re-homed by kind, not rewritten for
