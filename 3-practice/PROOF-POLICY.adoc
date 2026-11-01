@@ -114,6 +114,38 @@ No Mathlib, in Lean or elsewhere: a missing tactic or lemma is reproved by
 hand in the core library. A proof that needs a large external library to
 compile is a dependency, not a proof the estate owns.
 
+=== 2.1 Canonical Agda checks and reconciliation evidence (2026-11-01)
+
+Theory proofs MUST be checked with the pinned Agda toolchain using:
+
+[source,bash]
+----
+agda --safe --without-K --cubical-compatible path/to/Theorem.agda
+----
+
+The capital K is significant. Never silently remove one of the flags.
+The compatibility flag is not a Cubical Agda proof. Unavailable or
+incompatible checkers are recorded as open, not proven.
+
+Every theory theorem records its identity, original proof language,
+source revision/digest, Agda statement/digest, translation or re-proof
+route, checker version, exact command and result, assumptions/postulates,
+and an auditable run reference. Rocq/Coq and Lean have separately recorded
+witness and theorem-statement checks, digest, toolchain, route
+(transported or re-proved), result and axioms.
+
+Acceptance of a transported witness only verifies its translated
+statement. Until source/target statements and assumptions are compared,
+the translation boundary remains assumed/argued. A failed translation,
+missing checker, timeout or rejected witness is not a refutation of the
+theorem and must not erase previously valid evidence.
+
+Proof status uses the existing closed vocabulary in section 5;
+per-checker outcomes and transport routes are additional metadata,
+not newly invented proof status tokens. Imported receipts, search hits
+and AI confidence cannot substitute for an executed kernel check.
+Proof Burrower remains a general discovery/evidence tool while
+ECHIDNA is responsible for the eventual reconciliation pipeline.
 == 3. Existing proofs
 
 Proofs written before this ruling are re-homed by kind, not rewritten for
