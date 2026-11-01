@@ -120,7 +120,7 @@ BEGIN {
       if (c ~ /^#/ || c ~ /^[[:space:]]*$/) continue
       split(c, cf, "\t")
       if (cf[1] == "" || cf[3] == "") continue
-      reached[tolower(cf[1]), norm(cf[3])] = 1
+      reached[cf[1], norm(cf[3])] = 1
     }
     close(closurefile)
   }
@@ -254,7 +254,7 @@ END {
     for (k in lock) {
       split(k, kp, SUBSEP)
       if (kp[1] != key) continue
-      if (!((wf SUBSEP kp[2]) in uses) && !((tolower(key) SUBSEP kp[2]) in reached)) orphan = orphan " " kp[2]
+      if (!((wf SUBSEP kp[2]) in uses) && !((key SUBSEP kp[2]) in reached)) orphan = orphan " " kp[2]
     }
     if (orphan != "") {
       printf "FAIL %s\n     stale lockfile entries, no uses: references them:%s\n", key, orphan

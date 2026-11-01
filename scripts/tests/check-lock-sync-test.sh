@@ -161,11 +161,11 @@ expect 0 'the reviewed closure backs the through-ref in direction 2'
 # ...and the closure is not a blanket amnesty: a ref it does not name is still
 # stale, so a wrong lock cannot hide behind a manifest.
 rm "$WF/actions-lock.closure.tsv"
-printf '%s\t%s\t%s\n' '.github/workflows/other.yml' \
+printf '%s\t%s\t%s\n' '.github/workflows/Smoke.yml' \
   'hyperpolymath/cicd-suite@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' \
   'actions/checkout@bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' \
   > "$WF/actions-lock.closure.tsv"
-expect 1 'a closure row for another workflow does not excuse this one'
+expect 1 'a case-different closure workflow does not excuse this one'
 rm -f "$WF/actions-lock.closure.tsv" "$WF/smoke.yml"
 
 printf '\ncheck-lock-sync regression: %s passed, %s failed\n' "$pass" "$fail"
