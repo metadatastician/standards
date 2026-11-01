@@ -118,7 +118,7 @@ reuse_missing=""
 reuse_sites=0
 if [ -d "$SRC/.github/workflows" ]; then
   lock_keys="$(yq -o json -I 0 '.' "$SRC/.github/workflows/actions.lock" 2>/dev/null |
-    jq -r '(.dependencies // {}) | keys[]' 2>/dev/null)"
+    jq -r '(.dependencies // {}) | keys[] | split("@") | "\(.[0] | ascii_downcase)@\(.[1])"' 2>/dev/null)"
   for wf in "$SRC"/.github/workflows/*.yml "$SRC"/.github/workflows/*.yaml; do
     [ -f "$wf" ] || continue
     calls="$(yq -o json -I 0 '.' "$wf" 2>/dev/null |
