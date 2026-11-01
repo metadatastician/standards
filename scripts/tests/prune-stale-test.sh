@@ -188,13 +188,13 @@ workflows:
         - 'actions/checkout@v1'
 dependencies:
 EOF
-printf '.github/workflows/secret-scanner.yml\thyperpolymath/cicd-suite@%s\tactions/checkout@V1\n' "$S" \
+printf '.github/workflows/secret-scanner.yml\thyperpolymath/cicd-suite@%s\tActions/Checkout@v1\n' "$S" \
   > "$k/actions-lock.closure.tsv"
 (cd "$WORK/k" && bash "$TARGET") >/dev/null 2>&1
-grep -qxF "        - 'Actions/Checkout@V1'" "$k/actions.lock" \
+grep -qxF "        - 'actions/checkout@v1'" "$k/actions.lock" \
   && ok "closure keeps a ref whose ref-case matches and whose repo-case differs" \
   || bad "closure keeps a ref whose ref-case matches and whose repo-case differs"
-! grep -qxF "        - 'actions/checkout@v1'" "$k/actions.lock" \
+! grep -qxF "        - 'Actions/Checkout@V1'" "$k/actions.lock" \
   && ok "closure does not keep a ref that differs only in REF case" \
   || bad "closure does not keep a ref that differs only in REF case"
 
