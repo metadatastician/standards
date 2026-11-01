@@ -177,6 +177,27 @@ grep -qxF "        - 'actions/checkout@$A'" "$k/actions.lock" \
   && ok "--no-closure restores the two-oracle behaviour (the ref is pruned)" \
   || bad "--no-closure restores the two-oracle behaviour (the ref is pruned)"
 
+# Case: the OWNER/REPO half is case-insensitive (GitHub treats it so), the REF
+# half is not (git refs are case-sensitive). Lowercasing the whole column made
+# `@V1` and `@v1` the same row, so a stale entry was protected by a manifest
+# naming a different ref and the sync gate stayed red.
+cat > "$k/actions.lock" <<EOF
+workflows:
+    '.github/workflows/secret-scanner.yml':
+        - 'Actions/Checkout@V1'
+        - 'actions/checkout@v1'
+dependencies:
+EOF
+printf '.github/workflows/secret-scanner.yml\thyperpolymath/cicd-suite@%s\tActions/Checkout@v1\n' "$S" \
+  > "$k/actions-lock.closure.tsv"
+(cd "$WORK/k" && bash "$TARGET") >/dev/null 2>&1
+grep -qxF "        - 'actions/checkout@v1'" "$k/actions.lock" \
+  && ok "closure keeps a ref whose ref-case matches and whose repo-case differs" \
+  || bad "closure keeps a ref whose ref-case matches and whose repo-case differs"
+! grep -qxF "        - 'Actions/Checkout@V1'" "$k/actions.lock" \
+  && ok "closure does not keep a ref that differs only in REF case" \
+  || bad "closure does not keep a ref that differs only in REF case"
+
 fi
 
 mkdir -p "$WORK/n/.github/workflows"; (cd "$WORK/n" && bash "$TARGET") >/dev/null 2>&1; st=$?

@@ -117,7 +117,7 @@ printf '%s\t%s\t%s\n%s\t%s\t%s\n' \
   ".github/workflows/secret-scanner.yml" "$CICD@$SHA_A" "hyperpolymath/setup-rust@$SHA_D" \
   >"$d/.github/workflows/actions-lock.closure.tsv"
 expect 'the estate shape passes: a reusable record carrying its own uses:' 0 "$d"
-expect_msg 'the reusable pin is reported as accepted, not silently ignored' 'calls it as a reusable at that commit'
+expect_msg 'the reusable pin is reported as accepted, not silently ignored' "reaches it as a reusable at that commit"
 
 # ── 2. the unified-dataset-vocab#81 shape: through-ref on the CALLER entry,
 #      no reusable record at all. This is the gate reconciliation case. ─────
@@ -352,6 +352,397 @@ grep -q "actions/checkout@$SHA_B" "$d/.github/workflows/actions-lock.closure.tsv
   && ok 'the written baseline contains the resolved edge' \
   || bad 'the written baseline is missing the resolved edge'
 expect 'the written baseline reproduces on the next run' 0 "$d"
+
+# ── 8. a FLOATING ref reached through a pinned reusable is still a float ──
+#      The recursion applied the immutability rule only at top level, so a
+#      SHA-pinned callee could call another reusable at a branch and the
+#      closure would describe whatever that branch pointed at today.
+d=$(new_tree nestedfloat); caller "$d" "$SHA_A"
+cache_put hyperpolymath cicd-suite "$SHA_A" .github/workflows/floaty.yml \
+'name: floaty
+on: workflow_call
+jobs:
+  f:
+    uses: hyperpolymath/cicd-suite/.github/workflows/nested.yml@main
+'
+cat >"$d/.github/workflows/secret-scanner.yml" <<YAML
+name: Secret Scanner
+on: [push]
+jobs:
+  scan:
+    uses: $CICD/.github/workflows/floaty.yml@$SHA_A
+YAML
+cat >"$d/.github/workflows/actions.lock" <<YAML
+version: 'v0.0.3'
+workflows:
+    '.github/workflows/secret-scanner.yml': []
+dependencies:
+    '$CICD@$SHA_A':
+        ref: '$SHA_A'
+        commit: 'sha1-$SHA_A'
+        owner_id: 6759885
+        repo_id: 1326697643
+        uses:
+            - 'actions/checkout@$SHA_B'
+YAML
+printf '%s\t%s\t%s\n' ".github/workflows/secret-scanner.yml" "$CICD@$SHA_A" "actions/checkout@$SHA_B" \
+  >"$d/.github/workflows/actions-lock.closure.tsv"
+expect 'a nested reusable called at a branch is rejected' 1 "$d"
+expect_msg 'the nested float is named, and says why it matters' 'nested job-level uses'
+cp "$d/.github/workflows/actions-lock.closure.tsv" "$tmp/nestedfloat-baseline.tsv"
+expect 'an aborted nested walk refuses to write the baseline' 1 "$d" --write-baseline
+expect_msg 'the incomplete traversal explains why the baseline was preserved' 'traversal was incomplete'
+if cmp -s "$tmp/nestedfloat-baseline.tsv" "$d/.github/workflows/actions-lock.closure.tsv"; then
+  ok 'an aborted nested walk leaves the existing baseline unchanged'
+else
+  bad 'an aborted nested walk changed the existing baseline'
+fi
+
+# ── 9. a nested callee's LOCK RECORD must carry the ref that was named ────
+d=$(new_tree nestedref); caller "$d" "$SHA_A"
+cat >"$d/.github/workflows/secret-scanner.yml" <<YAML
+name: Secret Scanner
+on: [push]
+jobs:
+  scan:
+    uses: $CICD/.github/workflows/secret-scanner-reusable.yml@$SHA_A
+YAML
+cat >"$d/.github/workflows/actions.lock" <<YAML
+version: 'v0.0.3'
+workflows:
+    '.github/workflows/secret-scanner.yml': []
+dependencies:
+    '$CICD@$SHA_A':
+        ref: '$SHA_A'
+        commit: 'sha1-$SHA_A'
+        owner_id: 6759885
+        repo_id: 1326697643
+        uses:
+            - 'actions/checkout@$SHA_B'
+            - 'hyperpolymath/setup-rust@$SHA_D'
+    '$CICD@$SHA_C':
+        ref: 'v2.0.0'
+        commit: 'sha1-$SHA_C'
+        owner_id: 6759885
+        repo_id: 1326697643
+        uses:
+            - 'hyperpolymath/setup-rust@$SHA_D'
+YAML
+printf '%s\t%s\t%s\n%s\t%s\t%s\n' \
+  ".github/workflows/secret-scanner.yml" "$CICD@$SHA_A" "actions/checkout@$SHA_B" \
+  ".github/workflows/secret-scanner.yml" "$CICD@$SHA_A" "hyperpolymath/setup-rust@$SHA_D" \
+  >"$d/.github/workflows/actions-lock.closure.tsv"
+expect 'a nested record whose ref was rewritten to a tag is rejected' 1 "$d"
+expect_msg 'the rewritten nested ref is named' "carries ref: 'v2.0.0'"
+cp "$d/.github/workflows/actions-lock.closure.tsv" "$tmp/nestedref-baseline.tsv"
+expect 'a nested record/ref mismatch refuses to write the baseline' 1 "$d" --write-baseline
+expect_msg 'the mismatched nested record explains why the baseline was preserved' 'traversal was incomplete'
+if cmp -s "$tmp/nestedref-baseline.tsv" "$d/.github/workflows/actions-lock.closure.tsv"; then
+  ok 'a nested record/ref mismatch leaves the existing baseline unchanged'
+else
+  bad 'a nested record/ref mismatch changed the existing baseline'
+fi
+
+# ── 10. a LOCAL call inside a remote reusable belongs to the CALLEE repo ──
+cache_put hyperpolymath cicd-suite "$SHA_A" .github/workflows/local-caller.yml \
+'name: local caller
+on: workflow_call
+jobs:
+  l:
+    uses: ./.github/workflows/helper.yml
+'
+cache_put hyperpolymath cicd-suite "$SHA_A" .github/workflows/helper.yml \
+'name: helper
+on: workflow_call
+jobs:
+  h:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: hyperpolymath/setup-rust@'"$SHA_D"'
+'
+d=$(new_tree localnested)
+cat >"$d/.github/workflows/secret-scanner.yml" <<YAML
+name: Secret Scanner
+on: [push]
+jobs:
+  scan:
+    uses: $CICD/.github/workflows/local-caller.yml@$SHA_A
+YAML
+cat >"$d/.github/workflows/actions.lock" <<YAML
+version: 'v0.0.3'
+workflows:
+    '.github/workflows/secret-scanner.yml': []
+dependencies:
+    '$CICD@$SHA_A':
+        ref: '$SHA_A'
+        commit: 'sha1-$SHA_A'
+        owner_id: 6759885
+        repo_id: 1326697643
+        uses:
+            - 'hyperpolymath/setup-rust@$SHA_D'
+YAML
+printf '%s\t%s\t%s\n' ".github/workflows/secret-scanner.yml" "$CICD@$SHA_A" "hyperpolymath/setup-rust@$SHA_D" \
+  >"$d/.github/workflows/actions-lock.closure.tsv"
+expect 'a local call inside a remote reusable is traversed, not dropped' 0 "$d"
+
+# ...and it is genuinely traversed: remove the dependency and the miss appears.
+sed -i "/setup-rust/d" "$d/.github/workflows/actions.lock"
+printf '# empty\n' >"$d/.github/workflows/actions-lock.closure.tsv"
+expect 'the local nested call really contributed its dependency (miss is caught)' 1 "$d"
+expect_msg 'the dependency reached through the local call is named' "hyperpolymath/setup-rust@$SHA_D"
+
+# ── 11. two top-level calls reaching the SAME nested file are two edges ───
+cache_put hyperpolymath cicd-suite "$SHA_A" .github/workflows/first.yml \
+'name: first
+on: workflow_call
+jobs:
+  a:
+    uses: hyperpolymath/cicd-suite/.github/workflows/nested.yml@'"$SHA_C"'
+'
+SHA_E=$(printf 'e%.0s' {1..40})   # a second top-level pin, same nested callee
+cache_put hyperpolymath cicd-suite "$SHA_A" .github/workflows/first.yml \
+'name: first
+on: workflow_call
+jobs:
+  a:
+    uses: hyperpolymath/cicd-suite/.github/workflows/nested.yml@'"$SHA_C"'
+'
+cache_put hyperpolymath cicd-suite "$SHA_E" .github/workflows/second2.yml \
+'name: second
+on: workflow_call
+jobs:
+  b:
+    uses: hyperpolymath/cicd-suite/.github/workflows/nested.yml@'"$SHA_C"'
+'
+d=$(new_tree twotops)
+cat >"$d/.github/workflows/secret-scanner.yml" <<YAML
+name: Secret Scanner
+on: [push]
+jobs:
+  scan:
+    uses: $CICD/.github/workflows/first.yml@$SHA_A
+  scan2:
+    uses: $CICD/.github/workflows/second2.yml@$SHA_E
+YAML
+cat >"$d/.github/workflows/actions.lock" <<YAML
+version: 'v0.0.3'
+workflows:
+    '.github/workflows/secret-scanner.yml': []
+dependencies:
+    '$CICD@$SHA_A':
+        ref: '$SHA_A'
+        commit: 'sha1-$SHA_A'
+        owner_id: 6759885
+        repo_id: 1326697643
+        uses:
+            - 'hyperpolymath/setup-rust@$SHA_D'
+    '$CICD@$SHA_E':
+        ref: '$SHA_E'
+        commit: 'sha1-$SHA_E'
+        owner_id: 6759885
+        repo_id: 1326697643
+        uses:
+            - 'hyperpolymath/setup-rust@$SHA_D'
+    '$CICD@$SHA_C':
+        ref: '$SHA_C'
+        commit: 'sha1-$SHA_C'
+        owner_id: 6759885
+        repo_id: 1326697643
+        uses:
+            - 'hyperpolymath/setup-rust@$SHA_D'
+YAML
+got=0; run_guard "$d" --write-baseline || got=$?
+[ "$got" -eq 0 ] && ok 'two top-level calls reaching one nested file both resolve' \
+  || { tail -8 "$tmp/out"; bad "two-top-level: wanted 0, got $got"; }
+tops="$(awk -F'\t' '$1 !~ /^#/ && $3 ~ /setup-rust/ {print $2}' "$d/.github/workflows/actions-lock.closure.tsv" | sort -u | wc -l)"
+[ "$tops" -eq 2 ] && ok 'both top-level edges are attributed to the shared nested file (not one)' \
+  || bad "the shared nested file was attributed to $tops top-level edge(s), expected 2"
+# The nested record's ref repeats its own SHA and no workflow calls it at top
+# level: that must be ACCEPTED (it is the nested form of the same thing), not
+# reported as the runner-invalid leaf shape.
+if grep -q "repeats the record's own SHA" "$tmp/out"; then
+  bad 'a nested reusable record was reported as a leaf raw-SHA defect'
+else
+  ok 'a nested reusable record whose ref repeats its SHA is accepted'
+fi
+
+# ── 12. the baseline is compared in BOTH directions ──────────────────────
+#      A new remote edge recorded only in the lock is a change to what this
+#      repository trusts; comparing only "did any reviewed row disappear" let
+#      it through unreviewed.
+cache_put hyperpolymath cicd-suite "$SHA_A" .github/workflows/simple.yml \
+'name: simple
+on: workflow_call
+jobs:
+  s:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@'"$SHA_B"'
+'
+d=$(new_tree reverse)
+cat >"$d/.github/workflows/secret-scanner.yml" <<YAML
+name: Secret Scanner
+on: [push]
+jobs:
+  scan:
+    uses: $CICD/.github/workflows/simple.yml@$SHA_A
+YAML
+cat >"$d/.github/workflows/actions.lock" <<YAML
+version: 'v0.0.3'
+workflows:
+    '.github/workflows/secret-scanner.yml':
+        - 'actions/checkout@$SHA_B'
+dependencies:
+    'actions/checkout@$SHA_B':
+        ref: 'v7.0.1'
+        commit: 'sha1-$SHA_B'
+        owner_id: 44036562
+        repo_id: 197814629
+YAML
+printf '%s\t%s\t%s\n' ".github/workflows/secret-scanner.yml" "$CICD@$SHA_A" "actions/checkout@$SHA_B" \
+  >"$d/.github/workflows/actions-lock.closure.tsv"
+expect 'a reviewed baseline reproduces' 0 "$d"
+# the same tree, with the reviewed row removed: the edge is now unreviewed
+printf '# reviewed closure removed by the reviewer\n' >"$d/.github/workflows/actions-lock.closure.tsv"
+expect 'an edge reached but absent from the baseline is a failure' 1 "$d"
+expect_msg 'the unreviewed edge is named' 'UNREVIEWED CLOSURE'
+
+# ── 13. an option without a value is UNINSPECTED, not an infinite loop ────
+d=$(new_tree optnoval); caller "$d" "$SHA_A"
+got=0; run_guard "$d" --depth || got=$?
+[ "$got" -eq 2 ] && ok '--depth with no value exits 2 instead of looping' \
+  || bad "--depth with no value: wanted 2, got $got"
+got=0; run_guard "$d" --baseline || got=$?
+[ "$got" -eq 2 ] && ok '--baseline with no value exits 2' \
+  || bad "--baseline with no value: wanted 2, got $got"
+
+# ── 14. a `uses:` that is an ACTION INPUT is not a workflow call ──────────
+cache_put hyperpolymath cicd-suite "$SHA_A" .github/workflows/with-input.yml \
+'name: with input
+on: workflow_call
+jobs:
+  w:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@'"$SHA_B"'
+        with:
+          uses: hyperpolymath/not-a-call@'"$SHA_D"'
+'
+d=$(new_tree withinput)
+cat >"$d/.github/workflows/secret-scanner.yml" <<YAML
+name: Secret Scanner
+on: [push]
+jobs:
+  scan:
+    uses: $CICD/.github/workflows/with-input.yml@$SHA_A
+YAML
+cat >"$d/.github/workflows/actions.lock" <<YAML
+version: 'v0.0.3'
+workflows:
+    '.github/workflows/secret-scanner.yml': []
+dependencies:
+    '$CICD@$SHA_A':
+        ref: '$SHA_A'
+        commit: 'sha1-$SHA_A'
+        owner_id: 6759885
+        repo_id: 1326697643
+        uses:
+            - 'actions/checkout@$SHA_B'
+YAML
+printf '%s\t%s\t%s\n' ".github/workflows/secret-scanner.yml" "$CICD@$SHA_A" "actions/checkout@$SHA_B" \
+  >"$d/.github/workflows/actions-lock.closure.tsv"
+expect 'a with:-input named uses: is not treated as a workflow call' 0 "$d"
+if grep -qF "hyperpolymath/not-a-call@$SHA_D" "$d/.github/workflows/actions-lock.closure.tsv" 2>/dev/null; then
+  bad 'the with:-input value leaked into the closure rows'
+else
+  ok 'the with:-input value never enters the closure'
+fi
+
+# ── 15. a following option is a MISSING value, not a value ───────────────
+# `--cache --offline` consumed the option as a directory and left offline mode
+# off: a run that asked to prohibit network access made network requests.
+d=$(new_tree optflip); caller "$d" "$SHA_A"
+got=0; run_guard "$d" --cache --offline || got=$?
+[ "$got" -eq 2 ] && ok '--cache followed by --offline is a missing value (exit 2)' \
+  || bad "--cache --offline: wanted 2, got $got"
+got=0; run_guard "$d" --baseline --write-baseline || got=$?
+[ "$got" -eq 2 ] && ok '--baseline followed by --write-baseline is a missing value (exit 2)' \
+  || bad "--baseline --write-baseline: wanted 2, got $got"
+got=0; run_guard "$d" --depth -1 || got=$?
+[ "$got" -eq 2 ] && ok 'a negative --depth is refused (exit 2)' \
+  || bad "--depth -1: wanted 2, got $got"
+
+# ── 16. a local COMPOSITE ACTION inside a remote reusable is not a workflow ──
+# `uses: ./.github/actions/setup` used to be rewritten to
+# `owner/repo/.github/actions/setup@sha` — an invented edge to the repository
+# itself — while the actions the composite actually runs went uncollected.
+cache_put hyperpolymath cicd-suite "$SHA_A" .github/workflows/with-composite.yml \
+'name: with composite
+on: workflow_call
+jobs:
+  c:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./.github/actions/setup
+'
+cache_put hyperpolymath cicd-suite "$SHA_A" .github/actions/setup/action.yml \
+'name: setup
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@'"$SHA_B"'
+    - uses: hyperpolymath/setup-rust@'"$SHA_D"'
+'
+d=$(new_tree composite)
+cat >"$d/.github/workflows/secret-scanner.yml" <<YAML
+name: Secret Scanner
+on: [push]
+jobs:
+  scan:
+    uses: $CICD/.github/workflows/with-composite.yml@$SHA_A
+YAML
+cat >"$d/.github/workflows/actions.lock" <<YAML
+version: 'v0.0.3'
+workflows:
+    '.github/workflows/secret-scanner.yml': []
+dependencies:
+    '$CICD@$SHA_A':
+        ref: '$SHA_A'
+        commit: 'sha1-$SHA_A'
+        owner_id: 6759885
+        repo_id: 1326697643
+        uses:
+            - 'actions/checkout@$SHA_B'
+            - 'hyperpolymath/setup-rust@$SHA_D'
+YAML
+printf '%s\t%s\t%s\n%s\t%s\t%s\n' \
+  ".github/workflows/secret-scanner.yml" "$CICD@$SHA_A" "actions/checkout@$SHA_B" \
+  ".github/workflows/secret-scanner.yml" "$CICD@$SHA_A" "hyperpolymath/setup-rust@$SHA_D" \
+  >"$d/.github/workflows/actions-lock.closure.tsv"
+expect 'a local composite action inside a remote reusable is traversed' 0 "$d"
+if grep -qF "$CICD/.github/actions/setup@" "$d/.github/workflows/actions-lock.closure.tsv"; then
+  bad 'the composite action path was invented as a reached dependency'
+else
+  ok 'the composite action is not recorded as a bogus edge to the repository'
+fi
+if grep -qF "hyperpolymath/setup-rust@$SHA_D" "$d/.github/workflows/actions-lock.closure.tsv"; then
+  ok 'the action the composite runs is collected'
+else
+  bad 'the action the composite runs is missing from the closure'
+fi
+# ...and an unreadable composite is UNRESOLVED, never silently empty.
+rm -rf "$CACHE/hyperpolymath/cicd-suite/$SHA_A/.github_actions_setup_action.yml"
+got=0; run_guard "$d" || got=$?
+[ "$got" -eq 2 ] && ok 'an unreadable composite action is NOT INSPECTED (exit 2)' \
+  || bad "unreadable composite: wanted 2, got $got"
+cache_put hyperpolymath cicd-suite "$SHA_A" .github/actions/setup/action.yml \
+'name: setup
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@'"$SHA_B"'
+    - uses: hyperpolymath/setup-rust@'"$SHA_D"'
+'
 
 printf '\n%s\n' "check-reusable-closure: passed=$pass failed=$fail"
 [ "$fail" -eq 0 ] || exit 1

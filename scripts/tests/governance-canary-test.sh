@@ -54,7 +54,6 @@ FIXTURE="$ROOT/scripts/tests/fixtures/governance-canary"
 command -v yq >/dev/null 2>&1 || { echo 'SKIP(2): yq not installed' >&2; exit 2; }
 yq --version 2>/dev/null | grep -q mikefarah || { echo 'SKIP(2): mikefarah yq v4 required' >&2; exit 2; }
 command -v jq >/dev/null 2>&1 || { echo 'SKIP(2): jq not installed' >&2; exit 2; }
-[ -f "$FIXTURE/MANIFEST.sha256" ] || { echo "SKIP(2): canary fixture missing: $FIXTURE" >&2; exit 2; }
 
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
@@ -71,9 +70,17 @@ if [ -n "$REF" ]; then
   git -C "$ROOT" archive "$REF" | tar -x -C "$SRC" 2>/dev/null ||
     { echo "SKIP(2): could not extract $REF" >&2; exit 2; }
   echo "source under test: $REF ($(git -C "$ROOT" rev-parse --short=12 "$REF"))"
+  # The CONSUMER FIXTURE must come from the same revision as the source. Left
+  # pointing at the working tree, one published SHA produced different verdicts
+  # over time — and a commit could be approved using consumer inputs that were
+  # never part of it.
+  FIXTURE="$SRC/scripts/tests/fixtures/governance-canary"
 else
   echo "source under test: working tree ($ROOT)"
 fi
+[ -f "$FIXTURE/MANIFEST.sha256" ] ||
+  { echo "SKIP(2): canary fixture missing: $FIXTURE (it must be part of the source under test)" >&2; exit 2; }
+echo "consumer fixture: ${FIXTURE#"$tmp"/}"
 
 pass=0; fail=0; skipped=0
 ok()   { echo "PASS: $1"; pass=$((pass + 1)); }
@@ -99,6 +106,64 @@ else
   printf '%s\n' "$out" | sed 's/^/    /'
   bad "uses: coverage failed (exit $cov) — a caller dies at startup"
   STARTUP_RC=1
+fi
+
+# 1a-bis. reached dependencies may be locked under the calling workflow or
+# under the reusable's own record. check-lock-sync validates both supported
+# locations; a direct record for every remote reusable call is not required.
+sync=0
+if ! have scripts/check-lock-sync.sh; then
+  bad "this source ships no workflow lock-sync guard"
+  STARTUP_RC=1
+else
+  out="$(bash "$SRC/scripts/check-lock-sync.sh" "$SRC/.github/workflows" 2>&1)" || sync=$?
+  if [ "$sync" -eq 0 ]; then
+    ok "workflow lock sync accepts both supported reusable dependency locations"
+  else
+    printf '%s\n' "$out" | sed 's/^/    /'
+    bad "workflow lock sync failed (exit $sync)"
+    STARTUP_RC=1
+  fi
+fi
+
+# 1a-ter. every dependency the REVIEWED CLOSURE says is reached must still be
+# locked in one of the two places the runner looks for it: this workflow's own
+# entry, or the reusable record's nested `uses:`. check-lock-sync recognises a
+# closure-backed entry as "referenced" (direction 2), which is what makes the
+# unified-dataset-vocab#81 shape pass — but recognising an entry is not the same
+# as requiring the reached dependency to be present. Delete a reusable entry and
+# its record together and the lock stays closed, sync stays green, and the
+# dependency is gone: the canary would still certify startup.
+closure_baseline="$SRC/.github/workflows/actions-lock.closure.tsv"
+if [ ! -f "$closure_baseline" ]; then
+  bad "this source has no reviewed closure baseline, so Start up coverage cannot be certified against one"
+  STARTUP_RC=1
+else
+  unlocked_reach=""
+  reach_rows=0
+  lockjson="$(yq -o json -I 0 '.' "$SRC/.github/workflows/actions.lock" 2>/dev/null)"
+  while IFS=$'\t' read -r cwf cre ref; do
+    case "$cwf" in ''|'#'*) continue ;; esac
+    [ -n "$ref" ] || continue
+    reach_rows=$((reach_rows + 1))
+    # The two places the runner looks, and only these two: the CALLING
+    # workflow's entry, or the nested `uses:` of the reusable THIS row names.
+    # Scanning every record instead would accept a dependency that happens to
+    # be locked for some unrelated reusable.
+    locked="$(printf '%s' "$lockjson" | jq -r --arg wf "$cwf" --arg cre "$cre" --arg d "$ref" '
+      ((.workflows[$wf] // []) | index($d)) != null
+      or (((.dependencies // {})[$cre].uses) // [] | index($d) != null)' 2>/dev/null)"
+    [ "$locked" = "true" ] || unlocked_reach="$unlocked_reach $cwf: $ref"
+  done < "$closure_baseline"
+  if [ "$reach_rows" -eq 0 ]; then
+    bad "the reviewed closure baseline has no rows — a vacuous pass is not coverage"
+    STARTUP_RC=1
+  elif [ -n "$unlocked_reach" ]; then
+    bad "reached dependencies recorded in NEITHER supported location (a caller dies at startup):$unlocked_reach"
+    STARTUP_RC=1
+  else
+    ok "every reviewed reached dependency (${reach_rows} row(s)) is locked where the runner looks"
+  fi
 fi
 
 # 1b. every record is one the runner accepts, and the lock is closed
@@ -250,8 +315,19 @@ sed -i '0,/^    runs-on: ubuntu-latest$/s//    runs-on: ubuntu-latest\n    runs-
 gate 'duplicate-key linter rejects a duplicated key on the same canary' 1 scripts/check-workflow-duplicate-keys.sh \
   bash "$SRC/scripts/check-workflow-duplicate-keys.sh" "$seeded2/.github/workflows"
 
+# A gate the reusable EXECUTES must exist in the source, even where this canary
+# cannot run it: `Check action pins resolve upstream` fails the governance job
+# if the script is missing, so a source that does not ship it cannot be
+# certified by a canary that never looked.
+if have scripts/check-action-pins-resolve.sh; then
+  ok "this source ships check-action-pins-resolve.sh (the reusable executes it)"
+else
+  bad "this source ships no scripts/check-action-pins-resolve.sh, and governance-reusable.yml runs it: the pin-resolution step fails for every caller"
+  POLICY_RC=1
+fi
+
 if [ "$POLICY_RC" -eq 0 ]; then
-  ok "POLICY phase clean (gates execute in both directions)"
+  ok "POLICY phase clean for the gates this canary exercises"
 else
   bad "POLICY phase not clean"
 fi
@@ -260,5 +336,9 @@ fi
 echo
 echo "governance-canary: passed=$pass failed=$fail (startup=${STARTUP_RC} policy=${POLICY_RC})"
 [ "$fail" -eq 0 ] || exit 1
-echo "CANARY GREEN: startup clean and both policy directions behaved."
+echo "CANARY GREEN: startup clean, and the gates listed above execute and still fail"
+echo "what they exist to fail. NOT exercised here: scripts/check-action-pins-resolve.sh"
+echo "(it asks GitHub whether each pin resolves, so it needs the network), other lock"
+echo "verifiers, and allowlist admission. Those are exercised by the governance jobs"
+echo "themselves; this canary does not stand in for them."
 exit 0

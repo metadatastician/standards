@@ -100,18 +100,32 @@ CACHE=""
 OFFLINE=0
 DEPTH=6
 REPO="${GITHUB_REPOSITORY:-}"
+# need_value OPTION REMAINING_ARGC VALUE: require a nonempty option value that
+# is not itself an option. Exit 2 with an error otherwise.
+# `--cache --offline` used to consume `--offline` as a directory and leave
+# OFFLINE=0 — a command that asked for no network access would make network
+# requests — and `--baseline --write-baseline` silently disabled write mode.
+need_value() {  # $1 option, $2 remaining argc, $3 value
+  case "${3:-}" in
+    '') echo "::error::$1 needs a value — NOT INSPECTED, which is not a pass." >&2; exit 2 ;;
+    --*) echo "::error::$1 needs a value but was followed by the option '$3' — NOT INSPECTED, which is not a pass." >&2; exit 2 ;;
+  esac
+  [ "$2" -ge 2 ] ||
+    { echo "::error::$1 needs a value — NOT INSPECTED, which is not a pass." >&2; exit 2; }
+}
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    --baseline) BASELINE="${2:-}"; shift 2 ;;
+    --baseline) need_value "$1" "$#" "${2:-}"; BASELINE="$2"; shift 2 ;;
     --write-baseline) WRITE_BASELINE=1; shift ;;
-    --cache) CACHE="${2:-}"; shift 2 ;;
+    --cache) need_value "$1" "$#" "${2:-}"; CACHE="$2"; shift 2 ;;
     --offline) OFFLINE=1; shift ;;
-    --depth) DEPTH="${2:-6}"; shift 2 ;;
-    --repo) REPO="${2:-}"; shift 2 ;;
+    --depth) need_value "$1" "$#" "${2:-}"; DEPTH="$2"; shift 2 ;;
+    --repo) need_value "$1" "$#" "${2:-}"; REPO="$2"; shift 2 ;;
     -h|--help) sed -n '2,90p' "${BASH_SOURCE[0]}"; exit 0 ;;
     *) WF_DIR="$1"; shift ;;
   esac
 done
+case "$DEPTH" in ''|*[!0-9]*) echo "::error::--depth must be a non-negative integer (got '$DEPTH') — NOT INSPECTED." >&2; exit 2 ;; esac
 
 not_inspected() { echo "::error::$* — NOT INSPECTED, which is not a pass." >&2; exit 2; }
 
@@ -181,6 +195,7 @@ fail=0
 inspected_sites=0
 resolved_sites=0
 unresolved=0
+incomplete_traversal=0
 notes=""
 declare -A REACHED=()   # "workflow|jobref|actionref" -> 1 (what we actually saw)
 declare -A LOCKSET=()   # "workflow|actionref" -> locked under that workflow entry
@@ -213,19 +228,82 @@ while IFS=$'\t' read -r kind a b; do
   esac
 done < <(cat "$TMP/lock.wf" "$TMP/lock.deps")
 
-# uses_of FILE: print every string uses: value in a workflow document, one
-# per line. Return a nonzero status if the YAML or JSON processing fails.
+# uses_of FILE: print string uses: values at job and step level, one per line.
+# Return a nonzero status if the YAML or JSON processing fails.
 uses_of() {
   yq -o json -I 0 '.' "$1" 2>/dev/null |
-    jq -r '[.. | objects | select(has("uses")) | .uses | select(type == "string")] | .[]' 2>/dev/null
+    jq -r '[(.jobs // {}) | to_entries[] | .value | objects | .uses // empty],
+           [(.jobs // {}) | to_entries[] | .value | objects | (.steps // [])[] | objects | .uses // empty]
+           | .[] | select(type == "string")' 2>/dev/null
+}
+
+# local_action OWNER REPO REF PATH DEPTH TOP: collect the `uses:` of a local
+# COMPOSITE ACTION inside a remote reusable — `<PATH>/action.yml` (or
+# `action.yaml`) at that ref — attributing every external ref to TOP, and
+# following a further local composite the same way. Unreadable is unresolved,
+# never silently empty.
+local_action() {
+  local owner=$1 repo=$2 ref=$3 path=$4 depth=$5 top=$6
+  local id="$owner/$repo@$ref#$path"
+  case " $WALKED " in *" $id "*) return 0 ;; esac
+  WALKED="$WALKED $id"
+  if [ "$depth" -gt "$DEPTH" ]; then
+    echo "::error::$owner/$repo@$ref#$path: local action chain is deeper than --depth $DEPTH, so its closure was never inspected. Raise --depth." >&2
+    unresolved=$((unresolved + 1))
+    return 1
+  fi
+  local file="" cand
+  for cand in "$path/action.yml" "$path/action.yaml"; do
+    if file="$(resolve_callee "$owner" "$repo" "$ref" "$cand")"; then break; fi
+    file=""
+  done
+  if [ -z "$file" ]; then
+    echo "::error::$owner/$repo@$ref#$path: the local composite action $path could not be read at $ref (no action.yml/action.yaml in the fetched tree). An unread composite is NOT a closed closure; pass --cache with a fetched copy, or drop --offline." >&2
+    unresolved=$((unresolved + 1))
+    return 1
+  fi
+  local uses n nn
+  # A composite action's `uses:` live under `runs.steps`, NOT under `jobs` —
+  # reading it with the workflow extractor returns nothing, which is how the
+  # composite's real actions used to vanish from the closure.
+  uses="$(yq -o json -I 0 '.' "$file" 2>/dev/null |
+    jq -r '(.runs.steps // [])[] | objects | .uses // empty | select(type == "string")' 2>/dev/null)" ||
+    { echo "::error::$owner/$repo@$ref#$path: $path/action.yml does not parse as YAML" >&2; unresolved=$((unresolved + 1)); return 1; }
+  while IFS= read -r n; do
+    [ -n "$n" ] || continue
+    case "$n" in
+      ./*)
+        local_action "$owner" "$repo" "$ref" "${n#./}" $((depth + 1)) "$top" || return 1
+        continue
+        ;;
+      ../*)
+        echo "::error::$owner/$repo@$ref#$path: nested call '$n' escapes the repository root; it cannot be resolved at a pinned ref." >&2
+        unresolved=$((unresolved + 1))
+        return 1
+        ;;
+    esac
+    if is_job_level "$n"; then
+      # A composite action cannot call a reusable workflow; that is malformed
+      # rather than traversable, and the runner rejects it.
+      echo "::error::$owner/$repo@$ref#$path: local composite action calls the reusable workflow '$n', which a composite cannot do." >&2
+      unresolved=$((unresolved + 1))
+      return 1
+    fi
+    nn="$(norm "$n")"
+    [ -n "$nn" ] || continue
+    REACHED["$CURWF|$top|$nn"]=1
+  done <<< "$uses"
+  return 0
 }
 
 # walk_callee RAW DEPTH [TOP]: collect refs reached from a reusable call in
 # REACHED, attributed to CURWF and TOP (defaulting to RAW's normalized key).
-# RAW is the full uses: value, including the workflow path. The depth argument
-# is compared to the configured DEPTH limit; calls beyond it or already visited
-# by full value are skipped. Return 1 if a callee cannot be read or parsed;
-# unreadable callees also increment unresolved.
+# RAW is the full uses: value, including the workflow path. DEPTH starts at 1;
+# calls beyond the configured limit fail, while a file already visited for the
+# same TOP is skipped. Local nested calls are resolved at the callee's ref.
+# Return 1 for depth, read or parse failures, ../ references, unpinned nested
+# calls, or nested record/ref mismatches. Depth and read failures increment
+# unresolved.
 WALKED=""
 walk_callee() {
   local raw=$1 depth=$2 top=${3:-}
@@ -239,9 +317,13 @@ walk_callee() {
   fi
   # Cycle detection keys on the FILE, not on owner/repo@ref: two different
   # workflow files called at the same ref are two different `uses:` sets, and
-  # collapsing them silently under-collects the closure.
-  case " $WALKED " in *" $raw "*) return 0 ;; esac
-  WALKED="$WALKED $raw"
+  # collapsing them silently under-collects the closure. It is also SCOPED TO
+  # THE TOP-LEVEL CALL: two top-level reusables in one workflow that both reach
+  # the same nested file are two different edges, and remembering the file
+  # globally made the second traversal return here without attributing its
+  # dependencies to the second edge.
+  case " $WALKED " in *" $top|$raw "*) return 0 ;; esac
+  WALKED="$WALKED $top|$raw"
   CHAINKEYS="$CHAINKEYS $key"
 
   local path=${raw%@*} ref=${raw##*@}
@@ -257,13 +339,57 @@ walk_callee() {
   fi
   resolved_sites=$((resolved_sites + 1))
 
-  local uses n nn
+  local uses n nn child
   uses="$(uses_of "$file")" || { echo "::error::$key: $wfpath at $ref does not parse as YAML" >&2; return 1; }
   while IFS= read -r n; do
     [ -n "$n" ] || continue
-    if is_job_level "$n"; then
-      PARENT["$(norm "$n")"]="$key"
-      walk_callee "$n" $((depth + 1)) "$top" || return 1
+    case "$n" in
+      ./*)
+        # A LOCAL call inside a REMOTE reusable is not "this repository at this
+        # commit": it is that repository at that ref. Two kinds, and they must
+        # not be conflated:
+        #   * `./.github/workflows/<f>.yml` — a local reusable WORKFLOW, which
+        #     resolves like any other reusable call at the same ref;
+        #   * anything else (`./.github/actions/x`) — a local COMPOSITE ACTION,
+        #     whose own `uses:` live in its action.yml. Rewriting that to
+        #     `owner/repo/.github/actions/x@ref` invented an edge to the
+        #     repository itself and never read the composite, so the actions it
+        #     really runs were missing from the closure.
+        case "${n#./}" in
+          .github/workflows/*.yml|.github/workflows/*.yaml)
+            child="$owner/$repo/${n#./}@$ref"
+            ;;
+          *)
+            local_action "$owner" "$repo" "$ref" "${n#./}" $((depth + 1)) "$top" || return 1
+            continue
+            ;;
+        esac
+        ;;
+      ../*)
+        echo "::error::$key: nested call '$n' escapes the repository root; a ../-relative reusable cannot be resolved at a pinned ref." >&2
+        return 1
+        ;;
+      *) child="$n" ;;
+    esac
+    if is_job_level "$child"; then
+      local cref=${child##*@} ckey
+      # Nested calls get the SAME immutability rule as top-level ones: a
+      # branch or tag reached through a SHA-pinned callee is still a float,
+      # and this recursion used to resolve and certify it.
+      if ! is_sha "$cref"; then
+        echo "::error::$key: nested job-level uses '$child' is not SHA-pinned. A SHA-pinned reusable that calls another at a branch makes the closure describe whatever that ref pointed at today." >&2
+        return 1
+      fi
+      ckey="$(norm "$child")"
+      [ -n "$ckey" ] || { echo "::error::$key: nested call '$n' does not name a readable owner/repo" >&2; return 1; }
+      # ...and the same record/ref conjugation: a nested callee's lock record
+      # must carry the ref the caller named, not a tag it was rewritten to.
+      if [ -n "${RECREF[$ckey]:+x}" ] && [ "${RECREF[$ckey]}" != "$cref" ]; then
+        echo "::error::$key: the record '$ckey' carries ref: '${RECREF[$ckey]}' but this reusable names '$cref'. A reusable record's ref must be the ref that was requested." >&2
+        return 1
+      fi
+      PARENT["$ckey"]="$key"
+      walk_callee "$child" $((depth + 1)) "$top" || return 1
     else
       nn="$(norm "$n")"
       [ -n "$nn" ] || continue
@@ -281,7 +407,7 @@ for wf in "$WF_DIR"/*.yml "$WF_DIR"/*.yaml; do
 
   if ! wf_json="$(yq -o json -I 0 '.' "$wf" 2>"$TMP/wf.err")"; then
     echo "::error file=$wf::does not parse as YAML: $(head -1 "$TMP/wf.err")" >&2
-    fail=$((fail + 1)); continue
+    fail=$((fail + 1)); incomplete_traversal=1; continue
   fi
 
   WALKED=""; CHAINKEYS=""
@@ -295,14 +421,14 @@ for wf in "$WF_DIR"/*.yml "$WF_DIR"/*.yaml; do
     local_ref=${j##*@}
     if ! is_sha "$local_ref"; then
       echo "::error file=$wf::job-level uses '$j' is not SHA-pinned. A branch or tag there cannot be verified — the closure below would describe whatever that ref pointed at today, and a caller pinned to this repository would still follow it." >&2
-      fail=$((fail + 1))
+      fail=$((fail + 1)); incomplete_traversal=1
       continue
     fi
     jn="$(norm "$j")"
     [ -n "$jn" ] || continue
     inspected_sites=$((inspected_sites + 1))
     JOBREF["$jn"]=1
-    walk_callee "$j" 1 || fail=$((fail + 1))
+    walk_callee "$j" 1 || { fail=$((fail + 1)); incomplete_traversal=1; }
     if [ -z "${LOCKSET["$key|$jn"]:-}" ]; then
       if [ -n "${HAVEKEY[$key]:-}" ]; then
         notes="${notes}  $key: job-level ref $jn is not in this entry (allowed; measured harmless in standards#968, and it is what unified-dataset-vocab#81 runs with today)"$'\n'
@@ -351,8 +477,12 @@ emit_rows() {
   for k in "${!REACHED[@]}"; do IFS='|' read -r a b c <<<"$k"; printf '%s\t%s\t%s\n' "$a" "$b" "$c"; done | LC_ALL=C sort
 }
 
-if [ "$WRITE_BASELINE" -eq 1 ] && [ "$unresolved" -gt 0 ]; then
-  echo "::error::not writing $BASELINE: ${unresolved} callee workflow(s) could not be read, so the closure is partial." >&2
+if [ "$WRITE_BASELINE" -eq 1 ] && [ "$incomplete_traversal" -gt 0 ]; then
+  if [ "$unresolved" -gt 0 ]; then
+    echo "::error::not writing $BASELINE: ${unresolved} callee workflow(s) could not be read, so the closure is partial." >&2
+  else
+    echo "::error::not writing $BASELINE: traversal was incomplete, so the closure is partial." >&2
+  fi
 elif [ "$WRITE_BASELINE" -eq 1 ]; then
   {
     printf '%s\n' "# Reviewed closure of remote reusable workflows (standards#968, #1290)."
@@ -370,13 +500,27 @@ elif [ "$WRITE_BASELINE" -eq 1 ]; then
 fi
 
 if [ "$WRITE_BASELINE" -eq 0 ] && [ -f "$BASELINE" ]; then
+  # The baseline is compared in BOTH directions. Comparing only "is every
+  # reviewed row still reachable" let a NEW edge through: add a remote call and
+  # its through-ref records to the lock and nothing on the reviewed artefact
+  # changes, so the gate exited 0 on trust nobody reviewed.
+  declare -A BASE=()
   while IFS=$'\t' read -r bwf bjr bar; do
     case "$bwf" in ''|'#'*) continue ;; esac
+    BASE["$bwf|$bjr|$bar"]=1
     if [ -z "${REACHED["$bwf|$bjr|$bar"]:-}" ]; then
       echo "::error file=$bwf::DROPPED CLOSURE — the reviewed baseline ($BASELINE) has $bjr -> $bar, and this source no longer reaches it. The lockfile can still be closed in this state (an edge and its target removed together leave no dangling pointer), so no other gate sees this. Restore the call, or remove the row in a pull request that says why." >&2
       fail=$((fail + 1))
     fi
   done <"$BASELINE"
+
+  for k in "${!REACHED[@]}"; do
+    IFS='|' read -r rwf rjr rar <<<"$k"
+    [ -n "${BASE["$k"]:-}" ] && continue
+    echo "::error file=$rwf::UNREVIEWED CLOSURE — this source reaches $rjr -> $rar, and that row is not in the reviewed baseline ($BASELINE). A new remote edge (or a new dependency behind one) is a change to what this repository trusts: regenerate with --write-baseline and let it be reviewed in the pull request." >&2
+    fail=$((fail + 1))
+  done
+  unset BASE
 fi
 
 # 5b. a LEAF record whose ref: repeats its own SHA is the record the runner
@@ -387,8 +531,14 @@ for k in "${!RECREF[@]}"; do
   key_sha=${k##*@}
   is_sha "$key_sha" || continue
   [ "${RECREF[$k]}" = "$key_sha" ] || continue
-  if [ -n "${JOBREF[$k]:-}" ]; then
-    notes="${notes}  $k: ref repeats the key's SHA, but a workflow in this repository calls it as a reusable at that commit — accepted (standards#1290)"$'\n'
+  if [ -n "${JOBREF[$k]:-}" ] || [ -n "${PARENT[$k]:-}" ]; then
+    # JOBREF: a workflow here calls it at top level. PARENT: a reusable this
+    # workflow reaches calls it NESTED. Both mean the same thing — the ref
+    # genuinely IS the commit that was requested — and only the top-level case
+    # used to be exempt, which made a nested reusable record impossible to
+    # state: the record/ref conjugation above requires `ref` == the named SHA,
+    # and this check then rejected exactly that.
+    notes="${notes}  $k: ref repeats the key's SHA, but this repository reaches it as a reusable at that commit — accepted (standards#1290)"$'\n'
   else
     echo "::error::$k: ref: '$key_sha' repeats the record's own SHA. GitHub rejects this record at 'Set up job' ('invalid lockfile pin') for every caller. Name the reviewed tag that resolves to it (gitbot-fleet fix-lock-self-sha-refs.sh, or 'gh actions-lock' for a step-level action)." >&2
     fail=$((fail + 1))

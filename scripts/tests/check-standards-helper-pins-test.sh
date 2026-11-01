@@ -67,6 +67,24 @@ assert 'a bare input ref is rejected' 1 wf
 workflow '${{ inputs.canon-ref || job.workflow_sha }}'
 assert 'an input with a job.workflow_sha fallback is accepted' 0 wf
 
+# ── the accepted shapes are matched EXACTLY, not by substring ────────────
+# `${{ job.workflow_sha && 'main' }}` resolves to the floating branch while
+# containing the literal the old glob matched, so it read as a pin.
+workflow "\${{ job.workflow_sha && 'main' }}"
+assert "an expression that merely CONTAINS job.workflow_sha is rejected" 1 wf
+workflow "\${{ inputs.canon-ref || job.workflow_sha || 'main' }}"
+assert 'a fallback with a THIRD, floating alternative is rejected' 1 wf
+
+# ── the checkout action name is matched case-insensitively ───────────────
+# GitHub resolves `Actions/Checkout` to the same action; a case-sensitive
+# selector omitted the step and its standards checkout went unexamined.
+workflow 'main'
+sed -i 's#uses: actions/checkout@#uses: Actions/Checkout@#' "$tmp/wf/fixture.yml"
+assert 'a case-varied checkout action name is still scanned (branch rejected)' 1 wf
+workflow '${{ job.workflow_sha }}'
+sed -i 's#uses: actions/checkout@#uses: Actions/Checkout@#' "$tmp/wf/fixture.yml"
+assert 'a case-varied checkout action name is still scanned (pin accepted)' 0 wf
+
 # ── missing ref: actions/checkout silently follows the default branch ────
 mkdir -p "$tmp/wf"
 rm -f "$tmp/wf"/*.yml

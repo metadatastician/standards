@@ -137,5 +137,36 @@ cp "$TMP/full.lock" "$WF/actions.lock"
 sed -i '/push-signed-commits/d' "$R/.github/actions/push/action.yml"
 expect 1 'a ref no composite uses any more is stale'
 
+# ── The unified-dataset-vocab#81 shape: the job-level reusable ref is absent
+#    from the lock and the through-ref is recorded under the CALLING workflow.
+#    Direction 1 permits it; direction 2 must not then call the through-ref a
+#    stale entry, or the shape cannot pass this gate at all.
+rm -f "$TMP/full.lock"
+cat > "$WF/smoke.yml" <<'YAML'
+jobs:
+  scan:
+    uses: hyperpolymath/cicd-suite/.github/workflows/secret-scanner.yml@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+YAML
+cat > "$WF/actions.lock" <<'YAML'
+workflows:
+    '.github/workflows/smoke.yml':
+        - 'actions/checkout@bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
+YAML
+expect 1 'a through-ref with no closure manifest and no uses: is stale'
+printf '%s\t%s\t%s\n' '.github/workflows/smoke.yml' \
+  'hyperpolymath/cicd-suite@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' \
+  'actions/checkout@bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' \
+  > "$WF/actions-lock.closure.tsv"
+expect 0 'the reviewed closure backs the through-ref in direction 2'
+# ...and the closure is not a blanket amnesty: a ref it does not name is still
+# stale, so a wrong lock cannot hide behind a manifest.
+rm "$WF/actions-lock.closure.tsv"
+printf '%s\t%s\t%s\n' '.github/workflows/Smoke.yml' \
+  'hyperpolymath/cicd-suite@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' \
+  'actions/checkout@bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' \
+  > "$WF/actions-lock.closure.tsv"
+expect 1 'a case-different closure workflow does not excuse this one'
+rm -f "$WF/actions-lock.closure.tsv" "$WF/smoke.yml"
+
 printf '\ncheck-lock-sync regression: %s passed, %s failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
