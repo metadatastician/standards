@@ -89,20 +89,24 @@ jobs:
       # files (+29,544/−1,736 lines) under scripts/, so every consumer was judged by six-week-old
       # gate code — and standards' own self-lint path (which runs its local
       # tree) could never notice. A branch here would be worse still.
+      # COMPARE is the PROPOSED tree, not the base: comparing a pin against the
+      # commit the pull request started from cannot see the helper edits the
+      # pull request makes, so a pin that is stale with respect to this change
+      # passed with a green tick. (On a push, head == the pushed commit.)
       - name: Standards helper checkouts are immutable and fresh
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
-          COMPARE="${BASE_SHA:-$GITHUB_SHA}"
+          COMPARE="${HEAD_SHA:-$GITHUB_SHA}"
           bash scripts/check-standards-helper-pins.sh .github/workflows --compare "$COMPARE"
 
       - name: Lock-gate pin is not stale
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
-          COMPARE="${BASE_SHA:-$GITHUB_SHA}"
+          COMPARE="${HEAD_SHA:-$GITHUB_SHA}"
           bash scripts/check-lock-gate-pin-freshness.sh "$COMPARE"
 
       # The fixture-driven controls for the guards above. They live in

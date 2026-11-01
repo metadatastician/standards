@@ -448,10 +448,17 @@ repeat. `governance-canary-test.sh <sha>` extracts that commit with
 
 [source,bash]
 ----
-gh actions-lock --no-migrate-local-actions --no-narrow
-scripts/relock-sha-keys.sh && scripts/complete-job-refs.sh && scripts/close-lock.sh
-scripts/prune-stale.sh                      # consults the closure baseline
-scripts/check-lock-pin-contract.sh && scripts/check-lock-sync.sh
+# `&&` throughout: each step depends on the previous one having succeeded, and a
+# block whose lines run independently returns the status of its LAST command —
+# so a failed regeneration would hand back a success after the verification had
+# already gone red.
+gh actions-lock --no-migrate-local-actions --no-narrow &&
+  scripts/relock-sha-keys.sh &&
+  scripts/complete-job-refs.sh &&
+  scripts/close-lock.sh &&
+  scripts/prune-stale.sh &&                  # consults the closure baseline
+  scripts/check-lock-pin-contract.sh &&
+  scripts/check-lock-sync.sh
 ----
 
 . **Probe the remote path before trusting it** (this is the evidence that does
@@ -478,10 +485,13 @@ input — the new defaults do not float.
 |scope |action
 
 |whole change
-|`git revert -m1 <merge-sha>`. No `uses:` ref and no lock record changed, so the
-revert restores `main`'s behaviour exactly — including, deliberately, the stale
-literal third pin and the two floating helper checkouts. There is no partial
-state to repair.
+|`git revert <commit-on-main>`, naming the commit the merge produced on `main`
+(a squash or rebase merge is a SINGLE-parent commit, so `-m 1` — the
+mainline-parent option for reverting a real merge commit — does not apply; keep
+it in reserve for the case where this repository is ever merged with a merge
+commit). No `uses:` ref and no lock record changed, so the revert restores
+`main`'s behaviour exactly — including, deliberately, the stale literal third
+pin and the two floating helper checkouts. There is no partial state to repair.
 |one consumer
 |repin that consumer back to its previous standards SHA and re-run its own
 pipeline (`gh actions-lock …` → `close-lock.sh`). Its lock is *not* restored by

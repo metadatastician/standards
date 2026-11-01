@@ -424,6 +424,7 @@ mikefarah `yq` is unavailable and a stand-in parser is used. They are green on
 the runner, and they are unaffected by this change either way — the identical
 result at base is the evidence.
 
+[[migration]]
 == Migration
 
 Ordered; nothing here is safe to compress.
@@ -462,7 +463,10 @@ Consumers that explicitly pass `canon-ref:` (fork-governance) or
 
 == Rollback
 
-Revert this PR (`git revert -m1 <merge-sha>`, or `gh pr revert`). Because no
+Revert this PR (`git revert <commit-on-main>`, or `gh pr revert`). The ruleset
+squash- or rebase-merges, so the result on `main` is a single-parent commit and
+`-m 1` (the mainline-parent option, which applies only to reverting a real merge
+commit) is not part of this command. Because no
 lock record and no `uses:` ref changed, a revert restores the previous
 behaviour exactly — including, deliberately, the three stale literal pins and
 the two floating helper checkouts. There is no partial state to repair.
@@ -479,6 +483,7 @@ Per-site rollback if only one change misbehaves:
   delete the two scripts. **Do not** relax a guard's rules to keep it green: a
   guard that has been widened to pass is indistinguishable from no guard.
 
+[[coordination]]
 == Coordination
 
 * **standards#1290** — acceptance criterion 3 is implemented by
@@ -509,12 +514,16 @@ Per-site rollback if only one change misbehaves:
 
 * **Four workflows carry no lock key.** `lock-sync-gate.yml`, `scorecard.yml`,
   `secret-scanner.yml` and `self-ci.yml` appear under neither `workflows:` in the
-  lock nor among the records. Measured by parsing each file: **all four contain
-  zero external `uses:`** (only `run:` steps and `./`-relative composite
-  actions), so there is nothing for a lock to key and nothing the runner
-  validates. Unkeyed is correct here, not a gap — and if one of them ever gains
-  a third-party `uses:`, `.githooks/validate-actions-lock.sh` fails, because
-  coverage is asserted in both directions in the required gate.
+  lock nor among the records. Measured by parsing each file: **none of the four
+  contains a direct external `uses:`** — `lock-sync-gate.yml` has no `uses:` at
+  all (it checks out by calling git in a `run:` step), and the other three call
+  **local reusable workflows** (`uses: ./.github/workflows/*.yml`), not composite
+  actions: those run at this same commit, cannot float, and are validated as
+  workflow files in their own right. So there is nothing for a lock to key in
+  these four files. Unkeyed is correct here, not a gap — and if
+  one of them ever gains a third-party `uses:` (or a step inside a local
+  reusable workflow it calls does), `.githooks/validate-actions-lock.sh` fails,
+  because coverage is asserted in both directions in the required gate.
 * **Two caller-side records record `ref:` equal to their own SHA.**
   `metadatastician/standards@70019048…` and `…@d55304a0…` are reusable-workflow
   edges, and standards#1290 records them as correct as-is: the requested ref of

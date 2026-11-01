@@ -54,7 +54,6 @@ FIXTURE="$ROOT/scripts/tests/fixtures/governance-canary"
 command -v yq >/dev/null 2>&1 || { echo 'SKIP(2): yq not installed' >&2; exit 2; }
 yq --version 2>/dev/null | grep -q mikefarah || { echo 'SKIP(2): mikefarah yq v4 required' >&2; exit 2; }
 command -v jq >/dev/null 2>&1 || { echo 'SKIP(2): jq not installed' >&2; exit 2; }
-[ -f "$FIXTURE/MANIFEST.sha256" ] || { echo "SKIP(2): canary fixture missing: $FIXTURE" >&2; exit 2; }
 
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
@@ -71,9 +70,17 @@ if [ -n "$REF" ]; then
   git -C "$ROOT" archive "$REF" | tar -x -C "$SRC" 2>/dev/null ||
     { echo "SKIP(2): could not extract $REF" >&2; exit 2; }
   echo "source under test: $REF ($(git -C "$ROOT" rev-parse --short=12 "$REF"))"
+  # The CONSUMER FIXTURE must come from the same revision as the source. Left
+  # pointing at the working tree, one published SHA produced different verdicts
+  # over time — and a commit could be approved using consumer inputs that were
+  # never part of it.
+  FIXTURE="$SRC/scripts/tests/fixtures/governance-canary"
 else
   echo "source under test: working tree ($ROOT)"
 fi
+[ -f "$FIXTURE/MANIFEST.sha256" ] ||
+  { echo "SKIP(2): canary fixture missing: $FIXTURE (it must be part of the source under test)" >&2; exit 2; }
+echo "consumer fixture: ${FIXTURE#"$tmp"/}"
 
 pass=0; fail=0; skipped=0
 ok()   { echo "PASS: $1"; pass=$((pass + 1)); }
@@ -99,6 +106,42 @@ else
   printf '%s\n' "$out" | sed 's/^/    /'
   bad "uses: coverage failed (exit $cov) — a caller dies at startup"
   STARTUP_RC=1
+fi
+
+# 1a-bis. every REMOTE JOB-LEVEL reusable call has its own record. The local
+# hook skips reusable-workflow refs by design (the lockfile does not model
+# them), and the contract guard below only inspects records that already exist,
+# so this class was invisible to the whole STARTUP phase: a new SHA-pinned
+# `owner/repo/.github/workflows/x.yml@sha` call with no `owner/repo@sha` record
+# ships a source whose callers can die during setup.
+reuse_missing=""
+reuse_sites=0
+if [ -d "$SRC/.github/workflows" ]; then
+  lock_keys="$(yq -o json -I 0 '.' "$SRC/.github/workflows/actions.lock" 2>/dev/null |
+    jq -r '(.dependencies // {}) | keys[]' 2>/dev/null)"
+  for wf in "$SRC"/.github/workflows/*.yml "$SRC"/.github/workflows/*.yaml; do
+    [ -f "$wf" ] || continue
+    calls="$(yq -o json -I 0 '.' "$wf" 2>/dev/null |
+      jq -r '(.jobs // {}) | to_entries[] | .value | objects | .uses // empty' 2>/dev/null)"
+    while IFS= read -r call; do
+      [ -n "$call" ] || continue
+      case "$call" in
+        ./*|../*) continue ;;                       # local: its own entry
+        */.github/workflows/*@*) : ;;
+        *) continue ;;
+      esac
+      reuse_sites=$((reuse_sites + 1))
+      ckey="$(printf '%s' "${call%@*}" | awk -F/ '{print tolower($1 "/" $2)}')@${call##*@}"
+      printf '%s\n' "$lock_keys" | grep -qxF -- "$ckey" ||
+        reuse_missing="$reuse_missing $ckey (called by ${wf##*/})"
+    done <<< "$calls"
+  done
+fi
+if [ -n "$reuse_missing" ]; then
+  bad "SHA-pinned remote reusable call(s) with no lockfile record — a caller dies at startup:$reuse_missing"
+  STARTUP_RC=1
+else
+  ok "every remote reusable call (${reuse_sites} site(s)) has an owner/repo@sha record"
 fi
 
 # 1b. every record is one the runner accepts, and the lock is closed
@@ -250,8 +293,19 @@ sed -i '0,/^    runs-on: ubuntu-latest$/s//    runs-on: ubuntu-latest\n    runs-
 gate 'duplicate-key linter rejects a duplicated key on the same canary' 1 scripts/check-workflow-duplicate-keys.sh \
   bash "$SRC/scripts/check-workflow-duplicate-keys.sh" "$seeded2/.github/workflows"
 
+# A gate the reusable EXECUTES must exist in the source, even where this canary
+# cannot run it: `Check action pins resolve upstream` fails the governance job
+# if the script is missing, so a source that does not ship it cannot be
+# certified by a canary that never looked.
+if have scripts/check-action-pins-resolve.sh; then
+  ok "this source ships check-action-pins-resolve.sh (the reusable executes it)"
+else
+  bad "this source ships no scripts/check-action-pins-resolve.sh, and governance-reusable.yml runs it: the pin-resolution step fails for every caller"
+  POLICY_RC=1
+fi
+
 if [ "$POLICY_RC" -eq 0 ]; then
-  ok "POLICY phase clean (gates execute in both directions)"
+  ok "POLICY phase clean for the gates this canary exercises"
 else
   bad "POLICY phase not clean"
 fi
@@ -260,5 +314,9 @@ fi
 echo
 echo "governance-canary: passed=$pass failed=$fail (startup=${STARTUP_RC} policy=${POLICY_RC})"
 [ "$fail" -eq 0 ] || exit 1
-echo "CANARY GREEN: startup clean and both policy directions behaved."
+echo "CANARY GREEN: startup clean, and the gates listed above execute and still fail"
+echo "what they exist to fail. NOT exercised here: scripts/check-action-pins-resolve.sh"
+echo "(it asks GitHub whether each pin resolves, so it needs the network), the lock"
+echo "verifiers, and allowlist admission. Those are exercised by the governance jobs"
+echo "themselves; this canary does not stand in for them."
 exit 0
