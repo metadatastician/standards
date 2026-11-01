@@ -389,6 +389,14 @@ printf '%s\t%s\t%s\n' ".github/workflows/secret-scanner.yml" "$CICD@$SHA_A" "act
   >"$d/.github/workflows/actions-lock.closure.tsv"
 expect 'a nested reusable called at a branch is rejected' 1 "$d"
 expect_msg 'the nested float is named, and says why it matters' 'nested job-level uses'
+cp "$d/.github/workflows/actions-lock.closure.tsv" "$tmp/nestedfloat-baseline.tsv"
+expect 'an aborted nested walk refuses to write the baseline' 1 "$d" --write-baseline
+expect_msg 'the incomplete traversal explains why the baseline was preserved' 'traversal was incomplete'
+if cmp -s "$tmp/nestedfloat-baseline.tsv" "$d/.github/workflows/actions-lock.closure.tsv"; then
+  ok 'an aborted nested walk leaves the existing baseline unchanged'
+else
+  bad 'an aborted nested walk changed the existing baseline'
+fi
 
 # ── 9. a nested callee's LOCK RECORD must carry the ref that was named ────
 d=$(new_tree nestedref); caller "$d" "$SHA_A"

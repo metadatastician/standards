@@ -188,6 +188,7 @@ fail=0
 inspected_sites=0
 resolved_sites=0
 unresolved=0
+incomplete_traversal=0
 notes=""
 declare -A REACHED=()   # "workflow|jobref|actionref" -> 1 (what we actually saw)
 declare -A LOCKSET=()   # "workflow|actionref" -> locked under that workflow entry
@@ -327,7 +328,7 @@ for wf in "$WF_DIR"/*.yml "$WF_DIR"/*.yaml; do
 
   if ! wf_json="$(yq -o json -I 0 '.' "$wf" 2>"$TMP/wf.err")"; then
     echo "::error file=$wf::does not parse as YAML: $(head -1 "$TMP/wf.err")" >&2
-    fail=$((fail + 1)); continue
+    fail=$((fail + 1)); incomplete_traversal=1; continue
   fi
 
   WALKED=""; CHAINKEYS=""
@@ -341,14 +342,14 @@ for wf in "$WF_DIR"/*.yml "$WF_DIR"/*.yaml; do
     local_ref=${j##*@}
     if ! is_sha "$local_ref"; then
       echo "::error file=$wf::job-level uses '$j' is not SHA-pinned. A branch or tag there cannot be verified — the closure below would describe whatever that ref pointed at today, and a caller pinned to this repository would still follow it." >&2
-      fail=$((fail + 1))
+      fail=$((fail + 1)); incomplete_traversal=1
       continue
     fi
     jn="$(norm "$j")"
     [ -n "$jn" ] || continue
     inspected_sites=$((inspected_sites + 1))
     JOBREF["$jn"]=1
-    walk_callee "$j" 1 || fail=$((fail + 1))
+    walk_callee "$j" 1 || { fail=$((fail + 1)); incomplete_traversal=1; }
     if [ -z "${LOCKSET["$key|$jn"]:-}" ]; then
       if [ -n "${HAVEKEY[$key]:-}" ]; then
         notes="${notes}  $key: job-level ref $jn is not in this entry (allowed; measured harmless in standards#968, and it is what unified-dataset-vocab#81 runs with today)"$'\n'
@@ -397,8 +398,12 @@ emit_rows() {
   for k in "${!REACHED[@]}"; do IFS='|' read -r a b c <<<"$k"; printf '%s\t%s\t%s\n' "$a" "$b" "$c"; done | LC_ALL=C sort
 }
 
-if [ "$WRITE_BASELINE" -eq 1 ] && [ "$unresolved" -gt 0 ]; then
-  echo "::error::not writing $BASELINE: ${unresolved} callee workflow(s) could not be read, so the closure is partial." >&2
+if [ "$WRITE_BASELINE" -eq 1 ] && [ "$incomplete_traversal" -gt 0 ]; then
+  if [ "$unresolved" -gt 0 ]; then
+    echo "::error::not writing $BASELINE: ${unresolved} callee workflow(s) could not be read, so the closure is partial." >&2
+  else
+    echo "::error::not writing $BASELINE: traversal was incomplete, so the closure is partial." >&2
+  fi
 elif [ "$WRITE_BASELINE" -eq 1 ]; then
   {
     printf '%s\n' "# Reviewed closure of remote reusable workflows (standards#968, #1290)."
