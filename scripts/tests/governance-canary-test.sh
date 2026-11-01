@@ -122,7 +122,11 @@ if [ -d "$SRC/.github/workflows" ]; then
   for wf in "$SRC"/.github/workflows/*.yml "$SRC"/.github/workflows/*.yaml; do
     [ -f "$wf" ] || continue
     calls="$(yq -o json -I 0 '.' "$wf" 2>/dev/null |
-      jq -r '(.jobs // {}) | to_entries[] | .value | objects | .uses // empty' 2>/dev/null)"
+      jq -r '(.jobs // {}) | to_entries[] | .value | objects | .uses // empty' 2>/dev/null)" || {
+      bad "could not enumerate remote reusable calls in ${wf##*/} (yq/jq failed)"
+      STARTUP_RC=1
+      continue
+    }
     while IFS= read -r call; do
       [ -n "$call" ] || continue
       case "$call" in
