@@ -100,6 +100,8 @@ CACHE=""
 OFFLINE=0
 DEPTH=6
 REPO="${GITHUB_REPOSITORY:-}"
+# need_value OPTION REMAINING_ARGC VALUE: require a nonempty option value.
+# Exit 2 with an error if fewer than two arguments remain or VALUE is empty.
 need_value() {  # $1 option, $2 remaining argc
   [ "$2" -ge 2 ] && [ -n "${3:-}" ] ||
     { echo "::error::$1 needs a value — NOT INSPECTED, which is not a pass." >&2; exit 2; }
@@ -218,8 +220,8 @@ while IFS=$'\t' read -r kind a b; do
   esac
 done < <(cat "$TMP/lock.wf" "$TMP/lock.deps")
 
-# uses_of FILE: print every string uses: value in a workflow document, one
-# per line. Return a nonzero status if the YAML or JSON processing fails.
+# uses_of FILE: print string uses: values at job and step level, one per line.
+# Return a nonzero status if the YAML or JSON processing fails.
 uses_of() {
   yq -o json -I 0 '.' "$1" 2>/dev/null |
     jq -r '[(.jobs // {}) | to_entries[] | .value | objects | .uses // empty],
@@ -229,10 +231,12 @@ uses_of() {
 
 # walk_callee RAW DEPTH [TOP]: collect refs reached from a reusable call in
 # REACHED, attributed to CURWF and TOP (defaulting to RAW's normalized key).
-# RAW is the full uses: value, including the workflow path. The depth argument
-# is compared to the configured DEPTH limit; calls beyond it or already visited
-# by full value are skipped. Return 1 if a callee cannot be read or parsed;
-# unreadable callees also increment unresolved.
+# RAW is the full uses: value, including the workflow path. DEPTH starts at 1;
+# calls beyond the configured limit fail, while a file already visited for the
+# same TOP is skipped. Local nested calls are resolved at the callee's ref.
+# Return 1 for depth, read or parse failures, ../ references, unpinned nested
+# calls, or nested record/ref mismatches. Depth and read failures increment
+# unresolved.
 WALKED=""
 walk_callee() {
   local raw=$1 depth=$2 top=${3:-}
