@@ -65,6 +65,7 @@
     "leanprover/lean-action@*",
     "ludeeus/action-shellcheck@*",
     "lycheeverse/lychee-action@*",
+    "metadatastician/standards/.github/workflows/*@*",
     "mlugg/setup-zig@*",
     "ocaml/setup-ocaml@*",
     "orhun/git-cliff-action@*",
