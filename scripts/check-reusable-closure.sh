@@ -244,7 +244,7 @@ uses_of() {
 # never silently empty.
 local_action() {
   local owner=$1 repo=$2 ref=$3 path=$4 depth=$5 top=$6
-  local id="$owner/$repo@$ref#$path"
+  local id="$top|$owner/$repo@$ref#$path"
   case " $WALKED " in *" $id "*) return 0 ;; esac
   WALKED="$WALKED $id"
   if [ "$depth" -gt "$DEPTH" ]; then
