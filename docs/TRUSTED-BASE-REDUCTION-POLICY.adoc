@@ -381,30 +381,41 @@ is a gate that will be removed:
 | They change compilation, not the trusted base.
 
 | Prover *invocation* flags
-| See below. There is no estate-wide "correct" way to invoke Agda, Lean or Coq.
+| Theory proofs have the mandatory Agda checks in
+  link:../3-practice/PROOF-POLICY.adoc[`PROOF-POLICY.adoc` §2.1].
+  Other invocation options remain repository-specific.
 |===
 
-=== Why the prover invocation is not standardised
+=== Mandatory and repository-specific invocation options
+
+For theory proofs, the pinned Agda toolchain must run with
+`--safe --without-K --cubical-compatible`, as required by
+link:../3-practice/PROOF-POLICY.adoc[`PROOF-POLICY.adoc` §2.1]. These are
+mandatory checking flags, not repository-specific choices. A repository
+mid-migration from `{-# TERMINATING #-}` may still run Agda with `--safe`
+off for a release, but that run does not satisfy the canonical theory check:
+the affected proof remains `OPEN` until it passes the required invocation.
 
 `JuliaPackageSpitter.jl` runs Agda under
 `--safe --without-K --double-check --ignore-interfaces -W error` with a
 builtin-only Prelude and no libraries, and gets a trusted base of four builtins
 and zero postulates. That configuration is excellent *for a development that
-imports nothing*. It is not a rule:
+imports nothing*. Its additional flags and library configuration are not a
+rule:
 
 * `--no-libraries` requires a builtin-only Prelude. A repository using
   `agda-stdlib` cannot pass it, and would have to vendor or re-derive the
   standard library to comply.
-* `--safe` interacts with the pragmas and flags now detected here; a repository
-  mid-migration from `{-# TERMINATING #-}` may need it off for a release.
-* The same applies to Lean (`--noBuild`? lake profiles), Coq (`-w`, `-q`) and
-  Idris2 (`--check-total`): the flags that make one development strict make
-  another unusable.
+* Agda options beyond the required theory-check flags, and invocation options
+  for Lean (`--noBuild`? lake profiles), Coq (`-w`, `-q`) and Idris2
+  (`--check-total`), remain repository-specific: flags that make one
+  development strict may make another unusable.
 
 What *is* estate-wide is the disposition requirement: every escape hatch is
-documented, and the count is visible. How a repository invokes its prover is
-its own business, recorded in its own workflow — where its pin, its version
-assertion and its negative controls live.
+documented, and the count is visible. Beyond the required Agda theory-check
+flags, how a repository invokes its prover is its own business, recorded in
+its own workflow — where its pin, its version assertion and its negative
+controls live.
 
 === Rollout, and what a pinned caller sees
 
