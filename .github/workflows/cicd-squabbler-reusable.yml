@@ -93,7 +93,7 @@ jobs:
 
       - name: Install the pinned, attested squabble
         id: squabble
-        uses: hyperpolymath/cicd-squabbler/.github/actions/squabble@1ab1507a424c9edfe6cb53dea4e33a2f3cc558e3
+        uses: hyperpolymath/cicd-squabbler/.github/actions/squabble@d88ff883d98abadb3d00b83e585cf202ce00e11e
         with:
           args: ""
 
@@ -141,7 +141,7 @@ jobs:
       # Harden it first (Hypatia RE001 / ruling D131) so outbound egress is
       # audited from the first credential-bearing request onward.
       - name: Harden runner (egress audit)
-        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
+        uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
         with:
           egress-policy: audit
 
@@ -214,7 +214,7 @@ jobs:
       - name: Install the pinned, attested squabble
         id: squabble
         if: steps.fight-credential.outputs.available == 'true'
-        uses: hyperpolymath/cicd-squabbler/.github/actions/squabble@1ab1507a424c9edfe6cb53dea4e33a2f3cc558e3
+        uses: hyperpolymath/cicd-squabbler/.github/actions/squabble@d88ff883d98abadb3d00b83e585cf202ce00e11e
         with:
           args: ""
 
