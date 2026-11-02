@@ -365,4 +365,49 @@ NEW=$NEW_SAVE
 cp "$T/source-lock-before-case" "$S/.github/workflows/actions.lock"
 echo "  PASS record standards' lock keys under another owner/repo case is copied, not refused"
 
+
+# 7. Transferred canonical owner: the workflow and the dependency record must
+# both use metadatastician, retaining repo_id and replacing the old owner_id.
+D=$(consumer canonical-from-legacy)
+sed -i 's#hyperpolymath/standards/\.github#metadatastician/standards/\.github#' "$D/caller.yml"
+bash "$RELOCK" --to "$NEW" --standards "$S" "$D" >/dev/null || fail "canonical transfer refused"
+L="$D/actions.lock"
+grep -q "^        - 'metadatastician/standards@$NEW'\$" "$L" || fail "canonical workflow ref not migrated"
+grep -q "^    'metadatastician/standards@$NEW':\$" "$L" || fail "canonical record absent"
+grep -A4 "^    'metadatastician/standards@$NEW':\$" "$L" | grep -qx '        owner_id: 297579217' || fail "canonical owner ID absent"
+grep -A5 "^    'metadatastician/standards@$NEW':\$" "$L" | grep -qx '        repo_id: 1116521501' || fail "repository ID changed"
+grep -q 'hyperpolymath/standards@' "$L" && fail "legacy records survived canonical transfer"
+cp "$L" "$T/canonical-once"
+bash "$RELOCK" --to "$NEW" --standards "$S" "$D" >/dev/null || fail "canonical idempotent repeat refused"
+cmp -s "$T/canonical-once" "$L" || fail "canonical repeat changed the lock"
+echo "  PASS canonical owner transfer from legacy lock and idempotent retry"
+
+# Canonical consumers that already have canonical (but old) records must work.
+D=$(consumer canonical-existing)
+sed -i 's#hyperpolymath/standards/\.github#metadatastician/standards/\.github#' "$D/caller.yml"
+sed -i 's#hyperpolymath/standards@#metadatastician/standards@#g' "$D/actions.lock"
+bash "$RELOCK" --to "$NEW" --standards "$S" "$D" >/dev/null || fail "canonical existing lock refused"
+grep -q "^    'metadatastician/standards@$NEW':\$" "$D/actions.lock" || fail "canonical old lock not updated"
+echo "  PASS canonical-to-canonical SHA bump"
+
+# Two different owners in live workflow callers are ambiguous; never mutate.
+D=$(consumer mixed-owner)
+cp "$D/caller.yml" "$D/other.yml"
+sed -i 's#hyperpolymath/standards/\.github#metadatastician/standards/\.github#' "$D/caller.yml"
+cp "$D/actions.lock" "$T/mixed-before"
+if bash "$RELOCK" --to "$NEW" --standards "$S" "$D" >"$T/mixed-log" 2>&1; then fail "mixed owners were accepted"; fi
+cmp -s "$D/actions.lock" "$T/mixed-before" || fail "mixed-owner refusal changed lock"
+grep -q 'mixed standards owners' "$T/mixed-log" || fail "missing explicit mixed-owner diagnosis"
+echo "  PASS mixed owner coordinates refused without mutation"
+
+# A canonical transfer with the wrong source repository identity is not safe.
+D=$(consumer transfer-wrong-id)
+sed -i 's#hyperpolymath/standards/\.github#metadatastician/standards/\.github#' "$D/caller.yml"
+sed -i 's/repo_id: 1116521501/repo_id: 999999999/' "$D/actions.lock"
+cp "$D/actions.lock" "$T/identity-transfer-before"
+if bash "$RELOCK" --to "$NEW" --standards "$S" "$D" >"$T/identity-transfer-log" 2>&1; then fail "wrong transferred repository ID accepted"; fi
+cmp -s "$D/actions.lock" "$T/identity-transfer-before" || fail "wrong identity modified lock"
+grep -q 'repository ID mismatch' "$T/identity-transfer-log" || fail "wrong identity not diagnosed"
+echo "  PASS wrong transferred repository identity refused"
+
 echo "PASS: relock-standards-pin.sh"
