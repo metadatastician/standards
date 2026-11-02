@@ -137,6 +137,24 @@ assert 'a composite-action record is NOT exempt on its uses: list alone' 1 "$tmp
 } > "$tmp/lock.yml"
 assert 'a non-list uses: is rejected, not treated as an edge' 1 "$tmp/lock.yml" --self-repo "$SELF_REPO"
 
+
+# The uses: list is only proof if every member is a well-formed immutable ref.
+selfreusable "$sha" uses "$SELF_REPO"
+sed -i "s/- 'actions\/checkout@$sha'/- {malformed: mapping}/" "$tmp/lock.yml"
+assert 'a mapping in uses does not confer exemption' 1 "$tmp/lock.yml" --self-repo "$SELF_REPO"
+selfreusable "$sha" uses "$SELF_REPO"
+sed -i "s/- 'actions\/checkout@$sha'/- 'actions\/checkout@main'/" "$tmp/lock.yml"
+assert 'a floating nested ref cannot confer exemption' 1 "$tmp/lock.yml" --self-repo "$SELF_REPO"
+
+# A legitimate job-level reusable with no nested dependencies is not a leaf.
+selfreusable "$sha" leaf "$SELF_REPO"
+printf 'name: mirror\non: [push]\njobs:\n  m:\n    uses: %s/.github/workflows/mirror-reusable.yml@%s\n' "$SELF_REPO" "$sha" > "$tmp/mirror.yml"
+assert 'dependency-free reusable is accepted when job-level caller exists' 0 "$tmp/lock.yml" --self-repo "$SELF_REPO"
+
+selfreusable "$sha" uses "$SELF_REPO"
+sed -i "s/@$sha/@${sha^^}/" "$tmp/mirror.yml"
+assert 'uppercase immutable caller SHA matches lowercase lock key' 0 "$tmp/lock.yml" --self-repo "$SELF_REPO"
+
 # ...and the ref must be the SAME SHA as the key. A 40-hex ref that differs
 # from the pin is the historical defect wearing an edge's clothes.
 selfreusable '1111111111111111111111111111111111111111' uses "$SELF_REPO"
@@ -151,7 +169,7 @@ assert 'a reusable edge written under the pre-transfer slug is exempt' 0 "$tmp/l
 assert 'and it is still exempt when --self-repo asks narrowly' 0 "$tmp/lock.yml" --self-repo "$SELF_REPO"
 
 # ── key shape: an `@` is not enough ──────────────────────────────────────
-for bad in 'not-a-repo' '/repo' 'owner/repo/sub@'"$sha" 'owner@name/repo'; do
+for bad in 'not-a-repo' '/repo' 'owner/repo/sub@'"$sha" 'owner@name/repo@'"$sha"; do
   printf 'version: v0.0.3\ndependencies:\n    '\''%s@%s'\'':\n        ref: v7.0.1\n        commit: sha1-%s\n        owner_id: 44036562\n        repo_id: 197814629\n' \
     "${bad%@*}" "$sha" "$sha" > "$tmp/lock.yml"
   assert "malformed key '$bad' is rejected" 1 "$tmp/lock.yml" --self-repo "$SELF_REPO"

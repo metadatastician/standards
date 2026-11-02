@@ -744,5 +744,117 @@ runs:
     - uses: hyperpolymath/setup-rust@'"$SHA_D"'
 '
 
+
+# A remote reusable containing only run: steps is still a new trust edge.
+cache_put hyperpolymath cicd-suite "$SHA_A" .github/workflows/only-run.yml \
+'name: only-run
+on: workflow_call
+jobs:
+  plain:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo runnable
+'
+d=$(new_tree onlyrun)
+cat >"$d/.github/workflows/secret-scanner.yml" <<YAML
+name: onlyrun
+on: [push]
+jobs:
+  plain:
+    uses: $CICD/.github/workflows/only-run.yml@$SHA_A
+YAML
+printf 'version: v0.0.3\nworkflows:\ndependencies:\n' >"$d/.github/workflows/actions.lock"
+printf '# no reviewed trust edge\n' >"$d/.github/workflows/actions-lock.closure.tsv"
+expect 'new run-only reusable is unreviewed, not vacuous' 1 "$d"
+expect_msg 'run-only identity is named' '@reusable'
+got=0; run_guard "$d" --write-baseline || got=$?
+[ "$got" -eq 0 ] && ok 'run-only trust edge can be recorded' || bad "run-only baseline generation exited $got"
+expect 'run-only reusable passes with reviewed identity row' 0 "$d"
+
+# An internal .. segment must never escape a pinned repository.
+cache_put hyperpolymath cicd-suite "$SHA_A" .github/workflows/escape.yml \
+'name: escape
+on: workflow_call
+jobs:
+  bad:
+    uses: ./../other/.github/workflows/x.yml
+'
+d=$(new_tree pathescape)
+cat >"$d/.github/workflows/secret-scanner.yml" <<YAML
+name: pathescape
+on: [push]
+jobs:
+  bad:
+    uses: $CICD/.github/workflows/escape.yml@$SHA_A
+YAML
+printf 'version: v0.0.3\nworkflows:\ndependencies:\n' >"$d/.github/workflows/actions.lock"
+printf '# no reviewed edge\n' >"$d/.github/workflows/actions-lock.closure.tsv"
+expect 'internal .. path segment cannot escape repository' 2 "$d"
+expect_msg 'unsafe nested path is named' "contains a '..' segment"
+
+
+# Two independent callers of a shared composite must each retain evidence.
+cache_put hyperpolymath cicd-suite "$SHA_A" .github/workflows/first-composite.yml \
+'name: first
+on: workflow_call
+jobs:
+  a:
+    uses: hyperpolymath/cicd-suite/.github/workflows/shared-composite.yml@'"$SHA_C"'
+'
+cache_put hyperpolymath cicd-suite "$SHA_E" .github/workflows/second-composite.yml \
+'name: second
+on: workflow_call
+jobs:
+  b:
+    uses: hyperpolymath/cicd-suite/.github/workflows/shared-composite.yml@'"$SHA_C"'
+'
+cache_put hyperpolymath cicd-suite "$SHA_C" .github/workflows/shared-composite.yml \
+'name: shared
+on: workflow_call
+jobs:
+  c:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./.github/actions/shared
+'
+cache_put hyperpolymath cicd-suite "$SHA_C" .github/actions/shared/action.yml \
+'name: shared action
+runs:
+  using: composite
+  steps:
+    - uses: hyperpolymath/setup-rust@'"$SHA_D"'
+'
+d=$(new_tree two-composite-tops)
+cat >"$d/.github/workflows/secret-scanner.yml" <<YAML
+name: two composites
+on: [push]
+jobs:
+  first:
+    uses: $CICD/.github/workflows/first-composite.yml@$SHA_A
+  second:
+    uses: $CICD/.github/workflows/second-composite.yml@$SHA_E
+YAML
+cat >"$d/.github/workflows/actions.lock" <<YAML
+version: v0.0.3
+workflows:
+    '.github/workflows/secret-scanner.yml': []
+dependencies:
+    '$CICD@$SHA_C':
+        ref: '$SHA_C'
+        commit: 'sha1-$SHA_C'
+        owner_id: 6759885
+        repo_id: 1326697643
+        uses:
+            - 'hyperpolymath/setup-rust@$SHA_D'
+YAML
+got=0; run_guard "$d" --write-baseline || got=$?
+[ "$got" -eq 0 ] && ok 'shared composite resolves under both top-level calls' || bad "shared composite write exit $got"
+tops="$(awk -F'\t' '$3 ~ /setup-rust/ {print $2}' "$d/.github/workflows/actions-lock.closure.tsv" | sort -u | wc -l)"
+[ "$tops" -eq 2 ] && ok 'composite action preserves two top-level identities' || bad "composite trust edge attributed to $tops top-level call(s)"
+expect 'shared composite full baseline reproduces' 0 "$d"
+sed -i "/$SHA_E/d" "$d/.github/workflows/actions-lock.closure.tsv"
+expect 'removing one composite attribution is caught' 1 "$d"
+expect_msg 'omitted composite attribution is unreviewed' 'UNREVIEWED CLOSURE'
+
 printf '\n%s\n' "check-reusable-closure: passed=$pass failed=$fail"
 [ "$fail" -eq 0 ] || exit 1

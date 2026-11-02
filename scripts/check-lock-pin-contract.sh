@@ -184,7 +184,11 @@ ROWS="$(printf '%s' "$JSON" | jq -r '
     (if (.value.owner_id | type) == "number" then (.value.owner_id|tostring) else "" end),
     (if (.value.repo_id  | type) == "number" then (.value.repo_id |tostring) else "" end),
     (if (.value.uses | type) == "array" and (.value.uses | length) > 0 then "yes" else "no" end),
-    (if (.value.uses != null) and ((.value.uses | type) != "array") then "yes" else "no" end)
+    (if .value.uses == null then "no"
+     elif (.value.uses | type) != "array" then "yes"
+     elif any(.value.uses[]; if type != "string" then true
+          else (test("^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+@[0-9a-fA-F]{40}$") | not) end) then "yes"
+     else "no" end)
   ] | map(tostring) | if any(.[]; contains("\u001f") or contains("\n") or contains("\r")) then error("lock record contains a field or row delimiter") else join("\u001f") end
 ')" || not_inspected "could not enumerate .dependencies records"
 
@@ -215,7 +219,8 @@ $(printf '%s' "$wjson" | jq -r '
   | select(type == "string")
   | select(test("^[^./][^@]*/\\.github/workflows/[^@]+@[^@]+$"))
   | capture("^(?<o>[^/]+)/(?<r>[^/]+)/.+@(?<ref>.+)$")
-  | ((.o | ascii_downcase) + "/" + (.r | ascii_downcase) + "@" + .ref)' 2>/dev/null)"
+  | ((.o | ascii_downcase) + "/" + (.r | ascii_downcase) + "@" +
+     (if (.ref | test("^[0-9a-fA-F]{40}$")) then (.ref | ascii_downcase) else .ref end))' 2>/dev/null)"
   done
 fi
 # is_reusable_caller KEY: this key is called as a job-level reusable workflow.
@@ -259,7 +264,7 @@ while IFS= read -r row; do
   # shape (a scalar, a mapping) is NOT an edge: treating it as one granted the
   # raw-SHA exemption below to a record `close-lock.sh` sees no edge for.
   if [ "$bad_uses" = "yes" ]; then
-    fail "INVALID ${key}: uses must be a LIST of 'owner/repo@ref' entries (got $(printf '%s' "$JSON" | jq -r --arg k "$key" '.dependencies[$k].uses | type'))"
+    fail "INVALID ${key}: uses must be a LIST of SHA-pinned 'owner/repo@ref' strings"
     has_uses="no"
   fi
 
@@ -273,7 +278,7 @@ while IFS= read -r row; do
     # never qualifies (it has no `uses:` list), and a record whose `ref`
     # differs from its key's SHA never qualifies either.
     ref_lc="$(printf '%s' "$ref" | tr 'A-Z' 'a-z')"
-    if [ "$has_uses" = "yes" ] && [ "$ref_lc" = "$pin_lc" ] && is_reusable_caller "${repo_lc}@${pin_lc}"; then
+    if [ "$bad_uses" != "yes" ] && [ "$ref_lc" = "$pin_lc" ] && is_reusable_caller "${repo_lc}@${pin_lc}"; then
       exempt=$((exempt + 1))
       if is_self_repo "$repo_lc"; then
         echo "  ok (caller-side reusable edge) ${key}: ref repeats the pin by design"

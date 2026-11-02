@@ -271,6 +271,11 @@ local_action() {
     { echo "::error::$owner/$repo@$ref#$path: $path/action.yml does not parse as YAML" >&2; unresolved=$((unresolved + 1)); return 1; }
   while IFS= read -r n; do
     [ -n "$n" ] || continue
+    if [[ "/$n/" == *"/../"* ]]; then
+      echo "::error::$owner/$repo@$ref#$path: nested local action '$n' contains a '..' segment" >&2
+      unresolved=$((unresolved + 1))
+      return 1
+    fi
     case "$n" in
       ./*)
         local_action "$owner" "$repo" "$ref" "${n#./}" $((depth + 1)) "$top" || return 1
@@ -343,6 +348,11 @@ walk_callee() {
   uses="$(uses_of "$file")" || { echo "::error::$key: $wfpath at $ref does not parse as YAML" >&2; return 1; }
   while IFS= read -r n; do
     [ -n "$n" ] || continue
+    if [[ "/$n/" == *"/../"* ]]; then
+      echo "::error::$key: nested call '$n' contains a '..' segment" >&2
+      unresolved=$((unresolved + 1))
+      return 1
+    fi
     case "$n" in
       ./*)
         # A LOCAL call inside a REMOTE reusable is not "this repository at this
@@ -429,6 +439,12 @@ for wf in "$WF_DIR"/*.yml "$WF_DIR"/*.yaml; do
     inspected_sites=$((inspected_sites + 1))
     JOBREF["$jn"]=1
     walk_callee "$j" 1 || { fail=$((fail + 1)); incomplete_traversal=1; }
+    # A remote run-only reusable is still executable code, even with no actions.
+    seen=0
+    for rk in "${!REACHED[@]}"; do
+      case "$rk" in "$key|$jn|"*) seen=1; break ;; esac
+    done
+    [ "$seen" -eq 1 ] || REACHED["$key|$jn|@reusable"]=1
     if [ -z "${LOCKSET["$key|$jn"]:-}" ]; then
       if [ -n "${HAVEKEY[$key]:-}" ]; then
         notes="${notes}  $key: job-level ref $jn is not in this entry (allowed; measured harmless in standards#968, and it is what unified-dataset-vocab#81 runs with today)"$'\n'
@@ -459,6 +475,9 @@ for wf in "$WF_DIR"/*.yml "$WF_DIR"/*.yaml; do
   # 3. refs reached through a remote reusable: accept either recorded shape.
   while IFS=$'\t' read -r wf2 jr ar; do
     [ "$wf2" = "$key" ] || continue
+    # @reusable is a synthetic trust-identity baseline marker, not a real
+    # action that GitHub expects in actions.lock. Never demand its lock entry.
+    [ "$ar" = "@reusable" ] && continue
     if [ -n "${LOCKSET["$key|$ar"]:-}" ]; then continue; fi
     # (b) recorded under the `uses:` of a reusable record this workflow actually
     # reaches — the top-level call, or any nested one (depth >= 2).
