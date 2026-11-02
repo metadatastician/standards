@@ -66,7 +66,7 @@ L="$WF/actions.lock"
 # refuse REASON... — report why the relock is refused and exit 1, lock untouched.
 refuse() { echo "relock-standards-pin: REFUSED ($*); $L left untouched" >&2; exit 1; }
 
-PIN_RE='hyperpolymath/standards/\.github/workflows/[A-Za-z0-9._-]+\.ya?ml@[0-9a-fA-F]+'
+PIN_RE='(hyperpolymath|metadatastician)/standards/\.github/workflows/[A-Za-z0-9._-]+\.ya?ml@[0-9a-fA-F]+'
 shopt -s nullglob
 wfs=("$WF"/*.yml "$WF"/*.yaml)
 shopt -u nullglob
@@ -80,8 +80,13 @@ pins=$(standards_pins "${wfs[@]}" | sort -u || true)
 # A short pin (7+ hex) that prefixes TARGET names TARGET: the applier counts it
 # FRESH and leaves it as written, and the lock keys it by that short ref in a
 # record of its own, which is left as it is. Only full pins feed TARGET's record.
-full="" stale=""
+full="" stale="" COORD=""
 for p in $pins; do
+  repo=${p%%/.github/workflows/*}
+  if [ -n "$COORD" ] && [ "$repo" != "$COORD" ]; then
+    refuse "mixed standards owners in live workflow calls ($COORD and $repo); normalise workflows before relocking"
+  fi
+  COORD="$repo"
   r=${p##*@}
   if [ "$r" = "$TARGET" ]; then full="$full $p"
   elif [ "${#r}" -lt 7 ] || [ "${TARGET:0:${#r}}" != "$r" ]; then stale="$stale $p"
@@ -89,8 +94,8 @@ for p in $pins; do
 done
 [ -z "$stale" ] || refuse "workflows still pin other standards commits:$stale"
 
-olds=$(grep -oE "'hyperpolymath/standards@[0-9a-f]{40}'" "$L" | tr -d "'" | sed 's/.*@//' | sort -u | grep -vx "$TARGET" || true)
-if [ -z "$olds" ]; then echo "relock-standards-pin: lock already keyed to standards@${TARGET:0:12}"; exit 0; fi
+oldrefs=$(grep -oE "'(hyperpolymath|metadatastician)/standards@[0-9a-f]{40}'" "$L" | tr -d "'" | LC_ALL=C sort -u | grep -vx "${COORD}@${TARGET}" || true)
+if [ -z "$oldrefs" ]; then echo "relock-standards-pin: lock already keyed to standards@${TARGET:0:12}"; exit 0; fi
 [ -n "$full" ] || refuse "lock names standards commits but no workflow pins standards@${TARGET:0:12} in full"
 
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
@@ -120,30 +125,35 @@ lock_key() {
 # Actions the called reusables use at TARGET, normalised to owner/repo@ref.
 : > "$tmp/uses"
 for p in $full; do
-  path=${p#hyperpolymath/standards/}; path=${path%@*}
+  path=${p#${COORD}/}; path=${path%@*}
   git -C "$SROOT" show "${TARGET}:${path}" > "$tmp/reusable" 2>/dev/null || refuse "$path is not in standards at ${TARGET:0:12}"
   sed 's/[[:space:]]#.*$//' "$tmp/reusable" \
     | grep -oE "^[[:space:]]*-?[[:space:]]*uses:[[:space:]]*['\"]?[A-Za-z0-9_.-]+/[A-Za-z0-9_./-]+@[^[:space:]'\"]+" \
     | sed -E "s/^[[:space:]]*-?[[:space:]]*uses:[[:space:]]*['\"]?//; s#^([^/]+/[^/@]+)[^@]*@#\1@#" >> "$tmp/uses" || true
 done
-grep -v '^hyperpolymath/standards@' "$tmp/uses" | LC_ALL=C sort -u > "$tmp/uses.s" || true
+grep -Ev '^(hyperpolymath|metadatastician)/standards@' "$tmp/uses" | LC_ALL=C sort -u > "$tmp/uses.s" || true
 
 # owner_id / repo_id come from an OLD record; without one the lock was already dangling.
 ids=""
-for o in $olds; do ids=$(rec_body "hyperpolymath/standards@$o" "$L" | grep -E '^        (owner_id|repo_id):' || true); [ -n "$ids" ] && break; done
-[ -n "$ids" ] || refuse "no hyperpolymath/standards@OLD dependency record to take owner_id/repo_id from"
+for o in $oldrefs; do ids=$(rec_body "$o" "$L" | grep -E '^        (owner_id|repo_id):' || true); [ -n "$ids" ] && break; done
+[ -n "$ids" ] || refuse "no standards@OLD dependency record to take owner_id/repo_id from"
+if [ "$COORD" = "metadatastician/standards" ]; then
+  # A transfer keeps the repository ID but changes the owner account ID.
+  printf '%s\n' "$ids" | grep -qx '        repo_id: 1116521501' || refuse "standards repository ID mismatch during owner transfer"
+  ids=$(printf '%s\n' "$ids" | sed 's/^        owner_id: .*/        owner_id: 297579217/')
+fi
 
 # Records the OLD standards records kept alive: the pruning candidates.
 : > "$tmp/cand"
-for o in $olds; do rec_body "hyperpolymath/standards@$o" "$L" | grep -oE "^            - '[^']+'" | sed -E "s/^ +- '|'$//g" >> "$tmp/cand" || true; done
+for o in $oldrefs; do rec_body "$o" "$L" | grep -oE "^            - '[^']+'" | sed -E "s/^ +- '|'$//g" >> "$tmp/cand" || true; done
 
 cp "$L" "$tmp/lock"
-for o in $olds; do
-  sed -i "s|^        - 'hyperpolymath/standards@$o'\$|        - 'hyperpolymath/standards@$TARGET'|" "$tmp/lock"
-  awk -v k="    ${q}hyperpolymath/standards@$o${q}:" '$0==k{s=1;next} s&&/^    [^ ]/{s=0} !s' "$tmp/lock" > "$tmp/l" && mv "$tmp/l" "$tmp/lock"
+for o in $oldrefs; do
+  sed -i "s|^        - '$o'\$|        - '${COORD}@$TARGET'|" "$tmp/lock"
+  awk -v k="    ${q}${o}${q}:" '$0==k{s=1;next} s&&/^    [^ ]/{s=0} !s' "$tmp/lock" > "$tmp/l" && mv "$tmp/l" "$tmp/lock"
 done
-awk -v k="    ${q}hyperpolymath/standards@$TARGET${q}:" '$0==k{s=1;next} s&&/^    [^ ]/{s=0} !s' "$tmp/lock" > "$tmp/l" && mv "$tmp/l" "$tmp/lock"
-{ printf "    'hyperpolymath/standards@%s':\n        ref: '%s'\n        commit: 'sha1-%s'\n" "$TARGET" "$TARGET" "$TARGET"
+awk -v k="    ${q}${COORD}@$TARGET${q}:" '$0==k{s=1;next} s&&/^    [^ ]/{s=0} !s' "$tmp/lock" > "$tmp/l" && mv "$tmp/l" "$tmp/lock"
+{ printf "    '%s@%s':\n        ref: '%s'\n        commit: 'sha1-%s'\n" "$COORD" "$TARGET" "$TARGET" "$TARGET"
   printf '%s\n' "$ids"
   if [ -s "$tmp/uses.s" ]; then echo "        uses:"; sed "s|.*|            - '&'|" "$tmp/uses.s"; fi
 } >> "$tmp/lock"
@@ -224,11 +234,11 @@ dangling=$(LC_ALL=C comm -23 "$tmp/edges" "$tmp/recs")
 # The gates match an entry to a `uses:` by its ref as written, so an entry
 # re-keyed to TARGET for a workflow that pins a short ref is a desync they reject.
 for w in "${wfs[@]}"; do
-  want=$(standards_pins "$w" | sed 's#^hyperpolymath/standards/.*@#hyperpolymath/standards@#' | LC_ALL=C sort -u || true)
+  want=$(standards_pins "$w" | sed -E 's#^(hyperpolymath|metadatastician)/standards/.*@#\1/standards@#' | LC_ALL=C sort -u || true)
   have=$(awk -v k="    '.github/workflows/${w##*/}':" '$0==k{f=1;next} f&&!/^        - /{exit} f' "$tmp/out" \
-    | grep -oE "'hyperpolymath/standards@[0-9a-fA-F]+'" | tr -d "'" | LC_ALL=C sort -u || true)
+    | grep -oE "'(hyperpolymath|metadatastician)/standards@[0-9a-fA-F]+'" | tr -d "'" | LC_ALL=C sort -u || true)
   [ "$want" = "$have" ] || refuse "${w##*/}: lock entries [${have//$'\n'/ }] would not match its pins [${want//$'\n'/ }]"
 done
 
 cat "$tmp/out" > "$L"
-echo "relock-standards-pin: $L keyed to standards@${TARGET:0:12} (from $(echo $olds | sed 's/\([0-9a-f]\{12\}\)[0-9a-f]*/\1/g'))"
+echo "relock-standards-pin: $L keyed to ${COORD}@${TARGET:0:12} (from $(echo $oldrefs | sed 's/\([0-9a-f]\{12\}\)[0-9a-f]*/\1/g'))"
