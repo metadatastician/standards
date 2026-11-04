@@ -62,5 +62,15 @@ for policy in config/settings/actions-allowlist.json rhodium-standard-repositori
   fi
 done
 
+# These two Google actions are already admitted by the canonical live-policy
+# payload. Both explicit subpaths must also pass the conservative tree check;
+# the repository-root pattern deliberately does not grant arbitrary subpaths.
+for policy in config/settings/actions-allowlist.json rhodium-standard-repositories/actions-allowlist/allowed-actions.json; do
+  cp "$ROOT/$policy" "$WORK/allowed-actions.json"
+  expect 0 'google/clusterfuzzlite/actions/build_fuzzers@884713a6c30a92e5e8544c39945cd7cb630abcd1' "$policy admits the reviewed build action"
+  expect 0 'google/clusterfuzzlite/actions/run_fuzzers@v1' "$policy admits the reviewed run action"
+  expect 1 'google/clusterfuzzlite/actions/unreviewed-action@v1' "$policy rejects other action subpaths"
+done
+
 printf '\nallowlist regression: %s passed, %s failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
