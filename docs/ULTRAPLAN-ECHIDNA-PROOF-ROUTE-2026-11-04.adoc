@@ -1,0 +1,1104 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+// SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+= Ultraplan: the echidna system — the proof route of the Kautz ladder, engineered and proved
+Jonathan D.A. Jewell (hyperpolymath)
+v0.1.0, 2026-11-04
+:toc: left
+:toclevels: 3
+:sectnums:
+:icons: font
+:status: DRAFT v0.1.0 — for owner review. Measured sections are facts with the command or file that produced them. Sections marked PROPOSED are design, not rulings. The decisions in <<decisions>> are open.
+
+[.lead]
+The "echidna system" is the proof route of the Kautz-ladder ultraplan
+(link:ULTRAPLAN-KAUTZ-LADDER-2026-10-19.adoc[], Wave 3 and the Wave 0/1
+work it depends on): a Hypatia finding becomes a proof obligation,
+echidnabot hands it to ECHIDNA, the result comes back as a receipt, and
+Hypatia may then, and only then, report the finding at HYP-01 level
+`sound`. This document maps what exists across the attached repositories,
+names every seam that is not connected, compares three independent route
+designs, recommends one, lists what has to be created, lays the proof
+ladder over the prover policy, and plans the ultracode session that would
+build it.
+
+It does not change any code. Every claim about a repository cites a
+repo-relative path. Facts about `echidna`, `verisimdb`, `panic-attack` and
+`pons-asinorum` come only from what the attached repositories say about
+them and are marked _second-hand_.
+
+== Verdict in one page
+
+*Where it stands.* The two ends of the route are real and machine-checked;
+everything between them is missing.
+
+* Hypatia sends obligations: `Hypatia.EchidnabotObligation` builds a static
+  GraphQL mutation with every value in variables, tested
+  (`hypatia/lib/echidnabot_obligation.ex:3-109`).
+* echidnabot stores each obligation as `PENDING` and nothing ever reads it
+  again. The code says so (`echidnabot/src/api/graphql.rs:416`); the store
+  trait has no update method (`echidnabot/src/store/mod.rs:91-96`); there is
+  no query to read an obligation back.
+* Hypatia's `Verdict.idr` gives `sound` exactly one constructor, `Rechecked`,
+  which demands a confirming mechanical re-check
+  (`hypatia/src/Hypatia/ABI/Verdict.idr:162-165`), proved and gated in CI.
+  Its runtime mirror `Verdict.attach_recheck/3`
+  (`hypatia/lib/hypatia/verdict.ex:99-117`) has no caller in `lib/`, so no
+  runtime finding has ever reached `sound`.
+* Quarantine-as-retraction is proved (`Retraction.idr`) and tested; nothing
+  calls `Quarantine.retract_dependents/1`.
+* The K2 element, `ProverRecommender`, trains every five minutes on rows it
+  synthesises from aggregates, because the store it reads is not deployed
+  (`hypatia/lib/neural/prover_recommender.ex:136-189`); nothing reads its
+  output.
+
+*What this session measured* (<<measured>>). Two facts change the design:
+
+. A successful Lean proof prints nothing. Two different proofs have the
+  same output digest, `sha256("")`. The digest Hypatia's existing re-check
+  binds identifies a confirmed proof _hole_; it cannot identify a
+  discharged _obligation_. Discharge needs its own typed evidence.
+. Checking a Lean file executes code in it: `#eval IO.FS.writeFile` wrote a
+  file during `lean`. An obligation drain that runs provers on submitted
+  goals is remote code execution unless it is sandboxed, and the obligation
+  endpoint has no authentication today (`echidnabot/src/api/graphql.rs:389-390`).
+
+*What to build, in one sentence* (<<recommendation>>). Seal the route's
+wire formats in one Idris2 package first, then run one pipe end to end on
+the only class whose meaning HYP-01 already defines (a `sorry` hole in a
+Lean file), with any stub graded orange; and keep one record family,
+keyed by the ADR-008 content-id domains, as the store every later rung
+reads from.
+
+*Where it sits on the ladder.* Today the route is K0 with holes. It is the
+one subsystem that can claim the proof-route clauses of K2 and K4 honestly
+before any fix outcome is rescan-verified, because a kernel re-run on the
+same bytes _is_ a rescan. That claim is scoped in <<kautz>>; it holds for
+in-situ attempts and does not hold for goals transcribed from prose.
+
+*Wave 0 now, everything else after numbers.* Five small changes close real
+holes and can land now (<<wave0>>). The pipe, the drain and the learning
+work stay behind the standing rule that nothing above Wave 1 is committed
+before the experiments have numbers
+(link:ULTRAPLAN-KAUTZ-LADDER-2026-10-19.adoc[] §Experiments).
+
+== What the echidna system is
+
+=== IS and IS NOT
+
+*IS* the path from a finding to a mechanically checked verdict about it,
+with the records that path leaves behind and the learning that reads them.
+
+*IS NOT* a prover (ECHIDNA is the prover, _second-hand_), not a fixer (the
+fleet is, behind exit 78), and not a review bot. It mutates no repository.
+
+=== Parties
+
+[cols="2,2,3",options="header"]
+|===
+|Party |Repository |Role on the route
+
+|Hypatia
+|`hyperpolymath/hypatia`
+|Produces obligations (`lib/rules/proof_obligation.ex`,
+`lib/fleet_dispatcher.ex`); recommends a prover
+(`lib/rules/proof_strategy_selection.ex`, `lib/neural/prover_recommender.ex`);
+issues the only warrant (`Verdict`, `Retraction`).
+
+|echidnabot
+|`hyperpolymath/echidnabot` (vendored in `gitbot-fleet/bots/echidnabot` at a pin)
+|Receives obligations, schedules jobs in a container executor, talks to
+ECHIDNA, parses `echidna.prove.result/1`
+(`src/dispatcher/prove_result.rs`), assesses trust (`src/trust/`), writes
+local training deltas (`src/feedback/`).
+
+|ECHIDNA
+|`hyperpolymath/echidna` (_not attached_)
+|Runs the provers; emits `echidna.prove.result/1`
+(contract in `proof-burrower/docs/ECHIDNA-INTEGRATION.adoc`).
+
+|proof-burrower
+|`hyperpolymath/proof-burrower`
+|Pre-prover: homes a goal in a library, reads it through specialists,
+attempts playbooks through ECHIDNA, keeps an append-only ledger. Symbolic
+throughout; `burrower serve` is implemented and unconsumed.
+
+|gitbot-fleet
+|`hyperpolymath/gitbot-fleet`
+|Actuator, quarantined (exit 78). Hosts the vendored echidnabot and the
+E1 predicate verdicts. The route does not pass through it.
+
+|standards
+|`hyperpolymath/standards`
+|Proof policy, ledger vocabulary, verdict grid, deed and K9 grammars,
+ADR-008 identity domains, `hypatia-rules`.
+
+|rsr-template-repo, `.git-private-farm`, oikosbot
+|their own repositories
+|Carriers: where a repo records its rung and proof status; the future
+work-order office; the K0 fake-gate detector and estate telemetry.
+|===
+
+=== Target architecture (PROPOSED)
+
+[source]
+----
+  finding (Hypatia scan)                         proof-burrower (optional pre-prover)
+        │ shape: total function per category             │ homes, playbooks, ledger
+        ▼                                                  ▼
+  ┌──────────────────────── proof-route ABI (Idris2, one package) ────────────────────┐
+  │ ProverId · Token · Goal · Obligation · Lifecycle · Receipt · Binding · Severity   │
+  │ generated: Rust + Elixir enum tables, Nickel contracts, JCS golden fixtures        │
+  └────────────────────────────────────────────────────────────────────────────────────┘
+        │ submitProofObligation (auth, rate-limited, size/path/digest checks)
+        ▼
+  echidnabot ── drain (PENDING→RUNNING→CLOSED|REFUTED|INDETERMINATE, sandboxed) ──► ECHIDNA
+        │                                                       │ prove.result/2 (digests)
+        │◄──────────────────────────── receipt ─────────────────┘
+        │ proofObligation(id) query (pull)          report-back (.gitbot-fleet/…/echidnabot.json)
+        ▼                                                       ▼
+  Hypatia ingest ── independent kernel re-run ── Verdict v2 ──► verdict grid row (findings family)
+        │                (witness, not receipt)    sound only via Rechecked | Closed
+        ▼
+  records: proof.attempt/1 (events) ─fold─► proof.status/1 (octad content)
+        │  flat files in verisim-data first; VeriSimDB (stapeln, owned hardware) later
+        ├──► ProverRecommender v2 (K2, goal-side features, held-out by goal_id)
+        ├──► distilled class→prover order in lib/rules with @distilled_from (K4)
+        ├──► HYP-S003 replacement (proof freshness)
+        └──► deed (neurosym (ladder (rung …))) per repo
+----
+
+The design keeps the epistemic-types split the estate already names:
+ECHIDNA and echidnabot write _receipts_; only Hypatia issues a _warrant_
+(`echidnabot/src/dispatcher/prove_result.rs:18-20`;
+`hypatia/src/Hypatia/ABI/Verdict.idr:157-160`). The producer of a proof
+never certifies it.
+
+[[measured]]
+== Where it stands — measured
+
+=== Seams
+
+[cols="3,1,4",options="header"]
+|===
+|Seam |State |Evidence and the smallest change that connects it
+
+|Finding → obligation
+|unwired
+|`ProofObligation.obligations_from_patterns/2` has no caller
+(`hypatia/lib/rules/proof_obligation.ex:171`). The only live producer is
+the substitute tier's prose claim "Substitution with X preserves behavior"
+(`hypatia/lib/fleet_dispatcher.ex:65-84`). Wiring the function as it stands
+would be wrong: its classifier sends every `sorry`/axiom claim to `:control`
+(`proof_obligation.ex:54-99`), and its eliminate arm at confidence ≥ 0.90
+sends robot-repo-automaton an "Apply tactic" _mutation_ request
+(`fleet_dispatcher.ex:108-119`).
+
+|Hypatia → echidnabot
+|wired, tested
+|`EchidnabotObligation` + `FleetDispatcher.dispatch_to_echidnabot`
+(`fleet_dispatcher.ex:388-429`). It bypasses Kin gate, rate limiter and
+quarantine; it drops the returned `proofId` (`fleet_dispatcher.ex:806-832`)
+and writes a manifest line that `dispatch-runner.sh` skips for lack of a
+`.strategy` (`gitbot-fleet/scripts/dispatch-runner.sh:366`).
+
+|echidnabot store → prover
+|missing
+|No drain, no update, no read-back (`graphql.rs:416`, `store/mod.rs:91-96`).
+`inline: true` is recorded and ignored (`graphql.rs:627-628`). Content-id
+failure falls back to the nil UUID, so failed obligations would collide
+(`echidnabot/src/store/models.rs:318`).
+
+|Prover vocabulary
+|inconsistent
+|HYP-01 accepts `lean4|idris2|agda|coq` (`hypatia/lib/hypatia/verdict.ex:33`);
+echidnabot exposes 12 kinds, spells Lean `LEAN`, has no Idris2
+(`graphql.rs:53-68`) and relabels any unknown slug as Coq (`graphql.rs:753`);
+Hypatia drops `lean4` and `idris2` hints (`echidnabot_obligation.ex:80-88`).
+Idris2, which PROOF-POLICY assigns to every API and ABI, cannot be routed.
+
+|Result → Hypatia
+|missing
+|No consumer writes a proof-status record or a `ProverRecheck`.
+`echidna.prove.result/1` carries neither the target digest nor an artefact
+digest (`echidnabot/src/dispatcher/prove_result.rs:6-12`).
+
+|Result → verdict grid
+|missing
+|The grid reads fleet report-backs from the scanned tree
+(`.github/workflows/hypatia-scan-reusable.yml:711-731`); echidnabot writes
+none. Its fleet publisher exists but `connect_to_fleet` is never called
+(`echidnabot/src/scheduler/job_queue.rs:51-58`).
+
+|Trust → anything
+|computed, discarded
+|echidnabot's trust level is never shown or stored
+(`echidnabot/src/result_formatter.rs:25-30`); certificate verification is
+always false and solver integrity is hard-coded true
+(`echidnabot/src/trust/confidence.rs:143-147,184`), so a result tops out at
+level 2.
+
+|Retraction → findings
+|proved, unwired
+|`Quarantine.retract_dependents/1` is called only by tests
+(`hypatia/lib/safety/quarantine.ex:100-112`). Prover retraction is by name,
+not version (`hypatia/lib/hypatia/verdict/retraction.ex:35`).
+
+|ProverRecommender → dispatch
+|trained, unread
+|`recommend/2` and `current_models/0` have no caller; training rows are
+synthetic (`prover_recommender.ex:62-65,112,168-176`).
+
+|Record store
+|missing
+|No proof-status octad schema exists; HYP-S003 assumes a VeriSimDB on port
+8097 that does not exist (`hypatia-rules/README.adoc:56-57`;
+link:ULTRAPLAN-KAUTZ-LADDER-2026-10-19.adoc[] §Verdict).
+
+|Repo → rung address
+|missing
+|No deed clause records a ladder rung; the template's `(neurosym)` is
+comments only (`rsr-template-repo/rsr-template-repo_chora.deed:355-372`).
+
+|Work order → fleet
+|missing
+|No k9 work-order contract or evaluator exists in any attached repository;
+exit 78 stands (`gitbot-fleet/scripts/dispatch-runner.sh:148-152`). The
+proof route does not need it (see <<bypass>>).
+|===
+
+=== Probes run in this session
+
+[cols="3,1,3",options="header"]
+|===
+|Probe |Result |Note
+
+|`cargo test --locked --workspace` in proof-burrower
+|pass
+|67 tests in 39 s (56 core, 3 CLI contract, 4 process contract, 1 live
+Isabelle with 1 ignored, 3 wasm).
+
+|`cargo test --locked --lib` in `gitbot-fleet/bots/echidnabot` (pin `faeb280`)
+|pass
+|199 tests in 5.6 s.
+
+|`cargo metadata --locked` in standalone echidnabot (`f210b76`)
+|pass
+|Dependencies resolve as pinned git dependencies. The CLAUDE.md warning that
+a bare clone cannot build is stale.
+
+|`cargo test --locked --lib` in standalone echidnabot
+|198 of 199
+|Finished in 7 s. echidnabot's CI says this suite hangs for over 20 minutes
+and does not run it (`echidnabot/.github/workflows/e2e.yml:25-30`); that did
+not reproduce. The one failure is a race: two tests set and clear the same
+environment variable on parallel threads (`echidnabot/src/observability.rs:286-311`);
+the module passes in isolation three times out of three.
+
+|`lake build` of `hypatia/verification/proofs/lean4` under Lean 4.30.0
+|pass
+|Five modules; no `sorry`, no `axiom`, no Mathlib import.
+
+|Lean digest probe (scratch files, Lean 4.30.0)
+|see text
+|`theorem two_eq : 1 + 1 = 2 := rfl` and a different `by decide` proof both
+exit 0 with empty output; both output digests are `e3b0c442…`, the hash of
+the empty string. A `sorry` file gives a 50-byte warning whose digest
+reproduces across runs and changes when the file moves.
+
+|Lean code-execution probe
+|executes
+|A file containing `#eval IO.FS.writeFile "pwned.txt" "x"` created
+`pwned.txt` while being checked. A second probe (`#eval IO.Process.run`)
+printed `uid=0`.
+
+|Idris2 v0.7.0 from source
+|not run
+|The session's permission check refused building upstream source. Every
+Idris2 claim here is read from CI configuration, not re-run.
+|===
+
+Toolchain installed for the probes: Lean 4.30.0 (elan release binary),
+z3 4.8.12, Elixir 1.14 / OTP 25, shellcheck, asciidoctor, gitleaks (apt).
+Not installed: Idris2, Agda, Rocq, Creusot, Kani, Nickel, TLA+ tools,
+Dedukti.
+
+== Three routes, compared
+
+Three architects worked from the same maps without seeing each other's
+designs. Each was given one angle.
+
+[cols="1,3,1,1,3",options="header"]
+|===
+|Route |Shape |Elegance / correctness |Dependability / security / privacy |Cost
+
+|*A — proof-first (the elegant arm)*
+|Seal every seam as one Idris2 package in standards (ProverId, Token, Goal,
+Obligation, Lifecycle, Receipt, Binding, Severity), generate every
+consumer's tables and fixtures from it, add a separately typed `Discharged`
+support to HYP-01, then wire. Obligations only from total shape functions.
+|9
+|7
+|About 10-14 engineer-weeks to the first runtime `sound`; needs Idris2 in
+standards CI and an ECHIDNA receipt `/2` upstream.
+
+|*B — pipe-first*
+|One finding end to end in a container on the class HYP-01 already
+defines (a Lean `sorry` hole): a new `Hypatia.ProofRoute`, an echidnabot
+drain and read-back query, a stub ECHIDNA named as a stub that runs real
+Lean, `attach_recheck/3` in the scan funnel, a report-back row that stays
+orange while the stub is in the path. Harden after numbers.
+|8
+|8
+|About 8 engineer-days to a demonstrable loop, then about 10 days of
+hardening after the owner rules on the numbers.
+
+|*C — data-first*
+|One record family (`proof.attempt/1` events folded into `proof.status/1`)
+keyed by ADR-008 domains, flat files in verisim-data first, an in-situ
+re-check producer, a burrower ledger exporter, an echidnabot pull channel,
+ProverRecommender v2 with goal-side features and a portfolio run, then
+distillation with provenance and rung clauses.
+|8
+|8
+|About 48 engineer-days end to end; K2 may come back refuted for lack of
+portfolio-complete data, which the route records honestly.
+|===
+
+Aspects, beyond the two axes:
+
+* *Security.* All three require the sandbox and authentication. B is the
+  only one that runs prover code on the critical path early, so its
+  hardening steps (auth, loopback bind, mandatory sandbox) cannot slip past
+  the first non-local deployment.
+* *Privacy.* C is the strongest: goal text and raw prover output stay in
+  the private flat-file store and owned-hardware VeriSimDB; grid and
+  report-back carry identifiers, tokens and digests only.
+* *Drift.* A is the only route that closes vocabulary drift by
+  construction. B and C close it by tests, which narrows but does not
+  remove the `argued` row between the Idris2 model and the Elixir and Rust
+  code.
+* *Maintenance.* A turns standards from canon text into canon text plus an
+  Idris2 package with CI. If that is unwanted, Hypatia can host the package,
+  at the cost of echidnabot depending on Hypatia's ABI.
+* *Learning.* Only C makes the K2 claim falsifiable: it drops the
+  recommender's outcome-time features
+  (`prover_recommender.ex:20-29,246-255`), splits held-out data by goal, and
+  sets the bar at the larger of 0.66 and a per-class frequency baseline,
+  because 0.66 is ECHIDNA's own ranker baseline (_second-hand_) and may
+  measure a different task.
+
+[[recommendation]]
+=== Recommendation (PROPOSED)
+
+*The elegant arm is A.* The recommendation departs from it in order, not in
+destination:
+
+. Land the Wave 0 fixes now (<<wave0>>). They close holes on any route.
+. Write the specification and the Idris2 ABI for the four seams the first
+  pipe crosses (ProverId, Token, Receipt with Binding, Severity) — A's
+  steps S1-S4, narrowed.
+. Build B's pipe on a draft branch against those types, so the first loop
+  runs on sealed wire formats rather than ad-hoc ones. It uses the existing
+  `Mechanical` support, which already means "a prover confirmed a hole".
+. Keep C's record family as the only thing the pipe writes, so every later
+  rung reads one store.
+. Add A's `Discharged` support, the lifecycle and shape functions, and C's
+  learning work only after the experiments in <<experiments>> have numbers
+  and the owner has ruled on them.
+
+Why depart: A alone gives no runtime value for about a quarter while the
+obligation endpoint stays unauthenticated. B alone would bake today's
+vocabulary drift into a working loop. The hybrid takes A's types for the
+seams it actually crosses, B's loop to prove them against real Lean, and
+C's store so nothing is written twice. It reaches a demonstrable,
+honestly-graded loop in roughly four weeks and the full A shape in roughly
+the quarter A needs anyway.
+
+[[bypass]]
+=== The proof route and exit 78
+
+The proof route sends obligations straight from Hypatia to echidnabot. It
+never passes the fleet's interlock. That is acceptable because the route is
+a *sensor*, not an actuator: exit 78 and the Kautz-4 ruling govern
+dispatch, apply, PR, issue and deploy actions on estate repositories
+(`gitbot-fleet/docs/AUTOMATION-QUARANTINE.adoc`). It is acceptable only
+while five conditions hold, each as code with a test:
+
+. No forge write and no forge token anywhere on the obligation path.
+. The prover always runs sandboxed (the code-execution probe shows why).
+. The obligation endpoint requires authentication.
+. Dispatch to echidnabot passes the rate limiter.
+. Path, size and digest checks run before any prover does.
+
+If any obligation path gains a write, the exemption ends and that path goes
+through the work-order evaluator like every other mutation.
+
+== The architecture in layers (PROPOSED)
+
+=== Layer 1 — the proof-route ABI
+
+One Idris2 package, `2-protocols/proof-route/` in standards (or in Hypatia,
+<<decisions>> D-1), `%default total`, with accept and reject fixtures in the
+style of `hypatia/scripts/check-verdicts.sh`:
+
+[cols="1,4",options="header"]
+|===
+|Module |Content
+
+|`ProverId`
+|Closed slug vocabulary with a kernel class: small-kernel, SMT, model
+checker, bounded checker. Replaces the four vocabularies. Unknown slugs are
+refused, never relabelled.
+
+|`Token`
+|The five ledger tokens of `docs/README-EXPLAINME-STANDARD.adoc` with their
+order and the weakest-step meet; the total map from attempt facts to a
+token (SMT without a checked certificate caps at `argued`; model checkers
+and Kani at `tested-only`; a dangerous axiom gives `open`); the monotone map
+from token to HYP-01 level.
+
+|`Goal`, `Obligation`
+|A goal is formal text plus target path and target digest; an obligation
+binds a goal to a finding. Identity by ADR-008 content ids. Obligations come
+from shape functions; a goal proposed by a model is a different type and
+can never reach `sound` without a shape witness that reproduces the same
+goal id.
+
+|`Lifecycle`
+|`PENDING → RUNNING → CLOSED | REFUTED | INDETERMINATE`, terminal states
+absorbing, requeue consuming fuel, a closing receipt whose goal id equals
+the obligation's.
+
+|`Receipt`, `Binding`
+|`echidna.prove.result/2`: the `/1` fields plus prover version, goal digest,
+proof-artefact digest, target digest and diagnostics. A receipt binds an
+obligation only when all three digests match. Kernel stdout is diagnostic,
+never binding.
+
+|`Severity`, `Gen`
+|The total map from token and lifecycle state to grid severity; generated
+Rust and Elixir tables, Nickel contracts and JCS golden fixtures.
+|===
+
+=== Layer 2 — echidnabot, the drain
+
+Store transitions and a `proofObligation(id)` query; a drain task beside the
+scheduler loop that polls `PENDING` rows, checks path, size and digest,
+runs the prover in the existing Podman/bwrap executor
+(`echidnabot/src/executor/container.rs`, today default off,
+`src/config.rs:198-211`), parses the receipt, and records the transition.
+Authentication on the endpoint, loopback bind until it exists. A report-back
+writer for the grid. Creusot on the receipt parser and the store transition
+function.
+
+=== Layer 3 — Hypatia, the warrant
+
+A `Hypatia.ProofRoute` client that keeps the `proofId`; an ingest that polls
+results; an independent re-run of the kernel on the same bytes as the
+witness (so the producer of the receipt never certifies it); `Verdict v2`:
+
+* `Rechecked` keeps its meaning: a prover confirmed the hole the detector
+  claimed.
+* A new `Discharged` support and `Closed` constructor carry a bound receipt
+  _and_ a confirming independent re-run, with a token of `proven` or
+  `proven-with-postulates` (<<decisions>> D-3).
+* Retraction by `(prover, version)`, so a kernel bug retracts only the
+  verdicts resting on that version.
+
+=== Layer 4 — records
+
+`proof.attempt/1` (append-only events, JCS plus LF) and `proof.status/1`
+(the fold; the content of the proof-status octad), keyed by the ADR-008
+domains `echidnabot-proof-obligation`, `proof-goal`, `prove-result` and a
+new `proof-status` domain. Flat files under Hypatia's verisim-data tree
+first; a VeriSimDB projection once the stapeln bundle is deployed (ruled
+2026-10-19). Counts are always by goal id and result id, never by row: E1
+showed 21,498 rows collapsing to 136 keys.
+
+=== Layer 5 — surfaces
+
+* A grid row `echidnabot (proof status)` in the findings family, with a
+  token-to-severity table and `gating: false` in the enrolment manifest. A
+  stub anywhere in the path makes the row `not_run`, which the renderer
+  already shows orange.
+* A deed address: `(neurosym (ladder (rung :id K0 :scope proof-route
+  :state measured :falsifier "…" :evidence "<path>" :measured "<date>")))`,
+  a `deed_lint` side condition and one mapping-spec row. No ABNF change: clause
+  names are open (`1-formats/deed/spec/abnf/deed.abnf:99-102`).
+* A replacement for HYP-S003 (proof freshness) reading `proof.status/1`, as
+  a K9 component or praxis deed under the DEED-K9 plan's P2.4.
+
+=== Layer 6 — learning
+
+ProverRecommender v2 reading `proof.attempt/1` with goal-side features only,
+evaluated by an independent harness that holds the held-out split. If it
+beats the bar, it is frozen into a class-to-prover order in
+`lib/rules/proof_strategy_selection.ex` with a `@distilled_from` digest over
+the result ids it learned from and a falsifier corpus: the first executed
+instance of "dumb rules from smart learning" on this route.
+
+== What has to be created
+
+[cols="1,3,1,2",options="header"]
+|===
+|Repository |Artefact |Kind |Exists today
+
+|standards
+|Proof-route specification (`2-protocols/proof-route/PROOF-ROUTE-SPEC.adoc`)
+|doc
+|no
+
+|standards
+|Idris2 package `ProofRoute/{ProverId,Token,Goal,Obligation,Lifecycle,Receipt,Binding,Severity,Gen}.idr`, accept/reject fixtures, check script
+|proof
+|no
+
+|standards
+|Idris2 v0.7.0 CI job
+|workflow
+|no
+
+|standards
+|`proof.attempt/1` and `proof.status/1` record specs with Nickel contracts and JCS fixtures
+|contract
+|no
+
+|standards
+|ADR-008 register amendment: `proof-status` domain; add hypatia and echidnabot to the repos of `proof-goal` and `prove-result`
+|contract
+|domains exist (`docs/decisions/ADR-008-profile-c-domains.json`)
+
+|standards
+|VERDICT-GRID-SPEC addendum: echidnabot proof-status row, token-to-severity table, fixture in `scripts/tests/verdict-grid-test.sh`
+|doc + test
+|no
+
+|standards
+|Deed ladder clause: mapping row, `deed_lint` side condition
+|deed-clause
+|no
+
+|standards
+|HYP-S003 replacement reading `proof.status/1`
+|contract
+|A2ML original, unwired
+
+|standards
+|The standards#692 gate for the ledger vocabulary
+|workflow
+|no
+
+|hypatia
+|`Hypatia.ProofRoute` client, ingest, `to_recheck/2`, attach in the scan funnel
+|code
+|no
+
+|hypatia
+|`Verdict.idr` `Discharged`/`Closed`; versioned prover retraction; Elixir mirror
+|proof + code
+|no
+
+|hypatia
+|Independent re-checker generalised from `scripts/recheck-lean-hole.sh`
+|code
+|hole confirmation only
+
+|hypatia
+|Shape functions per category (finding → formal goal)
+|code
+|no
+
+|hypatia
+|ProverRecommender v2, `mix hypatia.prover_mrr`, distilled rule with provenance
+|code
+|v1 trains on synthetic rows
+
+|echidnabot
+|Store transitions, `proofObligation(id)`, drain, endpoint auth, report-back writer, receipt `/2` parser
+|code
+|none of these
+
+|echidnabot
+|Instantiated Idris2 ABI or its deletion (today an uninstantiated template, `src/abi/Types.idr:13`)
+|proof
+|template only
+
+|echidnabot
+|Creusot contracts on receipt parser and store transition
+|proof
+|no
+
+|echidnabot, hypatia
+|`echidnabot_chora.deed`; deeds where missing (D312)
+|deed
+|A2ML only in echidnabot
+
+|proof-burrower
+|`burrower ledger export --schema proof.attempt/1`; lockstep ADR-008 profile-C migration of content ids with echidnabot
+|code
+|no
+
+|proof-burrower
+|Re-home TP-2 from Lean to Idris2; Kani harness on the wasm shim
+|proof
+|template obligations only
+
+|rsr-template-repo
+|`(ladder …)` and `(contractiles …)` clauses; `check-proofs.sh` wired into CI in place of the lane that degrades silently
+|deed + workflow
+|no
+
+|oikosbot
+|Job-level telemetry so a prover gate that never fails is its own candidate; `oikosbot/infallible-gate` SARIF rule
+|code
+|per-workflow only
+
+|gitbot-fleet
+|Vendored echidnabot pin bump after each echidnabot change (`scripts/sync-vendored-bot.sh`)
+|code
+|mechanism exists
+|===
+
+[[wave0]]
+=== Wave 0 — now, on any route
+
+These close holes that exist today. None of them commits to Wave 3.
+
+. *hypatia:* close the eliminate ≥ 0.90 arm of the proof-obligation branch,
+  which asks robot-repo-automaton to "Apply tactic"
+  (`lib/fleet_dispatcher.ex:108-119`), and add the missing branch test.
+. *echidnabot:* make content-id failure an error instead of the nil UUID
+  (`src/store/models.rs:318`).
+. *echidnabot:* refuse unknown prover slugs instead of relabelling them as
+  Coq (`src/api/graphql.rs:753`).
+. *echidnabot:* make the observability env-var tests deterministic and run
+  `cargo test --lib` in CI again; update the stale build caveat in
+  CLAUDE.md.
+. *hypatia:* make the LearningScheduler requeue resend the original claim and
+  repository instead of `requeue-of-<id>` placeholders
+  (`lib/learning_scheduler.ex:463-470`); until then, tag those rows and keep
+  them out of training.
+
+[[ladder-proofs]]
+== The proof and theory ladder
+
+Each obligation sits on the prover PROOF-POLICY assigns
+(link:../3-practice/PROOF-POLICY.adoc[]), in build order. A falsifier is the
+planted case that must be refused.
+
+[cols="1,1,4,1,3",options="header"]
+|===
+|# |Rung |Obligation |Prover |Falsifier
+
+|1
+|K0
+|Prover classification is total; only small-kernel provers reach `proven`;
+SMT reaches `proven` only with a checked certificate; model checkers give
+`tested-only`.
+|Idris2
+|A reject fixture assigning `proven` to an unchecked z3 result typechecks.
+
+|2
+|K0
+|Token order and weakest-step meet are lawful; token → HYP-01 level is
+monotone.
+|Idris2 (engineering) — or Agda with Rocq and Lean legs if ruled theory (D-4)
+|`meet(proven, argued) = proven` is derivable.
+
+|3
+|K0
+|`proof.attempt/1` wire contract: JCS one line, closed vocabularies,
+64-hex digests, decode ∘ encode = id.
+|Idris2
+|A 63-hex digest is accepted.
+
+|4
+|K0
+|A receipt binds an obligation only on goal, proof and target digest
+equality; an empty-output digest never binds.
+|Idris2
+|Two different proofs bind the same obligation.
+
+|5
+|K0
+|`Sound` v2: `Closed` only from `Discharged` with an allowed token and a
+confirming independent re-run; existing `patternNotSound`,
+`observedNotSound`, `refutedNotSound` keep holding.
+|Idris2
+|Any reject fixture is accepted, or `LeanHoleRecheckSound` is refused.
+
+|6
+|K0
+|Lifecycle: terminal states absorb; requeue consumes fuel.
+|Idris2
+|`CLOSED → RUNNING` compiles.
+
+|7
+|K0
+|Retraction never raises a level; retracting `(prover, version)` kills exactly
+the verdicts resting on it.
+|Idris2 encoding; Agda source in residual-evidence-types, rechecked in Rocq
+and Lean via Dedukti first
+|Retracting an unrelated version lowers a verdict.
+
+|8
+|K0
+|echidnabot's receipt parser accepts only well-formed `/2`; its store
+transition preserves the lifecycle relation. Same for burrower's
+`echidna_contract.rs`.
+|Creusot
+|A fuzzed 63-hex digest is accepted; a closed row reopens.
+
+|9
+|K0
+|The burrower-wasm shim never writes past its output capacity.
+|Kani (`tested-only`, bounds stated)
+|A harness finds an overrun.
+
+|10
+|K0
+|The drain and the poll protocol: no lost result across restart, no double
+write.
+|TLA+ (`tested-only`, bounds and exception reason recorded)
+|Two workers both reach `RUNNING` for one obligation at the stated bounds.
+
+|11
+|K0
+|Elixir and Rust mirrors agree with the ABI on every generated fixture.
+|golden and property tests (`tested-only`); the correspondence row stays
+`argued`
+|A generated reject fixture is accepted.
+
+|12
+|K2 / K4 enabler
+|The status fold over attempt multisets is a join on the token lattice:
+commutative, associative, idempotent, monotone.
+|Agda, rechecked in Rocq and Lean
+|Folding the same attempts in two orders gives two statuses.
+
+|13
+|K3 boundary
+|A learned goal proposer never yields `sound` without a shape witness.
+|Idris2 (type of the gate)
+|A proposed goal reaches `Closed` without one.
+
+|14
+|Wave 1 adjacency
+|Work-order admissibility is a total, deny-by-default function of work
+order, grants and evidence; a proof receipt or CNO certificate counts only
+if it binds the declared files.
+|Idris2 model; Creusot once the evaluator is Rust
+|A work order with no matching grant is admitted.
+|===
+
+Existing proofs this route inherits or must re-home, per PROOF-POLICY §3:
+
+* Hypatia's Lean proofs of engineering properties (`RateLimiting`,
+  `ParserTotality`, possibly `BayesianUpdate`) move to Idris2 when next
+  touched; PageRank and ESN convergence are theory, so their plan moves to
+  Agda without Mathlib.
+* `KinGate.tla` is reported `tested-only` with its bounds, with the reason
+  for TLA+ recorded beside it.
+* `Retraction.idr` and `Verdict.idr` are transcriptions from Agda sources;
+  their correspondence rows are `argued` until compared.
+
+[[kautz]]
+== How the echidna system follows the Kautz ladder
+
+The ultraplan's ladder classifies capabilities, each with a falsifier
+(link:ULTRAPLAN-KAUTZ-LADDER-2026-10-19.adoc[] §ladder). The proof route
+climbs the same ladder, on a different rail from the fix fleet.
+
+[cols="1,4,4",options="header"]
+|===
+|Rung |On the proof route |Falsifier and scope
+
+|K0
+|Every obligation, receipt and verdict passes a typed seam; `sound` is
+constructible only through `Rechecked` or `Closed`; the grid row can go
+red, orange and green.
+|A finding reported `sound` without a bound receipt and an independent
+re-run; the echidnabot row has zero lifetime failures and no grey reason.
+
+|K1
+|Not on this route. No paid reviewer touches proofs.
+|Record nothing rather than a vacuous figure.
+
+|K2 (proof-route clause)
+|ProverRecommender v2 beats the bar on held-out, portfolio-complete
+attempts.
+|MRR ≤ max(0.66, frequency baseline). The rung as a whole stays unclaimed
+until E5 shows the pools change dispatch precision.
+
+|K3
+|ECHIDNA's formaliser (_second-hand_) or a learned burrower ranker proposes
+goals; the kernel accepts or rejects.
+|All proposals accepted or all rejected; report the vacuity rate beside the
+acceptance rate.
+
+|K4
+|Receipts are executor-verified training rows; a learned order is
+distilled into `lib/rules` with provenance.
+|The distilled rule cannot resolve a cited result id.
+
+|K5, K6
+|Deferred. Record now the fixed rule any learned invocation policy must
+beat: "prover source in situ → re-run its own prover; transcribed goal →
+ECHIDNA portfolio; SMT only → report_only".
+|Ablation to that rule performs as well.
+|===
+
+*Where it differs from the fix-fleet climb.* The fleet reaches K2 only
+through rescan-verified fix outcomes, which wait for the Wave 1 evaluator
+and the end of exit 78. The proof route mutates nothing, so its K0 can
+complete in parallel with Wave 1, and its labels are available for K2
+earlier.
+
+*Is a proof outcome its own rescan?* For an _in-situ_ attempt, yes: the
+fact "kernel K at version v accepted term T for goal G on target bytes with
+digest D, resting on axioms A" is reproduced by re-running K on the same
+bytes. The scope is narrow, and the risks are named:
+
+* A transcribed goal can be accepted while meaning something other than the
+  claim. That correspondence row is `argued`, never `sound`.
+* ECHIDNA's own trust level must never be the token; echidnabot caps at
+  level 2 and hard-codes solver integrity.
+* An SMT result without a checked certificate is `argued`.
+* A proof resting on `believe_me` or `sorry` is `open`.
+* The only live obligation producer today is a prose claim; data may be too
+  scarce for K2, and the deed then records `:state refuted`.
+
+[[experiments]]
+== Experiments and benches before bigger work
+
+Per the owner's standing rule, nothing above Wave 1 is committed until
+these have numbers.
+
+[cols="1,3,3,2,1",options="header"]
+|===
+|Id |Question |Method |Decides |In this container
+
+|X-PF2
+|What can a receipt digest bind?
+|Re-run Lean on holes and proofs; compare output digests.
+|*Done:* output digests are deterministic but path-dependent, and every
+success is `sha256("")`. Bind goal, proof and target digests; output is
+diagnostic.
+|yes, run
+
+|X-PF4
+|Is checking a goal running code?
+|`#eval` side effects under `lean`.
+|*Done:* yes. The drain requires the sandbox; sandbox off means refuse.
+|yes, run
+
+|X0
+|Do the control's digests reproduce outside the repo and under `unshare -rn`?
+|Re-run the HYP-01 positive control.
+|*Done:* yes, about 0.5 s per run; the stub must keep the relative path.
+|yes, run
+
+|X-PF1
+|Is a total order on tokens enough for the weakest-step rule?
+|Model the meet in scratch Lean (not a committed proof).
+|Token order; whether its laws are engineering or theory (D-4).
+|yes
+
+|X-PF3
+|Can SMT results ever be `proven` here?
+|z3 proof objects plus an independent Alethe checker.
+|Whether SMT caps at `argued` permanently.
+|partly (checker needs install)
+
+|XD3
+|Do echidnabot and proof-burrower mint the same goal and result ids?
+|Shared test vectors through both `ids.rs`.
+|Lockstep ADR-008 migration or a translation table.
+|yes
+
+|XD4
+|Does ProverRecommender v1 leak outcome-time features; is 0.66 the right bar?
+|Feature audit; frequency baseline on the same split.
+|Feature set and the bar for E6.
+|yes
+
+|XD5
+|Do vacuity checks catch mis-stated goals?
+|Planted inconsistent hypotheses and trivial goals.
+|Whether attempts carry a `vacuity` field.
+|yes
+
+|X-PF7
+|What fraction of findings can be given a total shape?
+|Hypatia scan of fixture repos; classify by category.
+|Which categories get shape functions first.
+|partly
+
+|E7-lite
+|Closed, refuted and indeterminate fractions, seconds per obligation.
+|Three Lean categories (`sorry`, `native_decide`, axiom) × 100 files through
+the pipe with the stub.
+|Commitment to the drain and the learning work; category order.
+|yes, after the pipe
+
+|E2
+|Does the standards rule set fire against a live store?
+|Deploy verisim-api (stapeln, owned hardware); ingest; run `hypatia-rules`.
+|Whether the store is ready for octads.
+|no
+
+|E6
+|Does the ranker learn?
+|Portfolio run on owned hardware; held-out MRR against the bar.
+|The K2 proof-route clause.
+|no
+
+|E7
+|The ultraplan's full experiment with ECHIDNA.
+|100 findings × 3 categories through the real route.
+|Wave 3 at estate scale.
+|no
+|===
+
+== The ultracode session
+
+The engineering is a sequence of workflows, not one. Each phase ends at a
+gate the orchestrator reads before starting the next; the owner rules where
+the plan says so. Agents that edit files in parallel each get their own
+worktree.
+
+[cols="1,3,3,3",options="header"]
+|===
+|Phase |Agents |Output |Gate
+
+|P0 re-verify
+|Two read-only verifiers re-open every path cited in this plan.
+|A list of stale citations.
+|Zero unverified citations.
+
+|P1 Wave 0
+|One agent per fix in <<wave0>>, worktree each; one reviewer per PR.
+|Five small PRs (hypatia, echidnabot).
+|Each repo's own checks pass; the planted negative of each fix is refused.
+
+|P2 rulings
+|Orchestrator only.
+|Owner answers to <<decisions>> through the selector, recorded under
+`docs/decisions/`.
+|Every D-question answered or explicitly deferred.
+
+|P3 specification and ABI
+|Spec author; Idris2 author; a separate adversary who writes programs that
+must _not_ typecheck; generator author.
+|Stacked standards PRs: (a) ProverId and Token, (b) Receipt and Binding,
+(c) Severity and generated tables, (d) record specs and ADR-008 amendment.
+|CI Idris2 build; accept/reject gate; generated output byte-stable.
+
+|P4 experiments
+|Three runners (Lean; Rust ids; Elixir) and one skeptic who tries to refute
+each number.
+|Numbers in `docs/experiments/`.
+|Each experiment states what it decided.
+
+|P5 pipe (draft)
+|echidnabot drain agent; Hypatia route agent; stub author; security
+reviewer.
+|Draft PRs in echidnabot and Hypatia; the container end-to-end script.
+|One positive and three negative cases pass; the grid row is orange with
+the stub in the path; E7-lite numbers recorded.
+
+|P6 owner go
+|Orchestrator only.
+|Ruling on the E7-lite numbers.
+|Go, change or stop.
+
+|P7 harden and surface
+|Auth and sandbox agent; Verdict v2 agent; grid and deed agents; Creusot
+author; a reviewer per repository.
+|PRs out of draft; grid addendum; deed ladder clause; vendored-pin bump in
+gitbot-fleet.
+|Each repo's CI green; `deed_lint` and `verdict-grid-test.sh` pass; no A2ML
+created.
+
+|P8 learning (after E2 and the portfolio run)
+|One ML agent; one independent evaluator who alone holds the held-out
+split.
+|E6 report; distilled rule; rung clauses.
+|Evaluator-computed MRR above the bar, or `:state refuted` recorded.
+|===
+
+Size: P0-P5 fit one session of under ten agents per phase. P7 and P8 need
+owned hardware, the ECHIDNA receipt `/2` upstream, and Idris2, Creusot and
+Agda in CI.
+
+[[decisions]]
+== Decisions for the owner
+
+Each question has its arms in the order elegant first; the recommended arm
+is marked where it differs.
+
+. *D-1 Where the proof-route ABI lives.* (a) standards
+  `2-protocols/proof-route/` with its own Idris2 CI — elegant, one canon;
+  (b) Hypatia, beside `Verdict.idr` — less CI, but echidnabot then depends
+  on Hypatia's ABI.
+. *D-2 Route order.* (a) A, proof-first in full — elegant; (b) the hybrid in
+  <<recommendation>> — recommended; (c) B, pipe-first only.
+. *D-3 Which tokens yield `sound`.* (a) `proven` only; (b) `proven` and
+  `proven-with-postulates` with the axioms listed — recommended, matches
+  the ledger's own definition.
+. *D-4 Are the token-lattice laws engineering or theory?* (a) theory: Agda
+  with Rocq and Lean legs — elegant; (b) engineering: Idris2 —
+  recommended, because the statement names this route's types.
+. *D-5 Grid placement.* (a) a conformance-family proof lane with its own
+  comment; (b) an echidnabot report-back row in the findings family,
+  advisory — recommended, no renderer change.
+. *D-6 Obligation transport.* (a) direct Hypatia → echidnabot under the five
+  conditions in <<bypass>> — recommended; (b) through the work-order
+  evaluator once it exists.
+. *D-7 Where the results return.* (a) Hypatia pulls by `proofId` —
+  recommended; (b) echidnabot pushes; (c) both.
+. *D-8 echidnabot's template ABI.* (a) instantiate it with the route's
+  types; (b) delete it until it carries content.
+
+[[beyond]]
+== Beyond these repositories
+
+For the estate tracking list:
+
+* *echidna* (_not attached_): emit `echidna.prove.result/2` with digests and
+  closed prover slugs; export the checked proof artefact; run backends
+  sandboxed; Dedukti exchange for theory rechecks. proof-burrower's CI pins
+  an ECHIDNA that predates `/1` (`proof-burrower/.github/workflows/proof-safety.yml:169`).
+* *verisimdb* (_not attached_): the proof-status octad as a projection of
+  `proof.status/1`; the stapeln deployment with authentication; the row
+  endpoint `GET /api/v1/proof_attempts` that ProverRecommender assumes.
+* *panic-attack* (_not attached_): obligation shapes per PA category and
+  `@covers` reconciliation.
+* *residual-evidence-types, epistemic-types, echo-types* (_not attached_):
+  the Agda sources of `Retraction` and `Verdict`; their Rocq and Lean
+  recheck legs.
+* *absolute-zero, januskey* (_not attached_): CNO certificates as
+  work-order evidence; `reversible-core` for fleet mutations.
+* *Hosting and secrets:* one echidnabot on owned hardware with the sandbox
+  on and a bearer token; `HYPATIA_ECHIDNABOT_URL` and its token; later
+  `VERISIM_API_TOKEN`.
+* *Toolchains in CI:* Idris2 v0.7.0 in standards; Agda, Rocq and Dedukti for
+  theory legs; Creusot for echidnabot and proof-burrower; an Alethe checker
+  if SMT is ever to reach `proven`.
+* *This session's environment:* building Idris2 from source was refused by
+  the session's permission check; a SessionStart setup that installs Idris2,
+  Agda and Rocq from pinned releases would let a cloud session check the ABI
+  locally instead of only in CI.
+
+== Assumptions and limits
+
+* Three of the six subsystem maps, and all three route designs, were
+  produced by agents and spot-checked here; the load-bearing code claims
+  (no authentication, nil-UUID fallback, Coq relabelling, `PENDING` forever,
+  the `:control` classification, the robot-repo-automaton arm) were
+  re-opened and hold. The two Lean probes were reproduced independently.
+* Effort figures are the architects' estimates, not measurements.
+* No Idris2, Agda, Rocq, Creusot or Kani check was run in this session.
+* Nothing in this document is a ruling. The rulings it respects are the four
+  Kautz rulings of 2026-10-19, the DEED-K9 rulings of 2026-10-20 and
+  PROOF-POLICY of 2026-10-26.
