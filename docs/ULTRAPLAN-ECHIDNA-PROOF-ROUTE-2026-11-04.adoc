@@ -2,12 +2,12 @@
 // SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
 = Ultraplan: the echidna system — the proof route of the Kautz ladder, engineered and proved
 Jonathan D.A. Jewell (hyperpolymath)
-v0.1.0, 2026-11-04
+v0.2.0, 2026-11-04
 :toc: left
 :toclevels: 3
 :sectnums:
 :icons: font
-:status: DRAFT v0.1.0 — for owner review. Measured sections are facts with the command or file that produced them. Sections marked PROPOSED are design, not rulings. The decisions in <<decisions>> are open.
+:status: DRAFT v0.2.0 — for owner review; v0.2.0 folds in an adversarial critic pass (four claims corrected, schema-wide auth gap added, merged PR order). Measured sections are facts with the command or file that produced them. Sections marked PROPOSED are design, not rulings. The decisions in <<decisions>> are open.
 
 [.lead]
 The "echidna system" is the proof route of the Kautz-ladder ultraplan
@@ -44,8 +44,20 @@ everything between them is missing.
   Its runtime mirror `Verdict.attach_recheck/3`
   (`hypatia/lib/hypatia/verdict.ex:99-117`) has no caller in `lib/`, so no
   runtime finding has ever reached `sound`.
+* Even if a producer called `attach_recheck/3` today, it would bind a re-check
+  to the finding's _file_ only, not its line or rule, and it checks the
+  artefact digest's format without recomputing it
+  (`hypatia/lib/hypatia/verdict.ex:99-117`). One re-check of a file would
+  "confirm" every finding on that file.
 * Quarantine-as-retraction is proved (`Retraction.idr`) and tested; nothing
   calls `Quarantine.retract_dependents/1`.
+* echidnabot serves its whole GraphQL schema without authentication on
+  `0.0.0.0` (`echidnabot/src/main.rs:327-341`, `src/config.rs:313-315`).
+  Beyond submitting obligations, an unauthenticated caller can overwrite a
+  repository's webhook secret through `updateRepoSettings`
+  (`src/api/graphql.rs:522-540`), and so forge webhooks that start prover
+  runs and post to GitHub, or write training rows through
+  `recordTacticOutcome`. This is the most urgent item in the plan.
 * The K2 element, `ProverRecommender`, trains every five minutes on rows it
   synthesises from aggregates, because the store it reads is not deployed
   (`hypatia/lib/neural/prover_recommender.ex:136-189`); nothing reads its
@@ -69,14 +81,16 @@ Lean file), with any stub graded orange; and keep one record family,
 keyed by the ADR-008 content-id domains, as the store every later rung
 reads from.
 
-*Where it sits on the ladder.* Today the route is K0 with holes. It is the
-one subsystem that can claim the proof-route clauses of K2 and K4 honestly
-before any fix outcome is rescan-verified, because a kernel re-run on the
-same bytes _is_ a rescan. That claim is scoped in <<kautz>>; it holds for
-in-situ attempts and does not hold for goals transcribed from prose.
+*Where it sits on the ladder.* Today the route is K0 with holes. Its first
+honest claim is K0, scoped to proof-hole findings. It is the best first
+candidate for K4 on the estate, because a kernel re-run on the same bytes
+_is_ a rescan, so its training rows are true. It should not be the first to
+claim K2, which the ladder defines as a conjunction the proof route cannot
+satisfy alone. <<kautz>> scopes both.
 
-*Wave 0 now, everything else after numbers.* Five small changes close real
-holes and can land now (<<wave0>>). The pipe, the drain and the learning
+*Wave 0 now, everything else after numbers.* Twelve small changes close
+real holes, record what was measured and take the owner's rulings; they can
+land now (<<wave0>>). The pipe, the drain and the learning
 work stay behind the standing rule that nothing above Wave 1 is committed
 before the experiments have numbers
 (link:ULTRAPLAN-KAUTZ-LADDER-2026-10-19.adoc[] §Experiments).
@@ -197,9 +211,25 @@ sends robot-repo-automaton an "Apply tactic" _mutation_ request
 |wired, tested
 |`EchidnabotObligation` + `FleetDispatcher.dispatch_to_echidnabot`
 (`fleet_dispatcher.ex:388-429`). It bypasses Kin gate, rate limiter and
-quarantine; it drops the returned `proofId` (`fleet_dispatcher.ex:806-832`)
-and writes a manifest line that `dispatch-runner.sh` skips for lack of a
-`.strategy` (`gitbot-fleet/scripts/dispatch-runner.sh:366`).
+quarantine; it sends no `Authorization` header; it drops the returned
+`proofId` (`fleet_dispatcher.ex:806-832`). It also copies the claim and
+context text into `data/verisim/dispatch/pending.jsonl`
+(`fleet_dispatcher.ex:742`), a git-backed store, as a manifest line that
+`dispatch-runner.sh` skips for lack of a `.strategy`
+(`gitbot-fleet/scripts/dispatch-runner.sh:366`): a privacy leak and a dead
+letter.
+
+|echidnabot API → anyone
+|unauthenticated
+|The whole schema on `0.0.0.0`, no auth layer, no rate limit on `/graphql`
+(`echidnabot/src/main.rs:307-341`); `updateRepoSettings` rewrites
+`webhook_secret` (`src/api/graphql.rs:522-540`).
+
+|Re-check → finding
+|file only
+|`check_same_target` compares the file; no line or rule; the artefact digest
+is format-checked, not recomputed (`hypatia/lib/hypatia/verdict.ex:99-117`).
+`ProverRecheck` in the ABI carries no span or rule either.
 
 |echidnabot store → prover
 |missing
@@ -393,26 +423,35 @@ Aspects, beyond the two axes:
 *The elegant arm is A.* The recommendation departs from it in order, not in
 destination:
 
-. Land the Wave 0 fixes now (<<wave0>>). They close holes on any route.
-. Write the specification and the Idris2 ABI for the four seams the first
-  pipe crosses (ProverId, Token, Receipt with Binding, Severity) — A's
-  steps S1-S4, narrowed.
-. Build B's pipe on a draft branch against those types, so the first loop
-  runs on sealed wire formats rather than ad-hoc ones. It uses the existing
-  `Mechanical` support, which already means "a prover confirmed a hole".
-. Keep C's record family as the only thing the pipe writes, so every later
-  rung reads one store.
-. Add A's `Discharged` support, the lifecycle and shape functions, and C's
-  learning work only after the experiments in <<experiments>> have numbers
-  and the owner has ruled on them.
+. Land the Wave 0 changes now (<<wave0>>): authentication first, then the
+  other holes, the rulings, the measurements and the deeds. They are needed
+  on any route.
+. Run B's pipe as a *draft-only experiment*, on the one class HYP-01 already
+  defines: a re-check of a Lean `sorry` hole, using the existing
+  `Mechanical` support, bound to the finding's span and rule, inside the
+  shared sandbox. Its job is to produce numbers and to find what the types
+  must say, not to merge.
+. Then write the specification and the Idris2 ABI (A's steps, starting with
+  ProverId, Token, Receipt with Binding, Recheck and Severity), informed by
+  what the pipe found, with the theory laws in Agda.
+. Take the pipe out of draft against those types, writing only C's record
+  family so every later rung reads one store.
+. Add A's `Discharged` support for claim-proving obligations, the lifecycle
+  and shape functions, and C's learning work only after E7 and the owner's
+  rulings.
 
-Why depart: A alone gives no runtime value for about a quarter while the
-obligation endpoint stays unauthenticated. B alone would bake today's
-vocabulary drift into a working loop. The hybrid takes A's types for the
-seams it actually crosses, B's loop to prove them against real Lean, and
-C's store so nothing is written twice. It reaches a demonstrable,
-honestly-graded loop in roughly four weeks and the full A shape in roughly
-the quarter A needs anyway.
+<<merged-prs>> lists this as 23 stacked PRs.
+
+Why depart: the owner's rule puts numbers before any Wave 3 commitment, and
+Idris2 cannot run in this environment while the estate's GitHub runners are
+billing-blocked, so an ABI-first merge here would be a silent green. On the
+dependable and secure axis, two live holes outrank new types: an
+unauthenticated schema on `0.0.0.0` that can rewrite webhook secrets, and
+prover code execution. And the hole re-check is the one class that reaches
+runtime `sound` without new theory. The destination stays A's sealed ABI and
+`Discharged` support, with C's record model. A demonstrable,
+honestly-graded loop is about two weeks after Wave 0; the full A shape
+arrives in roughly the quarter A needs anyway.
 
 [[bypass]]
 === The proof route and exit 78
@@ -473,7 +512,16 @@ the obligation's.
 |`echidna.prove.result/2`: the `/1` fields plus prover version, goal digest,
 proof-artefact digest, target digest and diagnostics. A receipt binds an
 obligation only when all three digests match. Kernel stdout is diagnostic,
-never binding.
+never binding. It must be a new schema tag, and both consumers need a
+dual-accept release before ECHIDNA emits it: echidnabot rejects unknown
+fields (`src/dispatcher/prove_result.rs:78-79`), so extending `/1` would
+break it, while proof-burrower tolerates extra fields but refuses any tag
+other than `/1` (`crates/burrower-core/src/echidna_contract.rs:124-152`).
+
+|`Recheck`
+|`ProverRecheck` v2 binds a re-check to the finding's span and rule, not
+only its file, and its artefact digest is recomputed by the verifier, not
+taken on trust.
 
 |`Severity`, `Gen`
 |The total map from token and lifecycle state to grid severity; generated
@@ -483,13 +531,18 @@ Rust and Elixir tables, Nickel contracts and JCS golden fixtures.
 === Layer 2 — echidnabot, the drain
 
 Store transitions and a `proofObligation(id)` query; a drain task beside the
-scheduler loop that polls `PENDING` rows, checks path, size and digest,
-runs the prover in the existing Podman/bwrap executor
-(`echidnabot/src/executor/container.rs`, today default off,
-`src/config.rs:198-211`), parses the receipt, and records the transition.
-Authentication on the endpoint, loopback bind until it exists. A report-back
-writer for the grid. Creusot on the receipt parser and the store transition
-function.
+scheduler loop that polls `PENDING` rows, checks path, size and digest, and
+runs the prover in one of two ways only: delegated to ECHIDNA (the default,
+`local_isolation = false`), or locally in the Podman/bwrap executor
+(`local_isolation = true`, which refuses to start without a backend:
+`echidnabot/src/config.rs:196-207`, `src/main.rs:1349-1358`). Whether
+ECHIDNA sandboxes its own backends is _second-hand_ and becomes an explicit
+trust-boundary row. One shared sandbox profile applies everywhere a prover
+runs, including Hypatia's re-checker and any stub: read-only target, no
+network, no secrets, dropped capabilities (`unshare -rn` isolates the
+network only). Authentication on the whole schema, loopback bind by default,
+a rate limit on `/graphql`. A report-back writer and SARIF output for the
+grid. Creusot on the receipt parser and the store transition function.
 
 === Layer 3 — Hypatia, the warrant
 
@@ -633,6 +686,30 @@ instance of "dumb rules from smart learning" on this route.
 |deed
 |A2ML only in echidnabot
 
+|echidnabot, hypatia
+|One shared sandbox profile for every prover run (read-only target, no
+network, no secrets, dropped capabilities), with an escape experiment per
+prover; SHA-pinned prover images
+|code + experiment
+|`unshare -rn` in a probe only; Lean measured, other provers not
+
+|echidnabot
+|SARIF output for the proof row, beside the report-back
+|code
+|no
+
+|echidnabot, hypatia
+|Route counters on `/metrics`: obligations by state, receipts by token,
+refusals by reason, seconds per obligation, findings by level, stub flag;
+the estate has no OBSERVABILITY-POLICY yet
+|code + doc
+|`/metrics` exists in both; no route counters
+
+|echidnabot, proof-burrower
+|Dual-accept parsers for `prove.result` `/1` and `/2`
+|code
+|no
+
 |proof-burrower
 |`burrower ledger export --schema proof.attempt/1`; lockstep ADR-008 profile-C migration of content ids with echidnabot
 |code
@@ -662,8 +739,16 @@ instance of "dumb rules from smart learning" on this route.
 [[wave0]]
 === Wave 0 — now, on any route
 
-These close holes that exist today. None of them commits to Wave 3.
+These close holes that exist today, record what was measured, and take the
+rulings the rest depends on. None of them commits to Wave 3.
 
+. *echidnabot, first:* bearer authentication on the whole `/graphql`
+  schema, a loopback default bind, and a rate limit on `/graphql`; refuse to
+  start on a non-loopback address without a token. Planted negative:
+  unauthenticated `submitProofObligation`, `updateRepoSettings` and
+  `recordTacticOutcome` return 401; webhooks are unaffected.
+. *hypatia:* send the token from `HYPATIA_ECHIDNABOT_TOKEN`, and stop
+  copying obligation claim and context into `pending.jsonl` for echidnabot.
 . *hypatia:* close the eliminate ≥ 0.90 arm of the proof-obligation branch,
   which asks robot-repo-automaton to "Apply tactic"
   (`lib/fleet_dispatcher.ex:108-119`), and add the missing branch test.
@@ -678,6 +763,19 @@ These close holes that exist today. None of them commits to Wave 3.
   repository instead of `requeue-of-<id>` placeholders
   (`lib/learning_scheduler.ex:463-470`); until then, tag those rows and keep
   them out of training.
+. *standards:* record the owner's rulings on <<decisions>> under
+  `docs/decisions/`.
+. *standards:* record this session's measurements under `docs/experiments/`.
+. *standards:* the deed ladder clause: mapping row, `deed_lint` side
+  condition, template example. It refuses `K7` and `:state measured` without
+  `:evidence`.
+. *hypatia, then echidnabot and gitbot-fleet:* a chora deed each. None of the
+  three has one (hypatia's `*.deed` files are test fixtures), so none can
+  record a rung yet. No A2ML is touched; rungs are never written into
+  `NEUROSYM.a2ml`.
+. *standards:* widen the ADR-008 `proof-goal` and `prove-result` domains
+  after the content-id agreement experiment shows echidnabot, proof-burrower
+  and an Elixir implementation mint the same ids.
 
 [[ladder-proofs]]
 == The proof and theory ladder
@@ -702,8 +800,17 @@ SMT reaches `proven` only with a checked certificate; model checkers give
 |K0
 |Token order and weakest-step meet are lawful; token → HYP-01 level is
 monotone.
-|Idris2 (engineering) — or Agda with Rocq and Lean legs if ruled theory (D-4)
+|Agda, rechecked in Rocq and Lean (PROOF-POLICY lists lattices and orders as
+theory); the Idris2 ABI states the same laws for its own types and cites the
+Agda theorem as an `argued` correspondence row
 |`meet(proven, argued) = proven` is derivable.
+
+|2a
+|K0
+|`ProverRecheck` v2: a re-check binds a finding's span and rule, not only its
+file; an empty-output digest never binds.
+|Idris2
+|`RecheckOfOtherLineIsNotSound` or `EmptyOutputIsNotBinding` typechecks.
 
 |3
 |K0
@@ -738,7 +845,8 @@ confirming independent re-run; existing `patternNotSound`,
 |Retraction never raises a level; retracting `(prover, version)` kills exactly
 the verdicts resting on it.
 |Idris2 encoding; Agda source in residual-evidence-types, rechecked in Rocq
-and Lean via Dedukti first
+(Dedukti transport first) and Lean (re-proved by hand until a released
+Lambdapi Lean exporter exists, PROOF-POLICY §2)
 |Retracting an unrelated version lowers a verdict.
 
 |8
@@ -773,7 +881,7 @@ write.
 |K2 / K4 enabler
 |The status fold over attempt multisets is a join on the token lattice:
 commutative, associative, idempotent, monotone.
-|Agda, rechecked in Rocq and Lean
+|Agda, rechecked in Rocq and Lean (Lean leg re-proved)
 |Folding the same attempts in two orders gives two statuses.
 
 |13
@@ -824,11 +932,13 @@ re-run; the echidnabot row has zero lifetime failures and no grey reason.
 |Not on this route. No paid reviewer touches proofs.
 |Record nothing rather than a vacuous figure.
 
-|K2 (proof-route clause)
+|K2 (proof-route clause only)
 |ProverRecommender v2 beats the bar on held-out, portfolio-complete
-attempts.
-|MRR ≤ max(0.66, frequency baseline). The rung as a whole stays unclaimed
-until E5 shows the pools change dispatch precision.
+attempts. Recorded as `(rung :id K2 :scope proof-route-mrr …)`, never as
+the rung.
+|MRR ≤ max(0.66, frequency baseline). K2 is a conjunction (rescan-trained
+pools, weekly demotion with a reason, MRR); the proof route can satisfy only
+one conjunct, so it should not be the first subsystem to claim K2.
 
 |K3
 |ECHIDNA's formaliser (_second-hand_) or a learned burrower ranker proposes
@@ -836,10 +946,14 @@ goals; the kernel accepts or rejects.
 |All proposals accepted or all rejected; report the vacuity rate beside the
 acceptance rate.
 
-|K4
+|K4 (best first candidate, `:scope proof-route`)
 |Receipts are executor-verified training rows; a learned order is
-distilled into `lib/rules` with provenance.
-|The distilled rule cannot resolve a cited result id.
+distilled into `lib/rules` with `@distilled_from` over result ids, which
+meets the ladder's falsifier literally.
+|The distilled rule cannot resolve a cited result id. The claim also needs
+rows only from the authenticated, sandboxed drain; E6 beating the frequency
+baseline (otherwise the distilled rule _is_ the baseline); and an
+independent evaluator holding the falsifier corpus.
 
 |K5, K6
 |Deferred. Record now the fixed rule any learned invocation policy must
@@ -847,6 +961,21 @@ beat: "prover source in situ → re-run its own prover; transcribed goal →
 ECHIDNA portfolio; SMT only → report_only".
 |Ablation to that rule performs as well.
 |===
+
+*Where the combined route departs from the ultraplan's path.*
+
+. The first loop is a hole re-check, not ECHIDNA discharging obligations
+  shaped from PA categories. That is K0 for proof-hole findings, not Wave 3
+  discharge, and is labelled so.
+. Until the stapeln VeriSimDB exists, the octad and panic-attack's `@covers`
+  reconciliation are stood in for by flat files and Hypatia-internal
+  reconciliation, labelled "not VeriSimDB".
+. The ultraplan's K0 asks every reporter to emit SARIF; echidnabot emits none
+  yet, so the grid row ships with SARIF, not only a report-back.
+. The ultraplan proposes `(ladder :rung K2 :falsifier :measured)`; this plan
+  needs the nested, scoped form `(ladder (rung :id … :scope …))` because a
+  sub-claim such as the proof-route MRR must not read as the whole rung
+  (<<decisions>> D-4).
 
 *Where it differs from the fix-fleet climb.* The fleet reaches K2 only
 through rescan-verified fix outcomes, which wait for the Wave 1 evaluator
@@ -976,60 +1105,66 @@ worktree.
 |A list of stale citations.
 |Zero unverified citations.
 
-|P1 Wave 0
-|One agent per fix in <<wave0>>, worktree each; one reviewer per PR.
-|Five small PRs (hypatia, echidnabot).
-|Each repo's own checks pass; the planted negative of each fix is refused.
-
-|P2 rulings
+|P1 rulings
 |Orchestrator only.
 |Owner answers to <<decisions>> through the selector, recorded under
-`docs/decisions/`.
+`docs/decisions/` (merged row 8).
 |Every D-question answered or explicitly deferred.
 
-|P3 specification and ABI
-|Spec author; Idris2 author; a separate adversary who writes programs that
-must _not_ typecheck; generator author.
-|Stacked standards PRs: (a) ProverId and Token, (b) Receipt and Binding,
-(c) Severity and generated tables, (d) record specs and ADR-008 amendment.
-|CI Idris2 build; accept/reject gate; generated output byte-stable.
+|P2 Wave 0
+|One agent per row 1-7 and 9-12 of <<merged-prs>>, a worktree each; one
+reviewer per PR; a security reviewer on row 1.
+|Eleven small PRs in echidnabot, hypatia and standards; deeds for hypatia,
+echidnabot and gitbot-fleet.
+|Each repo's own checks pass; the planted negative of each change is
+refused; no A2ML created.
 
-|P4 experiments
-|Three runners (Lean; Rust ids; Elixir) and one skeptic who tries to refute
-each number.
-|Numbers in `docs/experiments/`.
+|P3 experiments
+|Runners for Lean, Rust ids and Elixir; one skeptic who tries to refute each
+number.
+|Numbers in `docs/experiments/`: auth exploit and its refusal, sandbox
+escape per prover, line binding, receipt compatibility, digest stability
+across machines, content-id agreement, vacuity.
 |Each experiment states what it decided.
 
-|P5 pipe (draft)
+|P4 pipe (draft only)
 |echidnabot drain agent; Hypatia route agent; stub author; security
-reviewer.
+reviewer (merged row 13).
 |Draft PRs in echidnabot and Hypatia; the container end-to-end script.
 |One positive and three negative cases pass; the grid row is orange with
-the stub in the path; E7-lite numbers recorded.
+the stub in the path; E7-lite numbers recorded; nothing merged.
 
-|P6 owner go
+|P5 owner go
 |Orchestrator only.
-|Ruling on the E7-lite numbers.
+|Ruling on the E7-lite numbers (D-9).
 |Go, change or stop.
 
-|P7 harden and surface
-|Auth and sandbox agent; Verdict v2 agent; grid and deed agents; Creusot
-author; a reviewer per repository.
-|PRs out of draft; grid addendum; deed ladder clause; vendored-pin bump in
-gitbot-fleet.
-|Each repo's CI green; `deed_lint` and `verdict-grid-test.sh` pass; no A2ML
-created.
+|P6 specification, ABI and theory
+|Spec author; Idris2 author; an adversary who writes programs that must
+_not_ typecheck; generator author; Agda author with Rocq and Lean leg
+authors (merged rows 14-15).
+|Stacked standards PRs.
+|Idris2 and Agda green on an owned runner; accept/reject gate; generated
+output byte-stable; every theory leg proven or waived.
 
-|P8 learning (after E2 and the portfolio run)
-|One ML agent; one independent evaluator who alone holds the held-out
-split.
-|E6 report; distilled rule; rung clauses.
-|Evaluator-computed MRR above the bar, or `:state refuted` recorded.
+|P7 harden and surface
+|Verdict v2 agent; drain and store agent with Creusot and TLA+; dual-accept
+agent; grid agent; a reviewer per repository (merged rows 16-20).
+|PRs out of draft; grid row with SARIF; vendored-pin bump in gitbot-fleet.
+|Each repo's CI green; `verdict-grid-test.sh` passes.
+
+|P8 discharge and learning (after E7, D-3, E2 and the portfolio run)
+|`Discharged` agent; one ML agent; one independent evaluator who alone holds
+the held-out split (merged rows 21-22).
+|`Discharged` support; E6 report; distilled rule; rung clauses.
+|Rejects fire; evaluator-computed MRR above the bar, or `:state refuted`
+recorded.
 |===
 
-Size: P0-P5 fit one session of under ten agents per phase. P7 and P8 need
-owned hardware, the ECHIDNA receipt `/2` upstream, and Idris2, Creusot and
-Agda in CI.
+Size: P0-P4 fit one session of under ten agents per phase and run in a
+cloud container with Lean, z3, Elixir and cargo. P6-P8 need an owned runner
+(the estate's GitHub runners are billing-blocked), the ECHIDNA receipt `/2`
+upstream, and Idris2, Agda, Rocq, Creusot and TLC.
 
 [[decisions]]
 == Decisions for the owner
@@ -1043,12 +1178,18 @@ is marked where it differs.
   on Hypatia's ABI.
 . *D-2 Route order.* (a) A, proof-first in full — elegant; (b) the hybrid in
   <<recommendation>> — recommended; (c) B, pipe-first only.
-. *D-3 Which tokens yield `sound`.* (a) `proven` only; (b) `proven` and
-  `proven-with-postulates` with the axioms listed — recommended, matches
+. *D-3 Which tokens let a discharged obligation reach `sound`.* (A hole
+  re-check is separate: it confirms when the prover's own diagnostic states
+  the hole at the finding's span, and a clean run refutes.) (a) `proven`
+  only; (b) `proven` and `proven-with-postulates` with the axioms listed —
+  recommended, matches
   the ledger's own definition.
-. *D-4 Are the token-lattice laws engineering or theory?* (a) theory: Agda
-  with Rocq and Lean legs — elegant; (b) engineering: Idris2 —
-  recommended, because the statement names this route's types.
+. *D-4 The rung clause.* (a) nested and scoped,
+  `(neurosym (ladder (rung :id :scope :state :falsifier :evidence :measured)))`
+  — elegant and recommended, the only form that can scope a sub-claim;
+  (b) the ultraplan's flat `(ladder :rung …)`. (The token-lattice laws are
+  not a decision: PROOF-POLICY already lists lattices and orders as theory,
+  so they go to Agda with Rocq and Lean legs.)
 . *D-5 Grid placement.* (a) a conformance-family proof lane with its own
   comment; (b) an echidnabot report-back row in the findings family,
   advisory — recommended, no renderer change.
@@ -1059,6 +1200,45 @@ is marked where it differs.
   recommended; (b) echidnabot pushes; (c) both.
 . *D-8 echidnabot's template ABI.* (a) instantiate it with the route's
   types; (b) delete it until it carries content.
+. *D-9 Do stub numbers count?* E7-lite runs real Lean behind a stub
+  ECHIDNA. (a) They count as numbers for committing to the pipe, not to
+  ECHIDNA discharge — recommended; (b) only numbers through a real ECHIDNA
+  count.
+
+[[merged-prs]]
+== The merged order of work (PROPOSED)
+
+Small stacked PRs, one seam each. Rows 1-12 are Wave 0 and can land now;
+rows 13-23 wait for the experiments and rulings named in their gate.
+
+[cols="1,2,4,1,2,3",options="header"]
+|===
+|# |Repository |Title |Size |After |Gate
+
+|1 |echidnabot |Bearer auth on all of `/graphql`, loopback default, `/graphql` rate limit |S |— |Unauthenticated mutations return 401; non-loopback without a token refuses to start
+|2 |hypatia |Token header from `HYPATIA_ECHIDNABOT_TOKEN`; no claim or context in `pending.jsonl` |S |1 |Header test; manifest test
+|3 |hypatia |Proof-obligation eliminate arm never dispatches robot-repo-automaton; branch test |XS |— |No `:auto_fix_request` at any tier
+|4 |echidnabot |No nil-UUID fallback |XS |— |Error unit test; protocol contract green
+|5 |echidnabot |Refuse unknown prover slugs |XS |— |Planted slug gives an error and no row
+|6 |echidnabot |Fix the env-var test race; run `--lib` in CI |S |— |Three green runs under a timeout
+|7 |hypatia |No placeholder requeue obligations |S |3 |No `requeue-of-` claim sent
+|8 |standards |Proof-route rulings record |XS |— |Selector answers with dates
+|9 |standards |Experiment records for this session's measurements |XS |— |Each number cites its log
+|10 |standards |Deed ladder clause: mapping row, `deed_lint` condition, template example |S |8 |Refuses `K7` and `measured` without evidence
+|11 |hypatia, then echidnabot, gitbot-fleet |Chora deed per repository |M |10 |`deed_lint` green; no A2ML touched
+|12 |standards |Widen ADR-008 proof domains |XS |9 |Identical ids from Rust and Elixir
+|13 |echidnabot + hypatia (draft) |The pipe: read-back, drain, stub ECHIDNA with real Lean in the shared sandbox, `ProofRoute`, report-back and SARIF; auth, sandbox, line-binding and burrower-compatibility experiments |L |1-5, 7, 8 |All controls print; stub row orange; PRs stay draft
+|14 |standards |Proof-route spec (PROPOSED) and Idris2 package, generated fixtures, CI on an owned runner |L |8, 13 |Idris2 green; rejects refused; generated output byte-stable
+|15 |standards (with the Agda home) |Token order and meet, level monotonicity, fold join, retraction never raises: Agda, Rocq leg, Lean leg re-proved |M |8 |Every leg proven or waived, route recorded
+|16 |hypatia |`ProverRecheck` v2 with span and rule binding; sandboxed artefact re-run |M |13, 14 |`RecheckOfOtherLineIsNotSound` refused; `LeanHoleRecheckSound` still accepted
+|17 |echidnabot, proof-burrower |Dual-accept `prove.result` `/1` and `/2` |S |14 |Golden `/2` accepted by both
+|18 |echidnabot |Lifecycle store, `proofObligation` query, sandboxed drain; Creusot; TLA+ |L |1, 13, 14, 17 |Illegal transitions refused; sandbox off means refused; TLC bounds recorded
+|19 |hypatia |`ProofRoute` submit and ingest, `proof.attempt`/`proof.status` store, funnel attach for hole re-checks |M |16, 18 |`sorry.lean` reaches `sound`; a tampered file stays `epi`
+|20 |standards + echidnabot |Grid row with SARIF and report-back; severity table; level shown on the grid |S |19 |Stub orange, real blue, `proven` emits no finding
+|21 |hypatia + standards |`Discharged` support for claim-proving obligations |M |19, E7, D-3 |Rejects tested-only, SMT without certificate, empty output, goal mismatch
+|22 |hypatia |ProverRecommender v2, `mix hypatia.prover_mrr`, distillation with `@distilled_from` |M |19, portfolio data |Evaluator-held split beats the bar, or `:state refuted`
+|23 |proof-burrower |Kani harnesses on the wasm FFI seam |S |— |A planted off-by-one fails; bounds recorded
+|===
 
 [[beyond]]
 == Beyond these repositories
@@ -1092,11 +1272,18 @@ For the estate tracking list:
 
 == Assumptions and limits
 
-* Three of the six subsystem maps, and all three route designs, were
-  produced by agents and spot-checked here; the load-bearing code claims
-  (no authentication, nil-UUID fallback, Coq relabelling, `PENDING` forever,
-  the `:control` classification, the robot-repo-automaton arm) were
-  re-opened and hold. The two Lean probes were reproduced independently.
+* The six subsystem maps and the three route designs were produced by
+  agents. An independent critic then tried to refute the ten most
+  load-bearing claims: six held, four were refuted and are corrected above
+  (the meaning of `Mechanical/confirms` for hole findings; how each
+  consumer treats unknown receipt fields; what `local_isolation = false`
+  means; which repositories have a chora deed). The critic's security
+  finding (the whole GraphQL schema is unauthenticated) and every other
+  code claim this plan relies on were re-opened by hand and hold. The two
+  Lean probes were reproduced independently.
+* The three designs disagree on names: the record family, the lifecycle
+  states, the ABI's home and the rung clause. This plan picks one of each
+  and lists the open ones in <<decisions>>.
 * Effort figures are the architects' estimates, not measurements.
 * No Idris2, Agda, Rocq, Creusot or Kani check was run in this session.
 * Nothing in this document is a ruling. The rulings it respects are the four
