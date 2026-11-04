@@ -169,6 +169,11 @@ describe("extra rules", () => {
   test("a comment ends a boolean, as it ends any token (deed.abnf token-sep)", () => {
     expect(verdict(HDR + "(repo-deed :schema-version \"1\" :a #t; note\n :b #f)\n")).toBeNull();
   });
+  test("a boolean's lexeme is exactly #t or #f, whatever follows it", () => {
+    const [, items] = validate(HDR + "(repo-deed :schema-version \"1\" :a #t; note\n :b #f)\n");
+    const values = items.filter((it) => it[0] === "field" && it[1] !== "schema-version").map((it) => it[2]);
+    expect(values).toEqual([["boolean", "#t"], ["boolean", "#f"]]);
+  });
   test("non-string schema-version", () => {
     expect(verdict(HDR + "(repo-deed :schema-version 1)\n")).toMatch(/must be a STRING/);
   });

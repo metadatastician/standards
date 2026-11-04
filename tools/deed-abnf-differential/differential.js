@@ -89,8 +89,10 @@ function gateVerdict(text) {
   }
 }
 
+// Sorted at every level, so a --seed picks the same documents on any
+// filesystem and a CI failure reproduces locally.
 function committedDeeds(dir, out = []) {
-  for (const name of readdirSync(dir)) {
+  for (const name of readdirSync(dir).sort()) {
     if (name === ".git" || name === "node_modules" || name === "target") continue;
     const p = join(dir, name);
     const st = statSync(p);
@@ -102,21 +104,24 @@ function committedDeeds(dir, out = []) {
   return out;
 }
 
+// The (egress …) clause's text. Strings and comments are skipped both while
+// finding the clause and while balancing its parentheses: a comment may hold
+// any text-char, a parenthesis included (`; disabled)`).
 function egressText(t) {
-  const i = t.indexOf("(egress");
-  if (i < 0) return null;
   let depth = 0;
-  let inStr = false;
-  for (let k = i; k < t.length; k++) {
+  let start = -1;
+  for (let k = 0; k < t.length; k++) {
     const c = t[k];
-    if (inStr) {
-      if (c === "\\") k++;
-      else if (c === '"') inStr = false;
-      continue;
+    if (c === '"') {
+      for (k++; k < t.length && t[k] !== '"'; k++) if (t[k] === "\\") k++;
+    } else if (c === ";") {
+      while (k < t.length && t[k] !== "\n") k++;
+    } else if (c === "(") {
+      if (start < 0 && t.startsWith("(egress", k) && /[\s)]/.test(t[k + 7] ?? "")) start = k;
+      if (start >= 0) depth++;
+    } else if (c === ")" && start >= 0 && --depth === 0) {
+      return t.slice(start, k + 1);
     }
-    if (c === '"') inStr = true;
-    else if (c === "(") depth++;
-    else if (c === ")" && --depth === 0) return t.slice(i, k + 1);
   }
   return null;
 }

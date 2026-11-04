@@ -261,7 +261,8 @@ function lexHashForm(lx) {
       );
     }
     lx.i += 2;
-    return ["boolean", two];
+    // The lexeme is the two characters; `two` also holds the one after it.
+    return ["boolean", two.slice(0, 2)];
   }
   throw new LintError('unrecognised #-form: only #t, #f, #u5"…", #u8"…" are legal', lx.line());
 }
