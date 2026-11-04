@@ -49,7 +49,7 @@ Every other "what is this repo" doc is now a thin pointer back to these two
 | the `*-protocol/` dirs
 
 | The **readiness grades** — ARG / FRG / CRG / TRG
-| link:adoption-readiness-grades/[ARG], link:foundations-readiness-grades/[FRG], link:component-readiness-grades/[CRG], link:toolchain-readiness-grades/[TRG]
+| link:4-readiness/adoption-readiness-grades/[ARG], link:4-readiness/foundations-readiness-grades/[FRG], link:4-readiness/component-readiness-grades/[CRG], link:4-readiness/toolchain-readiness-grades/[TRG]
 
 | Scope a bot's work across multiple repositories or estates
 | link:docs/MULTI-REPOSITORY-SCOPE-STANDARD.adoc[Multi-Repository Scope Standard] + link:docs/repo-scope.example.toml[declaration example]
@@ -87,7 +87,7 @@ frozen snapshots. See link:REGISTRY.adoc[REGISTRY.adoc] for details.
 This repository serves as the canonical source for policies, templates, and specifications governing all Hyperpolymath projects. It provides:
 
 * **Language Policy** -- Which languages and tools are permitted across the ecosystem
-* **Language-Maturation Grades** -- link:adoption-readiness-grades/[ARG (Adoption Readiness)] + link:foundations-readiness-grades/[FRG (Foundations Readiness)] per-language profile templates; aggregated into the link:https://github.com/hyperpolymath/nextgen-languages[nextgen-languages] dashboard. TRG (Trust) + CRG (Compliance) profile templates live under each framework's `templates/` directory.
+* **Language-Maturation Grades** -- link:4-readiness/adoption-readiness-grades/[ARG (Adoption Readiness)] + link:4-readiness/foundations-readiness-grades/[FRG (Foundations Readiness)] per-language profile templates; aggregated into the link:https://github.com/hyperpolymath/nextgen-languages[nextgen-languages] dashboard. TRG (Trust) + CRG (Compliance) profile templates live under each framework's `templates/` directory.
 * **Machine-readable metadata** -- repo facts as clauses of `<repo>_chora.deed` (grammar link:1-formats/deed/spec/abnf/deed.abnf[`deed.abnf`]), contracts as `*.k9.ncl`, agent coordination as `coordination.k9` (see <<Machine-Readable Metadata>>)
 * **Build System** -- Mustfile/justfile (no Makefiles)
 * **Stable Release Gate** -- link:3-practice/release-pre-flight/V1-GATE.adoc[hard `v1.0.0` audit requirements] for all repos and multi-repo systems

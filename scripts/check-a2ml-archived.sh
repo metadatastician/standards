@@ -26,7 +26,9 @@
 # that REF did not list has JOINED the ledger and fails, whatever the line
 # count. (Archiving one file while ledgering a new one keeps the count, so a
 # count-only ratchet cannot see that swap.) A REF with no ledger yet is the
-# bootstrap and passes.
+# bootstrap and passes. One carry-over is allowed: a file the base ledger
+# listed that was renamed with identical content (git R100) keeps its entry
+# at the new path, because a move adds no fact.
 #
 # Usage: check-a2ml-archived.sh [--base REF] [ROOT]   (ROOT defaults to .)
 # Exit:  0 clean · 1 violation · 2 setup error (no ledger, unreadable root,
@@ -93,9 +95,15 @@ if [ -n "$BASE" ]; then
   git -C "$ROOT" rev-parse --verify -q "$BASE^{commit}" >/dev/null \
     || { echo "ERROR: --base $BASE does not resolve to a commit" >&2; exit 2; }
   if base_ledger="$(git -C "$ROOT" show "$BASE:$LEDGER_REL" 2>/dev/null)"; then
-    declare -A was=()
+    declare -A was=() moved_from=()
     while IFS=$'\t' read -r _ entry; do was[$entry]=1; done < <(printf '%s\n' "$base_ledger" | ledger_entries)
+    # A ledgered file renamed with its content unchanged (git R100) keeps its
+    # entry: a move adds no fact. Any edit makes it a different file.
+    while IFS= read -r -d '' st && IFS= read -r -d '' old && IFS= read -r -d '' new; do
+      [ "$st" = R100 ] && moved_from[$new]="$old"
+    done < <(git -C "$ROOT" diff -z --find-renames=100% --diff-filter=R --name-status "$BASE" 2>/dev/null)
     for entry in "${!listed[@]}"; do
+      if [ -n "${moved_from[$entry]:-}" ] && [ -n "${was[${moved_from[$entry]}]:-}" ]; then continue; fi
       if [ -z "${was[$entry]:-}" ]; then
         echo "::error file=$LEDGER_REL,line=${listed[$entry]}::ledger entry '$entry' is not in the ledger at $BASE: nothing joins it (A2ML is retired)"
         fail=1

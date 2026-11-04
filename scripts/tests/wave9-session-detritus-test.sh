@@ -46,10 +46,10 @@ for preserved in \
   9-archive/a2ml/docs/archive/reorg-leftovers/K9-AUTOMATION-SPEC.a2ml \
   9-archive/a2ml/docs/archive/reorg-leftovers/CRG-TRG-RSR-MAPPING.a2ml \
   9-archive/a2ml/docs/archive/reorg-leftovers/TEMPLATE-VERSIONING-SPEC.a2ml \
-  toolchain-readiness-grades/testing/LANGUAGE-TESTING-STANDARDS.adoc \
-  toolchain-readiness-grades/testing/affinescript-testing-guide.adoc \
-  toolchain-readiness-grades/testing/julia-testing-tools-guide.adoc \
-  toolchain-readiness-grades/testing/language-testing-guide-TEMPLATE.adoc; do
+  4-readiness/toolchain-readiness-grades/testing/LANGUAGE-TESTING-STANDARDS.adoc \
+  4-readiness/toolchain-readiness-grades/testing/affinescript-testing-guide.adoc \
+  4-readiness/toolchain-readiness-grades/testing/julia-testing-tools-guide.adoc \
+  4-readiness/toolchain-readiness-grades/testing/language-testing-guide-TEMPLATE.adoc; do
   assert_present "$preserved"
 done
 

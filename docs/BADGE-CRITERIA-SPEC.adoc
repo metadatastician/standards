@@ -37,19 +37,19 @@ normative:
 | Axis | Normative source | Subject it grades
 
 | CRG
-| `component-readiness-grades/COMPONENT-READINESS-GRADES.adoc` + `.a2ml` (v2.0 in-repo header; v2.2 referenced by the profile templates)
+| `4-readiness/component-readiness-grades/COMPONENT-READINESS-GRADES.adoc` + `.a2ml` (v2.0 in-repo header; v2.2 referenced by the profile templates)
 | A released component: crate, library, binary, plugin, schema, vendored artefact
 
 | TRG
-| `toolchain-readiness-grades/TOOLCHAIN-READINESS-GRADES.adoc` + `.a2ml` (v1.0)
+| `4-readiness/toolchain-readiness-grades/TOOLCHAIN-READINESS-GRADES.adoc` + `.a2ml` (v1.0)
 | A toolchain component of a language
 
 | ARG
-| `adoption-readiness-grades/ADOPTION-READINESS-GRADES.adoc` + `.a2ml` (v1.0)
+| `4-readiness/adoption-readiness-grades/ADOPTION-READINESS-GRADES.adoc` + `.a2ml` (v1.0)
 | A language's user-facing adoption surface
 
 | FRG
-| `foundations-readiness-grades/FOUNDATIONS-READINESS-GRADES.adoc` + `.a2ml` (v1.0)
+| `4-readiness/foundations-readiness-grades/FOUNDATIONS-READINESS-GRADES.adoc` + `.a2ml` (v1.0)
 | A language's typing-discipline formalisation
 |===
 
@@ -611,11 +611,11 @@ needs no ruling here. Listed only so the question is not lost.
   exist; none of BC-M4..BC-M11 has been executed.
 * Whether a VeriSimDB instance is deployed anywhere outside this
   repository. The conclusion "inert" rests on the absence of a reference
-  from the two hypatia-scan workflows and on the `component-readiness-grades`
+  from the two hypatia-scan workflows and on the `4-readiness/component-readiness-grades`
   scorecard's own statement; it is not a deployment audit.
 * The CRG version number -- *resolved on 2026-09-04, after this draft was
   written.* Three files agree on *v2.0*:
-  `component-readiness-grades/COMPONENT-READINESS-GRADES.adoc` line 3,
+  `4-readiness/component-readiness-grades/COMPONENT-READINESS-GRADES.adoc` line 3,
   the same directory's `.a2ml` line 11 (`(version "2.0")`), and
   `hypatia-rules/crg-overclaim-detector.a2ml` line 242. Only
   `templates/CRG-PROFILE-TEMPLATE.adoc` claims v2.2 (lines 17 and 25), and
