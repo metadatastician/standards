@@ -28,7 +28,7 @@ jobs:
       - name: Checkout policy source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          repository: hyperpolymath/standards
+          repository: metadatastician/standards
           ref: ${{ job.workflow_sha }}
           path: .standards-checkout
           sparse-checkout: |
@@ -64,11 +64,11 @@ jobs:
       - name: Checkout policy source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          repository: hyperpolymath/standards
+          repository: metadatastician/standards
           ref: ${{ job.workflow_sha }}
           path: .standards-checkout
           sparse-checkout: |
-            rhodium-standard-repositories/actions-allowlist
+            config/settings/actions-allowlist.json
             scripts/check-actions-policy.sh
           sparse-checkout-cone-mode: false
 
@@ -95,7 +95,7 @@ jobs:
           set +e
           bash .standards-checkout/scripts/check-actions-policy.sh \
             "$GITHUB_REPOSITORY" \
-            .standards-checkout/rhodium-standard-repositories/actions-allowlist/allowed-actions.json
+            .standards-checkout/config/settings/actions-allowlist.json
           rc=$?
           set -e
           if [ "$rc" -eq 3 ]; then

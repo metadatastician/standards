@@ -93,6 +93,34 @@ echo '[{"severity":"low","rule_module":"code_safety","type":"unwrap_without_chec
 bash "$S" "$T/in.sarif" "$T/f.json" "$T/b.json" "$T/out.sarif" >/dev/null 2>&1
 ck "an empty SARIF survives filtering" 0 "$(count "$T/out.sarif")"
 
+# Two severities of the same rule and file: suppress only the one actually
+# acknowledged. In legacy SARIF without severity provenance, retain both.
+cat > "$T/collision-findings.json" <<'EOF'
+[{"severity":"critical","rule_module":"code_safety","type":"unsafe_block","file":"src/a.rs"},
+ {"severity":"high","rule_module":"code_safety","type":"unsafe_block","file":"src/a.rs"}]
+EOF
+cat > "$T/collision-baseline.json" <<'EOF'
+[{"severity":"critical","rule_module":"code_safety","type":"unsafe_block","file":"src/a.rs"}]
+EOF
+cat > "$T/collision.sarif" <<'EOF'
+{"version":"2.1.0","runs":[{"results":[
+ {"ruleId":"hypatia/code_safety/unsafe_block","properties":{"hypatia.severity":"critical"},"locations":[{"physicalLocation":{"artifactLocation":{"uri":"src/a.rs"}}}]},
+ {"ruleId":"hypatia/code_safety/unsafe_block","properties":{"hypatia.severity":"high"},"locations":[{"physicalLocation":{"artifactLocation":{"uri":"src/a.rs"}}}]}
+]}]}
+EOF
+bash "$S" "$T/collision.sarif" "$T/collision-findings.json" "$T/collision-baseline.json" "$T/out.sarif" >/dev/null 2>&1
+ck "matching severity is suppressed, unacknowledged severity survives" high \
+  "$(jq -r '.runs[0].results[0].properties["hypatia.severity"]' "$T/out.sarif")"
+ck "one of two colliding findings survives" 1 "$(count "$T/out.sarif")"
+jq 'del(.runs[].results[].properties)' "$T/collision.sarif" > "$T/legacy.sarif"
+bash "$S" "$T/legacy.sarif" "$T/collision-findings.json" "$T/collision-baseline.json" "$T/out.sarif" >/dev/null 2>&1
+ck "ambiguous legacy SARIF is left unfiltered" 2 "$(count "$T/out.sarif")"
+# Extra results that are not accounted for by scanner JSON must never be
+# suppressed just because one result has the same key.
+jq '.runs[0].results += [.runs[0].results[0]]' "$T/collision.sarif" > "$T/extra.sarif"
+bash "$S" "$T/extra.sarif" "$T/collision-findings.json" "$T/collision-baseline.json" "$T/out.sarif" >/dev/null 2>&1
+ck "unaccounted duplicate results fail open" 3 "$(count "$T/out.sarif")"
+
 # The blocking workflow needs affirmative evidence that filtering completed.
 export GITHUB_OUTPUT="$T/filter-output"
 : > "$GITHUB_OUTPUT"
@@ -108,6 +136,34 @@ ck "missing validator cannot report filtering success" '' "$(cat "$GITHUB_OUTPUT
 : > "$GITHUB_OUTPUT"
 bash "$S" "$T/in.sarif" "$T/empty.json" "$T/b.json" "$T/out.sarif" > "$T/filter.log" 2>&1
 ck "completed zero-match filtering is reported" 'filtered=true' "$(cat "$GITHUB_OUTPUT")"
+# A malformed or multiple-document response is not confirmation that zero
+# findings were suppressed. Leave SARIF untouched and never arm the gate.
+for payload in '{"findings_suppressed":null}' '{"findings_suppressed":[]} {"findings_suppressed":[]}'; do
+  cat > "$T/invalid-validator" <<SCRIPT
+#!/usr/bin/env bash
+cat <<'JSON'
+$payload
+JSON
+SCRIPT
+  ck "invalid-response fixture emits its intended JSON" "$payload" "$(bash "$T/invalid-validator")"
+  : > "$GITHUB_OUTPUT"
+  APPLY_BASELINE="$T/invalid-validator" bash "$S" "$T/in.sarif" "$T/f.json" "$T/b.json" "$T/out.sarif" > "$T/filter.log" 2>&1
+  ck "invalid matcher response leaves SARIF untouched" 3 "$(count "$T/out.sarif")"
+  ck "invalid matcher response cannot claim success" '' "$(cat "$GITHUB_OUTPUT")"
+done
+cat > "$T/invalid-validator" <<'SCRIPT'
+#!/usr/bin/env bash
+printf '%s\n' '{"findings_suppressed":[]}'
+exit 1
+SCRIPT
+matcher_status=0
+matcher_response=$(bash "$T/invalid-validator") || matcher_status=$?
+ck "failed matcher fixture returns nonzero" 1 "$matcher_status"
+ck "failed matcher fixture emits valid JSON" '{"findings_suppressed":[]}' "$matcher_response"
+: > "$GITHUB_OUTPUT"
+APPLY_BASELINE="$T/invalid-validator" bash "$S" "$T/in.sarif" "$T/f.json" "$T/b.json" "$T/out.sarif" > "$T/filter.log" 2>&1
+ck "failed matcher leaves SARIF untouched" 3 "$(count "$T/out.sarif")"
+ck "failed matcher cannot claim success" '' "$(cat "$GITHUB_OUTPUT")"
 
 printf '\n  %d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

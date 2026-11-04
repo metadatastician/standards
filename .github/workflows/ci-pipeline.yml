@@ -319,7 +319,7 @@ jobs:
     name: Secret scanning
     # Deliberately NOT gated on `detect`: a repo with no recognised ecosystem
     # can still be leaking credentials.
-    uses: hyperpolymath/standards/.github/workflows/secret-scanner-reusable.yml@d55304a01b5260b0511aae0d14ed8b8770b00293
+    uses: metadatastician/standards/.github/workflows/secret-scanner-reusable.yml@d55304a01b5260b0511aae0d14ed8b8770b00293
     with:
       runs-on: ${{ inputs.runs-on }}
 
@@ -330,7 +330,7 @@ jobs:
     name: Rust
     needs: detect
     if: ${{ needs.detect.outputs.has_rust == 'true' }}
-    uses: hyperpolymath/standards/.github/workflows/rust-ci-reusable.yml@d55304a01b5260b0511aae0d14ed8b8770b00293
+    uses: metadatastician/standards/.github/workflows/rust-ci-reusable.yml@d55304a01b5260b0511aae0d14ed8b8770b00293
     with:
       runs-on: ${{ inputs.runs-on }}
       enable_coverage: ${{ inputs.enable_coverage }}
@@ -803,7 +803,7 @@ jobs:
         if: ${{ contains(needs.*.result, 'failure') || needs.detect.outputs.refused == 'true' }}
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          repository: hyperpolymath/standards
+          repository: metadatastician/standards
           # Read the ledger from THIS workflow file's own commit.
           #
           # `job.workflow_sha` is "the commit SHA of the workflow file that

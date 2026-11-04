@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: MPL-2.0
 #
-# check-mustfile-structure.sh — structural validation of a Mustfile.a2ml.
+# check-mustfile-structure.sh — structural validation of A2ML or DEED Mustfiles.
 #
 # A Mustfile declares hard repository invariants as '### <id>' blocks. Every
 # declared check MUST carry:
@@ -26,6 +26,23 @@ MUST="${1:-.machine_readable/contractiles/must/Mustfile.a2ml}"
 if [ ! -f "$MUST" ]; then
   echo "error: Mustfile not found: $MUST" >&2
   exit 2
+fi
+
+
+# DEED is parsed as a document, not as one record per physical line.
+# This also refuses an empty check set, duplicate IDs and unknown severities.
+if [ "${MUST##*.}" = "deed" ]; then
+  ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+  if ! command -v bun >/dev/null 2>&1; then
+    echo "error: bun is required for canonical DEED validation" >&2
+    exit 2
+  fi
+  if ! bun "$ROOT/1-formats/deed/tools/deed_lint.js" --mustfile-json "$MUST" >/dev/null; then
+    echo "❌ Malformed Mustfile deed: $MUST" >&2
+    exit 1
+  fi
+  echo "✅ Mustfile deed structurally valid (canonical parser and check profile)"
+  exit 0
 fi
 
 awk '

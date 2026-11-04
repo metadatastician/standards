@@ -78,8 +78,19 @@ sed -i 's/@release/@Release/' "$WF/test.yml"
 printf "        - 'actions/checkout@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'\n" >> "$WF/actions.lock"
 expect 1 'stale lock entries remain failures'
 sed -i '/actions\/checkout/d' "$WF/actions.lock"
+# A workflow with no lockfile entry is fatal when it has a STEP-LEVEL use (the
+# ref GitHub must find under that path), and harmless when its only use is a
+# job-level reusable call — measured across 159 repositories (standards#968) and
+# the shape hyperpolymath/unified-dataset-vocab#81 ships.
 cp "$WF/test.yml" "$WF/unlocked.yml"
-expect 1 'workflow missing from lock remains a failure'
+expect 0 'job-level-only workflow with no lock entry is not fatal (standards#968)'
+cat > "$WF/unlocked.yml" <<'YAML'
+jobs:
+  test:
+    steps:
+      - uses: actions/checkout@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+YAML
+expect 1 'workflow missing from lock remains a failure (step-level)'
 rm "$WF/unlocked.yml"
 rm "$WF/test.yml"
 expect 1 'deleted workflow lock entries remain failures'

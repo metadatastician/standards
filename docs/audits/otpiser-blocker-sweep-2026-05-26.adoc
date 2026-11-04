@@ -7,7 +7,7 @@
 :source-highlighter: rouge
 :icons: font
 
-Companion machine-readable manifest: `otpiser-blocker-sweep-2026-05-26.a2ml`.
+Companion machine-readable manifest: `9-archive/a2ml/docs/audits/otpiser-blocker-sweep-2026-05-26.a2ml` (archived; A2ML is retired).
 
 == Summary
 
@@ -124,7 +124,7 @@ Every commit GPG-signed with key `4A03639C1EB1F86C7F0C97A91835A14A2867091E`, aut
 
 == Files produced today
 
-* This audit pair: `docs/audits/otpiser-blocker-sweep-2026-05-26.{adoc,a2ml}`
+* This audit pair: `docs/audits/otpiser-blocker-sweep-2026-05-26.adoc` and the archived `9-archive/a2ml/docs/audits/otpiser-blocker-sweep-2026-05-26.a2ml`
 * Session-memory file: `~/.claude/projects/-home-hyperpolymath/memory/session_2026_05_26_otpiser_blocker_sweep.md`
 * 6 detection-rule issues filed (hypatia#336-339, gitbot-fleet#214, standards#208)
 * 1 SPDX-sweep PR (absolute-zero#54) — landed

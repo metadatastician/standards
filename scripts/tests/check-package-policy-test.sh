@@ -86,5 +86,32 @@ deed "$d" deedwins '  (rsr-profile :version "1.0.0" :capabilities ("bash"))'
 printf '[rsr-profile]\nversion = "1.0.0"\ncapabilities = ["reproducible-build"]\n' > "$d/.machine_readable/rsr-profile.a2ml"
 assert "a2ml beside a deed clause: the resolver's precedence (deed) decides, so no packaging is required" 0 "Packaging not applicable" bash "$GATE" "$d"
 
+echo "=== discovery must agree with the resolver (CodeRabbit and Codex on #1357) ==="
+d=$(repo deed-head-eol)
+deed "$d" deedheadeol '  (rsr-profile\n    :version "1.0.0"\n    :capabilities ("container"))\n'
+assert "clause head at the end of a line is still the clause" 1 "Package policy violation" bash "$GATE" "$d"
+
+d=$(repo deed-semicolon)
+deed "$d" deedsemicolon '  (notes :author "Smith; Jr.") (rsr-profile :version "1.0.0" :capabilities ("container"))\n'
+assert "a ; inside a string before the clause is text, not a comment" 1 "Package policy violation" bash "$GATE" "$d"
+
+d=$(repo deed-large)
+{ printf ';; SPDX-License-Identifier: CC-BY-SA-4.0\n(repo-deed :schema-version "1.0.0" :canonical-name "deedlarge" :repo-uuid #u5"github.com/o/deedlarge" :beholding-chora #u5"estate/chora"\n  (rsr-profile :version "1.0.0" :capabilities ("container"))\n  (notes\n'
+  awk 'BEGIN { for (i = 0; i < 25000; i++) printf "    :n%d \"%s\"\n", i, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" }'
+  printf '  ))\n'; } > "$d/deedlarge_chora.deed"
+assert "a large deed (profile first, then 1.5 MB) is still discovered under pipefail" 1 "Package policy violation" bash "$GATE" "$d"
+
+d=$(repo deed-dotname)
+deed "$d" .github '  (rsr-profile :version "1.0.0" :capabilities ("container"))\n'
+assert "a dot-prefixed repo deed (.github_chora.deed) is discovered" 1 "Package policy violation" bash "$GATE" "$d"
+
+d=$(repo deed-head-comment)
+deed "$d" deedheadcomment '  (rsr-profile; the profile\n    :version "1.0.0"\n    :capabilities ("container"))\n'
+assert "a comment straight after the clause head still separates it" 1 "Package policy violation" bash "$GATE" "$d"
+
+d=$(repo deed-failglob)
+deed "$d" deedfailglob '  (rsr-profile :version "1.0.0" :capabilities ("container"))\n'
+assert "with failglob on, discovery still finds the deed" 1 "Package policy violation" bash -O failglob "$GATE" "$d"
+
 printf '\npassed=%d failed=%d\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

@@ -7,7 +7,7 @@
 :source-highlighter: rouge
 :icons: font
 
-Companion machine-readable manifest: `audit-reusables-convergence-2026-05-26.a2ml`.
+Companion machine-readable manifest: `9-archive/a2ml/docs/audits/audit-reusables-convergence-2026-05-26.a2ml` (archived; A2ML is retired).
 
 Predecessors:
 

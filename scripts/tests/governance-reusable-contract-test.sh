@@ -25,12 +25,22 @@ fail() {
 helper_checkout="$(grep -F -A 18 -- '- name: Checkout the pinned Standards policy helpers' "$GOVERNANCE" || true)"
 [ -n "$helper_checkout" ] ||
   fail "governance workflow has no step named 'Checkout the pinned Standards policy helpers'"
-# GitHub expression is an asserted literal.
+# Immutable either way: a literal 40-hex commit, or job.workflow_sha (the
+# reusable's own commit, i.e. exactly the commit the caller pinned). A literal
+# is still allowed by SHAPE — but it is a third pin that can rot, which is what
+# happened for six weeks to 317101e03b8f, and check-standards-helper-pins.sh is
+# what judges currency. This contract test judges that the step cannot float.
 # shellcheck disable=SC2016
-printf '%s\n' "$helper_checkout" | grep -Eq 'ref: [0-9a-f]{40}$' ||
-  fail "governance helpers are not fetched from an immutable commit"
-if printf '%s\n' "$helper_checkout" | grep -Eq '^[[:space:]]*ref:[[:space:]]*main[[:space:]]*$'; then
-  fail "governance helper execution still follows moving main"
+printf '%s\n' "$helper_checkout" | grep -Eq '^[[:space:]]*ref:[[:space:]]*(\$\{\{ job\.workflow_sha \}\}|[0-9a-f]{40})[[:space:]]*$' ||
+  fail "governance helpers are not fetched from an immutable commit or job.workflow_sha"
+if printf '%s\n' "$helper_checkout" | grep -Eq '^[[:space:]]*ref:[[:space:]]*(main|master|HEAD)[[:space:]]*$'; then
+  fail "governance helper execution still follows a moving ref"
+fi
+# github.workflow_sha / github.sha name the CALLER's commit inside a called
+# reusable, so they can never serve as this repository's helper source.
+# shellcheck disable=SC2016
+if printf '%s\n' "$helper_checkout" | grep -Eq 'ref:.*\$\{\{ github\.(workflow_sha|sha)'; then
+  fail "governance helper source is the caller's commit, not this repository's"
 fi
 
 # The assertions above cover the step named `Checkout the pinned Standards
@@ -100,6 +110,23 @@ for workflow in "$GOVERNANCE" "$FOCUSED"; do
     fail "$workflow conflates API unavailability with a policy verdict"
 done
 
+# The live detector and additive updater must compare the same estate payload;
+# the separately maintained tree preflight policy is not a settings payload.
+for entry in "$GOVERNANCE:actions-policy-live" "$FOCUSED:live-policy"; do
+  workflow=${entry%:*}; job=${entry##*:}
+  live_block=$(awk -v job="$job" '
+    $0 == "  " job ":" {active=1; next}
+    active && /^  [a-zA-Z0-9_-]+:/ {exit}
+    active {print}' "$workflow")
+  grep -Fq 'config/settings/actions-allowlist.json' <<< "$live_block" ||
+    fail "$workflow live-policy job does not use the estate settings payload"
+  if grep -Fq '.standards-checkout/rhodium-standard-repositories/actions-allowlist/allowed-actions.json' <<< "$live_block"; then
+    fail "$workflow live-policy job still checks the stale tree policy"
+  fi
+done
+grep -Fq '$SCRIPT_DIR/../config/settings/actions-allowlist.json' "$ROOT/scripts/check-actions-policy.sh" ||
+  fail "live-policy detector default differs from the updater"
+
 grep -Eq 'uses: hyperpolymath/standards/.github/workflows/allowlist-preflight-reusable.yml@[0-9a-f]{40}$' \
   "$RSR_SEED" || fail "RSR allowlist seed is not a thin immutable reusable-workflow caller"
 if grep -Eq 'raw\.githubusercontent\.com/.*/main|curl[[:space:]]' "$RSR_SEED"; then
@@ -130,5 +157,58 @@ for workflow in "$GOVERNANCE" "$FOCUSED" "$DEED" "$FORK" "$K9"; do
     fail "$workflow still has an old-slug-only shell identity branch"
   fi
 done
+
+# ── No third pin by default ──────────────────────────────────────────────
+# MEASURED 2026-10-31: three steps staged helpers from the literal
+# 317101e03b8f (2026-09-14) while main had moved 194 files under scripts/.
+# Literal helper pins are rejected. Helper checkouts must use job.workflow_sha.
+literals="$(grep -nE '^[[:space:]]*ref:[[:space:]]*[0-9a-f]{40}' "$GOVERNANCE" || true)"
+if [ -n "$literals" ]; then
+  fail "governance still stages a helper from a literal commit; use \${{ job.workflow_sha }} (a literal goes stale silently — standards#946/#1119/#1290's sibling class):
+$literals"
+fi
+
+# The job workflow-identity properties are unavailable on GHES, where the
+# expression resolves EMPTY and actions/checkout then follows the default
+# branch: a float wearing a pin's clothes. EVERY job that stages a standards
+# helper from job.workflow_sha must assert it resolved, and the list is DERIVED
+# from the file rather than hardcoded — a hardcoded pair was true for two jobs
+# and false for the other fifteen until it was measured (2026-10-31).
+assert_sites="$(awk '
+  /^  [a-zA-Z0-9_-]+:[[:space:]]*$/ { job = $1; sub(/:$/, "", job); injob = 1 }
+  injob && /repository:[[:space:]]*(meta)?(datastician|hyperpolymath)\/standards[[:space:]]*$/ { repo = 1 }
+  injob && repo && /ref:[[:space:]]*\$\{\{[[:space:]]*(job\.workflow_sha|inputs\.[A-Za-z0-9_-]+[[:space:]]*\|\|[[:space:]]*job\.workflow_sha)/ { print job; repo = 0 }
+  injob && /^  [a-zA-Z0-9_-]+:[[:space:]]*$/ && $0 !~ /^  [a-zA-Z0-9_-]+:[[:space:]]*$/{ repo = 0 }
+' "$GOVERNANCE" | sort -u)"
+[ -n "$assert_sites" ] || fail "no job stages a standards helper from job.workflow_sha — the derivation found nothing, so this assertion would be vacuous; if the file really changed shape, change this test deliberately"
+for job in $assert_sites; do
+  block="$(awk -v id="$job" '$0=="  "id":" {p=1; next} p && /^  [a-zA-Z0-9_-]+:$/ {exit} p {print}' "$GOVERNANCE")"
+  printf '%s\n' "$block" | grep -Fq "Assert this reusable's own commit resolved" ||
+    fail "job '$job' stages helpers from job.workflow_sha without asserting it resolved (GHES resolves it empty, and ref: '' follows the default branch)"
+  printf '%s\n' "$block" | grep -Fq "SELF_WORKFLOW_SHA" ||
+    fail "job '$job' assertion does not read job.workflow_sha"
+  # The assertion must come BEFORE the checkout it protects.
+  a="$(printf '%s\n' "$block" | grep -n "Assert this reusable's own commit resolved" | head -1 | cut -d: -f1)"
+  c="$(printf '%s\n' "$block" | grep -n 'ref: \${{ job.workflow_sha }}\|ref: \${{ inputs\..*|| job.workflow_sha }}' | head -1 | cut -d: -f1)"
+  [ -n "$c" ] && [ "$a" -lt "$c" ] ||
+    fail "job '$job' asserts the commit AFTER the helper checkout it is supposed to protect"
+done
+echo "  (asserted job.workflow_sha resolution in $(printf '%s\n' "$assert_sites" | wc -l | tr -d ' ') job(s): $(printf '%s ' $assert_sites))"
+
+# The floating helper checkouts the same measurement found must stay fixed:
+# a branch ref for a standards helper means one push to standards changes the
+# behaviour of every already-pinned caller.
+for workflow in "$GOVERNANCE" "$ROOT/.github/workflows/changelog-reusable.yml" \
+                "$ROOT/.github/workflows/readme-derive-reusable.yml" \
+                "$ROOT/.github/workflows/fork-governance-reusable.yml"; do
+  if grep -nE '^[[:space:]]*-?[[:space:]]*ref:[[:space:]]*(main|master|HEAD)[[:space:]]*$' "$workflow" >/dev/null; then
+    fail "$workflow still stages a standards helper from a moving branch"
+  fi
+  if grep -nE '^[[:space:]]*default:[[:space:]]*"?(main|master)"?[[:space:]]*$' "$workflow" >/dev/null; then
+    fail "$workflow still defaults a standards source input to a moving branch"
+  fi
+done
+grep -Fq 'scripts/check-standards-helper-pins.sh' "$ROOT/.github/workflows/self-test.yml" ||
+  fail "the standards helper pin guard is not executed by Self Test"
 
 echo "PASS: reusable governance uses one pinned implementation with focused and suite entry points"

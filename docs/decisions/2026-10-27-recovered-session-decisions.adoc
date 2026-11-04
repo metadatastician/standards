@@ -42,8 +42,10 @@ wording. Nothing beyond the planning documents had been implemented.
 * *Q5, versioning.* One rule for the deed, K9 components and `coordination.k9`: three segments,
   MAJOR.MINOR.PATCH. A wrong major is refused, a higher minor is accepted with a warning, and
   a two-segment version is refused. Both validators change.
-* *Q6.* Assurance-envelope fields (scope, assumptions, boundaries, evidence label) go on each
-  contractile clause in `_base.ncl`; Panoply is the pilot.
+* *Q6.* `scope`, `assumptions` and `boundaries` go on each contractile clause in `_base.ncl`.
+  The evidence grade is not a clause field: each descriptile fact a runner uses carries a label
+  from `ASSURANCE-CONSTITUTION.adoc` (the ultraplan's "What to keep" section). Panoply is the
+  pilot.
 * *Q7.* Panoply-class files renamed from the retired format to `.deed` are translated where a
   mapping spec exists and deleted where none does.
 * *Q8.* `hyperpolymath/contractiles` holds only the runner; the spec lives in this repository
@@ -81,15 +83,24 @@ descriptile; the verb it lacks is `bust`.
 
 == Housekeeping rulings (reported by the session as posted on #1234)
 
-These were reported from a session; the comment itself (6166497494) was not re-read.
+The rulings were reported from a session; the comment itself (6166497494) was not re-read. For
+counts and status, `docs/reorg/2026-10-14-tidy/ISSUE-1234-CLOSEOUT-REPORT.adoc` is
+authoritative: it holds the completed censuses, which supersede the session's interim figures.
 
-* *D304.* Cloudflare R2, with age-encrypted bundles. The owner provisions the bucket and token.
-* *D332.* The owner uninstalls Probot Settings (app 1561); then 87 `settings.yml` files
-  (60 hyperpolymath, 27 metadatastician) are removed, one pull request per repository.
+* *D304.* Cloudflare R2, with age-encrypted bundles. Implemented as the optional
+  `mirror-r2-bundle` job in `mirror-reusable.yml`, enabled by `vars.R2_BUNDLE_MIRROR_ENABLED`;
+  the owner provisions the bucket and token.
+* *D332.* The owner uninstalls Probot Settings (app 1561, installation 145157322); then
+  `.github/settings.yml` is deleted, one pull request per repository. The census is 95
+  repositories (65 `hyperpolymath`, 30 `metadatastician`), scripted in
+  `scripts/triage-2026-10-23-issue-1234-apply.sh`, which checks the uninstall first. The
+  session's earlier count of 87 is superseded.
 * *A7.* Closed: no GitLab copy exists. The next free ruling id was D335.
-* The ruleset bypass actors 1561, 946600 and 85455 appear in 11 repository rulesets. The
-  removal is owner-run because the session proxy blocks ruleset PUTs. The D50 vaults must
-  never get `non_fast_forward`.
+* *A1.* The ruleset bypass actors 1561, 946600 and 85455 appear in 10 `hyperpolymath`
+  repository rulesets (4 active, 6 disabled) and in no `metadatastician` ruleset; the same
+  apply script converges them. The session's earlier count of 11 is superseded. The removal is
+  owner-run because the session proxy blocks ruleset PUTs. The D50 vaults must never get
+  `non_fast_forward`.
 
 == actions.lock and the repository move
 
@@ -100,14 +111,19 @@ These were reported from a session; the comment itself (6166497494) was not re-r
   the pinned commit and rejects records whose ref is a bare SHA. Fixed by #1314 (case folding in
   `relock-standards-pin.sh`) and `januskey#159`, both merged.
 * `GITHUB_TOKEN` cannot push files under `.github/workflows/`, and a human push needs the
-  `workflow` OAuth scope. Regenerate a lock with `gh actions-lock` plus the repair chain
-  (`relock-sha-keys`, `complete-job-refs`, `close-lock`, `prune-stale`), then verify with
-  `update-actions-lock.sh --verify-local`, `check-lock-sync.sh` and
-  `check-actions-lock-gate.sh`.
+  `workflow` OAuth scope. Regenerate a lock through `scripts/regen-dependabot-locks.sh`, not by
+  hand: it snapshots the lock before `gh actions-lock` rewrites it, then runs the repair chain
+  (`relock-sha-keys`, `complete-job-refs`, `close-lock --prior <snapshot>`, `prune-stale`).
+  Running without the snapshot removes the first moved-tag fallback. If tag listing succeeds but
+  no current tag points to the pinned SHA, `close-lock` skips the key with exit 3 only when the
+  called repository lock and call-site comment cannot supply a qualified symbolic tag. Verify with
+  `update-actions-lock.sh --verify-local`,
+  `check-lock-sync.sh` and `check-actions-lock-gate.sh`.
 * Do not merge a re-point pull request without its regenerated lock; `hypatia#958` merged first
   and left that repository's callers without the matching lock records.
-* `close-lock` learned two sources for a moved tag (#1323, merged): the prior lock record and
-  the call-site tag comment. A third, the callee's own lock, landed in #1350.
+* `close-lock` now has three sources for a moved tag, tried in order: the prior lock record
+  (#1323), the called repository's own lock (#1350), and the call-site tag comment (#1323).
+  `scripts/close-lock.sh`, section MOVED TAGS, is the authority.
 * #1317 and #1319 (merged) fixed the zero-job Mirror and Self CI failures: the mirror and
   ci-pipeline callers were pinned to a commit that existed only on a deleted branch. Other
   estate repositories pinned there have not been checked.
@@ -132,5 +148,6 @@ These were reported from a session; the comment itself (6166497494) was not re-r
 
 == Open items that need the owner
 
-See the pull request description for the current list. Items that belong to other repositories
-are recorded in the pull request, not here, so this record does not drift from them.
+The owner action list and the open items for other repositories are in the companion snapshot
+`docs/decisions/2026-10-27-recovered-session-open-items.adoc`. It is dated and is not kept up
+to date; check each item against its repository before acting on it.

@@ -189,17 +189,20 @@ sarif_check 'multiple SARIF documents refuse' 2 "$clean $clean"
 sarif_check 'empty runs refuse' 2 '{"version":"2.1.0","runs":[]}'
 sarif_check 'missing results refuse' 2 '{"version":"2.1.0","runs":[{"tool":{"driver":{"name":"Hypatia"}}}]}'
 sarif_check 'unknown result level refuses' 2 '{"version":"2.1.0","runs":[{"tool":{"driver":{"name":"Hypatia"}},"results":[{"ruleId":"control","level":"unknown"}]}]}'
+sarif_check 'malformed SARIF properties refuse' 2 '{"version":"2.1.0","runs":[{"tool":{"driver":{"name":"Hypatia"}},"results":[{"ruleId":"control","level":"warning","properties":42}]}]}'
+sarif_check 'boolean SARIF properties refuse' 2 '{"version":"2.1.0","runs":[{"tool":{"driver":{"name":"Hypatia"}},"results":[{"ruleId":"control","level":"warning","properties":false}]}]}'
+sarif_check 'malformed SARIF locations refuse' 2 '{"version":"2.1.0","runs":[{"tool":{"driver":{"name":"Hypatia"}},"results":[{"ruleId":"control","level":"warning","locations":42}]}]}'
 printf '%s' '[]' > .hypatia-baseline.json
 sarif_check 'baseline without validator refuses' 2 "$clean"
 mkdir scripts
 cp "$repo/scripts/apply-baseline.sh" scripts/apply-baseline.sh
-printf '%s' '[]' > hypatia-findings.relativized.json
+printf '%s' '[]' > hypatia-findings.gating.json
 sarif_check 'unconfirmed baseline filtering refuses' 2 "$clean"
 export HYPATIA_BASELINE_FILTERED=true
 sarif_check 'valid baseline accepted' 0 "$clean"
 printf '%s' '{}' > .hypatia-baseline.json
 sarif_check 'malformed baseline refuses even without findings' 2 "$clean"
-rm -f .hypatia-baseline.json hypatia-findings.relativized.json
+rm -f .hypatia-baseline.json hypatia-findings.gating.json
 unset HYPATIA_BASELINE_FILTERED
 
 # CLI adapter contract controls (standards#1054): empty, warn, high, and crash fixtures
@@ -207,7 +210,15 @@ mkdir -p "$tmp/home/hypatia"
 cat > "$tmp/home/hypatia/hypatia-cli.sh" <<'CLI'
 #!/usr/bin/env bash
 set -euo pipefail
+printf 'scan\n' >> "$SCAN_LOG"
 case "${FIXTURE_MODE:-}" in
+  advisory)
+    if [ "${HYPATIA_ADVISORY:-false}" = true ]; then
+      printf '%s\n' '[{"severity":"low","advisory":true,"rule_module":"workflow_audit","type":"reusable_call_to_moved_repository","file":"ci.yml"},{"severity":"critical","rule_module":"code_scanning_alerts","type":"CSA003","file":"old.yml"}]'
+    else
+      printf '%s\n' '[{"severity":"critical","rule_module":"code_scanning_alerts","type":"CSA003","file":"old.yml"}]'
+    fi
+    ;;
   empty)
     if [[ "${HYPATIA_FORMAT:-}" = "json" ]]; then
       printf '[]\n'
@@ -236,11 +247,25 @@ case "${FIXTURE_MODE:-}" in
 esac
 CLI
 chmod +x "$tmp/home/hypatia/hypatia-cli.sh"
+# Offline mock for Mix: assert the captured JSON is projected, not rescanned.
+# Real Hypatia.SARIF is additionally exercised by the integration canary job.
+mkdir -p "$tmp/fakebin"
+cat > "$tmp/fakebin/mix" <<'MIX'
+#!/usr/bin/env bash
+set -euo pipefail
+jq '{version:"2.1.0", runs:[{tool:{driver:{name:"Hypatia"}}, results:
+  [.[] | select(.rule_module != "code_scanning_alerts") |
+   select(.severity == "critical" or .severity == "high" or .severity == "medium" or .severity == "warn") |
+   {ruleId:("hypatia/" + .rule_module + "/" + .type),
+    level:(if .severity == "critical" or .severity == "high" then "error" else "warning" end)}]}]}' "$FINDINGS_PATH"
+MIX
+chmod +x "$tmp/fakebin/mix"
+export SCAN_LOG="$tmp/scan-count"
 
 adapter_check() {
   local name=$1 mode=$2 expected=$3 actual
-  rm -f hypatia-findings.json hypatia.sarif "$GITHUB_OUTPUT" "$GITHUB_STEP_SUMMARY"
-  if HOME="$tmp/home" FIXTURE_MODE="$mode" bash scan.sh >result.log 2>&1; then
+  rm -f hypatia-findings.json hypatia.sarif "$GITHUB_OUTPUT" "$GITHUB_STEP_SUMMARY" "$SCAN_LOG"
+  if HOME="$tmp/home" PATH="$tmp/fakebin:$PATH" FIXTURE_MODE="$mode" bash scan.sh >result.log 2>&1; then
     if bash validate.sh >>result.log 2>&1; then
       if bash gate.sh >>result.log 2>&1; then actual=0; else actual=$?; fi
     else
@@ -254,16 +279,22 @@ adapter_check() {
     cat result.log
     exit 1
   fi
+  [ "$(wc -l < "$SCAN_LOG")" -eq 1 ] || { echo "FAIL: scanner did not run exactly once" >&2; exit 1; }
   printf 'PASS: %s\n' "$name"
 }
 adapter_check 'CLI adapter empty fixture produces zero-result SARIF and passes' empty 0
 adapter_check 'CLI adapter warn fixture produces warning SARIF and passes' warn 0
 adapter_check 'CLI adapter high fixture produces error SARIF and blocks' high 1
 adapter_check 'CLI adapter crash fixture fails closed even if [] was written' crash 1
+HYPATIA_ADVISORY=true adapter_check 'opt-in advisory stays out of SARIF gating' advisory 0
+jq -e 'any(.[]; .type == "reusable_call_to_moved_repository" and .advisory == true)' hypatia-findings.json >/dev/null || { echo 'FAIL: WF028 missing from JSON' >&2; exit 1; }
+jq -e '[.runs[].results[]] | length == 0' hypatia.sarif >/dev/null || { echo 'FAIL: advisory or meta echo entered SARIF' >&2; exit 1; }
+HYPATIA_ADVISORY=false adapter_check 'default advisory off' advisory 0
+jq -e 'all(.[]; .type != "reusable_call_to_moved_repository")' hypatia-findings.json >/dev/null || { echo 'FAIL: default JSON includes WF028' >&2; exit 1; }
 
 # panic-attack controls. The step is advisory: it never fails the job, and it
 # never writes a bare `[]`. A skip or a failure must be an explicit status.
-export PANIC_ATTACK_SHA=b689a74d2762a1c19839ae3fbd59b7fe5ef920ea
+export PANIC_ATTACK_SHA=410a8f821ea8297833162565b50a298f787815da
 fail() { printf 'FAIL: %s\n' "$1"; cat result.log; exit 1; }
 
 cat > "$tmp/fake-panic-attack" <<'PA'

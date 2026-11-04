@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 // SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
-= Fork governance — specification v1.1
+= Fork governance — specification v1.2
 :toc: left
 :toclevels: 4
-:revdate: 2026-10-24
-:revnumber: 1.1
+:revdate: 2026-10-28
+:revnumber: 1.2
 :status: normative
 
 This document is normative for the *comment*: its markers, its order, its
@@ -68,8 +68,8 @@ heading. It is not `K9 conformance`; the rename is normative.
 |===
 | Header | Values | Rule
 | `Lane` | fixed strings | As listed in §2.2.
-| `Status` | `<glyph> <word>` | Derived from the lane's verdict and job result (§3). Never typed by hand.
-| `Status` (suffix) | `· advisory: <glyph> <word> (<n> critical, <n> high, not grading)` | Optional, on the Hypatia row only. Present iff the lane reported an advisory finding (§3.2). Absent — not `none` — when there is nothing to show.
+| `Status` | DEED: `<glyph> <word>`; K9/Hypatia: `<glyph> <word> (job: <result>[; grid: <glyph> <word>])` | Derived from the lane's job result and verdict (§3). If a grid job did not succeed but has a recognised verdict, show that grid verdict after the job result; it does not replace the lane state. Never typed by hand.
+| `Status` (suffix) | `· advisory in grid scope: <glyph> <word> (<n> critical, <n> high, not grading)` | Optional, on the Hypatia row only. Present when the grid has advisory rows, even when those rows have zero graded findings (§3.2). Counts include only graded findings in the grid's declared scope; standing/excluded findings remain visible in the grid. Absent — not `none` — only when there are no advisory rows.
 | `Run` | `[run N](url)` or `same run` | The first row carries the link; the rest say `same run` because they share one run.
 |===
 
@@ -114,6 +114,13 @@ Rules, in order:
 
 DEED has no grid of its own: its job result is the whole of its verdict
 (`success` → green, `failure` → red, anything else → orange).
+
+For K9 and Hypatia, the primary summary state still follows the job-result
+rules above. If a non-successful job has already produced a valid grid, the
+status MUST show that grid state separately; a red job and a yellow findings
+grid are compatible facts, not conflicting verdicts. In particular, the
+baseline gate and the grid may grade different scopes, so a blocking gate can
+fail on a finding that the delta grid reports as standing or excluded.
 
 === 3.0 What the verdict is a verdict ABOUT
 
@@ -166,15 +173,19 @@ absence of evidence.
 
 The advisory figure beside the verdict (§2.3) exists because the alternative —
 omitting advisory findings from the summary — makes a purple critical invisible
-on the one line everyone reads. Shown and not grading is a different claim from
-not shown, and only the first one is honest.
+on the one line everyone reads. Its critical/high counts cover only the grid's
+graded scope; standing and excluded findings remain visible in the reporter rows
+and their details. Shown and not grading is a different claim from not shown,
+and only the first one is honest.
 
 === 3.2 The overall badge
 
 `badge.json` carries the *worst* lane, with precedence
 `red = purple > orange = blue > yellow > green` and `grey` only when every lane
 is grey. Red outranks orange deliberately: missing evidence must not be able to
-hide a known failure (VERDICT-GRID-SPEC §Conformance family).
+hide a known failure (VERDICT-GRID-SPEC §Conformance family). Because yellow
+can mean either conformance advisory debt or medium findings, its cross-lane
+badge message MUST be neutral (`attention`), not a label from one family.
 
 == 4. Posting
 
@@ -215,6 +226,11 @@ and `hypatia-scan-reusable.yml` therefore request no write permission.
 | `actions: read`, `contents: read`, `security-events: write`
 | Uploads SARIF. A caller may not grant less than the callee declares — the
 run then dies at startup with zero jobs.
+| `fleet` (plain job)
+| `contents: read`
+| Checks out gitbot-fleet at a pinned SHA, runs the enrolled adapters on the
+head, uploads the `fleet-report-backs` artifact. Not a lane: no grid, no summary
+row (LANES, "The fleet report-backs").
 | `verdict` (posting engine)
 | `contents: read`, `actions: read`, `pull-requests: write`
 | Downloads two artifacts, writes one comment.

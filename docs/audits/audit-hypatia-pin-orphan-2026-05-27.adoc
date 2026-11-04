@@ -7,7 +7,7 @@
 :source-highlighter: rouge
 :icons: font
 
-Companion machine-readable manifest: `audit-hypatia-pin-orphan-2026-05-27.a2ml`.
+Companion machine-readable manifest: `9-archive/a2ml/docs/audits/audit-hypatia-pin-orphan-2026-05-27.a2ml` (archived; A2ML is retired).
 Sidecar to: `audit-admin-merge-wrapper-sweep-2026-05-26.adoc` (the parent
 reusables-campaign closure).
 

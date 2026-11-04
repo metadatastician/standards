@@ -163,7 +163,50 @@ assert "profile-shaped text in a string with no a2ml is no profile at all" 2 "no
 
 d=$(repo_deed deednested '  (rsr-profile :version "1.0.0" (notes :example "write :capabilities (bash) here" :role "spine") :capabilities ("rust"))')
 assert "fields are read from the profile clause itself, not from a nested (notes …) or its strings" 0 "effective capabilities: rust" bash "$CHECK" "$d"
-assert "…and a :role inside the nested clause is not the profile's role" 0 "rsr-profile check: OK" bash "$CHECK" "$d"
+assert "…and its :role is not the profile's role" 0 "rsr-profile check: OK" bash "$CHECK" "$d"
+
+# Role-sensitive: without the spine role the undeclared rust workflow is
+# VESTIGIAL (exit 1); reading the nested :role would exempt it (exit 0).
+d=$(repo_deed deednestedrole '  (rsr-profile :version "1.0.0" (notes :role "spine") :capabilities ("bash"))')
+rm -f "$d/Cargo.toml" "$d/Cargo.lock" "$d/src/main.rs"
+assert "a :role inside a nested clause does not make the repo a spine" 1 "VESTIGIAL" bash "$CHECK" "$d"
+
+d=$(repo_deed deedstrfield '  (rsr-profile :version "1.0.0" :description "write :capabilities (bash) and :role \\"spine\\" here" :capabilities ("rust"))')
+assert "field-shaped text inside a top-level string is not a field" 0 "effective capabilities: rust" bash "$CHECK" "$d"
+
+d=$(repo_deed deedmultiline '  (rsr-profile\n    :version "1.0.0" ; a comment\n    :capabilities (\n      "rust"))\n')
+assert "a clause head at line end and a list across lines resolve" 0 "effective capabilities: rust" bash "$CHECK" "$d"
+
+d=$(repo dotdeed)
+rm -f "$d/.machine_readable/rsr-profile.a2ml"
+printf ';; SPDX-License-Identifier: CC-BY-SA-4.0\n(repo-deed :schema-version "1.0.0" :canonical-name ".github" :repo-uuid #u5"github.com/o/.github" :beholding-chora #u5"estate/chora"\n  (rsr-profile :version "1.0.0" :capabilities ("rust")))\n' > "$d/.github_chora.deed"
+assert "a dot-prefixed repo deed (.github_chora.deed) is found" 0 ".github_chora.deed (rsr-profile …)" bash "$CHECK" "$d"
+
+# Escapes and typed atoms (CodeRabbit and Codex on #1361).
+d=$(repo_deed deedescrole '  (rsr-profile :version "1.0.0" :role "spi\\ne" :capabilities ("bash"))')
+rm -f "$d/Cargo.toml" "$d/Cargo.lock" "$d/src/main.rs"
+assert "an escaped \\n in :role does not alias spine" 1 "VESTIGIAL" bash "$CHECK" "$d"
+
+d=$(repo_deed deedescremove '  (rsr-profile :version "1.0.0" :capabilities ("rust") :remove ("rus\\t"))')
+assert "an escaped \\t in :remove does not remove rust" 0 "effective capabilities: rust" bash "$CHECK" "$d"
+
+d=$(repo_deed deedescunkremove '  (rsr-profile :version "1.0.0" :capabilities ("rust") :remove ("r\\ust"))')
+assert "an unknown escape in :remove does not remove rust" 0 "effective capabilities: rust" bash "$CHECK" "$d"
+
+d=$(repo_deed deedescunkrole '  (rsr-profile :version "1.0.0" :role "s\\pine" :capabilities ("bash"))')
+rm -f "$d/Cargo.toml" "$d/Cargo.lock" "$d/src/main.rs"
+assert "an unknown escape in :role does not alias spine" 1 "VESTIGIAL" bash "$CHECK" "$d"
+
+d=$(repo_deed deeduuiditem '  (rsr-profile :version "1.0.0" :capabilities (#u5"rust"))')
+assert "a uuid literal in a list is not a capability" 2 "-" bash "$CHECK" "$d"
+
+d=$(repo dotglob)
+rm -f "$d/.machine_readable/rsr-profile.a2ml"
+printf ';; SPDX-License-Identifier: CC-BY-SA-4.0\n(repo-deed :schema-version "1.0.0" :canonical-name ".github" :repo-uuid #u5"github.com/o/.github" :beholding-chora #u5"estate/chora"\n  (rsr-profile :version "1.0.0" :capabilities ("rust")))\n' > "$d/.github_chora.deed"
+assert "with dotglob on, a dot-led deed is still one deed" 0 ".github_chora.deed (rsr-profile …)" bash -O dotglob "$CHECK" "$d"
+
+d=$(repo_deed deedfailglob '  (rsr-profile :version "1.0.0" :capabilities ("rust"))')
+assert "with failglob on, one unmatched deed pattern does not abort the scan" 0 "deedfailglob_chora.deed (rsr-profile …)" bash -O failglob "$CHECK" "$d"
 
 echo "=== setup errors ==="
 assert "no profile → 2" 2 "no profile at" bash "$CHECK" "$WORK/does-not-exist"

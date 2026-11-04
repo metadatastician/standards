@@ -4,10 +4,12 @@ Campaign: standards#837 · Frame: link:README.adoc[mappings/README] ·
 Status: RULED and applied (owner, 2026-10-27). The owner merged the first
 translation under this spec, `standards_chora.deed` in standards#1356, and
 ruled on its review thread that CLADE is superseded by the chora deed: A2ML
-is retired, `.deed` is the successor, and its grammar (`deed.abnf` v1.0.0,
-the canonical-grammar ruling of 2026-09-19) is what a translated clause must
-satisfy. A source field absent from the instance (standards' `[clade]` has no
-`primary-name`) is not emitted and does not block the translation; the
+is retired, `.deed` is the successor, and its grammar is what a translated
+clause must satisfy. That is `deed.abnf` at its current version, the sole
+normative grammar since the canonical-grammar ruling of 2026-09-19. It is
+not pinned to v1.0.0, because the `#u8` literal on the deed's `:repo-uuid`
+entered in v1.1.0. A source field absent from the instance (standards'
+`[clade]` has no `primary-name`) is not emitted and does not block the translation; the
 grammar does not require it, and the CLADE-006 pair check belongs to the
 A2ML-era registry, not to the deed. Earlier status: PROPOSAL (no translation
 until owner review).
@@ -43,7 +45,7 @@ Head-level scaffolding follows the grammar's required identity table
 (repo-deed
   :schema-version  "1.0.0"        ; structurally FIRST
   :canonical-name  "<repo>"
-  :repo-uuid       #u5"<repo uuid5>"
+  :repo-uuid       #u8"gv-clade-index:github.com/<owner>/<repo>"
   :beholding-chora #u5"<estate chora>"
   ...)
 ----
@@ -64,7 +66,7 @@ bare filename would resolve against nothing (grammar rationale).
 4+| *Head identity*
 
 | `[identity] canonical-name` | `:canonical-name` | verbatim STRING
-| `[identity] uuid` | `:repo-uuid` | uuid5 literal whose BODY IS THE NAME INPUT (`#u5"github.com/<owner>/<name>"`), not the derived hex (grammar v1.0.0: "Body is the NAME input to RFC 4122 §4.3"). Translator **re-derives and compares against the instance, never copies** (§5 P-1)
+| `[identity] uuid` | `:repo-uuid` | UUIDv8 literal whose BODY IS THE NAME INPUT (`#u8"gv-clade-index:github.com/<owner>/<name>"`), not the derived hex: ADR-008 profile C per P-1 (owner ruling D320). A `#u5"github.com/<owner>/<name>"` literal stays legal until the uuid5 cutover (grammar v1.1.0), but a translation emits the v8 form. Translator **re-derives the expected UUIDv8 from the repository name, and never copies or compares it with the legacy source UUID** (§5 P-1)
 | — (new) | `:beholding-chora` | resolved from registry — uuid5 literal
 
 4+| *Clauses*
@@ -120,8 +122,8 @@ Fields not listed do not exist in the deed era for this family.
   is rejected before any output assignment. A source carrying `=` inside a
   *string* is fine (strings pass through escaped).
 * **P-3 (output must parse as DEED):** every emitted deed is parsed against
-  the normative grammar (`deed.abnf` v1.0.0; the #837 canonical-file
-  ruling landed 2026-09-19): full input consumed, `:schema-version` structurally first, unknown
+  the normative grammar (`deed.abnf` at its current version; the #837
+  canonical-file ruling landed 2026-09-19, and `#u8` entered in v1.1.0): full input consumed, `:schema-version` structurally first, unknown
   clauses are *errors* (validator §conformance), no `=` outside a
   symbol-legal position, and string emission uses ONLY the four legal
   escapes `\"` `\\` `\n` `\t` — `\r` and `\uXXXX` are parse errors; non-ASCII
@@ -160,7 +162,7 @@ Emitted `rsr-template-repo_chora.deed`:
 (repo-deed
   :schema-version  "1.0.0"
   :canonical-name  "rsr-template-repo"
-  :repo-uuid       #u5"github.com/hyperpolymath/rsr-template-repo"
+  :repo-uuid       #u8"gv-clade-index:github.com/hyperpolymath/rsr-template-repo"
   :beholding-chora #u5"<estate chora NAME — resolved from gv-clade-index at emit time>"
 
   (identity :primary-forge github

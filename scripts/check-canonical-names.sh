@@ -35,13 +35,16 @@ declare -A REPL=( ["6a2"]="descriptiles" ["agent_instructions"]="bot_directives"
 # lands under 9-archive/a2ml/ at its original path) must keep the names of
 # its day. The anchored "9-archive/" prefix does not reach a sibling such as
 # 9-archives/ or a nested .../9-archive/.
+# The legacy A2ML ledger (.machine_readable/a2ml-legacy-allow.txt) names each
+# live A2ML file by its real path, so it spells agent_instructions/ until those
+# files are renamed or archived: a record of paths, not a new use.
 is_excluded() {
   case "$1" in
     0-canon/CANONICAL-NAMES.adoc|scripts/check-canonical-names.sh|scripts/tests/*|\
+    .machine_readable/a2ml-legacy-allow.txt|\
     *MIGRATION*|*migration*|*CHANGELOG*|\
     9-archive/*|\
-    .machine_readable/archive/scorecards-v1/*.scorecard.a2ml|\
-    standards-update/.machine_readable/6scm-archive/.machine_readable/6a2/*) return 0 ;;
+    .machine_readable/archive/scorecards-v1/*.scorecard.a2ml) return 0 ;;
   esac
   return 1
 }

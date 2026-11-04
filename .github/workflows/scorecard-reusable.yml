@@ -54,7 +54,7 @@ jobs:
       - name: Checkout native-lock reconciliation helper
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          repository: hyperpolymath/standards
+          repository: metadatastician/standards
           ref: 5a0891e9e58b785181a92e141505ca96ca987b42 # per-file reconciliation (#1168)
           path: .standards-scorecard
           persist-credentials: false
@@ -198,7 +198,7 @@ jobs:
       - name: Checkout native-lock reconciliation helper
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          repository: hyperpolymath/standards
+          repository: metadatastician/standards
           ref: 5a0891e9e58b785181a92e141505ca96ca987b42 # per-file reconciliation (#1168)
           path: .standards-scorecard
           persist-credentials: false

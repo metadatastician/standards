@@ -43,9 +43,9 @@ for preserved in \
   docs/archive/session-detritus/root/SECURITY_TRAINING_SUMMARY.md \
   docs/archive/session-detritus/axel-protocol/SONNET-TASKS.adoc \
   docs/archive/session-detritus/0-ai-gatekeeper-protocol/AI-GATEKEEPER-PROTOCOL-COMPLETE-2026-02-07.adoc \
-  docs/archive/reorg-leftovers/K9-AUTOMATION-SPEC.a2ml \
-  docs/archive/reorg-leftovers/CRG-TRG-RSR-MAPPING.a2ml \
-  docs/archive/reorg-leftovers/TEMPLATE-VERSIONING-SPEC.a2ml \
+  9-archive/a2ml/docs/archive/reorg-leftovers/K9-AUTOMATION-SPEC.a2ml \
+  9-archive/a2ml/docs/archive/reorg-leftovers/CRG-TRG-RSR-MAPPING.a2ml \
+  9-archive/a2ml/docs/archive/reorg-leftovers/TEMPLATE-VERSIONING-SPEC.a2ml \
   toolchain-readiness-grades/testing/LANGUAGE-TESTING-STANDARDS.adoc \
   toolchain-readiness-grades/testing/affinescript-testing-guide.adoc \
   toolchain-readiness-grades/testing/julia-testing-tools-guide.adoc \

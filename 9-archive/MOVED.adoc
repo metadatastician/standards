@@ -1,0 +1,90 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+// SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+= 9-archive — what moved here, and why
+:toc: macro
+
+[IMPORTANT]
+====
+Everything under `9-archive/` is frozen history. Do not edit it, extend it or
+convert it by hand. A record keeps the paths and names of its day, so gates
+that police current names exclude this district.
+====
+
+toc::[]
+
+== Layout
+
+[cols="2,5"]
+|===
+| Path | Holds
+
+| `rhodium-standard-repositories/`
+| The last copy of the retired Rhodium Standard Repositories tree, archived
+before this index existed.
+
+| `a2ml/`
+| Retired A2ML records, each at its *original repository path* under
+`a2ml/`. A file that lived at `docs/audits/x.a2ml` is now
+`9-archive/a2ml/docs/audits/x.a2ml`.
+|===
+
+== A2ML (2026-10-27)
+
+A2ML is retired (owner rulings D99, D269c, D312 and D313). Machine-readable
+repository facts are now the chora deed (`standards_chora.deed`), contracts are
+`*.k9.ncl`, and agent coordination is `coordination.k9`. The moves below are
+pure renames: no record changed.
+
+[cols="3,1,4"]
+|===
+| Original location | Files | Why it could move
+
+| `docs/audits/`, `.machine_readable/audits/`
+| 9
+| Dated audit records. No tool reads them. The launcher audit's AsciiDoc
+companion stays live and links here.
+
+| `docs/archive/reorg-leftovers/`, `.machine_readable/migrations/`
+| 4
+| Reorganisation and migration leftovers, already historical.
+
+| `1-formats/k9/`, `2-protocols/0-ai-gatekeeper/`, `2-protocols/axel/`,
+`2-protocols/overlay/`, `3-practice/outreach/`: each `.machine_readable/descriptiles/`
+| 24
+| Descriptile sets from the sub-projects' years as separate repositories. A
+repository has one chora deed (D312), so a sub-directory has no deed for
+these facts to go to. The mapping specs list no target, so they do not
+translate.
+
+| `standards-update/.machine_readable/`
+| 13
+| The same, for `standards-update/`, with its older `6scm-archive/` copy and
+that copy's README.
+|===
+
+== What did not move
+
+Every A2ML file still outside this district is named, by exact path and with
+its reason, in `.machine_readable/a2ml-legacy-allow.txt`. In short:
+
+* families with no mapping spec, which wait for kyX (D313): the Debtfile,
+  Mustfile and the rest of the contractile set, `CLAIMS.a2ml`,
+  `rsr-criteria-v2.a2ml`, the Hypatia rules and the DYADT vectors;
+* families whose mapping spec is refused or still open: META, ECOSYSTEM,
+  STATE, ANCHOR, CLADE, `rsr-profile.a2ml` and the 0-AI-MANIFEST files;
+* AGENTIC, NEUROSYM and PLAYBOOK. They are translated into
+  `standards_chora.deed`, but RSR criteria 3.1.5 to 3.1.7 and the canon tier
+  docs still name the `.a2ml` paths;
+* the A2ML format family under `1-formats/a2ml/`, whose grammar describes the
+  files above, so it retires with the last of them;
+* the scorecard corpus, whose archive surface the owner fixed at
+  `.machine_readable/archive/scorecards-v1/` (ruling R5 on #837);
+* canon and data with no deed home yet, such as the readiness grades and the
+  session-management state templates.
+
+== Retiring another file
+
+Move it to `9-archive/a2ml/<original path>` with `git mv`, and remove its
+ledger entry in the same commit. `scripts/check-a2ml-archived.sh` fails on an
+A2ML file that is in neither place, and on a ledger entry whose file is gone.
+The exemption ratchet fails if the ledger grows.

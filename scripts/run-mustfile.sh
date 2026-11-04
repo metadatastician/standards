@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: MPL-2.0
 #
-# run-mustfile.sh — EXECUTE the checks declared in a Mustfile.a2ml.
+# run-mustfile.sh — EXECUTE the checks declared in A2ML or DEED Mustfiles.
 #
 # The Mustfile declares hard repository invariants. Each '### <id>' block has a
 # severity and a means of discharge:
@@ -24,6 +24,56 @@ MUST="${1:-.machine_readable/contractiles/must/Mustfile.a2ml}"
 if [ ! -f "$MUST" ]; then
   echo "error: Mustfile not found: $MUST" >&2
   exit 2
+fi
+
+
+# Parse live DEED checks with the normative parser; a syntactically legal but
+# unknown or empty check set must never be presented as a passing run.
+if [ "${MUST##*.}" = "deed" ]; then
+  ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+  if ! command -v bun >/dev/null 2>&1 || ! command -v jq >/dev/null 2>&1; then
+    echo "error: bun and jq are required for DEED Mustfile execution" >&2
+    exit 2
+  fi
+  if ! records="$(bun "$ROOT/1-formats/deed/tools/deed_lint.js" --mustfile-json "$MUST")"; then
+    echo "❌ Mustfile parse or profile check failed: $MUST" >&2
+    exit 1
+  fi
+  if ! jq -e 'type == "array" and length > 0' <<< "$records" >/dev/null; then
+    echo "❌ Mustfile has no executable/inspectable check records" >&2
+    exit 1
+  fi
+  pass=0 warn=0 manual=0 blocking_fail=0
+  while IFS= read -r record; do
+    name="$(jq -er '.id' <<< "$record")" || exit 1
+    sev="$(jq -er '.severity' <<< "$record")" || exit 1
+    kind="$(jq -er '.discharge' <<< "$record")" || exit 1
+    body="$(jq -er '.body' <<< "$record")" || exit 1
+    if [ "$kind" = "verification" ]; then
+      printf '  MANUAL [%-8s] %s\n' "$sev" "$name"
+      manual=$((manual + 1))
+    elif bash -c "$body" >/dev/null 2>&1; then
+      printf '  PASS   [%-8s] %s\n' "$sev" "$name"
+      pass=$((pass + 1))
+    else
+      case "$sev" in
+        critical|high)
+          printf '  FAIL   [%-8s] %s\n' "$sev" "$name"
+          blocking_fail=$((blocking_fail + 1)) ;;
+        medium|low)
+          printf '  WARN   [%-8s] %s\n' "$sev" "$name"
+          warn=$((warn + 1)) ;;
+        *) echo "error: invalid severity reached executor: $sev" >&2; exit 1 ;;
+      esac
+    fi
+  done < <(jq -c '.[]' <<< "$records")
+  printf '\nMustfile: %s passed · %s warning · %s manual · %s blocking-fail\n' "$pass" "$warn" "$manual" "$blocking_fail"
+  if [ "$blocking_fail" -gt 0 ]; then
+    echo "❌ Mustfile check FAILED ($blocking_fail blocking failure(s))" >&2
+    exit 1
+  fi
+  echo "✅ Mustfile checks passed (all critical/high checks green; manual checks reported)"
+  exit 0
 fi
 
 name="" sev="" cmd="" kind=""

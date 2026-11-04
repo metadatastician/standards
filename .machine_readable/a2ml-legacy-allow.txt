@@ -1,0 +1,226 @@
+# SPDX-License-Identifier: MPL-2.0
+# SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+#
+# a2ml-legacy-allow.txt — SHRINK-ONLY ledger of the A2ML files still live in
+# this repository. Read by scripts/check-a2ml-archived.sh.
+#
+# A2ML is retired (owner rulings D99, D269c, D312, D313). Every tracked A2ML
+# file (*.a2ml, *.a2ml.in, *.a2ml.template, *.a2ml.vN.template) must either
+# sit under 9-archive/ or be named here. Each entry is one exact path: no
+# globs, so a file added later cannot hide under a pattern. An entry whose
+# file has gone (archived, translated or deleted) fails the gate, so the
+# ledger shrinks in the same commit that retires the file.
+#
+# ⚠ SHRINK-ONLY. Registered in LEDGERS=() in scripts/check-exemption-ratchet.sh,
+# which fails on growth unless a commit in the range carries a column-0
+# trailer naming this exact path:
+#
+#     Ratchet-exception: .machine_readable/a2ml-legacy-allow.txt — <why>
+#
+# Each group below says why its files are still live and what retires them.
+# Never add a fact to a listed file (CLAUDE.md, Machine-Readable Artefacts).
+
+# ── Waiting for kyX: no mapping spec exists (owner ruling 2026-10-27, D313) ──
+# Debtfile, Mustfile, CLAIMS, rsr-criteria-v2, the Hypatia rules, the DYADT
+# vectors and the contractile INDEX. Live readers include the debt ratchet,
+# run-mustfile.sh, verify-claims.sh, the DYADT runner and Hypatia.
+.machine_readable/Debtfile.a2ml
+.machine_readable/contractiles/INDEX.a2ml
+.machine_readable/contractiles/must/Mustfile.a2ml
+0-canon/rsr/rsr-criteria-v2.a2ml
+CLAIMS.a2ml
+hypatia-rules/clade-identity-coherence.a2ml
+hypatia-rules/crg-demotion-detector.a2ml
+hypatia-rules/crg-overclaim-detector.a2ml
+hypatia-rules/k9-orphan-detector.a2ml
+hypatia-rules/profile-drift-detector.a2ml
+hypatia-rules/proof-freshness.a2ml
+hypatia-rules/rsr-self-compliance.a2ml
+hypatia-rules/uses-ref-sha-pinned.a2ml
+hypatia-rules/uuid-v8-estate-conformance.a2ml
+hypatia-rules/workflow-allowlist-gap.a2ml
+1-formats/sub-specs/did-you-actually-do-that/spec/conformance/always-match.a2ml
+1-formats/sub-specs/did-you-actually-do-that/spec/conformance/confirmed-command.a2ml
+1-formats/sub-specs/did-you-actually-do-that/spec/conformance/contains-fixture.a2ml
+1-formats/sub-specs/did-you-actually-do-that/spec/conformance/incompatible-verifier.a2ml
+1-formats/sub-specs/did-you-actually-do-that/spec/conformance/licence-in-statement.a2ml
+1-formats/sub-specs/did-you-actually-do-that/spec/conformance/manual-licence.a2ml
+1-formats/sub-specs/did-you-actually-do-that/spec/conformance/missing-field.a2ml
+1-formats/sub-specs/did-you-actually-do-that/spec/conformance/refuted-command.a2ml
+1-formats/sub-specs/did-you-actually-do-that/spec/conformance/unsafe-path.a2ml
+1-formats/sub-specs/did-you-actually-do-that/spec/conformance/unverifiable-network.a2ml
+
+# ── The rest of the contractile set ──
+# k9-contractile.yml reads every <verb>/<Verb>file.a2ml that INDEX.a2ml lists;
+# the manifests travel with their verbs. Retire with INDEX.a2ml.
+.machine_readable/contractiles/adjust/Adjustfile.a2ml
+.machine_readable/contractiles/adjust/adjust.manifest.a2ml
+.machine_readable/contractiles/bust/Bustfile.a2ml
+.machine_readable/contractiles/bust/bust.manifest.a2ml
+.machine_readable/contractiles/dust/Dustfile.a2ml
+.machine_readable/contractiles/dust/dust.manifest.a2ml
+.machine_readable/contractiles/intend/Intentfile.a2ml
+.machine_readable/contractiles/intend/intend.manifest.a2ml
+.machine_readable/contractiles/must/must.manifest.a2ml
+.machine_readable/contractiles/trust/Trustfile.a2ml
+.machine_readable/contractiles/trust/trust.manifest.a2ml
+
+# ── Mapping spec refused or decision open ──
+# META and ECOSYSTEM carry fields their tables do not list; STATE waits on
+# state-v1-decision.adoc; ANCHOR has no spec; CLADE stays until HYP-S010
+# reads the deed; the gates still read rsr-profile.a2ml until standards'
+# profile is folded into standards_chora.deed.
+.machine_readable/CLADE.a2ml
+.machine_readable/anchors/ANCHOR.a2ml
+.machine_readable/descriptiles/ECOSYSTEM.a2ml
+.machine_readable/descriptiles/META.a2ml
+.machine_readable/descriptiles/STATE.a2ml
+.machine_readable/rsr-profile.a2ml
+
+# ── Translated, but canon still names the .a2ml path ──
+# standards_chora.deed carries (agentic) (neurosym) (playbook) since #1356,
+# but RSR criteria 3.1.5-3.1.7 (Hypatia SD007-SD009), 0-canon/rsr/TIERS.adoc,
+# VERSION.adoc and 0-AI-MANIFEST.deed still name these files. Archive them
+# in the canon change that names the deed clauses instead.
+.machine_readable/descriptiles/AGENTIC.a2ml
+.machine_readable/descriptiles/NEUROSYM.a2ml
+.machine_readable/descriptiles/PLAYBOOK.a2ml
+
+# ── 0-AI-MANIFEST: decision open (1-formats/deed/mappings/ai-manifest-decision.adoc) ──
+1-formats/sub-specs/cartridges/0.2-AI-MANIFEST.a2ml
+1-formats/sub-specs/ensaid-config/0-AI-MANIFEST.a2ml
+2-protocols/0-ai-gatekeeper/0-AI-MANIFEST.a2ml
+2-protocols/0-ai-gatekeeper/examples/0-AI-MANIFEST.a2ml
+docs/wikis/0.2-AI-MANIFEST.a2ml
+
+# ── The A2ML format family ──
+# The retired format's own grammar, specs and examples. It describes every
+# live file in this ledger, so it retires with the last of them. The
+# templates wait on the same STATE decision as STATE.a2ml.
+1-formats/a2ml/agentic/.machine_readable/descriptiles/AGENTIC.a2ml
+1-formats/a2ml/agentic/.machine_readable/descriptiles/ECOSYSTEM.a2ml
+1-formats/a2ml/agentic/.machine_readable/descriptiles/META.a2ml
+1-formats/a2ml/agentic/.machine_readable/descriptiles/NEUROSYM.a2ml
+1-formats/a2ml/agentic/.machine_readable/descriptiles/PLAYBOOK.a2ml
+1-formats/a2ml/agentic/.machine_readable/descriptiles/STATE.a2ml
+1-formats/a2ml/agentic/examples/comprehensive.a2ml
+1-formats/a2ml/agentic/examples/minimal.a2ml
+1-formats/a2ml/anchor/.machine_readable/descriptiles/AGENTIC.a2ml
+1-formats/a2ml/anchor/.machine_readable/descriptiles/ECOSYSTEM.a2ml
+1-formats/a2ml/anchor/.machine_readable/descriptiles/META.a2ml
+1-formats/a2ml/anchor/.machine_readable/descriptiles/NEUROSYM.a2ml
+1-formats/a2ml/anchor/.machine_readable/descriptiles/PLAYBOOK.a2ml
+1-formats/a2ml/anchor/.machine_readable/descriptiles/STATE.a2ml
+1-formats/a2ml/ecosystem/.machine_readable/descriptiles/AGENTIC.a2ml
+1-formats/a2ml/ecosystem/.machine_readable/descriptiles/ECOSYSTEM.a2ml
+1-formats/a2ml/ecosystem/.machine_readable/descriptiles/META.a2ml
+1-formats/a2ml/ecosystem/.machine_readable/descriptiles/NEUROSYM.a2ml
+1-formats/a2ml/ecosystem/.machine_readable/descriptiles/PLAYBOOK.a2ml
+1-formats/a2ml/ecosystem/.machine_readable/descriptiles/STATE.a2ml
+1-formats/a2ml/meta/.machine_readable/descriptiles/AGENTIC.a2ml
+1-formats/a2ml/meta/.machine_readable/descriptiles/ECOSYSTEM.a2ml
+1-formats/a2ml/meta/.machine_readable/descriptiles/META.a2ml
+1-formats/a2ml/meta/.machine_readable/descriptiles/NEUROSYM.a2ml
+1-formats/a2ml/meta/.machine_readable/descriptiles/PLAYBOOK.a2ml
+1-formats/a2ml/meta/.machine_readable/descriptiles/STATE.a2ml
+1-formats/a2ml/meta/examples/comprehensive.a2ml
+1-formats/a2ml/meta/examples/minimal.a2ml
+1-formats/a2ml/neurosym/.machine_readable/descriptiles/AGENTIC.a2ml
+1-formats/a2ml/neurosym/.machine_readable/descriptiles/ECOSYSTEM.a2ml
+1-formats/a2ml/neurosym/.machine_readable/descriptiles/META.a2ml
+1-formats/a2ml/neurosym/.machine_readable/descriptiles/NEUROSYM.a2ml
+1-formats/a2ml/neurosym/.machine_readable/descriptiles/PLAYBOOK.a2ml
+1-formats/a2ml/neurosym/.machine_readable/descriptiles/STATE.a2ml
+1-formats/a2ml/neurosym/examples/comprehensive.a2ml
+1-formats/a2ml/neurosym/examples/minimal.a2ml
+1-formats/a2ml/playbook/.machine_readable/descriptiles/AGENTIC.a2ml
+1-formats/a2ml/playbook/.machine_readable/descriptiles/ECOSYSTEM.a2ml
+1-formats/a2ml/playbook/.machine_readable/descriptiles/META.a2ml
+1-formats/a2ml/playbook/.machine_readable/descriptiles/NEUROSYM.a2ml
+1-formats/a2ml/playbook/.machine_readable/descriptiles/PLAYBOOK.a2ml
+1-formats/a2ml/playbook/.machine_readable/descriptiles/STATE.a2ml
+1-formats/a2ml/playbook/examples/comprehensive.a2ml
+1-formats/a2ml/playbook/examples/minimal.a2ml
+1-formats/a2ml/state/.machine_readable/descriptiles/AGENTIC.a2ml
+1-formats/a2ml/state/.machine_readable/descriptiles/ECOSYSTEM.a2ml
+1-formats/a2ml/state/.machine_readable/descriptiles/META.a2ml
+1-formats/a2ml/state/.machine_readable/descriptiles/NEUROSYM.a2ml
+1-formats/a2ml/state/.machine_readable/descriptiles/PLAYBOOK.a2ml
+1-formats/a2ml/state/.machine_readable/descriptiles/STATE.a2ml
+1-formats/templates/AGENTIC.a2ml.template
+1-formats/templates/ECOSYSTEM.a2ml.template
+1-formats/templates/META.a2ml.template
+1-formats/templates/NEUROSYM.a2ml.template
+1-formats/templates/PLAYBOOK.a2ml.template
+1-formats/templates/STATE.a2ml.template
+1-formats/templates/STATE.a2ml.v2.template
+
+# ── Scorecard corpus: ruled archive surface (R5 on #837, 2026-10-09) ──
+# The owner fixed .machine_readable/archive/scorecards-v1/ as this corpus's
+# archive, so it does not move to 9-archive/ without a new ruling.
+.machine_readable/archive/scorecards-v1/0-ai-gatekeeper-protocol.scorecard.a2ml
+.machine_readable/archive/scorecards-v1/a2ml-templates.scorecard.a2ml
+.machine_readable/archive/scorecards-v1/accessibility.scorecard.a2ml
+.machine_readable/archive/scorecards-v1/adoption-readiness-grades.scorecard.a2ml
+.machine_readable/archive/scorecards-v1/agentic-a2ml.scorecard.a2ml
+.machine_readable/archive/scorecards-v1/anchor-a2ml.scorecard.a2ml
+.machine_readable/archive/scorecards-v1/avow-protocol.scorecard.a2ml
+.machine_readable/archive/scorecards-v1/axel-protocol.scorecard.a2ml
+.machine_readable/archive/scorecards-v1/component-readiness-grades.scorecard.a2ml
+.machine_readable/archive/scorecards-v1/contractiles.scorecard.a2ml
+.machine_readable/archive/scorecards-v1/did-you-actually-do-that.scorecard.a2ml
+.machine_readable/archive/scorecards-v1/ecosystem-a2ml.scorecard.a2ml
+.machine_readable/archive/scorecards-v1/ensaid-config.scorecard.a2ml
+.machine_readable/archive/scorecards-v1/estate-constitution.scorecard.a2ml
+.machine_readable/archive/scorecards-v1/form-fill-provenance.scorecard.a2ml
+.machine_readable/archive/scorecards-v1/foundations-readiness-grades.scorecard.a2ml
+.machine_readable/archive/scorecards-v1/hypatia-rules.scorecard.a2ml
+.machine_readable/archive/scorecards-v1/k9-coordination-protocol.scorecard.a2ml
+.machine_readable/archive/scorecards-v1/k9-svc.scorecard.a2ml
+.machine_readable/archive/scorecards-v1/meta-a2ml.scorecard.a2ml
+.machine_readable/archive/scorecards-v1/neurosym-a2ml.scorecard.a2ml
+.machine_readable/archive/scorecards-v1/overlay-protocol.scorecard.a2ml
+.machine_readable/archive/scorecards-v1/playbook-a2ml.scorecard.a2ml
+.machine_readable/archive/scorecards-v1/publication-pre-flight.scorecard.a2ml
+.machine_readable/archive/scorecards-v1/release-pre-flight.scorecard.a2ml
+.machine_readable/archive/scorecards-v1/rhodium-standard-repositories.scorecard.a2ml
+.machine_readable/archive/scorecards-v1/session-management-standards.scorecard.a2ml
+.machine_readable/archive/scorecards-v1/state-a2ml.scorecard.a2ml
+.machine_readable/archive/scorecards-v1/toolchain-readiness-grades.scorecard.a2ml
+
+# ── Canon and data with no deed home yet (no mapping spec; waiting for kyX) ──
+.machine_readable/agent_instructions/coverage.a2ml
+.machine_readable/agent_instructions/debt.a2ml
+.machine_readable/agent_instructions/methodology.a2ml
+.machine_readable/autolinks.a2ml
+.machine_readable/bot_exclusion_registry.a2ml
+.machine_readable/integrations/feedback-o-tron.a2ml
+.machine_readable/integrations/proven.a2ml
+.machine_readable/integrations/verisimdb.a2ml
+.machine_readable/integrations/vexometer.a2ml
+.machine_readable/uuid-v7-estate-standard.a2ml
+1-formats/SATELLITES.a2ml
+1-formats/contractiles/intend/Intentfile.a2ml
+1-formats/contractiles/trust/Trustfile.a2ml
+1-formats/sub-specs/inline-annotations/examples/octad-mapping.a2ml
+1-formats/sub-specs/inline-annotations/examples/output.a2ml
+2-protocols/axel/content/about.a2ml
+3-practice/accessibility/STANDARD.a2ml
+3-practice/session-management-standards/continuity/checkpoint-before-major-change/STATE-template.a2ml
+3-practice/session-management-standards/continuity/emergency-termination/STATE-template.a2ml
+3-practice/session-management-standards/continuity/planned-session-close/STATE-template.a2ml
+3-practice/session-management-standards/continuity/recovery-operation/STATE-template.a2ml
+3-practice/session-management-standards/continuity/repo-intake/STATE-template.a2ml
+3-practice/session-management-standards/handover/collaborative-transfer/STATE-template.a2ml
+3-practice/session-management-standards/handover/full-transfer/STATE-template.a2ml
+3-practice/session-management-standards/handover/human-transfer/STATE-template.a2ml
+3-practice/session-management-standards/handover/model-transfer/STATE-template.a2ml
+3-practice/session-management-standards/verify/maintenance-sweep/STATE-template.a2ml
+3-practice/session-management-standards/verify/release-audit/STATE-template.a2ml
+3-practice/session-management-standards/verify/substantial-completion/STATE-template.a2ml
+adoption-readiness-grades/ADOPTION-READINESS-GRADES.a2ml
+audits/assail-classifications.a2ml
+component-readiness-grades/COMPONENT-READINESS-GRADES.a2ml
+foundations-readiness-grades/FOUNDATIONS-READINESS-GRADES.a2ml
+toolchain-readiness-grades/TOOLCHAIN-READINESS-GRADES.a2ml
+www/.well-known/badges/registry.a2ml

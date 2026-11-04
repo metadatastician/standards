@@ -43,10 +43,11 @@ Do NOT use this playbook for:
 
 === 1. Estate-wide reference scan
 
-Every hard-coded URL reference to `github.com/<source-org>/<repo>` breaks on
-transfer. GitHub sets up a redirect for up to **30 days** (unless you create a
-new repo at the old path, in which case it snaps off immediately), but the
-redirect is best-effort — don't rely on it.
+Inventory every hard-coded reference to `github.com/<source-org>/<repo>`.
+REST and git may follow a transfer redirect, but GitHub Actions reusable
+workflow resolution does *not*: an old-owner `uses:` can end in
+`startup_failure` with zero jobs. Never infer reusable resolution from a
+successful REST lookup or checkout, and do not depend on a redirect window.
 
 **Scan:**
 
@@ -297,24 +298,83 @@ For each downstream forge:
 . Add the private key as a GitHub secret in the destination repo.
 . Re-test the mirror workflow.
 
-=== 4. Update the estate-wide references
+=== 4. Actions policy, canary, then estate-wide references
 
-Using the scan from pre-transfer step 1, sweep every external file that
-referenced the old URL:
+*Sequencing rule: allow-list -> canary -> fan-out.* This order applies to
+public as well as enterprise transfers. The caller's effective Actions policy
+is evaluated at workflow plan time. A canonical reusable can be refused even
+though the repository is public and git/REST resolve it correctly.
 
+. Inventory the effective Actions posture for every affected caller, including
+  inherited organisation/enterprise policy. For *all* callers already on
+  `selected`, widen the effective list *before* changing caller coordinates.
+  Preserve existing entries and both publisher flags *exactly*: enabling
+  `verified_allowed` admits all verified publishers, not just the narrow
+  reusable. Resolve any difference from canonical flags as a separate reviewed
+  policy decision; the live-policy checker will continue to report it. Do not
+  flip `all` to `selected`, prune a repo-specific action, or mistake an API 403
+  for an empty/healthy list. For
+  the 2026 standards move, canon is `config/settings/actions-allowlist.json`;
+  its narrow reusable pattern is
+  `metadatastician/standards/.github/workflows/*@*`. A live broader pattern is
+  retained until a separate usage census authorises narrowing.
+  The offline workflow-tree preflight uses the separate
+  `rhodium-standard-repositories/actions-allowlist/allowed-actions.json`; it
+  mirrors this transfer pattern but has other historical differences and
+  cannot verify Marketplace publisher status. Live-policy checks and the
+  updater use the estate settings payload. Do not blindly union the older tree
+  list into live settings: it contains entries intentionally pruned from canon.
+. With repository Administration read/write access, dry-run and then apply the
+  additive union to each selected caller. `scripts/widen-actions-allowlist.sh`
+  changes neither posture nor SHA-pinning, reads the list back, and verifies
+  membership rather than merely counting entries. Stop on any error; handle an
+  inherited policy at its actual controlling scope, then verify the caller's
+  effective list. Coordinate with other settings writers: the REST update is
+  not an atomic compare-and-swap.
++
 [source,bash]
 ----
-find <estate-root> -type f \( \
-  -name "*.md" -o -name "*.adoc" -o -name "*.toml" \
-  -o -name "*.yml" -o -name "*.yaml" -o -name "*.a2ml" \
-  -o -name "*.ncl" -o -name "*.json" -o -name "*.sh" \) \
-  -not -path "*/hyperpolymath-archive/*" \
-  -not -path "*/.git/*" \
-  -not -path "*/node_modules/*" \
-  -exec sed -i 's|<source-org>/<repo>|<dest-org>/<repo>|g' {} +
+bash scripts/widen-actions-allowlist.sh hyperpolymath/hypatia           # dry-run
+bash scripts/widen-actions-allowlist.sh hyperpolymath/hypatia --apply   # PUT + GET verification
 ----
++
+  Apply to every affected selected caller, not just the canary. Re-read and
+  record each result. A permission failure blocks the rollout; never infer
+  success from an inaccessible policy.
+. Canary one `hyperpolymath`-owned selected-actions repository whose workflow
+  already calls `metadatastician/standards/.github/workflows/governance-reusable.yml`
+  at an immutable SHA. For the existing Hypatia canary, after policy repair one
+  may re-run the same failed run and inspect its *latest attempt*:
++
+[source,bash]
+----
+gh run rerun 40451601571 --repo hyperpolymath/hypatia
+gh api repos/hyperpolymath/hypatia/actions/runs/40451601571 \
+  --jq '{status, conclusion, run_attempt, head_sha, html_url}'
+gh api repos/hyperpolymath/hypatia/actions/runs/40451601571/jobs \
+  --jq '{total_count, jobs: [.jobs[] | {name, status, conclusion, started_at}]}'
+----
++
+  Confirm the workflow at that run's `head_sha` uses the canonical coordinate,
+  that a *called governance job* actually has a non-null `started_at`, and that
+  the run is not `startup_failure`. A different job starting, a successful git
+  checkout, or a zero-job run is not a canary. A later job failure may still
+  prove plan-time resolution but must be triaged separately. Record the run URL,
+  attempt, effective pattern and job evidence. Wait for this proof; do not
+  fan out after a dry-run or merely a successful PUT.
+. Only then update executable `uses:` and `repository:` scalars in dependent
+  workflows to the canonical `full_name`, retaining the immutable commit pins.
+  Review changes and propagate in controlled batches; do not rewrite historical
+  prose. Check the selected-actions policy and started jobs for each batch.
 
-Commit + push each affected repo.
+[NOTE]
+====
+On 2026-10-28, Hypatia run
+https://github.com/hyperpolymath/hypatia/actions/runs/40451601571[40451601571]
+was `startup_failure` with zero jobs. That is evidence of the outage, *not* a
+successful canary. The estate rollout remains unverified until the policy and
+job-start checks above succeed with a suitably authorised integration.
+====
 
 === 5. Update submodule references
 
@@ -418,7 +478,7 @@ heavy-CI private repo can breach limits. Verify the enterprise plan's
 Actions limits before transferring any repo whose monthly minute consumption
 is material.
 
-=== Redirect window is 30 days OR until conflict
+=== Redirects do not make reusable workflows resolve
 
 If anyone creates a new repo at the old path during the redirect window
 (`<source-org>/<repo>` again), the redirect breaks IMMEDIATELY. Lock down

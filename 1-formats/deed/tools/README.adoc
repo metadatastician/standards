@@ -42,11 +42,51 @@ Enforced rules:
   (K9-consistent); bare CR rejected (CRLF or LF line-ends only)
 * quoted values restricted to symbols and lists
 
-Usage (`deed_lint.py` takes the same arguments):
+Usage (the frozen Python implementation does *not* support the newer modes):
 
     bun deed_lint.js FILE.deed...
     bun deed_lint.js --self-test          # 14-case embedded corpus
     bun deed_lint.js --fixtures fixtures/ # valid/ must pass, invalid/ must fail
+
+== `deed_lint.js --ast-json` — validated syntax for semantic consumers
+
+    bun deed_lint.js --ast-json path/to/example_praxis.deed
+
+Outputs one JSON object with `head` (the document kind) and `items` (the
+ordered parser tree), and no success messages on stdout. A field is
+`["field", "name", ["value-kind", value]]`; a clause is
+`["clause", "name", [members...]]`. `integer` values retain their *exact
+base-10 spelling as strings*, not floating-point JS numbers. Nested clauses,
+string escapes and multiline fields are parsed by the canonical grammar,
+not by line-shaped shell regexes.
+
+Exit 0 means *grammar and filename dispatch* passed, **not** that a Mustfile,
+Debtfile or claims deed has satisfied its domain invariants. Consumers MUST
+check their expected clause types and counts (including a nonzero count),
+mandatory fields, duplicates, types, enumerations and the applicable semantic
+rules before reporting success. Missing files, malformed input or ambiguous
+arguments produce a nonzero exit and *no JSON*. The tool does not execute
+embedded commands. This is the shared parsing seam for the A2ML retirement
+campaign (#837 and PR #1343), not a substitute for the existing policy gates.
+
+== `deed_lint.js --mustfile-json` — the Mustfile check profile
+
+    bun deed_lint.js --mustfile-json path/to/must_praxis.deed
+
+Validates the entire praxis-deed and every `(check …)` clause against the
+Mustfile profile, then emits a JSON array of `id`, `severity`, `discharge`
+and `body` records. Empty check sets, duplicate IDs/fields, unexpected nested
+clauses, unknown severities/discharge modes and hollow bodies are errors.
+The profile is line-layout independent; it also rejects malformed DEED
+*before* emitting any executable content.
+
+It does not run shell commands. `scripts/check-mustfile-structure.sh` uses it
+for DEED structure; `scripts/run-mustfile.sh` uses it to discharge each
+`run` entry, reporting `verification` entries as MANUAL rather than claiming
+they were executed. Those shell interfaces keep the legacy A2ML mode until
+its downstream consumers are migrated. The DEED runner requires Bun and jq;
+both are present in the repository's self-test workflow. Its regression
+suite is `scripts/tests/check-mustfile-deed-test.sh`.
 
 == `deed_lint.js --egress` — the `(egress …)` clause profile
 

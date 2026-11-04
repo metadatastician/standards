@@ -110,7 +110,8 @@ it is deliberately louder than green: a system that renders "no evidence" as
 | Hypatia verdict grid
 | `.github/workflows/hypatia-scan-reusable.yml`
 | The repository's scanners ran, and here is what they reported, one row per
-reporter, with the fleet's report-backs folded in.
+reporter, with the fleet's report-backs folded in (produced per run by the `fleet`
+job of `fork-governance.yml`, see link:LANES.adoc[LANES] "The fleet report-backs").
 |===
 
 The lane named *K9-DEED conformance* is the K9 lane and the DEED lane read as

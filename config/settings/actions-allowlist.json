@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "purpose": "Estate Actions allowlist (PUT /repos/{o}/{r}/actions/permissions/selected-actions; org-level for metadatastician). APPLY ONLY AT THE TAIL OF THE SWEEP (design spec §10 step 5): pruning before the workflows that reference the pruned actions are gone recreates the 87%-dead-runs incident.",
+  "purpose": "Estate Actions allowlist (PUT /repos/{o}/{r}/actions/permissions/selected-actions; org-level for metadatastician). For an owner transfer, widen selected-action lists before a canonical-coordinate canary and any caller fan-out. Union this payload with each live list; never prune as part of the transfer. Pruning remains a separate, audited tail-of-sweep operation (design spec §10 step 5).",
   "pruned_from_live_2026_09_02": {
     "R1/R4/R5 removals": [
       "snyk/actions@*",
@@ -90,6 +90,7 @@
     "leanprover/lean-action@*",
     "ludeeus/action-shellcheck@*",
     "lycheeverse/lychee-action@*",
+    "metadatastician/standards/.github/workflows/*@*",
     "mlugg/setup-zig@*",
     "mozilla-actions/sccache-action@*",
     "ocaml/setup-ocaml@*",
@@ -123,5 +124,6 @@
     "trufflesecurity/trufflehog@*",
     "webfactory/ssh-agent@*"
   ],
+  "transfer_note": "[2026-10-28] Reusables from transferred standards use the narrow metadatastician/standards/.github/workflows/*@* pattern. A live broader metadatastician/* or any other existing pattern is retained during rollout; audit consumers before any later narrowing.",
   "enforcement_note": "[2026-09-20 sweep] Workflow-side Codecov/Snyk references are now deleted across both estates, so the prune recorded above is safe to apply. Caveat unchanged: verified_allowed is TRUE, so Marketplace-verified creators (Snyk, Codecov, SonarSource, Semgrep, ...) run whether or not they appear in patterns_allowed. The 118→92 prune is therefore HYGIENE: R1 is enforced by deleting the workflows in the sweep, not by this list. Flipping verified_allowed to false is a separate decision (O12) taken only after a uses: census proves every verified-creator action still in use is on patterns_allowed."
 }

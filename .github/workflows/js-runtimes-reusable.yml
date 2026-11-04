@@ -54,7 +54,7 @@ jobs:
       - name: Checkout standards for the checker
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          repository: hyperpolymath/standards
+          repository: metadatastician/standards
           # This reusable's own commit (the pattern governance-reusable uses).
           ref: ${{ job.workflow_sha }}
           path: .standards-js
@@ -104,7 +104,7 @@ jobs:
         if: steps.has.outputs.pkg == 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          repository: hyperpolymath/standards
+          repository: metadatastician/standards
           ref: ${{ job.workflow_sha }}
           path: .standards-js
           persist-credentials: false

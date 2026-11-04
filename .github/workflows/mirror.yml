@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   mirror:
-    uses: hyperpolymath/standards/.github/workflows/mirror-reusable.yml@70019048f862250c04346f27e6ca196ff7aa187a
+    uses: metadatastician/standards/.github/workflows/mirror-reusable.yml@70019048f862250c04346f27e6ca196ff7aa187a
     # Exactly the ten optional secrets the callee declares at the
     # pinned SHA (verified declared ⊇ referenced). Was `secrets:
     # inherit`, which forwarded every repo/org secret (standards#1108

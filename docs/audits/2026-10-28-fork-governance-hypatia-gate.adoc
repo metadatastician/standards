@@ -1,0 +1,136 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+// SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+= Fork governance run 40235220534: Hypatia gate vs findings grid
+:description: Evidence explaining why one PR run has a failed Hypatia job and a yellow findings grid.
+:status: evidence
+:date: 2026-10-28
+
+== Finding
+
+Run link: https://github.com/metadatastician/standards/actions/runs/40235220534
+
+The run was created on 2026-10-25 at `7d7dc60babffda9f9ccdbe06a76a28147f669adf`
+(PR #1343). It has two distinct results:
+
+* the Hypatia job is *failure* because its blocking baseline gate found one
+  unbaselined high finding;
+* the rendered, change-scoped Hypatia findings grid is *yellow* because its
+  graded findings are two medium `research_extensions/RE001` findings.
+
+This is not a contradictory verdict. The grid grades the declared change scope;
+the blocking baseline gate evaluates the scan after baseline filtering and is
+not limited to the grid's delta. The failed job result remains red even though
+the grid was successfully rendered before the gate ran.
+
+== Blocking finding
+
+The check-run annotation for job `121295226287` names the cause:
+
+[source]
+----
+root_hygiene/missing in 0-AI-MANIFEST.a2ml
+1 unfiltered finding(s) at or above 'high' (1 kept in total)
+----
+
+The PR head does not have that root A2ML file, and none should be restored:
+A2ML is retired. It does have a root `standards_chora.deed`; its `front-doors`
+clause points agents to `.machine_readable/descriptiles/0-AI-MANIFEST.deed`,
+and the PR's `README.adoc` links to that same nested deed. This follows the
+newer deed front-door contract.
+
+The run's scanner is older than that contract. Both local workflow defaults
+still pin Hypatia to `aa34a4cc6ba39d873710ff39763fdb9cde715f9d` (2026-10-20).
+That version's `root_hygiene` rule requires a root `0-AI-MANIFEST.*` and does
+not recognize the repository's root deed. Hypatia commit
+[`9dfa00155d57520167ae7c5122ece9954b428b08`](https://github.com/hyperpolymath/hypatia/commit/9dfa00155d57520167ae7c5122ece9954b428b08)
+(2026-10-26) changes the rule to accept a root `<repo>_chora.deed` and adds
+tests for it; its upstream CI checks passed. This is the matching rule fix.
+
+The two changed-path RE001 medium findings are separately acknowledged as
+`warn` entries in the PR baseline through 2026-12-22. They are not the blocking
+finding. Adding a baseline exception for the stale root-hygiene result, adding
+a duplicate root manifest, or restoring `.a2ml` would hide or duplicate the
+contract rather than fix the scanner-version mismatch.
+
+== Why the grid and advisory suffix look different
+
+The verdict grid renders raw findings; it does not apply
+`.hypatia-baseline.json`. In delta mode it grades only findings attached to
+changed paths, while listing standing and excluded findings separately. The
+old rule reports the missing file under the legacy path
+`0-AI-MANIFEST.a2ml`, not the moved `.deed` path. That synthetic expected-file
+location does not match the changed deed path, so this high finding is not
+graded by the grid. The baseline gate still sees it and fails.
+
+The summary's advisory `0 critical, 0 high` counts are also *in grid scope*, not
+whole-repository totals. Panic-attack reported 41 findings in total, including
+5 critical and 1 high outside the graded scope; those remain visible in its
+standing/excluded counts and do not gate. Pons reported 22 findings, all
+outside the changed scope. The panic and pons rows are advisory.
+
+The PR head's `fork-governance.yml` also predates the current inline fleet
+report-back job, so this run has no gitbot-fleet rows. On current main the
+manifest enrolls accessibilitybot, finishingbot, glambot and rhodibot;
+panicbot is disabled to avoid duplicating the direct panic-attack row.
+
+== Pin and egress rollout boundary
+
+The narrow root-deed fix is merged upstream, but promoting
+`9dfa00155d57520167ae7c5122ece9954b428b08` is not a one-rule pin update:
+comparing it with the current `aa34...` pin advances 44 Hypatia commits and
+multiple rule/workflow areas. It should be canaried against the consumer tree
+and its new findings classified before changing either reusable default or any
+baseline.
+
+Do not jump directly to Hypatia `adb2f41db34156cf81b2508f6596a10c7f076098`.
+That later version includes RE001's declared-egress semantics, which depend on
+the unfinished local rollout. The owner selected a staged hybrid on 2026-10-28,
+now recorded in ADR-009: D131 remains operative during the transition, and
+declared egress is additive rather than a substitute. Cutover waits for change-
+procedure steps 3–6, the Trustfile invariant and agent instruction, deed
+attestations and the farm sweep, plus a recorded effective date/hash and
+validated derived registries. After cutover, Trustfile requires the attestation
+and RE001 checks workflow/deed consistency; per-job `harden-runner` remains
+permitted. ADR-009 remains *Proposed* and supersedes nothing until that formal
+cutover.
+
+The current `standards_chora.deed` has no `(egress ...)` clause. The local
+`cicd-squabbler` contract test requires pinned `harden-runner` in audit mode for
+the secret-touching, pull-request-only fight job; this per-job use is valid in
+both stages and should not be removed. No scanner pin, baseline, or workflow
+policy was changed here. The `hypatia-rules/` A2ML files are legacy, not a second
+copy of Hypatia's live rules.
+
+`.git-private-farm` is absent from this workspace. No farm-wide deed sweep or
+external repository was changed.
+
+== Changes in the current branch
+
+The summary renderer now reports a failed job and its already-rendered grid
+state separately, uses findings-family labels (`medium findings`, not
+`conformant (advisory debt)`), and identifies advisory totals as grid-scoped.
+The lane and grid documentation now states that the baseline gate and delta
+grid grade different scopes. The gating threshold, baseline contents, scanner
+pin and external repositories are unchanged.
+
+Verification:
+
+[source,sh]
+----
+bash scripts/tests/fork-governance-render-test.sh  # 37 passed
+bash scripts/tests/verdict-grid-test.sh            # 53 passed
+bash scripts/tests/hypatia-blocking-gate-test.sh   # passed
+bash scripts/tests/apply-baseline-test.sh          # 52 passed
+bash scripts/tests/cicd-squabbler-contract-test.sh # 50 passed
+----
+
+== Next steps
+
+. Complete the ADR-009 review/contest/recording steps and migration tasks before
+  the declared-egress cutover; the farm sweep requires access to
+  `.git-private-farm`.
+. Canary the `9dfa...` Hypatia ref against the PR tree and classify the full
+  rule-set delta before promoting either workflow default.
+. PR #1343 remains open and draft with 16 unresolved review threads and
+  merge conflicts; its head is outside this branch. The reporting/spec changes
+  are being packaged separately so #1343 is not altered or closed.

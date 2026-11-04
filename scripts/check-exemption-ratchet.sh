@@ -162,6 +162,10 @@ LEDGERS=(
   # The K9 debt ledger (1-formats/k9/tools/CONFORMANCE-REPORTING.adoc): the
   # k9-conformance lane also refuses an undeclared addition on its own.
   ".machine_readable/k9-contract-debt.txt"
+  # The legacy A2ML ledger (scripts/check-a2ml-archived.sh): the live A2ML files
+  # still waiting for kyX or an owner ruling. Every entry leaves when its file
+  # is archived or translated; nothing joins it.
+  ".machine_readable/a2ml-legacy-allow.txt"
 )
 
 echo "Exemption ratchet — comparing against ${BASE_REF}"

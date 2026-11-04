@@ -26,10 +26,16 @@ on:
         required: false
         default: 98
       standards-ref:
-        description: Ref of hyperpolymath/standards to source the vocab-gate script from.
+        description: >-
+          Ref of metadatastician/standards to source the vocab-gate script
+          from. Leave EMPTY to use this reusable's own commit
+          (job.workflow_sha) — the standards commit the caller pinned. A
+          branch here (the old default, "main") means one push to standards
+          changes the vocabulary floor enforced on every already-pinned
+          caller, with no review in their repository.
         type: string
         required: false
-        default: main
+        default: ""
 
 permissions:
   actions: read
@@ -134,10 +140,30 @@ jobs:
 
       - name: Fetch vocab-gate script from standards
         if: steps.decl.outputs.derive == 'true'
+        env:
+          STANDARDS_REF: ${{ inputs.standards-ref || job.workflow_sha }}
         run: |
-          # Version-locked to the same standards ref that owns this workflow.
-          git clone --depth 1 --branch "${{ inputs.standards-ref }}" \
-            https://github.com/hyperpolymath/standards.git "$RUNNER_TEMP/standards"
+          set -euo pipefail
+          # Version-locked to the standards commit that owns this workflow.
+          #
+          # A fetch, not `git clone --branch`: --branch takes a BRANCH, so it
+          # cannot express the immutable commit this step must name, and the
+          # old default ("main") made the vocabulary floor follow standards
+          # main for every already-pinned caller. `git fetch origin <sha>`
+          # works for a commit and, when a caller deliberately overrides
+          # standards-ref with a branch, for that too.
+          # A ref must not be mistakable for a git option: `git fetch origin
+          # --all` would fetch everything and leave FETCH_HEAD unpinned.
+          if ! printf '%s' "$STANDARDS_REF" | grep -Eq '^([0-9a-f]{40}|[A-Za-z0-9_][A-Za-z0-9._/-]*)$'; then
+            echo "::error::standards-ref resolved to an unusable value: '${STANDARDS_REF}'"
+            exit 1
+          fi
+          git init -q "$RUNNER_TEMP/standards"
+          git -C "$RUNNER_TEMP/standards" remote add origin \
+            https://github.com/metadatastician/standards.git
+          git -C "$RUNNER_TEMP/standards" fetch -q --depth 1 origin "$STANDARDS_REF"
+          git -C "$RUNNER_TEMP/standards" checkout -q --detach FETCH_HEAD
+          echo "Vocab-gate source: standards@$(git -C "$RUNNER_TEMP/standards" rev-parse HEAD) (requested ${STANDARDS_REF})"
           chmod +x "$RUNNER_TEMP/standards/.github/scripts/readme-vocab-gate.sh"
 
       - name: Anchor-ID convention guard

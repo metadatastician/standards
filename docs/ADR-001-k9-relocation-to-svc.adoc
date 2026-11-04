@@ -132,5 +132,5 @@ For each repo in the estate:
 * `CONTRACTILE-HOME-MIGRATION-2026-04-18.adoc` — root-level
   `1-formats/contractiles/` → `.machine_readable/contractiles/` consolidation
   (task 2 of the current migration wave).
-* `.machine_readable/migrations/contractile-layout-2026-04-18.a2ml` —
+* `9-archive/a2ml/.machine_readable/migrations/contractile-layout-2026-04-18.a2ml` (archived) —
   machine-readable migration log with per-repo outcomes.

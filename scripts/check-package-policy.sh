@@ -133,6 +133,23 @@ find_first() {
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RSR_PROFILE_CHECKER="${RSR_PROFILE_CHECKER:-$SCRIPT_DIR/check-rsr-profile.sh}"
 
+# deed_has_profile <file>: exit 0 when the deed carries an "(rsr-profile"
+# head outside comments and strings, else 1. Awk reads the file itself, with
+# no pipe: a pipe into "grep -q" lets the producer die of SIGPIPE on a large
+# deed, which pipefail turns into a false "no profile". A ";" outside a string
+# starts a comment, and string state is per line, both as in the resolver's
+# deed_strip. A head at the end of a line ends at whitespace there too.
+deed_has_profile() {
+  awk 'BEGIN { bs = sprintf("%c", 92); dq = sprintf("%c", 34) }
+  { n = length($0); q = 0
+    for (i = 1; i <= n; i++) { c = substr($0, i, 1)
+      if (q) { if (c == bs) i++; else if (c == dq) q = 0; continue }
+      if (c == dq) { q = 1; continue }
+      if (c == ";") break
+      if (c == "(" && substr($0, i, 12) == "(rsr-profile" && (i + 12 > n || substr($0, i + 12, 1) ~ /[[:space:]);]/)) { found = 1; exit } } }
+  END { exit !found }' "$1"
+}
+
 # Print the repo's effective capabilities, one per line; nothing if it has no
 # profile. A profile the reference checker cannot resolve declares nothing it
 # can read, so it counts as undeclared but is NAMED in a warning (e.g. an
@@ -149,10 +166,14 @@ effective_capabilities() {
   # so a clause token outside a ";" comment is enough to hand the deed over.
   # estate_chora.deed is the estate-deed, never a repo deed.
   if [ -z "$found" ]; then
-    for f in "$ROOT"/*_chora.deed; do
+    # ".*_chora.deed" too: the deed grammar allows a dot-led stem (.github).
+    # One of the two patterns normally has no match, so failglob must be off;
+    # dotglob would make the first match the dot-led deed as well.
+    shopt -u dotglob failglob
+    for f in "$ROOT"/*_chora.deed "$ROOT"/.*_chora.deed; do
       [ -f "$f" ] || continue
       [ "$(basename "$f")" = estate_chora.deed ] && continue
-      if sed 's/;.*$//' "$f" | grep -q '(rsr-profile[[:space:])]'; then found="$f"; break; fi
+      if deed_has_profile "$f"; then found="$f"; break; fi
     done
   fi
   [ -n "$found" ] || return 0

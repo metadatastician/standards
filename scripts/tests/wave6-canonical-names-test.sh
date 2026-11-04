@@ -95,6 +95,9 @@ for probe in "9-archives/STATE.a2ml" "docs/9-archive/STATE.a2ml"; do
   git rm -q --cached "$probe"; rm -rf "${probe%%/*}"
 done
 
+echo "== the legacy A2ML ledger names real legacy paths and is excluded =="
+grep -qF '.machine_readable/a2ml-legacy-allow.txt|' "$CHK" && ok "legacy A2ML ledger is excluded from the guard" || bad "legacy A2ML ledger not excluded"
+
 echo "== the guard excludes 0-canon/CANONICAL-NAMES.adoc itself =="
 grep -q '0-canon/CANONICAL-NAMES.adoc' "$CHK" && ok "mandate doc is excluded from the guard" || bad "mandate doc not excluded"
 

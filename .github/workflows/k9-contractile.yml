@@ -50,6 +50,9 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
 
+      - name: Install Bun for Mustfile enforcement and reporting
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+
       - name: K9-SVC Validation
         run: |
           set -euo pipefail
@@ -123,10 +126,6 @@ jobs:
           echo "${NICKEL_SHA256}  ${RUNNER_TEMP}/nickel" | sha256sum -c -
           chmod +x "$RUNNER_TEMP/nickel"
           echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
-
-      - name: Install reporting runtime
-        if: ${{ always() }}
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
 
       - name: Reporting regression tests
         run: bun test 1-formats/k9/tools/conformance-report.test.mjs

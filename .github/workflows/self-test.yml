@@ -80,8 +80,69 @@ jobs:
           chmod u+x "$RUNNER_TEMP/gh-actions-lock"
           echo "GH_ACTIONS_LOCK_BIN=$RUNNER_TEMP/gh-actions-lock" >> "$GITHUB_ENV"
 
+      - name: Reject former-owner workflow coordinates
+        run: bash scripts/check-workflow-coordinates.sh
+
+      # Every checkout of THIS repository from a shared workflow must name the
+      # commit it came from. MEASURED 2026-10-31: three steps staged helpers
+      # from the literal 317101e03b8f (2026-09-14) while main had moved 202
+      # files (+29,544/−1,736 lines) under scripts/, so every consumer was judged by six-week-old
+      # gate code — and standards' own self-lint path (which runs its local
+      # tree) could never notice. A branch here would be worse still.
+      - name: Standards helper checkouts are immutable and fresh
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          COMPARE="${BASE_SHA:-$GITHUB_SHA}"
+          bash scripts/check-standards-helper-pins.sh .github/workflows --compare "$COMPARE"
+
+      - name: Lock-gate pin is not stale
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          COMPARE="${BASE_SHA:-$GITHUB_SHA}"
+          bash scripts/check-lock-gate-pin-freshness.sh "$COMPARE"
+
+      # The fixture-driven controls for the guards above. They live in
+      # scripts/tests/ and the general suite runs them too, but that suite is
+      # red on main (dismiss-code-scanning-alerts-test.sh) and stops at its
+      # first failure, so a control that is only "in the suite" is a control
+      # nobody sees the result of. Named here so their verdict is never
+      # contingent on an unrelated red.
+      - name: Guard controls (fixture-driven)
+        run: |
+          set -euo pipefail
+          bash scripts/tests/check-lock-pin-contract-test.sh
+          bash scripts/tests/check-standards-helper-pins-test.sh
+          bash scripts/tests/check-reusable-closure-test.sh
+          bash scripts/tests/governance-canary-test.sh
+
       - name: Run tests/*.sh and scripts/tests/*.sh
         run: bash scripts/run-shell-test-suite.sh
+
+      # The suite above runs with whatever `awk` this image offers, and on
+      # ubuntu-latest that is gawk. mawk is the default awk on a plain Debian or
+      # Ubuntu install, and it rejects gawk-only constructs at parse time, so a
+      # script can be green here and dead on a contributor's machine (or on a
+      # slimmer runner) with "awk: syntax error at or near ,". Re-run the awk-
+      # heavy regression suite with `awk` shadowed by mawk so that class of
+      # breakage fails CI. Add a test here when a gate's correctness depends on
+      # awk program text; scripts/prune-stale.sh is exempt because it probes for
+      # gawk and fails closed with a clear message instead.
+      - name: awk-dependent gates also run under mawk
+        run: |
+          set -euo pipefail
+          if ! command -v mawk >/dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo apt-get install -y --no-install-recommends mawk
+          fi
+          shim="$RUNNER_TEMP/awk-shim"
+          mkdir -p "$shim"
+          ln -sf "$(command -v mawk)" "$shim/awk"
+          echo "awk -> $(PATH="$shim:$PATH" awk -W version 2>&1 | head -1)"
+          PATH="$shim:$PATH" bash scripts/tests/check-lock-sync-test.sh
 
       # KYAML ratchet (YAML-POLICY Y-3, §5 step 5, standards#1024): every file
       # already converted must stay KYAML. A file joins this list in the PR that
@@ -94,16 +155,53 @@ jobs:
           bash scripts/kyaml-format.sh --check \
             _shared/container/.gatekeeper.yaml
 
+      # A2ML is retired: every A2ML file sits under 9-archive/ or is named in
+      # the shrink-only legacy ledger (.machine_readable/a2ml-legacy-allow.txt).
+      # The fixtures in scripts/tests/check-a2ml-archived-test.sh prove the
+      # gate; this step holds the repository itself to it. --base compares
+      # ledger membership with the base, so an entry cannot join it even when
+      # another leaves (the count-only exemption ratchet misses that swap).
+      # On a pull request the base is the PR base; on main it is the previous
+      # commit. fetch-depth: 0 above makes both resolvable.
+      - name: A2ML stays archived
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          bash scripts/check-a2ml-archived.sh --base "${BASE_SHA:-HEAD~1}" .
+
       # Not part of the offline suite: this one needs real git history, so it
       # cannot live in scripts/tests/*.sh where a contributor runs it on a
       # shallow or detached tree. On a pull request the comparison is the base
       # SHA, so a PR that edits a helper is not asked to pin to its own
       # unborn merge commit; on main it is HEAD, so the bump owed after such a
       # PR lands shows up immediately instead of rotting silently.
-      - name: Lock-gate pin is not stale
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+
+  hypatia-projection:
+    name: Hypatia single-scan projection contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1.24.1
+        with:
+          elixir-version: '1.19.4'
+          otp-version: '28.3'
+      - name: Check out vetted Hypatia
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: hyperpolymath/hypatia
+          ref: adb2f41db34156cf81b2508f6596a10c7f076098
+          path: .hypatia-projection-source
+          persist-credentials: false
+      - name: Build the real SARIF renderer
+        working-directory: .hypatia-projection-source
         run: |
-          set -euo pipefail
-          COMPARE="${BASE_SHA:-$GITHUB_SHA}"
-          bash scripts/check-lock-gate-pin-freshness.sh "$COMPARE"
+          mix deps.get
+          mix escript.build
+      - name: Exercise the reusable projection with real Hypatia
+        env:
+          HYPATIA_SOURCE: ${{ github.workspace }}/.hypatia-projection-source
+        run: bash scripts/integration-hypatia-projection.sh

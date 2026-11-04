@@ -59,7 +59,7 @@ jobs:
         if: github.repository_id != 1116521501 && github.repository != 'hyperpolymath/standards' && github.repository != 'metadatastician/standards'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          repository: hyperpolymath/standards
+          repository: metadatastician/standards
           ref: ${{ job.workflow_sha }}
           path: .deed-canon
           persist-credentials: false

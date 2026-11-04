@@ -284,6 +284,7 @@ while IFS= read -r pin; do
 done <<< "$checkout_pin"
 
 # --- 8. actions.lock has no leaf self-SHA refs ---------------------------
+# Canonical standards reusable-workflow pins are transitive, not leaf actions.
 self_sha_leaves="$(awk '
   /^dependencies:/ { in_dep = 1; next }
   /^[a-z_]+:/      { in_dep = 0; cur = ""; next }
@@ -297,7 +298,7 @@ self_sha_leaves="$(awk '
     n = index(cur, "@")
     nwo = (n > 0) ? substr(cur, 1, n - 1) : cur
     pin = (n > 0) ? substr(cur, n + 1) : ""
-    if (tolower(nwo) != "hyperpolymath/standards" && length(r) == 40 && r ~ /^[0-9a-fA-F]+$/ && tolower(r) == tolower(pin)) {
+    if (tolower(nwo) != "metadatastician/standards" && length(r) == 40 && r ~ /^[0-9a-fA-F]+$/ && tolower(r) == tolower(pin)) {
       print cur
     }
     cur = ""

@@ -5,6 +5,7 @@
 :toclevels: 3
 :sectnums:
 :date: 2026-10-19
+:revdate: 2026-10-28
 
 A verdict grid is the one-screen report a CI lane posts on a pull request:
 a badge, an identity line, a table with one row per thing that was checked,
@@ -110,8 +111,8 @@ Hypatia lane; the rest come from the fleet.
 |Row |Evidence read |How it goes orange
 
 |Hypatia scan
-|`hypatia-findings.relativized.json`: one JSON array of findings with `severity`, `rule_module`, `type`, `file`, `line`, `reason`.
-|File absent, not JSON, not one array of objects, or a severity the grid does not know. The reusable's "Validate findings" step failing is exactly this case.
+|The same `hypatia.sarif` used by `block-on-high`, after validated baseline and scope filtering. Original severity and source line/class are carried in result properties; raw `hypatia-findings.json` is separate inventory.
+|SARIF absent, malformed, not one document, or a committed baseline whose filtering was not verified. Missing JSON does not turn a valid SARIF into a clean alert-inventory claim.
 
 |panic-attack assail
 |`panic-attack-findings.json`, the status envelope the reusable already writes: `status` `ran` / `not_run` / `error`, `ref`, `reason`, `report.weak_points[]` with `category`, `file`, `severity`, `description`, optional `suppressed`.
@@ -122,9 +123,51 @@ Hypatia lane; the rest come from the fleet.
 |As above.
 
 |One row per gitbot-fleet member
-|`.gitbot-fleet/report-backs/<member>.json` in the scanned tree, each a report-back envelope (below), and `.gitbot-fleet/enrolment.json` naming which members apply to this repository.
+|`.gitbot-fleet/report-backs/<member>.json` in the scanned tree, each a report-back envelope (below), and `.gitbot-fleet/enrolment.json` naming which members apply to this repository. The envelopes are produced per run, never committed: the caller's fleet job (gitbot-fleet `fleet-report-back-reusable.yml`, or its two scripts inline) uploads them as the `fleet-report-backs` artifact and `hypatia-scan-reusable.yml` (input `report-backs-artifact`) downloads them into that directory before rendering.
 |An enrolled member with no report-back is orange ("enrolled, but no report-back was received"); a member marked not enrolled is grey with the manifest's reason; a member with a report-back but no enrolment entry gets a row from its report-back alone. An unreadable manifest is one orange row named `gitbot-fleet enrolment`.
 |===
+
+=== Grade, alert inventory and corroboration
+
+The Hypatia row grades only the filtered SARIF results the blocking gate sees,
+within the grid's own delta/whole-repo scope. A separate baseline-filtered,
+pre-scope SARIF snapshot supplies excluded findings for reporting only; it is
+not uploaded to code scanning and cannot add to the graded set. A result with
+multiple locations is excluded only if all locations are excluded; unknown
+locations remain gradable. High and
+critical share SARIF's `error` level, so the projection carries the original severity separately.
+For pinned `code_safety` findings, the CWE is also recovered only from the
+CLI's exact generated `(... occurrences, CWE-..., line ...)` suffix when no
+structured class/CWE is present; other prose is never used as identity.
+Code-scanning meta-findings omitted by Hypatia's SARIF renderer and findings
+removed by a baseline cannot make that row purple. Raw JSON separately counts
+code-scanning, Dependabot and secret-scanning observations by module; some
+alert-derived findings may also appear in SARIF, so this is inventory, not an
+additional total. The opt-in `hypatia-advisory` input adds below-threshold
+advisories such as WF028 only to JSON and a separate, non-graded summary.
+One scanner run supplies both projections; the SARIF renderer remains the
+upstream scanner's implementation.
+
+Fleet rows sort by Hypatia Kin Arbiter priority (`echidnabot`, `rhodibot`,
+`panicbot`, `sustainabot`, `glambot`, `seambot`, `finishingbot`, `cipherbot`,
+`gsbot`, `accessibilitybot`, `the-hotchocolabot`); unknown members follow
+alphabetically. Built-in rows remain Hypatia, panic-attack, pons.
+
+Schema 3 preserves per-reporter counts but also publishes `unique_total`,
+`reported_total`, `counts` (unique severities), `reported_counts`, and
+`unique_findings` in `report.json`. A fingerprint combines a normalised,
+repository-relative path, a real positive line and a normalised class or CWE.
+Matching observations from distinct reporters have `corroborated_by` and the
+worst observed severity; duplicates within one reporter remain distinct.
+Without any of those identity components, or for a path outside the checkout,
+a finding is retained separately and counted under `uncorrelatable_total`.
+The projection preserves the scanner's original path for correlation: an
+outside absolute path that upstream SARIF shortened to a basename does not
+become an apparent in-repository match. Scope grading still uses the SARIF URI.
+These are conservative corroborations, not proof that unmatched results are
+different defects. Unique totals cover graded findings from gating and
+advisory rows, do not change row counts or gate decisions, and must not be
+summed with raw alert inventory. Old schema-2 baselines are incomparable.
 
 === The report-back envelope
 
@@ -144,6 +187,13 @@ A fleet member reports back by writing one JSON object:
 `suggestion` — `shared-context/src/finding.rs`) or the scanner words above;
 both normalise. `not_applicable` must carry a reason and renders grey.
 
+The producer is gitbot-fleet `scripts/fleet-report-back.sh`, a driver over each
+adapter's own local-directory JSON mode. It writes `ran`, `not_run` or `error`;
+`not_applicable` is the repository's statement and lives in the enrolment
+manifest. A member whose adapter is missing, crashed or timed out is `error`
+with the reason, so the orange row says why rather than saying nothing.
+Paths are repository-relative with no `./`, so delta scoping can match them.
+
 === The enrolment manifest
 
 [source,json]
@@ -161,12 +211,24 @@ so changing it ends comparisons with earlier revisions.
 == Comparison
 
 "Since previous revision" compares the current grid with the baseline
-embedded in the lane's previous comment on the same PR, and only when the
-schema and the *profile* match and the commit differs. The profile is a
-SHA-256 over the renderer, the enrolment manifest and the pinned tool
-commits; a changed tool or scope yields `— no comparable baseline`, never an
-apparent improvement. A row whose status changed (a scanner that ran last
-time and not this time) reads `— evidence changed`. Rows that ran both times
+embedded in the lane's previous bot-authored comment on the same PR, and only when the
+schema and the *profile* match and the commit differs. This is a comparison of
+*PR revisions*, not repository history across PRs, and it is different from the
+committed `.hypatia-baseline.json` acknowledged-findings ledger. The PR-time caller
+reads the bot-authored comment in a separate read-scoped job and supplies
+an optional prior-grid artifact to the Hypatia reusable. The reusable
+does *not* require PR-read permission, preserving compatibility for
+callers without comparison support. Failed or absent prior evidence is
+reported, never treated as clean. The profile is a
+SHA-256 over the renderer, enrolment manifest, pinned tool commits, scope mode
+and canonically ordered exclusion prefixes; a changed tool or scope yields
+`— no comparable baseline (scanner or policy profile changed)`, never an
+apparent improvement. The comparison now explains which incompatibility
+occurred (no prior PR grid, changed schema, scope or profile, different PR,
+or missing reporter); rerunning an identical commit is explicitly labelled
+as a same-commit run. The revision's
+changed-file list is not part of the profile. A row whose status changed (a
+scanner that ran last time and not this time) reads `— evidence changed`. Rows that ran both times
 compare blocking findings (critical + high) first, then medium, then minor:
 `↑ improved (n fewer blocking)`, `↓ regressed (n more blocking)`,
 `↑ fewer medium`, `↔ unchanged`, and so on.
@@ -204,9 +266,10 @@ certification; the scope footer says so in every rendering.
 ----
 jobs:
   hypatia:
-    uses: hyperpolymath/standards/.github/workflows/hypatia-scan-reusable.yml@<sha>
+    uses: metadatastician/standards/.github/workflows/hypatia-scan-reusable.yml@<sha>
     permissions: { actions: read, contents: read, security-events: write }
-    secrets: { HYPATIA_SCAN_PAT: ${{ secrets.HYPATIA_SCAN_PAT }} }
+    secrets:
+      HYPATIA_SCAN_PAT: ${{ secrets.HYPATIA_SCAN_PAT }}
   verdict:
     needs: hypatia
     if: always() && github.event_name == 'pull_request'
@@ -214,21 +277,28 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@<pinned> # name: verdict-grid
-      - run: |  # find the marked comment, PATCH it, else POST (same pattern as k9-contractile.yml)
+      # The posting implementation must find the marked comment and PATCH it,
+      # or POST a new one; see fork-governance/ADOPTION.adoc for the complete
+      # tested reusable posting engine.
 ----
 
-The reusable reads the previous comment only to fill the delta column; that
-read is best-effort and a missing previous comment means `— no comparable
-baseline`.
+The PR-time caller reads the previous bot-authored comment in its separate
+read-scoped job and supplies an optional prior-grid artifact to fill the delta
+column. The reusable does not read prior comments. Failed or absent prior
+evidence is reported as `— no comparable baseline`, never treated as clean.
 
 == Reproduce locally
 
 [source,bash]
 ----
 bash scripts/tests/verdict-grid-test.sh
-HYPATIA_FORMAT=json hypatia scan . --exit-zero > hypatia-findings.json
+# Use files from the SAME completed reusable scan artifact. SARIF is already
+# baseline/scope-filtered; do not independently rescan to obtain it. Repeat
+# --exclude-prefix for the scan's declared prefixes (9-archive/ here).
 bash scripts/verdict-grid.sh render --out verdict-grid \
-  --hypatia hypatia-findings.json --panic panic-attack-findings.json --pons pons-findings.json \
+  --hypatia hypatia-findings.json --hypatia-sarif hypatia.sarif \
+  --hypatia-sarif-unscoped hypatia.pre-scope.sarif --exclude-prefix 9-archive/ \
+  --panic panic-attack-findings.json --pons pons-findings.json \
   --report-backs .gitbot-fleet/report-backs --enrolment .gitbot-fleet/enrolment.json
 ----
 
@@ -239,11 +309,13 @@ error. Gating is the workflow's decision, taken from `report.json`.
 
 * No composite score across lanes, and no averaging within one: a grid is
   worst-of, and two lanes are two comments.
-* No change to what any scanner finds. The grid reads results; it does not
-  filter them. Baseline suppression (`.hypatia-baseline.json`) remains the
-  gate's business and is not applied to the grid, so the grid shows the
-  repository's standing debt as well as new findings; the delta column is
-  what isolates a PR's effect.
+* No change to what any scanner finds. The Hypatia row grades the gate's
+  baseline-filtered SARIF; raw JSON preserves the original inventory, including
+  acknowledged findings. Other rows report their own findings. Advisory summary
+  counts cover only the grid's graded scope; standing and excluded counts remain
+  visible where the source includes them. The job/gate result is separate from
+  the grid state: a blocking gate can fail on a high/critical finding outside
+  the delta grid's graded scope.
 * No JavaScript. The findings renderer is bash and jq so it adds nothing to
   the estate's authored-JavaScript surface (`docs/NO-JAVASCRIPT-SOURCE-POLICY.adoc`). The K9 lane's `.mjs` renderer predates this
   document; migrating it onto `verdict-grid.jq` is follow-up work, not part of this specification.

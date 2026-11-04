@@ -1,0 +1,107 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+// SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+= Open items recovered from unreachable sessions (snapshot)
+:date: 2026-10-27
+:author: Jonathan D.A. Jewell (hyperpolymath)
+:status: SNAPSHOT (dated 2026-10-27; not maintained)
+:scope: estate
+
+Companion to `2026-10-27-recovered-session-decisions.adoc`, which records the rulings. This
+file records what was left unfinished, as of 2026-10-27. It is a snapshot. It is not kept up to
+date, so check each item against its repository before acting on it.
+
+Provenance: the items come from 24 cloud-session transcripts, most only partly read.
+Statements marked *checked* were confirmed against the repository's git history on
+2026-10-27. Statements marked *unverified* could not be.
+
+== Needs the owner
+
+. *Five sessions locked to a trusted device.* These ran on the failed computer and refuse reads
+  from a cloud session: "gitbot-fleet: write verdict-grid report-backs", "Differential-test
+  sholes Rust codec (Opus retry)", "Claude API credit setup", "Sholes review" and "Deal with
+  Joshua's stuff". Open each in the Claude app on a trusted device and carry any ruling or
+  unpushed work into a repository.
+. *hypatia Actions on main.* A session reported that Governance, Hypatia Security Scan and
+  Secret Scanner failed at startup because the lock regeneration was never pushed (it lacked
+  the `workflow` OAuth scope). *Checked:* at hypatia `789ca60` the callers already use
+  `metadatastician/standards/…@333b06a0` and `actions.lock` names only the new owner. Run status
+  is *unverified*: check the latest runs before treating this as a blocker.
+. *PanLL repin.* *Checked:* panll's workflows still call `hyperpolymath/standards/…@75bd5994`
+  (and `rust-ci-reusable.yml@412a7031`), which Actions does not redirect. Choose "repin only" or
+  "repin and adopt fork-governance".
+. *D332, A1, D304.* Uninstall Probot Settings, run the A1 ruleset convergence, and provision
+  the R2 bucket and token. `docs/reorg/2026-10-14-tidy/ISSUE-1234-CLOSEOUT-REPORT.adoc` and
+  `scripts/triage-2026-10-23-issue-1234-apply.sh` hold the commands.
+. *UUID v8 rename, stages 2 and 3* (#1260). They change branch protection estate-wide.
+. *Q9 follow-up in rsr-template-repo.* `rsr-template-repo#247` merged before the Q9 tier-split
+  revision the overhaul called for.
+. *repo-init and container-init.* Share a render recipe (the recommended arm), print a hint only,
+  or leave as is.
+. *What a deed answer record may store* (for example author emails). This blocks the exact
+  drift gate for minted repositories.
+. *echidna.* D3 (the first prover pair) and D5 (the VeriSimDB issue); and whether the larger
+  spanning set of solver families is worth its extra cost (timings were never produced).
+. *Lintel.* The Canon pin (deed 2.1.2 against canon 2.1.3), and sign-off of the A-1
+  non-collusion wording and the L-7 statement.
+. *verisimdb.* Retire the `persistent-server-fly` intent, superseded by the Kautz-ladder ruling.
+. *yq upstream issue.* Drafted in a panic-attack session but never filed; its files were in a
+  scratchpad that no longer exists.
+
+== By repository
+
+=== hyperpolymath/hypatia
+
+* Baseline gate: about 28–30 older findings remained (*unverified* count).
+* Offered and not answered: change `rsr-oracle.yml`'s standards default and guard, with
+  `docs/consumers/rsr-oracle.adoc`; add a rule that flags `uses: hyperpolymath/standards/…` as a
+  certain startup failure; the repository's "selected actions" setting may need the new paths.
+* RE001 plan, "both, staged": short-lived credentials where possible, harden-runner audit then
+  block on the rest. WH013: a YAML parse through yamerl behind a `WorkflowYaml` module, which
+  needs hex.pm allowlisted in the network policy.
+* Regenerate `docs/rules/catalogue.adoc`.
+
+=== hyperpolymath/echidna
+
+* *Checked:* #444, #445 and #446 merged. `echidna lexicon scan` (PR 3) is designed but not
+  written: JCS JSON Lines output, UUIDv8 record ids, lexical normalisation now and parsed in PR 6.
+* Also open: the dead `VERISIMDB_PAT` (#310), #194, #195, the S2 training run, and an untested
+  Julia mirror filter.
+
+=== hyperpolymath/panll
+
+* *Checked:* #153–#165 merged, including #164 (239 backend commands registered).
+* Open: `GITEA_HOST` unset; Dependabot alert #15; whether to retire the ReScript scanner; what
+  "unforgeable" means for provenance; proof-ledger items blocked on #148.
+
+=== hyperpolymath/panic-attack
+
+* *Checked:* #232, #245–#248 and #250 merged. *Unverified:* #231 (the quick-xml lock bump) has
+  no squash-merge commit in recent history.
+* Open: an `ijson-jcs` crates.io release; the same `.kyaml` dogfood change in
+  rsr-template-repo; extending the Idris proof.
+
+=== hyperpolymath/rsr-template-repo
+
+* Follow-ups never queued: the exact drift gate (blocked on the answer-record ruling above), a
+  content-hash cache for the mint tools, and `sed` escaping of answers.
+* `dogfood-gate.yml`'s Canon lockstep fails in every minted repository: gate it to the
+  template repository, or read `${{ github.repository }}`.
+* The SonarCloud "C Security Rating on New Code" failure on #247 was never diagnosed.
+* The golden path was not verified in the sandbox: `just test` needs zig, which the session's
+  network policy blocked.
+
+=== metadatastician/lintel and hyperpolymath/secret-types
+
+* *Checked:* lintel #2, #3, #10 and #13 and secret-types #10 merged. *Unverified:* the state of
+  secret-types #9.
+* Open: move `_∪_` upstream into `SecretTypes.Lattice.Record`; the remaining proofs (n
+  variables, TSNI, declassification after a policy choice, the Echo connection); the deed's
+  `UNASSIGNED` fields; registration in gv-clade-index (the owner's act); repin secret-types
+  workflows still on `standards@da2c748`.
+
+=== The MetaManifold-WebUI fork
+
+* Replace `e28e832` with the three original commits, re-signed, then fast-forward; post the
+  #37 summary only after upstream #62's CI is green.
+* Work the 13% false-positive finding (`glm_nb`, 4 samples per group) on the fork first.
+* Nothing had been pushed upstream.

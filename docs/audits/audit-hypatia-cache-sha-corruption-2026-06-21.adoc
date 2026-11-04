@@ -7,7 +7,7 @@
 :source-highlighter: rouge
 :icons: font
 
-Companion machine-readable manifest: `audit-hypatia-cache-sha-corruption-2026-06-21.a2ml`.
+Companion machine-readable manifest: `9-archive/a2ml/docs/audits/audit-hypatia-cache-sha-corruption-2026-06-21.a2ml` (archived; A2ML is retired).
 Sibling to `audit-hypatia-pin-orphan-2026-05-27.adoc` — a *different* SHA-pin
 failure class on the same two reusables (that one was the orphaned
 `@<standards-sha>` reference to the reusable; this one is a corrupt

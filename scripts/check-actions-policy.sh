@@ -9,7 +9,7 @@ set -euo pipefail
 
 REPOSITORY="${1:?usage: check-actions-policy.sh <owner/repo> [allowed-actions.json]}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CANON="${2:-${ALLOWLIST_JSON:-$SCRIPT_DIR/../rhodium-standard-repositories/actions-allowlist/allowed-actions.json}}"
+CANON="${2:-${ALLOWLIST_JSON:-$SCRIPT_DIR/../config/settings/actions-allowlist.json}}"
 GH_BIN="${GH_BIN:-gh}"
 
 [ -f "$CANON" ] || { echo "ERROR: canonical allowlist not found: $CANON" >&2; exit 2; }

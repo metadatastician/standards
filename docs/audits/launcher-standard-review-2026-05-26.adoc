@@ -241,7 +241,7 @@ depend on merges landing first:
 
 == See also
 
-- link:launcher-standard-review-2026-05-26.a2ml[Machine-readable
+- link:../../9-archive/a2ml/docs/audits/launcher-standard-review-2026-05-26.a2ml[Machine-readable
   manifest] — same PR set as a parseable A2ML document.
 - `../UX-standards/launcher-standard.adoc` — the standard being
   revised.

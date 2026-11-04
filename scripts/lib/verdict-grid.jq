@@ -45,10 +45,44 @@ def norm_sev:
     elif . == "info" or . == "informational" or . == "note" or . == "suggestion" then "info"
     else "unknown" end;
 
-def finding(id; sev; file; line; msg):
+def finding(id; sev; file; line; msg; class):
   { id: (id // "" | tostring), severity: (sev | norm_sev),
-    file: (file // "" | tostring), line: (line // 0 | tonumber? // 0),
-    message: (msg // "" | tostring) };
+    file: (file // "" | tostring), identity_file: (file // "" | tostring),
+    line: (line // 0 | tonumber? // 0),
+    message: (msg // "" | tostring), class: (class // "" | tostring) };
+
+# Safe, lexical repository path normalisation. Paths outside the checkout or
+# with unresolved leading '..' remain visible but cannot corroborate another
+# result: absent identity must never collapse distinct defects.
+def norm_path($root):
+  (tostring | gsub("\\\\"; "/")) as $p
+  | ($root | gsub("\\\\"; "/") | rtrimstr("/")) as $r
+  | (if $r != "" and ($p | startswith($r + "/")) then $p | ltrimstr($r + "/") else $p end)
+  | if startswith("/") or test("^[A-Za-z]:/") then .
+    else reduce (split("/")[]) as $part ([];
+      if $part == "" or $part == "." then .
+      elif $part == ".." and length > 0 and .[-1] != ".." then .[0:-1]
+      else . + [$part] end) | join("/") end;
+
+def norm_class:
+  ascii_downcase | gsub("^\\s+|\\s+$"; "")
+  | if test("^cwe[-_ ]*[0-9]+$") then
+      "cwe-" + (capture("^cwe[-_ ]*(?<n>[0-9]+)$").n | tonumber | tostring)
+    else gsub("[^a-z0-9]"; "") end;
+
+def fingerprint:
+  (.class | norm_class) as $class
+  | .identity_file as $file
+  | if $file == "" or $file == "." or ($file | startswith("/")) or
+       ($file | test("^[A-Za-z][A-Za-z0-9+.-]*:|^(\\.\\./|\\.\\.$)")) or
+       .line <= 0 or (.line | floor != .) or
+       ($class | IN("", "unknown", "finding", "error", "none"))
+    then null else [$file, .line, $class] | tojson end;
+
+def cwe_or_class($f; $fallback):
+  if ($f.cwe // $f.cwe_id // null) != null then
+    ($f.cwe // $f.cwe_id | tostring | if test("^[0-9]+$") then "CWE-" + . else . end)
+  else ($f.class // $f.category // $fallback // "") end;
 
 def reporter(id; title; status; reason; ref; findings):
   { id: id, title: title, status: status, reason: (reason // ""), ref: (ref // ""), findings: findings }
@@ -71,34 +105,72 @@ def envelope(id; title; src; items):
     then reporter(id; title; src.doc.status; (src.doc.reason // "no reason recorded"); src.doc.ref; [])
   else reporter(id; title; "error"; "unrecognised envelope status \(src.doc.status)"; src.doc.ref; []) end;
 
-def hypatia(src; ref):
-  if src.present | not then reporter("hypatia"; "Hypatia scan"; "error"; "the scanner produced no findings array"; ref; [])
-  elif src.valid | not then reporter("hypatia"; "Hypatia scan"; "error"; "the findings file is not valid JSON"; ref; [])
-  elif (src.doc | type) != "array" or (src.doc | all(type == "object")) | not
-    then reporter("hypatia"; "Hypatia scan"; "error"; "the findings file is not one array of objects"; ref; [])
-  else reporter("hypatia"; "Hypatia scan"; "ran"; ""; ref;
-    [src.doc[] | finding("\(.rule_module // "?")/\(.type // "?")"; .severity; .file; .line; .reason)]) end;
+# The SARIF is the gate's exact, already-baseline/scope-filtered set. Raw JSON
+# is retained separately for alert-derived and opt-in advisory inventory only.
+def hypatia(src; ref; baseline_verified):
+  if baseline_verified | not then reporter("hypatia"; "Hypatia scan"; "error"; "baseline present but SARIF filtering was not verified"; ref; [])
+  elif src.present | not then reporter("hypatia"; "Hypatia scan"; "error"; "the scanner produced no SARIF projection"; ref; [])
+  elif src.valid | not then reporter("hypatia"; "Hypatia scan"; "error"; "the SARIF file is not one valid JSON document"; ref; [])
+  elif (try (src.doc.version == "2.1.0" and (src.doc.runs | type == "array" and length > 0)
+      and all(src.doc.runs[]; .tool.driver.name == "Hypatia" and (.results | type == "array")
+        and all(.results[]; type == "object" and (.ruleId | type == "string" and length > 0)
+          and ((.properties | type) == "object" or .properties == null)
+          and ((.locations | type) == "array" or .locations == null)
+          and ((.message | type) == "object" or .message == null)
+          and (try ((.locations[0].physicalLocation.artifactLocation.uri // "") | type == "string") catch false)
+          and (try ((.message.text // "") | type == "string") catch false)
+          and (.level as $l | ["error", "warning", "note", "none"] | index($l) != null)))) catch false) | not
+    then reporter("hypatia"; "Hypatia scan"; "error"; "the SARIF projection is malformed"; ref; [])
+  else (try [src.doc.runs[].results[]
+     | (.properties // {}) as $p
+     | (if .level == "error" and $p["hypatia.severity"] == "critical" then "critical"
+        elif .level == "error" then "high"
+        elif .level == "warning" then "medium" else "info" end) as $severity
+     # Match the scope filter's all-locations rule: a mixed-scope SARIF
+     # result remains visible, as does any result with an unknown location.
+     | [ .locations[]? | (try (.physicalLocation.artifactLocation.uri // "") catch "")
+         | if type == "string" then . else "" end ] as $scope_files
+     | finding((.ruleId | sub("^hypatia/"; "")); $severity;
+         (.locations[0].physicalLocation.artifactLocation.uri // "");
+         (if $p | has("hypatia.originalLine") then $p["hypatia.originalLine"] else 0 end);
+         (.message.text // ""); ($p["hypatia.class"] // (.ruleId | split("/") | last)))
+     # SARIF may collapse an outside absolute path to a basename. Preserve the
+     # original scanner path for correlation, but grade the SARIF URI itself.
+     | .identity_file = (if ($p["hypatia.originalFile"] | type) == "string"
+                          then $p["hypatia.originalFile"] else .file end)
+     | .scope_files = $scope_files] catch null) as $findings
+    | if $findings == null then
+        reporter("hypatia"; "Hypatia scan"; "error"; "SARIF result properties or locations are unreadable"; ref; [])
+      else reporter("hypatia"; "Hypatia scan"; "ran"; ""; ref; $findings) end
+  end;
 
 def panic(src):
   envelope("panic-attack"; "panic-attack assail"; src;
     [.report.weak_points[] | select(.suppressed != true)
-     | finding(.category; .severity; .file; 0; .description)]);
+     | . as $f | finding(.category; .severity; .file; .line; .description; cwe_or_class($f; .category))]);
 
 def pons(src):
   envelope("pons-asinorum"; "pons asinorum"; src;
-    [.report.findings[]
+    [.report.findings[] | . as $f
      | finding(.rule_id; .severity; .location.file; .location.line_start;
-         "\(.message) (\(.tier // "?"), \(.evidence // "?"))")]);
+         "\(.message) (\(.tier // "?"), \(.evidence // "?"))"; cwe_or_class($f; .rule_id))]);
 
 def reportback(src):
   (src.name) as $id
   | if src.valid | not then reporter($id; $id; "error"; "the report-back is not valid JSON"; ""; [])
     elif (src.doc | type) != "object" then reporter($id; $id; "error"; "the report-back is not an object"; ""; [])
+    elif (src.doc.reporter != null and ((src.doc.reporter | type) != "string" or src.doc.reporter == "")) or
+         (src.doc.title != null and (src.doc.title | type) != "string")
+      then reporter($id; $id; "error"; "the report-back identity is not a nonempty string"; ""; [])
     else (src.doc.reporter // $id) as $rid
     | (src.doc.title // $rid) as $title
     | if src.doc.status == "ran" then
-        reporter($rid; $title; "ran"; ""; src.doc.ref;
-          [ (src.doc.findings // [])[] | finding(.rule_id // .id; .severity; .file; .line; .message) ])
+        if (src.doc.findings | type) != "array" or any(src.doc.findings[]; type != "object") then
+          reporter($rid; $title; "error"; "the report-back has no readable findings array"; src.doc.ref; [])
+        else (try [src.doc.findings[] | . as $f | finding(.rule_id // .id; .severity; .file; .line; .message; cwe_or_class($f; (.rule_id // .id)))] catch null) as $fs
+          | if $fs == null then reporter($rid; $title; "error"; "the report-back findings are unreadable"; src.doc.ref; [])
+            else reporter($rid; $title; "ran"; ""; src.doc.ref; $fs) end
+        end
       elif (src.doc.status | IN("not_run", "error", "not_applicable"))
         then reporter($rid; $title; src.doc.status; (src.doc.reason // "no reason recorded"); src.doc.ref; [])
       else reporter($rid; $title; "error"; "unrecognised report-back status \(src.doc.status)"; src.doc.ref; []) end
@@ -112,21 +184,54 @@ def counts_of($fs):
 
 def counts: counts_of(.findings);
 
-# A declared exclusion is a PREFIX match on the finding's path, and it applies
-# in every mode: frozen history is out of scope whether or not the change
-# touched it.
-def under_exclusion($sc; $f):
-  any((($sc.excluded_prefixes // [])[]) ; . as $x | ($f.file // "") | startswith($x));
+# Exclude a multi-location SARIF result only if every location is excluded,
+# matching the authoritative SARIF scope filter. Any unknown location grades.
+def path_excluded($sc; $path):
+  ($path != "") and any((($sc.excluded_prefixes // [])[]); . as $p | $path | startswith($p));
 
-# A finding with NO path cannot be shown to be outside the change, so it is
-# graded. The alternative -- inferring "not mine" from a missing field -- would
-# turn malformed evidence into silence.
+def scope_paths($f):
+  if ($f.scope_files | type) == "array" and ($f.scope_files | length) > 0
+  then $f.scope_files else [($f.file // "")] end;
+
+def under_exclusion($sc; $f):
+  all(scope_paths($f)[]; path_excluded($sc; .));
+
 def bucket($sc; $f):
-  if under_exclusion($sc; $f) then "excluded"
-  elif ($sc.mode // "whole-repo") != "delta" then "graded"
-  elif ($f.file // "") == "" then "graded"
-  elif any((($sc.changed // [])[]); . == $f.file) then "graded"
-  else "standing" end;
+  (scope_paths($f)) as $paths
+  | if under_exclusion($sc; $f) then "excluded"
+    elif any($paths[]; . == "") then "graded"
+    elif ($sc.mode // "whole-repo") != "delta" then "graded"
+    elif any($paths[]; . as $path | (path_excluded($sc; $path) | not)
+             and any((($sc.changed // [])[]); . == $path)) then "graded"
+    else "standing" end;
+
+def normalize_finding($root):
+  .file |= norm_path($root) | .identity_file |= norm_path($root)
+  | if (.scope_files | type) == "array" then .scope_files |= map(norm_path($root)) else . end;
+
+# Only add excluded results from a separate pre-scope, baseline-filtered
+# projection. The gate SARIF stays authoritative for every graded finding.
+# Subtract already-present results as a multiset so failed-open scope filters
+# and repeated same-reporter results are neither hidden nor double-counted.
+def extra_excluded($all; $present; $scope; $root):
+  ($all.findings | map(normalize_finding($root))
+    | map(select(under_exclusion($scope; .)))) as $excluded
+  | ($present.findings | map(normalize_finding($root))
+    | map(select(under_exclusion($scope; .)))
+    | reduce .[] as $f ({}; ($f | tojson) as $k | .[$k] = ((.[$k] // 0) + 1))) as $counts
+  | reduce $excluded[] as $f ({counts: $counts, extra: []};
+      ($f | tojson) as $k
+      | if (.counts[$k] // 0) > 0 then .counts[$k] -= 1
+        else .extra += [$f] end) | .extra;
+
+def hypatia_with_exclusions($gate; $pre; $scope; $root; $ref; $verified):
+  hypatia($gate; $ref; $verified) as $row
+  | if $pre == null or $row.status != "ran" then $row
+    else hypatia($pre; $ref; $verified) as $full
+      | if $full.status != "ran" then
+          $row + {status: "error", reason: "pre-scope SARIF inventory is unavailable or malformed"}
+        else $row | .findings += extra_excluded($full; $row; $scope; $root) end
+    end;
 
 def state:
   if .status == "not_applicable" then "grey"
@@ -142,13 +247,38 @@ def overall:
   else (["purple", "red", "orange", "yellow", "blue", "green"] as $order
         | . as $states | $order | map(select(. as $c | $states | index($c))) | first) end;
 
+# Hypatia.Kin.Arbiter @ adb2f41, highest priority first. Unknown IDs sort
+# after known members by name, not by artifact download or JSON key order.
+def arbiter_priority:
+  {echidnabot: 1, rhodibot: 2, panicbot: 3, sustainabot: 4, glambot: 5,
+   seambot: 6, finishingbot: 7, cipherbot: 8, gsbot: 9, accessibilitybot: 10,
+   "the-hotchocolabot": 11}[.] // 99;
+
+# One occurrence per reporter may corroborate the same path/line/class in
+# another reporter. Duplicates within a reporter remain distinct (ordinal),
+# and unknown identity never merges. The worst severity survives the merge;
+# neither deduplication nor advisory evidence affects the gating row's state.
+def unique_graded($rows):
+  [ $rows[] as $r | $r.findings_graded | to_entries[]
+    | .key as $i | .value + {reporter: $r.id, gating: $r.gating, row_index: $i} ]
+  | group_by([(.fingerprint // ("unmatched:" + .reporter + ":" + (.row_index | tostring))), .reporter])
+  | map(sort_by(-(.severity | rank)) | to_entries | map(.value + {ordinal: .key})) | add // []
+  | group_by([(.fingerprint // ("unmatched:" + .reporter + ":" + (.row_index | tostring))), .ordinal])
+  | map(. as $group | (max_by(.severity | rank)) as $worst
+    | {fingerprint: $worst.fingerprint, file: $worst.file, line: $worst.line,
+       class: $worst.class, severity: $worst.severity,
+       corroborated_by: ([$group[].reporter] | unique),
+       sources: [$group[] | {reporter, id, severity, gating}]} );
+
 def build:
   . as $in
   | ($in.scope // {mode: "whole-repo"}) as $scope
   | ($in.sources | map(select(.kind == "hypatia")) | first // {present: false}) as $h
+  | ($in.sources | map(select(.kind == "hypatia-sarif")) | first // {present: false}) as $hs
+  | ($in.sources | map(select(.kind == "hypatia-unscoped-sarif")) | first) as $hu
   | ($in.sources | map(select(.kind == "panic")) | first // {present: false}) as $p
   | ($in.sources | map(select(.kind == "pons")) | first // {present: false}) as $q
-  | [ hypatia($h; $in.identity.refs.hypatia), panic($p), pons($q) ] as $builtin
+  | [ hypatia_with_exclusions($hs; $hu; $scope; ($in.root // ""); $in.identity.refs.hypatia; ($in.hypatia_baseline_verified != false)), panic($p), pons($q) ] as $builtin
   | [ $in.sources[] | select(.kind == "report-back") | reportback(.) ] as $backs
   | ($in.enrolment.reporters // {}) as $enrol
   | [ $enrol | to_entries[] | .key as $id | .value as $e
@@ -156,7 +286,8 @@ def build:
       | if $e.enrolled == true
         then reporter($id; ($e.title // $id); "not_run"; "enrolled, but no report-back was received"; ""; [])
         else reporter($id; ($e.title // $id); "not_applicable"; ($e.reason // "not enrolled for this repository"); ""; []) end ] as $missing
-  | ($builtin + $backs + $missing
+  | ($builtin + (($backs + $missing) | sort_by([(.id | arbiter_priority), (.id | ascii_downcase)]))
+     | map(.findings |= map(normalize_finding($in.root // "") | . + {fingerprint: fingerprint}))
      | map(. + {findings_graded:   [.findings[] | select(bucket($scope; .) == "graded")],
                 findings_standing: [.findings[] | select(bucket($scope; .) == "standing")],
                 findings_excluded: [.findings[] | select(bucket($scope; .) == "excluded")]})
@@ -182,7 +313,17 @@ def build:
      | map(. + {state: state})) as $reporters
   | ([$reporters[] | select(.gating)]) as $gating_rows
   | ([$reporters[] | select(.gating | not)]) as $advisory_rows
-  | { schema: 2, lane: ($in.identity.lane // "hypatia"), profile: $in.profile,
+  | (unique_graded($reporters)) as $unique
+  | ([$reporters[].findings_graded[]]) as $reported
+  | (try ($h.valid and ($h.doc | type == "array" and all(.[];
+       type == "object" and (.severity | IN("critical", "high", "medium", "warn", "low", "info", "informational"))))) catch false) as $raw_valid
+  | (if $raw_valid then
+       [$h.doc[] | select(.rule_module | IN("code_scanning_alerts", "dependabot_alerts", "secret_scanning_alerts"))]
+     else [] end) as $alerts
+  | (if $raw_valid then
+       [$h.doc[] | select(.advisory == true and (.severity | IN("low", "info", "informational")))]
+     else [] end) as $json_advisories
+  | { schema: 3, lane: ($in.identity.lane // "hypatia"), profile: $in.profile,
       sha: ($in.identity.sha // ""), run: ($in.identity.run // "local"), url: ($in.identity.url // ""),
       pr: ($in.identity.pr // "local"), repo: ($in.identity.repo // ""), dirty: ($in.identity.dirty // false),
       generated: ($in.identity.generated // ""), refs: ($in.identity.refs // {}),
@@ -201,23 +342,38 @@ def build:
                           else ($advisory_rows | map(.state) | overall) end),
                   critical: ([$advisory_rows[].findings_graded[] | select(.severity == "critical")] | length),
                   high: ([$advisory_rows[].findings_graded[] | select(.severity == "high")] | length) },
-      counts: ([$reporters[].findings_graded[]] | counts_of(.)) };
+      # These totals cover all rows in grid scope (gating AND advisory); they
+      # are not a gate. Row counts remain as reported, before deduplication.
+      counts: counts_of($unique),
+      reported_counts: counts_of($reported),
+      unique_total: ($unique | length), reported_total: ($reported | length),
+      uncorrelatable_total: ([$unique[] | select(.fingerprint == null)] | length),
+      unique_findings: $unique,
+      hypatia_json_advisories: {available: $raw_valid, total: ($json_advisories | length), findings: $json_advisories},
+      hypatia_alerts: {available: $raw_valid, total: ($alerts | length),
+        by_module: ($alerts | group_by(.rule_module) | map({key: .[0].rule_module, value: length}) | from_entries),
+        # Raw JSON inventory; some alert-derived results may also be in SARIF.
+        counts: ([$alerts[] | {severity: (.severity | norm_sev)}] | counts_of(.))} };
 
 # One row's movement since the previous revision of the same PR. `report` is
 # the whole report (profile, pr, sha); `.` is the row.
+# These cases are different facts; a missing historical comparison must not
+# look like a flat trend or an absent finding.
+def comparison_gap(prev; report):
+  if prev == null then "— no comparable baseline (no prior PR grid or unreadable snapshot)"
+  elif prev.schema != 3 then "— no comparable baseline (schema changed)"
+  elif prev.pr != report.pr then "— no comparable baseline (different PR)"
+  elif prev.sha == report.sha then "— same commit (no revision comparison)"
+  elif (prev.scope.mode // "unknown") != (report.scope.mode // "unknown") then "— no comparable baseline (scope changed)"
+  elif prev.profile != report.profile then "— no comparable baseline (scanner or policy profile changed)"
+  else null end;
+
 def delta(prev; report):
   . as $r
-  # schema 2 added scope-aware counts. A baseline embedded by a v1 renderer
-  # counted the whole repository, so comparing it with a delta-scoped count
-  # would show a large fake "improvement" on the first revision after upgrade.
-  # Unknown scope in the baseline is treated the same way: incomparable, said
-  # out loud, never silently zero.
-  | if prev == null or prev.schema != 2 or prev.profile != report.profile or prev.pr != report.pr or prev.sha == report.sha
-      or (prev.scope.mode // "unknown") != (report.scope.mode // "unknown")
-    then "— no comparable baseline" else . end
-  | if type == "string" then . else
+  | (comparison_gap(prev; report)) as $gap
+  | if $gap != null then $gap else
     (prev.reporters | map(select(.id == $r.id)) | first) as $b
-    | if $b == null then "— no comparable baseline"
+    | if $b == null then "— no comparable baseline (reporter absent previously)"
       elif $b.status != $r.status then "— evidence changed"
       elif $r.status == "not_applicable" then "↔ unchanged"
       elif $r.status != "ran" then "— indeterminate"
@@ -239,6 +395,14 @@ def word: {purple: "critical", red: "high", orange: "indeterminate", yellow: "me
 def esc: tostring | gsub("&"; "&amp;") | gsub("<"; "&lt;") | gsub(">"; "&gt;") | gsub("\\|"; "&#124;")
          | gsub("`"; "&#96;") | gsub("\r?\n"; " ");
 def badge_url(lbl; st): "https://img.shields.io/badge/\(lbl | @uri)-\(st | word | @uri)-\(st | colour)";
+
+# The pinned CLI emits the normalized `type`, not the source rule's WF code.
+# Give known advisory rules their human label without rewriting the raw JSON.
+def advisory_rule_label:
+  if .rule_module == "workflow_audit" then
+    ({sha_pinned_toolchain_without_input: "WF026", known_broken_reusable_revision: "WF027",
+      reusable_call_to_moved_repository: "WF028"}[.type] // .type // "?")
+  else (.rule // .type // "?") end;
 
 def render(prev):
   . as $r
@@ -262,8 +426,18 @@ def render(prev):
   # "purple" from a reporter that cannot block a merge and "purple" from one
   # that can are different facts, and used to look identical.
   + (if (($r.advisory.rows // 0) > 0)
-       then "Advisory: \($r.advisory.rows) row(s), worst \($r.advisory.state | state_label) (\($r.advisory.critical) critical, \($r.advisory.high) high) — reported, never grading the change.\n"
+       then "Advisory: \($r.advisory.rows) row(s), worst \($r.advisory.state | state_label) (\($r.advisory.critical) critical, \($r.advisory.high) high in grid scope) — reported, never grading the change.\n"
        else "" end)
+  + "\nUnique graded findings across gating and advisory rows: \($r.unique_total) (\($r.reported_total) reporter observations; \($r.uncorrelatable_total) without sufficient identity to corroborate). Row counts remain per reporter; unique totals do not change gating.\n"
+  + (if $r.hypatia_alerts.available then
+       "Raw Hypatia alert-derived observations: \($r.hypatia_alerts.total) (code-scanning, Dependabot and secret-scanning; some may also be in SARIF; not an extra total).\n"
+     else "Raw Hypatia alert-derived inventory unavailable.\n" end)
+  + (if ($r.hypatia_json_advisories.total // 0) > 0 then
+       "JSON-only below-threshold advisories: \($r.hypatia_json_advisories.total) (not graded or uploaded).\n\n"
+       + ([ $r.hypatia_json_advisories.findings[0:20][]
+            | "- `\(advisory_rule_label | esc)` at `\(.file // "" | esc)\(if (.line // 0) > 0 then ":\(.line)" else "" end)` — \(.reason // "" | esc | .[0:280])\n" ] | add // "")
+       + (if $r.hypatia_json_advisories.total > 20 then "- Additional advisories are in the raw JSON artifact.\n" else "" end)
+     else "" end)
   + "\n| Reporter | Gate | Status | Critical | High | Medium | Minor | Since previous revision |\n|---|---|---|---:|---:|---:|---:|---|\n"
   + ([ $r.reporters[]
        | "| \(.title | esc) | \(if .gating then "gating" else "advisory" end) | \(.state | state_label) | \(.counts.critical) | \(.counts.high) | \(.counts.medium) | \(.counts.minor) | \(delta(prev; $r)) |\n" ] | add // "")

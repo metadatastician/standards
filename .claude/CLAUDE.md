@@ -12,6 +12,12 @@ Documentation, in AsciiDoc, lives in `3-practice/fork-governance/` — `SPEC.ado
 is normative for the comment's markers and order. Machine-readable route:
 `:governance` in the `routing` clause of `standards_chora.deed`.
 
+The fleet rows in the Hypatia grid are fed by the `fleet` job of
+`fork-governance.yml` (gitbot-fleet `scripts/fleet-report-back.sh`, pinned by
+`FLEET_REF`), which uploads the `fleet-report-backs` artifact that
+`hypatia-scan-reusable.yml` downloads before rendering. `.gitbot-fleet/enrolment.json`
+says which members apply; `.gitbot-fleet/report-backs/` stays empty in git.
+
 Never hand-edit the comment, and never reorder the sections.
 
 ## License Policy — Manual Only (highest-priority guardrail)

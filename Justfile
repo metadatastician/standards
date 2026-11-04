@@ -121,6 +121,27 @@ language-guides-check:
 canonical-names-check base="origin/main":
     @bash scripts/check-canonical-names.sh "{{base}}"
 
+# Mechanical half of a repository rename: register + allowlist + tree check
+# (0-canon/CANONICAL-NAMES.adoc § "What a repository rename mechanically entails")
+retired-names-check args="--strict":
+    @bash scripts/check-retired-names.sh {{args}}
+
+# Trusted-base scanner regression suite (core + extended tiers, budget, tiers)
+trusted-base-test:
+    @bash scripts/tests/check-trusted-base-test.sh
+
+# Every normative heading in an opted-in document must declare its enforcement
+# status: `Enforced-by: <script>` or `Review-only: <why nothing does>`. Opt-in
+# per document with `// doctrine-coverage: on` so a repository that has never
+# tagged anything is not red-boarded the day the gate is installed.
+doctrine-coverage:
+    @bash scripts/check-doctrine-coverage.sh --path docs --path 0-canon
+
+# Measure the trusted-base marker set across governance callers. Writes to
+# out/ (gitignored); needs a token with estate-wide read.
+trusted-base-survey owner="hyperpolymath":
+    @bash scripts/estate-trusted-base-survey.sh --owner {{owner}}
+
 # Aggregate compliance gate. The RSR self-audit is INFORMATIONAL — a monorepo
 # is not expected to score Gold — but a *broken* audit (exit 4 / unexpected)
 # must fail loudly rather than pass silently under a blanket `|| true`
@@ -130,6 +151,8 @@ validate:
     @bash scripts/check-language-guide.sh
     @echo "=== validate: canonical-names reintroduction guard (vs origin/main) ==="
     @bash scripts/check-canonical-names.sh origin/main || bash scripts/check-canonical-names.sh HEAD
+    @echo "=== validate: doctrine coverage (every invariant names its enforcement) ==="
+    @bash scripts/check-doctrine-coverage.sh --path docs --path 0-canon
     @echo "=== validate: RSR self-audit (INFORMATIONAL grade; errors fail loudly) ==="
     @bash scripts/rsr-selfaudit.sh .
     @echo "=== validate: done ==="

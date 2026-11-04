@@ -16,6 +16,8 @@
 # returns 0 on error is indistinguishable from an empty ledger, and "empty" is
 # the state that passes.
 #
+# The rule this implements: docs/DEBTFILE-SPEC.adoc § "No fallback".
+#
 # WHY ENTRIES AND NOT LINES, for TOML. A non-comment line count for
 # `.gitleaks.toml` counts `paths = [`, the closing `]`, and every structural
 # line. Reformatting one array across several lines then reads as growth, while

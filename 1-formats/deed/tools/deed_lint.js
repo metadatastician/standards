@@ -26,6 +26,8 @@ Usage: deed_lint.js FILE...     exit 0 iff all files conform
        deed_lint.js --self-test
        deed_lint.js --egress FILE...           (egress …) clause profile (ADR-009)
        deed_lint.js --egress-fixtures DIR      DIR/valid pass the profile, DIR/invalid fail it
+       deed_lint.js --ast-json FILE           emit the validated AST as JSON (integer lexemes stay strings)
+       deed_lint.js --mustfile-json FILE      validate the Mustfile check profile and emit records
 `;
 
 import { readdirSync, readFileSync } from "node:fs";
@@ -179,12 +181,14 @@ function lexString(lx) {
   }
 }
 
-/** Lex an optionally negative decimal integer; returns ["integer", null] or null. */
+/** Lex an optionally negative decimal integer; retain its exact digits as a string.
+ * Keeping the lexeme rather than a JS Number avoids losing precision for large
+ * DEED integers when consumers inspect the validated AST. */
 function lexNumber(lx) {
   const m = /^-?[0-9]+/.exec(lx.t.slice(lx.i));
   if (m) {
     lx.i += m[0].length;
-    return ["integer", null];
+    return ["integer", m[0]];
   }
   return null;
 }
@@ -488,6 +492,81 @@ export function checkFilenameDispatch(filename, head) {
   }
 }
 
+
+/** Domain violations in an otherwise grammatical Mustfile deed. */
+export class MustfileError extends LintError {
+  constructor(msg) {
+    super(msg, null);
+    this.name = "MustfileError";
+  }
+  toString() { return this.msg; }
+}
+
+/**
+ * Convert (check ...) clauses into records without relying on physical lines.
+ * This profile validates required fields, values and uniqueness. It does NOT
+ * execute commands; the Mustfile runner remains responsible for discharge.
+ */
+export function readMustfileChecks(text, filename = null) {
+  const [head, items] = validate(text, filename);
+  if (head !== "praxis-deed") throw new MustfileError("Mustfile must be a praxis-deed");
+  const required = ["id", "severity", "discharge", "body"];
+  const allowed = new Set([...required, "description"]);
+  const topLevelFields = new Map([
+    ["schema-version", new Set(["string"])],
+    ["canonical-name", new Set(["string"])],
+    ["beholding-chora", new Set(["uuid5", "uuid8"])],
+  ]);
+  const seenTopLevel = new Set();
+  const severities = new Set(["critical", "high", "medium", "low"]);
+  const discharges = new Set(["run", "verification"]);
+  const seen = new Set();
+  const checks = [];
+  for (const node of items) {
+    if (node[0] === "field") {
+      const [, key, value] = node;
+      if (!topLevelFields.has(key)) throw new MustfileError("unknown top-level Mustfile field :" + key);
+      if (seenTopLevel.has(key)) throw new MustfileError("duplicate top-level Mustfile field :" + key);
+      if (!topLevelFields.get(key).has(value[0])) throw new MustfileError("invalid type for top-level :" + key);
+      if (value[0] === "string" && value[1].trim() === "") throw new MustfileError("empty top-level :" + key);
+      seenTopLevel.add(key);
+      continue;
+    }
+    if (node[1] !== "check") throw new MustfileError("unexpected clause (" + node[1] + ") in Mustfile");
+    const fields = new Map();
+    for (const member of node[2]) {
+      if (member[0] !== "field") throw new MustfileError("nested clauses are not valid in (check ...)");
+      const key = member[1];
+      if (!allowed.has(key)) throw new MustfileError("unknown (check ...) field :" + key);
+      if (fields.has(key)) throw new MustfileError("duplicate (check ...) field :" + key);
+      fields.set(key, member[2]);
+    }
+    for (const key of required) {
+      if (!fields.has(key)) throw new MustfileError("(check ...) missing :" + key);
+    }
+    const get = (key, kind) => {
+      const value = fields.get(key);
+      if (value[0] !== kind) throw new MustfileError(":" + key + " must be a " + kind);
+      return value[1];
+    };
+    const id = get("id", "symbol");
+    const severity = get("severity", "symbol");
+    const discharge = get("discharge", "symbol");
+    const body = get("body", "string");
+    if (!severities.has(severity)) throw new MustfileError("unknown severity: " + severity);
+    if (!discharges.has(discharge)) throw new MustfileError("unknown discharge: " + discharge);
+    if (body.trim() === "") throw new MustfileError("empty :body for " + id);
+    if (fields.has("description") && fields.get("description")[0] !== "string") {
+      throw new MustfileError(":description must be a string");
+    }
+    if (seen.has(id)) throw new MustfileError("duplicate check id: " + id);
+    seen.add(id);
+    checks.push({ id, severity, discharge, body });
+  }
+  if (checks.length === 0) throw new MustfileError("Mustfile contains no (check ...) clauses");
+  return checks;
+}
+
 const H = ";; SPDX-License-Identifier: CC-BY-SA-4.0\n";
 
 /** The embedded self-test corpus (same 14 cases, order and expectations as the Python). */
@@ -760,6 +839,37 @@ function fixtures(d) {
 
 /** CLI entry: dispatch on --self-test / --fixtures / file list; returns exit code. */
 function main(argv) {
+  if (argv.includes("--mustfile-json")) {
+    if (argv.length !== 2 || argv[0] !== "--mustfile-json" || argv[1].startsWith("-")) {
+      console.error("usage: deed_lint.js --mustfile-json FILE");
+      return 2;
+    }
+    const file = argv[1];
+    try {
+      console.log(JSON.stringify(readMustfileChecks(readFileSync(file, "utf8"), file)));
+      return 0;
+    } catch (e) {
+      console.error("FAIL " + file + ": " + (e instanceof LintError ? e.toString() : e.message));
+      return 1;
+    }
+  }
+  if (argv.includes("--ast-json")) {
+    // One input and a clean stdout contract: consumers must never receive a
+    // partial AST or a success-shaped empty result for invalid DEED input.
+    if (argv.length !== 2 || argv[0] !== "--ast-json" || argv[1].startsWith("-")) {
+      console.error("usage: deed_lint.js --ast-json FILE");
+      return 2;
+    }
+    const file = argv[1];
+    try {
+      const [head, items] = validate(readFileSync(file, "utf8"), file);
+      console.log(JSON.stringify({ head, items }));
+      return 0;
+    } catch (e) {
+      console.error(`FAIL ${file}: ${e instanceof LintError ? e.toString() : e.message}`);
+      return 1;
+    }
+  }
   if (argv.includes("--self-test")) return selfTest();
   if (argv.includes("--egress-fixtures")) {
     const d = argv[argv.indexOf("--egress-fixtures") + 1];

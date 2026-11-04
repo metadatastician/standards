@@ -411,46 +411,47 @@ jobs:
     timeout-minutes: 20
     runs-on: ${{ inputs.runs-on }}
     if: vars.RADICLE_MIRROR_ENABLED == 'true'
-    # Map the secret to env so step `if:`s can gate on its presence: the
-    # `secrets` context is NOT available in `if:` (using it is an
-    # "Unrecognized named-value: 'secrets'" startup failure). `env` IS
-    # available in step `if:`, and secrets are valid in job-level `env`.
-    env:
-      RADICLE_KEY: ${{ secrets.RADICLE_KEY }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
-      # All Radicle steps gate on secrets.RADICLE_KEY being set on the
-      # caller repo (passed explicitly under that declared name). Without this gate
-      # the workflow burned ~3 minutes of Rust+Radicle install on every
-      # push to every RADICLE_MIRROR_ENABLED repo only to fail at
-      # `~/.radicle/keys/radicle: No such file or directory` because the
-      # `echo "" > ...` write into a non-existent dir errors out — and
-      # even if the dir existed, the empty-key write would never sync.
-      # Caught 26 estate repos on the 2026-05-30 audit. The vars gate
-      # answers "is Radicle mirror desired here?"; the secret gate
-      # answers "are we configured to actually do it?".
+      # secrets cannot be read directly in a step if-expression. Publish only
+      # a boolean, never the key: the Rust setup and cargo install steps must
+      # not inherit RADICLE_KEY while they download and run build scripts.
+      - name: Check Radicle configuration
+        id: radicle
+        env:
+          RADICLE_KEY: ${{ secrets.RADICLE_KEY }}
+        run: |
+          if [ -n "$RADICLE_KEY" ]; then
+            echo 'configured=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'configured=false' >> "$GITHUB_OUTPUT"
+          fi
       - name: Setup Rust
-        if: ${{ env.RADICLE_KEY != '' }}
+        if: steps.radicle.outputs.configured == 'true'
         uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # stable
         with:
           toolchain: stable
       - name: Install Radicle
-        if: ${{ env.RADICLE_KEY != '' }}
+        if: steps.radicle.outputs.configured == 'true'
         run: |
           cargo install radicle-cli --locked
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
       - name: Mirror to Radicle
-        if: ${{ env.RADICLE_KEY != '' }}
+        if: steps.radicle.outputs.configured == 'true'
+        env:
+          RADICLE_KEY: ${{ secrets.RADICLE_KEY }}
         run: |
+          umask 077
           mkdir -p ~/.radicle/keys
           printf "%s\n" "$RADICLE_KEY" > ~/.radicle/keys/radicle
+          unset RADICLE_KEY
           chmod 600 ~/.radicle/keys/radicle
           rad sync --announce || echo "Radicle sync attempted"
       - name: Skipped (RADICLE_KEY not configured)
-        if: ${{ env.RADICLE_KEY == '' }}
+        if: steps.radicle.outputs.configured != 'true'
         run: |
           echo "::notice::RADICLE_MIRROR_ENABLED=true but secrets.RADICLE_KEY is empty. Skipping Radicle mirror. Configure the RADICLE_KEY org/repo secret to enable."
 

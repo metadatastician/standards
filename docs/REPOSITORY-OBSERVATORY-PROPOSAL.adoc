@@ -1,0 +1,221 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+= Repository Observatory: reporting contract proposal (draft v0.1)
+:toc: left
+:toclevels: 4
+:revdate: 2026-10-29
+:status: proposal
+
+== Purpose and boundaries
+
+Provide one comprehensible, evidence-grounded account of a pull request and its
+repository without creating a second CI gate or a competing PR-comment writer.
+This is a proposed *reporting and presentation contract*, not an adopted K9,
+DEED or Hypatia conformance rule. Existing canonical validators and gating
+decisions remain authoritative until independently revised.
+
+The Observatory is a projection of existing evidence, never an independent
+assertion that the code is safe or that a DEED's claims are true.
+
+== Non-negotiable invariants
+
+. One PR, one updated public-safe summary comment. Preserve the existing
+  bot-author and marker safeguards and the single-poster architecture from
+  link:../3-practice/fork-governance/SPEC.adoc[fork governance].
+. The K9-DEED conformance *status* appears in every summary and every filtered
+  view; it cannot be hidden. L0-L2 validation MUST NOT be presented as L3
+  signature verification, whole-system proof or a claim that DEED metadata is true.
+. The test-suite section precedes other optional analysis integrations in the
+  Observatory. This is an order of *our report*, not a promise to reorder
+  independently published GitHub Checks or external apps.
+. User-selected visible sections do not change CI execution, evidence retention,
+  gating, scope, access control or the machine-readable report.
+. Every absent, skipped, indeterminate, inaccessible and not-applicable result
+  has a reason. None is silently translated into pass or zero.
+. The public PR payload contains only data explicitly classified as safe for
+  that repository's audience. CSS hiding, accordions and JavaScript filters
+  are not privacy controls.
+. Every visible state identifies its evidence source, subject commit, applicable
+  scope, collection time, policy/tool revision and any relevant limitation.
+
+== Concepts
+
+*Evidence observation*::
+  A record from a named producer (Hypatia, K9 validator, DEED parser, a test
+  runner, a dependency checker or a gitbot-fleet adapter). Producers retain
+  ownership of their factual assertions.
+
+*Verdict*::
+  A policy projection over observations with an explicit subject and scope.
+  Distinguish CI execution from evaluation: a failed job and a yellow grid may
+  both be true if they measure different facts.
+
+*Subject*::
+  A repository ID and immutable commit SHA, optionally a PR/base/head pair.
+  Repository names may change; IDs must be recorded when the provider exposes
+  them. A display alias is not a durable identity.
+
+*Scope*::
+  One of PR change, repository snapshot, or acknowledged-debt inventory. A
+  reader must not infer one scope from a differently scoped display.
+
+*Lineage*::
+  An evidence-backed graph of GitHub fork relationships, mirrors, branch refs
+  and manually declared upstreams, each with a different edge kind.
+
+== Display contract
+
+At the top: repository identity, subject commit, run link, evidence freshness,
+test-suite entry point and mandatory K9-DEED conformance summary. A compact
+high-level status table summarises all producers without treating unknown as
+success. DEED syntax and K9-DEED conformance remain separate factual lanes.
+
+Optional display sections, when enabled, follow this order:
+
+. Tests: test execution, unit/integration/regression, coverage, failures,
+  missing suites and source evidence. Position first among optional integrations.
+. Forks and lineage: render only for real GitHub forks or other explicitly
+  declared lineage relationships; show not applicable otherwise.
+. Hypatia and fleet: grouped findings with a count and evidence per scope,
+  stable-enough identity, deduplication provenance and an investigation view.
+. Owner-only private farm oversight: no restricted detail in public PR output.
+. Dependencies: terminal section, grouped by direct/transitive reachability,
+  support/security/maintenance state, scope and owner-remediable action.
+
+A repository may display only selected panels, but the test-suite entry and
+the K9-DEED status remain visible. Filters do not mutate the report or assert
+that a hidden finding has ceased to exist.
+
+== K9-DEED traceability
+
+The visual matrix MUST link each applicable DEED requirement to the relevant
+K9 obligation, rule/layer, validation outcome and evidence/provenance. Record
+unverified links and partial evidence explicitly. A green test is not a proof
+of all normative obligations. The linked obligations, not a percentage score,
+are the primary information.
+
+The existing conformance-family vocabulary and its underlying L0-L2
+boundaries remain in force. Introduce no new K9 acceptance rule by changing
+the renderer. Future L3 and proof-system evidence must be separately named.
+
+== Fork topological view
+
+GitHub's fork flag and upstream parent/source fields determine whether a
+provider-recognised fork exists. Do not infer forks from a repository name,
+a similarly named template, a remote URL or the fact that a workflow is called
+fork-governance. For non-forks, fork divergence is *not applicable*.
+
+Stations are repositories/branches; lines are typed relationships (GitHub
+fork, mirror, declared upstream, dependency or promotion). Only a typed,
+observed relationship may be rendered as established. Each station records
+last verified time, relevant commit refs, ahead/behind counts when comparable,
+and the last relevant CI-flow situation report. Unavailable comparisons do
+not become zero divergence.
+
+== Hypatia comparison model
+
+Three disjoint comparisons are required:
+
+[cols="1,2,2"]
+|===
+|View |Question |Baseline source
+
+|PR revision
+|What changed across revisions of this PR?
+|Prior trusted bot-authored PR grid, only when schema, profile, scope and
+subject identity are comparable
+
+|Repository history
+|How did the repository improve or regress over time?
+|A versioned series of full-tree scans with persistent provenance and a
+declared comparison policy; not reconstructed from the latest PR comment
+
+|Accepted debt
+|What has been acknowledged, expired, newly introduced or resolved?
+|The committed Hypatia acknowledgement ledger, with expiry and
+finding-identity semantics independent of PR-scoped counts
+|===
+
+The historical trend store is *not yet implemented* by the current PR grid.
+Do not show an overall historical delta until it exists. When a comparison is
+unavailable, say whether no earlier snapshot exists, evidence was inaccessible,
+the scanner/policy changed, coverage changed, or the identity was insufficient.
+
+Where findings are correlated across tools, retain all original observations,
+their separate severity/role, and the correlation method. A deduplicated count
+must not erase a contradictory observation.
+
+== Dependency investigations
+
+Distinguish missing/unresolvable, archived, maintainership concerns,
+malfunction, known vulnerability, suspected compromise and confirmed
+compromise. These are neither mutually exclusive nor interchangeable.
+Warning signs are not a confirmed compromise.
+
+For each relevant dependency record:
+* direct or transitive path, resolved version and relevant feature/platform;
+* evidence source and most recent check;
+* reason for classification and confidence/uncertainty;
+* whether impact is demonstrably reachable in the repository's relevant scope;
+* a concrete mitigation, and the split between locally actionable maintenance
+  and fixes requiring upstream or external control.
+
+A missing advisory feed must not be reported as zero vulnerabilities.
+
+== Private-farm boundary
+
+The public Observatory has *no right* to read or embed sensitive farm data.
+The restricted projection requires authentication and an authorisation
+decision for the current viewer and repository, with explicit delegation.
+Default deny; public visibility of even connection/coverage status is
+opt-in per repository.
+
+The restricted owner view may show connection, last verified update, a private
+link, and a minimal ! action-needed or ? information-incomplete indicator.
+No private URL, issue title, secret, identity or detailed status may enter a
+public PR comment or public job artifact by default. Server-side access
+checks and audit logs are required; visual hiding is insufficient.
+
+== Machine-readable envelope: proposed v1
+
+The machine contract should be versioned and assembled after evidence producers
+finish. Its minimum fields are: schema identity; repository ID and display
+name; immutable subject SHA/PR/base; generating run ID and timestamp; producer
+and policy revisions; collection/completeness status; clearly scoped verdicts;
+evidence references; a permanent K9-DEED summary; and redaction/sensitivity
+classification. Each optional section can be unknown, not run, not applicable,
+or deliberately withheld; absence has no default-green meaning.
+
+The renderer MUST consume the evidence envelope and not recalculate conformance
+or invention of success from an empty table. The existing per-lane artifacts
+and markers remain readable through migration; do not silently swap
+the wire format of current grids.
+
+== Rollout and acceptance gates
+
+. Agree the envelope schema and establish consumer/producer compatibility tests.
+. Canary in standards, one actual GitHub fork (e.g. MetaManifold-WebUI) and
+  one large-findings repository, without modifying required checks.
+. Verify a genuinely passing test, a failing test, no tests, and a zero-job
+  startup failure appear differently.
+. Test old and new K9/Hypatia report compatibility, and signed pinned workflow
+  consumption across hyperpolymath and metadatastician.
+. Plant a contradictory grid, malformed dependency result, unavailable earlier
+  baseline, private-farm unauthorised viewer, and forged PR-comment baseline.
+. Validate keyboard, focus, screen-reader, non-colour cues, responsive layout,
+  sufficient contrast, linkability and contextual help.
+. Promote pinned versions only after canary checks, with a reversible rollback
+  per caller and estate-wide adoption ledger. Never replace policy enforcement
+  with favourable infographic scores.
+
+== Open architectural questions
+
+* Where historical immutable scan snapshots live, how long they are retained,
+  who may read them, and how tool/profile changes are bridged.
+* Whether a GitHub App is introduced for richer Checks UI and owner-restricted
+  observatory data, or a separate authenticated service supplies that view.
+* Which components determine dependency reachability and ownership, versus
+  merely reporting advisory metadata.
+* How K9/DEED evidence links are represented in a typed graph without
+  claiming an unevidenced proof or changing normative semantics.
+* How to keep public PR comments concise while allowing a full interactive
+  investigation surface in a separate linked interface.

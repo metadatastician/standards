@@ -67,7 +67,7 @@ echo "== a missing lane is orange and stays in the table =="
 d="$TMP/b"; render "$d" --deed-result success --k9-result success --k9-verdict green \
   --hypatia-result skipped
 check "skipped hypatia still has a table row" \
-  "grep -q '| Hypatia verdict grid | 🟠 indeterminate' '$d/body.md'"
+  "grep -Fq '| Hypatia verdict grid | 🟠 indeterminate (job: skipped)' '$d/body.md'"
 check "the missing hypatia grid is called out, not omitted" \
   "grep -q 'no verdict-grid artifact was produced' '$d/body.md'"
 check "overall badge is orange when any lane is indeterminate" \
@@ -76,13 +76,55 @@ check "overall badge is orange when any lane is indeterminate" \
 echo "== a failed job outranks its own stale green grid =="
 d="$TMP/c"; render "$d" --deed-result success --k9-result failure --k9-verdict green \
   --k9-report "$grid_k9" --hypatia-result success --hypatia-verdict green --hypatia-report "$grid_hyp"
-check "k9 row is failing, not green" "grep -q '| K9-DEED conformance .* | 🔴 failing' '$d/body.md'"
+check "k9 row is failing, not green" \
+  "grep -Fq '| K9-DEED conformance (L0–L2; L3 not verified) | 🔴 failing (job: failure; grid: 🟢 conformant) |' '$d/body.md'"
 check "overall badge is red" "grep -q '\"message\": \"failing\"' '$d/badge.json'"
+
+echo "== Hypatia job failure and findings-grid state remain distinct =="
+d="$TMP/c2"; render "$d" --deed-result success --k9-result success --k9-verdict green \
+  --k9-report "$grid_k9" --hypatia-result failure --hypatia-verdict yellow \
+  --hypatia-report "$grid_hyp" --hypatia-advisory "green:0:0"
+check "failed Hypatia job stays red while its grid remains yellow" \
+  "grep -Fq '| Hypatia verdict grid | 🔴 failing (job: failure; grid: 🟡 medium findings) · advisory in grid scope: 🟢 green (0 critical, 0 high, not grading) |' '$d/body.md'"
+check "scope note explains a gate can fail outside the delta grid" \
+  "grep -q 'blocking gate may inspect findings outside the delta grid' '$d/body.md'"
+check "the rendered grid is still embedded" "grep -q 'HYP-GRID-BODY' '$d/body.md'"
+check "overall badge remains red for the failed job" "grep -q '\"message\": \"failing\"' '$d/badge.json'"
 
 echo "== an unknown state word is indeterminate, never green =="
 d="$TMP/d"; render "$d" --deed-result success --k9-result success --k9-verdict 'looks-fine' \
   --k9-report "$grid_k9" --hypatia-result success --hypatia-verdict green --hypatia-report "$grid_hyp"
-check "unrecognised verdict renders orange" "grep -q '| K9-DEED conformance .* | 🟠 indeterminate' '$d/body.md'"
+check "unrecognised verdict renders orange" \
+  "grep -Fq '| K9-DEED conformance (L0–L2; L3 not verified) | 🟠 indeterminate (job: success) |' '$d/body.md'"
+d="$TMP/d2"; render "$d" --deed-result success --k9-result success --k9-verdict purple \
+  --k9-report "$grid_k9" --hypatia-result success --hypatia-verdict green --hypatia-report "$grid_hyp"
+check "findings-only purple is invalid for K9 conformance" \
+  "grep -Fq '| K9-DEED conformance (L0–L2; L3 not verified) | 🟠 indeterminate (job: success) |' '$d/body.md'"
+
+echo "== findings labels do not borrow conformance vocabulary =="
+d="$TMP/d3"; render "$d" --deed-result success --k9-result success --k9-verdict green \
+  --k9-report "$grid_k9" --hypatia-result success --hypatia-verdict yellow --hypatia-report "$grid_hyp"
+check "medium findings are not labelled as conformance debt" \
+  "grep -Fq '| Hypatia verdict grid | 🟡 medium findings (job: success) |' '$d/body.md'"
+check "overall yellow badge is neutral across grading families" \
+  "grep -q '\"message\": \"attention\"' '$d/badge.json'"
+d="$TMP/d4"; render "$d" --deed-result success --k9-result success --k9-verdict green \
+  --k9-report "$grid_k9" --hypatia-result success --hypatia-verdict blue --hypatia-report "$grid_hyp"
+check "blue means minor findings" \
+  "grep -Fq '| Hypatia verdict grid | 🔵 minor findings (job: success) |' '$d/body.md'"
+check "overall blue badge says minor findings" \
+  "grep -q '\"message\": \"minor findings\"' '$d/badge.json'"
+
+echo "== cross-family colour precedence =="
+d="$TMP/blue-vs-yellow"; render "$d" --deed-result success --k9-result success --k9-verdict yellow \
+  --hypatia-result success --hypatia-verdict blue
+check "yellow conformance debt outranks blue minor findings" "grep -q '\"color\": \"yellow\"' '$d/badge.json'"
+d="$TMP/blue-vs-orange"; render "$d" --deed-result success --k9-result success --k9-verdict orange \
+  --hypatia-result success --hypatia-verdict blue
+check "orange missing evidence outranks blue minor findings" "grep -q '\"color\": \"orange\"' '$d/badge.json'"
+d="$TMP/red-vs-purple"; render "$d" --deed-result failure --k9-result success --k9-verdict green \
+  --hypatia-result success --hypatia-verdict purple
+check "purple critical is not masked by red" "grep -q '\"color\": \"blueviolet\"' '$d/badge.json'"
 
 echo "== DEED lane =="
 d="$TMP/e"; render "$d" --deed-result success --k9-result success --k9-verdict green \
@@ -99,7 +141,8 @@ check "DEED with no result is indeterminate" "grep -q '| DEED syntax (repo deed)
 echo "== findings-family purple is carried through, not flattened =="
 d="$TMP/h"; render "$d" --deed-result success --k9-result success --k9-verdict green \
   --k9-report "$grid_k9" --hypatia-result success --hypatia-verdict purple --hypatia-report "$grid_hyp"
-check "purple hypatia row" "grep -q '| Hypatia verdict grid | 🟣 critical' '$d/body.md'"
+check "purple hypatia row uses findings-family wording" \
+  "grep -Fq '| Hypatia verdict grid | 🟣 critical findings (job: success) |' '$d/body.md'"
 check "purple overall badge colour" "grep -q '\"color\": \"blueviolet\"' '$d/badge.json'"
 
 echo "== determinism =="
@@ -115,8 +158,8 @@ d="$TMP/k"
 render "$d" --deed-result success --k9-result success --k9-verdict green --k9-report "$grid_k9" \
   --hypatia-result success --hypatia-verdict green --hypatia-report "$grid_hyp" \
   --hypatia-advisory "purple:4:1"
-check "a green verdict stays green with 4 advisory criticals" \
-  "grep -q '| Hypatia verdict grid | 🟢 conformant .* · advisory: 🟣 purple (4 critical, 1 high, not grading) |' '$d/body.md'"
+check "a clean grid stays green and labels advisory counts as grid-scoped" \
+  "grep -Fq '| Hypatia verdict grid | 🟢 no graded findings (job: success) · advisory in grid scope: 🟣 purple (4 critical, 1 high, not grading) |' '$d/body.md'"
 check "the overall badge is green, not purple" "grep -q '\"message\": \"conformant\"' '$d/badge.json'"
 check "the advisory counts are not folded into the row state" \
   "! grep -q '| Hypatia verdict grid | 🟣' '$d/body.md'"

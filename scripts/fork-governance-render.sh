@@ -116,43 +116,108 @@ glyph_for() {
 word_ok() {
   case "$1" in green|yellow|orange|red|purple|blue|grey) return 0 ;; *) return 1 ;; esac
 }
+word_ok_for_family() { # $1=conformance|findings, $2=state
+  case "$1:$2" in
+    conformance:green|conformance:yellow|conformance:orange|conformance:red|conformance:grey) return 0 ;;
+    findings:green|findings:yellow|findings:orange|findings:red|findings:purple|findings:blue|findings:grey) return 0 ;;
+    *) return 1 ;;
+  esac
+}
 rank_of() {
-  case "$1" in red) printf 4 ;; purple) printf 4 ;; blue) printf 3 ;; orange) printf 3 ;;
-                 yellow) printf 2 ;; green) printf 1 ;; *) printf 3 ;; esac
+  # A common, explicit ordering across both grading families. In particular,
+  # blue (minor findings) must not mask orange or yellow, regardless of which
+  # lane happened to be assembled first.
+  case "$1" in purple) printf 6 ;; red) printf 5 ;; orange) printf 4 ;;
+                 yellow) printf 3 ;; blue) printf 2 ;; green) printf 1 ;;
+                 grey) printf 0 ;; *) printf 4 ;; esac
 }
 
 # A job result says whether the LANE COMPLETED. A grid state says WHAT IT
 # FOUND. They are different claims and both are reported: a job that failed
 # while its grid said green is red, because the failure is the newer fact.
-lane_state() { # $1 = result, $2 = verdict, $3 = family default
-  local result="$1" verdict="$2"
+lane_state() { # $1 = result, $2 = verdict, $3 = grading family
+  local result="$1" verdict="$2" family="$3"
   case "$result" in
     success)
-      if word_ok "$verdict"; then printf '%s' "$verdict"; else printf 'orange'; fi ;;
+      if word_ok_for_family "$family" "$verdict"; then printf '%s' "$verdict"; else printf 'orange'; fi ;;
     failure)  printf 'red' ;;
     *)        printf 'orange' ;;
   esac
 }
 
-DEED_STATE="$(lane_state "$DEED_RESULT" "")"
-K9_STATE="$(lane_state "$K9_RESULT" "$K9_VERDICT")"
-HYP_STATE="$(lane_state "$HYPATIA_RESULT" "$HYPATIA_VERDICT")"
+DEED_STATE="$(lane_state "$DEED_RESULT" "" conformance)"
+K9_STATE="$(lane_state "$K9_RESULT" "$K9_VERDICT" conformance)"
+HYP_STATE="$(lane_state "$HYPATIA_RESULT" "$HYPATIA_VERDICT" findings)"
 
 # DEED is a conformance lane with no grid of its own: success is green.
 [ "$DEED_RESULT" = success ] && DEED_STATE=green
 
-# Human label per state, in the vocabulary the rest of the estate uses.
-label_of() {
+# Human labels for the two grading families. A findings-grid state is not a
+# conformance claim: in particular, yellow means medium findings, not
+# "conformant with advisory debt".
+label_of() { # conformance vocabulary
   case "$1" in
     green)  printf 'conformant' ;;
     yellow) printf 'conformant (advisory debt)' ;;
     orange) printf 'indeterminate' ;;
     red)    printf 'failing' ;;
-    purple) printf 'critical' ;;
-    blue)   printf 'high findings' ;;
     grey)   printf 'not applicable' ;;
     *)      printf 'indeterminate' ;;
   esac
+}
+findings_label_of() {
+  case "$1" in
+    green)  printf 'no graded findings' ;;
+    yellow) printf 'medium findings' ;;
+    orange) printf 'indeterminate' ;;
+    red)    printf 'high findings' ;;
+    purple) printf 'critical findings' ;;
+    blue)   printf 'minor findings' ;;
+    grey)   printf 'not applicable' ;;
+    *)      printf 'indeterminate' ;;
+  esac
+}
+# The overall badge spans both grading families, so yellow needs a neutral
+# label: it may mean K9 advisory debt or Hypatia medium findings.
+overall_label_of() {
+  case "$1" in
+    green)  printf 'conformant' ;;
+    yellow) printf 'attention' ;;
+    orange) printf 'indeterminate' ;;
+    red)    printf 'failing' ;;
+    purple) printf 'critical findings' ;;
+    blue)   printf 'minor findings' ;;
+    grey)   printf 'not applicable' ;;
+    *)      printf 'indeterminate' ;;
+  esac
+}
+
+# The lane state follows the job result first (see SPEC §3). On a failed or
+# interrupted job, retain the already-rendered grid verdict alongside that
+# state instead of letting the red/orange job outcome erase it from the summary.
+job_label_of() {
+  case "$1" in
+    success|failure|skipped|cancelled) printf '%s' "$1" ;;
+    "")                              printf 'not run' ;;
+    *)                               printf 'unknown' ;;
+  esac
+}
+lane_cell() { # $1=result, $2=grid verdict, $3=conformance|findings
+  local result="$1" verdict="$2" family="$3" state label grid_label
+  state="$(lane_state "$result" "$verdict" "$family")"
+  if [ "$result" = success ] && word_ok_for_family "$family" "$verdict"; then
+    if [ "$family" = findings ]; then label="$(findings_label_of "$verdict")"
+    else label="$(label_of "$verdict")"; fi
+  else
+    label="$(label_of "$state")"
+  fi
+  printf '%s %s (job: %s' "$(glyph_for "$state")" "$label" "$(job_label_of "$result")"
+  if [ "$result" != success ] && word_ok_for_family "$family" "$verdict"; then
+    if [ "$family" = findings ]; then grid_label="$(findings_label_of "$verdict")"
+    else grid_label="$(label_of "$verdict")"; fi
+    printf '; grid: %s %s' "$(glyph_for "$verdict")" "$grid_label"
+  fi
+  printf ')'
 }
 
 # The advisory figure sits BESIDE the verdict, never inside it. The lane's
@@ -170,7 +235,7 @@ case "$HYPATIA_ADVISORY" in
     a_high="${a_rest#*:}"
     if word_ok "$a_state" && [ -n "$a_crit" ] && [ -n "$a_high" ] \
        && [ "$a_crit" -eq "$a_crit" ] 2>/dev/null && [ "$a_high" -eq "$a_high" ] 2>/dev/null; then
-      adv_suffix=" · advisory: $(glyph_for "$a_state") ${a_state} (${a_crit} critical, ${a_high} high, not grading)"
+      adv_suffix=" · advisory in grid scope: $(glyph_for "$a_state") ${a_state} (${a_crit} critical, ${a_high} high, not grading)"
     else
       adv_suffix=" · advisory: ${HYPATIA_ADVISORY} (unparsed)"
     fi
@@ -178,8 +243,8 @@ case "$HYPATIA_ADVISORY" in
 esac
 
 deed_cell="$(glyph_for "$DEED_STATE") $(label_of "$DEED_STATE")"
-k9_cell="$(glyph_for "$K9_STATE") $(label_of "$K9_STATE")"
-hyp_cell="$(glyph_for "$HYP_STATE") $(label_of "$HYP_STATE")"
+k9_cell="$(lane_cell "$K9_RESULT" "$K9_VERDICT" conformance)"
+hyp_cell="$(lane_cell "$HYPATIA_RESULT" "$HYPATIA_VERDICT" findings)"
 
 # ── Compose ─────────────────────────────────────────────────────────────────
 BODY="$OUT/body.md"
@@ -193,17 +258,19 @@ BODY="$OUT/body.md"
   echo '| Lane | Status | Run |'
   echo '|---|---|---|'
   printf '| DEED syntax (repo deed) | %s | [run %s](%s) |\n' "$deed_cell" "$RUN_ID" "$RUN_URL"
-  printf '| K9-DEED conformance (L0–L2; L3 not verified) | %s (job: %s) | same run |\n' \
-    "$k9_cell" "${K9_RESULT:-not run}"
-  printf '| Hypatia verdict grid | %s (job: %s)%s | same run |\n' \
-    "$hyp_cell" "${HYPATIA_RESULT:-not run}" "$adv_suffix"
+  printf '| K9-DEED conformance (L0–L2; L3 not verified) | %s | same run |\n' \
+    "$k9_cell"
+  printf '| Hypatia verdict grid | %s%s | same run |\n' \
+    "$hyp_cell" "$adv_suffix"
   echo
   echo 'Scope: the three lanes below are static checks at the named commit. A'
   echo 'green row means every applicable check in its declared scope passed;'
   echo 'orange means evidence is missing, not that nothing was found. The'
   echo 'Hypatia verdict covers GATING rows only; advisory reporters are listed'
-  echo 'in its grid and named beside the verdict, and cannot colour it. No row'
-  echo 'is a security certification.'
+  echo 'in its grid and their severity counts are limited to the grid scope.'
+  echo 'A blocking gate may inspect findings outside the delta grid’s grade; open'
+  echo 'the linked run and check annotations for the failing step and, where'
+  echo 'applicable, the finding. No row is a security certification.'
   echo
 
   # ── Lane 2: K9-DEED conformance ──
@@ -256,11 +323,11 @@ colour_for() {
   esac
 }
 if command -v jq >/dev/null 2>&1; then
-  jq -n --arg m "$(label_of "$overall")" --arg c "$(colour_for "$overall")" \
+  jq -n --arg m "$(overall_label_of "$overall")" --arg c "$(colour_for "$overall")" \
     '{schemaVersion: 1, label: "Fork governance", message: $m, color: $c}' > "$OUT/badge.json"
 else
   printf '{"schemaVersion":1,"label":"Fork governance","message":"%s","color":"%s"}\n' \
-    "$(label_of "$overall")" "$(colour_for "$overall")" > "$OUT/badge.json"
+    "$(overall_label_of "$overall")" "$(colour_for "$overall")" > "$OUT/badge.json"
 fi
 
 cat "$BODY"
