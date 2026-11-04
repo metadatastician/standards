@@ -67,6 +67,10 @@ for policy in config/settings/actions-allowlist.json rhodium-standard-repositori
     "$policy admits the upstream build_fuzzers action" "$ROOT/$policy"
   expect 0 'google/clusterfuzzlite/actions/run_fuzzers@v1' \
     "$policy admits the upstream run_fuzzers action" "$ROOT/$policy"
+  expect 0 'google/clusterfuzzlite/actions/build_fuzzers@884713a6c30a92e5e8544c39945cd7cb630abcd1' \
+    "$policy admits build_fuzzers at an immutable ref" "$ROOT/$policy"
+  expect 0 'google/clusterfuzzlite/actions/run_fuzzers@884713a6c30a92e5e8544c39945cd7cb630abcd1' \
+    "$policy admits run_fuzzers at an immutable ref" "$ROOT/$policy"
   expect 1 'google/clusterfuzzlite/actions/unknown_action@v1' \
     "$policy rejects an unknown sibling action" "$ROOT/$policy"
   expect 1 'google/clusterfuzzlite/actions/build_fuzzers/nested@v1' \
