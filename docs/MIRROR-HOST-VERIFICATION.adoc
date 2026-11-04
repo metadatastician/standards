@@ -58,7 +58,7 @@ the reusable workflow reads it directly from `vars` without a secret mapping:
 ----
 jobs:
   mirror:
-    uses: hyperpolymath/standards/.github/workflows/mirror-reusable.yml@<sha>
+    uses: metadatastician/standards/.github/workflows/mirror-reusable.yml@<sha>
     secrets:
       R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
       R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
