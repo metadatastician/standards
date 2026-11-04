@@ -41,6 +41,8 @@
     "erlef/setup-beam@*",
     "extractions/setup-just@*",
     "gitleaks/gitleaks-action@*",
+    "google/clusterfuzzlite/actions/build_fuzzers@*",
+    "google/clusterfuzzlite/actions/run_fuzzers@*",
     "google/clusterfuzzlite@*",
     "goto-bus-stop/setup-zig@*",
     "hadolint/hadolint-action@*",
