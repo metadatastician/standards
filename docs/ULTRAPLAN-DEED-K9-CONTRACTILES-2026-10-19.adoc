@@ -2,12 +2,12 @@
 // SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
 = Ultraplan: getting the deed, K9 and contractile system right, estate-wide
 Jonathan D.A. Jewell (hyperpolymath)
-v0.3.1, 2026-10-20
+v0.3.2, 2026-11-04
 :toc: left
 :toclevels: 3
 :sectnums:
 :icons: font
-:status: DRAFT — for owner review. v0.3.1 records all sixteen owner rulings of 2026-10-20 (<<owner-model>>, <<decisions>>). Measured sections are facts with commands. Sections marked PROPOSED are design, not rulings, and are written to be reviewed by a second, unanchored reader.
+:status: DRAFT — for owner review. v0.3.2 records all sixteen owner rulings of 2026-10-20 (<<owner-model>>, <<decisions>>) and measures progress against them on 2026-11-04 (<<progress>>). Measured sections are facts with commands. Sections marked PROPOSED are design, not rulings, and are written to be reviewed by a second, unanchored reader.
 
 [.lead]
 The owner found the template with what looked like only an Adjustfile in its
@@ -702,7 +702,7 @@ from the template and coaptation, and are proposals where marked.
 |`trust` |Trustfile |Security, privacy and safety. |blocking |boolean + provenance
 |`adjust` |Adjustfile |Accessibility. Its descriptile counterpart is ADJUST, the repo's actual state. |advisory (floor may graduate to `must`; PROPOSED) |graded [0,1]
 |`dust` |Dustfile |Exnovation: stripping down, uninstalling, retiring, reverse-engineering guidance, deliberately disabling features. |advisory |reported, never alarms
-|`bust` |Bustfile |Likely failure pathways and weaknesses, and how to fix things when they break: self-healing, self-diagnosing, domain-specific fix scripts, including partial fixes that acknowledge a failure (Q16). |alarm when a declared failure pathway is active (PROPOSED) |alarm
+|`bust` |Bustfile |Likely failure pathways and weaknesses, and how to fix things when they break: self-healing, fault-tolerant, self-diagnosing, observability-oriented, domain-specific fix scripts, including partial fixes that acknowledge a failure (Q16). |alarm when a declared failure pathway is active (PROPOSED) |alarm
 |===
 
 Drift tolerance, the other reading of `adjust`, becomes a tolerance band on any
@@ -777,7 +777,7 @@ One rule for all three formats, generalised from the K9 contract:
 
 *Added.*
 
-* A homonym register in `CANONICAL-NAMES.adoc` (P1.1).
+* A homonym register in `0-canon/CANONICAL-NAMES.adoc` (P1.1).
 * A coordination validator (P1.4).
 * A Hypatia rule that flags a `.deed` file that fails the grammar, and a
   `.deed` file whose first line is not `;;` (the renamed-not-translated
@@ -800,6 +800,121 @@ One rule for all three formats, generalised from the K9 contract:
 * The coaptation loop, wired to the runner rather than replaced.
 * `standards-map.toml` and the 2026-10-14 reorg plan, which this plan extends
   with the one-format-one-directory rule.
+
+[[progress]]
+== Progress at 2026-11-04
+
+Measured on 2026-11-04 against standards `main` at `087f6bf`, rsr-template-repo
+`main` at `c481073` and contractiles `main` at `213fe71`, by reading the files
+each step names. "Open" means the step's acceptance check would fail today. Work
+by other sessions is credited where it moved a step. Nothing here marks a step
+done without the check that step defines.
+
+[cols="1,1,4",options="header"]
+|===
+|Step |Status |Evidence
+
+|P0.1
+|*Departed*
+|hyperpolymath/rsr-template-repo#247 and #248 merged on 2026-10-20. #247 landed
+before it was revised to the Q9 shape. Its records are now pure `'Yard`
+declarations with `allow_subprocess = false`, which is half of Q9. But each
+paired runner (for example `contractiles/must/must.ncl`) still declares
+`leash = 'Kennel` with `allow_subprocess = true`, and no signed `'Hunt` executor
+exists. So probe execution still sits outside the Hunt gate. The fix is now a
+corrective change to the template, not a revision of an open PR. It needs the
+executor, the L3 verifier and the five-precondition tests that P0.1 names.
+
+|P0.2
+|Not verified
+|The rule would live in Hypatia, which this session cannot read. The standards
+reusable `hypatia-scan-reusable.yml` makes no reference to deeds.
+
+|P0.3
+|Open
+|The template deed has no `(contractiles …)` clause and no descriptile clauses,
+and its `:contractiles_required` names three verbs (must, trust, intend).
+
+|P0.4
+|Open
+|`AGENTS.adoc` line 18 still bans Deno. `EXPLAINME.adoc` still links
+`0-AI-MANIFEST.a2ml`. `0-AI-MANIFEST.deed` still carries `purpose`, `routing`,
+`invariants`, `attestation` and `meta`. The deed spec still says "DRAFT, not
+ratified. Nothing in this document is deployed". Related progress:
+standards#1356 folded the AGENTIC, NEUROSYM and PLAYBOOK records into
+`standards_chora.deed`, so the chora now holds more of the facts Q15 moves
+there.
+
+|P1.1
+|Open
+|`0-canon/CANONICAL-NAMES.adoc` has no homonym register.
+
+|P1.2
+|Open
+|Standards' `adjust.k9.ncl`, `dust.k9.ncl` and `bust.k9.ncl` still declare
+`drift-tolerance-and-corrective-action`, `recovery-and-retirement` and
+`hard-stop-and-expiry-declaration`. The UX Dustfile documents are not renamed
+(Q16).
+
+|P1.3
+|Open
+|`k9_contract.ncl` exposes only `schema_major = "1"`. `deed_lint.js` still
+checks only that `:schema-version` is a string. standards#1359 moved the deed
+grammar to v1.2.1, a grammar change rather than the versioning rule.
+
+|P1.4
+|Open
+|`2-protocols/k9-coordination/tools/` holds only `k9-init`; no validator.
+
+|P1.5
+|Open
+|`1-formats/k9/spec/` has no ABNF.
+
+|P1.6
+|Open
+|`2-protocols/chora/` is still in place.
+
+|P2.1
+|Open
+|The contractile CLI has no `bust` subcommand.
+
+|P2.2
+|Open
+|Standards' contractile directories hold 12 `.a2ml` files, and the four
+all-caps `.contractile` files remain.
+
+|P2.3
+|Open
+|`_base.ncl` has no `scope`, `assumptions` or `boundaries` fields.
+
+|P2.4
+|Open
+|`.machine_readable/Debtfile.a2ml` and ten `hypatia-rules/*.a2ml` remain.
+
+|P2.5
+|Open
+|No anchor mapping spec. `ANCHOR.a2ml`, `rsr-profile.a2ml`, `CLAIMS.a2ml` and
+`rsr-criteria-v2.a2ml` remain.
+
+|P3
+|*Partly done*
+|standards#1362 archived 50 A2ML files with no live reader into `9-archive/`
+and put the rest under a shrink-only ledger,
+`.machine_readable/a2ml-legacy-allow.txt` (171 entries), enforced by
+`scripts/check-a2ml-archived.sh` and the exemption ratchet. That is the
+completion condition P3 needs, arriving early. Its departures (AGENTIC, NEUROSYM
+and PLAYBOOK stay live as A2ML while RSR criteria still read them) are recorded
+in that PR.
+|===
+
+Two further facts. Standards now resolves to `metadatastician/standards`: its
+check runs report under that name, and the old `hyperpolymath/standards` address
+still redirects. And the "Debt ratchet" failure seen on standards#1322 came
+from the base branch (the `deno-residue` count of 3 exceeded its ceiling of
+1), not from that change.
+
+The open steps are tracked one per checkbox in metadatastician/standards#1399,
+which also lists the work outside this repository.
 
 == The plan
 
@@ -918,7 +1033,7 @@ ruling in <<decisions>> that the step implements; every one is ruled.
 
 === P1 — sort out and differentiate (one to two weeks)
 
-. *P1.1 Homonym register* into `CANONICAL-NAMES.adoc`, from <<collisions>>.
+. *P1.1 Homonym register* into `0-canon/CANONICAL-NAMES.adoc`, from <<collisions>>.
 . *P1.2 Apply the verb ruling of 2026-10-20.* One edit per document that defines
   a verb, citing the ruling: the template contractiles README, the contractiles
   repository's canonical-directory README, `CONTRACTILE-SPEC.adoc`,
@@ -938,7 +1053,7 @@ ruling in <<decisions>> that the step implements; every one is ruled.
   gate and deletes them. The template's six components already hold their
   declarations and are edited in place. _Accept:_ a repo-wide search finds no
   normative text giving `adjust`, `dust` or `bust` a meaning other than the
-  ruled one, outside the register in `CANONICAL-NAMES.adoc`, and `git diff`
+  ruled one, outside the register in `0-canon/CANONICAL-NAMES.adoc`, and `git diff`
   touches no `.a2ml` file.
 . *P1.3 Versioning doctrine* *(Q5, ruled 2026-10-20: one rule for the deed, K9
   components and `coordination.k9`)*, then the spec headers *and the readers*.
@@ -1240,7 +1355,7 @@ whose paired runner spawns processes is a finding.
 
 == Beyond this repository
 
-For the estate's tracking list:
+For the estate's tracking list (kept current in metadatastician/standards#1399):
 
 * *rsr-template-repo:* #247 and #248; P0.3. Every minted repo inherits it.
 * *contractiles:* the CLI (P2.1), the README's A2ML claim, `coordination.k9`
