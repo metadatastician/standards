@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: MPL-2.0
-# Check repository-name matching without changing the canonical allowlist.
+# Check repository-name matching and the actual canonical action paths.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -13,11 +13,11 @@ JSON
 pass=0
 fail=0
 
-# Check one workflow reference against the same synthetic policy.
+# Check one workflow reference against the synthetic or supplied real policy.
 expect() {
-  local want="$1" ref="$2" label="$3" rc=0 out
+  local want="$1" ref="$2" label="$3" policy="${4:-$WORK/allowed-actions.json}" rc=0 out
   printf 'jobs:\n  test:\n    steps:\n      - uses: %s\n' "$ref" > "$WORK/workflows/test.yml"
-  out="$(bash "$ROOT/scripts/check-allowed-actions.sh" "$WORK/allowed-actions.json" "$WORK/workflows" 2>&1)" || rc=$?
+  out="$(bash "$ROOT/scripts/check-allowed-actions.sh" "$policy" "$WORK/workflows" 2>&1)" || rc=$?
   if [ "$rc" -eq "$want" ]; then
     echo "PASS: $label"
     pass=$((pass + 1))
@@ -60,6 +60,31 @@ for policy in config/settings/actions-allowlist.json rhodium-standard-repositori
   else
     echo "FAIL: $policy is missing the narrow reusable allowance"; fail=$((fail + 1))
   fi
+  # These are real upstream action.yml paths at google/clusterfuzzlite@v1;
+  # there is no root action.yml. Both policy surfaces must admit the actual
+  # workflow references without turning the repo-root grant into a wildcard.
+  expect 0 'google/clusterfuzzlite/actions/build_fuzzers@v1' \
+    "$policy admits the upstream build_fuzzers action" "$ROOT/$policy"
+  expect 0 'google/clusterfuzzlite/actions/run_fuzzers@v1' \
+    "$policy admits the upstream run_fuzzers action" "$ROOT/$policy"
+  expect 0 'google/clusterfuzzlite/actions/build_fuzzers@884713a6c30a92e5e8544c39945cd7cb630abcd1' \
+    "$policy admits build_fuzzers at an immutable ref" "$ROOT/$policy"
+  expect 0 'google/clusterfuzzlite/actions/run_fuzzers@884713a6c30a92e5e8544c39945cd7cb630abcd1' \
+    "$policy admits run_fuzzers at an immutable ref" "$ROOT/$policy"
+  expect 1 'google/clusterfuzzlite/actions/unknown_action@v1' \
+    "$policy rejects an unknown sibling action" "$ROOT/$policy"
+  expect 1 'google/clusterfuzzlite/actions/build_fuzzers/nested@v1' \
+    "$policy does not extend an approved path to its descendants" "$ROOT/$policy"
+done
+
+# These two Google actions are already admitted by the canonical live-policy
+# payload. Both explicit subpaths must also pass the conservative tree check;
+# the repository-root pattern deliberately does not grant arbitrary subpaths.
+for policy in config/settings/actions-allowlist.json rhodium-standard-repositories/actions-allowlist/allowed-actions.json; do
+  cp "$ROOT/$policy" "$WORK/allowed-actions.json"
+  expect 0 'google/clusterfuzzlite/actions/build_fuzzers@884713a6c30a92e5e8544c39945cd7cb630abcd1' "$policy admits the reviewed build action"
+  expect 0 'google/clusterfuzzlite/actions/run_fuzzers@v1' "$policy admits the reviewed run action"
+  expect 1 'google/clusterfuzzlite/actions/unreviewed-action@v1' "$policy rejects other action subpaths"
 done
 
 printf '\nallowlist regression: %s passed, %s failed\n' "$pass" "$fail"
