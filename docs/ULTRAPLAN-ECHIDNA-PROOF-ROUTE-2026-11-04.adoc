@@ -2,12 +2,12 @@
 // SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
 = Ultraplan: the echidna system — the proof route of the Kautz ladder, engineered and proved
 Jonathan D.A. Jewell (hyperpolymath)
-v0.2.0, 2026-11-04
+v0.2.1, 2026-11-04
 :toc: left
 :toclevels: 3
 :sectnums:
 :icons: font
-:status: DRAFT v0.2.0 — for owner review; v0.2.0 folds in an adversarial critic pass (four claims corrected, schema-wide auth gap added, merged PR order). Measured sections are facts with the command or file that produced them. Sections marked PROPOSED are design, not rulings. The decisions in <<decisions>> are open.
+:status: DRAFT v0.2.1 — for owner review; v0.2.1 answers eight Codex review findings; v0.2.0 folded in an adversarial critic pass (four claims corrected, schema-wide auth gap added, merged PR order). Measured sections are facts with the command or file that produced them. Sections marked PROPOSED are design, not rulings. The decisions in <<decisions>> are open.
 
 [.lead]
 The "echidna system" is the proof route of the Kautz-ladder ultraplan
@@ -561,12 +561,25 @@ witness (so the producer of the receipt never certifies it); `Verdict v2`:
 === Layer 4 — records
 
 `proof.attempt/1` (append-only events, JCS plus LF) and `proof.status/1`
-(the fold; the content of the proof-status octad), keyed by the ADR-008
-domains `echidnabot-proof-obligation`, `proof-goal`, `prove-result` and a
-new `proof-status` domain. Flat files under Hypatia's verisim-data tree
-first; a VeriSimDB projection once the stapeln bundle is deployed (ruled
-2026-10-19). Counts are always by goal id and result id, never by row: E1
-showed 21,498 rows collapsing to 136 keys.
+(the fold; the content of the proof-status octad), keyed by ADR-008
+content ids: `proof-goal`, `prove-result`, a new `proof-status` domain, and
+a *versioned* obligation domain. The registered
+`echidnabot-proof-obligation` domain hashes only `{claim, context, prover,
+repo}` (`docs/decisions/ADR-008-profile-c-domains.json`), so an unchanged
+claim on a new target revision, span, rule or finding would get the old id,
+hit an absorbing terminal state and never run again. The route registers an
+obligation v2 domain over the finding identity (rule, span), the goal id and
+the target digest; v1 ids stay valid for legacy rows.
+
+The records that live in a tracked tree carry identifiers, tokens, digests
+and timestamps only. Goal text, claim and context, and raw prover output
+are written to a private store outside any git-tracked path (owned
+hardware, access-controlled), and the records point at them by content id.
+Otherwise the route would recreate the `pending.jsonl` disclosure that
+Wave 0 removes. The tracked flat files start under Hypatia's verisim-data
+tree; a VeriSimDB projection follows once the stapeln bundle is deployed
+(ruled 2026-10-19). Counts are always by goal id and result id, never by
+row: E1 showed 21,498 rows collapsing to 136 keys.
 
 === Layer 5 — surfaces
 
@@ -586,9 +599,12 @@ showed 21,498 rows collapsing to 136 keys.
 ProverRecommender v2 reading `proof.attempt/1` with goal-side features only,
 evaluated by an independent harness that holds the held-out split. If it
 beats the bar, it is frozen into a class-to-prover order in
-`lib/rules/proof_strategy_selection.ex` with a `@distilled_from` digest over
-the result ids it learned from and a falsifier corpus: the first executed
-instance of "dumb rules from smart learning" on this route.
+`lib/rules/proof_strategy_selection.ex` with a falsifier corpus and a
+`@distilled_from` reference to an immutable manifest that lists, in order,
+the result ids it learned from (the manifest's digest travels with the
+reference). A digest alone could not say which rows were used once the
+dataset grows. This is the first executed instance of "dumb rules from
+smart learning" on this route.
 
 == What has to be created
 
@@ -617,7 +633,7 @@ instance of "dumb rules from smart learning" on this route.
 |no
 
 |standards
-|ADR-008 register amendment: `proof-status` domain; add hypatia and echidnabot to the repos of `proof-goal` and `prove-result`
+|ADR-008 register amendment: `proof-status` domain; a versioned obligation domain over finding identity, goal id and target digest; add hypatia and echidnabot to the repos of `proof-goal` and `prove-result`
 |contract
 |domains exist (`docs/decisions/ADR-008-profile-c-domains.json`)
 
@@ -742,13 +758,20 @@ the estate has no OBSERVABILITY-POLICY yet
 These close holes that exist today, record what was measured, and take the
 rulings the rest depends on. None of them commits to Wave 3.
 
-. *echidnabot, first:* bearer authentication on the whole `/graphql`
-  schema, a loopback default bind, and a rate limit on `/graphql`; refuse to
-  start on a non-loopback address without a token. Planted negative:
-  unauthenticated `submitProofObligation`, `updateRepoSettings` and
-  `recordTacticOutcome` return 401; webhooks are unaffected.
-. *hypatia:* send the token from `HYPATIA_ECHIDNABOT_TOKEN`, and stop
-  copying obligation claim and context into `pending.jsonl` for echidnabot.
+. *echidnabot, first:* authentication _and_ authorization on the whole
+  `/graphql` schema, a loopback default bind, and a rate limit on
+  `/graphql`; refuse to start on a non-loopback address without credentials.
+  Two credentials, not one: a route credential that can only submit
+  obligations and read their results back, for an allowlist of repositories;
+  and a separate administrative credential for `updateRepoSettings`,
+  `recordTacticOutcome` and every other mutation. A stolen route credential
+  must not reopen the webhook-secret rewrite or training-row writes. Planted
+  negatives: unauthenticated calls return 401; the route credential gets 403
+  on `updateRepoSettings` and `recordTacticOutcome` and on a repository
+  outside its allowlist; webhooks are unaffected.
+. *hypatia:* send the route credential from `HYPATIA_ECHIDNABOT_TOKEN`, and
+  stop copying obligation claim and context into `pending.jsonl` for
+  echidnabot.
 . *hypatia:* close the eliminate ≥ 0.90 arm of the proof-obligation branch,
   which asks robot-repo-automaton to "Apply tactic"
   (`lib/fleet_dispatcher.ex:108-119`), and add the missing branch test.
@@ -790,11 +813,14 @@ planted case that must be refused.
 
 |1
 |K0
-|Prover classification is total; only small-kernel provers reach `proven`;
-SMT reaches `proven` only with a checked certificate; model checkers give
-`tested-only`.
+|Prover classification is total. A result reaches `proven` by one of two
+roads: a small-kernel prover accepted it, or an SMT result carries a
+certificate an independent checker verified (PROOF-POLICY §5). An SMT
+result without a checked certificate gives `argued`; model checkers and
+bounded checkers give `tested-only`.
 |Idris2
-|A reject fixture assigning `proven` to an unchecked z3 result typechecks.
+|A reject fixture assigning `proven` to an unchecked z3 result typechecks,
+or an accept fixture with a checked SMT certificate is refused.
 
 |2
 |K0
@@ -821,10 +847,14 @@ file; an empty-output digest never binds.
 
 |4
 |K0
-|A receipt binds an obligation only on goal, proof and target digest
-equality; an empty-output digest never binds.
+|A receipt binds an obligation only when its goal and target digests equal
+the obligation's and its proof-artefact digest equals the artefact
+independently re-derived for _that_ receipt. Several receipts with
+different proofs may bind one obligation (a portfolio); each is checked on
+its own. An empty-output digest never binds.
 |Idris2
-|Two different proofs bind the same obligation.
+|A receipt binds whose proof digest differs from its own re-derived
+artefact, or whose goal or target digest differs from the obligation's.
 
 |5
 |K0
@@ -948,8 +978,9 @@ acceptance rate.
 
 |K4 (best first candidate, `:scope proof-route`)
 |Receipts are executor-verified training rows; a learned order is
-distilled into `lib/rules` with `@distilled_from` over result ids, which
-meets the ladder's falsifier literally.
+distilled into `lib/rules` with `@distilled_from` pointing at an immutable
+manifest of the result ids it learned from, which meets the ladder's
+falsifier literally: the rule can resolve every row it came from.
 |The distilled rule cannot resolve a cited result id. The claim also needs
 rows only from the authenticated, sandboxed drain; E6 beating the frequency
 baseline (otherwise the distilled rule _is_ the baseline); and an
@@ -1112,9 +1143,10 @@ worktree.
 |Every D-question answered or explicitly deferred.
 
 |P2 Wave 0
-|One agent per row 1-7 and 9-12 of <<merged-prs>>, a worktree each; one
-reviewer per PR; a security reviewer on row 1.
-|Eleven small PRs in echidnabot, hypatia and standards; deeds for hypatia,
+|One agent per row 1-7 and 9-11 of <<merged-prs>>, a worktree each; one
+reviewer per PR; a security reviewer on rows 1 and 2. Row 12 waits for the
+content-id agreement result in P3.
+|Ten small PRs in echidnabot, hypatia and standards; deeds for hypatia,
 echidnabot and gitbot-fleet.
 |Each repo's own checks pass; the planted negative of each change is
 refused; no A2ML created.
@@ -1215,8 +1247,8 @@ rows 13-23 wait for the experiments and rulings named in their gate.
 |===
 |# |Repository |Title |Size |After |Gate
 
-|1 |echidnabot |Bearer auth on all of `/graphql`, loopback default, `/graphql` rate limit |S |— |Unauthenticated mutations return 401; non-loopback without a token refuses to start
-|2 |hypatia |Token header from `HYPATIA_ECHIDNABOT_TOKEN`; no claim or context in `pending.jsonl` |S |1 |Header test; manifest test
+|1 |echidnabot |Authentication and authorization on all of `/graphql`: a route credential (submit and read back, repository allowlist) and a separate administrative credential; loopback default; `/graphql` rate limit |S |— |Unauthenticated calls return 401; the route credential gets 403 on `updateRepoSettings`, `recordTacticOutcome` and unlisted repositories; non-loopback without credentials refuses to start
+|2 |hypatia |Route credential from `HYPATIA_ECHIDNABOT_TOKEN`; no claim or context in `pending.jsonl` |S |1 |Header test; manifest test
 |3 |hypatia |Proof-obligation eliminate arm never dispatches robot-repo-automaton; branch test |XS |— |No `:auto_fix_request` at any tier
 |4 |echidnabot |No nil-UUID fallback |XS |— |Error unit test; protocol contract green
 |5 |echidnabot |Refuse unknown prover slugs |XS |— |Planted slug gives an error and no row
@@ -1226,7 +1258,7 @@ rows 13-23 wait for the experiments and rulings named in their gate.
 |9 |standards |Experiment records for this session's measurements |XS |— |Each number cites its log
 |10 |standards |Deed ladder clause: mapping row, `deed_lint` condition, template example |S |8 |Refuses `K7` and `measured` without evidence
 |11 |hypatia, then echidnabot, gitbot-fleet |Chora deed per repository |M |10 |`deed_lint` green; no A2ML touched
-|12 |standards |Widen ADR-008 proof domains |XS |9 |Identical ids from Rust and Elixir
+|12 |standards |Widen ADR-008 proof domains; register the versioned obligation domain |XS |9, content-id agreement (P3) |Identical ids from Rust and Elixir; a changed target digest gives a new obligation id
 |13 |echidnabot + hypatia (draft) |The pipe: read-back, drain, stub ECHIDNA with real Lean in the shared sandbox, `ProofRoute`, report-back and SARIF; auth, sandbox, line-binding and burrower-compatibility experiments |L |1-5, 7, 8 |All controls print; stub row orange; PRs stay draft
 |14 |standards |Proof-route spec (PROPOSED) and Idris2 package, generated fixtures, CI on an owned runner |L |8, 13 |Idris2 green; rejects refused; generated output byte-stable
 |15 |standards (with the Agda home) |Token order and meet, level monotonicity, fold join, retraction never raises: Agda, Rocq leg, Lean leg re-proved |M |8 |Every leg proven or waived, route recorded
@@ -1234,7 +1266,7 @@ rows 13-23 wait for the experiments and rulings named in their gate.
 |17 |echidnabot, proof-burrower |Dual-accept `prove.result` `/1` and `/2` |S |14 |Golden `/2` accepted by both
 |18 |echidnabot |Lifecycle store, `proofObligation` query, sandboxed drain; Creusot; TLA+ |L |1, 13, 14, 17 |Illegal transitions refused; sandbox off means refused; TLC bounds recorded
 |19 |hypatia |`ProofRoute` submit and ingest, `proof.attempt`/`proof.status` store, funnel attach for hole re-checks |M |16, 18 |`sorry.lean` reaches `sound`; a tampered file stays `epi`
-|20 |standards + echidnabot |Grid row with SARIF and report-back; severity table; level shown on the grid |S |19 |Stub orange, real blue, `proven` emits no finding
+|20 |standards + echidnabot |Grid row with SARIF and report-back; severity table; level shown on the grid |S |19 |Stub orange; a real run whose results are all `proven` emits no finding and renders green; blue only for a run that emits a low or info finding
 |21 |hypatia + standards |`Discharged` support for claim-proving obligations |M |19, E7, D-3 |Rejects tested-only, SMT without certificate, empty output, goal mismatch
 |22 |hypatia |ProverRecommender v2, `mix hypatia.prover_mrr`, distillation with `@distilled_from` |M |19, portfolio data |Evaluator-held split beats the bar, or `:state refuted`
 |23 |proof-burrower |Kani harnesses on the wasm FFI seam |S |— |A planted off-by-one fails; bounds recorded
