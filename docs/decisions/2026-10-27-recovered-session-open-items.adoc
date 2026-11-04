@@ -36,10 +36,15 @@ as the sessions reported it and was not checked.
 . *D304, the R2 mirror.* *Checked* against `mirror-reusable.yml`: the `mirror-r2-bundle` job
   stays disabled until the variable `R2_BUNDLE_MIRROR_ENABLED` is `true`, and it uploads only
   with all of: the secrets `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY`; `R2_AGE_RECIPIENT`
-  (`age1…` or `ssh-ed25519`, as a secret or a variable); and the variables `R2_ENDPOINT_URL`
-  (`*.r2.cloudflarestorage.com`) and `R2_BUCKET`. Each caller must map the secrets explicitly in
-  its `secrets:` block, not through `secrets: inherit`. `docs/MIRROR-HOST-VERIFICATION.adoc` has
-  the provisioning steps.
+  (`age1…`, or `ssh-ed25519` followed by the key material only, with no trailing comment; as a
+  secret or a variable); and the variables `R2_ENDPOINT_URL` (`*.r2.cloudflarestorage.com`) and
+  `R2_BUCKET`. Each caller must map the secrets explicitly in its `secrets:` block, not through
+  `secrets: inherit`, and must call a `mirror-reusable.yml` revision that has the job (added in
+  `cfad152`, 2026-10-23): an older pin skips it silently, and *checked*, `75bd5994` is one.
+  `docs/MIRROR-HOST-VERIFICATION.adoc` has the provisioning steps.
+. *A local mode for `scripts/regen-dependabot-locks.sh`.* It works only remotely, with App
+  tokens. A local mode reusing `regen_lock` would let a re-point pull request be repaired
+  without a hand-copied procedure.
 . *UUID v8 rename, stages 2 and 3* (#1260). They change branch protection estate-wide.
 . *Q9 follow-up in rsr-template-repo.* `rsr-template-repo#247` merged before the Q9 tier-split
   revision the overhaul called for.
