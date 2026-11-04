@@ -166,6 +166,9 @@ describe("extra rules", () => {
   test("bad boolean token #true", () => {
     expect(verdict(HDR + '(repo-deed :schema-version "1" :a #true)\n')).toMatch(/booleans are exactly/);
   });
+  test("a comment ends a boolean, as it ends any token (deed.abnf token-sep)", () => {
+    expect(verdict(HDR + "(repo-deed :schema-version \"1\" :a #t; note\n :b #f)\n")).toBeNull();
+  });
   test("non-string schema-version", () => {
     expect(verdict(HDR + "(repo-deed :schema-version 1)\n")).toMatch(/must be a STRING/);
   });
