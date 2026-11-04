@@ -1,0 +1,51 @@
+== 007 MK2 Audit Target: Proof Dispatch
+
+== Status: DESIGN TARGET — check against actual implementation
+
+=== Must Have
+
+[cols=",",options="header",]
+|===
+|Category |Feature
+|Syntax |Single source of truth for proof obligations
+|Architecture |Modular proof systems (Coq/Isabelle/Lean/custom)
+|Context |Discourse-bound context (proof state/assumptions/goals)
+|Diagnostics |Unified error reporting for proof failures
+|Proofs |Automated and interactive proofs
+|===
+
+=== Should Have
+
+[cols=",",options="header",]
+|===
+|Category |Feature
+|Interop |Cross-prover interop
+|Selection |Dynamic proof selection (@coq_proof/@lean_proof)
+|Performance |Optimization hints per prover
+|Tooling |Semantic-aware proof tooling
+|===
+
+=== Could Have
+
+[cols=",",options="header",]
+|===
+|Category |Feature
+|Concurrency |Parallel proof checking
+|Caching |Proof caching/reuse
+|Runtime |Runtime proof switching
+|===
+
+=== Aspirational
+
+[cols=",",options="header",]
+|===
+|Category |Feature
+|Inference |Automated proof inference
+|Verification |Formal proofs of dispatch correctness
+|Consistency |Language-wide proof consistency
+|===
+
+=== Ecosystem Integration
+
+* Package Manager: OPSM
+* IDE: PanLL + Visual Codium (ENSAID)

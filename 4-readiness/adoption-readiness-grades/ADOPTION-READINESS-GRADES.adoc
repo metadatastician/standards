@@ -1,0 +1,507 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+// Copyright (c) 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+
+= Adoption Readiness Grades (ARG)
+:toc: left
+:toclevels: 3
+
+[cols="1,3", options="header"]
+|===
+| Field | Value
+
+| Standard | Adoption Readiness Grades
+| Version | 1.0
+| Date | 2026-05-28
+| Status | Active
+| Author | Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+| License | MPL-2.0
+| Family | Rhodium Standard Repositories (RSR)
+| Companion to | Toolchain Readiness Grades v1.0, Component Readiness Grades v2.2
+| Relationship | Language-whole sibling tier (CRG = component, TRG = toolchain, ARG = language adoption)
+|===
+
+== Abstract
+
+Adoption Readiness Grades (ARG) is a strict-by-construction grading scheme
+for the *language-as-an-adoptable-artefact*. It sits at the language-whole
+tier of the estate grading hierarchy:
+
+* *CRG* grades individual *components* (subcommand, module, library).
+* *TRG* grades the *toolchain* (parser, type checker, codegen, etc.).
+* *ARG* grades the *language as a thing someone can adopt*.
+
+ARG uses the same letter grades as CRG and TRG (`X | F | E | D | C | B | A`)
+and the same worst-of-any-required-element aggregation rule. The evidence
+required at each grade differs: ARG asks "would anyone use this?", not
+"is the toolchain engineered?" or "is the type checker sound?". Those are
+the questions of TRG and FRG. ARG is the third axis.
+
+A language can be TRG-A on every component and still be ARG-E if nobody
+adopts it. A language can be ARG-D (toy-project usable) with TRG-D
+toolchain. The three axes are independent and worst-of dominates *only*
+within an axis, never across them.
+
+This standard is designed to be adopted by any language project
+regardless of paradigm, domain, or intended runtime. It is part of the
+Rhodium Standard Repositories (RSR) family of standards maintained by
+hyperpolymath.
+
+== 1. Scope
+
+This standard applies to:
+
+* Any programming language, query language, configuration language, or
+  domain-specific language for which the question *"would someone adopt
+  this?"* is meaningful.
+* The *language as a public artefact* — what a prospective adopter
+  encounters when they discover the language: docs, playground, tutorial,
+  registry, ecosystem, governance.
+
+This standard does NOT apply to:
+
+* Internal-only DSLs whose audience is the project itself (CRG and TRG
+  cover those).
+* Component-level quality (use CRG).
+* Toolchain quality (use TRG).
+* Mathematical foundations / typing soundness (use FRG).
+* Repository hygiene (use RSR).
+
+=== 1.1 Per-language extension
+
+Each adopting language SHOULD publish a `spec/ARG-PROFILE.adoc` in its
+own repo that tightens this baseline with language-specific obligations.
+A profile MAY only tighten, never loosen. Examples of valid tightening:
+
+* AffineScript: "Grade B requires a playground that lets a user write an
+  affine-typed program and observe borrow-check feedback."
+* Ephapax: "Grade C requires at least one external tutorial in the
+  dyadic-modality discipline written by someone other than the maintainer."
+* VCL-total: "Grade C requires a registered Verisim instance the language
+  can address from a public example."
+* KRL: "Grade C requires example programs covering all four operation
+  families (Construct / Transform / Resolve / Retrieve)."
+
+The profile shape is defined in `templates/ARG-PROFILE-TEMPLATE.adoc`.
+
+== 2. Normative References
+
+* *CRG v2.2* — Component Readiness Grades. ARG inherits CRG's letter
+  vocabulary and release-stage mapping.
+* *TRG v1.0* — Toolchain Readiness Grades. ARG ≤ TRG always (you cannot
+  adopt a language whose toolchain is below the same grade).
+* *RSR* — Rhodium Standard Repositories. ARG-graded languages MUST be
+  RSR-compliant at the adoption rung's required level.
+* *Diversity Metrics* — Adopt the TRG `diversity-metrics` block
+  (technical, organisational, user, downstream-target) verbatim.
+* *TypeLL / PanLL / VCL-total* — The 10-level type-safety lineage. Where
+  a language claims compliance with one or more of the 10 levels, ARG-C+
+  evidence MUST cite the level explicitly.
+
+== 3. Required Adoption Surfaces
+
+ARG grades the *language as adoptable*. An "adoption surface" is one of
+the public artefacts an adopter encounters. The required surfaces are:
+
+=== 3.1 Discovery surface
+* *D1* Landing page or canonical README in the language's repo
+* *D2* One-paragraph elevator pitch a non-specialist can understand
+* *D3* Provenance: who maintains it, when started, current version
+
+=== 3.2 Onboarding surface
+* *O1* "Hello world" runnable from a clean install in ≤ 5 minutes
+* *O2* Tutorial covering the language's distinctive features
+* *O3* Playground (browser-runnable or single-command-local)
+* *O4* Cookbook of worked examples in ≥ 2 substantive domains
+
+=== 3.3 Reference surface
+* *R1* Reference manual (operational specification, complete coverage
+  of the language as released)
+* *R2* Standard library reference (one entry per public module/function)
+* *R3* Formal grammar (EBNF or equivalent)
+* *R4* Operational or denotational semantics document (also TRG M5)
+* *R5* Stable error-code index (also TRG diagnostics M-component)
+
+=== 3.4 Community surface
+* *C1* Issue tracker with response-time policy
+* *C2* Contribution guide (CONTRIBUTING.md or equivalent)
+* *C3* Code of conduct (CoC)
+* *C4* Public discussion venue (forum, Discord, Zulip, mailing list)
+* *C5* RFC / ADR process documented and used
+
+=== 3.5 Distribution surface
+* *Δ1* Stable release artefacts (tagged, signed, reproducible per RSR)
+* *Δ2* Package registry presence (or canonical install path)
+* *Δ3* Versioning policy (Semver or estate Edition system)
+* *Δ4* Deprecation policy and visible deprecation log
+* *Δ5* Security disclosure policy (3-practice/SECURITY.md, contact, response time)
+
+=== 3.6 Education surface
+* *E1* Slide deck or talk-script suitable for a 1-hour external presentation
+* *E2* Training materials suitable for a 1-day workshop
+* *E3* Curriculum suitable for a school-term unit (multi-week)
+* *E4* External educator(s) who have used the materials
+
+=== 3.7 Ecosystem surface
+* *X1* Library count: third-party libraries published against the language
+* *X2* Tool count: third-party tools (formatters, linters, plugins, etc.)
+* *X3* Integration count: integrations with surrounding systems (DOM, vite,
+  C-ABI, etc. — domain-specific)
+* *X4* Independent maintainer count beyond the founder
+
+== 4. Grade Definitions
+
+=== 4.1 Grade X — Untested / Not yet a language
+
+*Release stage:* None
+
+The candidate is not yet a language a person could adopt. No release
+artefact exists, or the artefact is so incomplete that *no* discovery
+surface item from §3.1 is present.
+
+*Evidence required:* None. This is the absence of adoption-surface
+evidence.
+
+=== 4.2 Grade F — Harmful / Wasteful
+
+*Release stage:* Reject, deprecate, or delegate
+
+Released but actively harmful to its adopters: misleading documentation,
+silently incorrect semantics, regressive ergonomics versus established
+alternatives, or maintainer absence amounting to abandonment-while-still-promoted.
+
+ARG-F is rare. Most languages that *would* be ARG-F never crossed the
+ARG-E threshold to begin with. The grade exists so that a language can
+be honestly de-promoted when it does cause harm.
+
+*Evidence required:*
+* Documented harm or misrepresentation.
+* Explicit demotion record in the per-language `READINESS.md`.
+* Recommendation: halt, rename-and-restart, or merge into a sibling.
+
+=== 4.3 Grade E — Bare Minimum  *(pre-alpha — internal only, not releasable)*
+
+*Release stage:* Pre-alpha
+*Stability posture:* Internal experiment
+*Honest shorthand:* `internal-bare`
+
+Undeniable internal minimum: the candidate qualifies as a language,
+runs its own stdlib end-to-end, and a maintainer can demonstrate this.
+*Nobody outside the maintainer would actually use it* — there is no
+worth-using surface yet.
+
+*Smell test:* "Yes, it's a language. So what?"
+
+*Evidence required (worst-of, all MUST be PASSED):*
+
+* TRG ≥ E for all front-end components (F1 grammar, F2 lexer, F3 parser,
+  F4 AST, F6 import resolver, F7 diagnostics)
+* TRG ≥ E for at least one back-end (B1 IR, B2 codegen, B6 runtime)
+* TRG ≥ E for stdlib (T8) — language can run its own stdlib
+* D1 (landing page) and D2 (elevator pitch) present
+* Repo is RSR-compliant at the required level for TRG-E
+
+=== 4.4 Grade D — Toy-Project Usable  *(pre-alpha+ — still not releasable broadly)*
+
+*Release stage:* Pre-alpha+
+*Stability posture:* Toy-project usable
+*Honest shorthand:* `pre-alpha-toy`
+
+Toy-project usable. A motivated person could build a weekend project in
+this language without papercut-after-papercut. The language begins to
+exist for someone other than the maintainer, but the surface is still
+sparse.
+
+*Smell test:* "I could write a weekend project in this."
+
+*Evidence required (all E + the following):*
+
+* TRG ≥ D estate-wide (all required toolchain components)
+* O1 (5-minute hello-world) demonstrated
+* O2 (tutorial covering distinctive features)
+* O4 (cookbook with ≥ 3 worked examples ≥ 100 LoC each)
+* R1 (reference manual, even if incomplete)
+* R3 (formal grammar)
+* Δ1 (stable release artefacts, signed, reproducible)
+* At least 3 external programs ≥ 100 LoC each parse, typecheck, and run
+* Diversity-metrics check: external program authors are ≥ 2 distinct
+  individuals beyond the maintainer
+
+=== 4.5 Grade C — Self-Validated  *(alpha gate)*
+
+*Release stage:* Alpha
+*Stability posture:* Stable in home context
+*Honest shorthand:* `alpha-stable`
+
+Self-validated alpha. The language is non-trivially usable in its home
+context. Maintainers and a dogfood cohort use it for real work in ≥ 2
+substantive domains. This is the *alpha gate* — below C is not alpha.
+
+*Smell test:* "I could ship a real internal tool in this."
+
+*Evidence required (all D + the following):*
+
+* TRG ≥ C estate-wide
+* CRG ≥ C for every adoption-surface §3 component
+* O3 (playground — browser-runnable or single-command-local) operational
+* R2 (stdlib reference, one entry per public symbol)
+* R4 (operational or denotational semantics document — also TRG M5)
+* R5 (stable error-code index)
+* C1, C2, C3 (issue tracker + CONTRIBUTING + CoC) in place
+* C5 (RFC/ADR process used at least 3 times)
+* Δ2 (package registry presence or canonical install path)
+* Δ3 (versioning policy)
+* E1 (slide deck / talk-script — proves the language can be presented externally)
+* ≥ 10 dogfood users meeting diversity-metrics (technical + role + use-case)
+* ≥ 2 substantive domains covered by ≥ 3 cookbook examples each
+* VeriSimDB instance ingesting per-commit ARG-PROFILE attestations
+* Continuous fuzzing per TRG `FUZZING-CORPUS-FLOOR.adoc`, 14 days minimum
+
+=== 4.6 Grade B — Broadly Adopted  *(beta gate)*
+
+*Release stage:* Beta
+*Stability posture:* Broadly trial-stable
+*Honest shorthand:* `beta-stable`
+
+Broadly adopted beta. The language has escaped its home repo. External
+people, in organisations and contexts that don't share the maintainer's
+worldview, write real programs in it. The number 6 (diverse external
+projects) is borrowed from CRG-B intentionally — it is enough to reveal
+home-context assumptions without making progress impossible.
+
+*Smell test:* "It fits the workflows people already have."
+
+*Evidence required (all C + the following):*
+
+* TRG ≥ B estate-wide
+* CRG ≥ B for every adoption-surface §3 component
+* ≥ 100 distinct external users meeting diversity-metrics (technical,
+  organisational, user, downstream-target)
+* ≥ 6 diverse external projects use the language, with target diversity
+  verified against TRG diversity-metrics
+* X1 (≥ 12 third-party libraries published against the language)
+* X2 (≥ 3 third-party tools — formatter / linter / plugin / etc. — not
+  written by the founder)
+* X3 (ecosystem-plugged: integrations with surrounding systems exist;
+  the specific set is language-specific per profile)
+* X4 (≥ 2 maintainers beyond the founder with sustained contribution
+  over ≥ 6 months)
+* Δ4 (deprecation policy active; ≥ 1 deprecation cycle completed)
+* Δ5 (3-practice/SECURITY.md with disclosure policy and demonstrated response)
+* E2 (training materials for 1-day workshop) exists and has been used
+  externally
+* Continuous fuzzing per TRG, 30 days minimum, including structure-aware
+* External single-party audit (security or correctness) completed
+* SBOM produced; Hypatia zero Critical/High; branch protection enforced
+
+=== 4.7 Grade A — School-Grade Real  *(stable / release)*
+
+*Release stage:* Stable
+*Stability posture:* Stable
+*Honest shorthand:* `school-grade`
+
+School-grade real — first-generation-Python equivalent. A school could
+adopt the language as their teaching language next term, and a real
+ecosystem of practitioners exists around it. The founder is no longer
+the single point of failure.
+
+*Smell test:* "Teach it to a 12-year-old next term."
+
+Past ARG-A is not part of this scheme — what lies beyond is a *cultural
+phenomenon*, not a property of the language. ARG-A is the cap.
+
+*Evidence required (all B + the following):*
+
+* TRG = A estate-wide (the language's toolchain is field-proven Six-Sigma)
+* FRG ≥ B (the language has formally-grounded foundations)
+* ≥ 1000 distinct external users meeting diversity-metrics
+* ≥ 1 educational institution has taught the language as a multi-week
+  unit, with external educator (E3 + E4)
+* X1 ≥ 50 third-party libraries, X2 ≥ 8 third-party tools, X4 ≥ 5
+  independent maintainers beyond the founder
+* The founder could step away for 6 months without the language stalling
+  (the *bus-factor test*; recorded as a maintainer's signed statement)
+* 5-nines on the standing priority axes (TRG §5.7.5 — adopted verbatim)
+* Continuous fuzzing 90 days including differential testing against a
+  reference implementation
+* Type-theory or PL-research upstream contribution in the last 12 months
+* Full hyperpolymath standards conformance per TRG §5.7.5
+* Unanimous 6+6 (humans + LLMs) signoff per TRG `templates/A-GRADE-LLM-PANEL.adoc`
+
+=== 4.8 Demotion on loss  *(critical)*
+
+Loss of any A-grade gate (founder-bus-factor reverts, educator withdraws,
+distinct-user count drops below threshold for ≥ 30 days, FRG regresses
+below B, signoff rescinded, standards drift) *immediately* demotes the
+language. There is no grace period. Same rule as TRG §5.8.
+
+== 5. Aggregation Rule
+
+ARG aggregation is *worst-of-any-required-adoption-surface*. The
+language's ARG grade is the *lowest* grade achieved across all required
+surfaces at the candidate grade's evidence floor.
+
+*No averaging. No weighting. No partial credit.*
+
+A language with discovery + onboarding + reference all at B but
+community at D is *ARG-D*, not "ARG-B-with-community-gap". The honest
+grade tells the maintainer where to focus.
+
+Crucially, ARG ≤ TRG always. A language cannot be adopted past the
+maturity of its toolchain. If TRG drops to D mid-cycle, ARG immediately
+drops to D regardless of how strong the community surface is.
+
+== 6. Definitions
+
+=== 6.1 "Distinct external user"
+
+Same definition as TRG §6.4: an individual who has used the language for
+their own work (not maintainer-paid contract work, not solicited
+demonstration), who is not the founder, who is identifiable (real name
+or stable handle), and whose use is dated and recorded.
+
+=== 6.2 "Substantive domain"
+
+A domain in which a non-trivial program (≥ 500 LoC) could be written
+that solves a recognisable real problem. Examples: graphics, networking,
+parsing, simulation, data analysis, web frontend, embedded control. A
+"substantive" domain is *not* "we wrote 10 examples of the same
+fibonacci function".
+
+=== 6.3 "Diversity-metrics"
+
+Adopt TRG's diversity-metrics block verbatim. The four diversity
+dimensions (technical / organisational / user / downstream-target) and
+their thresholds apply to ARG identically.
+
+=== 6.4 "Bus-factor test"
+
+The founder records a signed statement that they could stop working on
+the language for 6 calendar months without the language stalling
+(releases halt, decisions queue indefinitely, community migrates away).
+This is a personal claim, not a proof — but ARG-A requires it to be
+*credible* given the X4 (independent maintainer) evidence already in
+place.
+
+=== 6.5 "School-grade"
+
+The "school" benchmark is calibrated against *first-generation Python*
+(c. 1995-2002): a language a non-specialist educator could pick up and
+teach to children with available materials, where adoption does not
+require the educator to be a domain expert in the language itself.
+
+== 7. Per-Language Profile Mechanism
+
+Each adopting language publishes `spec/ARG-PROFILE.adoc` in its repo,
+following the template at `templates/ARG-PROFILE-TEMPLATE.adoc`. The
+profile:
+
+* States the current honest grade (X / F / E / D / C / B / A).
+* Cites the evidence for each criterion (file paths, commit SHAs,
+  external URLs, VeriSimDB attestation IDs).
+* Records the path to the next grade with concrete next steps.
+* Carries an iteration history with dates and previous grades retained.
+* MAY tighten the baseline (add language-specific obligations).
+* MUST NOT loosen the baseline (no waiver of evidence floors).
+
+A language's ARG-PROFILE.adoc is itself a *VCL-total proposition* — its
+content is `DECLARE`'d to VeriSimDB on each commit. Drift between the
+profile's claimed grade and the underlying evidence is detected by
+VeriSimDB's cross-modal drift monitor and surfaces as a *grade-stale*
+alert.
+
+== 8. Self-Assessment
+
+The ARG specification's own ARG grade is *not applicable* — ARG grades
+languages, not specifications. The ARG specification is graded by the
+CRG of the standards repo and by the TRG of the documentation tooling.
+
+That said, the ARG document set is self-assessed against its own
+internal-consistency criteria in `SELF-ASSESSMENT.adoc`.
+
+== 9. Conformance
+
+A language conforms to ARG if:
+
+1. Its ARG grade is recorded in `spec/ARG-PROFILE.adoc` in its repo.
+2. The grade is supported by the evidence described in §4 for that
+   grade and every grade below it (X is the empty floor).
+3. The profile is reviewed at least once per release cycle, and on any
+   demotion event within 7 days.
+4. The aggregation rule of §5 is respected (worst-of, no averaging).
+5. Demotion is recorded immediately on loss of any required evidence
+   (§4.8).
+6. Per-commit attestations are emitted to VeriSimDB at grade C and
+   above.
+7. The language is also TRG-graded; ARG ≤ TRG holds at all times.
+
+== 10. Open Questions / Versioning
+
+This is ARG v1.0. Likely v2 changes once real adoption data accumulates:
+
+* The "1000 distinct users" threshold for A is *plucked from intuition*,
+  same caveat as TRG's "5M processor-hours" threshold. It is the right
+  *order of magnitude* for "school-grade real", but the exact number
+  should be re-baselined against telemetry from the first ARG-A
+  candidate, if and when one emerges.
+* The "6 diverse external projects" at B is borrowed from CRG-B. May
+  need to drift higher for languages whose communities are inherently
+  small (e.g. domain-specific languages with only ~12 plausible
+  adopters total).
+* The interaction between ARG and FRG at grades A is currently encoded
+  as "ARG-A requires FRG ≥ B". This may tighten to "ARG-A requires
+  FRG ≥ A" once at least one language reaches both. The current
+  formulation allows for languages whose adoption is high but whose
+  formal foundations lag (most production languages historically).
+* The "founder bus-factor test" is novel and subjective. It is
+  acknowledged as a number-not-derivation. Re-baseline against the
+  first ARG-A candidate.
+
+== 11. Honest Comparison to Real-World Software Standards
+
+To the author's knowledge, ARG-A is not matched by any language standard
+currently in use anywhere. The closest comparators:
+
+* *Python (c. 2002)* — would have been ARG-B-leaning-A by ARG's
+  criteria. First-generation Python is the calibration point for
+  ARG-A's "school-grade" rung. Modern Python is ARG-A.
+* *Rust (2024)* — ARG-A. Field-proven, school-taught, ecosystem-plugged.
+* *Haskell (2024)* — ARG-A in academia, ARG-B-leaning-A in industry.
+* *Elm (2024)* — ARG-B. Strong community, narrow domain, governance
+  friction has prevented A.
+* *Idris2 (2024)* — ARG-D. Real users, but not at C-cohort scale.
+* *Most "I built a programming language" weekend projects* — ARG-X or
+  ARG-E. Honest.
+
+The author expects approximately *zero* hyperpolymath languages to hit
+ARG-A in year one of ARG operation. That is the correct order of
+magnitude. If ARG-A becomes easy to hit, the bar is wrong and the
+standard MUST be raised.
+
+This standard is open to challenge. If you think the bar is too low,
+specify what evidence class, adoption surface, or community-discipline
+requirement is missing.
+
+== 12. Machine-Readable Grade Declaration
+
+Languages using ARG SHOULD include in their `READINESS.md`:
+
+[source,markdown]
+----
+**Current ARG Grade:** D
+**Current TRG Grade:** D
+**Current FRG Grade:** E
+**Current CRG Grade:** C
+**Current RSR Compliance:** FULL
+----
+
+This line is parsed by `just arg-grade` and `just arg-badge` from
+`rsr-template-repo`.
+
+== Revision History
+
+[cols="1,1,1,3", options="header"]
+|===
+| Version | Date | Author | Changes
+
+| 1.0 | 2026-05-28 | Jonathan D.A. Jewell | Initial release. ARG fills the language-adoption tier (CRG = component, TRG = toolchain, ARG = language). Grade vocabulary X-A inherited from CRG/TRG. Worst-of aggregation and immediate demotion inherited from TRG. ARG ≤ TRG always. Integration with VeriSimDB via VCL-total propositions at grade C+.
+|===

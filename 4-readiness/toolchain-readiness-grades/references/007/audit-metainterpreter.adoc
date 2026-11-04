@@ -1,0 +1,126 @@
+== 007 MK2 Audit Target: Metainterpreter
+
+== Status: PARTIALLY IMPLEMENTED — verified 2026-03-29
+
+== Auditor: Claude Opus 4.6 (code-verified)
+
+=== Must Have
+
+[width="100%",cols="25%,25%,25%,25%",options="header",]
+|===
+|Category |Feature |Status |Evidence
+|Syntax |Single source of truth for interpreter semantics |PASS
+|`+eval.rs+` (2194 lines) is the reference evaluator
+
+|Architecture |Modular language backends |PASS |31 backends via
+BackendRegistry
+
+|Context |Discourse-bound context (dynamic typing/closures/coroutines)
+|PARTIAL |Discourse tracked in evaluator + meta-level via
+DiscourseMetaHook. NO closures, NO coroutines
+
+|Diagnostics |Error reporting for meta-level execution |PASS
+|`+MetaError+` enum (7 variants): ReflectionError, NotARecord,
+MissingField, FieldTypeError, HarvardViolation, HookError, Unsupported
+
+|Execution |Direct and meta-circular interpretation |PASS |Full
+reify→intercept→reflect→eval loop. 4 modes: Direct, MetaCircular,
+Stepping, Replay. 40 passing tests
+|===
+
+*Must Have: 4.5/5 (90%)*
+
+=== Should Have
+
+[width="100%",cols="25%,25%,25%,25%",options="header",]
+|===
+|Category |Feature |Status |Evidence
+|Interop |Cross-language meta-interop |PARTIAL |Reified AST is
+serializable RtValue (serde); can be transmitted to other backends
+
+|Selection |Dynamic semantic selection (@meta_dynamic) |NOT IMPL |—
+
+|Performance |JIT for hot paths |NOT IMPL |jit.rs exists but is
+detection/hint only
+
+|Tooling |Semantic-aware tooling |PARTIAL |MetaHook trait enables
+external tools (debuggers, supervisors) to intercept evaluation.
+LoggingHook, FilterHook built-in
+|===
+
+*Should Have: 1/4 (25%)*
+
+=== Could Have
+
+[cols=",,,",options="header",]
+|===
+|Category |Feature |Status |Evidence
+|Concurrency |Parallel evaluation |NOT IMPL |—
+|Codegen |Semantic-aware codegen |NOT IMPL |—
+|Runtime |Runtime semantic switching |NOT IMPL |—
+|===
+
+*Could Have: 0/3 (0%)*
+
+=== Aspirational
+
+[width="100%",cols="25%,25%,25%,25%",options="header",]
+|===
+|Category |Feature |Status |Evidence
+|Inference |Automated inference |NOT IMPL |—
+
+|Verification |Formal proofs of meta-interpretation equivalence |NOT
+IMPL |Roundtrip tests verify reify→reflect identity but no formal proof
+
+|Consistency |Language-wide consistency checks |NOT IMPL |—
+|===
+
+*Aspirational: 0/3 (0%)*
+
+=== Summary
+
+*TOTAL: 5.5/15 (37%) — up from 13% (2/15) on 2026-03-27*
+
+==== Key Implementation Details (2026-03-29)
+
+*Reification (AST → RtValue):* - Complete coverage: DataExpr (14
+variants), ControlExpr (17 variants), ControlStmt (15 variants),
+TopLevelDecl (14 variants) - Plus: Pattern, BranchArm, GivenClause,
+GivenItem, Handler, LocaleExpr, BinOp, PredOp - All nodes become
+`+RtValue::Record+` with `+__kind+` discriminant — pure Data
+(Harvard-safe)
+
+*Reflection (RtValue → AST):* - Complete inverse of reification with
+structured error handling - Returns `+Result<_, MetaError>+` for
+malformed records
+
+*Meta-Circular Eval Loop:* - Reifies each declaration to Data - Fires
+MetaHook callbacks (before_step / after_step) - Reflects back to AST and
+evaluates via base evaluator - Records MetaStep with: reified AST,
+result value, trace snapshot, env snapshot
+
+*Interception Hooks (MetaHook trait):* - `+MetaHookAction+`: Continue,
+Skip, Pause, Abort - Built-in: LoggingHook, FilterHook,
+DiscourseMetaHook - Stepping mode supports breakpoints and resume
+
+*Discourse-Aware Meta-Evaluation:* - DiscourseMetaHook enters/exits
+discourse per step - INVARIANT 7 preserved: discourse does not leak
+between steps
+
+*Benchmarks:* 18 criterion benchmarks covering
+reify/reflect/roundtrip/meta-circular/stepping/replay/hooks
+
+==== What Still Needs Work
+
+[arabic]
+. *Closures and coroutines* in the base evaluator (not a
+meta-interpreter issue per se)
+. *JIT compilation* for hot meta-paths (jit.rs is detection only)
+. *Dynamic semantic selection* at meta-level (@meta_dynamic)
+. *Parallel meta-evaluation* (speculative branch at meta-level)
+. *Formal proofs* of reify→reflect→eval equivalence with direct eval
+
+=== Ecosystem Integration
+
+* Package Manager: OPSM
+* IDE: PanLL + Visual Codium (ENSAID)

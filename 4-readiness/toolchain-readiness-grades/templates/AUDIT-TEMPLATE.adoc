@@ -1,0 +1,95 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+// Copyright (c) 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+
+= TRG Component Audit — Template
+:status: Canonical template, version 1.0
+:date: 2026-04-12
+
+This is the canonical four-tier MoSCoW audit template that every
+hyperpolymath toolchain component MUST fill in. The completed audit
+lives at `audits/audit-<component>.md` (or `.adoc`) inside the host
+language repo.
+
+The four tiers map directly to TRG grades per `TOOLCHAIN-READINESS-GRADES.adoc` §4:
+
+[cols="1,2,3",options="header"]
+|===
+| Tier | Audit row label | Grade gate
+| Must | *Must Have ✅* | All rows PASSED required for grade *E*
+| Should | *Should Have 🟡* | All rows PASSED required for grade *D*
+| Could | *Could Have 🔵* | All rows PASSED required for grade *C*
+| Aspirational | *Aspirational ⭐* | All rows PASSED required for grade *B*
+|===
+
+If *any* Must row is FAILED, the component is grade *X*, regardless of how
+many higher-tier rows pass. No partial credit across tiers.
+
+The seed reference (the 007 lexer MK2 audit) is at
+`references/007/audit-lexer-mk2-tier-format.md` of this directory.
+
+== Audit table — fill in for the component under audit
+
+[cols="1,3,1,4",options="header"]
+|===
+| Category | Feature | Status | Evidence / Notes
+
+| *Must Have ✅* | _(component-specific must row 1)_ | _(PASSED \| FAILED)_ | _(citation, file path, test name, etc.)_
+|                | _(component-specific must row 2)_ | _(PASSED \| FAILED)_ | _(...)_
+|                | _(component-specific must row N)_ | _(PASSED \| FAILED)_ | _(...)_
+
+| *Should Have 🟡* | _(component-specific should row 1)_ | _(PASSED \| FAILED)_ | _(...)_
+|                  | _(component-specific should row 2)_ | _(PASSED \| FAILED)_ | _(...)_
+
+| *Could Have 🔵* | _(component-specific could row 1)_ | _(PASSED \| FAILED)_ | _(...)_
+|                 | _(component-specific could row 2)_ | _(PASSED \| FAILED)_ | _(...)_
+
+| *Aspirational ⭐* | _(component-specific aspirational row 1)_ | _(PASSED \| FAILED)_ | _(...)_
+|                   | _(component-specific aspirational row 2)_ | _(PASSED \| FAILED)_ | _(...)_
+|===
+
+== Required header fields
+
+Every completed audit MUST start with:
+
+[source]
+----
+= <Component Name> — TRG Audit
+:component: <component>
+:host-language: <language repo name>
+:audit-version: <semver of this audit>
+:audit-date: <ISO date>
+:auditor: <name + email>
+:current-trg-grade: <X | F | E | D | C | B | A>
+:previous-trg-grade: <previous grade or "N/A">
+:component-version: <semver of the component being audited>
+:spec-version: TOOLCHAIN-READINESS-GRADES v1.0
+----
+
+== Required footer fields
+
+Every completed audit MUST end with:
+
+. *Audit Summary* — one paragraph stating the current grade and the
+  highest tier whose rows all PASSED.
+. *Promotion Path* — what would need to change for the component to
+  reach the next grade up.
+. *Demotion Risk* — what could trigger a demotion under the §5.8
+  immediate-demotion rule.
+. *Banned-construct count* (D and above only) — explicit count of
+  every banned construct in §6.5 inside the component's source.
+  Must be ZERO.
+. *Standards conformance summary* (C and above) — checklist of every
+  conformance item required at the current grade per §5.4-§5.7.
+. *Evidence archive pointer* — relative path to the
+  `audits/<component>/A-grade-evidence/` directory (where applicable)
+  containing the reproducibility artefacts.
+
+== Style rules
+
+* Use checkmarks (✅) and warning marks (🟡) sparingly and consistently.
+* Every PASSED claim MUST be supported by a verifiable artefact:
+  a test name, a CI run URL, a file path, a measurement.
+* "I think it works" is NOT evidence. "I ran it on X and the result
+  was Y" is evidence.
+* The audit document is itself a claim and is itself subject to the
+  invariant-path doc-claims grounder. Run it before committing.

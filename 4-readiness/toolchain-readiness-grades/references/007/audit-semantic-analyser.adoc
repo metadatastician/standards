@@ -1,0 +1,60 @@
+== 007 MK2 Audit Target: Semantic Analyser
+
+== Status: DESIGN TARGET — check against actual implementation
+
+=== Must Have
+
+[width="100%",cols="50%,50%",options="header",]
+|===
+|Category |Feature
+|Syntax |Stable syntax/lexer (single source of truth)
+
+|Architecture |Modular semantic analyser (plug-in architecture)
+
+|Type System |Type system agnostic (static/dynamic/gradual)
+
+|Context |Discourse-bound context tracking (scope/control flow/data
+flow)
+
+|Extensibility |Semantic plugin system
+|===
+
+=== Should Have
+
+[cols=",",options="header",]
+|===
+|Category |Feature
+|Polymorphism |Semantic polymorphism
+|Selection |Dynamic semantic selection (annotations/pragmas)
+|Interop |Interoperability between semantics
+|Diagnostics |Error reporting tailored to active semantics
+|Performance |Optimization hints
+|===
+
+=== Could Have
+
+[cols=",",options="header",]
+|===
+|Category |Feature
+|Tooling |Semantic-aware tooling
+|Concurrency |Concurrency models per semantic domain
+|Codegen |Semantic-aware codegen
+|Optimization |Semantic-aware optimizations
+|===
+
+=== Aspirational
+
+[cols=",",options="header",]
+|===
+|Category |Feature
+|Inference |Automated semantic inference
+|Verification |Formal proofs of semantic equivalence
+|Consistency |Language-wide consistency checks
+|Runtime |Runtime semantic switching
+|Refactoring |Semantic-aware refactoring tools
+|===
+
+=== Ecosystem Integration
+
+* Package Manager: OPSM
+* IDE: PanLL + Visual Codium (ENSAID)

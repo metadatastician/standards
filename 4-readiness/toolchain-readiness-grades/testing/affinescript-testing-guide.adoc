@@ -1,0 +1,142 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+
+== AffineScript Testing Tools Guide
+
+*Version:* 1.0.0 *Date:* 2026-07-03 *Status:* Active (baseline — honest
+by construction) *Parent standard:* `+LANGUAGE-TESTING-STANDARDS.adoc+`
+(R1–R9)
+
+AffineScript is the estate’s primary application language (RS/TS/JS →
+AffineScript → typed-wasm; affine/linear types, OCaml-based compiler).
+This guide is the estate’s current best statement of its testing story.
+AffineScript’s tooling is young, so several rows below are honest
+*gaps*, not omissions — a gap here is a tracked piece of work, and this
+guide names it rather than pretending coverage exists.
+
+*Canonical SSOT (prospective):* the authoritative home for this guide
+will be `+hyperpolymath/affinescript+` (`+spec/+` or
+`+docs/testing.adoc+`). Until that lands, this repo carries it; the
+migration is a Wave-6 charter. Do not let the two diverge — when the
+affinescript-repo version ships, this becomes a pointer.
+
+=== Requirement mapping
+
+[width="99%",cols="20%,16%,16%,16%,16%,16%",options="header",]
+|===
+|# |Requirement |Level |Tool |CI invocation |Status
+|R1 |Unit test runner |MUST |`+affinescript-deno-test+` bootstrap runner
+|`+deno task test+` (in the AS repo) |partial — bootstrap shim,
+self-hosting pending
+
+|R2 |Formatter (check mode) |MUST |`+affinescript fmt+` (compiler
+subcommand) |`+affinescript fmt --check+` |gap — formatter not yet
+shipped
+
+|R3 |Linter / static analysis |MUST |compiler diagnostics +
+`+affinescript-verify.yml+` |`+affinescript compile --check+` |partial —
+the type system IS the primary static check; a dedicated linter is a gap
+
+|R4 |Coverage |SHOULD |`+none+` |— |gap
+
+|R5 |Property-based / fuzz |SHOULD |`+none+` |— |gap (parser/lowering
+are the priority targets)
+
+|R6 |Benchmark |SHOULD |wasm bench harness |— |gap
+
+|R7 |Security / dependency audit |MUST |Deno (`+deno.json+` import
+audit) |`+deno task audit+` |partial — Deno-managed deps; no AS-native
+audit
+
+|R8 |Contract / pre-post |MAY |affine/linear types (compile-time)
+|compiler |partial — linearity is a compile-time contract
+
+|R9 |Proof check |MUST* |Idris2 ABI proofs (for proven-backed modules)
+|ECHIDNA proof gate |partial — applies to modules using the `+proven+`
+library
+|===
+
+`+MUST*+` = R7 applies (Deno ecosystem); R9 applies only to AS modules
+that call proven/Idris2-verified code.
+
+=== Tools
+
+==== AffineScript compiler (`+affinescript+`) — R2, R3, R8
+
+* *Purpose:* the type checker is the primary correctness gate.
+Affine/linear types reject use-after-move and aliasing at compile time —
+that is R8 (contract) discharged by construction, and much of R3 (static
+analysis).
+* *Usage:* `+affinescript compile <file>.affine+` (type-checks + lowers
+to typed-wasm); `+affinescript compile --check+` for check-only.
+* *CI:* `+.github/workflows/affinescript-verify.yml+` clones + builds
+the compiler and runs verification. *Note:* that job is currently
+_advisory_ (`+continue-on-error+`) while the compiler build stabilises —
+it does not yet gate. Promotion to blocking is the unblock condition for
+R3.
+
+==== affinescript-deno-test — R1
+
+* *Purpose:* the bootstrap test runner used until AffineScript
+self-hosts its test framework. TS/JS shim (documented carve-out).
+* *Usage:* `+deno task test+` in the AS repo.
+* *CI:* runs in the AffineScript repo’s CI.
+
+=== Recommended CI pipeline
+
+Until the AS-native toolchain matures, the recommended pipeline is:
+
+[arabic]
+. *Type-check (R3/R8, MUST):* build the compiler,
+`+affinescript compile    --check+` over all `+.affine+` sources —
+SHA-pinned, and *blocking once the compiler build is reliably green*
+(today advisory; see `+affinescript-verify.yml+`).
+. *Unit tests (R1, MUST):* `+deno task test+` via the bootstrap runner.
+. *Dep audit (R7, MUST):* Deno import audit.
+. SHOULD rows (coverage, property, bench) are tracked gaps — see below.
+
+No `+continue-on-error+` on a MUST check once its tool is stable; the
+current advisory status of `+affinescript-verify.yml+` is itself a
+tracked gap, not a silent pass.
+
+=== Best practices
+
+[arabic]
+. Design modules to admit affine/linear typing from the start — the type
+system is the cheapest test you have.
+. Prefer compile-time linearity contracts (R8) over runtime assertions
+where the type system can express the invariant.
+. For correctness-critical paths, route through `+proven+`/Idris2 (R9)
+rather than hand-rolled checks.
+. Keep `+.affine+` sources free of TS/JS shims except the documented
+bootstrap carve-outs.
+
+=== Known gaps
+
+Honest inventory (every gap is real work, not an omission):
+
+* *R2 formatter* — no `+affinescript fmt+` yet. Charter.
+* *R3 dedicated linter* — beyond type diagnostics; and
+`+affinescript-verify.yml+` is advisory (`+continue-on-error+`), so R3
+does not yet _gate_. Charter: flip to blocking once the compiler build
+is reliably green.
+* *R4 coverage* — no wasm coverage tool. Charter.
+* *R5 property/fuzz* — none; parser and canonical-lowering are the
+priority targets. Charter.
+* *R6 benchmark* — no wasm bench harness. Charter.
+* *R1 self-hosting* — the test runner is a TS/JS bootstrap shim, not
+AS-native. Unblocks when AffineScript self-hosts the runner.
+
+These gaps are why AffineScript’s Toolchain Readiness Grade cannot yet
+exceed the lower bands — which is the honest position, and the reason
+this guide exists.
+
+=== Resources
+
+* `+LANGUAGE-TESTING-STANDARDS.adoc+` — the parent R1–R9 standard.
+* `+.github/workflows/affinescript-verify.yml+` — the current (advisory)
+CI check.
+* `+language-testing-guide-TEMPLATE.adoc+` — the skeleton this
+follows.
+* SSOT (prospective): `+hyperpolymath/affinescript+`.
+
+*Maintainers:* @hyperpolymath *Last Updated:* 2026-07-03

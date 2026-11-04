@@ -1,0 +1,58 @@
+== 007 MK2 Audit Target: Macro Expander
+
+== Status: DESIGN TARGET — check against actual implementation
+
+=== Must Have
+
+[width="100%",cols="50%,50%",options="header",]
+|===
+|Category |Feature
+|Syntax |Single source of truth for macro expansion
+(syntax/hygiene/rules)
+
+|Architecture |Modular macro systems (Rust macro_rules!/Lisp/C
+preprocessor)
+
+|Context |Discourse-bound context (hygiene/expansion order/scoping)
+
+|Diagnostics |Unified error reporting (macro not found/hygiene
+violation)
+
+|Expansion |Compile-time and runtime expansion
+|===
+
+=== Should Have
+
+[cols=",",options="header",]
+|===
+|Category |Feature
+|Interop |Cross-system macro interop
+|Selection |Dynamic macro selection
+|Performance |Optimization hints (inline simple macros)
+|Tooling |Semantic-aware tooling (macro-aware debuggers)
+|===
+
+=== Could Have
+
+[cols=",",options="header",]
+|===
+|Category |Feature
+|Concurrency |Parallel expansion
+|Hygiene |Semantic-aware hygiene
+|Runtime |Runtime macro switching
+|===
+
+=== Aspirational
+
+[cols=",",options="header",]
+|===
+|Category |Feature
+|Inference |Automated macro inference
+|Verification |Formal proofs of macro equivalence
+|Consistency |Language-wide hygiene checks
+|===
+
+=== Ecosystem Integration
+
+* Package Manager: OPSM
+* IDE: PanLL + Visual Codium (ENSAID)

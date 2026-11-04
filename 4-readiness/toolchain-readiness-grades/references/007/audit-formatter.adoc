@@ -1,0 +1,55 @@
+== 007 MK2 Audit Target: Formatter
+
+== Status: DESIGN TARGET — check against actual implementation
+
+=== Must Have
+
+[width="100%",cols="50%,50%",options="header",]
+|===
+|Category |Feature
+|Syntax |Single source of truth for formatting
+(syntax/whitespace/comments/indentation)
+
+|Architecture |Modular language backends
+
+|Context |Discourse-bound context (project-wide rules/team styles)
+
+|Diagnostics |Unified error reporting (trailing whitespace/mismatched
+indentation)
+
+|Modes |Automatic and manual formatting
+|===
+
+=== Should Have
+
+[cols=",",options="header",]
+|===
+|Category |Feature
+|Interop |Cross-tool interop (rustfmt/black/clang-format)
+|Selection |Dynamic style selection
+|Performance |Parallel formatting hints
+|Tooling |Semantic-aware tooling (IDE/diff/CI)
+|===
+
+=== Could Have
+
+[cols=",",options="header",]
+|===
+|Category |Feature
+|Concurrency |Parallel formatting
+|Styles |Context-specific styles
+|Runtime |Runtime style switching
+|===
+
+=== Aspirational
+
+[cols=",",options="header",]
+|===
+|Category |Feature
+|Inference |Automated style inference
+|===
+
+=== Ecosystem Integration
+
+* Package Manager: OPSM
+* IDE: PanLL + Visual Codium (ENSAID)

@@ -1,0 +1,76 @@
+== 007 MK2 Reference: "`Perfect`" Type Checker Design
+
+== Source: Academic research + industry best practices (2026)
+
+== Status: REFERENCE DOCUMENT — informs typechecker audit targets
+
+=== Core (Must-Have) per academic/industry consensus
+
+[cols=",",options="header",]
+|===
+|Component |Purpose
+|Type Inference |Infers types automatically (Hindley-Milner style)
+|Type Checking |Verifies type correctness
+|Error Reporting |Clear, actionable error messages with suggestions
+|Scope Resolution |Tracks symbol scopes
+|Type Environments |Maintains type bindings per scope
+|Unification |Solves type equations with occurs check
+|Subtyping |Handles subtype relationships
+|Generics Support |Handles generic types (Vec, Option)
+|Trait/Interface Support |Enforces trait bounds (T: Debug)
+|Ownership/Borrow Checking |Enforces memory safety (linear types)
+|Module System |Handles imports/exports
+|===
+
+=== Should-Have per modern standards
+
+[cols=",",options="header",]
+|===
+|Component |Purpose
+|Incremental Type Checking |Only rechecks changed parts
+|Gradual Typing |Supports both static and dynamic typing
+|Higher-Kinded Types |Generics over generics
+|Effect Systems |Enforces effects (async, try, panic)
+|Lifetime Analysis |Infers lifetimes
+|Macro Expansion |Handles language macros
+|Language Interop |Cross-language FFI with type safety
+|Performance Optimizations |Caching, parallel checking
+|Auto-Fix Suggestions |Suggested fixes for type errors
+|===
+
+=== Could-Have (advanced/experimental)
+
+[cols=",",options="header",]
+|===
+|Feature |Purpose
+|Linear Types |Enforces linear/affine types
+|Dependent Types |Types that depend on values
+|Session Types |Protocol safety
+|Refinement Types |Types with predicates
+|Algebraic Effects |First-class effect system
+|Type-Directed Code Gen |Uses type info to optimize codegen
+|Cross-Platform Type Checking |WASM, x86, ARM with single checker
+|Type Checking for DSLs |Types in domain-specific languages
+|Type Checking for Concurrency |Thread safety (Send + Sync)
+|===
+
+=== Anti-Patterns to Avoid
+
+* Overly complex type system (100+ features)
+* No incremental checking
+* Poor error messages ("`type error`" with no detail)
+* No subtyping support
+* No generics
+* No performance optimizations
+
+=== 007-Specific Notes
+
+007’s typechecker maps to this framework via the Kategoria layers: -
+L1-L3 = Type Inference + Checking + Generics - L4 = Dependent Types
+(bounded fragment) - L5 = Refinement Types (decidable predicates) - L6 =
+Linear Types (Harvard handles) - L7 = Session Types (protocol
+compliance) - L8 = Effect Systems (purity tracking) - L9 = Gradual
+Verification (proof obligations)
+
+The discourse-bound strictness spectrum is unique to 007 — no other type
+checker has discourse-modulated enforcement levels.

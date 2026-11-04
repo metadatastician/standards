@@ -1,0 +1,57 @@
+== 007 MK2 Audit Target: Import Resolver
+
+== Status: DESIGN TARGET — check against actual implementation
+
+=== Must Have
+
+[width="100%",cols="50%,50%",options="header",]
+|===
+|Category |Feature
+|Syntax |Single source of truth for import resolution
+(paths/aliases/virtual filesystems)
+
+|Architecture |Modular import strategies (filesystem/network/virtual)
+
+|Context |Discourse-bound context (module scope/visibility/cycle
+detection)
+
+|Diagnostics |Unified error reporting (module not found/cycle detected)
+
+|Resolution |Static and dynamic import resolution
+|===
+
+=== Should Have
+
+[cols=",",options="header",]
+|===
+|Category |Feature
+|Interop |Cross-system interop
+|Selection |Dynamic import annotations
+|Performance |Import caching hints
+|Tooling |Semantic-aware tooling
+|===
+
+=== Could Have
+
+[cols=",",options="header",]
+|===
+|Category |Feature
+|Concurrency |Parallel resolution
+|Caching |Semantic-aware caching
+|Runtime |Runtime import switching
+|===
+
+=== Aspirational
+
+[cols=",",options="header",]
+|===
+|Category |Feature
+|Inference |Automated import inference
+|Verification |Formal proofs of resolution correctness
+|Consistency |Language-wide consistency checks
+|===
+
+=== Ecosystem Integration
+
+* Package Manager: OPSM
+* IDE: PanLL + Visual Codium (ENSAID)

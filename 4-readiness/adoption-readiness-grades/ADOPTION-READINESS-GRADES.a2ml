@@ -1,0 +1,339 @@
+; SPDX-License-Identifier: MPL-2.0
+; Copyright (c) 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+
+; Adoption Readiness Grades (ARG) — Machine-readable specification
+; Format: A2ML (AI-to-Machine Language)
+; Standard: ARG v1.0
+; Companion to: ADOPTION-READINESS-GRADES.adoc (the normative spec)
+
+(standard
+  (name "Adoption Readiness Grades")
+  (abbreviation "ARG")
+  (version "1.0")
+  (date "2026-05-28")
+  (author "Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>")
+  (license "MPL-2.0")
+  (license-fallback "MPL-2.0")
+  (family "RSR")
+  (companion-of "Toolchain Readiness Grades v1.0" "Component Readiness Grades v2.2")
+  (relationship "language-whole-sibling-tier")
+  (tier "language-adoption")
+  (sibling-tiers
+    (component "CRG")
+    (toolchain "TRG")
+    (language-adoption "ARG")
+    (foundations "FRG")))
+
+(grades
+  (grade
+    (code X)
+    (name "Untested / Not yet a language")
+    (release-stage #f)
+    (stability-posture #f)
+    (ordinal 0)
+    (description "No release artefact exists, or no Discovery surface item from §3.1 is present.")
+    (evidence-required "none")
+    (minimum-for #f))
+  (grade
+    (code F)
+    (name "Harmful / Wasteful")
+    (release-stage #f)
+    (stability-posture #f)
+    (ordinal 1)
+    (description "Released but actively user-harmful: misleading docs, silently incorrect semantics, regressive ergonomics, or abandonment-while-promoted.")
+    (evidence-required "documented harm or misrepresentation; explicit demotion record in READINESS.md; halt/rename/merge recommendation")
+    (minimum-for #f))
+  (grade
+    (code E)
+    (name "Bare Minimum")
+    (release-stage "pre-alpha")
+    (stability-posture "internal-only")
+    (ordinal 2)
+    (description "Undeniable internal minimum: language qualifies, runs own stdlib, no external users required. Nobody outside the maintainer would use it.")
+    (evidence-required "TRG >= E for F1-F4 + F6 + F7 + B1 + B2 + B6 + T8; D1 (landing page) and D2 (elevator pitch) present; repo RSR-compliant for TRG-E")
+    (minimum-for "internal experiment"))
+  (grade
+    (code D)
+    (name "Toy-Project Usable")
+    (release-stage "pre-alpha+")
+    (stability-posture "toy-project-usable")
+    (ordinal 3)
+    (description "Toy-project usable. A motivated person could build a weekend project without papercut-after-papercut.")
+    (evidence-required "all E + TRG >= D estate-wide + O1 (5-min hello-world) + O2 (tutorial) + O4 (>=3 cookbook examples >=100 LoC) + R1 (reference manual, even if incomplete) + R3 (formal grammar) + Δ1 (signed reproducible release) + >=3 external programs >=100 LoC each parse+typecheck+run + diversity-metrics: external authors >= 2 distinct individuals beyond maintainer")
+    (minimum-for #f))
+  (grade
+    (code C)
+    (name "Self-Validated (alpha gate)")
+    (release-stage "alpha")
+    (stability-posture "stable-in-home-context")
+    (ordinal 4)
+    (description "Self-validated alpha. Non-trivially usable in home context. Dogfood cohort uses it for real work in >=2 substantive domains.")
+    (evidence-required "all D + TRG >= C estate-wide + CRG >= C for every adoption-surface §3 component + O3 (playground) + R2 (stdlib reference) + R4 (operational/denotational semantics) + R5 (stable error-code index) + C1+C2+C3 + C5 (RFC/ADR used >=3 times) + Δ2 (registry/install path) + Δ3 (versioning policy) + E1 (slide deck) + >=10 dogfood users meeting diversity-metrics + >=2 substantive domains covered by >=3 cookbook examples each + VeriSimDB instance ingesting per-commit ARG-PROFILE attestations + continuous fuzzing >=14 days per TRG FUZZING-CORPUS-FLOOR.adoc")
+    (minimum-for "alpha"))
+  (grade
+    (code B)
+    (name "Broadly Adopted (beta gate)")
+    (release-stage "beta")
+    (stability-posture "broadly-trial-stable")
+    (ordinal 5)
+    (description "Broadly adopted beta. Language has escaped its home repo. External people in unrelated organisations and contexts write real programs in it.")
+    (evidence-required "all C + TRG >= B estate-wide + CRG >= B per §3 component + >=100 distinct external users meeting diversity-metrics + >=6 diverse external projects use the language (TRG diversity-metrics verified) + X1 >=12 third-party libraries + X2 >=3 third-party tools (not founder-written) + X3 ecosystem-plugged (language-specific per profile) + X4 >=2 maintainers beyond founder with >=6 months sustained contribution + Δ4 deprecation policy active + >=1 deprecation cycle completed + Δ5 3-practice/SECURITY.md with response demonstrated + E2 training materials used externally + continuous fuzzing >=30 days incl structure-aware + external single-party audit + SBOM + Hypatia zero Critical/High + branch protection")
+    (minimum-for "beta"))
+  (grade
+    (code A)
+    (name "School-Grade Real")
+    (release-stage "stable")
+    (stability-posture "stable")
+    (ordinal 6)
+    (description "School-grade real — first-gen-Python equivalent. A school could adopt it next term. Founder no longer a single point of failure. ARG-A is the cap; past A is a cultural phenomenon, not a language property.")
+    (evidence-required "all B + TRG = A estate-wide + FRG >= B + >=1000 distinct external users meeting diversity-metrics + >=1 educational institution taught the language as a multi-week unit with external educator (E3 + E4) + X1 >= 50 libraries + X2 >= 8 tools + X4 >= 5 independent maintainers + founder bus-factor test signed (could step away 6 months) + 5-nines on standing priority axes + continuous fuzzing 90 days incl differential against reference impl + type-theory/PL-research upstream contribution in last 12 months + full hyperpolymath standards conformance per TRG §5.7.5 + unanimous 6+6 humans+LLMs signoff per TRG A-GRADE-LLM-PANEL.adoc")
+    (minimum-for "stable release")))
+
+(release-stage-mapping
+  (X "pre-alpha")
+  (F "rejected")
+  (E "pre-alpha (internal only)")
+  (D "pre-alpha+ (toy-project usable)")
+  (C "alpha")
+  (B "beta")
+  (A "stable / release"))
+
+(required-adoption-surfaces
+  (discovery
+    (D1 "Landing page or canonical README")
+    (D2 "One-paragraph elevator pitch for non-specialist")
+    (D3 "Provenance: maintainers, start date, current version"))
+  (onboarding
+    (O1 "Hello-world runnable from clean install in <= 5 minutes")
+    (O2 "Tutorial covering distinctive features")
+    (O3 "Playground (browser-runnable or single-command-local)")
+    (O4 "Cookbook of worked examples in >= 2 substantive domains"))
+  (reference
+    (R1 "Reference manual (operational specification)")
+    (R2 "Standard library reference (one entry per public symbol)")
+    (R3 "Formal grammar (EBNF or equivalent)")
+    (R4 "Operational or denotational semantics (also TRG M5)")
+    (R5 "Stable error-code index (also TRG diagnostics M)"))
+  (community
+    (C1 "Issue tracker with response-time policy")
+    (C2 "Contribution guide (CONTRIBUTING.md)")
+    (C3 "Code of conduct (CoC)")
+    (C4 "Public discussion venue (forum / Discord / Zulip / list)")
+    (C5 "RFC / ADR process documented and used"))
+  (distribution
+    (D1-dist "Stable release artefacts (tagged, signed, reproducible)")
+    (D2-dist "Package registry presence or canonical install path")
+    (D3-dist "Versioning policy (Semver or Edition)")
+    (D4-dist "Deprecation policy and visible deprecation log")
+    (D5-dist "Security disclosure policy"))
+  (education
+    (E1 "Slide deck / 1-hour external talk-script")
+    (E2 "Training materials for 1-day workshop")
+    (E3 "Curriculum for school-term unit (multi-week)")
+    (E4 "External educator(s) who have used the materials"))
+  (ecosystem
+    (X1 "Third-party library count")
+    (X2 "Third-party tool count")
+    (X3 "Integration count (domain-specific, per profile)")
+    (X4 "Independent maintainer count beyond founder")))
+
+(banned-constructs
+  ; Inherited verbatim from TRG.
+  (inherited-from "TRG")
+  (constructs
+    "believe_me"
+    "assert_total"
+    "Admitted"
+    "sorry"
+    "postulate"
+    "unsafeCoerce"
+    "Obj.magic"
+    "Obj.repr"
+    "unsafePerformIO"
+    "getUnsafe"
+    "getExn"
+    "raw transmute"
+    "raw reinterpret_cast"
+    "void * casts that defeat the type system"
+    "@unchecked"
+    "@SuppressWarnings on safety lints"))
+
+(standing-priority-order
+  ; Inherited verbatim from TRG.
+  (inherited-from "TRG")
+  (axes
+    (1 "dependability")
+    (2 "security")
+    (3 "interop")
+    (4 "usability")
+    (5 "performance")
+    (6 "versatility")
+    (7 "functional-extension")))
+
+(grade-aggregation
+  (rule "worst-of-any-required-adoption-surface")
+  (no-averaging #t)
+  (no-weighting #t)
+  (cross-axis-rule "ARG <= TRG always")
+  (justification "A language with discovery+onboarding+reference all at B but community at D is ARG-D, not 'ARG-B-with-community-gap'. Honest grade tells maintainer where to focus."))
+
+(diversity-metrics
+  (inherited-from "TRG")
+  (technical-diversity
+    (language-family-count >=3)
+    (runtime-environment-count >=4)
+    (architecture-count >=2)
+    (os-family-count >=3))
+  (organizational-diversity
+    (independent-org-count >=4)
+    (geographic-region-count >=3)
+    (industry-sector-count >=3))
+  (user-diversity
+    (role-count >=5)
+    (expertise-level-count >=3)
+    (use-case-count >=4))
+  (downstream-target-diversity
+    (language-family-count >=3)
+    (runtime-environment-count >=4)
+    (architecture-count >=2)
+    (os-family-count >=3)
+    (independent-org-count >=4)
+    (geographic-region-count >=3)
+    (industry-sector-count >=3)))
+
+(qualifying-provers
+  (inherited-from "TRG")
+  (v1
+    "Idris2"
+    "Lean 4"
+    "Rocq"
+    "Agda")
+  (re-baseline "annual"))
+
+(a-grade-llm-panel
+  (inherited-from "TRG")
+  (composition
+    (reasoning-models 2)
+    (specialist-coding-models 2)
+    (instruct-models 1)
+    (mixture-of-experts-models 1))
+  (vendor-distinctness #t)
+  (unanimous-required #t)
+  (re-baseline "quarterly"))
+
+(verisim-integration
+  (description "ARG-PROFILE.adoc content is DECLARE'd to VeriSimDB on each commit. Drift between claimed grade and underlying evidence is detected by VeriSimDB's cross-modal drift monitor and surfaces as grade-stale alert.")
+  (required-from-grade C)
+  (attestation-language "VCL-total")
+  (proof-types-used
+    "EXISTENCE"
+    "INTEGRITY"
+    "PROVENANCE"
+    "FRESHNESS"))
+
+(demotion
+  (immediate #t)
+  (no-grace-period #t)
+  (triggers
+    "founder bus-factor test reverts"
+    "educator withdraws (E4 lost)"
+    "distinct-user count drops below threshold for >30 days"
+    "FRG regresses below B at A-grade"
+    "TRG drops (ARG <= TRG enforced immediately)"
+    "6+6 signoff rescinded"
+    "host repo ceases to satisfy any §5.7.5 standard at language's current grade"
+    "RFC/ADR process abandoned (C+ requirement)"
+    "VeriSimDB attestation stale for >30 days (C+ requirement)"))
+
+(per-language-extension
+  (mechanism "spec/ARG-PROFILE.adoc in language repo")
+  (template "templates/ARG-PROFILE-TEMPLATE.adoc")
+  (rule "may tighten, may not loosen")
+  (examples
+    "AffineScript: Grade B requires playground with affine-borrow-check feedback"
+    "Ephapax: Grade C requires external tutorial in dyadic-modality discipline by non-maintainer"
+    "VCL-total: Grade C requires registered Verisim instance addressable from public example"
+    "KRL: Grade C requires examples covering all four operation families (Construct/Transform/Resolve/Retrieve)"))
+
+(definitions
+  (distinct-external-user
+    (description "Individual who has used the language for their own work, not maintainer-paid contract, not solicited demo, not the founder, identifiable, dated record")
+    (inherited-from "TRG §6.4"))
+  (substantive-domain
+    (description "Domain in which a non-trivial program (>=500 LoC) could solve a recognisable real problem")
+    (examples "graphics" "networking" "parsing" "simulation" "data-analysis" "web-frontend" "embedded-control")
+    (non-example "10 different fibonacci implementations are NOT a substantive domain"))
+  (bus-factor-test
+    (description "Founder records signed statement: could stop working on the language for 6 calendar months without it stalling")
+    (gate-for-grade A)
+    (signed-by "founder")
+    (credibility-requires "X4 evidence (>=5 independent maintainers) already in place"))
+  (school-grade
+    (description "Calibrated against first-generation Python (c. 1995-2002): non-specialist educator can teach it to children with available materials")
+    (gate-for-grade A)))
+
+(self-assessment
+  (current-grade "n/a")
+  (justification "ARG grades languages, not specifications. ARG specification is graded by standards repo's CRG and by documentation tooling's TRG.")
+  (path "SELF-ASSESSMENT.adoc")
+  (note "ARG document set is self-assessed against internal-consistency criteria in SELF-ASSESSMENT.adoc"))
+
+(conformance
+  (requirements
+    "ARG grade recorded in spec/ARG-PROFILE.adoc in language repo"
+    "Grade supported by evidence per §4 for that grade and every grade below it"
+    "Profile reviewed >=1 per release cycle, and within 7 days of any demotion"
+    "Aggregation rule §5 respected (worst-of, no averaging)"
+    "Demotion recorded immediately on loss of required evidence"
+    "Per-commit attestations emitted to VeriSimDB at grade C+"
+    "Language is also TRG-graded; ARG <= TRG holds at all times"))
+
+(open-questions
+  (q1
+    (question "Is the '1000 distinct users' threshold for ARG-A correctly calibrated?")
+    (status "plucked from intuition, same caveat as TRG 5M processor-hours")
+    (re-baseline-trigger "first ARG-A candidate")
+    (likely-direction "may drift up for general-purpose languages, down for narrow DSLs"))
+  (q2
+    (question "Is '6 diverse external projects' at ARG-B the right floor?")
+    (status "borrowed from CRG-B")
+    (re-baseline-trigger "first ARG-B candidate that is a narrow DSL with <12 plausible adopters total")
+    (likely-direction "lower threshold for inherently small communities"))
+  (q3
+    (question "Should ARG-A require FRG-A, not just FRG-B?")
+    (status "currently FRG >= B at ARG-A")
+    (re-baseline-trigger "first language reaching both ARG-A and FRG-A")
+    (likely-direction "tighten to FRG-A once any language has shown both can co-exist"))
+  (q4
+    (question "Is the founder bus-factor test sufficiently objective?")
+    (status "novel, subjective, signed-statement-based")
+    (re-baseline-trigger "first ARG-A candidate")
+    (likely-direction "may require external verification of stated independence")))
+
+(versioning
+  (document-version "1.0")
+  (last-updated "2026-05-28")
+  (status "active")
+  (compatibility
+    (backward-compatible #t)
+    (breaking-changes "none — initial release")
+    (deprecations "none"))
+  (maintenance
+    (review-cycle "quarterly")
+    (next-review "2026-08-28")
+    (deprecation-policy "12 months notice for major changes")
+    (change-control
+      (minor "Direct commit with maintainer review")
+      (major "RFC process + unanimous maintainer approval"))))
+
+(references
+  (item "CRG v2.2: Component Readiness Grades")
+  (item "TRG v1.0: Toolchain Readiness Grades")
+  (item "FRG v1.0: Foundations Readiness Grades (companion sibling)")
+  (item "RSR v1.0: Rhodium Standard Repository")
+  (item "K9 v1.0: Self-Validating Components")
+  (item "TypeLL: 10-level type-safety lineage origin")
+  (item "PanLL: panel framework type safety")
+  (item "VCL-total: VeriSim Consonance Language — attestation form")
+  (item "VeriSimDB: 8-modal octad attestation persistence")
+  (item "Hypatia: invariant-path doc-claims grounder"))

@@ -1,0 +1,56 @@
+== 007 MK2 Audit Target: Compiler
+
+== Status: DESIGN TARGET — check against actual implementation
+
+=== Must Have
+
+[width="100%",cols="50%,50%",options="header",]
+|===
+|Category |Feature
+|Architecture |Unified compiler frontend with modular backends
+(x86/ARM/WASM)
+
+|Syntax |Stable syntax/semantics as single source of truth
+
+|Optimization |Modular optimization passes (LTO/PGO)
+
+|Context |Discourse-bound context tracking
+
+|Type System |Type system agnostic
+|===
+
+=== Should Have
+
+[cols=",",options="header",]
+|===
+|Category |Feature
+|Portability |Cross-platform support
+|Interop |Interoperability between languages
+|Diagnostics |Error reporting tailored to target
+|Performance |Optimization hints per target (SIMD/NEON)
+|===
+
+=== Could Have
+
+[cols=",",options="header",]
+|===
+|Category |Feature
+|Tooling |Semantic-aware tooling
+|Concurrency |Concurrency models per target
+|Codegen |Semantic-aware codegen
+|===
+
+=== Aspirational
+
+[cols=",",options="header",]
+|===
+|Category |Feature
+|Inference |Automated semantic inference
+|Verification |Formal proofs of semantic equivalence
+|Consistency |Language-wide consistency checks
+|===
+
+=== Ecosystem Integration
+
+* Package Manager: OPSM
+* IDE: PanLL + Visual Codium (ENSAID)

@@ -1,0 +1,57 @@
+== 007 MK2 Audit Target: Metacompiler
+
+== Status: DESIGN TARGET — check against actual implementation
+
+=== Must Have
+
+[width="100%",cols="50%,50%",options="header",]
+|===
+|Category |Feature
+|Syntax |Single source of truth for all language specs
+
+|Architecture |Modular phases (lexer/parser/AST/type checker/codegen)
+
+|Context |Discourse-bound context (grammar rules/macro expansion/type
+constraints)
+
+|Diagnostics |Error reporting for metacompilation (grammar
+conflicts/unresolved symbols)
+
+|Backends |Multiple backends (C/Rust/LLVM/WASM)
+|===
+
+=== Should Have
+
+[cols=",",options="header",]
+|===
+|Category |Feature
+|Interop |Interop between stages
+|Selection |Dynamic semantic selection
+|Performance |Optimization hints per backend (LTO/PGO)
+|Tooling |Semantic-aware tooling for generated compilers
+|===
+
+=== Could Have
+
+[cols=",",options="header",]
+|===
+|Category |Feature
+|Concurrency |Parallel codegen
+|Codegen |Semantic-aware codegen
+|Runtime |Runtime semantic switching
+|===
+
+=== Aspirational
+
+[cols=",",options="header",]
+|===
+|Category |Feature
+|Inference |Automated inference
+|Verification |Formal proofs of metacompiler equivalence
+|Consistency |Language-wide consistency checks
+|===
+
+=== Ecosystem Integration
+
+* Package Manager: OPSM
+* IDE: PanLL + Visual Codium (ENSAID)

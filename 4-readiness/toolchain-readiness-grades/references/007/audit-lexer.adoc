@@ -1,0 +1,56 @@
+== 007 MK2 Audit Target: Lexer
+
+== Status: DESIGN TARGET — check against actual implementation
+
+=== Must Have
+
+[width="100%",cols="50%,50%",options="header",]
+|===
+|Category |Feature
+|Architecture |Stable lexer with modular token definitions
+
+|Syntax |Single source of truth
+
+|Context |Discourse-bound context (string interpolation/macros)
+
+|Diagnostics |Error reporting for lexing (unexpected chars/unterminated
+strings)
+
+|Coverage |Unicode/whitespace/comments
+|===
+
+=== Should Have
+
+[cols=",",options="header",]
+|===
+|Category |Feature
+|Interop |Interoperability (embedded DSLs)
+|Selection |Dynamic semantic selection (@dynamic_lexer)
+|Performance |Optimization hints (regex/DFA)
+|Tooling |Semantic-aware tooling (syntax highlighters/formatters)
+|===
+
+=== Could Have
+
+[cols=",",options="header",]
+|===
+|Category |Feature
+|Concurrency |Parallel tokenization
+|Modes |Semantic-aware lexer modes
+|Runtime |Runtime semantic switching
+|===
+
+=== Aspirational
+
+[cols=",",options="header",]
+|===
+|Category |Feature
+|Inference |Automated inference
+|Verification |Formal proofs of lexing equivalence
+|Consistency |Language-wide consistency checks
+|===
+
+=== Ecosystem Integration
+
+* Package Manager: OPSM
+* IDE: PanLL + Visual Codium (ENSAID)

@@ -1,0 +1,238 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+// Copyright (c) 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+
+= FRG-PROFILE — {LANGUAGE_NAME}
+:toc: left
+:toclevels: 2
+
+[cols="1,3"]
+|===
+| Field | Value
+
+| Language | {LANGUAGE_NAME}
+| Repository | {REPO_URL}
+| Current FRG Grade | {GRADE}  (X | F | E | D | C | B | A)
+| Assessed | {YYYY-MM-DD}
+| Assessor | {NAME <email>}
+| FRG Spec Version | 1.0
+| ARG Profile | spec/ARG-PROFILE.adoc
+| TRG Profile | spec/TRG-PROFILE.adoc
+| Formalisation Directory | {path/to/formal}
+| Qualifying Prover(s) | {Rocq | Lean 4 | Idris2 | Agda}
+|===
+
+== About this profile
+
+This profile applies the *FRG v1.0* baseline to {LANGUAGE_NAME} and
+records the current honest grade, the evidence supporting it, the
+language-specific tightening obligations, and the path to the next
+grade. Per FRG §1.1, profiles may *tighten* the baseline but never
+*loosen* it.
+
+FRG = {GRADE}. The full chain of axes for this language:
+
+* FRG: {GRADE}
+* ARG: {ARG_GRADE}
+* TRG: {TRG_GRADE}
+* CRG: {CRG_GRADE} (worst-of any released component)
+* RSR: {RSR_LEVEL}
+
+Cross-axis rule: ARG-A requires FRG ≥ B
+(currently FRG = {GRADE}, ARG = {ARG_GRADE}).
+
+== Declared TypeLL level
+
+* *TypeLL level claimed:* L{N}
+* *Evidence:* {Path to formalisation file + theorem names that establish
+  this level. Each level above L4 requires a soundness-class claim with
+  proof.}
+* *Levels not yet claimed:* L{N+1}-L10, with reason.
+
+== Grade rationale (evidence for {GRADE})
+
+[cols="2,1,4", options="header"]
+|===
+| Criterion | Met? | Evidence
+
+| *Mathematical core M1 — Abstract syntax formalised*
+| {YES/NO}
+| {Path to file; e.g. `formal/Syntax.v`}
+
+| *M2 — Typing judgment formalised*
+| {YES/NO}
+| {Path to file; e.g. `formal/Typing.v`}
+
+| *M3 — Operational or denotational semantics formalised*
+| {YES/NO/N/A}
+| {Path to file; e.g. `formal/Semantics.v` / `formal/Semantics_L1.v`}
+
+| *M4 — Preservation theorem stated*
+| {YES/NO/N/A}
+| {Theorem name + file:line citation}
+
+| *M5 — Progress theorem stated*
+| {YES/NO/N/A}
+| {Theorem name + file:line citation}
+
+| *Proof landings P1 — Preservation closed (0 admits, 0 axioms, 0 sorries)*
+| {YES/NO/N/A}
+| {Citation; PROOF-STATUS.a2ml line; date closed}
+
+| *P2 — Progress closed*
+| {YES/NO/N/A}
+| {Citation; PROOF-STATUS.a2ml line}
+
+| *P3 — Counterexample regression suite (≥ 3 Qed lemmas)*
+| {YES/NO/N/A}
+| {Path to counterexample file; lemma count}
+
+| *P4 — Layered orthogonal decomposition*
+| {YES/NO/N/A}
+| {Path to layered-design document; layers enumerated}
+
+| *Verification rigor V1 — Single qualifying prover*
+| {YES/NO}
+| {Which prover; build status link}
+
+| *V2 — Cross-prover replication ≥ 2*
+| {YES/NO/N/A}
+| {Second prover repository; replicated theorem name}
+
+| *V3 — Cross-prover replication ≥ 3*
+| {YES/NO/N/A}
+| {Third prover repository; replicated theorem name}
+
+| *V4 — Echidna integrated in CI as required gate*
+| {YES/NO/N/A}
+| {CI configuration line citing Echidna step}
+
+| *TypeLL L1-L6*
+| {YES/NO partial per level}
+| {Per-level evidence; structural for L1-L2, schema for L3, types for L4, NULL/nullable for L5, injection-safety for L6}
+
+| *TypeLL L7-L10 (grade B+)*
+| {YES/NO partial per level}
+| {Linear (L7), session (L8), effect/modal/proof-carrying (L9), QTT/cross-cutting (L10)}
+
+| *Banned constructs B0 — Zero in proof tree*
+| {YES/NO}
+| {Lint output reference; count of tracked admits if any}
+
+| *B1 — CI banned-construct lint active*
+| {YES/NO}
+| {CI workflow file + step name}
+
+| *Operational equivalence O1 — Operational checker tested against formal judgment (grade B+)*
+| {YES/NO/N/A}
+| {Test corpus path; example count}
+
+| *O2 — Differential testing 100k window (grade A)*
+| {YES/NO/N/A}
+| {Generator path; test-count rolling window report}
+
+| *O3 — Audit-friendly reference implementation (grade A)*
+| {YES/NO/N/A}
+| {Path to reference implementation; line count}
+
+| *Kernel-soundness contribution K1 (grade A only)*
+| {YES/NO/N/A}
+| {Upstream PR / commit / paper reference within last 12 months}
+
+| *VeriSimDB attestation (grade C+)*
+| {YES/NO}
+| {Attestation ID; last-ingested timestamp}
+
+| *External single-party review (grade B+)*
+| {YES/NO/N/A}
+| {Reviewer name; review-output reference}
+
+| *Unanimous 6+6 signoff (grade A only)*
+| {YES/NO/N/A}
+| {Signoff log reference}
+|===
+
+== Open proof obligations
+
+* *Tracked admits / sorries:* {count} (permitted at D and below;
+  forbidden at C and above)
+* *Each open goal is enumerated in:* `{path/to/PROOF-NEEDS.md}`
+* *PROOF-STATUS.a2ml:* `{path/to/PROOF-STATUS.a2ml}` — last updated
+  {YYYY-MM-DD}
+
+== Language-specific tightening (this profile only)
+
+FRG §1.1 permits per-language tightening. For {LANGUAGE_NAME}, the
+following additional obligations apply at the stated grades:
+
+* *Grade C tightening:* {Language-specific obligation; e.g. "AffineScript:
+  the formalised QTT fragment MUST be closed under the affine
+  restriction — no q=ω escape via the affine rule."}
+* *Grade B tightening:* {e.g. "Ephapax: preservation closed *per
+  layer* (preservation_l1, preservation_l2, preservation_l3) with
+  cross-layer composition closed under explicit invariants — not
+  via patched single-layer admits."}
+* *Grade A tightening:* {e.g. "VCL-total: cross-modal consistency
+  proofs over ≥ 3 of the 8 octad modalities."}
+
+These tightenings are *additional* to the baseline — none of the
+baseline evidence is waived.
+
+== What is NOT yet met (honest gaps)
+
+* {Bullet list of specific evidence the language does NOT currently
+  produce, grouped by foundations surface (M / P / V / L / B / O / K).}
+* {Each gap should be specific enough that a reader can verify by
+  inspection of `formal/` + PROOF-NEEDS.md.}
+
+== Path to next grade ({NEXT_GRADE})
+
+* {Specific next-step item 1, with estimated work and the specific
+  theorem(s) or evidence rung that would be unlocked.}
+* {Specific next-step item 2.}
+* {...}
+
+*Realistic timeline estimate:* {N weeks/months}
+
+== Path to grade beyond that ({GRADE_AFTER_NEXT})
+
+* {Larger items that follow the immediate next grade.}
+
+== Demotion risk
+
+* *Lowest:* {What single new admit / sorry / axiom would drop the grade
+  by one.}
+* *Medium:* {What multi-step regression would force a multi-grade
+  demotion.}
+* *Catastrophic:* {What would force demotion to F — i.e. introduction
+  of a Qed'd counterexample to a currently-claimed theorem without
+  redesign commitment.}
+
+== Iteration history
+
+[cols="1,1,4", options="header"]
+|===
+| Date | Grade | Notes
+
+| {YYYY-MM-DD} | {grade} | Initial assessment.
+| {YYYY-MM-DD} | {grade} | {Reason for change.}
+|===
+
+== Review cycle
+
+* *Routine:* Reassess on every release cycle (per FRG §6).
+* *Immediate:* Reassess within 7 days of any demotion trigger per
+  FRG-spec §4.8.
+* *VeriSimDB drift alert:* Reassess within 24 hours of any drift alert
+  from VeriSimDB on this language's foundations attestations.
+* *New admit detection:* CI lint that introduces a new banned-construct
+  / Admitted triggers immediate reassessment.
+
+== Footer
+
+Run `just frg-badge` in this repo to generate the shields.io badge for
+the README.
+
+This profile is itself a VCL-total proposition. Its content is
+`DECLARE`'d to VeriSimDB on each commit. Drift between the claimed
+grade above and the underlying evidence surfaces as a
+*foundations-stale* alert.

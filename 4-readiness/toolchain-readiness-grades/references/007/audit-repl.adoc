@@ -1,0 +1,51 @@
+== 007 MK2 Audit Target: REPL
+
+== Status: DESIGN TARGET — check against actual implementation
+
+=== Must Have
+
+[cols=",",options="header",]
+|===
+|Category |Feature
+|Syntax |Single source of truth for interactive evaluation
+|Architecture |Modular language backends
+|Context |Discourse-bound context (history/scope/environment)
+|Diagnostics |Unified error reporting
+|Execution |Direct and meta-level evaluation
+|===
+
+=== Should Have
+
+[cols=",",options="header",]
+|===
+|Category |Feature
+|Interop |REPL-to-static-tool interop
+|Selection |Dynamic semantic selection
+|Performance |JIT for hot paths
+|Tooling |Semantic-aware tooling (history/autocomplete/debuggers)
+|===
+
+=== Could Have
+
+[cols=",",options="header",]
+|===
+|Category |Feature
+|Concurrency |Parallel evaluation
+|Codegen |Semantic-aware codegen
+|Runtime |Runtime semantic switching
+|===
+
+=== Aspirational
+
+[cols=",",options="header",]
+|===
+|Category |Feature
+|Inference |Automated inference
+|Verification |Formal proofs of REPL equivalence
+|Consistency |Language-wide consistency checks
+|===
+
+=== Ecosystem Integration
+
+* Package Manager: OPSM
+* IDE: PanLL + Visual Codium (ENSAID)

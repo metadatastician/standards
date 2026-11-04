@@ -1,0 +1,56 @@
+== 007 MK2 Audit Target: Codegen
+
+== Status: DESIGN TARGET — check against actual implementation
+
+=== Must Have
+
+[width="100%",cols="50%,50%",options="header",]
+|===
+|Category |Feature
+|Syntax |Single source of truth for codegen (AST→target)
+
+|Architecture |Modular backends (x86/ARM/WASM/LLVM)
+
+|Context |Discourse-bound context (target arch/optimization flags/ABI)
+
+|Diagnostics |Unified error reporting (unsupported features/ABI
+mismatches)
+
+|Levels |High-level and low-level codegen
+|===
+
+=== Should Have
+
+[cols=",",options="header",]
+|===
+|Category |Feature
+|Interop |Backend interop
+|Selection |Dynamic backend selection
+|Performance |Optimization hints per backend (vectorization)
+|Tooling |Semantic-aware tooling
+|===
+
+=== Could Have
+
+[cols=",",options="header",]
+|===
+|Category |Feature
+|Concurrency |Parallel codegen
+|Optimization |Semantic-aware optimization passes
+|Runtime |Runtime backend switching
+|===
+
+=== Aspirational
+
+[cols=",",options="header",]
+|===
+|Category |Feature
+|Inference |Automated backend inference
+|Verification |Formal proofs of codegen equivalence
+|Consistency |Language-wide consistency checks
+|===
+
+=== Ecosystem Integration
+
+* Package Manager: OPSM
+* IDE: PanLL + Visual Codium (ENSAID)

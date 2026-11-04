@@ -1,0 +1,171 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+// Copyright (c) 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+
+= Toolchain Readiness Grades — Self-Assessment
+:toc: auto
+:status: Active
+:date: 2026-04-12
+
+The standards repo grades itself. This document applies the TRG criteria
+to *the TRG document set itself*. TRG is brand new, so the honest grade
+is low — and that honesty is the point.
+
+== Current Grade: X (Untested)
+
+*Assessed: 2026-04-12* +
+*Honest verdict: TRG v1.0 is itself at grade X.* The standard exists,
+the document set is internally consistent, but no toolchain component
+has yet been audited against it, no machine-checkable claims have been
+re-validated by the doc-claims grounder, and no external review has
+taken place.
+
+This is the *correct* starting grade. Anything else would be exactly
+the kind of premature self-grading that TRG itself is built to prevent.
+
+== Why X is the right grade right now
+
+[cols="1,1,3", options="header"]
+|===
+| Criterion | Met? | Evidence
+
+| *X (Untested)* — default
+| (n/a)
+| The default state for any newly-created standard before any audit
+  is run. TRG v1.0 was published 2026-04-12 and has not yet been
+  applied to any component.
+
+| *F (Harmful / Wasteful)*
+| PASSED
+| TRG is not harmful. It is internally consistent, CRG-compatible,
+  and addresses a real gap (CRG grades general components; TRG
+  grades toolchain components specifically). The estate has multiple
+  toolchain projects (007, ephapax, AffineScript, my-lang, etc.)
+  that need a stricter rubric than CRG provides.
+
+| *E (Bare Minimum)*
+| FAILED
+| Requires "all Must rows passed" against the four-tier MoSCoW format
+  defined in §4. *No toolchain component has been audited against TRG
+  yet*, so this row cannot be PASSED for any concrete component, and
+  therefore the standard itself has not been demonstrated to be
+  meaningfully applicable.
+|
+|
+| *Path to E:* run a TRG audit on at least one hyperpolymath toolchain
+  component (the obvious first candidate is 007's lexer, since the
+  TRG audit format is derived from the 007 lexer MK2 audit which is
+  archived in `references/007/audit-lexer-mk2-tier-format.md`).
+  Then promote 007's lexer to TRG-graded status. That single audit
+  demonstrates the standard is *applicable* and lifts TRG itself out
+  of grade X.
+|===
+
+== Path to D (Should-Have Complete)
+
+The next non-trivial promotion. Requires:
+
+. *All Must AND all Should rows PASSED* against the four-tier format,
+  for at least one component.
+. *Canonical Mathematical / Scientific / Engineering Proof Suite* (§6.6)
+  machine-checked through the audited component. The suite definition
+  is now at `templates/CANONICAL-PROOF-SUITE.adoc` (v1.0, 15 entries).
+. *2 fully-proven programs* per §6.2, each cross-validated by at
+  least one qualifying prover from `templates/QUALIFYING-PROVERS.adoc`.
+. *RSR-FULL* — all RSR-required workflows (per `hypatia-rules/rsr-self-compliance.a2ml @required_workflows`) plus the broader adopted set present, SHA-pinned, and currently
+  green. Standards repo is RSR-compliant; need to verify the same for
+  the host repo of the audited component.
+. *Banned constructs ZERO* — verified by `panic-attack assail` clean
+  across all severities (promoted from "Critical and High only" per §5.4).
+. *A2ML files + 0-AI-MANIFEST + Immaculate Guide* — already required
+  at E for the standard's adopting repos.
+. *Fuzzing harness exists* per `templates/FUZZING-CORPUS-FLOOR.adoc`
+  (Grade D row).
+
+*The single biggest blocker* between grade X and grade D is the
+Canonical Proof Suite. Until at least one toolchain in the estate has
+machine-checked all 15 entries of the M/S/E-CPS through itself, the
+standard's gate to leave grade E is unenforceable in practice.
+
+== Path to C (Self-Validated, alpha gate)
+
+After grade D, the path to C requires:
+
+. *All Could rows PASSED.*
+. *Full Testing-Taxonomy 18 × 14 coverage* per
+  `3-practice/testing-and-benchmarking/TESTING-TAXONOMY.adoc`.
+. *Six-Sigma test passing* — all tests in the Six-Sigma range
+  (≤ 3.4 failures per million test runs) for at least 14 consecutive
+  days.
+. *Continuous fuzzing for at least 14 days*.
+. *5 fully-proven programs.*
+. *10 dogfood users.*
+. *3-nines on the standing priority axes* (dependability, security,
+  interop, usability).
+. *VeriSimDB instance present and used by tests.*
+. *`launch-scaffolder mint` wired.*
+. *Stapeln containers built from Chainguard base.*
+
+== Path to B and A
+
+See `TOOLCHAIN-READINESS-GRADES.adoc` §5.6 and §5.7 for the full
+requirements. The honest expectation is *zero toolchain components in
+the estate reach A in year one*. That is the correct order of
+magnitude. Anything that reaches B in year one is already
+extraordinary by industry standards.
+
+== Standards conformance of the TRG document set itself
+
+[cols="2,1,4",options="header"]
+|===
+| Conformance item | Status | Notes
+
+| Main spec exists in `.adoc` | ✅ | `TOOLCHAIN-READINESS-GRADES.adoc` (~40 KB)
+| README.adoc | ✅ | `README.adoc`
+| Self-assessment | ✅ | This document
+| Machine-readable counterpart (`.a2ml`) | ✅ | `TOOLCHAIN-READINESS-GRADES.a2ml`
+| Templates referenced from spec | ✅ | All 5 templates created: `templates/AUDIT-TEMPLATE.adoc`, `templates/CANONICAL-PROOF-SUITE.adoc`, `templates/QUALIFYING-PROVERS.adoc`, `templates/FUZZING-CORPUS-FLOOR.adoc`, `templates/A-GRADE-LLM-PANEL.adoc`
+| References (canonical examples) | ✅ | 25 audit files copied verbatim from 007 in `references/007/`
+| SPDX header on every file | ✅ | Verified
+| invariant-path doc-claims grounder run | ✅ | First run on `standards/` produced 519 grounded / 2597 ungrounded / 1 unknown / 3117 total — drives this self-assessment's gap analysis
+| All file-path claims in spec resolve | 🟡 | Templates now exist; cross-repo references (e.g. to `feedback_branch_protection.md` in memory, `3-practice/immaculate-guide/IMMACULATE-GUIDE.adoc` in standards) should resolve under multi-root grounding once that lands in invariant-path Phase A
+| External review by formal-methods community | ❌ | Not yet — Phase A of invariant-path must complete first; then a coordinated submission to LangSec / NCSC research / NIST / formal-methods Zulip
+| Adoption by at least one toolchain component | ❌ | 007 lexer is the obvious first candidate; not yet started
+|===
+
+== Honest acknowledgments
+
+* TRG is not modest. The A grade is intentionally extraordinary —
+  Six Sigma vs trailing-12-month IPO cohort, 5M external processor-
+  hours, 21 fully-proven programs cross-validated by 3 independent
+  provers, type-theory upstream contribution, full hyperpolymath
+  standards conformance, unanimous 6+6 (humans + LLMs) signoff. The
+  author expects approximately *zero* hyperpolymath toolchain
+  components to hit A-grade in the first year of TRG operation.
+  That is the correct order of magnitude.
+
+* The Six Sigma vs IPO cohort methodology is novel. It has not been
+  peer-reviewed by industrial statisticians. §10 of the spec
+  explicitly invites challenge.
+
+* The 6+6 LLM panel is novel in software-readiness rubrics. The
+  combination of binding composition rules + reproducibility
+  requirement + unanimous requirement is the load-bearing claim;
+  no single piece is unprecedented but the combination is.
+
+* The "21 fully-proven programs cross-validated by 3 provers"
+  threshold for A-grade is plucked from intuition, not derived. It
+  is acknowledged as a number-not-derivation in §10 and §11. Likely
+  re-baselined against real telemetry from the first A-grade
+  candidate before TRG v2.
+
+* Per-language extension hook at §1.1 is the mechanism by which
+  language-specific obligations (Eclexia tropical-semiring, AffineScript
+  region/affinity, Idris2 totality discipline) are layered on top
+  of the TRG baseline. Profiles MAY only tighten, never loosen.
+
+== Standing rule
+
+This self-assessment is itself a claim and is itself subject to the
+invariant-path doc-claims grounder. Re-run it after any change to
+this directory. If any file-path claim in this document fails to
+ground, the self-assessment is invalid until the gap is closed.

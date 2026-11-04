@@ -1,0 +1,382 @@
+; SPDX-License-Identifier: MPL-2.0
+; Copyright (c) 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+
+; Toolchain Readiness Grades (TRG) — Machine-readable specification
+; Format: A2ML (AI-to-Machine Language)
+; Standard: TRG v1.0
+; Companion to: TOOLCHAIN-READINESS-GRADES.adoc (the normative spec)
+
+(standard
+  (name "Toolchain Readiness Grades")
+  (abbreviation "TRG")
+  (version "1.0")
+  (date "2026-04-12")
+  (author "Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>")
+  (license "MPL-2.0")
+  (license-fallback "MPL-2.0")
+  (family "RSR")
+  (companion-of "Component Readiness Grades v2.2")
+  (relationship "strict-superset"))
+
+(grades
+  (grade
+    (code X)
+    (name "Untested / Absent / Broken")
+    (release-stage #f)
+    (stability-posture #f)
+    (ordinal 0)
+    (description "Component is missing, present-but-uninvoked, or fails any Must row.")
+    (evidence-required "none")
+    (minimum-for #f))
+  (grade
+    (code F)
+    (name "Harmful / Wasteful")
+    (release-stage #f)
+    (stability-posture #f)
+    (ordinal 1)
+    (description "Actively harmful, redundant, or net opportunity cost.")
+    (evidence-required "documented test results showing harm; comparison with alternatives")
+    (minimum-for #f))
+  (grade
+    (code E)
+    (name "Bare Minimum")
+    (release-stage "pre-alpha")
+    (stability-posture "internal-only")
+    (ordinal 2)
+    (description "All Must rows passed. Banned constructs ZERO. panic-attack zero Critical/High. Six A2ML files + 0-AI-MANIFEST present. Immaculate Guide passing.")
+    (evidence-required "behavioural test per Must row; RSR-compliant; A2ML present; Immaculate Guide; banned constructs ZERO; panic-attack zero Critical/High")
+    (minimum-for "internal experiment"))
+  (grade
+    (code D)
+    (name "Should-Have Complete")
+    (release-stage "pre-alpha+")
+    (stability-posture "not-yet-releasable")
+    (ordinal 3)
+    (description "All Must + Should + Canonical Proof Suite. RSR-FULL. panic-attack zero across all severities. Fuzzing harness exists. 2 fully-proven programs.")
+    (evidence-required "all E + canonical M/S/E proof suite passing + RSR-FULL all required workflows green (per hypatia-rules/rsr-self-compliance.a2ml @required_workflows) + panic-attack zero all severities + fuzz harness exists + 2 fully-proven programs each by >=1 qualifying prover")
+    (minimum-for #f))
+  (grade
+    (code C)
+    (name "Could-Have Complete (Self-Validated)")
+    (release-stage "alpha")
+    (stability-posture "stable-in-home-context")
+    (ordinal 4)
+    (description "Alpha gate. All Could rows. Full Testing-Taxonomy 18x14 in Six-Sigma range for >=14 days. Continuous fuzzing 14 days. 5 fully-proven programs. 10 dogfood users meeting diversity-metrics. 3-nines on top 4 priority axes. VeriSimDB instance present.")
+    (evidence-required "all D + Could rows + Testing-Taxonomy 18x14 in Six-Sigma range 14 days + fuzz 14 days + 5 fully-proven programs + 10 dogfood users meeting diversity-metrics + 3-nines on dependability/security/interop/usability + VeriSimDB instance + launch-scaffolder mint wired + Stapeln containers")
+    (minimum-for "alpha"))
+  (grade
+    (code B)
+    (name "Aspirational Complete (Broadly Validated)")
+    (release-stage "beta")
+    (stability-posture "stable-for-broad-trial")
+    (ordinal 5)
+    (description "All four tiers. Continuous fuzzing 30 days incl structure-aware. 13 fully-proven programs each cross-validated by >=2 independent provers. 100 distinct external users meeting diversity-metrics. 5-nines top 4 + 4-nines rest. 6 diverse downstream targets meeting diversity-metrics. External audit by independent reviewer.")
+    (evidence-required "all C + Aspirational rows + fuzz 30 days incl structure-aware + 13 fully-proven programs each by >=2 independent provers + 100 distinct external users meeting diversity-metrics + 5-nines on top 4 priority axes + 4-nines on the other 3 + 6 disparate downstream targets meeting diversity-metrics + SBOM + Hypatia zero Critical/High + branch protection + external single-party audit")
+    (minimum-for "beta"))
+  (grade
+    (code A)
+    (name "Field-Proven Six-Sigma")
+    (release-stage "stable")
+    (stability-posture "stable")
+    (ordinal 6)
+    (description "Six Sigma vs trailing-12-month IPO cohort + 5M hours of aggressive external fuzzing by independent auditors + 21 fully-proven programs cross-validated by >=3 independent provers + type-theory upstream contribution + full hyperpolymath standards conformance + unanimous 6+6 humans+LLMs signoff.")
+    (evidence-required "all B + Six Sigma <=3.4 DPMO and bottom-decile vs trailing-12-month IPO cohort + 5,000,000 hours of aggressive external fuzzing by independent auditors (<=10% from internal CI) + 21 fully-proven programs each cross-validated by >=3 independent provers (>=1 with kernel-soundness proof) + type-theory upstream contribution in last 12 months + 5-nines on ALL 7 priority axes + continuous fuzzing 90 days incl differential + full hyperpolymath standards conformance per spec section 5.7.5 + unanimous 6+6 humans+LLMs signoff")
+    (minimum-for "stable release"))
+)
+
+(release-stage-mapping
+  (X "pre-alpha")
+  (F "rejected")
+  (E "pre-alpha (internal only)")
+  (D "pre-alpha+ (still not releasable)")
+  (C "alpha")
+  (B "beta")
+  (A "stable / release"))
+
+(required-toolchain-components
+  (front-end
+    (F1 "Grammar / Syntax")
+    (F2 "Lexer / Tokeniser")
+    (F3 "Parser")
+    (F4 "AST")
+    (F5 "Macro expander" (conditional "if language has macros"))
+    (F6 "Import resolver / Module system")
+    (F7 "Diagnostics / Error reporter"))
+  (middle-end
+    (M1 "Semantic analyser")
+    (M2 "Type checker")
+    (M3 "Type-checker reference implementation" (conditional "MUST for verified languages"))
+    (M4 "Proof dispatcher" (conditional "if language is verified"))
+    (M5 "Operational / denotational semantics document"))
+  (back-end
+    (B1 "Intermediate representation")
+    (B2 "Code generator")
+    (B3 "Backend registry" (conditional "if more than one backend"))
+    (B4 "Linker (or JIT/eval equivalent)")
+    (B5 "ABI / FFI surface (Idris2 ABI + Zig FFI)")
+    (B6 "Runtime"))
+  (tool-surface
+    (T1 "Compiler driver")
+    (T2 "Interpreter" (conditional "if interpreted-first"))
+    (T3 "REPL")
+    (T4 "Formatter")
+    (T5 "LSP server")
+    (T6 "Debugger")
+    (T7 "Package manager")
+    (T8 "Standard library")
+    (T9 "Pipeline / build orchestrator")))
+
+(banned-constructs
+  ; Grade-conditional from §5.4 onward, but ZERO from grade E for TRG.
+  (constructs
+    "believe_me"
+    "assert_total"
+    "Admitted"
+    "sorry"
+    "postulate"
+    "unsafeCoerce"
+    "Obj.magic"
+    "Obj.repr"
+    "unsafePerformIO"
+    "getUnsafe"
+    "getExn"
+    "raw transmute"
+    "raw reinterpret_cast"
+    "void * casts that defeat the type system"
+    "@unchecked"
+    "@SuppressWarnings on safety lints"))
+
+(standing-priority-order
+  (axes
+    (1 "dependability")
+    (2 "security")
+    (3 "interop")
+    (4 "usability")
+    (5 "performance")
+    (6 "versatility")
+    (7 "functional-extension")))
+
+(grade-aggregation
+  (rule "worst-of-any-required-component")
+  (no-averaging #t)
+  (no-weighting #t)
+  (justification "A single D-graded type checker drags the whole toolchain to D. CRG-consistent."))
+
+(qualifying-provers
+  (v1
+    "Idris2"
+    "Lean 4"
+    "Rocq"
+    "Agda")
+  (re-baseline "annual")
+  (kernel-soundness-criterion-for-A-grade #t))
+
+(canonical-proof-suite
+  (version "1.0")
+  (mathematics-count 5)
+  (science-count 5)
+  (engineering-count 5)
+  (total 15)
+  (gate "leave grade E")
+  (path "templates/CANONICAL-PROOF-SUITE.adoc"))
+
+(a-grade-llm-panel
+  (composition
+    (reasoning-models 2)
+    (specialist-coding-models 2)
+    (instruct-models 1)
+    (mixture-of-experts-models 1))
+  (vendor-distinctness #t)
+  (unanimous-required #t)
+  (re-baseline "quarterly")
+  (path "templates/A-GRADE-LLM-PANEL.adoc"))
+
+(visualization-reference
+  (title "C to B Promotion Visual Guide")
+  (document "C-TO-B-PROMOTION.md")
+  (diagrams
+    (item "Gantt chart: 20-34 week timeline with 4 phases")
+    (item "Fuzzing progression flowchart: 7→14→21→30 day milestones")
+    (item "Proven programs pipeline: batch validation workflow")
+    (item "Diversity metrics validation: 3-dimensional compliance"))
+  (purpose "Provides visual representation of the phased promotion process")
+  (integration "Mermaid.js diagrams render in GitHub/VS Code"))
+
+(c-to-b-promotion-guide
+  (title "Grade C to B Promotion: Detailed Step Breakdown")
+  (overview "The C→B transition represents crossing the beta threshold. This guide provides a phased approach to manage the substantial increase in requirements.")
+  (phase-1-preparation
+    (title "Foundation Strengthening (4-8 weeks)")
+    (steps
+      (step "Achieve 14-day stability at Grade C: 3-nines on top 4 axes, 10 dogfood users")
+      (step "Document current Testing-Taxonomy coverage and identify gaps")
+      (step "Establish continuous fuzzing baseline (7-day window)")
+      (step "Verify 5 fully-proven programs meet cross-validation readiness"))
+    (deliverables
+      (item "Stability report showing 3-nines sustained")
+      (item "Testing-Taxonomy gap analysis")
+      (item "Fuzzing infrastructure validation")
+      (item "Proven programs readiness assessment")))
+
+  (phase-2-scaling
+    (title "Scaling Validation (8-12 weeks)")
+    (steps
+      (step "Expand dogfood users from 10 to 50 (meeting diversity-metrics)")
+      (step "Extend continuous fuzzing to 30 days with structure-aware coverage")
+      (step "Add 8 more fully-proven programs (total 13), each with >=2 prover validations")
+      (step "Implement SBOM generation and Hypatia integration")
+      (step "Achieve 4-nines on remaining 3 priority axes"))
+    (deliverables
+      (item "User diversity compliance report")
+      (item "30-day fuzzing coverage report")
+      (item "Proven programs portfolio (13 total)")
+      (item "SBOM and security audit trail")
+      (item "4-nines validation across all axes")))
+
+  (phase-3-external-validation
+    (title "External Validation (6-10 weeks)")
+    (steps
+      (step "Identify and onboard 6 diverse downstream targets (meeting diversity-metrics)")
+      (step "Implement branch protection and external audit readiness")
+      (step "Conduct single-party external audit (focus: security, correctness, compliance)")
+      (step "Validate 100 distinct external users meeting diversity-metrics")
+      (step "Achieve 5-nines on top 4 priority axes"))
+    (deliverables
+      (item "Downstream targets compliance matrix")
+      (item "External audit report")
+      (item "User diversity validation (100 users)")
+      (item "5-nines achievement certification")
+      (item "Branch protection implementation proof")))
+
+  (phase-4-finalization
+    (title "Beta Readiness (2-4 weeks)")
+    (steps
+      (step "Conduct integration testing across all downstream targets")
+      (step "Finalize external-facing documentation and support channels")
+      (step "Perform dry-run of demotion triggers and recovery procedures")
+      (step "Obtain preliminary signoff from 3 humans + 3 LLMs")
+      (step "Submit formal beta promotion request with full evidence package"))
+    (deliverables
+      (item "Integration test suite results")
+      (item "External documentation package")
+      (item "Demotion/recovery procedure validation")
+      (item "Preliminary signoff records")
+      (item "Complete beta promotion evidence dossier")))
+
+  (critical-success-factors
+    (item "Maintain Grade C compliance throughout - no regressions allowed")
+    (item "Diversity-metrics compliance must be continuously validated")
+    (item "Fuzzing coverage must show weekly progress toward 30-day goal")
+    (item "Each proven program must have independent cross-validation")
+    (item "External audit findings must be addressed before promotion"))
+
+  (estimated-timeline
+    (total "20-34 weeks (5-8 months)")
+    (note "Timeline assumes dedicated team of 3-5 engineers with existing Grade C compliance")
+    (note "Parallelize phases where possible, but Phase 3 depends on Phase 2 completion"))
+
+  (risk-mitigation
+    (item "Use K9 automation hooks to validate diversity-metrics continuously")
+    (item "Implement progressive fuzzing milestones (7→14→21→30 days)")
+    (item "Stage proven programs in batches (5→9→13) with intermediate validation")
+    (item "Conduct mini-audits during Phase 2 to prepare for full external audit")))
+
+(endnotes
+  (fuzzing-hours-justification
+    (description "5M hours represents 2-3 years of continuous aggressive fuzzing at scale")
+    (empirical-basis
+      (item "Google OSS-Fuzz: ~10M CPU-hours/month across projects")
+      (item "Rust: ~2.5M hours before 1.0 stabilization")
+      (item "Production languages: typically 3-10M hours before major releases")
+      (item "Safety-critical systems: 1-5M hours for certification"))
+    (purpose
+      (item "Catches rare edge cases (1-in-a-million bugs)")
+      (item "Validates robustness across diverse inputs")
+      (item "Complements formal verification (21 proven programs)")
+      (item "Industry standard for stabilization")))
+
+(versioning
+  (document-version "2.0.0")
+  (last-updated "2026-04-15")
+  (status "active")
+  (changes-from-previous
+    (item "Added C→B promotion guide with phased breakdown")
+    (item "Clarified RSR vs RSR-FULL relationship")
+    (item "Added objective diversity metrics")
+    (item "Enhanced K9 automation integration examples")
+    (item "Updated fuzzing hours justification with industry benchmarks")
+    (item "Added visualization reference to C-TO-B-PROMOTION.md"))
+  (compatibility
+    (backward-compatible #t)
+    (breaking-changes "none")
+    (deprecations "none"))
+  (maintenance
+    (review-cycle "quarterly")
+    (next-review "2026-07-15")
+    (deprecation-policy "12 months notice for major changes")
+    (change-control
+      (minor "Direct commit with maintainer review")
+      (major "RFC process + unanimous maintainer approval")))
+  (references
+    (item "CRG v2.0: Component Readiness Grades")
+    (item "RSR v1.0: Rhodium Standard Repository")
+    (item "K9 v1.0: Self-Validating Components")
+    (item "Mermaid.js v10.0+: Diagram rendering")))
+
+(diversity-metrics
+  (technical-diversity
+    (language-family-count >=3)
+    (runtime-environment-count >=4)
+    (architecture-count >=2)
+    (os-family-count >=3))
+  (organizational-diversity
+    (independent-org-count >=4)
+    (geographic-region-count >=3)
+    (industry-sector-count >=3))
+  (user-diversity
+    (role-count >=5)
+    (expertise-level-count >=3)
+    (use-case-count >=4))
+  (downstream-target-diversity
+    (language-family-count >=3)
+    (runtime-environment-count >=4)
+    (architecture-count >=2)
+    (os-family-count >=3)
+    (independent-org-count >=4)
+    (geographic-region-count >=3)
+    (industry-sector-count >=3)))
+
+(automation-hooks
+  (k9-integration
+    (description "K9 self-validating components can automate TRG compliance checking")
+    (example "See 1-formats/k9/README.adoc for Kennel/Yard/Hunt safety levels matching grade requirements")
+    (use-case "Grade C promotion: K9 contract validates dogfood users meet diversity-metrics before allowing promotion")
+    (use-case "Grade B promotion: K9 contract validates downstream targets meet diversity-metrics and validates 100+ distinct external users")))
+
+(demotion
+  (immediate #t)
+  (no-grace-period #t)
+  (triggers
+    "canonical proof suite ceases to pass"
+    "previously fully-proven program ceases to typecheck or introduces banned construct"
+    "banned construct count becomes non-zero"
+    "host repo ceases to satisfy any §5.7.5 standard at the component's current grade"
+    "(A only) Six Sigma vs IPO cohort ceases to hold under re-pulled cohort"
+    "(A only) 5M processor hours rolling window drops below threshold for >30 days"
+    "any A-grade signoff rescinded by signer"))
+
+(per-language-extension
+  (mechanism "spec/TRG-PROFILE.adoc in language repo")
+  (rule "may tighten, may not loosen")
+  (examples
+    "Eclexia tropical-semiring soundness"
+    "AffineScript region / affinity discipline"
+    "Idris2 totality discipline"))
+
+(self-assessment
+  (current-grade X)
+  (assessed "2026-04-12")
+  (assessor "Jonathan D.A. Jewell")
+  (path "SELF-ASSESSMENT.adoc")
+  (justification "Standard exists and is internally consistent but no toolchain component has yet been audited against it. Honest grade for a brand-new standard.")
+  (path-to-E "audit at least one hyperpolymath toolchain component (007 lexer is the obvious first candidate)"))

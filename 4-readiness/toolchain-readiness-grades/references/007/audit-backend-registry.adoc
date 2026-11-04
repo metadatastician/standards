@@ -1,0 +1,49 @@
+== 007 MK2 Audit Target: Backend Registry
+
+== Status: DESIGN TARGET — check against actual implementation
+
+=== Must Have
+
+[width="100%",cols="50%,50%",options="header",]
+|===
+|Category |Feature
+|Syntax |Single source of truth for backend registrations
+|Architecture |Modular architecture (hardware/software/hybrid)
+|Context |Discourse-bound context (target arch/optimization flags/ABI)
+|Diagnostics |Unified error reporting (unsupported arch/missing backend)
+|Registration |Static and dynamic registration
+|===
+
+=== Should Have
+
+[cols=",",options="header",]
+|===
+|Category |Feature
+|Interop |Backend interop
+|Selection |Dynamic backend selection
+|Performance |Optimization hints per backend
+|Tooling |Semantic-aware tooling
+|===
+
+=== Could Have
+
+[cols=",",options="header",]
+|===
+|Category |Feature
+|Concurrency |Parallel initialization
+|Switching |Semantic-aware switching
+|Runtime |Runtime backend switching
+|===
+
+=== Aspirational
+
+[cols=",",options="header",]
+|===
+|Category |Feature
+|Inference |Automated backend inference
+|===
+
+=== Ecosystem Integration
+
+* Package Manager: OPSM
+* IDE: PanLL + Visual Codium (ENSAID)

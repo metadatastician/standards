@@ -1,0 +1,124 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+// Copyright (c) 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+
+= Adoption Readiness Grades (ARG)
+:toc:
+
+* *Status:* Active, v1.0, 2026-05-28
+* *License:* MPL-2.0
+* *Companion to:* Toolchain Readiness Grades (TRG) v1.0, Component Readiness Grades (CRG) v2.2, Foundations Readiness Grades (FRG) v1.0
+* *Part of:* Rhodium Standard Repositories (RSR)
+
+== What this is
+
+ARG grades the *language-as-an-adoptable-artefact*. It sits at the
+language-whole tier of the estate grading hierarchy:
+
+* *CRG* grades individual *components*.
+* *TRG* grades the *toolchain*.
+* *ARG* grades the *language as a thing someone can adopt*.
+* *FRG* grades the *mathematical foundations of the language*.
+
+ARG uses the same letter grades as CRG and TRG (`X | F | E | D | C | B | A`)
+and the same worst-of-any-required-element aggregation rule. The evidence
+required at each grade asks a different question: *"would anyone use this?"*
+
+== Why it exists
+
+Three reasons:
+
+1. CRG grades components, TRG grades the toolchain — neither answers
+   "is this language something a person can adopt?". That question
+   belongs at the language-whole tier.
+2. The hyperpolymath estate has 17+ languages in various states of
+   maturity. ARG provides a uniform yardstick for comparing them on
+   the adoption axis, independent of TRG or FRG progress.
+3. The existing `READINESS.md` per-repo convention (KRL is the canonical
+   example) can express component grades cleanly but has no rubric for
+   *language adoption as a whole*. ARG provides that rubric.
+
+== Files in this directory
+
+[cols="1,3", options="header"]
+|===
+| File | Purpose
+
+| `ADOPTION-READINESS-GRADES.adoc`
+| The normative spec. Read this first.
+
+| `README.adoc`
+| This file.
+
+| `ADOPTION-READINESS-GRADES.a2ml`
+| Machine-readable counterpart of the spec.
+
+| `SELF-ASSESSMENT.adoc`
+| ARG applied to itself (insofar as that's meaningful — ARG grades
+  languages, not specs; the doc set is self-assessed against
+  internal-consistency).
+
+| `templates/ARG-PROFILE-TEMPLATE.adoc`
+| The per-language profile template referenced from §1.1 of the spec.
+  Each adopting language publishes `spec/ARG-PROFILE.adoc` in its repo
+  following this template.
+|===
+
+== Quick mental model
+
+[cols="^1,4", options="header"]
+|===
+| Grade | Meaning
+
+| X | Not yet a language
+| F | Released but actively user-harmful (rare)
+| E | Bare minimum: qualifies as a language, runs own stdlib. Nobody outside the maintainer would actually use it.
+| D | Toy-project usable: a weekend project is feasible
+| C | Alpha gate: self-validated, ≥10 dogfood users, ≥2 substantive domains
+| B | Beta gate: broadly adopted, ≥100 external users, ≥6 diverse projects, ecosystem-plugged
+| A | Stable: school-grade real (first-gen-Python equivalent), ≥1000 users, founder bus-factor passed
+|===
+
+== Demotion is immediate
+
+Loss of any A-grade gate (founder steps away without replacement,
+educator withdraws, distinct-user count drops, FRG regresses, TRG drops,
+6+6 signoff rescinded) immediately demotes the language. There is no
+grace period. ARG ≤ TRG always — if the toolchain regresses, adoption
+regresses with it. See spec §4.8.
+
+== How strict is this really?
+
+See spec §11. Honest answer: ARG-A is calibrated against
+*first-generation Python* (c. 1995-2002) and modern Rust. The author
+expects approximately *zero* hyperpolymath languages to hit ARG-A in
+year one. That is the correct order of magnitude. If ARG-A becomes easy
+to hit, the bar is wrong and the standard MUST be raised.
+
+== Per-language profiles
+
+ARG is the baseline. Each hyperpolymath language is expected to publish
+a `spec/ARG-PROFILE.adoc` in its own repo that tightens ARG with
+language-specific obligations. A profile may only tighten, never loosen.
+See spec §1.1 and `templates/ARG-PROFILE-TEMPLATE.adoc`.
+
+== Interaction with the other graders
+
+* *vs. CRG:* CRG grades components inside the language project (a
+  formatter, an LSP server, a stdlib module). ARG grades the language
+  as a whole. Where CRG and ARG would both apply, both grades are
+  published independently. ARG ≤ worst-of(CRG over all required
+  adoption-surface components).
+* *vs. TRG:* TRG grades the toolchain. ARG asks whether anyone would
+  adopt the language. ARG ≤ TRG always.
+* *vs. FRG:* FRG grades the mathematical foundations of the language
+  (preservation theorems, soundness, the 10-level TypeLL progression).
+  Independent of ARG, except that ARG-A requires FRG ≥ B.
+* *vs. RSR:* RSR grades repository hygiene. ARG-graded language repos
+  MUST be RSR-compliant at the level required by TRG at the same
+  grade.
+
+== Open invitation
+
+If you think ARG is too lax (or too strict in a way that lets bad work
+hide), file an issue with concrete evidence and a proposed tightening.
+ARG earns trust by surviving critique.

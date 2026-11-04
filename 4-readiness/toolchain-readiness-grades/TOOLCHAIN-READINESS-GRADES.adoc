@@ -1,0 +1,799 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+// Copyright (c) 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+// (MPL-2.0 is the automatic legal fallback until PMPL is formally recognised)
+
+= Toolchain Readiness Grades (TRG)
+Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+2026-04-12
+:revnumber: 1.0
+:revdate: 2026-04-12
+:status: Active
+:license: PMPL-1.0-or-later
+:part-of: Rhodium Standard Repositories (RSR)
+:companion-of: Component Readiness Grades (CRG) v2.2
+:toc:
+:toclevels: 3
+
+== Abstract
+
+Toolchain Readiness Grades (TRG) is a quality-assessment scheme for the
+*core toolchain components* of a programming-language project: grammar, lexer,
+parser, AST, semantic analyser, type checker, intermediate representation,
+code generator, linker, runtime, standard library, and the user-facing tool
+surfaces (REPL, formatter, LSP, diagnostics, debugger, package manager,
+proof dispatcher, ABI/FFI surface, backend registry).
+
+TRG is a *strict superset* of Component Readiness Grades (CRG). The letter
+grades `X | F | E | D | C | B | A` are identical in meaning, but the evidence
+required at each grade is significantly higher because toolchain components are
+*critical infrastructure* — every downstream artefact in the language is built
+on top of them, and a regression in any one of them blast-radiuses through the
+whole estate.
+
+== 1. Scope
+
+This standard applies to:
+
+* Any hyperpolymath language project that ships a compiler, interpreter,
+  type checker, or any other core toolchain component.
+* Each individual *toolchain component* listed in §3, which is graded
+  independently against this standard.
+* The *toolchain as a whole*, whose grade is the worst grade of any
+  required component (§7).
+
+This standard does NOT apply to:
+
+* Application code that merely _uses_ a language toolchain — that is graded
+  with CRG.
+* Third-party toolchains the project consumes but does not maintain.
+* Pedagogical, documentation, or curriculum artefacts (those have their own
+  rubrics — see `tentacles-agentic-syllabus/`).
+
+=== 1.1 Per-language extension
+
+TRG is the *baseline*. Any hyperpolymath language MAY (and most will need
+to) publish a *language-specific TRG profile* that adds further requirements
+on top of the baseline. The profile lives at
+`<language-repo>/spec/TRG-PROFILE.adoc` and may *only* tighten requirements,
+never loosen them.
+
+For example, a verified DSL (e.g. Eclexia, AffineScript) is expected to
+publish a profile that requires its own paradigm-specific proof obligations
+— linearity, affinity, region safety, tropical-semiring soundness, effect
+discipline, etc. — on top of TRG-baseline. A toolchain conforms to TRG iff
+it conforms to *both* the baseline AND its declared profile.
+
+Profiles may add components beyond §3, may demand additional proofs in
+§6.2, and may extend the Canonical Proof Suite §6.6. They may NOT remove
+or relax any TRG-baseline requirement.
+
+== 2. Normative References
+
+* *CRG v2.2* — `component-readiness-grades/COMPONENT-READINESS-GRADES.md`.
+  TRG is grade-compatible with CRG; any difference is TRG being _stricter_,
+  never weaker.
+* *RSR* — Rhodium Standard Repositories baseline.
+* *Immaculate Guide* — `3-practice/immaculate-guide/IMMACULATE-GUIDE.adoc`.
+* *Testing Taxonomy* — `3-practice/testing-and-benchmarking/TESTING-TAXONOMY.adoc`
+  (18 categories × 14 aspects × 4 proof systems × 12 type levels).
+* *Standing priority order* (all hyperpolymath work, ranked):
+  `dependability > security > interop > usability > performance > versatility > functional-extension`.
+
+== 3. Required Toolchain Components
+
+A hyperpolymath language toolchain MUST be decomposable into discrete,
+independently-auditable components drawn from the canonical list below. A
+project that does not implement a component MUST declare it absent and
+justify the absence; a project that implements one but does not audit it
+is automatically grade *X* for that component and grade *X* for the
+toolchain as a whole.
+
+=== 3.1 Front-end (parsing layer)
+
+[cols="1,3,1",options="header"]
+|===
+| # | Component | Required?
+| F1 | *Grammar / Syntax* (EBNF, PEG, pest, or equivalent — single source of truth) | MUST
+| F2 | *Lexer / Tokeniser* | MUST
+| F3 | *Parser* | MUST
+| F4 | *AST* (typed tree, with documented invariants) | MUST
+| F5 | *Macro expander* | MUST if the language has macros
+| F6 | *Import resolver / Module system* | MUST
+| F7 | *Diagnostics / Error reporter* (separately auditable) | MUST
+|===
+
+=== 3.2 Middle-end (analysis layer)
+
+[cols="1,3,1",options="header"]
+|===
+| # | Component | Required?
+| M1 | *Semantic analyser* (name resolution, scoping, well-formedness) | MUST
+| M2 | *Type checker* | MUST
+| M3 | *Type-checker reference implementation* (oracle) | MUST for verified languages, SHOULD otherwise
+| M4 | *Proof dispatcher* | MUST if language is verified, otherwise N/A
+| M5 | *Operational / denotational semantics document* | MUST
+|===
+
+=== 3.3 Back-end (lowering layer)
+
+[cols="1,3,1",options="header"]
+|===
+| # | Component | Required?
+| B1 | *Intermediate representation (IR)* | MUST
+| B2 | *Code generator* (per backend) | MUST
+| B3 | *Backend registry* | MUST if more than one backend
+| B4 | *Linker* (or JIT/eval equivalent) | MUST
+| B5 | *ABI / FFI surface* (Idris2 ABI + Zig FFI per hyperpolymath standard) | MUST
+| B6 | *Runtime* | MUST
+|===
+
+=== 3.4 Tool surface (user-facing)
+
+[cols="1,3,1",options="header"]
+|===
+| # | Component | Required?
+| T1 | *Compiler driver* (the orchestrator binary) | MUST
+| T2 | *Interpreter* | MUST if language is interpreted-first
+| T3 | *REPL* | SHOULD
+| T4 | *Formatter* | SHOULD
+| T5 | *LSP server* | SHOULD
+| T6 | *Debugger* | SHOULD
+| T7 | *Package manager* | SHOULD
+| T8 | *Standard library* | MUST
+| T9 | *Pipeline / build orchestrator* | MUST
+|===
+
+Each component MUST have its own audit document at the canonical path
+`audits/audit-<component>.md` (or `.adoc`), conforming to the audit-template
+in `templates/AUDIT-TEMPLATE.adoc` of this standard.
+
+== 4. Per-Component Audit Format
+
+Every component audit MUST be a four-tier MoSCoW table covering Must / Should /
+Could / Aspirational rows, with Status and Evidence columns. The canonical
+example is `references/007/audit-lexer-mk2-tier-format.md` (the 007 lexer
+MK2 audit, copied here as the seed reference).
+
+The four tiers map *directly* to TRG grades:
+
+[cols="1,2,3",options="header"]
+|===
+| Tier | Audit-row label | Minimum grade gate
+| Must | *Must Have ✅* | Required for grade *E*
+| Should | *Should Have 🟡* | Required for grade *D*
+| Could | *Could Have 🔵* | Required for grade *C*
+| Aspirational | *Aspirational ⭐* | Required for grade *B*
+|===
+
+A component's *tier-table grade* is the highest tier all of whose rows are
+PASSED. If any Must row is FAILED, the component is grade *X*, regardless of
+how many higher-tier rows pass. *No partial credit across tiers.*
+
+== 5. Grade Definitions
+
+TRG grades are *grade-compatible* with CRG (same letters, same release-stage
+mapping), but the evidence bar is higher. Where CRG and TRG conflict, TRG
+takes precedence for toolchain components.
+
+=== 5.1 Grade X — Untested / Absent / Broken
+
+Component is missing, present-but-uninvoked, or fails any *Must* row.
+Same meaning as CRG-X, but TRG additionally treats _any failing Must row_ as
+X — even if the component is tested.
+
+*Evidence required:* none.
+
+=== 5.2 Grade F — Harmful / Wasteful
+
+Component is actively harmful, redundant, or a net opportunity cost.
+Same meaning as CRG-F. For toolchains, the most common F is "duplicates an
+upstream tool that is better and we should delegate".
+
+=== 5.3 Grade E — Bare Minimum  *(pre-alpha — internal experiment only, not releasable)*
+
+[horizontal]
+Tier gate:: All *Must* rows PASSED.
+Repository discipline:: RSR-compliant.
+Machine-readable:: All six A2ML files (`STATE`, `META`, `ECOSYSTEM`,
+        `AGENTIC`, `NEUROSYM`, `PLAYBOOK`) and `0-AI-MANIFEST.a2ml`
+        present and CI-validated. *Promoted to E because no toolchain
+        component should be touchable by AI agents without these.*
+Immaculate Guide:: all nine principles satisfied. *Promoted to E because
+        these are baseline repo hygiene, not polish.*
+Tests:: At least one *behavioural* test per Must row (not just "it compiles").
+panic-attack:: `panic-attack assail` clean — zero Critical, zero High
+        findings. *Promoted to E because shipping a toolchain component
+        with a known Critical security finding is never acceptable, not
+        even at "experimental".*
+Banned-construct gate:: ALL of `believe_me`, `assert_total`, `Admitted`,
+        `sorry`, `postulate`, `unsafeCoerce`, `Obj.magic`, `Obj.repr`,
+        `unsafePerformIO`, `getUnsafe`, `getExn`, raw `transmute`, raw
+        `reinterpret_cast`, MUST be ZERO inside the component's source.
+        *Promoted to E (from D) because every grade above X is already
+        making a soundness claim, and a soundness claim with `believe_me`
+        in it is a lie.*
+Proven programs (defined in §6.2):: 0 required.
+Canonical Proof Suite:: not required (suite passing is the gate to leave
+        E for D).
+Distinct users:: 0 required.
+Defect-density baseline:: not measured.
+
+=== 5.4 Grade D — Should-Have Complete  *(still pre-alpha — first grade with the canonical proof suite gate)*
+
+NOTE: D is *not* the alpha gate. Alpha begins at C. D is the
+"experimental but with the foundational proof suite passing" grade.
+
+[horizontal]
+Tier gate:: All *Must* AND all *Should* rows PASSED.
+Repository discipline:: RSR-FULLY-compliant — all RSR-required workflows (per `hypatia-rules/rsr-self-compliance.a2ml @required_workflows`) plus the broader adopted set present,
+        SHA-pinned, and *currently green*. (Promoted from B to D because
+        a toolchain component without RSR-full is just an unaudited binary
+        in disguise.) All grade-E requirements carried forward.
+panic-attack:: `panic-attack assail` clean *across all severities* — zero
+        Critical, zero High, zero Medium findings. (Promoted from "Critical
+        and High only" because Medium issues in a toolchain are upstream of
+        every program ever compiled.)
+Tests:: Every Must and Should row has a behavioural test in CI; no failing
+        tests in the home context.
+Fuzzing:: A fuzzing harness *exists* for the component with at least one
+        named target and a non-trivial corpus. Crashes triaged.
+        (Promoted from C because shipping anything that parses
+        external input without a fuzz harness is reckless.)
+Proven programs:: *2* fully-proven programs (defined in §6.2) exercising
+        the component end-to-end. Each MUST be checked by *at least one*
+        of {Idris2, Lean 4, Rocq}.
+Canonical Proof Suite:: *Full* Mathematical / Scientific / Engineering
+        Canonical Proof Suite (§6.6) machine-checked through the component.
+        *This is the foundational gate.* A toolchain that cannot express
+        and check the canonical proof suite cannot rise above grade E,
+        regardless of how many tier rows pass. The suite MUST be
+        re-checked nightly.
+Distinct users:: *1* (the project itself, dogfooding).
+Defect-density baseline:: not measured numerically, but `panic-attack
+        assail` clean across all severities is the floor.
+
+=== 5.5 Grade C — Could-Have Complete (Self-Validated)  *(THIS is the alpha gate)*
+
+A toolchain component is in *alpha* iff it is at grade C or above.
+Anything below C is pre-alpha. There is no `alpha-unstable` for
+toolchain components — alpha means alpha.
+
+[horizontal]
+Tier gate:: All *Must*, *Should*, AND *Could* rows PASSED.
+Repository discipline:: All grade-D requirements carried forward, plus
+        deep code-and-folder annotation per CRG §3.
+Tests:: Every Could row has a behavioural test; component is dogfooded by
+        the project's own CI on every push. CI green for at least 7
+        consecutive days at assessment time. *Full Testing-Taxonomy
+        coverage* — 18 categories × 14 aspects × 4 proof systems × 12 type levels (per
+        `3-practice/testing-and-benchmarking/TESTING-TAXONOMY.adoc`) wired up and
+        passing for the component.
+Six-Sigma test passing:: All passing tests above MUST be in the *Six
+        Sigma range* (≤ 3.4 failures per million test runs) for at least
+        14 consecutive days prior to assessment. Flaky tests do not get
+        a pass — they count as failures. (Promoted from A to C because
+        if your tests aren't reliable they aren't tests.)
+Fuzzing:: Continuous fuzzing for at least 14 consecutive days at
+        assessment time, no unaddressed crashes.
+Proven programs:: *5* fully-proven programs (disjoint feature surfaces),
+        each checked by *at least one* of {Idris2, Lean 4, Rocq, Agda}.
+Canonical Proof Suite:: still passing (carried from D), re-checked
+        nightly.
+Distinct users:: *10* dogfood users (development team + immediate
+        contributors).
+Standards conformance:: VeriSimDB project instance present and used by
+        tests; `launch-scaffolder mint` wired; Stapeln containers built
+        from Chainguard base; Groove protocol used for any inter-service
+        comms; Coordination.k9 wired.
+Defect-density baseline:: 3-nines (99.9%) on the standing priority axes
+        *dependability, security, interop, usability* — measured per
+        §6.3.
+Banned-construct gate:: as Grade D + E.
+
+=== 5.6 Grade B — Aspirational Complete (Broadly Validated)  *(beta gate)*
+
+A toolchain component is in *beta* iff it is at grade B. Beta requires
+external broad validation; if you do not have it, stay in alpha (C).
+
+[horizontal]
+Tier gate:: ALL four tiers (Must, Should, Could, Aspirational) PASSED.
+Repository discipline:: as Grade C, all carried forward.
+Tests:: Six-Sigma test passing maintained for at least 60 consecutive
+        days. Full Testing-Taxonomy coverage maintained.
+Fuzzing:: continuous fuzzing for at least 30 days, no unaddressed findings,
+          minimum corpus size and coverage targets per
+          `templates/FUZZING-CORPUS-FLOOR.adoc`. *At least one structure-
+          aware fuzzer* (e.g. grammar-aware for parsers, IR-aware for
+          codegen).
+Proven programs:: *13* fully-proven programs covering disjoint feature
+        surfaces. *Each one MUST be checked by at least TWO independent
+        provers* drawn from {Idris2, Lean 4, Rocq, Agda} — no single
+        prover bug can demolish a B-grade claim.
+Canonical Proof Suite:: still passing (carried from D), expanded to
+        include any post-D additions, *also re-checked under multi-prover
+        cross-validation per §6.2*.
+Distinct users:: *100* demonstrably distinct external users (not the
+        dogfood team, not 100 metric hits from one CI farm).
+Standards conformance:: full Grade-C carry-forward, plus
+        `launch-scaffolder mint`+`realign` wired, PanLL core panels
+        integrated, SBOM published, Hypatia *zero findings of any
+        severity*, branch protection per `feedback_branch_protection.md`,
+        SLSA Build Level 3 or higher.
+External audit:: *at least one* independent external party (outside the
+        hyperpolymath estate) has performed a written audit of the
+        component and signed off on the B claim. The audit MUST be
+        archived in `audits/<component>/B-grade-evidence/external-audit.adoc`.
+Defect-density baseline:: 5-nines (99.999%) on *dependability, security,
+        interop, usability* — and 4-nines on *performance, versatility,
+        functional-extension*.
+Diversity:: validated on at least 6 disparate downstream targets, in the
+        CRG sense (different domains, sizes, host platforms).
+Banned-construct gate:: as Grade E onward.
+Regression discipline:: every prior-tier evidence item is *re-validated on
+        every release*. Stale evidence demotes the component.
+Independent reproduction:: every fully-proven program builds from a clean
+        checkout in a fresh environment by an independent reviewer.
+
+=== 5.7 Grade A — Field-Proven Six-Sigma
+
+Grade A is the *release standard* for any hyperpolymath toolchain component.
+It is intentionally extraordinary. It requires *all of the following*,
+without exception, with consensus signoff (§5.7.6).
+
+==== 5.7.1 PRIMARY RELEASE GATE — Six-Sigma vs trailing-12-month IPO cohort
+
+This is *the* gate. Everything else in §5.7 is a precondition for it being
+meaningful. A toolchain component MUST NOT be released as A-grade unless
+this gate is met first.
+
+The component MUST achieve a *Six Sigma* (3.4 defects per million
+opportunities, or better) defect density when benchmarked against the
+*trailing-twelve-month cohort of all software companies that listed via IPO*
+during that window.
+
+[horizontal]
+Cohort definition:: Every company classified as software (NAICS 5112,
+                    5415, or equivalent) that completed a primary IPO on
+                    any major exchange in the 12 months ending on the
+                    assessment date. Cohort SHALL be re-pulled for every
+                    A-grade assessment; assessments are not transferable
+                    across cohorts.
+Defect-density metric:: defects per million opportunities (DPMO), where
+                        an "opportunity" is one user-visible operation
+                        of the component (e.g. one parse, one type-check
+                        run, one codegen invocation, one LSP request).
+                        Defects are counted from issue trackers,
+                        post-release CVEs, and field-reported regressions.
+Pass condition:: the component's DPMO is at or below the *6σ tail*
+                 (≤ 3.4 DPMO), AND its DPMO is in the bottom decile of
+                 the IPO cohort baseline distribution. Both gates must
+                 hold.
+Five nines on the standing priority axes:: in addition to the Six-Sigma
+                 gate above, the component MUST hit *five nines (99.999%)*
+                 on EVERY axis of the standing priority order — that is,
+                 dependability, security, interop, usability, performance,
+                 versatility, AND functional-extension. Not the top four.
+                 All seven.
+Measurement window:: rolling 90 days prior to assessment, drawn from
+                     production-equivalent telemetry.
+Disclosure:: the cohort list, the metric methodology, the raw counts, and
+             the calculation MUST be archived in `audits/<component>/A-grade-evidence/`
+             and reproducible by any reviewer.
+
+==== 5.7.2 Distinct users + 5,000,000 processor-hours
+
+* *1000* demonstrably distinct external users.
+* "Distinct" means a unique human or organisation, evidenced by issue
+  reports, downloads from independent IPs across multiple jurisdictions,
+  testimonials, or external integrations. *1000 metric hits from one CI
+  farm do not count.*
+* No outstanding unresolved harm reports from the field.
+* *Minimum 5,000,000 (five million) accumulated processor-hours* of
+  user-runtime executing programs *in the language* across the distinct
+  users above. Processor-hours from the development team's own CI count
+  for at most *10%* of the total — the remaining 4.5M+ MUST come from
+  external use. Synthetic load tests do not count.
+* Telemetry methodology, opt-in policy, raw counts, and aggregation method
+  MUST be archived in
+  `audits/<component>/A-grade-evidence/processor-hours.adoc` and
+  reproducible by any reviewer.
+
+==== 5.7.3 Tier and proof requirements
+
+* All Must / Should / Could / Aspirational rows PASSED, regression-validated.
+* *21* fully-proven programs (defined in §6.2) exercising the component
+  on disjoint feature surfaces, *each cross-validated by at least 3
+  independent provers per §6.2*, with at least one prover that has its
+  own kernel-soundness proof.
+* Every fully-proven program has been independently reproduced in a clean
+  environment by *at least 3* of the 6 human reviewers in §5.7.6.
+* The full Mathematical / Scientific / Engineering Canonical Proof Suite
+  (§6.6) is machine-checked nightly through the component under *every*
+  qualifying prover in `templates/QUALIFYING-PROVERS.adoc`, with zero
+  failures, zero skipped entries, and zero `believe_me`/`Admitted`/etc.
+  escape hatches anywhere in the suite or its supporting libraries.
+* Type-theory contribution: the project MUST have made *at least one
+  upstream contribution* to a qualifying prover's kernel, standard
+  library, or published type-theory literature in the 12 months prior to
+  assessment. *Promoted to A grade because hyperpolymath languages do
+  not just consume formal foundations — they extend them.* Evidence is a
+  merged PR, an accepted paper, or an equivalent public artefact archived
+  in `audits/<component>/A-grade-evidence/type-theory-contributions.adoc`.
+
+==== 5.7.4 Continuous fuzzing + adversarial testing
+
+* Continuous fuzzing for *at least 90 consecutive days* prior to the
+  assessment. Zero unaddressed crashes, hangs, or out-of-memory findings.
+* Per-component fuzzing corpora and minimum coverage targets are listed
+  in `templates/FUZZING-CORPUS-FLOOR.adoc`. The A-grade floor is at least
+  one structure-aware fuzzer (e.g. grammar-aware for parsers, IR-aware for
+  codegen) AND one differential fuzzer comparing the component against an
+  oracle implementation (§3.2 M3).
+* Adversarial test suites covering at least: malformed input, pathological
+  input sizes, hostile encodings, supply-chain inputs, and timing-channel
+  probes.
+
+==== 5.7.5 Full hyperpolymath standards conformance  *(non-negotiable)*
+
+The component's host repository MUST satisfy *every* live hyperpolymath
+estate standard at the time of assessment. Specifically and without
+exception:
+
+[horizontal]
+RSR:: All RSR-required workflows (per `hypatia-rules/rsr-self-compliance.a2ml @required_workflows`) plus the broader adopted set present, SHA-pinned, and *green for at least
+      90 consecutive days*. Zero workflow flakes in that window.
+Branch protection:: per `feedback_branch_protection.md` —
+                    PR-required, signatures-required, linear history,
+                    no force push.
+CRG (project):: project-level CRG = *A* per
+                `component-readiness-grades/COMPONENT-READINESS-GRADES.md`.
+CI/CD:: zero red builds for 90 days, zero flakes, zero retries-to-pass.
+launch-scaffolder:: ALL four subcommands wired (`mint`, `realign`,
+                    `provision`, `config`) with live fixtures.
+PanLL:: full integration — all relevant panels reachable, identity-state
+        replication active, tray/menu present, panelharness protocol
+        clean.
+Hypatia:: zero Critical, zero High, zero Medium, zero Low findings.
+panic-attack:: `panic-attack assail` returns clean (zero findings of any
+               severity); banned-construct counts in §5.4 / §6.5 are
+               ZERO.
+VeriSimDB:: live per-project instance, queried by tests, mandatory-usage
+            policy per `feedback_verisimdb_policy.md` satisfied.
+Stapeln:: containers built from Chainguard base images (no Dockerfile,
+          no Docker), signed, SBOM attached.
+Groove protocol:: all inter-service comms via Groove per
+                  `feedback_groove_first.md`.
+Coordination.k9:: wired into the standards innervation architecture per
+                  `standards-innervation-architecture.md`.
+A2ML:: all six machine-readable files (`STATE`, `META`, `ECOSYSTEM`,
+       `AGENTIC`, `NEUROSYM`, `PLAYBOOK`) present, current, and
+       CI-validated. `0-AI-MANIFEST.a2ml` present and validated.
+Immaculate Guide:: all nine principles satisfied with evidence in
+                   `STATE.a2ml`.
+SLSA + reproducibility:: SLSA Build Level 3 or higher; reproducible
+                         builds verified by *2 independent rebuilders*
+                         in clean environments.
+Continuous proof maintenance:: zero proof debt; every proof in §5.7.3 and
+                                §6.6 is re-checked nightly in CI; any
+                                proof failure for more than 24 hours
+                                automatically demotes the component to
+                                grade B until resolved.
+UX Manifesto:: full conformance per `ux-manifesto.md`.
+
+A repository that fails *any one* of the bullets above cannot be at
+A-grade for the toolchain component, regardless of all other evidence.
+
+==== 5.7.6 Consensus signoff (6 humans + 6 LLMs, unanimous)
+
+A-grade is gated on a *6+6 consensus signoff* — six humans and six LLMs
+agreeing in writing that the evidence in §5.7.1–§5.7.5 is sound.
+
+*Six humans:*
+
+* Each MUST be qualified to audit the component (compiler engineer, formal
+  methods practitioner, security researcher, language designer, etc.).
+* At least *3* MUST have personally reproduced at least one of the 21
+  fully-proven programs in a fresh environment (§5.7.3).
+* No two reviewers may be from the same organisation.
+* At least one reviewer MUST be drawn from outside the hyperpolymath
+  estate.
+
+*Six LLMs:*
+
+* One per major manufacturer/lab. No two LLMs from the same vendor.
+* Composition (binding):
+** *2 reasoning / thinking* models (e.g. Opus-class, Gemini Deep Think,
+   GPT reasoning tier — at the time of assessment).
+** *2 specialist coding* models.
+** *1 instruct* model.
+** *1 mixture-of-experts (MoE)* model, drawn from a vendor not already used
+   above.
+* The exact qualifying-vendor matrix and "specialist coding" criteria are
+  maintained in `templates/A-GRADE-LLM-PANEL.adoc` and re-baselined per
+  calendar quarter to track the moving frontier.
+* Each LLM signoff MUST be evidenced by a reproducible session transcript
+  archived alongside the human signoffs.
+
+A *unanimous* 12-of-12 vote is required. Any abstention or dissent blocks
+A-grade.
+
+=== 5.8 Demotion on loss  *(critical)*
+
+A toolchain component at any grade D or above is *immediately demoted*
+the moment ANY of the following becomes true, regardless of past evidence:
+
+* The Canonical Proof Suite (§6.6) ceases to pass through the component.
+* A previously-fully-proven program (§6.2) ceases to type-check or
+  introduces a banned construct.
+* A banned-construct count (§6.5) becomes non-zero.
+* The host repository ceases to satisfy any §5.7.5 standard at the
+  component's current grade or above.
+* (For grade A only) The Six Sigma vs trailing-12-month IPO cohort gate
+  ceases to hold under the *current* (re-pulled) cohort.
+* (For grade A only) The 5,000,000-processor-hour rolling window drops
+  below threshold for more than 30 consecutive days.
+* Any A-grade signoff in §5.7.6 is rescinded by its signer.
+
+Demotion is *immediate and automatic* — there is no grace period and no
+"audit pending" intermediate state. The component drops to the highest
+grade for which it still meets every requirement. If the lost gate was a
+gate-out-of-experimentation requirement (e.g. the Canonical Proof Suite),
+the component drops to *grade E* regardless of its previous grade.
+
+This is intentionally harsh: a toolchain that quietly loses a proof or a
+standard is more dangerous than one that never claimed the grade in the
+first place.
+
+=== 5.9 Summary table
+
+[cols="1,3,2,1,1,2,2,1,1",options="header"]
+|===
+| Grade | Tier gate | Release stage | Proven progs (provers) | Distinct users | Nines on priority axes | Six Sigma vs IPO | 5M proc-hrs | Consensus signoff
+| X | any Must FAILED, or absent | — | — | — | — | — | — | —
+| F | tested + harmful/wasteful | — | — | — | — | — | — | —
+| E | all Must passed; A2ML+manifest+Immaculate Guide; banned constructs ZERO; panic-attack zero Critical/High | pre-alpha (internal only) | 0 | 0 | — | — | — | —
+| D | + all Should; *Canonical Proof Suite passing*; RSR-FULL; panic-attack zero (all severities); fuzz harness exists | pre-alpha+ (still not releasable) | 2 (≥1 prover each) | 1 (the project) | — | — | — | —
+| C | + all Could; full Testing-Taxonomy; tests in Six Sigma range 14d; fuzz 14d | *alpha* | 5 (≥1 prover each) | 10 (dogfood team) | 3-nines on top 4 | — | — | —
+| B | + Aspirational; fuzz 30d incl structure-aware; external audit | *beta* | 13 (≥2 independent provers each) | 100 distinct | 5-nines on top 4 + 4-nines on rest | — | — | —
+| A | regression-validated; fuzz 90d incl differential; full §5.7.5 conformance; type-theory contribution | *stable / release* | 21 (≥3 independent provers each, ≥1 with kernel-soundness proof) | 1000 distinct | 5-nines on ALL 7 | YES (≤ 3.4 DPMO + bottom decile) | YES (≥5M, ≤10% internal) | YES (6 humans + 6 LLMs unanimous)
+|===
+
+== 6. Definitions
+
+=== 6.1 "Component"
+
+A discrete, independently-auditable unit of the toolchain drawn from the
+canonical list in §3.
+
+=== 6.2 "Fully-proven program" *(critical)*
+
+A "fully-proven program" is a program — written in the language under audit —
+for which an *end-to-end machine-checked correctness proof* exists, connecting
+the program's *source semantics* through the audited toolchain component to
+its *target semantics*. Specifically:
+
+* The proof MUST be machine-checked by *at least one* of the currently
+  qualifying provers in `templates/QUALIFYING-PROVERS.adoc`. The v1
+  qualifying set is *Idris2, Lean 4, Rocq, and Agda*. The qualifying set
+  MUST be re-baselined annually as type theory advances (Cubical Agda,
+  XTT, observational TT, HoTT, etc.) — TRG explicitly anticipates new
+  provers joining the set, and hyperpolymath toolchain projects are
+  expected to *contribute* to that frontier where they reach it.
+* For grade *D* and *C*: at least *one* qualifying prover.
+* For grade *B*: at least *two independent* qualifying provers must
+  cross-validate every fully-proven program. No single prover bug can
+  demolish a B claim.
+* For grade *A*: at least *three independent* qualifying provers must
+  cross-validate every fully-proven program AND every entry in the
+  Canonical Proof Suite (§6.6). At least one of the three MUST be a
+  prover with a published soundness proof of its own kernel.
+* The proof MUST be machine-checked and re-run in CI on every change to
+  the component, and re-checked nightly under all required provers.
+* "End-to-end" means the proof terminates in the target observable, not
+  partway through.
+* "Typechecks under strict mode" is *not* sufficient.
+* "Tests pass" is *not* sufficient.
+* `believe_me`, `assert_total`, `Admitted`, `sorry`, `postulate`,
+  `unsafeCoerce`, `Obj.magic`, `unsafePerformIO`, raw `transmute`, or any
+  other escape-hatch in the proof DEMOTES the proof to "not fully proven"
+  for TRG purposes — the entire program ceases to count toward the tier
+  threshold AND the component is immediately demoted per §5.8.
+* Each fully-proven program MUST exercise a disjoint feature surface;
+  21 trivial variants of the same proof do not count as 21 programs.
+
+=== 6.3 "Five nines on the priority axes"
+
+Each axis of the standing priority order is measured per the methodology
+in `3-practice/testing-and-benchmarking/TESTING-TAXONOMY.adoc`. "Five nines" means the
+measured rate of correct, secure, interoperable, usable behaviour (etc.) is
+≥ 99.999% over the assessment window.
+
+=== 6.4 "Distinct user"
+
+A unique human or organisation that has used the component for a real task
+not contrived for the audit, evidenced by an external artefact (issue
+report, integration repo, blog post, testimonial, telemetry record from a
+distinct IP / install ID across multiple jurisdictions). Single-organisation
+CI farms count as ONE user regardless of request volume.
+
+=== 6.5 "Banned constructs"
+
+The full banned-construct list, copied here as normative for TRG:
+
+`believe_me`, `assert_total`, `Admitted`, `sorry`, `postulate`,
+`unsafeCoerce`, `Obj.magic`, `Obj.repr`, `unsafePerformIO`, `getUnsafe`,
+`getExn`, raw `transmute` (Rust), raw `reinterpret_cast` (C++), `void *`
+casts that defeat the type system, `@unchecked`, `@SuppressWarnings`
+applied to safety lints, and any equivalent escape hatches in the
+language under audit.
+
+The list is grade-conditional (§5.4 onward).
+
+=== 6.6 "Canonical Proof Suite" — Mathematical, Scientific, Engineering
+
+The "Mathematical / Scientific / Engineering Canonical Proof Suite"
+(M/S/E-CPS) is a versioned set of representative formal proofs that a
+hyperpolymath language toolchain MUST be able to *express, machine-check,
+and re-run nightly* in order to qualify above grade *E*. The full
+versioned suite lives at `templates/CANONICAL-PROOF-SUITE.adoc`.
+
+At v1, the suite contains *at minimum one entry from each* of the
+following sub-domains. (The exact reference proofs are listed in the
+templates file; here we list the domains that MUST be covered.)
+
+*Mathematics*
+
+. Number theory (e.g. infinitude of primes, Bezout's identity).
+. Group theory (e.g. Lagrange's theorem).
+. Real analysis (e.g. intermediate value theorem).
+. Topology (e.g. compactness preservation).
+. Category theory (e.g. Yoneda lemma).
+
+*Science*
+
+. Classical mechanics (e.g. conservation of energy from Lagrangian).
+. Electromagnetism (e.g. Gauss's law from Maxwell's equations).
+. Thermodynamics (e.g. second law from statistical mechanics).
+. Quantum mechanics (e.g. Heisenberg uncertainty from operator algebra).
+. Information theory (e.g. Shannon source-coding theorem).
+
+*Engineering*
+
+. Control theory (e.g. Lyapunov stability of a worked example).
+. Digital logic verification (e.g. equivalence of two adder designs).
+. Structural mechanics (e.g. bound on beam deflection).
+. Software correctness (e.g. correctness of a sorting algorithm).
+. Cryptographic protocol verification (e.g. needham-schroeder fix).
+
+A toolchain that cannot express *any single one* of these is automatically
+grade *E* until the gap is closed. Suite expansions over time are expected
+and may demote A-grade components — that demotion is acceptable and is the
+mechanism by which TRG keeps pace with the frontier.
+
+== 7. Toolchain-Wide Grade Aggregation
+
+The *toolchain overall grade* is the *worst grade of any required
+component*. There is no averaging, no weighting, no "mostly C with one D".
+A single D-graded type checker drags the whole toolchain to D.
+
+This is intentional and CRG-consistent: a project with ten A components and
+one F is a project with a clear deprecation candidate, not an A project.
+
+A component declared *absent with justification* (e.g. "we have no
+package manager because we delegate to Guix") does not contribute to the
+overall grade, but the justification MUST be in the toolchain's
+`audits/README.adoc`.
+
+== 8. Conformance
+
+A toolchain conforms to TRG if and only if:
+
+. Every component listed in §3 is either present-and-audited, or
+  present-and-graded-X, or absent-with-justification.
+. Every audit conforms to the four-tier MoSCoW format in §4.
+. Every grade above X is supported by the evidence in §5.
+. Every grade D and above passes the banned-construct gate in §5.4.
+. Every grade B and above is regression-validated against prior-tier
+  evidence on every release.
+. Every grade A is supported by archived 6+6 consensus signoff and
+  archived Six-Sigma-vs-IPO-cohort calculation reproducible by any
+  reviewer.
+. The toolchain's overall grade is computed per §7 and recorded in
+  `READINESS.md` adjacent to the project's CRG declaration.
+
+== 9. Relationship to CRG
+
+TRG and CRG share letter grades and release-stage semantics. CRG grades
+*everything* in the project (subcommands, libraries, plugins, integrations).
+TRG grades the *toolchain components* specifically. A project that ships a
+language toolchain MUST publish *both*: a CRG grade for the project as a
+whole, and a TRG grade for the toolchain.
+
+When a component appears in both rubrics, the *stricter* grade governs.
+TRG is always at least as strict as CRG.
+
+== 10. Open Questions / Versioning
+
+* The Six-Sigma vs IPO baseline is novel; the methodology in §5.7.3 is v1
+  and SHOULD be re-evaluated annually. The IPO cohort is a moving target;
+  this is a feature, not a bug — it forces every A-grade assessment to
+  re-baseline against the most recent industry frontier.
+* The 6+6 LLM panel composition is moving-target by design (§5.7.4) and
+  re-baselined quarterly.
+* The "fully-proven program" feature-surface-disjointness criterion in
+  §6.2 needs a precise canonicalisation procedure — tracked as a future
+  TRG amendment.
+* TRG is open to challenge in the same spirit as CRG §11. If you think
+  the bar is too low, say what evidence class is missing.
+
+== 11. Honest Comparison to Real-World Software Standards
+
+This section is informative, not normative. It exists so practitioners can
+calibrate where TRG sits relative to known industry rubrics, and so future
+revisions can be challenged on real comparisons rather than vibes.
+
+[cols="1,3,3",options="header"]
+|===
+| Standard | What it requires | TRG-A relative position
+| ISO/IEC 25010 (general SQuaRE) | Quality model with axes; no proof requirement, no DPMO target. | TRG-A is **far stricter**.
+| ISO 26262 ASIL D (automotive) | Process rigour, MC/DC, hazard analysis; no end-to-end machine-checked semantics-preservation proofs. | TRG-A is **stricter on proof**, comparable on process.
+| DO-178C Level A (avionics) | Most rigorous commercial software standard; MC/DC; source-to-object code traceability; no requirement for end-to-end formal semantics proofs. | TRG-A is **stricter on proof depth**, comparable on process.
+| Common Criteria EAL7 | Formally verified design; only a handful of products in history. | TRG-A is **comparable** in proof ambition, **stricter** in field-evidence (1000 distinct users + 5M proc-hours + 6σ vs IPO is not in CC).
+| seL4 verification | Full machine-checked refinement proof of an OS kernel; world-class. | TRG-A is **comparable** in proof spirit but applied per-component instead of monolithically; TRG-A adds field-evidence and IPO-cohort gates seL4 does not have.
+| CompCert | Verified C compiler; specific semantics-preservation proof through entire compiler. | TRG-A's "21 disjoint fully-proven programs" is **directly comparable** to CompCert's per-pass proof obligations, plus the fuzzing/standards/IPO gates on top.
+| SLSA Build Level 4 | Reproducible builds, two-party review, hermetic builds; no proof requirement. | TRG-A *includes* SLSA L3 as a sub-requirement and adds proof, fuzzing, and field gates on top.
+| NIST SSDF (SP 800-218) | Process practices for secure development; no proof or DPMO targets. | TRG-A is **far stricter**.
+|===
+
+*Honest verdict on the bar:*
+
+TRG-A is **deliberately more stringent than any single real-world rubric the
+author is aware of**. Specifically, the simultaneous combination of:
+
+* end-to-end machine-checked semantics-preservation proofs (CompCert/seL4
+  ambition) for *21 disjoint feature surfaces*,
+* the full Mathematical/Scientific/Engineering Canonical Proof Suite as a
+  *gate to leave experimental*,
+* 5,000,000 external processor-hours,
+* Six Sigma vs the trailing-12-month IPO cohort *in the bottom decile*,
+* unanimous 6+6 multi-vendor signoff,
+* AND full hyperpolymath estate-wide standards conformance,
+
+is, to the author's knowledge, *not matched by any standard currently in
+use anywhere*. This is intentional. Toolchain components are critical
+infrastructure: every downstream artefact in the language sits on top of
+them, and a regression in any one of them blast-radiuses through the whole
+estate. The cost of a toolchain bug is not the cost of one bug, it is the
+cost of every program ever compiled by that toolchain.
+
+The author expects approximately *zero* hyperpolymath toolchain components
+to hit A-grade in the first year of TRG operation. That is the correct
+order of magnitude. If A-grade becomes easy to hit, the bar is wrong and
+the standard MUST be raised.
+
+*Where TRG-A may still be too lax — open invitation to challenge:*
+
+. The 21-program threshold is a number, not a derivation; CompCert proves
+  *every pass* of the compiler, not 21 sample programs.
+. The 5M-proc-hours floor is an order-of-magnitude guess; it should be
+  re-calibrated against real telemetry from at least one A-grade
+  candidate before v2.
+. The Six-Sigma-vs-IPO cohort methodology has not been peer-reviewed by
+  industrial statisticians; the DPMO opportunity definition needs
+  hardening.
+. The LLM panel composition is moving-target by design but has no
+  back-stop against capability collapse if the frontier stalls.
+. There is no requirement for *adversarial red-team engagement* by an
+  outside party — only fuzzing. seL4 had this; TRG-A should consider it.
+
+If you think any of the above (or anything else) is a hole, file an
+issue and propose a tightening. TRG earns trust by surviving critique,
+not by avoiding it.
+
+== Revision History
+
+[cols="1,2,3,5",options="header"]
+|===
+| Version | Date | Author | Changes
+| 1.0 | 2026-04-12 | Jonathan D.A. Jewell | Initial release. Four-tier MoSCoW format borrowed from 007 MK2 lexer audit. Six-Sigma vs trailing-12-month IPO cohort gate added at A grade. 6+6 consensus signoff baked in.
+|===

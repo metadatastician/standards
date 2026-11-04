@@ -1,0 +1,86 @@
+== 007 MK2 Audit Target: Agent-Native Language Properties
+
+== Status: DESIGN TARGET — requirements beyond standard toolchain audits
+
+== These are specific to 007’s identity as a language FOR agents.
+
+=== Must Have (agent identity)
+
+[width="100%",cols="50%,50%",options="header",]
+|===
+|Dimension |Feature
+|Self-Introspection |Agent can query its own capabilities at runtime
+
+|Self-Introspection |Agent can query its current discourse context
+
+|Self-Introspection |Agent can query its remaining budget
+
+|Self-Introspection |Agent can query its active branch strategy
+
+|Context Propagation |Spawned agents inherit parent’s discourse context
+
+|Context Propagation |Spawned agents inherit parent’s trace history
+reference
+
+|Capability Security |Spawned agent capabilities ⊆ parent capabilities
+(no escalation)
+
+|Harvard Integrity |Data tree cannot reference control tree (structural,
+not checked)
+
+|Decision Traces |Every branch point produces an observable trace record
+
+|Protocol Compliance |Session types verified at compile time
+|===
+
+=== Should Have (agent autonomy)
+
+[width="100%",cols="50%,50%",options="header",]
+|===
+|Dimension |Feature
+|Deadlines |Temporal bounds on operations (WithDeadline construct)
+
+|Delegation |Structured subtask delegation with completion tracking
+
+|Negotiation |Protocol negotiation before commitment
+(propose/counter/accept)
+
+|Adaptation |Agent reads own traces and modifies strategy
+
+|Trust |Behaviour attestation (hash + prover verification)
+
+|Refusal |Agent can refuse spawn if resources insufficient
+
+|Cross-Observation |Agent can observe another agent’s traces (with
+capability)
+|===
+
+=== Could Have (agent society)
+
+[cols=",",options="header",]
+|===
+|Dimension |Feature
+|Coalitions |Agents form groups with shared capabilities
+|Reputation |Trust scores based on past behaviour verification
+|Markets |Agents bid for resources/tasks via economic mechanisms
+|Governance |Agent collectives vote on protocol changes
+|Migration |Agent moves between locales preserving state + discourse
+|Versioning |Behaviour version negotiation between agents
+|===
+
+=== Aspirational (agent consciousness)
+
+[width="100%",cols="50%,50%",options="header",]
+|===
+|Dimension |Feature
+|Self-Modification |Agent modifies its own handlers based on experience
+|Theory of Mind |Agent models other agents’ beliefs and intentions
+|Explanation |Agent explains its decisions in natural language
+|Ethics |Agent refuses actions that violate ethical constraints
+|Creativity |Agent generates novel protocols not in its training
+|===
+
+=== Ecosystem Integration
+
+* Package Manager: OPSM
+* IDE: PanLL + Visual Codium (ENSAID)

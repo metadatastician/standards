@@ -1,0 +1,159 @@
+== C to B Promotion: Visual Guide
+
+[source,mermaid]
+----
+gantt
+    title C→B Promotion Timeline (20-34 weeks)
+    dateFormat  YYYY-MM-DD
+    section Phase 1: Foundation
+    Stability Baseline       :a1, 2024-01-01, 2w
+    Testing Taxonomy Gap Analysis :a2, after a1, 1w
+    Fuzzing Infrastructure    :a3, after a2, 2w
+    Proven Programs Readiness :a4, after a3, 1w
+    
+    section Phase 2: Scaling
+    User Expansion (10→50)  :b1, after a4, 4w
+    Fuzzing Extension (7→30d) :b2, after a4, 6w
+    Proven Programs (5→13)  :b3, after a4, 8w
+    SBOM & Hypatia Integration :b4, after a4, 2w
+    4-Nines Achievement      :b5, after b4, 2w
+    
+    section Phase 3: External
+    Downstream Targets (6)   :c1, after b5, 4w
+    Branch Protection        :c2, after b5, 1w
+    External Audit           :c3, after c2, 3w
+    User Validation (100)    :c4, after c3, 2w
+    5-Nines Achievement       :c5, after c4, 1w
+    
+    section Phase 4: Finalization
+    Integration Testing      :d1, after c5, 2w
+    Documentation            :d2, after c5, 1w
+    Demotion Dry-Run         :d3, after d2, 1w
+    Preliminary Signoff      :d4, after d3, 1w
+    Promotion Submission     :d5, after d4, 1w
+----
+
+=== Subsystem Flowcharts
+
+==== Fuzzing Progression
+
+[source,mermaid]
+----
+flowchart TD
+    A[7-day Baseline] --> B[14-day Validation]
+    B --> C[21-day Structure-Aware]
+    C --> D[30-day Full Coverage]
+    D --> E[Continuous 90-day Maintenance]
+    
+    style A fill:#f9f,stroke:#333
+    style B fill:#bbf,stroke:#333
+    style C fill:#f96,stroke:#333
+    style D fill:#6f9,stroke:#333
+    style E fill:#9f6,stroke:#333
+----
+
+==== Proven Programs Pipeline
+
+[source,mermaid]
+----
+flowchart TD
+    P1[Program 1] --> V1[Prover A]
+    P1 --> V2[Prover B]
+    P2[Program 2] --> V3[Prover A]
+    P2 --> V4[Prover C]
+    P3[Program 3] --> V5[Prover B]
+    P3 --> V6[Prover C]
+    
+    subgraph Batch 1
+    P1 --> B1[Cross-Validation]
+    P2 --> B1
+    P3 --> B1
+    end
+    
+    B1 --> P4
+    B1 --> P5
+    
+    subgraph Batch 2
+    P4 --> B2[Cross-Validation]
+    P5 --> B2
+    end
+    
+    style B1 fill:#f96
+    style B2 fill:#f96
+----
+
+==== Diversity Metrics Validation
+
+[source,mermaid]
+----
+flowchart TD
+    subgraph Technical
+    L1[Language Families ≥3] --> T[Technical Pass]
+    L2[Runtime Environments ≥4] --> T
+    L3[Architectures ≥2] --> T
+    L4[OS Families ≥3] --> T
+    end
+    
+    subgraph Organizational
+    O1[Independent Orgs ≥4] --> O[Organizational Pass]
+    O2[Geographic Regions ≥3] --> O
+    O3[Industry Sectors ≥3] --> O
+    end
+    
+    subgraph User
+    U1[Roles ≥5] --> U[User Pass]
+    U2[Expertise Levels ≥3] --> U
+    U3[Use Cases ≥4] --> U
+    end
+    
+    T --> DM[Diversity Metrics Pass]
+    O --> DM
+    U --> DM
+    
+    style DM fill:#9f9
+----
+
+=== Versioning
+
+*Document Version:* 1.0.0 *Last Updated:* 2026-04-15 *Status:* Active
+
+==== Version History
+
+[width="99%",cols="25%,31%,23%,21%",options="header",]
+|===
+|Version |Date |Changes |Author
+|1.0.0 |2026-04-15 |Initial creation with Mermaid diagrams and
+versioning section |Mistral Vibe
+|===
+
+==== Change Control
+
+[arabic]
+. *Minor Updates* (diagram improvements, typo fixes):
+* May be committed directly to main branch
+* Require PR review by at least one maintainer
+. *Major Updates* (structural changes, new subsystems):
+* Require RFC process
+* Must maintain backward compatibility
+* Require unanimous maintainer approval
+
+==== Compatibility
+
+* *Mermaid Version:* Compatible with Mermaid.js 10.0+
+* *Diagram Types:* gantt, flowchart
+* *Rendering:* Tested with GitHub Markdown, VS Code Mermaid plugin
+
+==== Maintenance
+
+* *Review Cycle:* Quarterly
+* *Next Review:* 2026-07-15
+* *Deprecation Policy:* 12 months notice for major changes
+
+=== Integration Notes
+
+[arabic]
+. *CRG Alignment:* This guide complements CRG Grade B requirements
+. *K9 Automation:* See `+automation-hooks+` section for K9 integration
+points
+. *RSR Compliance:* All phases assume RSR-FULL (Gold) compliance
+. *Demotion Triggers:* Phase 4 includes demotion procedure validation

@@ -1,0 +1,115 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+= Standards Repo — CRG Self-Assessment
+:toc: auto
+
+The standards repo grades itself. This document applies the same CRG criteria
+to the repo that defines CRG.
+
+[NOTE]
+====
+*Superseded.* This 2026-04-04 assessment was replaced by
+link:../../0-canon/CRG-SELF-ASSESSMENT.adoc[0-canon/CRG-SELF-ASSESSMENT.adoc]
+(assessed 2026-04-09, Grade C), which found the Grade B criteria not yet met.
+The repo's current grade is declared in the root `READINESS.md`. This document
+is kept as the historical record of the earlier assessment.
+====
+
+== Grade at 2026-04-04: B (Broadly Validated)
+
+Assessed: 2026-04-04
+
+=== Grade Justification
+
+[cols="1,1,3", options="header"]
+|===
+|Criterion |Met? |Evidence
+
+|**X (Non-existent)**
+|PASSED
+|Repo exists, has code and specifications
+
+|**F (Failing)**
+|PASSED
+|Builds successfully (`just build`), no compilation errors
+
+|**E (Embryonic)**
+|PASSED
+|README.adoc (420 lines), EXPLAINME.adoc (44 lines), comprehensive docs
+
+|**D (RSR-Compliant)**
+|PASSED
+|RSR scaffolding complete: LICENSE, 3-practice/SECURITY.md, CONTRIBUTING.md, CODE_OF_CONDUCT.md, 3-practice/MAINTAINERS.adoc, RSR-required CI workflows (per `hypatia-rules/rsr-self-compliance.a2ml @required_workflows`) + adopted optional set, .machine_readable/, 0-AI-MANIFEST.a2ml, Justfile/Mustfile
+
+|**C (Self-Validated)**
+|PASSED
+|158+ tests across 6 suites (groove grv6 10, mcp-repo-guardian 36, axel-protocol 14, repo-guardian-fs 29, a2ml/rust 47, 1-formats/k9/rust 45). All CRG C categories present: unit, smoke, P2P, contract, aspect, E2E, benchmarks.
+
+|**B (Broadly Validated)**
+|PASSED
+|Used by 290+ hyperpolymath repos as constitutional authority. 6 external repos tested against CRG B criteria in Hypatia scan (gossamer, protocol-squisher, burble, stapeln, boj-server, standards). Multiple protocol specs validated by independent implementations (Groove in Burble/Gossamer, K9 in 50+ repos, A2ML in 290+ repos).
+
+|**A (Field-Proven)**
+|NOT YET
+|Requires: external adoption beyond hyperpolymath, published benchmarks, formal proofs verified by ECHIDNA, VeriSimDB evidence persistence, zero unresolved harm reports over sustained period.
+|===
+
+=== Evidence Inventory
+
+[cols="1,3", options="header"]
+|===
+|Category |Detail
+
+|**Test Suites**
+|6 suites, 158+ tests, all passing (2026-04-04)
+
+|**Benchmarks**
+|Criterion (a2ml, k9-svc), Zig (grv6), Deno (manifest) — 22+ benchmark functions
+
+|**Proofs**
+|a2ml/src/A2ML/Proofs.idr (Idris2), lol/proofs/theories/information_theory.agda (Agda, 6 postulates — need ECHIDNA verification)
+
+|**Consumers**
+|290+ repos use RSR/CRG/A2ML standards. K9 used in 50+ repos. Groove in 3 active implementations.
+
+|**CI/CD**
+|19 enforcement workflows, including self-scan (hypatia-scan.yml added 2026-04-04)
+
+|**Documentation**
+|420-line README, EXPLAINME, 3 quickstart guides, ROADMAP, TOPOLOGY, 7 specification documents
+|===
+
+=== Gaps to Grade A
+
+1. **ECHIDNA proof verification not in CI** — proofs exist but are never machine-verified
+2. **VeriSimDB not configured** — no evidence persistence (config added 2026-04-04, not yet operational)
+3. **No external adoption** — all consumers are hyperpolymath repos
+4. **6 Agda postulates unaudited** — may include provable lemmas masquerading as axioms
+5. **AVOW protocol has 0 tests** — consent management proofs unverified
+6. **PanLL panels don't exist yet** — no standards-specific visibility layer
+
+=== Promotion Path to A
+
+[cols="1,1,3", options="header"]
+|===
+|Requirement |Status |Action
+
+|ECHIDNA proof CI gate
+|Not started
+|Add echidna-verify.yml workflow
+
+|VeriSimDB evidence persistence
+|Config created
+|Deploy instance on port 8097, ingest evidence
+
+|External validation
+|Not started
+|Publish to wider community, gather adoption evidence
+
+|Postulate audit
+|Not started
+|Run ECHIDNA against information_theory.agda, classify each postulate
+
+|Zero harm reports
+|On track
+|No known violations or consumer complaints
+|===

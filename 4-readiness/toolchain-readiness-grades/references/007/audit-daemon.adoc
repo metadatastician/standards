@@ -1,0 +1,96 @@
+== 007 MK2 Audit Target: Language Toolchain Daemon
+
+== Status: DESIGN TARGET — check against actual implementation
+
+=== Must Have
+
+[width="100%",cols="50%,50%",options="header",]
+|===
+|Dimension |Feature
+|Purpose |Clearly defines its role (compilation, translation, linting,
+dependency management)
+
+|Error Handling |Gracefully handles syntax errors, missing files, and
+tool failures
+
+|Logging |Logs all critical actions, errors, and warnings to structured
+file or stdout
+
+|Resources |Enforces CPU/RAM limits to prevent resource exhaustion
+
+|Isolation |Runs language tools in isolated subprocesses or containers
+
+|Exit Codes |Returns meaningful exit codes (0=success, 1=warning,
+2=error)
+
+|Configuration |Validates and sanitizes all input (file paths, CLI args)
+
+|Dependencies |Checks for required language tool versions
+|===
+
+=== Should Have
+
+[width="100%",cols="50%,50%",options="header",]
+|===
+|Dimension |Feature
+|Performance |Benchmarks toolchain steps and optimizes hot paths
+|Feedback |Provides clear, human-readable error messages
+|Parallelism |Supports parallel execution where possible
+|Dependencies |Tracks and visualizes tool dependencies
+|Idempotency |Ensures repeated runs produce the same output
+|Security |Restricts toolchain access to sensitive directories/data
+|Recovery |Allows reverting to previous toolchain state via snapshots
+|Portability |Works consistently across Linux/macOS/Windows
+|===
+
+=== Could Have
+
+[width="100%",cols="50%,50%",options="header",]
+|===
+|Dimension |Feature
+|Caching |Caches intermediate results (compiled binaries, parsed ASTs)
+
+|Interactive |Offers a REPL or interactive prompts for debugging
+
+|Extensibility |Allows custom plugins/hooks (pre/post-processing
+scripts)
+
+|Integration |Integrates with IDEs via LSP or CLI
+
+|Telemetry |Tracks anonymized usage metrics
+
+|Autoupdate |Automatically updates language tools to compatible versions
+
+|Multi-Tool |Supports multiple language ecosystems
+
+|AI |Offers AI-powered suggestions for fixes
+|===
+
+=== Aspirational
+
+[width="100%",cols="50%,50%",options="header",]
+|===
+|Dimension |Feature
+|Self-Healing |Automatically detects and fixes common toolchain issues
+
+|Predictive |Predicts toolchain failures before they occur
+
+|Collaborative |Enables team-wide toolchain sharing/configuration via
+registry
+
+|Cloud-Native |Runs natively in cloud environments (Kubernetes,
+serverless)
+
+|Efficiency |Optimizes toolchain steps for minimal resource usage
+
+|Federated |Works across organizations/tools via open standards (LSP,
+WASM)
+
+|Ethics |Ensures language models/tools respect privacy and bias
+mitigation
+|===
+
+=== Ecosystem Integration
+
+* Package Manager: OPSM
+* IDE: PanLL + Visual Codium (ENSAID)

@@ -1,0 +1,130 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+// Copyright (c) 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+
+= TRG Fuzzing Corpus Floor — v1.0
+:status: v1.0 — minimum fuzzing requirements per component
+:date: 2026-04-12
+
+This document defines the *minimum fuzzing requirements* referenced
+from `TOOLCHAIN-READINESS-GRADES.adoc` §5.6 and §5.7.4. It establishes
+the floor — a component MUST meet these to qualify for the relevant
+grade. Components MAY exceed them; many should.
+
+== Grade gates at a glance
+
+[cols="1,3,3",options="header"]
+|===
+| Grade | Fuzzing requirement | Minimum runtime + corpus
+
+| *D* | A fuzzing harness *exists* for the component, with at least one named target and a non-trivial corpus. Crashes triaged. | Minimum 1 hour of cumulative fuzzing in CI. Seed corpus ≥ 100 inputs.
+| *C* | Continuous fuzzing for at least *14 consecutive days* prior to assessment with no unaddressed crashes. | ≥ 14 days CI fuzzing. Corpus ≥ 1,000 inputs. Coverage ≥ 70% of branches in the targeted module.
+| *B* | Continuous fuzzing for at least *30 days*, no unaddressed findings, *at least one structure-aware fuzzer* (grammar-aware for parsers, IR-aware for codegen, etc.) | ≥ 30 days CI fuzzing. Corpus ≥ 10,000 inputs. Coverage ≥ 85% of branches. ≥ 1 structure-aware target.
+| *A* | Continuous fuzzing for at least *90 days*, no unaddressed findings, structure-aware AND *differential fuzzer* against an oracle implementation (the type-checker reference impl per §3.2 M3 where applicable) | ≥ 90 days CI fuzzing. Corpus ≥ 100,000 inputs. Coverage ≥ 95% of branches. ≥ 1 structure-aware target. ≥ 1 differential target. Adversarial test suites covering: malformed input, pathological sizes, hostile encodings, supply-chain inputs, timing-channel probes.
+|===
+
+== Per-component fuzzer floor
+
+Different toolchain components need different fuzzing strategies. The
+floor below is *additive* — a component MUST satisfy every applicable
+row.
+
+[cols="1,3,3",options="header"]
+|===
+| Component | Required fuzzer kind(s) | Notes
+
+| *Lexer / Tokeniser* | Bytestring fuzzer + Unicode-aware fuzzer | Pay particular attention to: lookalike Unicode (Cyrillic-vs-Latin), normalisation (NFC vs NFD), BOM handling, RTL marks, ZWJ injection, surrogate pairs, overlong UTF-8 sequences
+| *Parser* | Grammar-aware fuzzer (e.g. Grammarinator, tree-sitter random walks, custom grammar fuzzer) | At B-grade and above the grammar-aware fuzzer MUST cover ≥ 95% of grammar productions
+| *AST* | Round-trip fuzzer (parse → unparse → re-parse → compare) | Differential — the round-trip is itself the oracle
+| *Macro expander* | Grammar-aware fuzzer + recursion-bomb generator | Catches infinite-expansion bugs
+| *Import resolver / Module system* | Filesystem-state fuzzer (random module graphs, cycles, missing files, lookalike paths, symlink loops) | The TOCTOU class is here
+| *Diagnostics / Error reporter* | Output-format fuzzer (verify error messages parse cleanly, locations are well-formed, no null bytes / control characters in output) | Often-overlooked attack surface
+| *Semantic analyser* | Random well-formed program fuzzer + scope-confusion fuzzer | Use the parser as the input generator at B+ grades
+| *Type checker* | Random typed-AST fuzzer + differential against the type-checker reference implementation | The differential against the oracle is the A-grade requirement
+| *IR* | Round-trip fuzzer (lower → raise → compare) + invariant-violation fuzzer | Catches lowering bugs
+| *Code generator* | IR-aware fuzzer + differential against a known-good codegen for the same backend | Each backend gets its own differential pair
+| *Linker* | Random object-file fuzzer (well-formed but pathological) + symbol-collision fuzzer | Catches the linker class of CVE
+| *Runtime* | Random valid program fuzzer + memory-pressure fuzzer + concurrency fuzzer | Hard to fuzz well; structure-aware program generation is essential
+| *REPL* | Input-line fuzzer + state-corruption fuzzer (random commands across sessions) | Often the canary for stateful bugs
+| *Formatter* | Round-trip fuzzer (format → parse → format → compare) | Idempotence is the property
+| *LSP server* | LSP message fuzzer (protocol-aware, malformed-message generator) | Protocol confusion is a real attack class
+| *Stdlib* | Fuzzer per public function with known-good oracles (e.g. naive vs optimised) | Per-function fuzzing
+|===
+
+== Differential fuzzing requirements (A-grade)
+
+At A-grade, every toolchain component MUST have at least one
+*differential fuzzer* — a fuzzer that runs the same input through
+two independent implementations of the same logic and compares the
+outputs. Disagreements are findings.
+
+The "two independent implementations" can be:
+
+. *Two different versions of the component* (regression detection across releases)
+. *The component and its reference implementation* (e.g. the
+  type-checker and the type-checker reference impl per §3.2 M3)
+. *The component and an upstream tool with the same nominal job*
+  (e.g. our parser vs an established parser-generator output for
+  the same grammar)
+. *Two different backends of a multi-backend codegen* (the same
+  IR should produce equivalent results across backends)
+
+Differential fuzzing is what catches the *parser-differential* class
+of attack — the LangSec attack surface. It is the single highest-
+value fuzzing category for an A-grade audit.
+
+== Adversarial test suites (A-grade additional)
+
+In addition to fuzzing, A-grade requires adversarial test suites
+covering:
+
+* *Malformed input* — inputs that violate the component's input
+  language at every level (lexical, syntactic, semantic, type-level).
+* *Pathological input sizes* — very long lines, deeply nested
+  structures, very wide trees, very deep trees, inputs at the edge
+  of system limits.
+* *Hostile encodings* — every Unicode normalisation form, every BOM
+  variant, every RTL/ZWJ trick, every overlong UTF-8 sequence.
+* *Supply-chain inputs* — inputs constructed to trigger known
+  vulnerability patterns from CVE history (parser confusion, format
+  confusion, deserialisation attacks, etc.).
+* *Timing-channel probes* — inputs designed to reveal timing
+  side-channels in the component's processing.
+
+The adversarial corpus is itself a contribution — every successful
+adversarial input that the component handles correctly becomes a
+fixture for the next release.
+
+== Coverage measurement
+
+Branch coverage is measured per-component-module using:
+
+* *llvm-cov* for Rust components
+* *bisect_ppx* for OCaml components
+* *coverlay* / similar for Idris2 components
+* Component-native tools where available
+
+The floor is *branch coverage of the component's source code*, not
+of the test suite or the fuzzing harness. Aiming for the test suite's
+branches inflates the number; aiming for the component's branches
+measures what we actually care about.
+
+Coverage gaps are themselves findings — every uncovered branch at
+A-grade should have a written justification for why it cannot be
+exercised by fuzzing.
+
+== Versioning and re-baseline
+
+* *v1.0* (2026-04-12) — initial floor.
+* The floor is re-evaluated annually. Numbers may rise as the cost
+  of fuzzing computation drops; they may not rise so fast that
+  existing A-grade components are demoted without 90 days notice.
+* The component matrix may grow as new toolchain components are
+  added to TRG §3.
+
+== Open invitation
+
+If you think a component is missing from the matrix, propose its
+addition. If you think a fuzzer kind is missing for a component
+already in the matrix, propose it. If you think the per-grade
+runtime / corpus / coverage minimums are wrong, propose a change
+with evidence.

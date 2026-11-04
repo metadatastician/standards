@@ -1,0 +1,142 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+// Copyright (c) 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+
+= Adoption Readiness Grades — Self-Assessment
+:toc: auto
+:status: Active
+:date: 2026-05-28
+
+ARG grades *languages*, not *specifications*. The ARG spec cannot
+self-grade with an ARG letter, because the ARG spec is not a language.
+
+What follows is therefore a *document-set self-assessment* — applying
+ARG's internal-consistency criteria to the ARG document set itself, in
+the same spirit as TRG's `SELF-ASSESSMENT.adoc`.
+
+== Current document-set status: COMPLETE-MINIMAL
+
+*Assessed: 2026-05-28*
+
+ARG v1.0 was just published. The document set is internally consistent
+and structurally complete, but no language has yet been audited against
+it.
+
+== Document-set conformance
+
+[cols="2,1,4", options="header"]
+|===
+| Conformance item | Status | Notes
+
+| Normative spec exists in `.adoc`
+| ✅
+| `ADOPTION-READINESS-GRADES.adoc` (~16 KB, 12 sections)
+
+| README.adoc
+| ✅
+| `README.adoc`
+
+| Self-assessment
+| ✅
+| This document
+
+| Machine-readable counterpart (`.a2ml`)
+| ✅
+| `ADOPTION-READINESS-GRADES.a2ml`
+
+| Templates referenced from spec
+| ✅
+| `templates/ARG-PROFILE-TEMPLATE.adoc`
+
+| SPDX header on every file
+| ✅
+| Verified at creation
+
+| Inherits CRG/TRG vocabulary
+| ✅
+| Grades X-A; release-stage mapping aligned; worst-of aggregation
+
+| Inherits TRG diversity-metrics
+| ✅
+| §6.3 cites TRG verbatim
+
+| Inherits TRG banned-constructs
+| ✅
+| `(inherited-from "TRG")` in a2ml
+
+| ARG ≤ TRG cross-axis rule stated
+| ✅
+| §5 aggregation rule; §6 conformance
+
+| VeriSimDB integration specified
+| ✅
+| §7; VCL-total proposition form; required from grade C
+
+| At least one language audited against ARG
+| ❌
+| Phase 4 of the framework rollout — affinescript, ephapax, my-lang
+  profiles drafted but not yet committed at the time of this self-
+  assessment
+
+| External review by language designers
+| ❌
+| Not yet — first audit cohort must complete before external review
+
+| Adoption by any language outside hyperpolymath
+| ❌
+| Not yet — standard is brand new
+|===
+
+== Honest acknowledgments
+
+* *The "1000 distinct users" threshold at ARG-A is plucked from
+  intuition.* Same caveat as TRG's "5M processor-hours" threshold.
+  It is the right order of magnitude for "school-grade real" but the
+  exact number should be re-baselined against telemetry from the first
+  ARG-A candidate (if and when one emerges).
+
+* *The "6 diverse external projects" threshold at ARG-B is borrowed
+  from CRG-B.* It may need to drift for languages whose communities
+  are inherently small (narrow DSLs with very few plausible adopters).
+
+* *The "founder bus-factor test" is novel and subjective.* It is a
+  signed-statement gate, not a proof. May require external verification
+  in a future revision.
+
+* *The "school-grade" calibration against first-generation Python
+  (c. 1995-2002) is one author's reading.* Others may calibrate
+  differently; documented openly in §11 so the choice can be debated.
+
+* *ARG-A requires FRG ≥ B.* This is a deliberate-but-debatable
+  coupling. It excludes languages whose adoption is high but whose
+  foundations lag (most historical production languages). The
+  coupling may tighten to FRG ≥ A once any single language has shown
+  both can co-exist; or may loosen if it turns out to be unrealistic.
+
+* *VeriSimDB integration is required from grade C+.* This assumes
+  VeriSimDB is operational and addressable from the language repo.
+  At the time of this self-assessment VeriSimDB is at alpha (v0.1.0)
+  and the per-language ingestion path is not yet wired. The
+  requirement is *aspirational-from-C* for now, *enforced-from-C*
+  once VeriSimDB graduates to TRG-C itself.
+
+== Path forward
+
+. Land per-language `spec/ARG-PROFILE.adoc` in affinescript, ephapax,
+  my-lang following `templates/ARG-PROFILE-TEMPLATE.adoc`. Each at
+  honest current grade. This is Phase 4 of the framework rollout.
+. Extend `nextgen-languages/TOOLING-STATUS.adoc` with the ARG column
+  alongside TRG / FRG / CRG / RSR. Update `language-status-tracker.jl`
+  to surface ARG grades from each repo's profile.
+. Once the first audit cohort lands, invite external review from
+  language designers outside hyperpolymath. Adjust thresholds based on
+  feedback before locking v1.0.
+. After feedback cycle, ARG v1.0 becomes the load-bearing standard for
+  language adoption claims in the estate.
+
+== Standing rule
+
+This self-assessment is itself a claim and is itself subject to the
+invariant-path doc-claims grounder once it ingests the ARG directory.
+Re-run after any change to this directory. If any file-path claim in
+this document fails to ground, the self-assessment is invalid until
+the gap is closed.

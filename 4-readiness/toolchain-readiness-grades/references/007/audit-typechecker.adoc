@@ -1,0 +1,58 @@
+== 007 MK2 Audit Target: Type Checker
+
+== Status: DESIGN TARGET — check against actual implementation
+
+=== Must Have
+
+[width="100%",cols="50%,50%",options="header",]
+|===
+|Category |Feature
+|Syntax |Stable syntax/lexer/AST as single source of truth
+
+|Architecture |Modular type system backends
+(static/dynamic/gradual/domain-specific)
+
+|Context |Discourse-bound context tracking
+
+|Type System |Type system agnostic
+
+|Diagnostics |Error reporting tailored to active type system
+
+|Features |Generics/traits/higher-kinded types
+|===
+
+=== Should Have
+
+[cols=",",options="header",]
+|===
+|Category |Feature
+|Interop |Cross-type-system interop
+|Selection |Dynamic semantic selection (@dynamic)
+|Performance |Optimization hints (monomorphization)
+|Tooling |Semantic-aware tooling
+|===
+
+=== Could Have
+
+[cols=",",options="header",]
+|===
+|Category |Feature
+|Concurrency |Parallel constraint solving
+|Codegen |Semantic-aware codegen
+|Runtime |Runtime semantic switching
+|===
+
+=== Aspirational
+
+[cols=",",options="header",]
+|===
+|Category |Feature
+|Inference |Automated inference
+|Verification |Formal proofs of type system equivalence
+|Consistency |Language-wide consistency checks
+|===
+
+=== Ecosystem Integration
+
+* Package Manager: OPSM
+* IDE: PanLL + Visual Codium (ENSAID)

@@ -1,0 +1,149 @@
+; SPDX-License-Identifier: MPL-2.0
+; Copyright (c) 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+
+; Component Readiness Grades (CRG) — Machine-readable specification
+; Format: A2ML (AI-to-Machine Language)
+; Standard: CRG v2.0
+
+(standard
+  (name "Component Readiness Grades")
+  (abbreviation "CRG")
+  (version "2.0")
+  (date "2026-03-30")
+  (author "Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>")
+  (license "MPL-2.0")
+  (family "RSR"))
+
+(grades
+  (grade
+    (code X)
+    (name "Untested")
+    (release-stage #f)
+    (stability-posture #f)
+    (ordinal 0)
+    (description "No testing has been performed. Status unknown.")
+    (evidence-required "none")
+    (minimum-for #f))
+  (grade
+    (code F)
+    (name "Harmful / Wasteful")
+    (release-stage #f)
+    (stability-posture #f)
+    (ordinal 1)
+    (description "Actively harmful, wasteful, or better handled externally. Reject, deprecate, or delegate.")
+    (evidence-required "documented test results showing harm, waste, or redundancy; comparison with alternatives")
+    (minimum-for #f))
+  (grade
+    (code E)
+    (name "Minimal / Salvageable")
+    (release-stage "pre-alpha")
+    (stability-posture "unstable")
+    (ordinal 2)
+    (description "Does something slight. Barely functional. Needs redesign or major work.")
+    (evidence-required "at least one successful test case; documented failures and limitations")
+    (minimum-for #f))
+  (grade
+    (code D)
+    (name "Partial / Inconsistent")
+    (release-stage "alpha")
+    (stability-posture "unstable")
+    (ordinal 3)
+    (description "Works on some things but not systematically.")
+    (evidence-required "matrix of tested scenarios; documented scope vs actual capabilities; RSR compliance or documented equivalent repository discipline")
+    (minimum-for "alpha"))
+  (grade
+    (code C)
+    (name "Self-Validated")
+    (release-stage "alpha")
+    (stability-posture "stable-in-home-context")
+    (ordinal 4)
+    (description "Tested on the tool/project itself (dogfooding). Reliable in home context.")
+    (evidence-required "active dogfooding; CI integration or equivalent; no known failures in home context; deep code and folder annotation")
+    (minimum-for "alpha"))
+  (grade
+    (code B)
+    (name "Broadly Validated")
+    (release-stage "beta")
+    (stability-posture "stable-for-broad-trial")
+    (ordinal 5)
+    (description "Tested on at least 6 disparate, unrelated targets beyond the home repo meeting objective diversity criteria.")
+    (evidence-required "list of 6+ diverse targets with test results meeting diversity-metrics; evidence of feedback incorporation; minimum threshold for non-abstract publication")
+    (minimum-for "beta"))
+  (grade
+    (code A)
+    (name "Field-Proven")
+    (release-stage "stable")
+    (stability-posture "stable")
+    (ordinal 6)
+    (description "Real-world external feedback confirms value. Does no harm in the wild.")
+    (evidence-required "real-world usage data; feedback incorporation evidence; no unresolved harm reports")
+    (minimum-for "stable")))
+
+(transitions
+  (promotion
+    (from X) (to E) (requirement "Run at least one test. Document results."))
+  (promotion
+    (from X) (to F) (requirement "Evaluate and determine harmful or wasteful."))
+  (promotion
+    (from E) (to D) (requirement "Fix critical failures. Document scope."))
+  (promotion
+    (from D) (to C) (requirement "Dogfood on own project hard enough to absorb the first major breakages. Fix what breaks. Add deep code and folder annotation."))
+  (promotion
+    (from C) (to B) (requirement "Release beyond the home repo and test on 6+ diverse external targets. Fix what breaks."))
+  (promotion
+    (from B) (to A) (requirement "Ship. Collect external feedback. Demonstrate no harm."))
+  (demotion
+    (from A) (to B) (trigger "External feedback dries up or reveals no longer useful."))
+  (demotion
+    (from A) (to F) (trigger "External feedback reveals component causes harm."))
+  (demotion
+    (from B) (to C) (trigger "Broad validation reveals unfixed failures."))
+  (demotion
+    (from C) (to D) (trigger "Home context changes and component no longer reliable."))
+  (demotion
+    (from C) (to F) (trigger "Dogfooding reveals net negative."))
+  (demotion
+    (from D) (to E) (trigger "Scope narrows to barely functional."))
+  (demotion
+    (from any) (to F) (trigger "Better external alternative makes this pure opportunity cost.")))
+
+(conformance
+  (rule "Each assessable component MUST have a grade from {X, F, E, D, C, B, A}.")
+  (rule "Each grade above X MUST be supported by evidence per section 4.")
+  (rule "Assessments MUST be recorded in a version-controlled location.")
+  (rule "Assessments MUST be reviewed at least once per release cycle.")
+  (rule "Release stages MUST respect minimum grade thresholds.")
+  (rule "Components graded D or above MUST satisfy RSR compliance (Bronze tier minimum) or a documented equivalent repository discipline.")
+  (rule "For TRG alignment: RSR-FULL refers to RSR Gold tier (100% compliance) as defined in 0-canon/rsr/TIERS.adoc")
+  (rule "Components graded C or above MUST have deep code and folder annotation.")
+  (rule "Non-abstract publication claims about implementation-facing work MUST NOT be made below grade B.")
+  (rule "Release-candidate is a project-level integration state, not a distinct component-grade threshold.")
+  (rule "Beta implies stability for broad trial; externally visible but shaky components SHOULD remain in alpha.")
+  (rule "This v2 standard is intentionally challengeable; missing evidence classes SHOULD be raised explicitly by reviewers."))
+
+(diversity-metrics
+  (technical-diversity
+    (language-family-count >=3)
+    (runtime-environment-count >=4)
+    (architecture-count >=2)
+    (os-family-count >=3))
+  (organizational-diversity
+    (independent-org-count >=4)
+    (geographic-region-count >=3)
+    (industry-sector-count >=3))
+  (user-diversity
+    (role-count >=5)
+    (expertise-level-count >=3)
+    (use-case-count >=4)))
+
+(automation-hooks
+  (k9-integration
+    (description "K9 self-validating components can automate grade promotion workflows")
+    (example "See 1-formats/k9/README.adoc for Kennel/Yard/Hunt safety levels matching grade requirements")
+    (use-case "Grade B promotion: K9 contract validates 6+ diverse targets meet diversity-metrics before allowing promotion")))
+
+(editorial-signoff
+  (reviewer "Codex")
+  (date "2026-03-30")
+  (scope "strictness and evidence posture of the standard itself")
+  (basis "NIST SP 800-218 SSDF; ACM Artifact Review and Badging; CompCert verified compiler practice; seL4 assumption-explicit verification practice"))
