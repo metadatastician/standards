@@ -250,8 +250,10 @@ function lexHashForm(lx) {
     return ["uuid8", null];
   }
   if (two.slice(0, 2) === "#t" || two.slice(0, 2) === "#f") {
+    // A token-sep or a paren ends the boolean. A comment is a token-sep
+    // (deed.abnf), so `#t; note` is legal too.
     const nxt = lx.peek(2);
-    if (nxt && !" \r\n()".includes(nxt)) {
+    if (nxt && !" \r\n();".includes(nxt)) {
       const tok = lx.t.slice(lx.i + 2, lx.i + 24).trim().split(/\s+/)[0].slice(0, 20);
       throw new LintError(
         `booleans are exactly #t/#f (got ${pyRepr(two + tok)}); true/false/1/0 are parse errors`,
@@ -259,7 +261,8 @@ function lexHashForm(lx) {
       );
     }
     lx.i += 2;
-    return ["boolean", two];
+    // The lexeme is the two characters; `two` also holds the one after it.
+    return ["boolean", two.slice(0, 2)];
   }
   throw new LintError('unrecognised #-form: only #t, #f, #u5"…", #u8"…" are legal', lx.line());
 }

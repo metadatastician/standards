@@ -1,0 +1,39 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+= deed-abnf-differential
+
+Keeps the DEED gate and the DEED grammar from drifting apart.
+`1-formats/deed/spec/abnf/deed.abnf` is normative (D308).
+`1-formats/deed/tools/deed_lint.js` is the gate that CI runs.
+
+`differential.js` compiles `deed.abnf`, with the `(egress …)` clause profile
+(`clauses/egress.abnf`), using https://github.com/ldthomas/apg-js[apg-js]. It
+then gives both the grammar and the gate the same inputs:
+
+* every valid fixture: both must accept it. A valid egress fixture's clause
+  must also parse as `egress-clause`;
+* every committed deed and valid fixture, mutated by a seeded generator at the
+  grammar's boundaries (separators, line-ends, comments, quoting, brackets,
+  `#` forms, control and non-ASCII characters).
+
+It fails when the gate accepts what the grammar rejects. It also fails when the
+gate rejects what the grammar accepts, unless the gate's reason is one of its
+documented semantic checks: exactly one STRING `:schema-version`, a non-empty
+SPDX payload, the ADR-008 profile-C shape of a `#u8` body, and no bare
+`true`/`false`/`yes`/`no` where a boolean is meant.
+
+[source,bash]
+----
+cd tools/deed-abnf-differential
+bun install --frozen-lockfile
+bun differential.js                                  # CI's run: 4000 variants, seed 20261104
+bun differential.js --seed 7 --cases 6000 --edits 5  # explore further
+----
+
+The run is deterministic for a given `--seed`, so a CI failure reproduces
+locally with the same flags. `deed-conformance.yml` runs it in this repository.
+
+Its first run found a real gate bug: `deed_lint.js` rejected `:enabled #t; note`.
+In the grammar a comment is a separator, so a boolean may be followed by `;`.
+
+The dependency is pinned in `package.json`. All three locks are written by
+`tools/js-runtimes regen` (LANGUAGE-POLICY §1.3–§1.4).

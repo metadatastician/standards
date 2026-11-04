@@ -27,6 +27,7 @@ on:
       - 'scripts/uuid-v8.js'
       - 'scripts/tests/bun/**'
       - 'tools/uuid-v8/**'
+      - 'tools/deed-abnf-differential/**'
       - 'scripts/tests/rust/**'
   # No `pull_request` trigger: PR-time DEED conformance runs inside
   # fork-governance.yml, once, for every PR rather than only the ones that touch
@@ -75,6 +76,15 @@ jobs:
       - name: fixture corpus (valid must pass, invalid must fail)
         if: (github.repository_id == 1116521501 || github.repository == 'hyperpolymath/standards' || github.repository == 'metadatastician/standards')
         run: bun "$T/deed_lint.js" --fixtures "$T/fixtures"
+      - name: grammar-vs-gate differential (deed.abnf through apg-js, against deed_lint.js)
+        # Mutates every committed deed and valid fixture with a seeded generator
+        # and fails when the gate and the normative grammar disagree, other than
+        # on the gate's documented semantic checks. tools/deed-abnf-differential.
+        if: (github.repository_id == 1116521501 || github.repository == 'hyperpolymath/standards' || github.repository == 'metadatastician/standards')
+        working-directory: tools/deed-abnf-differential
+        run: |
+          bun install --frozen-lockfile
+          bun differential.js
       - name: uuid-v8 generator against an independent sha256sum oracle (#u8 = profile C)
         if: (github.repository_id == 1116521501 || github.repository == 'hyperpolymath/standards' || github.repository == 'metadatastician/standards')
         run: bash scripts/tests/bun/uuid-v8-gen-test.sh
