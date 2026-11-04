@@ -24,6 +24,15 @@ GH_BIN="${GH_BIN:-gh}"
 
 [ -d "$WF_DIR" ] || { echo "update-actions-lock: no workflow directory: $WF_DIR" >&2; exit 1; }
 
+# JSON verification is mandatory. Refuse missing tools before an update can
+# change the checkout; an unparsed verifier exit is not coverage evidence.
+for required_tool in "$GH_BIN" jq; do
+  if ! command -v "$required_tool" >/dev/null 2>&1; then
+    printf 'update-actions-lock: required tool unavailable: %s\n' "$required_tool" >&2
+    exit 127
+  fi
+done
+
 SNAPSHOT="$(mktemp -d)"
 COMPLETE=false
 
@@ -131,32 +140,72 @@ verify_lock_coverage() {
   #   - `local-action` with no dependency (v0.2.0), when every `./` action
   #     the workflow uses exists in this checkout.
   # Every other finding, including a wrong ref, remains blocking.
-  command -v jq >/dev/null 2>&1 || {
-    "$GH_BIN" actions-lock --verify-local
-    return
-  }
+  if result=$("$GH_BIN" actions-lock --verify-local --json=valid,findings); then
+    status=0
+  else
+    status=$?
+  fi
 
-  set +e
-  result=$("$GH_BIN" actions-lock --verify-local --json=valid,findings)
-  status=$?
-  set -e
+  # v0.2.0's execute() contract distinguishes completed findings (1) from
+  # execution errors (2), whose stdout may be partial. Shell/timeout failures
+  # also must retain their status, even when stdout looks like a valid report.
+  # Source: github/gh-actions-lock v0.2.0 cmd/gh-actions-lock/root.go.
+  case "$status" in
+    0|1) ;;
+    *)
+      printf '%s\n' "$result"
+      printf 'update-actions-lock: verifier execution failed (exit %s)\n' "$status" >&2
+      return "$status"
+      ;;
+  esac
 
-  if [ -z "$result" ] || ! printf '%s' "$result" | jq -e -s 'length == 1 and (.[0] | type == "object" and .valid != null and (.findings | type == "array"))' >/dev/null 2>&1; then
+  if [ -z "$result" ] || ! printf '%s' "$result" | jq -e -s '
+      length == 1 and
+      (.[0] | type == "object" and (.valid | type == "boolean") and
+        (.findings | type == "array") and
+        all(.findings[];
+          type == "object" and
+          (.category | type == "string" and length > 0) and
+          (.workflow | type == "string") and
+          (.dependency == null or (.dependency | type == "string")) and
+          (.severity == null or (.severity | type == "string"))))
+    ' >/dev/null 2>&1; then
     printf '%s\n' "$result"
-    [[ "$status" -ne 0 ]] && return "$status"
+    echo "update-actions-lock: malformed verifier report" >&2
     return 1
   fi
-  # The authoritative validity bit and the process exit are not equivalent.
-  # gh-actions-lock v0.1.6 exits 1 for advisory findings such as `sha-as-ref`
-  # even while reporting `"valid": true`. Preserve advisory findings in the
-  # log, but accept the lock exactly when the authoritative tool says it is
-  # valid.
+
+  # The legacy v0.1.6 advisory case is the sole established exception to the
+  # validity/exit relationship: sha-as-ref findings can be valid:true/exit 1.
+  # Keep that evidence visible. Neither an empty report nor another category
+  # can explain a nonzero exit on the valid path.
   if printf '%s' "$result" | jq -e '.valid == true' >/dev/null; then
+    if printf '%s' "$result" | jq -e 'any(.findings[]; .severity == "error")' >/dev/null; then
+      printf '%s\n' "$result"
+      echo "update-actions-lock: valid report contradicts an error finding" >&2
+      return 1
+    fi
+    if [[ "$status" -eq 1 ]] && ! printf '%s' "$result" | jq -e '
+        (.findings | length > 0) and
+        all(.findings[]; .category == "sha-as-ref")
+      ' >/dev/null; then
+      printf '%s\n' "$result"
+      echo "update-actions-lock: exit 1 lacks the known valid advisory explanation" >&2
+      return 1
+    fi
     if printf '%s' "$result" | jq -e '.findings | length > 0' >/dev/null; then
       printf '%s\n' "$result"
       echo "actions-lock: valid with advisory finding(s)"
     fi
     return 0
+  fi
+
+  # A completed invalid report exits 1. Coverage exceptions cannot explain an
+  # invalid report paired with exit 0, and execution errors were rejected above.
+  if [[ "$status" -eq 0 ]]; then
+    printf '%s\n' "$result"
+    echo "update-actions-lock: invalid report contradicts verifier exit 0" >&2
+    return 1
   fi
 
   remaining=0
