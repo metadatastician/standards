@@ -152,15 +152,70 @@ deed_fields() {
       key = "" }
     exit }'
 }
-# deed_scalar <key> : read deed_fields input; print the first :<key> value
-# followed by a newline if it is a string, otherwise nothing. String escapes
-# follow deed_fields.
-deed_scalar() { deed_fields | awk -F '\t' -v k="$1" '$1 == "S" && $2 == k && !done { print $3; done = 1 }'; }
-# deed_list <key> : read deed_fields input; print the first :<key> list's items,
+# deed_ast_fields <deed> : the same field lines as deed_fields, built from
+# the validated AST of the normative parser (deed_lint.js --ast-json, #1374)
+# instead of the awk tokenizer. The AST decodes every escape; a decoded
+# newline or tab is written back as the two characters \n or \t, so both
+# paths emit identical lines. A deed that does not parse fails here, closed.
+deed_ast_fields() {
+  local ast
+  ast="$(bun "$DEED_LINT" --ast-json "$1" 2>&1)" || {
+    echo "ERROR: $1 does not parse as DEED: $ast" >&2; return 2; }
+  printf '%s' "$ast" | jq -r '
+    def s: gsub("\n"; "\n") | gsub("\t"; "\t");
+    def atom: .[0] | IN("symbol", "integer", "boolean");
+    def uuid: .[0] | IN("uuid5", "uuid8");
+    [.. | arrays | select(.[0] == "clause" and .[1] == "rsr-profile")] as $c
+    | if ($c | length) > 1 then "COUNT\t\($c | length)"
+      elif ($c | length) == 0 then "COUNT\t0"
+      else
+        "COUNT\t1",
+        ($c[0][2]
+         | reduce .[] as $it ({seen: {}, out: []};
+             if $it[0] == "field" and (.seen[$it[1]] | not)
+             then .seen[$it[1]] = true | .out += [$it] else . end)
+         | .out[] | .[1] as $k | .[2] as $v
+         | if $v[0] == "string" then "S\t\($k)\t\($v[1] | s)"
+           elif ($v | atom) then "Y\t\($k)\t\($v[1])"
+           elif ($v | uuid) then "U\t\($k)\t"
+           elif $v[0] == "list" then
+             (if ($v[1] | length) == 0 then "E\t\($k)" else
+               ($v[1][] | if .[0] == "string" then "L\t\($k)\t\(.[1] | s)"
+                          elif atom then "L\t\($k)\t\(.[1])"
+                          elif uuid then "LU\t\($k)\t"
+                          else empty end) end)
+           else empty end)
+      end'
+}
+# deed_scalar <key> : field lines on stdin; print the first :<key> value
+# followed by a newline if it is a string, otherwise nothing.
+deed_scalar() { awk -F '\t' -v k="$1" '$1 == "S" && $2 == k && !done { print $3; done = 1 }'; }
+# deed_list <key> : field lines on stdin; print the first :<key> list's items,
 # strings unquoted, symbols as written, one per line. UUID literals and nested
 # lists are omitted; absent, empty or non-list values produce no output.
-# String escapes follow deed_fields.
-deed_list() { deed_fields | awk -F '\t' -v k="$1" '$1 == "L" && $2 == k { print $3 }'; }
+deed_list() { awk -F '\t' -v k="$1" '$1 == "L" && $2 == k { print $3 }'; }
+
+# Which parser reads the deed. RSR_DEED_PARSER=auto (the default) uses the
+# validated AST when Bun and deed_lint.js are both present, and otherwise the
+# awk tokenizer, with a notice naming the fallback. =ast requires the AST and
+# is a setup error without it; =awk forces the tokenizer. The two produce the
+# same field lines: scripts/tests/check-rsr-profile-test.sh runs its whole
+# suite under each and asserts the same verdicts.
+DEED_LINT="${DEED_LINT:-$SCRIPT_DIR/../1-formats/deed/tools/deed_lint.js}"
+DEED_PARSER="${RSR_DEED_PARSER:-auto}"
+case "$DEED_PARSER" in
+  auto)
+    if command -v bun >/dev/null 2>&1 && command -v jq >/dev/null 2>&1 && [ -f "$DEED_LINT" ]; then
+      DEED_PARSER=ast
+    else
+      DEED_PARSER=awk
+    fi ;;
+  ast)
+    command -v bun >/dev/null 2>&1 && command -v jq >/dev/null 2>&1 && [ -f "$DEED_LINT" ] || {
+      echo "ERROR: RSR_DEED_PARSER=ast needs bun, jq and $DEED_LINT" >&2; exit 2; } ;;
+  awk) ;;
+  *) echo "ERROR: RSR_DEED_PARSER must be auto, ast or awk (got '$DEED_PARSER')" >&2; exit 2 ;;
+esac
 
 DEED=""; DEED_PROFILE=""
 _deeds=()
@@ -179,12 +234,22 @@ if [ "${#_deeds[@]}" -gt 1 ]; then
   echo "ERROR: $REPO carries ${#_deeds[@]} *_chora.deed files; one-deed-per-repo (D312) expects exactly 1" >&2; exit 2
 elif [ "${#_deeds[@]}" -eq 1 ]; then
   DEED="${_deeds[0]}"
-  _clauses="$(deed_strip "$DEED" | deed_clause rsr-profile)"
-  _n="$(printf '%s\n' "$_clauses" | grep -c '^(rsr-profile' || true)"
+  if [ "$DEED_PARSER" = ast ]; then
+    _lines="$(deed_ast_fields "$DEED")" || exit 2
+    _n="$(printf '%s\n' "$_lines" | sed -n 's/^COUNT\t//p')"
+    _fields="$(printf '%s\n' "$_lines" | grep -v '^COUNT' || true)"
+  else
+    [ "${RSR_DEED_PARSER:-auto}" = auto ] && [ -f "$DEED" ] && \
+      echo "::notice title=rsr-profile::deed read with the awk tokenizer (bun, jq or $DEED_LINT unavailable); the validated AST path was not used" >&2
+    _clauses="$(deed_strip "$DEED" | deed_clause rsr-profile)"
+    _n="$(printf '%s\n' "$_clauses" | grep -c '^(rsr-profile' || true)"
+    _fields="$(printf '%s\n' "$_clauses" | head -1 | deed_fields)"
+  fi
   if [ "${_n:-0}" -gt 1 ]; then
     echo "ERROR: $DEED carries $_n (rsr-profile …) clauses, need exactly 1" >&2; exit 2
   elif [ "${_n:-0}" -eq 1 ]; then
-    DEED_PROFILE="$_clauses"
+    DEED_PROFILE="$_fields"
+    [ -n "$DEED_PROFILE" ] || DEED_PROFILE=" "   # a clause with no fields is still a clause
   fi
 fi
 if [ -z "$DEED_PROFILE" ] && [ ! -f "$PROFILE" ]; then
@@ -221,6 +286,7 @@ array_on_key() { # $1 = key; section body on stdin
 # and this reference checker must not be stricter than the oracle.
 if [ -n "$DEED_PROFILE" ]; then
   SOURCE="$DEED (rsr-profile …)"
+  echo "deed parser: $DEED_PARSER" >&2
   PBODY=""
   PRESET="$(printf '%s\n' "$DEED_PROFILE" | deed_scalar preset)"
   DIRECT="$(printf '%s\n' "$DEED_PROFILE" | deed_list capabilities)"
