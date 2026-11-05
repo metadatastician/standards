@@ -41,7 +41,11 @@
 # INTERNALLY CONSISTENT. It does NOT prove the commit is REACHABLE at the
 # remote. A local object store can hold commits GitHub has since orphaned
 # (a garbage-collected commit is the general case). Reachability is a
-# SEPARATE probe and must be made against the remote.
+# SEPARATE probe and must be made against the remote: the orphan-pin probe in
+# check-action-pins-resolve.sh (#782), which Governance runs in the
+# "Workflow security linter" job. Both are needed: mirror.yml and ci-pipeline.yml
+# pinned 427eb35c, which passed this check but sat only on a deleted PR
+# branch, so every run of both died at startup (#1317).
 #
 
 set -uo pipefail
@@ -252,7 +256,7 @@ for SHA in "$@"; do
     overall_rc=1
   elif [[ "$n_missing" -eq 0 && "$n_self_sha" -eq 0 && "$n_dangling" -eq 0 ]]; then
     echo "  VERDICT: SELF-CONSISTENT — every action ref used is keyed in this SHA's own lock, and the lock is closed."
-    echo "           (Reachability at the remote is NOT proven by this check.)"
+    echo "           (Reachability at the remote is NOT proven by this check: see check-action-pins-resolve.sh.)"
   else
     if [ "$n_missing" -gt 0 ]; then
       echo "  VERDICT: POISON — ${n_missing} action ref(s) used but NOT keyed in this SHA's own lock."
