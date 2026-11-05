@@ -39,7 +39,8 @@
     :contracts "1-formats/k9/"
     :coordination "2-protocols/k9-coordination/"
     :enforcement ".github/workflows/"
-    :governance "3-practice/fork-governance/")
+    :governance "3-practice/fork-governance/"
+    :proofs "3-practice/PROOF-POLICY.adoc")
   (status
     :phase active
     :since "2026-03-16"

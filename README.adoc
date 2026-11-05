@@ -55,6 +55,9 @@ Every other "what is this repo" doc is now a thin pointer back to these two
 | link:docs/MULTI-REPOSITORY-SCOPE-STANDARD.adoc[Multi-Repository Scope Standard] + link:docs/repo-scope.example.toml[declaration example]
 | link:docs/decisions/ADR-008-uuid-v8-estate-standard.adoc[Estate UUID v8 Standard (ADR-008)] + `scripts/check-uuid-v8.sh` (supersedes link:docs/UUID-V7-ESTATE-STANDARD.adoc[v7])
 
+| **Proofs**: which prover for which obligation, and what a proof grade (`PWG-…`) means
+| link:3-practice/PROOF-POLICY.adoc[3-practice/PROOF-POLICY.adoc] (§8 link:3-practice/PROOF-POLICY.adoc#proof-witness-grades[Proof Witness Grades]) + link:docs/TRUSTED-BASE-REDUCTION-POLICY.adoc[escape-hatch debt] + link:docs/README-EXPLAINME-STANDARD.adoc[proof ledger (§5)]
+
 | **Enforcement / CI** — what blocks bad changes
 | link:.github/workflows/[.github/workflows/] + link:hooks/[hooks/] + <<Enforcement>>
 
@@ -87,7 +90,8 @@ frozen snapshots. See link:REGISTRY.adoc[REGISTRY.adoc] for details.
 This repository serves as the canonical source for policies, templates, and specifications governing all Hyperpolymath projects. It provides:
 
 * **Language Policy** -- Which languages and tools are permitted across the ecosystem
-* **Language-Maturation Grades** -- link:adoption-readiness-grades/[ARG (Adoption Readiness)] + link:foundations-readiness-grades/[FRG (Foundations Readiness)] per-language profile templates; aggregated into the link:https://github.com/hyperpolymath/nextgen-languages[nextgen-languages] dashboard. TRG (Trust) + CRG (Compliance) profile templates live under each framework's `templates/` directory.
+* **Language-Maturation Grades** -- link:adoption-readiness-grades/[ARG (Adoption Readiness)] + link:foundations-readiness-grades/[FRG (Foundations Readiness)] per-language profile templates; aggregated into the link:https://github.com/hyperpolymath/nextgen-languages[nextgen-languages] dashboard. link:toolchain-readiness-grades/[TRG (Toolchain Readiness)] + link:component-readiness-grades/[CRG (Component Readiness)] profile templates live under each framework's `templates/` directory. These letter grades are not proof grades: see **Proof Witness Grades** below.
+* **Proof and Verification Policy** -- link:3-practice/PROOF-POLICY.adoc[which prover carries which obligation] (Creusot, SPARK, Idris2, Agda rechecked in Rocq and Lean), and link:3-practice/PROOF-POLICY.adoc#proof-witness-grades[**Proof Witness Grades** (§8)]: `PWG-3`, `PWG-2i`, `PWG-2ii`, `PWG-1`, where lower is stronger. These say how many independent machine-checked witnesses a theory theorem has. Always write the `PWG-` prefix.
 * **Machine-readable metadata** -- repo facts as clauses of `<repo>_chora.deed` (grammar link:1-formats/deed/spec/abnf/deed.abnf[`deed.abnf`]), contracts as `*.k9.ncl`, agent coordination as `coordination.k9` (see <<Machine-Readable Metadata>>)
 * **Build System** -- Mustfile/justfile (no Makefiles)
 * **Stable Release Gate** -- link:3-practice/release-pre-flight/V1-GATE.adoc[hard `v1.0.0` audit requirements] for all repos and multi-repo systems
