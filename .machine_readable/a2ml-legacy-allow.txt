@@ -68,14 +68,13 @@ hypatia-rules/workflow-allowlist-gap.a2ml
 # ── Mapping spec refused or decision open ──
 # META and ECOSYSTEM carry fields their tables do not list; STATE waits on
 # state-v1-decision.adoc; ANCHOR has no spec; CLADE stays until HYP-S010
-# reads the deed; the gates still read rsr-profile.a2ml until standards'
-# profile is folded into standards_chora.deed.
+# reads the deed. (rsr-profile.a2ml left 2026-11-05: its profile is the
+# (rsr-profile …) clause of standards_chora.deed.)
 .machine_readable/CLADE.a2ml
 .machine_readable/anchors/ANCHOR.a2ml
 .machine_readable/descriptiles/ECOSYSTEM.a2ml
 .machine_readable/descriptiles/META.a2ml
 .machine_readable/descriptiles/STATE.a2ml
-.machine_readable/rsr-profile.a2ml
 
 # ── 0-AI-MANIFEST: decision open (1-formats/deed/mappings/ai-manifest-decision.adoc) ──
 1-formats/sub-specs/cartridges/0.2-AI-MANIFEST.a2ml

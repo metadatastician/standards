@@ -353,6 +353,7 @@ present() {
 
 echo "repo:    $REPO"
 echo "profile: ${PRESET:+preset=$PRESET }${DIRECT:+direct-capabilities} <- $SOURCE"
+echo "role:    ${ROLE:-unset}"
 echo "effective capabilities: $(printf '%s\n' "$EFFECTIVE" | paste -sd ' ' -)"
 echo
 

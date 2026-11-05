@@ -6,6 +6,8 @@
 ;; translation may cite): CLADE.a2ml -> (identity) (clade) (forges) (lineage)
 ;; (status) per clade-to-repo-deed.adoc; AGENTIC / NEUROSYM / PLAYBOOK.a2ml ->
 ;; (agentic) (neurosym) (playbook) per agentic-neurosym-playbook-to-repo-deed.adoc.
+;; The (rsr-profile) clause is .machine_readable/rsr-profile.a2ml, moved here
+;; by the owner's decision of 2026-11-05 (see the comment on the clause).
 ;; META.a2ml and ECOSYSTEM.a2ml carry fields their mapping tables do not list
 ;; (the translator refuses rather than guesses), STATE.a2ml is a decision
 ;; still open (state-v1-decision.adoc), and the other .a2ml records wait for
@@ -94,6 +96,58 @@
     (licensing
       :initial-assignment "Agents may author new files with the correct SPDX under repository policy, and initialise a brand-new repository's LICENSE."
       :existing-declarations "Manual-Only; changes restricted to registered codeowner-admins. Agents flag drift and never sweep or relicense existing content."))
+  ; rsr-profile: the CANON's own RSR v2.0 capability declaration, moved here
+  ; from .machine_readable/rsr-profile.a2ml (owner, 2026-11-05; that file is
+  ; archived under 9-archive/a2ml/). Readers: scripts/check-rsr-profile.sh,
+  ; check-package-policy.sh and check-canon-lockstep.sh assertion 5, and the
+  ; oracle (Hypatia RsrConformance) for the applicable criteria set.
+  ;
+  ; The canon carries the criteria, the gate table and the reusable workflows,
+  ; but is NOT an instance of what it governs, so it declares only what is in
+  ; this tree; role "canon" keys the gate table's [canon] section, as "spine"
+  ; keys [carrier]. It carries no (canon …) pin: canon.lock IS this repo's
+  ; pin, and that clause is for the spine and the repos minted from it
+  ; (1-formats/deed/vocabulary/canon.adoc).
+  (rsr-profile
+    :version "1.0.0"
+    :spec "rsr-criteria-v2"
+    :declares-against "2.1.4"
+    :role "canon"
+    :capabilities (
+      ; scripts/: the gate implementations (check-*.sh)
+      "bash"
+      ; .github/workflows/casket-pages.yml + pages.yml
+      "docs-site"
+      ; 0-canon/constitution/ + docs/{AUDIT,AFFIRMATION}.adoc + GOVERNANCE + MAINTAINERS
+      "governance-tier"
+      ; guix.scm: a real Guix manifest that pins the canon's own tooling
+      "reproducible-build"
+      ; tools/{uuid-v8,js-runtimes,hooks/playbook-to-recipe}, k9-init, the
+      ; inline-annotations extractor and .verisimdb's ingester are cargo crates
+      ; (declared since #1228 fixed the root-anchored src/**/*.rs row)
+      "rust")
+    (notes
+      ; Capabilities deliberately NOT declared, each for want of the artefact:
+      ;   zig idris2 agda haskell gleam elixir julia ocaml affinescript
+      ;               - no source in these; the compiled code is the Rust CI tools
+      ;   cli         - the check-*.sh scripts are CI steps, not a shipped binary
+      ;   library     - consumed as a document and a pin (canon.lock), not a library
+      ;   ffi abi     - no C-ABI seam and no formally specified ABI in this tree
+      ;   api-service - the reusable workflows run on GitHub's runners, not served here
+      ;   container   - no Containerfile and no image
+      ;   published-package - publishes specs (canon.lock + a tag), not packages;
+      ;               the one omission to revisit if criteria go to a registry
+      ;   formal-proofs - docs/proofs/ are proof artefacts OF THE ESTATE, not of
+      ;               this repo's code: a [canon] carrier path in the gate table
+      ;   mobile web-ui - no UI
+      ;   benchmarks  - benches/ holds no suite
+      ;   plugin      - not hosted in a third-party extension host
+      ; Carried but gated by no capability, so named in the gate table's [canon]
+      ; section instead: the criteria (0-canon/rsr/rsr-criteria-v2.a2ml), the
+      ; gate table, the applicability policy, the *-reusable.yml workflows,
+      ; docs/proofs/, and 9-archive/rhodium-standard-repositories/ (the last
+      ; copy; archived 2026-10-09, never to be deleted).
+      :omitted-rationale "The canon defines conformance; it is not an instance of it. Declaring a capability the canon lacks would make the oracle score it against a module it does not carry — the over-scaffolding failure the v2.0 capability model exists to prevent."))
   ; Egress attestation: this repo adopts its own ADR-009
   ; (docs/decisions/ADR-009-declared-egress-for-secret-bearing-jobs.adoc;
   ; grammar 1-formats/deed/spec/abnf/clauses/egress.abnf). Every local job that
