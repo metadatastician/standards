@@ -252,10 +252,18 @@ The status vocabulary is closed:
 
 Rules:
 
+. Where the repository keeps a machine-readable proof ledger, that ledger is
+  canonical and this table is derived from it or cites it. When the two
+  disagree, the machine ledger wins, and the table is the thing to fix.
 . The ledger is the source of the *Proofs* row in the README scorecard. That
-  row shows the count of `proven` rows over all rows and links to
-  `EXPLAINME.adoc#proof-ledger`. README never states a proof grade that the
-  ledger does not support.
+  row shows the count of `proven` rows together with the denominator, and
+  names the rows that are not `proven` (e.g. "12 proven of 15; 2 open, 1
+  argued"). It links to `EXPLAINME.adoc#proof-ledger`. The count is a
+  census of rows, never a percentage of confidence: do not write "80%
+  proved". README never states a proof grade that the ledger does not
+  support. A Proof Witness Grade is always written with its `PWG-` prefix
+  and follows
+  link:../3-practice/PROOF-POLICY.adoc#proof-witness-grades[PROOF-POLICY §8].
 . A row's status may only be as strong as the weakest step it depends on. A
   theorem about a model is `proven` *for the model*. The link from model to
   code is its own row, usually `argued`.
