@@ -81,10 +81,10 @@ https://github.com/hyperpolymath/standards/tree/6d19ce0ebae047027dcfd594c7810bf3
 [cols="34%,33%,33%",options="header"]
 |===
 | Spec | Home | If you want…
-| ARG — Adoption Readiness Grades | link:adoption-readiness-grades/[`+adoption-readiness-grades/+`] | per-language adoption-maturity profile templates
-| FRG — Foundations Readiness Grades | link:foundations-readiness-grades/[`+foundations-readiness-grades/+`] | per-language foundational-maturity profile templates
-| CRG — Component Readiness Grades | link:component-readiness-grades/[`+component-readiness-grades/+`] | the X..A grading system for components
-| TRG — Toolchain Readiness Grades | link:toolchain-readiness-grades/[`+toolchain-readiness-grades/+`] | per-toolchain readiness profile templates
+| ARG — Adoption Readiness Grades | link:4-readiness/adoption-readiness-grades/[`+adoption-readiness-grades/+`] | per-language adoption-maturity profile templates
+| FRG — Foundations Readiness Grades | link:4-readiness/foundations-readiness-grades/[`+foundations-readiness-grades/+`] | per-language foundational-maturity profile templates
+| CRG — Component Readiness Grades | link:4-readiness/component-readiness-grades/[`+component-readiness-grades/+`] | the X..A grading system for components
+| TRG — Toolchain Readiness Grades | link:4-readiness/toolchain-readiness-grades/[`+toolchain-readiness-grades/+`] | per-toolchain readiness profile templates
 |===
 
 === Integration — registry, hypatia rules, templates (Stream 3)

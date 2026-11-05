@@ -209,9 +209,9 @@ docs/wikis/0.2-AI-MANIFEST.a2ml
 3-practice/session-management-standards/verify/maintenance-sweep/STATE-template.a2ml
 3-practice/session-management-standards/verify/release-audit/STATE-template.a2ml
 3-practice/session-management-standards/verify/substantial-completion/STATE-template.a2ml
-adoption-readiness-grades/ADOPTION-READINESS-GRADES.a2ml
+4-readiness/adoption-readiness-grades/ADOPTION-READINESS-GRADES.a2ml
 audits/assail-classifications.a2ml
-component-readiness-grades/COMPONENT-READINESS-GRADES.a2ml
-foundations-readiness-grades/FOUNDATIONS-READINESS-GRADES.a2ml
-toolchain-readiness-grades/TOOLCHAIN-READINESS-GRADES.a2ml
+4-readiness/component-readiness-grades/COMPONENT-READINESS-GRADES.a2ml
+4-readiness/foundations-readiness-grades/FOUNDATIONS-READINESS-GRADES.a2ml
+4-readiness/toolchain-readiness-grades/TOOLCHAIN-READINESS-GRADES.a2ml
 www/.well-known/badges/registry.a2ml

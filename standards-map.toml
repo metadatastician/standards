@@ -33,7 +33,7 @@
 [map]
 repo        = "hyperpolymath/standards"
 version     = "1.0.0"
-entry_count = 135
+entry_count = 136
 generated   = false   # hand-curated; the district index.adoc files ARE generated
 checked_by  = "scripts/check-standards-map.sh"
 
@@ -120,6 +120,19 @@ canon_slot  = ""
 canonical_doc = ""
 gate        = ""
 note        = "District root. This path did not exist before the 2026-10-09 archive move, so it is a new top-level entry and GATE D assertion 2 requires a record for it. canonical = false: the district holds frozen history, it is not itself a standard. lifecycle = frozen: the contents are the LAST COPY of dead upstream trees, are not maintained, and MUST NOT be edited for conformance - a change made here to satisfy a gate would falsify the historical record. .githooks/validate-k9.sh exempts this district from K9 validation and the debt ledger, for the same reason it exempts the validator fixtures."
+
+[[entry]]
+from        = "4-readiness"
+target      = "4-readiness/ (district root; created by the readiness move)"
+district    = "4-readiness"
+kind        = "district"
+files       = 56
+lifecycle   = "versioned"
+canonical   = false
+canon_slot  = ""
+canonical_doc = "4-readiness/README.adoc"
+gate        = ""
+note        = "District root. The four *-readiness-grades/ directories moved here unchanged on 2026-11-04, as their own rows' target columns said (owner selector: map-conformant moves only). It is a new top-level entry, so GATE D assertion 2 requires this record. canonical = false: the district groups the grading standards; each grading directory keeps its own row and its canonical = true."
 
 [[entry]]
 from        = ".gitbot-fleet"
@@ -957,7 +970,7 @@ gate        = "canon-self-conformance"
 note        = "outreach/ is a split-out candidate (non-normative)"
 
 [[entry]]
-from        = "toolchain-readiness-grades"
+from        = "4-readiness/toolchain-readiness-grades"
 target      = "4-readiness/toolchain-readiness-grades/"
 district    = "4-readiness"
 kind        = "grading"
@@ -970,7 +983,7 @@ gate        = "canon-self-conformance"
 note        = "dashboard aggregates to nextgen-languages"
 
 [[entry]]
-from        = "adoption-readiness-grades"
+from        = "4-readiness/adoption-readiness-grades"
 target      = "4-readiness/adoption-readiness-grades/"
 district    = "4-readiness"
 kind        = "grading"
@@ -983,7 +996,7 @@ gate        = "canon-self-conformance"
 note        = "dashboard aggregates to nextgen-languages"
 
 [[entry]]
-from        = "component-readiness-grades"
+from        = "4-readiness/component-readiness-grades"
 target      = "4-readiness/component-readiness-grades/"
 district    = "4-readiness"
 kind        = "grading"
@@ -996,7 +1009,7 @@ gate        = "canon-self-conformance"
 note        = "dashboard aggregates to nextgen-languages"
 
 [[entry]]
-from        = "foundations-readiness-grades"
+from        = "4-readiness/foundations-readiness-grades"
 target      = "4-readiness/foundations-readiness-grades/"
 district    = "4-readiness"
 kind        = "grading"
@@ -1318,8 +1331,8 @@ gate        = "actions-lock-gate"
 note        = "licenses/ and LICENSES/ both exist; audits/ vs docs/audits/ both exist"
 
 [[entry]]
-from        = "CICD-WORKFLOW-CATALOG.md"
-target      = "5-machine/ (root if spine-mandated): CICD-WORKFLOW-CATALOG.md"
+from        = ".github/workflows/README.adoc"
+target      = ".github/workflows/README.adoc (converted from the root CICD-WORKFLOW-CATALOG.md on 2026-11-04, tidy plan P2.6)"
 district    = "5-machine"
 kind        = "machinery"
 files       = 1
