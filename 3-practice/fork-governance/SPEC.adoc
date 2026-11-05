@@ -287,7 +287,7 @@ commenting job that can rewrite it.
 | A lane could not run | orange row, orange summary | as the lane reports
 | Artifact missing but job green | orange row | green
 | Comment could not be posted | none | red — a governance run that cannot report is a failure
-| Pull request from a fork | posted by the publisher (§4.1) | as the lanes report; the publisher's own run is red if it cannot post
+| Pull request from a fork | posted by the publisher (§4.1) | as the lanes report; the publisher's own run is red if it cannot post, or if a run that was not cancelled left no comment artifact
 | An acknowledgement has passed its `expires_at` | unchanged | as the finding now grades — the entry stops suppressing before the date is noticed
 |===
 

@@ -69,8 +69,9 @@ jobs:
       actions: read
       pull-requests: write
     steps:
-      # No artifact means the run never reached the verdict job (cancelled by a
-      # newer push, or it failed before rendering). The newer run publishes.
+      # A cancelled run (superseded by a newer push) may have no artifact; the
+      # newer run publishes. Any other run without one is a missing report,
+      # and the next step fails on it.
       - name: Download the rendered comment
         id: download
         continue-on-error: true
@@ -80,6 +81,20 @@ jobs:
           path: ${{ runner.temp }}/fork-governance-comment
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ github.token }}
+
+      - name: Fail on a missing comment
+        if: ${{ steps.download.outcome != 'success' }}
+        env:
+          RUN_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+        run: |
+          set -euo pipefail
+          if [ "$RUN_CONCLUSION" = cancelled ]; then
+            echo "The triggering run was cancelled and left no comment; its successor publishes."
+            exit 0
+          fi
+          echo "::error::$RUN_URL ($RUN_CONCLUSION) uploaded no fork-governance-comment artifact, so its pull request has no governance comment"
+          exit 1
 
       - name: Publish the comment
         if: ${{ steps.download.outcome == 'success' }}

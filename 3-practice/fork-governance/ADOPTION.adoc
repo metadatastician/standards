@@ -247,7 +247,7 @@ permissions:
 
 jobs:
   publish:
-    uses: hyperpolymath/standards/.github/workflows/fork-governance-publish-reusable.yml@<SHA>
+    uses: metadatastician/standards/.github/workflows/fork-governance-publish-reusable.yml@<SHA>
     permissions:
       actions: read
       pull-requests: write
