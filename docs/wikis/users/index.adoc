@@ -50,8 +50,8 @@ Standards hosts reusable CI workflows you pin by SHA
 
 ARG / FRG / CRG / TRG tell you how mature a repo/component is.
 
-* `adoption-readiness-grades/`, `foundations-readiness-grades/`,
-  `component-readiness-grades/`, `toolchain-readiness-grades/`.
+* `4-readiness/adoption-readiness-grades/`, `4-readiness/foundations-readiness-grades/`,
+  `4-readiness/component-readiness-grades/`, `4-readiness/toolchain-readiness-grades/`.
 * TODO: "how to read a grade badge and what it promises you".
 
 === 6. Get help

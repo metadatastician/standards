@@ -17,7 +17,7 @@
     (k9-foundation :paths ("1-formats/k9/" "1-formats/contractiles/"))
     (language-policy :paths (".claude/CLAUDE.md"))
     (protocols :paths ("2-protocols/" "*-protocol/"))
-    (readiness-grades :paths ("adoption-readiness-grades/" "foundations-readiness-grades/" "component-readiness-grades/" "toolchain-readiness-grades/"))
+    (readiness-grades :paths ("4-readiness/adoption-readiness-grades/" "4-readiness/foundations-readiness-grades/" "4-readiness/component-readiness-grades/" "4-readiness/toolchain-readiness-grades/"))
     (multi-repository-scope :paths ("docs/MULTI-REPOSITORY-SCOPE-STANDARD.adoc" "docs/repo-scope.example.toml"))
     (enforcement-ci :paths (".github/workflows/" "hooks/"))
     (drift-automation :paths ("hypatia-rules/" "docs/decisions/ADR-003-workflow-pin-staleness-window.adoc" "scripts/check-workflow-staleness.sh" "scripts/propagate-workflow-pins.sh"))

@@ -100,6 +100,16 @@ if command -v git >/dev/null 2>&1; then
   assert "the same swap without --base is only caught by the base comparison" 0 "-" bash "$GATE" "$d"
   assert "an unresolvable --base is a setup error" 2 "does not resolve" bash "$GATE" --base no-such-ref "$d"
 
+  d=$(repo gitrename)
+  git -C "$d" init -q && git -C "$d" add -A && git -C "$d" -c user.email=t@t -c user.name=t commit -qm init
+  mkdir -p "$d/moved" && git -C "$d" mv LIVE.a2ml moved/LIVE.a2ml
+  sed -i 's#^LIVE\.a2ml #moved/LIVE.a2ml #' "$d/.machine_readable/a2ml-legacy-allow.txt"
+  git -C "$d" add -A && git -C "$d" -c user.email=t@t -c user.name=t commit -qm move
+  assert "a ledgered file moved unchanged keeps its entry under --base" 0 "a2ml archive gate: OK" bash "$GATE" --base HEAD~1 "$d"
+  printf 'new fact\n' >> "$d/moved/LIVE.a2ml"
+  git -C "$d" -c user.email=t@t -c user.name=t commit -qam edit
+  assert "a moved file that also changed is a new entry" 1 "'moved/LIVE.a2ml' is not in the ledger at HEAD~2" bash "$GATE" --base HEAD~2 "$d"
+
   d=$(repo gitboot); rm "$d/.machine_readable/a2ml-legacy-allow.txt"; : > "$d/.machine_readable/keep"
   git -C "$d" init -q && git -C "$d" add -A && git -C "$d" -c user.email=t@t -c user.name=t commit -qm init
   printf 'LIVE.a2ml\n' > "$d/.machine_readable/a2ml-legacy-allow.txt"
