@@ -226,6 +226,11 @@ data, never instructions:
 . The body MUST start with the marker (§2.1) and fit in one comment.
 . The publisher uses the same marker-and-author lookup as the posting engine,
   so a pull request still has exactly one comment (§5).
+. Only the newest run writes. A run is superseded when its workflow has a
+  newer run from the same fork branch, or the run has a newer attempt; a
+  superseded run's publisher writes nothing, and publishers for one fork
+  branch run one at a time. A run that is not superseded and left no
+  artifact (including one cancelled by hand) fails its publisher.
 . The published comment ends with a line naming the run it was rendered by.
   The publisher cannot make a fork's verdicts honest; branch protection
   requires the lane checks, never the comment (ADOPTION §4).
@@ -287,7 +292,7 @@ commenting job that can rewrite it.
 | A lane could not run | orange row, orange summary | as the lane reports
 | Artifact missing but job green | orange row | green
 | Comment could not be posted | none | red — a governance run that cannot report is a failure
-| Pull request from a fork | posted by the publisher (§4.1) | as the lanes report; the publisher's own run is red if it cannot post, or if a run that was not cancelled left no comment artifact
+| Pull request from a fork | posted by the publisher (§4.1) | as the lanes report; the publisher's own run is red if it cannot post, or if a run with no newer successor left no comment artifact
 | An acknowledgement has passed its `expires_at` | unchanged | as the finding now grades — the entry stops suppressing before the date is noticed
 |===
 

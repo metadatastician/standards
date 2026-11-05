@@ -65,14 +65,46 @@ jobs:
           && github.event.workflow_run.head_repository.full_name != github.repository }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    # One publisher at a time per fork branch, so two cannot PATCH the comment
+    # at once; the "superseded" step below decides which one may write.
+    concurrency:
+      group: fork-governance-publish-${{ github.event.workflow_run.head_repository.full_name }}-${{ github.event.workflow_run.head_branch }}
+      cancel-in-progress: false
     permissions:
       actions: read
       pull-requests: write
     steps:
-      # A cancelled run (superseded by a newer push) may have no artifact; the
-      # newer run publishes. Any other run without one is a missing report,
-      # and the next step fails on it.
+      # Publishers can finish out of order: a re-run, or a close and reopen,
+      # gives two runs for one head. Only the newest may write. A run is
+      # superseded when its workflow has a newer run (higher id) from the
+      # same fork branch, or the run itself has a newer attempt.
+      - name: Check whether a newer run superseded this one
+        id: superseded
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+          WORKFLOW_ID: ${{ github.event.workflow_run.workflow_id }}
+          RUN_HEAD_REPO: ${{ github.event.workflow_run.head_repository.full_name }}
+          RUN_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          set -euo pipefail
+          newer=$(gh api -X GET "repos/$GITHUB_REPOSITORY/actions/workflows/$WORKFLOW_ID/runs" \
+              -f event=pull_request -f branch="$RUN_HEAD_BRANCH" -f per_page=100 \
+            | jq --arg repo "$RUN_HEAD_REPO" --argjson id "$RUN_ID" \
+                '[.workflow_runs[] | select(.head_repository.full_name == $repo and .id > $id)] | length')
+          attempt=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID" --jq '.run_attempt')
+          if [ "$newer" -gt 0 ] || [ "$attempt" -gt "$RUN_ATTEMPT" ]; then
+            echo "superseded=true" >> "$GITHUB_OUTPUT"
+            echo "A newer run (or attempt) exists for $RUN_HEAD_REPO:$RUN_HEAD_BRANCH; it publishes, not this one."
+          else
+            echo "superseded=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Any run that was not superseded must have left an artifact; the next
+      # step fails on one that did not, cancelled or not.
       - name: Download the rendered comment
+        if: ${{ steps.superseded.outputs.superseded == 'false' }}
         id: download
         continue-on-error: true
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
@@ -83,21 +115,19 @@ jobs:
           github-token: ${{ github.token }}
 
       - name: Fail on a missing comment
-        if: ${{ steps.download.outcome != 'success' }}
+        if: ${{ steps.superseded.outputs.superseded == 'false' && steps.download.outcome != 'success' }}
         env:
           RUN_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
           RUN_URL: ${{ github.event.workflow_run.html_url }}
         run: |
           set -euo pipefail
-          if [ "$RUN_CONCLUSION" = cancelled ]; then
-            echo "The triggering run was cancelled and left no comment; its successor publishes."
-            exit 0
-          fi
-          echo "::error::$RUN_URL ($RUN_CONCLUSION) uploaded no fork-governance-comment artifact, so its pull request has no governance comment"
+          # A run superseded by a newer push or re-run never reaches this step,
+          # so a cancelled run here was cancelled with no successor.
+          echo "::error::$RUN_URL ($RUN_CONCLUSION) uploaded no fork-governance-comment artifact and no newer run followed it, so its pull request has no governance comment"
           exit 1
 
       - name: Publish the comment
-        if: ${{ steps.download.outcome == 'success' }}
+        if: ${{ steps.superseded.outputs.superseded == 'false' && steps.download.outcome == 'success' }}
         env:
           GH_TOKEN: ${{ github.token }}
           GRID_AUTHOR: ${{ inputs.grid-author }}
