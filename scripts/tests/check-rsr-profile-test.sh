@@ -18,8 +18,40 @@
 
 set -uo pipefail
 
+# Differential run. With no parser forced, the whole suite runs once under
+# the awk tokenizer and once under the validated AST (deed_lint.js
+# --ast-json), and every assertion must hold under both. A forced mode
+# (RSR_DEED_PARSER=awk|ast) runs that mode only.
+if [ -z "${RSR_DEED_PARSER:-}" ]; then
+  _here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  _modes="awk"
+  if command -v bun >/dev/null 2>&1 && command -v jq >/dev/null 2>&1 \
+     && [ -f "$_here/../../1-formats/deed/tools/deed_lint.js" ]; then
+    _modes="awk ast"
+  else
+    echo "NOTE: bun, jq or deed_lint.js unavailable; the AST half of the differential run is skipped"
+  fi
+  _rc=0
+  for _m in $_modes; do
+    echo "######## RSR_DEED_PARSER=$_m"
+    RSR_DEED_PARSER=$_m bash "${BASH_SOURCE[0]}" || _rc=1
+  done
+  exit "$_rc"
+fi
+MODE="$RSR_DEED_PARSER"
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CHECK="$SCRIPT_DIR/../check-rsr-profile.sh"
+# An explicit RSR_DEED_PARSER=auto resolves exactly as the resolver does, so
+# the expectations below follow the parser that will actually run.
+if [ "$MODE" = auto ]; then
+  if command -v bun >/dev/null 2>&1 && command -v jq >/dev/null 2>&1 \
+     && [ -f "${DEED_LINT:-$SCRIPT_DIR/../../1-formats/deed/tools/deed_lint.js}" ]; then
+    MODE="ast"
+  else
+    MODE="awk"
+  fi
+fi
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 pass=0; fail=0
@@ -135,7 +167,7 @@ assert "role read from the deed: spine carrier exemption applies" 0 "carried for
 d=$(repo_deed deedpreset '  (rsr-profile :version "1.0.0" :preset "cli-tool")')
 assert "preset read from the deed (unknown names still fail loudly)" 2 "unknown preset" bash "$CHECK" "$d"
 
-d=$(repo_deed deedcomment '  ; (rsr-profile :version "1.0.0" :capabilities ("rust"))')
+d=$(repo_deed deedcomment '  ; (rsr-profile :version "1.0.0" :capabilities ("rust"))\n')
 assert "a commented-out clause is not a profile, and no a2ml means no profile" 2 "no (rsr-profile" bash "$CHECK" "$d"
 
 d=$(repo_deed deedfallback '')
@@ -190,12 +222,44 @@ assert "an escaped \\n in :role does not alias spine" 1 "VESTIGIAL" bash "$CHECK
 d=$(repo_deed deedescremove '  (rsr-profile :version "1.0.0" :capabilities ("rust") :remove ("rus\\t"))')
 assert "an escaped \\t in :remove does not remove rust" 0 "effective capabilities: rust" bash "$CHECK" "$d"
 
+# A string whose escapes decode to a newline then a field-shaped tail must
+# stay one field (Codex and GitHub Advanced Security on #1411). The AST
+# decodes \n and \t; written back raw, the tail would forge a record.
+d=$(repo_deed deedforgerole '  (rsr-profile :version "1.0.0" :description "x\\nS\\trole\\tspine" :capabilities ("bash"))')
+rm -f "$d/Cargo.toml" "$d/Cargo.lock" "$d/src/main.rs"
+assert "a \\n-led field-shaped tail in a string does not forge :role spine" 1 "VESTIGIAL" bash "$CHECK" "$d"
+
+d=$(repo_deed deedforgeremove '  (rsr-profile :version "1.0.0" :description "x\\nL\\tremove\\trust" :capabilities ("rust"))')
+assert "a \\n-led field-shaped tail in a string does not forge a :remove item" 0 "effective capabilities: rust" bash "$CHECK" "$d"
+
+d=$(repo_deed deedforgecount '  (rsr-profile :version "1.0.0" :description "x\\nCOUNT\\t2" :capabilities ("rust"))')
+assert "a \\n-led COUNT tail in a string does not forge a second clause" 0 "rsr-profile check: OK" bash "$CHECK" "$d"
+
+# The caller's tree is untrusted: a bunfig.toml preload in the working
+# directory must not run when the AST parser reads the deed (CodeRabbit on
+# #1411). The resolver runs from inside the repo here, as the gate job does.
+if [ "$MODE" = ast ]; then
+  d=$(repo_deed deedbunfig '  (rsr-profile :version "1.0.0" :capabilities ("rust"))')
+  printf 'preload = ["./preload.js"]\n' > "$d/bunfig.toml"
+  printf 'require("fs").writeFileSync("%s/PRELOAD-RAN", "x");\n' "$d" > "$d/preload.js"
+  assert "a caller bunfig.toml preload does not run in the deed parser" 0 "rsr-profile check: OK" bash -c 'cd "$1" && bash "$2" .' _ "$d" "$CHECK"
+  if [ -e "$d/PRELOAD-RAN" ]; then echo "FAIL: …the caller's preload ran"; fail=$((fail + 1)); else echo "PASS: …and the caller's preload did not run"; pass=$((pass + 1)); fi
+fi
+
 d=$(repo_deed deedescunkremove '  (rsr-profile :version "1.0.0" :capabilities ("rust") :remove ("r\\ust"))')
-assert "an unknown escape in :remove does not remove rust" 0 "effective capabilities: rust" bash "$CHECK" "$d"
+if [ "$MODE" = ast ]; then
+  assert "an unknown escape is not DEED: the AST path refuses the deed" 2 "does not parse as DEED" bash "$CHECK" "$d"
+else
+  assert "an unknown escape in :remove does not remove rust" 0 "effective capabilities: rust" bash "$CHECK" "$d"
+fi
 
 d=$(repo_deed deedescunkrole '  (rsr-profile :version "1.0.0" :role "s\\pine" :capabilities ("bash"))')
 rm -f "$d/Cargo.toml" "$d/Cargo.lock" "$d/src/main.rs"
-assert "an unknown escape in :role does not alias spine" 1 "VESTIGIAL" bash "$CHECK" "$d"
+if [ "$MODE" = ast ]; then
+  assert "an unknown escape in :role is not DEED: refused, never read as spine" 2 "does not parse as DEED" bash "$CHECK" "$d"
+else
+  assert "an unknown escape in :role does not alias spine" 1 "VESTIGIAL" bash "$CHECK" "$d"
+fi
 
 d=$(repo_deed deeduuiditem '  (rsr-profile :version "1.0.0" :capabilities (#u5"rust"))')
 assert "a uuid literal in a list is not a capability" 2 "-" bash "$CHECK" "$d"

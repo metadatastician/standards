@@ -68,23 +68,13 @@ hypatia-rules/workflow-allowlist-gap.a2ml
 # ── Mapping spec refused or decision open ──
 # META and ECOSYSTEM carry fields their tables do not list; STATE waits on
 # state-v1-decision.adoc; ANCHOR has no spec; CLADE stays until HYP-S010
-# reads the deed; the gates still read rsr-profile.a2ml until standards'
-# profile is folded into standards_chora.deed.
+# reads the deed. (rsr-profile.a2ml left 2026-11-05: its profile is the
+# (rsr-profile …) clause of standards_chora.deed.)
 .machine_readable/CLADE.a2ml
 .machine_readable/anchors/ANCHOR.a2ml
 .machine_readable/descriptiles/ECOSYSTEM.a2ml
 .machine_readable/descriptiles/META.a2ml
 .machine_readable/descriptiles/STATE.a2ml
-.machine_readable/rsr-profile.a2ml
-
-# ── Translated, but canon still names the .a2ml path ──
-# standards_chora.deed carries (agentic) (neurosym) (playbook) since #1356,
-# but RSR criteria 3.1.5-3.1.7 (Hypatia SD007-SD009), 0-canon/rsr/TIERS.adoc,
-# VERSION.adoc and 0-AI-MANIFEST.deed still name these files. Archive them
-# in the canon change that names the deed clauses instead.
-.machine_readable/descriptiles/AGENTIC.a2ml
-.machine_readable/descriptiles/NEUROSYM.a2ml
-.machine_readable/descriptiles/PLAYBOOK.a2ml
 
 # ── 0-AI-MANIFEST: decision open (1-formats/deed/mappings/ai-manifest-decision.adoc) ──
 1-formats/sub-specs/cartridges/0.2-AI-MANIFEST.a2ml
@@ -218,9 +208,9 @@ docs/wikis/0.2-AI-MANIFEST.a2ml
 3-practice/session-management-standards/verify/maintenance-sweep/STATE-template.a2ml
 3-practice/session-management-standards/verify/release-audit/STATE-template.a2ml
 3-practice/session-management-standards/verify/substantial-completion/STATE-template.a2ml
-adoption-readiness-grades/ADOPTION-READINESS-GRADES.a2ml
+4-readiness/adoption-readiness-grades/ADOPTION-READINESS-GRADES.a2ml
 audits/assail-classifications.a2ml
-component-readiness-grades/COMPONENT-READINESS-GRADES.a2ml
-foundations-readiness-grades/FOUNDATIONS-READINESS-GRADES.a2ml
-toolchain-readiness-grades/TOOLCHAIN-READINESS-GRADES.a2ml
+4-readiness/component-readiness-grades/COMPONENT-READINESS-GRADES.a2ml
+4-readiness/foundations-readiness-grades/FOUNDATIONS-READINESS-GRADES.a2ml
+4-readiness/toolchain-readiness-grades/TOOLCHAIN-READINESS-GRADES.a2ml
 www/.well-known/badges/registry.a2ml

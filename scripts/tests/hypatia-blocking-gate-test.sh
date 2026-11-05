@@ -305,6 +305,8 @@ echo "Running assail analysis on: ."
 case "${PA_FIXTURE:-}" in
   clean) printf '{"schema_version":"2.5","weak_points":[]}\n' > "$4" ;;
   findings) printf '%s\n' '{"schema_version":"2.5","weak_points":[{"severity":"Critical"},{"severity":"High"},{"severity":"High","suppressed":true},{"severity":"Medium"},{"severity":"Low"}]}' > "$4" ;;
+  archive) printf '%s\n' '{"schema_version":"2.5","weak_points":[{"severity":"Critical","file":"9-archive/old/demo.sh"},{"severity":"Critical","file":"./9-archive/old/b.sh"},{"severity":"High","file":"scripts/live.sh"},{"severity":"Medium","file":"docs/9-archive/x.md"},{"severity":"Critical","file":"9-archive-not/y.sh"}]}' > "$4" ;;
+  archive-only) printf '%s\n' '{"schema_version":"2.5","weak_points":[{"severity":"Critical","file":"9-archive/old/demo.sh"},{"severity":"Medium","file":"scripts/ok.sh"}]}' > "$4" ;;
   crash) echo "assail crashed" >&2; exit 3 ;;
   timed-out) exit 124 ;;
   no-report) ;;
@@ -353,6 +355,20 @@ grep -qx 'critical=0' "$GITHUB_OUTPUT" && grep -qx 'high=0' "$GITHUB_OUTPUT" || 
 pa_check 'panic-attack findings are counted without suppressed ones and do not gate' ran \
   '.counts == {critical: 1, high: 1, medium: 1, low: 1} and (.report.weak_points | length) == 5' \
   PA_BIN="$tmp/fake-panic-attack" PA_FIXTURE=findings
+# scope-excludes (standards#1306): a finding under an excluded prefix stays in
+# the report and in counts_excluded, but never in counts or the warning. The
+# prefix is anchored: docs/9-archive/ and 9-archive-not/ still count.
+pa_check 'panic-attack findings under scope-excludes are reported, not counted' ran \
+  '.counts == {critical: 1, high: 1, medium: 1, low: 0} and .counts_excluded == {critical: 2, high: 0, medium: 0, low: 0} and (.report.weak_points | length) == 5' \
+  PA_BIN="$tmp/fake-panic-attack" PA_FIXTURE=archive SCOPE_EXCLUDES=9-archive/
+grep -q '2 more finding(s) sit under `9-archive/`' "$GITHUB_STEP_SUMMARY" || fail 'excluded findings must be named in the summary'
+pa_check 'panic-attack with only excluded criticals does not warn' ran \
+  '.counts == {critical: 0, high: 0, medium: 1, low: 0} and .counts_excluded.critical == 1' \
+  PA_BIN="$tmp/fake-panic-attack" PA_FIXTURE=archive-only SCOPE_EXCLUDES=9-archive/,other/
+! grep -q '^::warning' result.log || fail 'an excluded-only critical must not warn'
+pa_check 'panic-attack with no scope-excludes counts everything' ran \
+  '.counts.critical == 3 and (.counts_excluded | add) == 0' \
+  PA_BIN="$tmp/fake-panic-attack" PA_FIXTURE=archive SCOPE_EXCLUDES=
 pa_check 'panic-attack crash records error with its exit code' error \
   '.exit_code == 3 and .reason == "panic-attack assail exited 3" and .report == null' \
   PA_BIN="$tmp/fake-panic-attack" PA_FIXTURE=crash

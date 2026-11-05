@@ -98,6 +98,15 @@ mkdir -p "$WORK/legacy/.machine_readable"
 printf '[canon]\nversion = "0.0.1"\ncriteria_sha256 = "%s"\n' "$WANT_CRIT" > "$WORK/legacy/.machine_readable/rsr-profile.a2ml"
 expect "legacy a2ml fallback still passes on criteria" "$WORK/legacy" PASS "LEGACY"
 
+# A deed larger than the pipe buffer, with the clause near the top, must still
+# be read. The comment-stripped text used to be piped into `grep -q`, which
+# exits at the first match; under `set -o pipefail` the writer's SIGPIPE made
+# the test false, and the 1114-line spine deed was reported as having no
+# (canon …) clause in CI ('grep: write error: Broken pipe').
+deed "$WORK/large" "$WANT_VER" "$WANT_CRIT" "$WANT_GATES"
+awk -v n=4000 '/^    :gates-sha256/ { sub(/\)\)$/, ")"); print; for (i = 0; i < n; i++) printf "  (notes :line %d :text \"padding so the deed outgrows a 64 KiB pipe buffer\")\n", i; print ")"; next } { print }' "$WORK/large/spine_chora.deed" > "$WORK/large/x" && mv "$WORK/large/x" "$WORK/large/spine_chora.deed" || { echo "FAIL could not pad the large deed"; exit 1; }
+expect "a deed larger than the pipe buffer is still read (no SIGPIPE false negative)" "$WORK/large" PASS "reading spine_chora.deed"
+
 mkdir -p "$WORK/none"
 expect "no deed clause and no profile fails" "$WORK/none" FAIL "no (canon …) deed clause"
 

@@ -22,6 +22,7 @@
 #   silently report a clean repo. Every estate gate that has ever lied did it
 #   this way. See scripts/count-ledger-entries.sh for the same rule stated for
 #   the exemption ledgers.
+#   Enforces docs/DEBTFILE-SPEC.adoc, "No fallback".
 #
 # ⚠ A PROBE MUST RESPECT EXISTING CARVE-OUTS. Naive probes manufacture debt.
 #   During this file's own authoring, three candidate probes were rejected for

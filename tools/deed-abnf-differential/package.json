@@ -1,0 +1,1 @@
+{"dependencies":{"apg-js":"4.4.0"},"description":"Grammar-vs-gate differential: deed.abnf (apg-js) against deed_lint.js over mutated deeds","name":"deed-abnf-differential","private":true,"scripts":{"test":"bun differential.js"},"type":"module"}

@@ -11,7 +11,7 @@ K9!
 # Repository facts that are not agent coordination were moved out 2026-10-13:
 #   - the VeriSimDB port (8097) is set in .verisimdb/config.toml;
 #   - the CRG grade is declared in the root READINESS.md, per
-#     component-readiness-grades/COMPONENT-READINESS-GRADES.adoc.
+#     4-readiness/component-readiness-grades/COMPONENT-READINESS-GRADES.adoc.
 #   A2ML is retired, so neither went there.
 #
 # Copyright (c) 2026 Jonathan D.A. Jewell (hyperpolymath)
@@ -98,7 +98,7 @@ invariants:
     severity: critical
 
 protected:
-  - path: component-readiness-grades/
+  - path: 4-readiness/component-readiness-grades/
     reason: "CRG specification — the grading system used by 290+ repos"
   - path: rhodium-standard-repositories/
     reason: "RESIDUAL — only actions-allowlist/ remains here. It is a live published interface: allowed-actions.json is fetched by raw URL from allowlist-preflight-reusable.yml and governance-reusable.yml, so moving it breaks consumers outside this repo. Needs its own deprecation/redirect plan."
@@ -160,7 +160,7 @@ innervation:
         - verisimdb
     - signal: "crg.grade.assessed"
       description: "A CRG grade was assigned or changed"
-      triggers_on: "change to component-readiness-grades/"
+      triggers_on: "change to 4-readiness/component-readiness-grades/"
       consumers:
         - verisimdb
         - panll

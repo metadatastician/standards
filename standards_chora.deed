@@ -6,6 +6,8 @@
 ;; translation may cite): CLADE.a2ml -> (identity) (clade) (forges) (lineage)
 ;; (status) per clade-to-repo-deed.adoc; AGENTIC / NEUROSYM / PLAYBOOK.a2ml ->
 ;; (agentic) (neurosym) (playbook) per agentic-neurosym-playbook-to-repo-deed.adoc.
+;; The (rsr-profile) clause is .machine_readable/rsr-profile.a2ml, moved here
+;; by the owner's decision of 2026-11-05 (see the comment on the clause).
 ;; META.a2ml and ECOSYSTEM.a2ml carry fields their mapping tables do not list
 ;; (the translator refuses rather than guesses), STATE.a2ml is a decision
 ;; still open (state-v1-decision.adoc), and the other .a2ml records wait for
@@ -39,7 +41,8 @@
     :contracts "1-formats/k9/"
     :coordination "2-protocols/k9-coordination/"
     :enforcement ".github/workflows/"
-    :governance "3-practice/fork-governance/")
+    :governance "3-practice/fork-governance/"
+    :proofs "3-practice/PROOF-POLICY.adoc")
   (status
     :phase active
     :since "2026-03-16"
@@ -92,4 +95,175 @@
   (policies
     (licensing
       :initial-assignment "Agents may author new files with the correct SPDX under repository policy, and initialise a brand-new repository's LICENSE."
-      :existing-declarations "Manual-Only; changes restricted to registered codeowner-admins. Agents flag drift and never sweep or relicense existing content.")))
+      :existing-declarations "Manual-Only; changes restricted to registered codeowner-admins. Agents flag drift and never sweep or relicense existing content."))
+  ; rsr-profile: the CANON's own RSR v2.0 capability declaration, moved here
+  ; from .machine_readable/rsr-profile.a2ml (owner, 2026-11-05; that file is
+  ; archived under 9-archive/a2ml/). Readers: scripts/check-rsr-profile.sh,
+  ; check-package-policy.sh and check-canon-lockstep.sh assertion 5, and the
+  ; oracle (Hypatia RsrConformance) for the applicable criteria set.
+  ;
+  ; The canon carries the criteria, the gate table and the reusable workflows,
+  ; but is NOT an instance of what it governs, so it declares only what is in
+  ; this tree; role "canon" keys the gate table's [canon] section, as "spine"
+  ; keys [carrier]. It carries no (canon …) pin: canon.lock IS this repo's
+  ; pin, and that clause is for the spine and the repos minted from it
+  ; (1-formats/deed/vocabulary/canon.adoc).
+  (rsr-profile
+    :version "1.0.0"
+    :spec "rsr-criteria-v2"
+    :declares-against "2.1.4"
+    :role "canon"
+    :capabilities (
+      ; scripts/: the gate implementations (check-*.sh)
+      "bash"
+      ; .github/workflows/casket-pages.yml + pages.yml
+      "docs-site"
+      ; 0-canon/constitution/ + docs/{AUDIT,AFFIRMATION}.adoc + GOVERNANCE + MAINTAINERS
+      "governance-tier"
+      ; guix.scm: a real Guix manifest that pins the canon's own tooling
+      "reproducible-build"
+      ; tools/{uuid-v8,js-runtimes,hooks/playbook-to-recipe}, k9-init, the
+      ; inline-annotations extractor and .verisimdb's ingester are cargo crates
+      ; (declared since #1228 fixed the root-anchored src/**/*.rs row)
+      "rust")
+    (notes
+      ; Capabilities deliberately NOT declared, each for want of the artefact:
+      ;   zig idris2 agda haskell gleam elixir julia ocaml affinescript
+      ;               - no source in these; the compiled code is the Rust CI tools
+      ;   cli         - the check-*.sh scripts are CI steps, not a shipped binary
+      ;   library     - consumed as a document and a pin (canon.lock), not a library
+      ;   ffi abi     - no C-ABI seam and no formally specified ABI in this tree
+      ;   api-service - the reusable workflows run on GitHub's runners, not served here
+      ;   container   - no Containerfile and no image
+      ;   published-package - publishes specs (canon.lock + a tag), not packages;
+      ;               the one omission to revisit if criteria go to a registry
+      ;   formal-proofs - docs/proofs/ are proof artefacts OF THE ESTATE, not of
+      ;               this repo's code: a [canon] carrier path in the gate table
+      ;   mobile web-ui - no UI
+      ;   benchmarks  - benches/ holds no suite
+      ;   plugin      - not hosted in a third-party extension host
+      ; Carried but gated by no capability, so named in the gate table's [canon]
+      ; section instead: the criteria (0-canon/rsr/rsr-criteria-v2.a2ml), the
+      ; gate table, the applicability policy, the *-reusable.yml workflows,
+      ; docs/proofs/, and 9-archive/rhodium-standard-repositories/ (the last
+      ; copy; archived 2026-10-09, never to be deleted).
+      :omitted-rationale "The canon defines conformance; it is not an instance of it. Declaring a capability the canon lacks would make the oracle score it against a module it does not carry — the over-scaffolding failure the v2.0 capability model exists to prevent."))
+  ; Egress attestation: this repo adopts its own ADR-009
+  ; (docs/decisions/ADR-009-declared-egress-for-secret-bearing-jobs.adoc;
+  ; grammar 1-formats/deed/spec/abnf/clauses/egress.abnf). Every local job that
+  ; reads a real secret (anything but GITHUB_TOKEN) is listed with exactly the
+  ; secrets it reads, the endpoints outside GitHub it reaches, and what holds
+  ; it to them. Hypatia RE001 accepts an entry here in place of
+  ; step-security/harden-runner and reports drift between an entry and its
+  ; workflow: when you add secrets.* to a job, change what it reaches, or
+  ; delete a workflow listed here, change this clause in the same commit.
+  ; The *-reusable.yml workflows also run in callers' repositories; an entry
+  ; here attests the job as this repository defines it.
+  (egress
+    :policy "standards ADR-009"
+    (job
+      :workflow ".github/workflows/boj-build.yml"
+      :job "trigger-boj"
+      :secrets ("BOJ_SERVER_URL")
+      :endpoints ("secret:BOJ_SERVER_URL" "var:BOJ_SERVER_URL")
+      :enforcement none
+      :reason "POSTs to the BoJ server's cartridge endpoint. The URL is the secret when set, else the variable.")
+    (job
+      :workflow ".github/workflows/allowlist-preflight-reusable.yml"
+      :job "live-policy"
+      :secrets ("HYPATIA_SCAN_PAT")
+      :endpoints ()
+      :enforcement none
+      :reason "Reads the live Actions allowlist through the GitHub API with gh; reaches only GitHub.")
+    (job
+      :workflow ".github/workflows/instant-sync.yml"
+      :job "dispatch"
+      :secrets ("FARM_DISPATCH_TOKEN")
+      :endpoints ()
+      :enforcement none
+      :reason "Sends a repository_dispatch event with peter-evans/repository-dispatch; reaches only the GitHub API.")
+    (job
+      :workflow ".github/workflows/mirror-reusable.yml"
+      :job "mirror-gitlab"
+      :secrets ("GITLAB_SSH_KEY")
+      :endpoints ("gitlab.com:22")
+      :enforcement none
+      :reason "Checks the host key with ssh-keyscan against an approved fingerprint, then pushes over SSH.")
+    (job
+      :workflow ".github/workflows/mirror-reusable.yml"
+      :job "mirror-bitbucket"
+      :secrets ("BITBUCKET_SSH_KEY")
+      :endpoints ("bitbucket.org:22")
+      :enforcement none
+      :reason "Checks the host key with ssh-keyscan against an approved fingerprint, then pushes over SSH.")
+    (job
+      :workflow ".github/workflows/mirror-reusable.yml"
+      :job "mirror-codeberg"
+      :secrets ("CODEBERG_SSH_KEY")
+      :endpoints ("codeberg.org:22")
+      :enforcement none
+      :reason "Checks the host key with ssh-keyscan against an approved fingerprint, then pushes over SSH.")
+    (job
+      :workflow ".github/workflows/mirror-reusable.yml"
+      :job "mirror-sourcehut"
+      :secrets ("SOURCEHUT_SSH_KEY")
+      :endpoints ("git.sr.ht:22")
+      :enforcement none
+      :reason "Checks the host key with ssh-keyscan against an approved fingerprint, then pushes over SSH.")
+    (job
+      :workflow ".github/workflows/mirror-reusable.yml"
+      :job "mirror-disroot"
+      :secrets ("DISROOT_SSH_KEY")
+      :endpoints ("git.disroot.org:22")
+      :enforcement none
+      :reason "Checks the host key with ssh-keyscan against an approved fingerprint, then pushes over SSH.")
+    (job
+      :workflow ".github/workflows/mirror-reusable.yml"
+      :job "mirror-gitea"
+      :secrets ("GITEA_SSH_KEY")
+      :endpoints ("var:GITEA_HOST")
+      :enforcement none
+      :reason "Mirrors to the caller's own Gitea instance, named by vars.GITEA_HOST: ssh-keyscan against an approved fingerprint, then an SSH push to port 22.")
+    (job
+      :workflow ".github/workflows/mirror-reusable.yml"
+      :job "mirror-radicle"
+      :secrets ("RADICLE_KEY")
+      :endpoints ("static.rust-lang.org" "index.crates.io" "static.crates.io" "*.radicle.garden" "*.radicle.xyz")
+      :enforcement none
+      :reason "Installs Rust (dtolnay/rust-toolchain) and radicle-cli with cargo, then rad sync announces to the CLI's preferred seed nodes. The seed hosts come from radicle-cli's defaults, not this workflow; check them against the installed version before enforcing.")
+    (job
+      :workflow ".github/workflows/mirror-reusable.yml"
+      :job "mirror-r2-bundle"
+      :secrets ("R2_ACCESS_KEY_ID" "R2_AGE_RECIPIENT" "R2_SECRET_ACCESS_KEY")
+      :endpoints ("var:R2_ENDPOINT_URL" "*.r2.cloudflarestorage.com" "azure.archive.ubuntu.com")
+      :enforcement none
+      :reason "Uploads an age-encrypted git bundle with aws s3 cp to the Cloudflare R2 endpoint in vars.R2_ENDPOINT_URL, which the job refuses unless it is *.r2.cloudflarestorage.com. apt-get reaches the runner's Ubuntu mirror only when age is not preinstalled.")
+    (job
+      :workflow ".github/workflows/github-backup-mirror-reusable.yml"
+      :job "mirror-github"
+      :secrets ("BACKUP_MIRROR_TOKEN")
+      :endpoints ()
+      :enforcement none
+      :reason "Mirrors to a backup GitHub organisation with gh and an HTTPS push to github.com; reaches only GitHub.")
+    (job
+      :workflow ".github/workflows/tailscale-connect-reusable.yml"
+      :job "connect"
+      :secrets ("TS_OAUTH_CLIENT_ID" "TS_OAUTH_SECRET")
+      :endpoints ("pkgs.tailscale.com" "*.tailscale.com" "log.tailscale.io")
+      :enforcement none
+      :reason "tailscale/github-action v4.4.0 downloads tailscale from pkgs.tailscale.com; tailscaled then reaches the control plane, DERP relays and log server under tailscale.com and tailscale.io. Peers on the tailnet are reached by address, which is this job's purpose.")
+    (job
+      :workflow ".github/workflows/hypatia-scan-reusable.yml"
+      :job "scan"
+      :secrets ("HYPATIA_SCAN_PAT")
+      :endpoints ("builds.hex.pm" "repo.hex.pm" "hex.pm" "index.crates.io" "static.crates.io")
+      :enforcement none
+      :reason "erlef/setup-beam installs OTP and Elixir from builds.hex.pm (its default mirror); mix deps.get fetches Hypatia's dependencies from Hex; cargo install builds panic-attack and pons-asinorum from GitHub with crates from crates.io. The PAT is passed to the scan as GITHUB_TOKEN for the GitHub API.")
+    (job
+      :workflow ".github/workflows/governance-reusable.yml"
+      :job "actions-policy-live"
+      :secrets ("HYPATIA_SCAN_PAT")
+      :endpoints ()
+      :enforcement none
+      :reason "Reads the live Actions policy through the GitHub API with gh; reaches only GitHub."))
+)

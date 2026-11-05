@@ -1,0 +1,35 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+// SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+= 4-readiness — how mature is it?
+:toc: macro
+
+This district holds the estate's grading standards. Each one answers how
+mature something is, on its own scale. The district question comes from
+`standards-map.toml`.
+
+[cols="1,2,3"]
+|===
+| Grade | Directory | What it grades
+
+| CRG
+| link:component-readiness-grades/[`component-readiness-grades/`]
+| A component, on the X to A scale.
+
+| TRG
+| link:toolchain-readiness-grades/[`toolchain-readiness-grades/`]
+| A toolchain, with per-language testing guides under `testing/`.
+
+| ARG
+| link:adoption-readiness-grades/[`adoption-readiness-grades/`]
+| How far a language has been adopted.
+
+| FRG
+| link:foundations-readiness-grades/[`foundations-readiness-grades/`]
+| How sound a language's foundations are.
+|===
+
+The four directories moved here unchanged from the repository root on
+2026-11-04, as their rows in `standards-map.toml` had targeted. Their file
+names and contents did not change. Each machine-readable grade record is
+still a legacy `.a2ml` file, listed in `.machine_readable/a2ml-legacy-allow.txt`
+until it has a deed home.

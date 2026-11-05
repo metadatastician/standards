@@ -111,14 +111,17 @@ authoritative: it holds the completed censuses, which supersede the session's in
   the pinned commit and rejects records whose ref is a bare SHA. Fixed by #1314 (case folding in
   `relock-standards-pin.sh`) and `januskey#159`, both merged.
 * `GITHUB_TOKEN` cannot push files under `.github/workflows/`, and a human push needs the
-  `workflow` OAuth scope. Regenerate a lock through `scripts/regen-dependabot-locks.sh`, not by
-  hand: it snapshots the lock before `gh actions-lock` rewrites it, then runs the repair chain
-  (`relock-sha-keys`, `complete-job-refs`, `close-lock --prior <snapshot>`, `prune-stale`).
-  Running without the snapshot removes the first moved-tag fallback. If tag listing succeeds but
-  no current tag points to the pinned SHA, `close-lock` skips the key with exit 3 only when the
-  called repository lock and call-site comment cannot supply a qualified symbolic tag. Verify with
-  `update-actions-lock.sh --verify-local`,
-  `check-lock-sync.sh` and `check-actions-lock-gate.sh`.
+  `workflow` OAuth scope. `scripts/regen-dependabot-locks.sh` is the supported route, but it
+  works only remotely: it needs per-owner App installation tokens in `REGEN_TOKENS` (without
+  them it warns, examines nothing and exits 0), sweeps Dependabot and pin-applier pull requests,
+  and repairs a default branch only with `REGEN_MAIN=1`, by opening a lock-only pull request.
+  There is no local mode yet, which is an open item. Until one exists, a hand repair of a local
+  checkout must follow the `regen_lock` function in that script step for step; this record does
+  not restate the steps, because each restatement here has missed one. The function is the
+  authority. In outline, it snapshots the lock, restores every non-lock file after
+  `gh actions-lock` and before the repair helpers, runs the helpers from a standards checkout's
+  `scripts/`, refuses a lock containing `$/`, and requires a lock-only diff before verifying.
+  Commit any other edits before starting, so the restore does not discard them.
 * Do not merge a re-point pull request without its regenerated lock; `hypatia#958` merged first
   and left that repository's callers without the matching lock records.
 * `close-lock` now has three sources for a moved tag, tried in order: the prior lock record

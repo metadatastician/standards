@@ -86,8 +86,16 @@ command -v jq >/dev/null 2>&1 || not_inspected "jq not found"
 [ -d "$WF_DIR" ] || not_inspected "workflow directory not found: $WF_DIR"
 
 if [ -n "$COMPARE" ]; then
+  # A pull-request checkout is the MERGE commit at depth 1, so the head commit
+  # the caller wants judged may not be in the clone. Fetch it by SHA before
+  # declaring the comparison impossible — otherwise the fresh check silently
+  # falls back to "cannot inspect", which is the one outcome a gate must not
+  # have when the answer is obtainable.
+  if ! git rev-parse --verify --quiet "$COMPARE^{commit}" >/dev/null; then
+    git fetch --quiet --depth=1 origin "$COMPARE" 2>/dev/null || true
+  fi
   git rev-parse --verify --quiet "$COMPARE^{commit}" >/dev/null ||
-    not_inspected "compare ref '$COMPARE' is not resolvable in this clone"
+    not_inspected "compare ref '$COMPARE' is not resolvable in this clone (and could not be fetched)"
 fi
 
 fail=0
@@ -103,8 +111,32 @@ for wf in "$WF_DIR"/*.yml "$WF_DIR"/*.yaml; do
     continue
   }
   # One node per standards checkout. `uses` is matched on the resolved action,
-  # so a sub-path (actions/checkout/...) is covered too, and `repository` is
-  # compared case-insensitively exactly as GitHub treats owner/repo.
+  # so a sub-path (actions/checkout/...) is covered too. Both the action name and
+  # `repository` are matched case-insensitively, exactly as GitHub treats them:
+  # a case-sensitive match on `uses` let `Actions/Checkout@<sha>` with
+  # `ref: main` reach standards without this guard seeing the step at all.
+  #
+  # The node list is captured FIRST and its exit status checked. Reading it from
+  # a process substitution would make a jq failure invisible: the loop would
+  # simply see nothing, the file would contribute zero sites, and a workflow
+  # whose standards checkouts all floated would pass as "no checkouts here".
+  # (Measured 2026-10-31: yq emitting a truncated document made the largest
+  # workflow in this repository contribute 0 of its 18 checkouts and still
+  # report PASS.)
+  nodes="$(printf '%s' "$json" | jq -c '
+    .jobs // {} | to_entries[] | .key as $job | (.value | (.steps // [])) | to_entries[] |
+    (.value | (.with // {})) as $w |
+    select($w.repository != null) |
+    select(($w.repository | ascii_downcase) | test("^(metadatastician|hyperpolymath)/standards$")) |
+    select(((.value.uses // "") | ascii_downcase) | test("checkout")) |
+    { job: $job,
+      step: (.value.name // "(unnamed step)"),
+      ref: (($w.ref // "") | tostring),
+      paths: (($w["sparse-checkout"] // "") | tostring) }
+  ')" || {
+    echo "::error file=$wf::could not enumerate this file's standards checkouts (jq failed on the parsed document), so its pins went UNEXAMINED — an uninspected file is not a pass." >&2
+    fail=$((fail + 1)); continue
+  }
   while IFS= read -r node; do
     [ -n "$node" ] || continue
     sites=$((sites + 1))
@@ -116,8 +148,16 @@ for wf in "$WF_DIR"/*.yml "$WF_DIR"/*.yaml; do
     case "$ref" in
       '') echo "::error file=$wf::$label: standards checkout has no 'ref' — actions/checkout follows the DEFAULT BRANCH, so this is a float, not a pin." >&2
           fail=$((fail + 1)); continue ;;
-      *'${{ job.workflow_sha }}'*) echo "  ok ${label}: job.workflow_sha (this reusable's own commit)"; continue ;;
-      *'${{ inputs.'*'|| job.workflow_sha }}'*) echo "  ok ${label}: caller override with a pinned job.workflow_sha fallback"; continue ;;
+      # EXACT shapes, not substring globs. `*'${{ job.workflow_sha }}'*` also
+      # accepts `${{ job.workflow_sha && 'main' }}`, which resolves to the
+      # floating branch while reading as a pin — a bypass of this guard rather
+      # than a use of it.
+      '${{ job.workflow_sha }}') echo "  ok ${label}: job.workflow_sha (this reusable's own commit)"; continue ;;
+    esac
+    if printf '%s' "$ref" | grep -Eq '^\$\{\{ *inputs\.[A-Za-z0-9_-]+ *\|\| *job\.workflow_sha *\}\}$'; then
+      echo "  ok ${label}: caller override with a pinned job.workflow_sha fallback"; continue
+    fi
+    case "$ref" in
       *'${{'*)
           echo "::error file=$wf::$label: ref '$ref' is an expression that does not resolve to THIS reusable's commit. github.sha/github.workflow_sha/github.workflow_ref name the CALLER's commit (checkout fails: 'No commit found for SHA'); github.job_workflow_sha does not exist; a bare input can be a branch. Use \${{ job.workflow_sha }} or a 40-hex commit." >&2
           fail=$((fail + 1)); continue ;;
@@ -153,17 +193,7 @@ for wf in "$WF_DIR"/*.yml "$WF_DIR"/*.yaml; do
     else
       echo "  ok ${label}: literal ${ref:0:12} contains $COMPARE over: $(printf '%s ' $scope)"
     fi
-  done < <(printf '%s' "$json" | jq -c '
-    .jobs // {} | to_entries[] | .key as $job | (.value | (.steps // [])) | to_entries[] |
-    (.value | (.with // {})) as $w |
-    select($w.repository != null) |
-    select(($w.repository | ascii_downcase) | test("^(metadatastician|hyperpolymath)/standards$")) |
-    select((.value.uses // "") | test("checkout")) |
-    { job: $job,
-      step: (.value.name // "(unnamed step)"),
-      ref: (($w.ref // "") | tostring),
-      paths: (($w["sparse-checkout"] // "") | tostring) }
-  ')
+  done <<< "$nodes"
 done
 
 if [ -n "$unparsed" ]; then

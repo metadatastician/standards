@@ -60,6 +60,20 @@ translate.
 | 13
 | The same, for `standards-update/`, with its older `6scm-archive/` copy and
 that copy's README.
+
+| `.machine_readable/descriptiles/` (AGENTIC, NEUROSYM, PLAYBOOK; 2026-11-05)
+| 3
+| Translated into `standards_chora.deed` (#1356). Canon 2.1.4 names the
+`(agentic)` `(neurosym)` `(playbook)` clauses as the carriers, and Hypatia's
+RSR scorer accepts them for criteria 3.1.5 to 3.1.7 (hyperpolymath/hypatia#1013).
+
+| `.machine_readable/rsr-profile.a2ml` (2026-11-05)
+| 1
+| The canon's capability profile, now the `(rsr-profile …)` clause of
+`standards_chora.deed` (owner decision 2026-11-05). The resolver
+(`check-rsr-profile.sh`) and Gate A read the clause; Hypatia's RSR scorer
+reads it from hyperpolymath/hypatia#1015. Its `[canon]` block was not
+carried over: `canon.lock` is the canon's own pin.
 |===
 
 == What did not move
@@ -72,9 +86,6 @@ its reason, in `.machine_readable/a2ml-legacy-allow.txt`. In short:
   `rsr-criteria-v2.a2ml`, the Hypatia rules and the DYADT vectors;
 * families whose mapping spec is refused or still open: META, ECOSYSTEM,
   STATE, ANCHOR, CLADE, `rsr-profile.a2ml` and the 0-AI-MANIFEST files;
-* AGENTIC, NEUROSYM and PLAYBOOK. They are translated into
-  `standards_chora.deed`, but RSR criteria 3.1.5 to 3.1.7 and the canon tier
-  docs still name the `.a2ml` paths;
 * the A2ML format family under `1-formats/a2ml/`, whose grammar describes the
   files above, so it retires with the last of them;
 * the scorecard corpus, whose archive surface the owner fixed at

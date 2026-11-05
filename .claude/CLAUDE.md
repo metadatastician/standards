@@ -137,6 +137,25 @@ carries its own verification. A preference, not a gate.
 The 2026-04-10 note "Rust always means Rust/SPARK" is **withdrawn**: Rust
 means Rust, verified with Creusot; SPARK belongs to Ada code.
 
+**Proof Witness Grades (owner ruling 2026-11-04, policy §8).** Grades say how
+many independent machine-checked witnesses a *theory* theorem has. Lower is
+stronger. `PWG-3` means the Agda proof checks under §2.1. `PWG-2i` adds one
+recheck leg (Rocq or Lean) that counts. `PWG-2ii` adds both legs, and only
+then is the §2 recheck obligation discharged. `PWG-1` adds per-commit
+receipts from a pinned, headless checker for every witness.
+
+- A leg counts only when it is kernel-checked *and* `RECONCILED` (§2.2). A
+  waived leg, an `unavailable` leg and a `BRIDGE-PENDING` leg do not count.
+- A non-DTT witness, such as Isabelle/HOL, is the tag `+foundation-diverse`,
+  not a grade.
+- Grades are *derived from receipts*, never asserted.
+- Any claim that something was "verified" or "machine-checked" through a
+  checker needs current receipts. A regression drops the grade.
+- Report a census with its denominator, never a percentage.
+- Always write the `PWG-` prefix. A bare "Grade 2" collides with
+  CRG/TRG/ARG/FRG letters and with ECHIDNA's `TrustLevel`, which counts the
+  other way.
+
 ### ALLOWED Languages & Tools
 
 | Language/Tool | Use Case | Notes |

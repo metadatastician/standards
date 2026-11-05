@@ -1,0 +1,26 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+// SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+= Wave placement and dependency-edge check for the ECHIDNA engineering ultraplan
+
+These files back the edge claim in
+link:../ULTRAPLAN-ECHIDNA-ENGINEERING-ROUTE-2026-11-05.adoc#how-made[the ultraplan].
+
+* `place.txt`: one line per item or item part, in the form
+  `ID WAVE LANE SEQ`. Waves are numbered W0=0, W1a=1, W1b=2, W2a=3,
+  W2b=4, W3a=5, W3b=6, W4a=7, W4b=8, W5=9, W6=10, W7=11, W8=12.
+* `edges.txt`: the 95 dependency edges from the system map, one
+  `FROM TO` pair per line.
+* `over.txt`: the part-level orderings that justify the six edges that do
+  not hold at whole-item level, and the two same-lane stacks.
+* `check.awk`: prints every edge that is not strictly ordered by wave.
+
+Re-run it with:
+
+[source,shell]
+----
+awk -f check.awk place.txt edges.txt
+----
+
+Expected output: 2 `SAMEWAVE` lines (the same-lane stacks) and 6 `VIOLATION`
+lines. Each of the six is justified at part level in `over.txt`. Any other
+line is a real ordering defect.

@@ -87,7 +87,11 @@ discharged within the working logic (e.g. function extensionality,
 propositional truncation, classical choice, certain decision procedures).
 It is enumerated in `docs/proof-debt.md` with a one-paragraph
 justification and a citation pointing to the canonical formalisation
-elsewhere (echo-types, MathLib4, agda-stdlib, etc.).
+elsewhere (echo-types, MathLib4, agda-stdlib, etc.). The citation names
+where the axiom is stated; it does not import it. The axiom must not enter
+the proof through that library: PROOF-POLICY §2 forbids Mathlib as a
+dependency. This disposition governs whether the *axiom* is admissible,
+and PROOF-POLICY §2 governs the *dependency*.
 |===
 
 A marker that is *none of (a)/(b)/(c)* is **debt**, and must appear in
@@ -412,10 +416,18 @@ rule:
   development strict may make another unusable.
 
 What *is* estate-wide is the disposition requirement: every escape hatch is
-documented, and the count is visible. Beyond the required Agda theory-check
-flags, how a repository invokes its prover is its own business, recorded in
-its own workflow — where its pin, its version assertion and its negative
-controls live.
+documented, and the count is visible. For this document's purposes (the
+budgets, the dispositions, and the detection of escape hatches), how a
+repository invokes its prover is its own business, recorded in its own
+workflow where its pin, its version assertion and its negative controls
+live.
+
+That latitude covers the debt tooling only. It does not cover how a theory
+proof's *entrypoint* is invoked. For first-party Agda theory proofs, that
+invocation is fixed by
+link:../3-practice/PROOF-POLICY.adoc[PROOF-POLICY §2.1]
+(`agda --safe --without-K --cubical-compatible`). Do not cite this section
+to keep a weaker lane.
 
 === Rollout, and what a pinned caller sees
 

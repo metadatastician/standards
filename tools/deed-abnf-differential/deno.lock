@@ -1,0 +1,18 @@
+{
+  "version": "5",
+  "specifiers": {
+    "npm:apg-js@4.4.0": "4.4.0"
+  },
+  "npm": {
+    "apg-js@4.4.0": {
+      "integrity": "sha512-fefmXFknJmtgtNEXfPwZKYkMFX4Fyeyz+fNF6JWp87biGOPslJbCBVU158zvKRZfHBKnJDy8CMM40oLFGkXT8Q=="
+    }
+  },
+  "workspace": {
+    "packageJson": {
+      "dependencies": [
+        "npm:apg-js@4.4.0"
+      ]
+    }
+  }
+}

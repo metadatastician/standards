@@ -183,7 +183,7 @@ metadata; its `--write` pass preserves it unchanged while updating only `count` 
 
 === No fallback
 
-// Enforced-by: scripts/run-debtfile.sh, scripts/count-ledger-entries.sh
+// Enforced-by: scripts/run-debtfile.sh
 
 A probe that fails to run, exits non-zero, or prints anything but an integer is
 a *hard failure*. There is deliberately no `|| echo 0`.

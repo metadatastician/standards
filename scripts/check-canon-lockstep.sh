@@ -301,6 +301,15 @@ pin_row() {
   fi
 }
 
+# has_canon_clause <deed>: true when a non-comment line opens a (canon …)
+# clause. One awk process, no pipe: `grep -v … | grep -q` under pipefail
+# reported a large deed as having no clause, because grep -q exits at the
+# first match and the writer's SIGPIPE made the pipeline false (CI read the
+# 1114-line spine deed that way).
+has_canon_clause() {
+  awk 'BEGIN { bs = sprintf("%c", 92); dq = sprintf("%c", 34) } { o = ""; q = 0; for (i = 1; i <= length($0); i++) { c = substr($0, i, 1); if (q && c == bs) { i++; continue } if (c == dq) { q = !q; o = o " "; continue } if (!q && c == ";") break; if (!q) o = o c } if (o ~ /[(]canon([[:space:]]|$)/) { found = 1; exit } } END { exit !found }' "$1"
+}
+
 echo "[3] spine declares the same canon pin"
 if [ -z "$SPINE" ] || [ ! -d "$SPINE" ]; then
   skip "no --spine DIR given (set --strict in CI release jobs)"
@@ -310,7 +319,7 @@ else
   HEX='[0-9a-f]{64}'
   if [ "${#DEEDS[@]}" -gt 1 ]; then
     softfail "spine carries ${#DEEDS[@]} *_chora.deed files; one-deed-per-repo (#837) expects exactly 1"
-  elif [ "${#DEEDS[@]}" -eq 1 ] && grep -vE '^[[:space:]]*;' "${DEEDS[0]}" | grep -qE '[(]canon([[:space:]]|$)'; then
+  elif [ "${#DEEDS[@]}" -eq 1 ] && has_canon_clause "${DEEDS[0]}"; then
     DEED="${DEEDS[0]}"
     echo "  reading $(basename "$DEED") (canon …)"
     pin_row version         "$CANON_VERSION"        "$(deed_canon version "$DEED")"         '[0-9]+\.[0-9]+\.[0-9]+'
@@ -387,14 +396,20 @@ echo "[5] the canon scores Gold on its own applicable set"
 # So both branches below are permanent, not a shim. Dotted is canonical;
 # hyphenated must still RESOLVE, never be rejected — a repo pinned to the
 # minority spelling is not a repo with a broken gate.
-CANON_PROFILE="$CANON/.machine_readable/rsr-profile.a2ml"
-[ -f "$CANON_PROFILE" ] || CANON_PROFILE="$CANON/machine-readable/rsr-profile.a2ml"
-if [ ! -f "$CANON_PROFILE" ]; then
-  softfail "the canon has NO rsr-profile.a2ml — it cannot be scored by the checker
-       it ships (scripts/check-rsr-profile.sh exits 2 on this repo).
-       -> see artefacts/rsr-profile.canon.a2ml; requires [canon] in the gate table."
+# The canon's profile is resolved by the resolver it ships, so both carriers
+# count exactly as they do for every other repo: the (rsr-profile …) clause of
+# standards_chora.deed (where it has lived since 2026-11-05), or a legacy
+# rsr-profile.a2ml. Reading the .a2ml here directly would make this assertion
+# a second, divergent reader.
+CANON_RESOLVED="$(bash "$CANON/scripts/check-rsr-profile.sh" "$CANON" 2>&1 || true)"
+if ! grep -q '^effective capabilities:' <<<"$CANON_RESOLVED"; then
+  softfail "the canon's rsr-profile could not be resolved — it cannot be scored by
+       the checker it ships (scripts/check-rsr-profile.sh $(grep -m1 'ERROR' <<<"$CANON_RESOLVED" || echo 'printed no effective capabilities')).
+       -> declare it in the (rsr-profile …) clause of standards_chora.deed;
+          role \"canon\" needs [canon] in the gate table."
 else
-  ROLE="$(grep -E '^[[:space:]]*role[[:space:]]*=' "$CANON_PROFILE" | head -1 | grep -oE '"[^"]+"' | tr -d '"')"
+  ROLE="$(sed -n 's/^role:[[:space:]]*//p' <<<"$CANON_RESOLVED" | head -1)"
+  [ "$ROLE" = unset ] && ROLE=""
   [ "$ROLE" = "canon" ] || softfail "canon rsr-profile role is '${ROLE:-unset}', expected 'canon'"
   [ "$ROLE" = "canon" ] && pass "canon rsr-profile declares role = \"canon\""
 

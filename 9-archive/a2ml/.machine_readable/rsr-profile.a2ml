@@ -41,7 +41,7 @@
 [rsr-profile]
 version          = "1.0.0"
 spec             = "rsr-criteria-v2"
-declares-against = "2.1.3"
+declares-against = "2.1.4"
 
 # Role in the estate pipeline. The gate table's [canon] section keys on this
 # value, exactly as [carrier] keys on role = "spine".
@@ -80,7 +80,7 @@ capabilities = [
 # ---------------------------------------------------------------------------
 
 [canon]
-version         = "2.1.3"
+version         = "2.1.4"
 criteria_sha256 = "6a5aa8857bd0d0d58ef48827938ca17c251b6b854dacf59d306388d61694d82a"
 gates_sha256    = "2f31f46d4753432e0aa8c9c28f339e18e062c98dc6e6ef4ecbb76993cf37638b"
 lock_sha256     = ""            # sha256 of canon.lock itself; filled at release

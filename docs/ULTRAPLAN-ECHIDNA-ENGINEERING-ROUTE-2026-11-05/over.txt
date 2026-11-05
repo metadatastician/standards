@@ -1,0 +1,15 @@
+# part-level edges (from-part to-part), wave numbers W0=0 .. W8=12
+L-15a L-5 2<5
+A-3 A-6a 5<7
+V-11 A-6a 3<7
+A-5 A-6b 10<11
+A-6a B-1b 7<9
+A-6b B-1c 11=11 same-wave cross-repo stack (B-1c consumes the recorded A-6b pilot result)
+PB-4a,PB-4b PB-5a 4,5<6
+PB-4c PB-5b 7<9
+PB-4 PB-6b 7<8 (PB-6a needs only PB-2 ledger rows, 3<5)
+PB-6a PB-5a 5<6
+PB-6b PB-5b 8<9
+# same-lane stacks inside one wave
+CI-3 CI-4 W0 ci lane
+A-4 A-5 W5 ot lane (A-4 finish then A-5 start)
