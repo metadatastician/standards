@@ -42,6 +42,16 @@ MODE="$RSR_DEED_PARSER"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CHECK="$SCRIPT_DIR/../check-rsr-profile.sh"
+# An explicit RSR_DEED_PARSER=auto resolves exactly as the resolver does, so
+# the expectations below follow the parser that will actually run.
+if [ "$MODE" = auto ]; then
+  if command -v bun >/dev/null 2>&1 && command -v jq >/dev/null 2>&1 \
+     && [ -f "${DEED_LINT:-$SCRIPT_DIR/../../1-formats/deed/tools/deed_lint.js}" ]; then
+    MODE="ast"
+  else
+    MODE="awk"
+  fi
+fi
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 pass=0; fail=0
@@ -224,6 +234,17 @@ assert "a \\n-led field-shaped tail in a string does not forge a :remove item" 0
 
 d=$(repo_deed deedforgecount '  (rsr-profile :version "1.0.0" :description "x\\nCOUNT\\t2" :capabilities ("rust"))')
 assert "a \\n-led COUNT tail in a string does not forge a second clause" 0 "rsr-profile check: OK" bash "$CHECK" "$d"
+
+# The caller's tree is untrusted: a bunfig.toml preload in the working
+# directory must not run when the AST parser reads the deed (CodeRabbit on
+# #1411). The resolver runs from inside the repo here, as the gate job does.
+if [ "$MODE" = ast ]; then
+  d=$(repo_deed deedbunfig '  (rsr-profile :version "1.0.0" :capabilities ("rust"))')
+  printf 'preload = ["./preload.js"]\n' > "$d/bunfig.toml"
+  printf 'require("fs").writeFileSync("%s/PRELOAD-RAN", "x");\n' "$d" > "$d/preload.js"
+  assert "a caller bunfig.toml preload does not run in the deed parser" 0 "rsr-profile check: OK" bash -c 'cd "$1" && bash "$2" .' _ "$d" "$CHECK"
+  if [ -e "$d/PRELOAD-RAN" ]; then echo "FAIL: …the caller's preload ran"; fail=$((fail + 1)); else echo "PASS: …and the caller's preload did not run"; pass=$((pass + 1)); fi
+fi
 
 d=$(repo_deed deedescunkremove '  (rsr-profile :version "1.0.0" :capabilities ("rust") :remove ("r\\ust"))')
 if [ "$MODE" = ast ]; then

@@ -156,7 +156,7 @@ deed_has_profile() {
 # explicit `capabilities = []`, which check-rsr-profile.sh rejects). A missing
 # resolver is handled the same way, also with a named warning.
 effective_capabilities() {
-  local f found="" out
+  local f found="" out perr bad
   for f in "$ROOT"/.machine_readable/rsr-profile.a2ml "$ROOT"/machine-readable/rsr-profile.a2ml; do
     [ -f "$f" ] && found="$f" && break
   done
@@ -188,8 +188,14 @@ effective_capabilities() {
   # A deed the normative parser rejects is a defect in the repo, not an
   # unreadable profile: reading it as "no capabilities" would let a malformed
   # deed that declares packaging pass with none shipped. Fail closed.
-  if printf '%s\n' "$out" | grep -q 'does not parse as DEED'; then
-    echo "::error::check-package-policy: ${found#"$ROOT"/} does not parse as DEED, so its declared capabilities cannot be read. Fix it (bun 1-formats/deed/tools/deed_lint.js ${found#"$ROOT"/}). $(printf '%s\n' "$out" | grep -m1 'does not parse as DEED')" >&2
+  # Only the resolver's own diagnostic counts (a path may contain the phrase),
+  # and the file named is the deed it rejected, which a legacy .a2ml beside
+  # it would otherwise mask.
+  perr="$(printf '%s\n' "$out" | grep -m1 '^ERROR: .* does not parse as DEED: ' || true)"
+  if [ -n "$perr" ]; then
+    bad="$(printf '%s\n' "$perr" | sed 's/^ERROR: \(.*\) does not parse as DEED: .*/\1/')"
+    bad="${bad#"$ROOT"/}"
+    echo "::error::check-package-policy: $bad does not parse as DEED, so its declared capabilities cannot be read. Fix it (bun 1-formats/deed/tools/deed_lint.js $bad). $perr" >&2
     return 1
   fi
   if ! printf '%s\n' "$out" | grep -q '^effective capabilities:'; then

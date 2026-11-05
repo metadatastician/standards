@@ -158,8 +158,12 @@ deed_fields() {
 # newline or tab is written back as the two characters \n or \t, so both
 # paths emit identical lines. A deed that does not parse fails here, closed.
 deed_ast_fields() {
-  local ast
-  ast="$(bun "$DEED_LINT" --ast-json "$1" 2>&1)" || {
+  local ast deed tooldir
+  deed="$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"
+  tooldir="$(cd "$(dirname "$DEED_LINT")" && pwd)"
+  # Bun reads bunfig.toml, preload included, from its working directory, and
+  # the caller's tree is untrusted, so the parser runs from its own directory.
+  ast="$(cd "$tooldir" && bun "./$(basename "$DEED_LINT")" --ast-json "$deed" 2>&1)" || {
     echo "ERROR: $1 does not parse as DEED: $ast" >&2; return 2; }
   printf '%s' "$ast" | jq -r '
     def s: gsub("\n"; "\\n") | gsub("\t"; "\\t");
@@ -236,7 +240,7 @@ elif [ "${#_deeds[@]}" -eq 1 ]; then
   DEED="${_deeds[0]}"
   if [ "$DEED_PARSER" = ast ]; then
     _lines="$(deed_ast_fields "$DEED")" || exit 2
-    _n="$(printf '%s\n' "$_lines" | sed -n 's/^COUNT\t//p')"
+    _n="$(printf '%s\n' "$_lines" | awk -F '\t' '$1 == "COUNT" { print $2 }')"
     _fields="$(printf '%s\n' "$_lines" | grep -v '^COUNT' || true)"
   else
     [ "${RSR_DEED_PARSER:-auto}" = auto ] && [ -f "$DEED" ] && \
