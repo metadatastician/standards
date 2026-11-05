@@ -77,15 +77,6 @@ hypatia-rules/workflow-allowlist-gap.a2ml
 .machine_readable/descriptiles/STATE.a2ml
 .machine_readable/rsr-profile.a2ml
 
-# ── Translated, but canon still names the .a2ml path ──
-# standards_chora.deed carries (agentic) (neurosym) (playbook) since #1356,
-# but RSR criteria 3.1.5-3.1.7 (Hypatia SD007-SD009), 0-canon/rsr/TIERS.adoc,
-# VERSION.adoc and 0-AI-MANIFEST.deed still name these files. Archive them
-# in the canon change that names the deed clauses instead.
-.machine_readable/descriptiles/AGENTIC.a2ml
-.machine_readable/descriptiles/NEUROSYM.a2ml
-.machine_readable/descriptiles/PLAYBOOK.a2ml
-
 # ── 0-AI-MANIFEST: decision open (1-formats/deed/mappings/ai-manifest-decision.adoc) ──
 1-formats/sub-specs/cartridges/0.2-AI-MANIFEST.a2ml
 1-formats/sub-specs/ensaid-config/0-AI-MANIFEST.a2ml
