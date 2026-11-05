@@ -29,7 +29,14 @@
 # FAILS CLOSED
 #   A listing or read that fails stops the run with exit 2: a repository that
 #   could not be examined is never reported as compliant, nor written on a
-#   guess. A rejected write is reported as FAIL and the batch carries on.
+#   guess. So does an `--owners` list with no owner in it. Once writing has
+#   started, a rejected write or a failed read-back is reported as FAIL and the
+#   batch carries on, so one bad repository does not strand the rest.
+#
+# CREDENTIAL
+#   Run it with your own `gh auth login` session. The listings only return what
+#   the credential can see: a fine-grained token limited to selected
+#   repositories would make a partial walk look complete.
 #
 # USAGE
 #   scripts/apply-branch-autodelete.sh                    # report only (default)
@@ -37,7 +44,8 @@
 #   scripts/apply-branch-autodelete.sh --owners a,b [--apply]
 #
 # EXIT: 0 = nothing left to change (or report printed); 1 = a write was
-#       rejected or did not read back true; 2 = usage or `gh` error.
+#       rejected, or its read-back failed or was not true; 2 = usage or
+#       `gh` error before any write.
 set -euo pipefail
 
 # die: report a usage or `gh` error and stop with exit 2.
@@ -51,7 +59,7 @@ while [ $# -gt 0 ]; do
     --owners)
       case "${2:-}" in ''|-*) die "--owners needs a comma-separated list" ;; esac
       OWNERS="$2"; shift 2 ;;
-    -h|--help) sed -n '3,40p' "$0"; exit 0 ;;
+    -h|--help) sed -n '3,48p' "$0"; exit 0 ;;
     *) die "unknown argument: $1" ;;
   esac
 done
@@ -67,9 +75,11 @@ fi
 echo "Owners: $OWNERS"
 
 todo=()
+walked=0
 IFS=',' read -r -a owner_list <<<"$OWNERS"
 for o in "${owner_list[@]}"; do
   [ -n "$o" ] || continue
+  walked=$((walked + 1))
   if [ "$o" = "$me" ]; then ep="user/repos?affiliation=owner&per_page=100"
   else ep="orgs/$o/repos?type=all&per_page=100"; fi
   listing="$(gh api --paginate "$ep" --jq '.[] | select((.fork or .archived) | not) | .full_name')" \
@@ -80,6 +90,7 @@ for o in "${owner_list[@]}"; do
     [ "$state" = "true" ] || todo+=("$r")
   done <<<"$listing"
 done
+[ "$walked" -gt 0 ] || die "--owners names no owner"
 
 if [ "${#todo[@]}" -eq 0 ]; then
   echo "Every repository already auto-deletes merged branches."
@@ -97,7 +108,9 @@ for r in "${todo[@]}"; do
     echo "FAIL $r (PATCH rejected)" >&2; failed=1; continue
   fi
   # A 200 is not proof; read the setting back (docs/REPO-SETTINGS.adoc).
-  if [ "$(gh api "repos/$r" --jq .delete_branch_on_merge)" = "true" ]; then
+  if ! after="$(gh api "repos/$r" --jq .delete_branch_on_merge)"; then
+    echo "FAIL $r (could not read back)" >&2; failed=1
+  elif [ "$after" = "true" ]; then
     echo "ON   $r"
   else
     echo "FAIL $r (did not read back true)" >&2; failed=1

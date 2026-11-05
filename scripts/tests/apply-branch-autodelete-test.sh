@@ -43,6 +43,7 @@ if [ "$method" = PATCH ]; then
   echo "$r" >> "$GH_FIX/PATCH.log"
   [ -e "$GH_FIX/reject/${r//\//_}" ] && { echo "HTTP 422" >&2; exit 1; }
   [ -e "$GH_FIX/stuck/${r//\//_}" ] || echo true > "$GH_FIX/state/${r//\//_}"
+  [ -e "$GH_FIX/vanish/${r//\//_}" ] && rm -f "$GH_FIX/state/${r//\//_}"
   echo '{}'; exit 0
 fi
 case "$path" in
@@ -63,7 +64,8 @@ chmod +x "$BIN/gh"
 # Reset the fixtures to the standard estate: one user, one admin org, one
 # member-only org, one pending org; a fork, an archived repo, the 007 repo.
 seed() {
-  rm -rf "$FIX/state" "$FIX/stuck" "$FIX/reject" "$FIX/PATCH.log"; mkdir -p "$FIX/state" "$FIX/stuck" "$FIX/reject"
+  rm -rf "$FIX/state" "$FIX/stuck" "$FIX/reject" "$FIX/vanish" "$FIX/PATCH.log"
+  mkdir -p "$FIX/state" "$FIX/stuck" "$FIX/reject" "$FIX/vanish"
   echo '{"login":"hyperpolymath"}' > "$FIX/user.json"
   echo '[{"state":"active","role":"admin","organization":{"login":"orgA"}},
          {"state":"active","role":"member","organization":{"login":"thirdparty"}},
@@ -131,6 +133,12 @@ check "exit 2" 2 "$rc"
 check "names the repo" "apply-branch-autodelete: could not read orgA/x" "$(tail -1 <<<"$out")"
 check "writes nothing" 0 "$(patches)"
 
+echo "== a failed read-back is named as such and the batch carries on"
+seed; touch "$FIX/vanish/hyperpolymath_a"; out="$(run --apply)"; rc=$?
+check "exit 1" 1 "$rc"
+check "names the unreadable repo" "FAIL hyperpolymath/a (could not read back)" "$(grep '^FAIL' <<<"$out")"
+check "still turns on the next repo" "ON   orgA/y" "$(grep '^ON' <<<"$out")"
+
 echo "== a rejected write is reported and the batch carries on"
 seed; touch "$FIX/reject/hyperpolymath_a"; out="$(run --apply)"; rc=$?
 check "exit 1" 1 "$rc"
@@ -145,6 +153,11 @@ check "--owners followed by a flag exits 2" 2 "$rc"
 check "--owners followed by a flag is rejected as usage, not looked up" \
   "apply-branch-autodelete: --owners needs a comma-separated list" "$out"
 check "--owners followed by a flag writes nothing" 0 "$(patches)"
+seed; out="$(run --owners , --apply)"; rc=$?
+check "--owners with only commas exits 2" 2 "$rc"
+check "--owners with only commas is not reported as compliant" \
+  "apply-branch-autodelete: --owners names no owner" "$(tail -1 <<<"$out")"
+check "--owners with only commas writes nothing" 0 "$(patches)"
 
 echo
 echo "apply-branch-autodelete-test: $PASS passed, $FAIL failed"

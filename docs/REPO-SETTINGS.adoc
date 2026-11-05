@@ -125,8 +125,10 @@ organisation where the caller is an active admin. It skips forks, archived
 repositories and the `007` repository under any owner. It reads each
 repository on its own and reads the setting back after every write. A
 listing or read that fails stops the run, so nothing unexamined is reported
-as compliant. It only reports unless given `--apply`. No CI credential holds repository administration today, so the
-owner runs it with their own `gh` login.
+as compliant. It only reports unless given `--apply`. No CI credential holds
+repository administration today, so the owner runs it with their own `gh`
+login. A fine-grained token limited to selected repositories would only see
+part of the estate, and the run would look complete.
 
 == Open owner decision
 
