@@ -104,7 +104,7 @@ expect "legacy a2ml fallback still passes on criteria" "$WORK/legacy" PASS "LEGA
 # the test false, and the 1114-line spine deed was reported as having no
 # (canon …) clause in CI ('grep: write error: Broken pipe').
 deed "$WORK/large" "$WANT_VER" "$WANT_CRIT" "$WANT_GATES"
-awk -v n=4000 '/^    :gates-sha256/ { sub(/\)\)$/, ")"); print; for (i = 0; i < n; i++) printf "  (notes :line %d :text \"padding so the deed outgrows a 64 KiB pipe buffer\")\n", i; print ")"; next } { print }' "$WORK/large/spine_chora.deed" > "$WORK/large/x" && mv "$WORK/large/x" "$WORK/large/spine_chora.deed"
+awk -v n=4000 '/^    :gates-sha256/ { sub(/\)\)$/, ")"); print; for (i = 0; i < n; i++) printf "  (notes :line %d :text \"padding so the deed outgrows a 64 KiB pipe buffer\")\n", i; print ")"; next } { print }' "$WORK/large/spine_chora.deed" > "$WORK/large/x" && mv "$WORK/large/x" "$WORK/large/spine_chora.deed" || { echo "FAIL could not pad the large deed"; exit 1; }
 expect "a deed larger than the pipe buffer is still read (no SIGPIPE false negative)" "$WORK/large" PASS "reading spine_chora.deed"
 
 mkdir -p "$WORK/none"
