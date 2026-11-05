@@ -33,7 +33,7 @@ Development roadmap for the Hyperpolymath standards and specifications repositor
 |Complete
 
 |**ARG/FRG Language-Maturation Framework**
-|Adoption Readiness Grades (`adoption-readiness-grades/`) + Foundations Readiness Grades (`foundations-readiness-grades/`); TRG/CRG per-language profile templates; aggregated into nextgen-languages dashboard
+|Adoption Readiness Grades (`4-readiness/adoption-readiness-grades/`) + Foundations Readiness Grades (`4-readiness/foundations-readiness-grades/`); TRG/CRG per-language profile templates; aggregated into nextgen-languages dashboard
 |Complete (2026-05-28, PRs #229 + #232)
 
 |**K9 Self-Validating Components**

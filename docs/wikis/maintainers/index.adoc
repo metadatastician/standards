@@ -63,7 +63,7 @@ is the thing that decides whether any of the other guardrails can bite.
 
 === 2. Readiness-grade governance
 
-* `component-readiness-grades/` (+ ARG/FRG/TRG), `0-canon/CRG-SELF-ASSESSMENT.adoc`,
+* `4-readiness/component-readiness-grades/` (+ ARG/FRG/TRG), `0-canon/CRG-SELF-ASSESSMENT.adoc`,
   the demotion/overclaim detectors in `hypatia-rules/`.
 
 === 3. Decision records & policy

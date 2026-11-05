@@ -22,7 +22,9 @@
 # main unannounced, and so `main` is a safe thing to pin to by construction.
 #
 # SCOPE: this proves INTERNAL CONSISTENCY of the commit under test. It does
-# NOT prove the commit is reachable at the remote — that is a separate probe.
+# NOT prove the commit is reachable at the remote. That is the orphan-pin probe
+# in scripts/check-action-pins-resolve.sh (#782), run by Governance's
+# "Workflow security linter" job.
 name: Lock Self-Check
 
 on:

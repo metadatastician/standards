@@ -77,7 +77,7 @@
   ; === Sensitive Areas (if in doubt, ask) ===
   (ask-before-touching
     "1-formats/contractiles/ — changes here propagate to every repo that has copied the templates"
-    "component-readiness-grades/ — CRG grade semantics are intentionally stable"
+    "4-readiness/component-readiness-grades/ — CRG grade semantics are intentionally stable"
     "rhodium-standard-repositories/ — RSR requirements affect all 500+ estate repos"
     ".machine_readable/ — format is specified; do not add files outside the contractile schema"
     "a2ml/ — specification language; backwards-incompatible changes need an ADR"
