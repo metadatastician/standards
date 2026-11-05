@@ -21,6 +21,14 @@
 # that is allowed to write to a pull request, so there is exactly one comment,
 # one marker, and one update loop per repository.
 #
+# FORK PULL REQUESTS. On a pull request from a fork GitHub hands every job a
+# read-only token, whatever the caller grants, so this job cannot write the
+# comment there. It still renders it (the step summary always carries it), and
+# instead of posting it uploads the body as the `fork-governance-comment`
+# artifact. fork-governance-publish-reusable.yml, called from a `workflow_run`
+# workflow that runs with the base repository's token, publishes it. A run
+# that cannot post therefore never fails for that reason alone.
+#
 # Documented in 3-practice/fork-governance/ (SPEC.adoc, LANES.adoc,
 # ADOPTION.adoc). Read those before changing the comment shape: the markers are
 # a contract with every downstream reader.
@@ -181,7 +189,46 @@ jobs:
             cat "$RUNNER_TEMP/fork-governance/body.md"
           } >> "$GITHUB_STEP_SUMMARY"
 
+      # A fork PR's token is read-only, so posting would fail. Hand the body
+      # to the workflow_run publisher instead (see the header). On any other
+      # event the head repository is this one, or absent (workflow_dispatch).
+      - name: Decide who posts
+        id: target
+        env:
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+        run: |
+          set -euo pipefail
+          if [ -n "$HEAD_REPO" ] && [ "$HEAD_REPO" != "$GITHUB_REPOSITORY" ]; then
+            echo "fork=true" >> "$GITHUB_OUTPUT"
+            echo "Fork pull request ($HEAD_REPO): the comment is handed to the workflow_run publisher."
+          else
+            echo "fork=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Package the comment for the publisher
+        if: ${{ steps.target.outputs.fork == 'true' }}
+        env:
+          PR_NUMBER: ${{ inputs.pr-number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          jq -n --arg pr "$PR_NUMBER" --arg sha "$HEAD_SHA" --arg run "$GITHUB_RUN_ID" \
+            '{pr_number: $pr, head_sha: $sha, run_id: $run}' \
+            > "$RUNNER_TEMP/fork-governance/meta.json"
+
+      - name: Upload the comment for the publisher
+        if: ${{ steps.target.outputs.fork == 'true' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: fork-governance-comment
+          path: |
+            ${{ runner.temp }}/fork-governance/body.md
+            ${{ runner.temp }}/fork-governance/meta.json
+          if-no-files-found: error
+          retention-days: 3
+
       - name: Publish the comment
+        if: ${{ steps.target.outputs.fork != 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ inputs.pr-number }}

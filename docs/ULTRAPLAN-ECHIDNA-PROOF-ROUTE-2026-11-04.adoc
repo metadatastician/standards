@@ -26,6 +26,10 @@ repo-relative path. Facts about `echidna`, `verisimdb`, `panic-attack` and
 `pons-asinorum` come only from what the attached repositories say about
 them and are marked _second-hand_.
 
+TIP: ECHIDNA itself is planned in the companion
+link:ULTRAPLAN-ECHIDNA-ENGINEERING-ROUTE-2026-11-05.adoc[engineering-route
+ultraplan] (2026-11-05). The two plans meet at `echidna.prove.result/1`.
+
 == Verdict in one page
 
 *Where it stands.* The two ends of the route are real and machine-checked;

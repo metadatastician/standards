@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: MPL-2.0
+# SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+#
+# fork-governance-publish.yml — post the Fork governance comment on pull
+# requests from forks, whose own run has only a read-only token.
+#
+# Runs after every "Fork governance" run, from the default branch's copy of this
+# file, with this repository's token. It publishes only what a fork run
+# uploaded, after checking it; a same-repository run has already posted and
+# this job skips. See fork-governance-publish-reusable.yml.
+
+name: Fork governance publish
+
+on:
+  workflow_run:
+    workflows: ["Fork governance"]
+    types: [completed]
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    uses: ./.github/workflows/fork-governance-publish-reusable.yml
+    permissions:
+      actions: read
+      pull-requests: write
