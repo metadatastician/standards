@@ -63,9 +63,9 @@ image:../badges/rsr-gold.svg[RSR Gold,64]
 * [ ] `.machine_readable/descriptiles/STATE.a2ml` - Project state tracking
 * [ ] `.machine_readable/descriptiles/META.a2ml` - Architecture decisions
 * [ ] `.machine_readable/descriptiles/ECOSYSTEM.a2ml` - Project relationships
-* [ ] `(agentic)` clause of the repo's `<repo>_chora.deed` (or the legacy `.machine_readable/descriptiles/AGENTIC.a2ml`) - AI agent constraints
-* [ ] `(neurosym)` clause of the repo deed (or the legacy `.machine_readable/descriptiles/NEUROSYM.a2ml`) - Neurosymbolic integration config
-* [ ] `(playbook)` clause of the repo deed (or the legacy `.machine_readable/descriptiles/PLAYBOOK.a2ml`) - Operational runbook
+* [ ] `.machine_readable/descriptiles/AGENTIC.a2ml` - AI agent constraints
+* [ ] `.machine_readable/descriptiles/NEUROSYM.a2ml` - Neurosymbolic integration config
+* [ ] `.machine_readable/descriptiles/PLAYBOOK.a2ml` - Operational runbook
 * [ ] OpenSSF Scorecard >= 9.0
 * [ ] All 11 compliance categories passing
 * [ ] .well-known/ai.txt, humans.txt, provenance.json
