@@ -18,39 +18,53 @@
 # WHAT IT SKIPS
 #   * forks -- other people's work (estate rule: never touch forks);
 #   * archived repositories -- read-only, a PATCH would fail;
-#   * hyperpolymath/007 -- out of scope for any normalisation (owner rule).
+#   * the 007 repository, under ANY owner -- out of scope for any normalisation
+#     (owner rule). It was transferred, so it is matched by name, not by the
+#     historical hyperpolymath/007 path, which a listing never returns.
 #
 # WHY EACH REPO IS READ ON ITS OWN
 #   docs/REPO-SETTINGS.adoc: settings are read per repository, never from a
 #   list endpoint. Lists only supply the names.
+#
+# FAILS CLOSED
+#   A listing or read that fails stops the run with exit 2: a repository that
+#   could not be examined is never reported as compliant, nor written on a
+#   guess. A rejected write is reported as FAIL and the batch carries on.
 #
 # USAGE
 #   scripts/apply-branch-autodelete.sh                    # report only (default)
 #   scripts/apply-branch-autodelete.sh --apply            # write, then read back
 #   scripts/apply-branch-autodelete.sh --owners a,b [--apply]
 #
-# EXIT: 0 = nothing left to change (or report printed); 1 = a write did not
-#       read back true; 2 = usage or `gh` error.
+# EXIT: 0 = nothing left to change (or report printed); 1 = a write was
+#       rejected or did not read back true; 2 = usage or `gh` error.
 set -euo pipefail
+
+# die: report a usage or `gh` error and stop with exit 2.
+die() { echo "apply-branch-autodelete: $*" >&2; exit 2; }
 
 APPLY=0
 OWNERS=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --apply) APPLY=1; shift ;;
-    --owners) OWNERS="${2:?--owners needs a comma-separated list}"; shift 2 ;;
-    -h|--help) sed -n '3,33p' "$0"; exit 0 ;;
-    *) echo "unknown argument: $1" >&2; exit 2 ;;
+    --owners)
+      case "${2:-}" in ''|-*) die "--owners needs a comma-separated list" ;; esac
+      OWNERS="$2"; shift 2 ;;
+    -h|--help) sed -n '3,40p' "$0"; exit 0 ;;
+    *) die "unknown argument: $1" ;;
   esac
 done
-command -v gh >/dev/null || { echo "gh not found" >&2; exit 2; }
+command -v gh >/dev/null || die "gh not found"
 
-me="$(gh api user --jq .login)" || { echo "gh is not logged in" >&2; exit 2; }
+me="$(gh api user --jq .login)" || die "gh is not logged in"
 if [ -z "$OWNERS" ]; then
-  OWNERS="$me,$(gh api --paginate user/memberships/orgs \
-    --jq '.[] | select(.state == "active" and .role == "admin") | .organization.login' | paste -sd, -)"
+  orgs="$(gh api --paginate user/memberships/orgs \
+    --jq '.[] | select(.state == "active" and .role == "admin") | .organization.login')" \
+    || die "could not list organisation memberships"
+  OWNERS="$me${orgs:+,$(paste -sd, - <<<"$orgs")}"
 fi
-echo "Owners: ${OWNERS%,}"
+echo "Owners: $OWNERS"
 
 todo=()
 IFS=',' read -r -a owner_list <<<"$OWNERS"
@@ -58,10 +72,13 @@ for o in "${owner_list[@]}"; do
   [ -n "$o" ] || continue
   if [ "$o" = "$me" ]; then ep="user/repos?affiliation=owner&per_page=100"
   else ep="orgs/$o/repos?type=all&per_page=100"; fi
+  listing="$(gh api --paginate "$ep" --jq '.[] | select((.fork or .archived) | not) | .full_name')" \
+    || die "could not list repositories for $o"
   while read -r r; do
-    if [ -z "$r" ] || [ "$r" = "hyperpolymath/007" ]; then continue; fi
-    [ "$(gh api "repos/$r" --jq .delete_branch_on_merge)" = "true" ] || todo+=("$r")
-  done < <(gh api --paginate "$ep" --jq '.[] | select((.fork or .archived) | not) | .full_name')
+    if [ -z "$r" ] || [ "${r#*/}" = "007" ]; then continue; fi
+    state="$(gh api "repos/$r" --jq .delete_branch_on_merge)" || die "could not read $r"
+    [ "$state" = "true" ] || todo+=("$r")
+  done <<<"$listing"
 done
 
 if [ "${#todo[@]}" -eq 0 ]; then
@@ -76,7 +93,9 @@ fi
 
 failed=0
 for r in "${todo[@]}"; do
-  gh api -X PATCH "repos/$r" -F delete_branch_on_merge=true >/dev/null
+  if ! gh api -X PATCH "repos/$r" -F delete_branch_on_merge=true >/dev/null; then
+    echo "FAIL $r (PATCH rejected)" >&2; failed=1; continue
+  fi
   # A 200 is not proof; read the setting back (docs/REPO-SETTINGS.adoc).
   if [ "$(gh api "repos/$r" --jq .delete_branch_on_merge)" = "true" ]; then
     echo "ON   $r"

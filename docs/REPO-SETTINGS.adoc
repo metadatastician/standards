@@ -122,9 +122,10 @@ classes above rather than in genuine drift.
 `scripts/apply-branch-autodelete.sh` turns on "Automatically delete head
 branches" wherever it is off. It walks the caller's own account and every
 organisation where the caller is an active admin. It skips forks, archived
-repositories and `hyperpolymath/007`, reads each repository on its own, and
-reads the setting back after every write. It only reports unless given
-`--apply`. No CI credential holds repository administration today, so the
+repositories and the `007` repository under any owner. It reads each
+repository on its own and reads the setting back after every write. A
+listing or read that fails stops the run, so nothing unexamined is reported
+as compliant. It only reports unless given `--apply`. No CI credential holds repository administration today, so the
 owner runs it with their own `gh` login.
 
 == Open owner decision

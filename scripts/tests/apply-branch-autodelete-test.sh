@@ -41,6 +41,7 @@ done
 if [ "$method" = PATCH ]; then
   r="${path#repos/}"
   echo "$r" >> "$GH_FIX/PATCH.log"
+  [ -e "$GH_FIX/reject/${r//\//_}" ] && { echo "HTTP 422" >&2; exit 1; }
   [ -e "$GH_FIX/stuck/${r//\//_}" ] || echo true > "$GH_FIX/state/${r//\//_}"
   echo '{}'; exit 0
 fi
@@ -62,7 +63,7 @@ chmod +x "$BIN/gh"
 # Reset the fixtures to the standard estate: one user, one admin org, one
 # member-only org, one pending org; a fork, an archived repo, the 007 repo.
 seed() {
-  rm -rf "$FIX/state" "$FIX/stuck" "$FIX/PATCH.log"; mkdir -p "$FIX/state" "$FIX/stuck"
+  rm -rf "$FIX/state" "$FIX/stuck" "$FIX/reject" "$FIX/PATCH.log"; mkdir -p "$FIX/state" "$FIX/stuck" "$FIX/reject"
   echo '{"login":"hyperpolymath"}' > "$FIX/user.json"
   echo '[{"state":"active","role":"admin","organization":{"login":"orgA"}},
          {"state":"active","role":"member","organization":{"login":"thirdparty"}},
@@ -73,7 +74,8 @@ seed() {
          {"full_name":"hyperpolymath/old","fork":false,"archived":true},
          {"full_name":"hyperpolymath/007","fork":false,"archived":false}]' > "$FIX/userrepos.json"
   echo '[{"full_name":"orgA/x","fork":false,"archived":false},
-         {"full_name":"orgA/y","fork":false,"archived":false}]' > "$FIX/org_orgA.json"
+         {"full_name":"orgA/y","fork":false,"archived":false},
+         {"full_name":"orgA/007","fork":false,"archived":false}]' > "$FIX/org_orgA.json"
   echo '[{"full_name":"orgB/z","fork":false,"archived":false}]' > "$FIX/org_orgB.json"
   echo false > "$FIX/state/hyperpolymath_a"; echo true > "$FIX/state/hyperpolymath_ok"
   echo true > "$FIX/state/orgA_x";          echo false > "$FIX/state/orgA_y"
@@ -97,8 +99,8 @@ seed; out="$(run --apply)"; rc=$?
 check "exit 0" 0 "$rc"
 check "patches exactly the two" "hyperpolymath/a|orgA/y" "$(paste -sd'|' - < "$FIX/PATCH.log")"
 check "reports both as ON after read-back" "2" "$(grep -c '^ON' <<<"$out")"
-for r in fork old 007; do
-  check "never touches hyperpolymath/$r" "" "$(grep "hyperpolymath/$r\$" "$FIX/PATCH.log")"
+for r in hyperpolymath/fork hyperpolymath/old hyperpolymath/007 orgA/007; do
+  check "never touches $r" "" "$(grep -x "$r" "$FIX/PATCH.log")"
 done
 
 echo "== idempotent"
@@ -117,8 +119,32 @@ seed; out="$(run --owners orgB)"; rc=$?
 check "exit 0" 0 "$rc"
 check "walks only the named owner" "OFF  orgB/z" "$(grep '^OFF' <<<"$out")"
 
+echo "== a failed listing stops the run (fails closed)"
+seed; rm "$FIX/org_orgA.json"; out="$(run --apply)"; rc=$?
+check "exit 2" 2 "$rc"
+check "names the owner" "apply-branch-autodelete: could not list repositories for orgA" "$(tail -1 <<<"$out")"
+check "writes nothing" 0 "$(patches)"
+
+echo "== a failed read stops the run (never guessed as OFF)"
+seed; rm "$FIX/state/orgA_x"; out="$(run --apply)"; rc=$?
+check "exit 2" 2 "$rc"
+check "names the repo" "apply-branch-autodelete: could not read orgA/x" "$(tail -1 <<<"$out")"
+check "writes nothing" 0 "$(patches)"
+
+echo "== a rejected write is reported and the batch carries on"
+seed; touch "$FIX/reject/hyperpolymath_a"; out="$(run --apply)"; rc=$?
+check "exit 1" 1 "$rc"
+check "names the rejected repo" "FAIL hyperpolymath/a (PATCH rejected)" "$(grep '^FAIL' <<<"$out")"
+check "still turns on the next repo" "ON   orgA/y" "$(grep '^ON' <<<"$out")"
+
 echo "== usage"
 seed; run --bogus >/dev/null; check "unknown argument exits 2" 2 "$?"
+seed; run --owners >/dev/null; check "--owners with no value exits 2" 2 "$?"
+seed; out="$(run --owners --apply)"; rc=$?
+check "--owners followed by a flag exits 2" 2 "$rc"
+check "--owners followed by a flag is rejected as usage, not looked up" \
+  "apply-branch-autodelete: --owners needs a comma-separated list" "$out"
+check "--owners followed by a flag writes nothing" 0 "$(patches)"
 
 echo
 echo "apply-branch-autodelete-test: $PASS passed, $FAIL failed"
