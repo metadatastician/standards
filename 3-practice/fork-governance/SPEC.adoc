@@ -218,9 +218,11 @@ the fork changed runs in it. The artifact was written by the fork's code and is
 data, never instructions:
 
 . `pr_number` MUST name an open pull request whose head is the triggering
-  run's `head_sha` and whose head repository is that run's. A run cannot
-  address any pull request but its own; a run whose pull request has moved on
-  publishes nothing, because the newer run will.
+  run's `head_sha`, `head_repository` and `head_branch`. A run cannot address
+  any pull request but its own; a run whose pull request has moved on
+  publishes nothing, because the newer run will. (`workflow_run.pull_requests`
+  would name the pull request directly, but GitHub leaves it empty for runs
+  from forks.)
 . The body MUST start with the marker (§2.1) and fit in one comment.
 . The publisher uses the same marker-and-author lookup as the posting engine,
   so a pull request still has exactly one comment (§5).
