@@ -1,0 +1,1838 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+// SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+= Ultraplan: the ECHIDNA system — the engineering route, from containment to `sound`
+Jonathan D.A. Jewell (hyperpolymath)
+v0.1.0, 2026-11-05
+:toc: left
+:toclevels: 2
+:sectnums:
+:icons: font
+:status: DRAFT v0.1.0 — for owner review. Four R0 rulings are recorded (2026-11-05). Every other ruling named here is open. Sections other than <<rulings>> and <<verdict>> are PROPOSED design, not rulings.
+
+[.lead]
+This is the companion to
+link:ULTRAPLAN-ECHIDNA-PROOF-ROUTE-2026-11-04.adoc[the proof-route ultraplan]
+(standards#1397). That document plans the route _between_ systems: a
+Hypatia finding becomes an obligation, echidnabot hands it to ECHIDNA, and a
+receipt comes back. It treats ECHIDNA itself as out of scope. This document
+plans ECHIDNA itself and the repositories that consume it directly
+(echidnabot, proof-burrower, gitbot-fleet, panic-attack, verisimdb). It
+covers what ECHIDNA has to become for its verdicts to be trustworthy, in
+which order, and how an ultracode session builds it.
+
+The two plans meet at `echidna.prove.result/1` and its provenance envelope.
+Where they overlap (echidnabot authentication, the obligation drain), the
+proof-route plan's merged PR order governs the echidnabot side, and this plan
+governs the ECHIDNA side.
+
+[[verdict]]
+== Verdict in one page
+
+*Where ECHIDNA stands.* The facts below come from a 12-agent system map of
+`hyperpolymath/echidna` at `6dbfea5`. They are reported to the owner
+unchanged, and three of them were re-checked at `0211aa0` (2026-11-05).
+
+* The public API (`api.nesy-prover.dev`) executes provers on caller input
+  with *no authentication*. It runs `:latest` with `AutoUpdate=registry`,
+  so every release auto-deploys
+  (`deploy/hetzner/echidna.container`, `deploy/hetzner/Caddyfile`;
+  re-checked). Contained by echidna#461 (W0 stopgap) once applied on the
+  host.
+* Solver integrity checking fails *open*. A `--sandbox` request is
+  ignored. No certificate is ever produced, because `certificate_hash` is
+  hard-coded to `None`. The CLI `verify` discards the typed outcome.
+* The trust kernel (`src/rust/verification/confidence.rs`) has two latent
+  defects. They are unreachable only because no certificate is ever
+  verified, and both go live the moment certificates are threaded through.
+  Re-checked:
+** Level5 is granted when the _primary_ prover is small-kernel, without
+   checking that the confirmers are (line 95).
+** Level4 is admitted on `certificate_verified` without `has_certificate`.
+* The formal artefacts are parallel models of the code, not bindings to it.
+  Several theorems are vacuous or stale.
+* The 14 `allow-fail` CI units expire on *2026-11-30*. After that date,
+  every PR that touches a workflow fails (re-checked: 14 occurrences in
+  `.github/`).
+* Cap'n Proto IPC is stubbed, and no trained model weights exist.
+  echidnabot is vendored into gitbot-fleet as a full product, against the
+  fleet's thin-adapter rule.
+
+*What to build, in one sentence.* Contain first, then make one canonical
+Idris2 trust-kernel spec the single source the Rust kernel, the proofs and
+the tests are all generated from or checked against. Then cage every
+subprocess, make certificates real, raise the epistemic level from `belief`
+to `epi` to `sound` only on evidence, and let learned advice reorder
+candidates but never decide a verdict.
+
+*Size.* 13 waves (W0, W1a/b, W2a/b, W3a/b, W4a/b, W5–W8), about 450
+agent-days and 68 owner rulings. At 10–16 concurrent agents, and with
+rulings returned within two working days, that is about 67 working days.
+This environment's guideline is fewer than 10 agents per workflow, so the
+waves run as sequenced phases. The milestones below assume the higher
+concurrency:
+
+* containment complete: about day 13;
+* first `epi`: about day 39;
+* gated model promotion: about day 50;
+* first `sound`: about day 60, unless the pacing ruling (#20) holds it.
+
+[[how-made]]
+== How this plan was made
+
+Four planners wrote independent routes from the same system map:
+
+* *A*, trust kernel first;
+* *B*, proofs bind the code;
+* *C*, one vertical slice, then widen;
+* *D*, the neurosymbolic loop.
+
+Three judges scored every route, one per lens: elegance and correctness,
+dependability and security, and executability in an ultracode session. A
+critic then attacked the synthesis, and the synthesis was revised. All 95
+dependency edges were checked by script.
+
+[cols="2,1,1,1,1",options="header"]
+|===
+|Route |Elegance and correctness |Dependability and security |Execution |Total
+
+|A — trust kernel first |8 |7.5 |7.5 |*23*
+|B — proofs bind the code |*8.5* |6.5 |6 |21
+|D — neurosymbolic loop |7 |5 |*8* |20
+|C — one vertical slice |6.5 |7 |6 |19.5
+|===
+
+NOTE: The workflow's own tally listed B first at 21. Routes A and D each
+appeared under two spellings of their names, so their scores were split.
+The totals above are merged from the per-lens judgements. The synthesis
+had already caught this.
+
+*The synthesis* keeps Route A's order (containment, then one pipeline,
+then the cage and certificates, then outward work). It takes Route B's
+architecture whole: one spec feeds an oracle, the oracle emits committed
+JCS golden tables, and exhaustive tests, Kani and cargo-mutants bind the
+shipped Rust to those tables. It grafts on:
+
+* from Route C, the single `ci-gate` aggregator;
+* from Route D, the outcome observer, `echidna.attempt/1`, the writer
+  allowlist, the identity-keyed split and the promotion gate.
+
+*Edge check, re-run independently.* The script and data are committed in link:ULTRAPLAN-ECHIDNA-ENGINEERING-ROUTE-2026-11-05/README.adoc[the companion directory]:
+
+* 87 of the 95 edges are strictly ordered by wave.
+* 2 are same-lane stacks inside one wave (CI-3→CI-4, A-4→A-5).
+* 6 hold at the level of their declared parts (L-15a→L-5, A-5→A-6,
+  A-6→B-1, PB-4→PB-5, PB-4→PB-6, PB-6→PB-5). Each part's wave was
+  checked.
+* One of the six is a same-wave cross-repo stack: A-6b→B-1c in W7.
+
+[[rulings]]
+== Rulings recorded (R0, 2026-11-05)
+
+Four rulings were taken through the selector on 2026-11-05. Every other
+ruling in this plan is *open*. The recording ADR (D-1) is created in W0.
+
+. *Live host (D-A #1): stopgap now, then auth.* Recommended and most
+  elegant.
+** W0: Caddy forwards only `GET`/`HEAD` on `/api/health` and
+   `/api/provers`, and AutoUpdate is off. Delivered as echidna#461, which
+   needs the owner's host action.
+** W1a: bearer auth on every execution route and binary.
+** W1b: re-pin to the signed image by digest.
+** echidnabot reaches the public host with a token.
+. *CI-4 and Guix (#43, #44): decide each unit individually.* Recommended
+  and most elegant.
+** Each of the 14 `allow-fail` units becomes blocking or is deleted. None
+   is re-dated.
+** The Guix T1 job is retired, and the Containerfile is recorded as the
+   reproducibility path.
+** The per-unit dispositions are W0 work and go to the owner as one list.
+. *Trust-kernel spec (#32): Idris2 canonical, Epi-gated.* The most
+  elegant arm. The synthesis recommended Level3 instead, and the owner
+  chose against that recommendation. See <<ruling-32>>.
+. *This plan's home and start: a standards ultraplan, then W0.* This
+  document, then the W0 session.
+
+Still open in R0:
+
+* integrity policy (#21, #22, #26);
+* contract shape (D-B #2, #23–#25);
+* `ci-gate` as the single required check (D-I #9, #38);
+* single authorities (#40, #30, #27, #45);
+* where echidnabot work lands and the CLAUDE.md correction (#55, #56, #58);
+* the proof-burrower pin (#59).
+
+Each is asked one wave before the work it gates.
+
+[[ruling-32]]
+=== What the Epi-gated ruling changes
+
+The synthesis was written for the recommended arm (Level3). Under the
+ruled arm, *only confirmers at `Epi` or above count toward cross-check
+trust levels*. A cross-checked result whose confirmers are only `Belief`
+cannot exceed Level2. This makes "Level3 + Belief" unrepresentable inside
+the mechanism scale itself.
+
+Consequences, which override the corresponding text in the generated
+sections below:
+
+* *W2a spec block.* `TrustKernel.idr` takes the confirmers' epistemic
+  level as a typed input. The cells that change are the Level3–Level5
+  cross-check cells. Each cites ruling #32 and is diffed against the W0
+  characterisation golden.
+* *Visible downgrade.* From W2a until A-6a lands (W4a, the first `epi` in
+  the contract), every cross-checked result that consumers see reports
+  Level2. This is honest, not a regression.
+** CHANGELOG and STATUS say so in the same PR.
+** echidnabot (B-4, W2b) renders the level it receives. It does not
+   reconstruct an older one.
+* *No `legacy_level` field.* The synthesis's elegance judge priced this arm
+  with a temporary `legacy_level` field. This plan does not add one.
+** Consumers get the honest level.
+** The W0 characterisation golden preserves the old table for anyone who
+   needs to compare.
+** Adding a field only to remove it later is the churn the elegance lens
+   penalises.
+* *A-10, the combined grade (W4b).* Its cap rule ("Level≥4 implies ≥Epi")
+  becomes a theorem of the spec, not a separate rule. A-10 still adds the
+  combined grade as a new output, and Kani checks the theorem.
+* *Level5* requires at least two distinct small-kernel confirmers, each
+  with a verified certificate and each at `Epi` or above. This fixes the
+  defect at line 95.
+* *Typed factors* make `certificate_verified` without `has_certificate`
+  unrepresentable. This fixes the second defect.
+
+[[architecture]]
+== The architecture in layers
+
+Thirteen layers. Each owns one responsibility and talks to its neighbours only through the contracts named.
+
+=== L0 Governance, gates and honesty
+
+Decide what can merge and what may be claimed. One aggregator required check gates every merge. Each claim the system makes about itself is tied to a test, or explicitly labelled as not gated. Owner rulings are recorded once. Shared files have exactly one owner per wave.
+
+*Components:*
+
+* .github/ci-gate.kyaml (new manifest)
+* .github/workflows/ci-gate.yml (new aggregator)
+* .github/workflows/*: 35 workflow files plus the tool-owned actions.lock today; 12 or fewer after CI-9b
+* scripts/gates/lib.sh (new; PASS/FAIL/DEFERRED convention) and scripts/gates/wN.sh
+* scripts/ci/check-allow-fail-expiry.sh
+* scripts/ci/command-new-ratchet.sh plus scripts/ci/command-new-allow.kyaml (new, shrink-only)
+* scripts/ci/claims-gate.sh (new; scans .adoc prose and `//!` module docs)
+* scripts/ci/ruling-cited.sh (new; a ruling-gated PR must cite a `ruled` ADR anchor)
+* docs/proofs/claims.json (new, JCS)
+* docs/decisions/ADR-*-rulings-ledger.adoc (D-1; owned only by the rulings role)
+* docs/STATUS.adoc and docs/PROVER_COUNT.adoc, generated by the xtask crate (D-2, D-3)
+* coordination.k9 (new per-wave file-claim map, including the integrator's shared files)
+* echidna_chora.deed
+
+*Contracts in:*
+
+* Owner rulings, asked through the selector in batches R0–R8 and recorded as ADR amendments with a source link.
+* The ruleset JSON, prepared by agents and applied by the owner.
+* The live ruleset, read through GET /repos/{owner}/{repo}/rules/branches/main, which needs only read access.
+
+*Contracts out:*
+
+* `ci-gate` becomes the only required context once the owner swaps the ruleset in W1a.
+* A 'required' claim holds only when the job is a member of ci-gate.kyaml AND the live ruleset requires ci-gate. Otherwise the claim is reported as 'member, not yet enforced'.
+* Each claims.json entry has status bound, model or retracted. A bound entry names its test, harness or oracle job.
+* STATUS and PROVER_COUNT must be byte-identical to the generator's output, and they list every DEFERRED check with its reason.
+
+=== L1 Prover identity
+
+Keep one enumeration of backends, with tiers derived from code and availability measured, not assumed.
+
+*Components:*
+
+* crates/echidna-core/src/prover_kind.rs (141 variants; tier() at line 834; all_core() at line 584)
+* src/rust/ffi/mod.rs::kind_to_u8
+* verification/proofs/idris2/ProverKindInjectivity.idr, generated (F-6)
+* src/interfaces/{rest,graphql,grpc}, mapped through From impls (V-9)
+* /api/provers availability check (V-12), which uses the integrity module's in-process binary resolution
+
+*Contracts in:*
+
+* Ruling #27 (definition of Tier-1).
+* Ruling #28 (whether discipline variants count as provers).
+* Ruling #30 (the REST surface).
+
+*Contracts out:*
+
+* ProverKind::all() and tier() feed the docs generator and the drift gate.
+* /api/provers returns `available: bool`, set by resolving the installed binary without spawning a process.
+
+=== L2 Execution
+
+Run every external process that touches a solver, checker or coprocessor through one bounded, sandboxed runner. Each backend reports a typed outcome, and an environment failure is reported as an error.
+
+*Components:*
+
+* src/rust/executor/process.rs (new ProverProcess: timeout, output cap, kill_on_drop, bwrap or podman)
+* src/rust/executor/sandbox.rs
+* src/rust/provers/mod.rs (ProverBackend trait, trait-default check(), ProverConfig)
+* src/rust/provers/outcome.rs: classify_anyhow_error must format with `{:#}` so that .context() chains are kept
+* The 100 backend files under src/rust/provers/ that call Command::new, including kissat.rs, cadical.rs and minisat.rs, and the V-2 check() overrides for coq, rocq, lean, isabelle, agda, idris2 and cvc5 (z3 already has one)
+* src/rust/coprocessor/{fpga,gap,macaulay2,maxima,parigp,singular}.rs
+* src/rust/verification/certificates.rs:143 (drat-trim), which moves to verification/checkers/drat_trim.rs
+* src/rust/integrity/solver_integrity.rs:147 (`which`), replaced by in-process PATH resolution
+* src/rust/server.rs:760 (SMT passthrough), removed by folding it into the Z3 and CVC5 backends
+
+*Contracts in:*
+
+* D-D (ruling #4): unsandboxed execution is denied by default unless an opt-in is recorded.
+* ProverConfig fields, destructured by V-6 so that an unread field fails to compile.
+
+*Contracts out:*
+
+* ProverOutcome is one of Proved, Refuted, Timeout{limit}, Error{kind} or Unknown.
+* Provenance records the sandbox mode: bwrap, podman, or `unsandboxed` together with the opt-in reason.
+
+=== L3 Solver integrity
+
+Run no solver or checker unless its binary matches an owner-signed manifest. Every exception is recorded.
+
+*Components:*
+
+* src/rust/integrity/solver_integrity.rs
+* config/solver-manifest.toml (17 entries, all PLACEHOLDER today)
+* `echidna integrity init|verify` in src/rust/cli/integrity.rs (new)
+* The SPARK integrity companion, with SHAKE3-512 renamed to SHAKE256-512
+* carcara and drat-trim entries, added in W3a
+* The pinned CI prover image, by digest: the only environment where the manifest is regenerated
+
+*Contracts in:*
+
+* Ruling #21: the policy for Uninitialized and Unchecked entries, and who may regenerate the manifest.
+* Ruling #26: the hash-name rename.
+* The owner's signature on the manifest (keyless cosign).
+
+*Contracts out:*
+
+* IntegrityStatus (Verified, Unchecked, Uninitialized or Tampered) feeds the trust kernel as a typed factor.
+* provenance.integrity is set in every result.
+* resolve_binary(kind), an in-process lookup reused by V-12.
+
+=== L4 Verdict kernel
+
+Turn a backend outcome into a verdict through one pipeline with a named policy. Stage order: integrity, sandboxed check, axioms, certificates, trust, arbitration, epistemic grade, combined grade.
+
+*Components:*
+
+* src/rust/dispatch.rs::verify_with_trust(state, policy) (V-5), with an exported PIPELINE const. The old entry points stay as #[deprecated] one-line delegations during W1a and are removed in W1b.
+* src/rust/verification/policy.rs (new)
+* src/rust/verification/axiom_tracker.rs
+* src/rust/verification/certificates.rs, plus new verification/checkers/{carcara,drat_trim}.rs
+* The trust module in crates/echidna-core: the single Rust kernel. confidence.rs re-exports it; the Creusot copy is retired or becomes annotations on it.
+* src/rust/verification/{result_arbiter,bayesian_arbiter,dempster_shafer,pareto}.rs, with pareto_arbiter merged into pareto.rs
+* src/rust/verification/consequence_probe.rs (new)
+* The OutcomeObserver trait (new)
+* Chapel and coprocessor results, which enter only as candidates
+
+*Contracts in:*
+
+* ProverOutcome from L2.
+* IntegrityStatus from L3.
+* CertificateStatus from the external checkers.
+* FidelityEvidence: DeclaredCorrespondence carrying a standpoint record (from probes), or KernelTranslation (from L7).
+* The coprocessor tier as a cap factor (I-8).
+* Rulings #32, #33, #34 and #40.
+
+*Contracts out:*
+
+* DispatchResult, carrying the policy, TrustLevel 1–5, EpistemicLevel (belief, epi or sound), the combined grade and the arbitration block. L6 serialises it.
+* OutcomeObserver events, consumed by L8.
+
+=== L5 Formal binding
+
+Bind every formal claim to the shipped Rust through generated tables, an oracle differential test, Kani or mutation testing. A claim that cannot be bound is labelled model or retracted.
+
+*Components:*
+
+* src/abi/EchidnaABI/TrustKernel.idr (new canonical spec) and Arbitration.idr
+* verification/oracle/: an Idris2 executable that emits the trust, fidelity and grade tables as JCS into verification/oracle/golden/
+* tests/trust_kernel_spec.rs, tests/fidelity_oracle.rs, tests/arbiter_props.rs
+* kani/ and mutants.toml
+* meta-checker/ (Agda, proved over a generated TrustTable.agda)
+* proofs/agda/ (DispatchOrdering, the CertificateChain replacement, Fusion, ParallelSoundness, NeuralSafety)
+* verification/proofs/lean4/ (PI-11, E10), built with lake on a pinned Lean 4.13.0 image
+* SPARK spark/ or Creusot, per D-F
+* proof-burrower Burrow/*.agda
+
+*Contracts in:*
+
+* Rulings #6, #32, #36, #37 and #38.
+
+*Contracts out:*
+
+* Committed golden tables, so cargo test needs neither Idris nor Agda when it runs.
+* claims.json entries with status bound.
+
+=== L6 Contracts and surfaces
+
+Expose the verdict as versioned, schema-validated JSON on every surface, behind authentication.
+
+*Components:*
+
+* crates/echidna-core/src/prove_result.rs: echidna.prove.result/1 plus one Option-typed provenance envelope (integrity, sandbox, policy, certificate, arbitration, level, grade)
+* crates/echidna-core/src/attempt.rs: echidna.attempt/1 (new)
+* src/rust/ids.rs: the only place ids are minted (ADR-008 P3 lands here in W1b)
+* echidna.proofstate/1 (PB-4) and echidna.corpus.near/1 (PB-7)
+* src/rust/cli/* (after the hotspot split)
+* src/rust/server/*, with a new server/auth.rs
+* src/interfaces/{rest,graphql,grpc}
+* crates/echidna-mcp
+* A golden corpus and JSON Schema in crates/echidna-core/schema/
+
+*Contracts in:*
+
+* DispatchResult from L4.
+* Rulings D-A, D-B, #23, #24, #25, #56 and the UUID ruling.
+
+*Contracts out:*
+
+* prove.result/1 on the CLI and on /api/verify and /api/prove. New fields are additive; a /2 is introduced only if a field must change meaning.
+* Bearer-token authentication on every execution route, in the server and in all three interface binaries.
+* attempt/1 rows, whose identifiers are minted only through src/rust/ids.rs under the ruled scheme.
+
+=== L7 Identity, corpus, lexicon and exchange
+
+Key statements by a versioned structural identity, flag incomplete keys, and carry the kernel-checked translations that justify a `sound` grade.
+
+*Components:*
+
+* src/rust/corpus/canonical.rs (dk-shape v1, then v2)
+* corpus/identity_join.rs (new)
+* corpus/octad.rs and verisim_bridge.rs (the identity_complete flag)
+* src/rust/lexicon/ and data/synonyms
+* src/rust/vcl_ut.rs
+* src/rust/exchange/{opentheory,dedukti,lambdapi}.rs, plus a new exchange/lambda_pi.rs
+* containers/hol/ (HOL4 and HOL Light images)
+
+*Contracts in:*
+
+* D6 (the dk-shape-v2 SCHEME bump).
+* D7 (the extractor fixes).
+* The pacing hold (#20).
+* Ruling #53 (bridge keying).
+
+*Contracts out:*
+
+* StructuralKey, together with its scheme and identity_complete flag.
+* corpus.near/1.
+* KernelTranslation evidence carrying an α-normalised λΠ term_hash.
+
+=== L8 Learning loop (advice only)
+
+Rank premises and tactics, record honest outcomes, and retrain and promote models only through a gate. None of this can change whether a result is accepted.
+
+*Components:*
+
+* One Julia server on :8090 (EchidnaML api/server.jl) exposing /gnn/rank, /suggest, /reload and /health; it boots without weights
+* src/julia/features.jl, splits.jl, registry.jl, eval_held_out.jl, retrain_from_verisim.jl and calibration/
+* src/rust/gnn/client.rs, neural.rs and src/rust/ipc/
+* crates/echidna-wire (the canonical Cap'n Proto schemas)
+* The VeriSim writer, behind OutcomeObserver and a writer allowlist
+* MetaController (also an OutcomeObserver) and VeriSimAdvisor
+* .github/workflows/{julia-ci,retrain,s4-loop}.yml (job bodies in scripts/ml/*.sh)
+* The D-H artefact store with a SHA-256 manifest
+* A digest-pinned verisim-api image for CI
+
+*Contracts in:*
+
+* attempt/1 rows from L4 and L6.
+* The verisim-api list/time-window endpoint (L-7).
+* Rulings #7, #8, #39, #46, #48, #49, #50, #51 and #52.
+
+*Contracts out:*
+
+* Advisory orderings only.
+* Registry ids, the only thing /reload accepts.
+* eval_results.jsonl (JCS), each row naming the store it was read from (production or CI).
+
+=== L9 Parallel, coprocessor and FFI
+
+Provide opt-in speed-ups that never decide a verdict.
+
+*Components:*
+
+* src/chapel/ (tryProver, chapel_ffi_exports.chpl, bench_mrr.chpl; island model under src/chapel/island/)
+* The real libchpl link in build.rs
+* src/rust/coprocessor/mod.rs and its six backends, on ProverProcess from W3a
+* spark/coprocessor_safety.ads
+* The Zig trees ffi/zig and src/zig_ffi, plus a new src/zig/echidna_abi.zig with 16 exports
+
+*Contracts in:*
+
+* Rulings #12, #40 and #41.
+* Every verdict is re-checked through verify_with_trust.
+
+*Contracts out:*
+
+* Candidate results only.
+* A coprocessor tier as a trust-kernel cap factor.
+* A C ABI with 16 exports.
+
+=== L10 Consumers
+
+echidnabot, gitbot-fleet, proof-burrower and panic-attack consume the typed contract and its receipt over authenticated transport. None of them ever raises a grade.
+
+*Components:*
+
+* Canonical hyperpolymath/echidnabot, vendored at gitbot-fleet/bots/echidnabot (subject to thin-adapter ruling #55)
+* gitbot-fleet: fleet-coordinator.sh, scripts/fleet-report-back.sh, shared-context/
+* proof-burrower: crates/burrower-core (ledger, echidna_contract.rs, synth, fitness, mine, retrieval, attempt.rs), burrower-cli, Burrow/*.agda
+* panic-attack: src/obligation/ (new) and src/aggregate/prove_result.rs (new)
+
+*Contracts in:*
+
+* prove.result/1 with the provenance envelope, attempt/1, proofstate/1 and corpus.near/1.
+* A bearer token.
+
+*Contracts out:*
+
+* Obligation requests in JCS, carrying a UUIDv8 content id over the JCS-normalised goal.
+* Check-runs that show outcome, receipt, level and grade, including `sound` once W7 produces it.
+* Ledger receipts that are re-validated on read.
+* Aggregate verdicts of Backed or Contradicted.
+
+=== L11 Deployment
+
+The deployed image is the one CI verified. It is signed, pinned by digest, and served behind authentication.
+
+*Components:*
+
+* The root Chainguard Containerfile (canonical, per ruling #45)
+* ghcr-publish.yml
+* container-ci.yml
+* The deploy/hetzner/echidna.container quadlet
+* The Caddyfile
+* scripts/deploy/verify-host.sh (new)
+* stapeln.toml and container/ct-build.sh (S-3)
+
+*Contracts in:*
+
+* Rulings D-A and #45.
+* Owner actions on the host.
+
+*Contracts out:*
+
+* An image whose digest equals the container-ci digest, with a cosign signature (keyless OIDC) and an SBOM attestation.
+* verify-host.sh output, committed as evidence. It is the precondition for L-9.
+
+=== L12 Optimisation and delivery
+
+Keep the ParadisEO multi-objective track, the UI, i18n and the Coursera delivery honest: each is either gated or labelled research or experimental.
+
+*Components:*
+
+* verification/pareto.rs (non-dominated sort and exact hypervolume)
+* src/julia/calibration/
+* The Chapel island model
+* A pure-Rust OptimizationABI, plus OptimizationABI.idr
+* src/ui/
+* locale/
+* S-4, delivered over the Zig ABI
+
+*Contracts in:*
+
+* Rulings #14, #42 and #60 (including WP0 issue bodies before E-1).
+
+*Contracts out:*
+
+* Pareto selection keyed lexicographically, with epistemic level first.
+* ml_calibration.json (JCS).
+
+[[data-flow]]
+=== How a proof obligation flows
+
+1. **Origin.** An obligation starts in one of three ways:
+- panic-attack pairs a finding with an author-supplied SMT-LIB sidecar (`@covers safe:rule-id:…`). `panic-attack obligations --emit` turns this into a JCS obligation with a UUIDv8 content id over the JCS-normalised goal.
+- An echidnabot webhook check runs on a PR.
+- Someone calls `echidna verify --output json` or POST /api/verify directly.
+
+2. **Queue.** echidnabot accepts the obligation through the authenticated /graphql submitProofObligation mutation (B-7) and stores it as PENDING. The B-5 dispatcher drains the queue and calls ECHIDNA REST /api/verify with its bearer token (P0-5). Caddy only lets authenticated requests reach execution routes (P0-6).
+
+3. **Server.** server/auth.rs checks the token. The route resolves the ProverKind through the single echidna-core enum (V-9) and calls verify_with_trust(state, policy) (V-5), which records the policy name.
+
+4. **Advice (optional; may only reorder).** The GNN, reached through gnn_api_url (L-1) over Cap'n Proto on a UDS with HTTP fallback (I-2/I-3), and VeriSimAdvisor (L-10) may reorder candidate premises, tactics or provers. They cannot set an outcome, and the non-interference test checks this.
+
+5. **Integrity.** The solver binary is resolved in-process and checked against the owner-signed manifest (SHAKE256-512 and BLAKE3). Any status other than Verified is an error unless an opt-in is recorded (P0-1, P0-2, V-10). The result is written to provenance.integrity.
+
+6. **Execution.** ProverProcess runs the binary under bwrap or podman, denies unsandboxed execution by default, and enforces a timeout and an output cap (V-7). The backend's check() returns a typed ProverOutcome, in which an environment failure becomes Error (V-2, missing-binary-is-error). The sandbox mode is written to provenance.
+
+7. **Axioms.** AxiomTracker classifies the axioms the proof uses. A Reject classification caps the result.
+
+8. **Certificates.** If the policy requires one, the backend emits Alethe or DRAT/LRAT. carcara or drat-trim checks it, running through ProverProcess and listed in the integrity manifest. The result is a typed CertificateStatus plus certificate_hash (V-8).
+
+9. **Trust.** The spec-bound kernel computes TrustLevel 1–5 from the typed factors (F-1, trust-factors-typed). A coprocessor-derived step adds a cap factor (I-8).
+
+10. **Arbitration.** If cross-check was requested (V-11), the arbiter runs. Portfolio is the default. Discounted Dempster-Shafer, grouped by standpoint, applies only among sources that do not certify (A-7, A-8).
+- Consequence probes yield DeclaredCorrespondence with a standpoint record, which gives `epi` (A-3, A-6a).
+- A kernel-replayed OpenTheory article whose α-normalised term_hash matches yields KernelTranslation, which gives `sound` (A-4, A-5, A-6b).
+
+11. **Combined grade.** The cap rule applies: Level≥4 requires Epi or better (A-10).
+
+12. **Emit.** prove.result/1 is emitted together with the provenance envelope: integrity, sandbox, policy, certificate, arbitration, level and grade.
+
+13. **Record.** OutcomeObserver writes one echidna.attempt/1 row (ids minted by ids.rs) to VeriSim, with advice provenance, identity key, scheme and identity_complete. Rows with status=error, and rows from backends outside the allowlist, are marked excluded_from_training. MetaController.record_outcome is a second observer on the same event (L-11). In production this needs L-9, which in turn needs the host P0-6 evidence and ruling #46. In CI the same observer writes to the pinned ephemeral VeriSim.
+
+14. **echidnabot.** echidnabot posts a check-run with outcome, receipt, level and grade (B-1a/B-1b/B-1c). In regulator mode it blocks merges. It marks the obligation terminal and publishes it to shared-context, so the fleet report-back writes a real verdict (B-2, B-3).
+
+15. **panic-attack.** The aggregate ingests prove.result/1, re-hashes it with BLAKE3, and marks the finding Backed (verified), Contradicted (refuted) or Unverified (error, timeout or unknown).
+
+16. **proof-burrower.** The ledger records the receipt. On every read it re-derives result_id with ids::content_id and demotes the entry to a warrant on mismatch (PB-1).
+
+17. **Retrain.** On a schedule (L-13, enabled only when L-9 is live), retrain reads a time window from production VeriSim (L-7), builds outcome-labelled features (L-8), trains on the identity-keyed train split, and evaluates on the held-out split against a measured cosine baseline. The promotion gate then either promotes the model or records a rejection in the registry. /reload accepts only a registry id. Every eval row names the store it read from.
+
+18. **Status.** STATUS and the claims register are regenerated from code, from the registry, and from the DEFERRED list kept by the gates. The dogfood gate later runs ECHIDNA's own proofs through this same path and records their receipt ids.
+
+[[cross-repo]]
+=== Who owns what across repositories
+
+* **hyperpolymath/echidna** owns the dispatcher, the verdict kernel, the formal artefacts and the contracts.
+** Exposes: echidna.prove.result/1 with its provenance envelope, echidna.attempt/1, echidna.proofstate/1, echidna.corpus.near/1, and the golden corpus with its JSON Schema.
+** Consumes: the metadatastician/standards reusable workflows, verisim-api, and panic-attack's scan-and-report reusable workflow.
+* **hyperpolymath/echidnabot** (canonical) owns the GitHub-app bot, the obligation store and dispatcher, and check-runs.
+** Consumes: prove.result/1 over authenticated REST, and the spec-bound echidna-core trust module (B-4).
+** Exposes: an authenticated /graphql obligation API, and shared-context findings.
+* **hyperpolymath/gitbot-fleet** owns fleet coordination, report-back, and the vendored echidnabot slot. Under ruling #55 the slot would shrink to a thin adapter.
+** Consumes: echidnabot's shared-context findings.
+** Exposes: report-back envelopes to the fork-governance Hypatia grid, in an unchanged shape.
+* **hyperpolymath/proof-burrower** owns tactic synthesis, the ledger, and the Burrow/*.agda proofs.
+** Consumes: prove.result/1 (through echidna-core::prove_result if ruling #59 says so), proofstate/1 and corpus.near/1.
+** Exposes: ledger receipts, attempt/1 rows tagged source=burrower, and `burrower swarm` for echidnabot to call.
+** Its own ids.rs follows the repo's own ADR-008 P3 timing. Nothing here forces it.
+* **hyperpolymath/panic-attack** owns static findings and their aggregation.
+** Exposes: JCS obligation requests built from @covers sidecars, and the scan-and-report reusable workflow.
+** Consumes: prove.result/1, in the aggregate.
+* **hyperpolymath/verisimdb** owns the octad store and verisim-api.
+** Exposes: a list/time-window endpoint (L-7), an identity index with a cross_prover_clusters view (C-9), and a digest-pinned verisim-api image for CI.
+** Consumes: attempt/1 rows.
+* **metadatastician/standards** (hyperpolymath/standards) owns the reusable workflows, the deed and k9 grammars, and the JSON/YAML policy.
+** Exposes: the reusables (the #458 repoint), deed_lint, and the coordination.k9 grammar. That grammar has no validator yet, so the orchestrator checks file-claim globs with its own script.
+* **hyperpolymath/echo-types** owns the Echo fibre formalism. It is cite-only until its lemma names have been audited (ruling #36); nothing consumes it as a dependency.
+
+[[must-create]]
+== What has to be created
+
+Item IDs (`P0-1`, `V-5`, `NEW:…`) are the system map's; the wave each lands in is in brackets.
+
+Recon must_create, trust pipeline and integrity (L3/L4):
+- P0-2 integrity production wiring plus `echidna integrity init` [W1b]. Also replaces the `which` subprocess at solver_integrity.rs:147 with in-process resolution.
+- V-5 verify_with_trust, the single pipeline with a named policy [W1a]. The deprecated wrappers are removed in W1b.
+- V-8 certificate generation plus the external checkers carcara and drat-trim:
+  - V-8a checkers [W3a]. The drat-trim call moves onto ProverProcess even if D-C is late.
+  - V-8b SMT/SAT proof emission [W3a].
+  - V-8c dispatch threading [W3b].
+- V-16 e2e tests for the timeout and unknown statuses [W0].
+- V-7 shared sandboxed ProverProcess runner plus the Command::new ratchet:
+  - V-7a runner and ratchet [W2a].
+  - V-7b the 12 all_core() backends [W2b].
+  - V-7c the remaining prover files in five alphabetical slices plus kissat, cadical and minisat (smt lane), stacked as PRs of about 5 files [W3a].
+  - V-7d the six coprocessor backends [W3a].
+
+Recon must_create, prover backends:
+- V-2 check() overrides for the Tier-1 ITPs and CVC5 [W1a]
+- D-3 tier scheme derived from code [W1b]
+- I-9 Tier-4 provisioning: Containerfiles plus a live suite for 19 backends, or formally mock-only if so ruled [W5]
+
+Recon must_create, external surfaces:
+- P0-4 bearer-auth middleware: P0-4a server and P0-4b interface binaries [both W1a]
+- V-9 a single ProverKind [W1a]
+- V-12 installed-binary availability [W1b], stacked after P0-2's resolve_binary
+- PB-4 echidna.proofstate/1:
+  - PB-4a Lean/Coq stepwise [W2b]
+  - PB-4b CLI and contract [W3a]
+  - PB-4c GraphQL apply_tactic and Isabelle [W4a]
+
+Recon must_create, CI and deploy:
+- P0-8 publish the image CI verified, signed and with an SBOM [W1a]
+- CI-9 aggregator plus five lanes:
+  - CI-9a `ci-gate` with a one-time ruleset swap [W1a]
+  - CI-9b consolidation to 12 or fewer workflow files, plus CODEOWNERS per D-J [W4a]
+- CI-10 Julia CI lane [W1a]
+- CI-14 gitbot-fleet builds and tests echidnabot [W0]
+- CI-15 proof-burrower Agda gate [W0]
+
+Recon must_create, plan and status:
+- D-1 decision ADR [W0]. It records D-A..D-N and ADR-2026-10-19 D2/D3/D5/D6/D7 as `open` unless an owner record exists. It is amended by the rulings role after each batch, and it is the anchor that ruling-cited.sh checks.
+- D-2 generated STATUS plus ROADMAP and handover reconciliation:
+  - D-2a generator, claims-map link and DEFERRED list [W2b]
+  - D-2b final regeneration [W8]
+
+Recon must_create, learning:
+- L-2 one server on :8090 that boots without weights [W1a]
+- L-5 train and publish weights: a CPU v0 run on the identity-keyed train split [W3a]
+- L-6 held-out eval against a measured cosine baseline [W3b]
+- L-7 verisim list/time-window endpoint [W0, verisimdb]
+- L-8 outcome-labelled objective and a consistent feature set [W2a]
+- L-13 scheduled retrain followed by /reload [W4a]. Enabled only if L-9 is met; otherwise DEFERRED.
+- L-14 learning/ research code:
+  - L-14a TacticPolicy aligned with attempt/1 [W4b]
+  - L-14b value head, or a research label [W6]
+- L-15 move corpus and models out of git under a SHA-256 manifest:
+  - L-15a mechanism [W1b]
+  - L-15b repoint checkouts [W4b]
+- L-12b Stage 2a hardware run, run by the owner [W5; DEFERRED(hardware) until then]
+
+Recon must_create, corpus and lexicon:
+- C-1 identity_complete flag [W1a]
+- C-2 type_discipline_tags field [W0]
+- C-3 dk-shape-v2 [W2a]
+- C-5 curated semantic_class and relation rows [W4b]
+- C-6 phrase and equivalent-expression extraction [W4b]
+- C-7 cross-corpus identity join [W2b]
+- C-9 VeriSim identity read path: a VCL-UT operation plus a verisimdb index [W3b]
+
+Recon must_create, theory and arbitration:
+- A-1 arbiter proptests [W0]
+- A-2 Idris oracle differential [W1a]. This satisfies ruling #37's Rust–Idris tie.
+- A-3 consequence probes plus a standpoint record [W3a]
+- A-4 OpenTheory reader/writer and CR-8 [W3b to W5]
+- A-5 α-normalised λΠ projection and term_hash [W5 to W6]
+- A-7 calibrated likelihoods [W4a]
+- A-8 dependence-aware fusion [W4a]
+- A-10 TrustLevel × EpistemicLevel rule [W4b]
+
+Recon must_create, formal:
+- F-1 single trust-kernel spec plus an exhaustive table [W2a, as the head of the 'spec block']
+- F-5 certificate-checker soundness tied to code [W4a]
+- F-8 discharge Creusot or demote it [W3b]
+- F-9 Kani:
+  - F-9a caps and range [W1a]
+  - F-9b saturation over u32 and equivalence with the spec [W2b]
+- F-11 a Validator.idr theorem, or retraction of Layer 5, per the F-11 disposition ruling [W4b]
+- F-12 fusion laws over the rationals [W3a]
+- F-13 Neural Safety non-interference, proved last [W8]
+
+Recon must_create, IPC, parallel dispatch and FFI:
+- I-1 canonical Cap'n Proto schema set [W3a]
+- I-2 Rust UDS transport [W4a]
+- I-3 Julia codec and UDS listener [W4a]. Independent of I-2. The UDS/HTTP equality test is a third PR stacked on both.
+- I-4 Chapel verdict parsing plus a mandatory Rust re-check [W1b]
+- I-10 a single 16-export Zig ABI [W5]
+- I-12 #161 bench against a criterion fixed in advance [W5; DEFERRED(hardware) until an 8+-core run]
+- I-13 Chapel L2.4–L2.7 [W6]. L2.5 multi-locale is DEFERRED(needs cluster).
+
+Recon must_create, echidnabot and fleet:
+- P0-5 echidnabot token [W1a]
+- B-3 fleet report-back leg [W4b]
+- B-5 obligation dispatcher [W2a]
+- B-6 contract carrying a panic-attack claim to an obligation to echidnabot [W3b]
+- B-7 echidnabot /graphql auth [W1a]
+
+Recon must_create, proof-burrower:
+- PB-1 receipts re-validated on read [W1b]
+- PB-2 LedgerBackend seam plus a writer lock [W2a]
+- PB-5 PB-01 synthesis:
+  - PB-5a P1/P2/P4, ledger-only [W3b]
+  - PB-5b P3 delta caching plus anti-pattern pruning [W5]
+- PB-6 PB-02 fitness and mining:
+  - PB-6a P1–P3 [W3a]
+  - PB-6b GoalReduction [W4b]
+- PB-7 corpus near JSON plus a retrieval backend [W3b]
+- PB-8 Lean/Coq attempt [W3b]
+- PB-9 EBI-1, burrower swarm in echidnabot [W5]
+
+Recon must_create, ParadisEO, UI and delivery:
+- E-1 non-dominated sort plus exact hypervolume [W3b, after the #60 WP0 issue bodies]
+- E-2 budget ADR [W1b]
+- E-3 CMA-ES calibration [W4b]
+- E-4 island model [W6]
+- E-5 pure-Rust bridge plus OptimizationABI.idr [W7]
+- S-1 honest static UI [W2b]
+- S-2 locale/ and an i18n macro [W5]
+- S-4 Coursera delivery over the Zig ABI [W6]
+
+NEW items for honesty and gates:
+- NEW:gate-convention [W0]: scripts/gates/lib.sh with PASS/FAIL/DEFERRED(reason). A DEFERRED check moves to the next wave's gate script and to STATUS.
+- NEW:ruling-citation-check [W0]: scripts/ci/ruling-cited.sh.
+- NEW:trust-kernel-characterisation [W0]: an exhaustive table of both Rust compute_trust_level copies (confidence.rs:77 and echidna-core-creusot lib.rs:317). It asserts they agree and flags the latent Level4/Level5 defects as characterised, not endorsed.
+- NEW:xfail-ledger [W0, with CI-11]: a shrink-only JCS tests/fixtures/XFAIL.json that V-3 must empty.
+- NEW:contract-golden-corpus plus consumer conformance tests in echidnabot, proof-burrower and panic-attack [W0].
+- NEW:lean-build-reconcile [W0]: run lake build on the pinned Lean 4.13.0 image, record the result, and either confirm green or open a repair item that precedes F-3.
+- NEW:claims-register and NEW:claims-gate [report-only from W1a and covering `//!` docs from W1b; required from W2a].
+- NEW:containment-probes [W1a]: the red-team's probes, committed as tests/containment_probes.rs.
+- NEW:command-ratchet plus its shrink-only allow-list [W2a].
+- NEW:fault-injection-gate [W2a; injected-disagreement case added in W2b]. Required and narrow:
+  - A tampered binary is refused before it runs.
+  - A missing binary gives error.
+  - A bwrap request when bwrap is unavailable gives error; where bwrap is available, provenance records bwrap.
+  - An unauthenticated call gives 401.
+  - A Chapel `sat` is never Proved.
+  - An injected disagreement gives conflict.
+- NEW:kernel-mutation-gate [W2b].
+- NEW:claims-register-closure [W8].
+- NEW:dod-audit [W8].
+
+NEW items for the kernel and spec:
+- NEW:idris-oracle-harness [W1a; extended in W2a]: verification/oracle/ emits the trust, fidelity and grade tables as JCS.
+- NEW:trust-factors-typed [W2a]: CertificateStatus and IntegrityStatus become enums. A temporary TrustFactors::from_legacy constructor keeps dispatch.rs compiling until the K lane migrates, and is deleted before the W2a gate.
+- NEW:level5-semantics [W2a]: Level5 requires at least two distinct small-kernel certified confirmers.
+- NEW:pipeline-stage-export [W2a]: a `pub const PIPELINE`, from which pipeline.json and then F-4 are generated.
+- NEW:coprocessor-cap-in-spec [W4a]: a new factor that reproduces every existing row at its default value.
+- NEW:combined-grade-in-spec [W4b].
+- NEW:agda-toolchain-unify [W2a].
+- NEW:lambda-pi-injectivity-proof [W7].
+- NEW:parallel-soundness-restate [W6].
+- NEW:self-receipt-dogfood [W6], with the external checker stated as the trust anchor.
+
+NEW items for contracts and the pipeline:
+- NEW:prove-result-provenance-envelope [W1a]: one Option-typed, additive block owned by one lane.
+- NEW:missing-binary-is-error [W1a]: the trait-default check() maps ENOENT/EACCES to Error, and classify_anyhow_error formats with `{:#}`.
+- NEW:metamath-inprocess-verifier-removal [W1a].
+- NEW:shake256-rename [W1b].
+- NEW:verify-raw-disposition [W1b]: fold the SMT passthrough into the Z3 and CVC5 backends, which removes the server.rs:760 Command::new.
+- NEW:ids-adr008-p3 [W1b]: ids.rs mints under the ruled UUID scheme, and the parsers read v7 and v8.
+- NEW:outcome-observer [W2a].
+- NEW:attempt-contract, echidna.attempt/1 [W2a].
+- NEW:proof-dag-format [W3b]: express CROSS-REPO-PROOF-DAG as a deed clause or k9 contract, never as .a2ml.
+
+NEW items for the learning loop:
+- NEW:writer-allowlist and NEW:advice-provenance [W2b].
+- NEW:loop-ci-harness [W2b]: s4-loop on the pinned ephemeral VeriSim, with no skip branch, asserting rows > 0. This is a CI test of the write leg, not a substitute for L-9.
+- NEW:verisim-api-pinned-image [W2b].
+- NEW:advice-non-interference-test [W2b, required].
+- NEW:identity-keyed-split [W3a].
+- NEW:capnp-fuzz [W3a].
+- NEW:verisim-rekey-migration [W3b].
+- NEW:model-registry and NEW:promotion-gate [W4a].
+- NEW:burrower-outcome-export [W4b].
+- NEW:generation-2-promotion [W5].
+- NEW:loop-observatory [W5].
+- NEW:burrower-dom-proptests, covering DOM-3..DOM-6 [W5].
+
+NEW items for execution, consumers, deploy and orchestration:
+- NEW:hotspot-split [W0]: a pure move of main.rs (2159 lines) into cli/*, server.rs (1630 lines) into server/*, and the Justfile (1206 lines) into just/*.just, gated by golden diffs.
+- NEW:coordination-file-claims [W0]: a coordination.k9 per wave, checked by the orchestrator script. It includes each repository's integrator claims.
+- NEW:wave-scaffold [every wave]: the integrator's opening PR (module stubs, dependencies) and closing promotion PR (ci-gate membership), in each repository touched.
+- NEW:agent-instructions-reconcile [W0, only with owner approval].
+- NEW:host-stopgap-runbook [W0, applied by the owner].
+- NEW:hol-kernels-ci-image [W3b].
+- NEW:pa-obligation-emit and NEW:pa-aggregate-prove-result [W3b].
+- NEW:echidnabot-thin-adapter [W3a, if ruled; the PR carries [mass-delete-ok]].
+- NEW:fleet-pin-bump [one per wave, at wave end, after the wave's echidnabot merges].
+
+Must-wire placement index (all 59), part 1:
+- CI: CI-1, CI-2, CI-3, CI-4 (DEFERRED to the head of W1a if R0 is late), CI-5, CI-7, CI-11, CI-13 and CI-16 in W0; CI-12 in W1a; CI-8 in W2a; CI-6 in W8, but pulled forward the day the read-only token arrives.
+- P0: P0-1 and P0-3 in W1a; P0-6 (the repo side) in W1b, with the host side as an owner checkpoint.
+- P0-7 is split. P0-7a (prose docs: README, CLAUDE.md, the deed, SECURITY.adoc) and P0-7b (`//!` module docs, by each file's W1b owner plus a moddocs lane for executor/, verification/ and confidence.rs) both land in W1b.
+- V: V-1, V-3 and V-15 in W1a; V-4, V-6, V-10 and V-14 in W1b; V-11 in W2a. V-13 is in W4a for all backends, the 12 core ones included; isabelle.rs is done by the ps lane.
+- L: L-3 and L-4 in W0; L-1 in W1b; L-9 and L-11 in W2b; L-10 and L-12 in W3b. L-9 is one item, gated on the host P0-6 evidence and ruling #46. If DEFERRED, L-10 and L-13 are DEFERRED with it.
+
+Must-wire placement index, part 2:
+- C: C-4 and C-11 in W1b; C-8 in W2a; C-10 in W4a.
+- A: A-9 in W3a; A-11 in W7. A-6 is split: A-6a in W4a, A-6b in W7.
+- F: F-10 in W0; F-6 in W1b; F-2, F-3 and F-4 in W2b; F-7 in W3b.
+- I: I-8 in W4a (through the spec lane); I-5, I-6 and I-11 in W4b; I-7 in W5.
+- B: B-9 in W1b; B-2 in W2a; B-4 in W2b; B-8 in W4b. B-1 is split three ways:
+  - B-1a, outcome and receipt only, no trust bridge [W2a]
+  - B-1b, level and grade [W5]
+  - B-1c, a `sound` rendering fixture from the recorded W7 pilot result [W7]
+- PB: PB-3 in W0; PB-10 in W5.
+- D and S: D-4 is split, D-4a in W1b and D-4b in W4b; S-3 in W4b.
+
+[[ladders]]
+== The ladders
+
+[[proof-ladder]]
+=== Proof ladder (binding formal claims to the shipped code)
+
+* Rung 0a (W0): make the existing claims true.
+** Tools: grep, Agda --safe --without-K, an Idris2 ipkg build, and lake on a pinned Lean 4.13.0 image.
+** Work:
+*** Retract the vacuous or stale theorems: comment-skip-sound, cancellation-safety, SoundnessPreservation, E9, the CertificateChain path, and the funext comment.
+*** Bring CapnSchemas.idr, CoprocessorForeign.idr and AxiomTrackerCompleteness.agda into the checked set.
+*** Add a grep that fails on `postulate`.
+*** Settle the Lean lake-build contradiction (NEW:lean-build-reconcile).
+** Binds no Rust yet; this rung only removes false bindings.
+** Items: F-10, CI-13, NEW:lean-build-reconcile.
+* Rung 0b (W0 to W2a): make the gates real.
+** Tool: ci-gate membership, plus the live ruleset requiring ci-gate.
+** Claim: a broken proof cannot reach main.
+** Covers: dogfood Agda/Idris/Lean, idris2-abi-ci, the meta-checker, and proof-burrower's Burrow/*.agda. No pass-through shims. One Agda version pinned.
+** Items: CI-1, CI-15, CI-9a, NEW:agda-toolchain-unify, CI-8.
+* Rung 0c (W0): sampled and exhaustive checks on the shipped Rust.
+** Tools: proptest plus exhaustive enumeration.
+** Claims checked:
+*** Bayesian fusion: permutation invariance, monotonicity, normalisation.
+*** Dempster-Shafer: commutativity and associativity within ε, Bel≤Pl, k∈[0,1].
+*** fidelity_level: None caps at Belief; blocking evidence never raises the level; two distinct term_hash values are never Sound.
+*** compute_trust_level: characterised over its whole finite domain, in both Rust copies, with the latent Level4/Level5 defects flagged.
+** Items: A-1, NEW:trust-kernel-characterisation.
+* Rung 0d (W1b): ProverKind drift gate.
+** Tool: a generator plus a CI diff.
+** Claim: kind_to_u8 is injective and bounded over all 141 variants.
+** Binds: prover_kind.rs and ffi/mod.rs::kind_to_u8, regenerated into ProverKindInjectivity.idr. test_kind_roundtrip_all remains the Rust-side check.
+** Item: F-6, after V-9.
+* Rung 1 (W1a to W2b): bind the proved objects to the Rust.
+** Tools: an Idris2 oracle that emits committed JCS goldens, cargo table tests, Kani, cargo-mutants.
+** Claims:
+*** Arbitration.idr `level` equals fidelity_level for every evidence list of length up to 3. This satisfies ruling #37.
+*** The table from the canonical TrustKernel.idr equals the single Rust kernel over the full typed domain.
+*** Kani proves the u32 saturation lemma plus the caps and range.
+*** cargo-mutants leaves 0 surviving mutants.
+** Items: A-2, NEW:idris-oracle-harness, F-9a/b, F-1, NEW:trust-factors-typed, NEW:level5-semantics, NEW:kernel-mutation-gate.
+** Requires: Rung 0c and ruling #32. If #32 is late, the spec block moves together by one wave.
+* Rung 2 (W2b): derive the divergent models from the spec.
+** Tools: Agda over a generated TrustTable.agda; Lean 4; Agda and Idris over the generated pipeline.
+** Claims:
+*** The meta-checker's level equals the spec.
+*** Lean PI-11 ("ok iff Verified, unless an opt-in is recorded") holds of the fail-closed integrity gate.
+*** DispatchOrdering holds over the exported PIPELINE constant.
+** Items: F-2, F-3, F-4, NEW:pipeline-stage-export.
+* Rung 3 (W3b): choose the tool for the trust kernel (D-F).
+** Options: gnatprove with enforce_zero_contract for the SPARK modules that are actually linked, and/or Creusot with a pinned toolchain. The recommended default is that the Rung-1 binding counts as the kernel proof; any tool not chosen is labelled 'model, not proved'.
+** Covers: coprocessor_safety.ads, which I-8 then consumes through the spec's cap factor.
+** Items: F-7, F-8, then I-8 and NEW:coprocessor-cap-in-spec.
+* Rung 4 (W3a to W4a): certificates.
+** Tools: carcara and drat-trim in a required live job, then Agda.
+** Claims: certificate_verified is set only when an external checker accepts the certificate. The Agda chain models format, checker, hash and the typed status, with the external checker named as the trust anchor.
+** Items: V-8a/b/c, F-5.
+* Rung 5 (W3a to W4a): the first `epi`.
+** Tools: Z3↔CVC5 consequence probes plus an Idris2 standpoint constructor, kept in step through the oracle.
+** Claims: correlated probes cannot reach Epi (correlatedNotEpi). A `distinct` result is a sound certificate of difference.
+** Items: A-3, A-6a.
+** Requires: Rung 1, V-11, CI-12 and ruling D3 (#15).
+* Rung 6 (W3a to W4a): fusion and selection laws.
+** Tools: Agda over ℚ, mirrored by f64 proptests; Lean E10.
+** Claims: VerdictSet is a meet-semilattice. The Dempster combination laws hold. Pareto maximality covers the single shipped selector, which keys on epistemic level first. Discounting and the cautious rule are proved only once there is probe data to justify them.
+** Items: A-9, F-12, A-7, A-8, E-1.
+* Rung 7 (W4b): the combined grade.
+** Tools: TrustKernel.idr, the oracle's grade table, Kani.
+** Claims: the cap rule (Level≥4 implies ≥Epi) holds, the grade is monotone, and the existing trust table is unchanged.
+** Items: A-10, NEW:combined-grade-in-spec.
+** Requires: Rungs 4 and 5, and ruling #33.
+* Rung 8 (W3a to W6): IPC and parallel soundness.
+** Tools: Cap'n Proto round-trip proptests, cargo-fuzz, the corrected CapnSchemas.idr, and ParallelSoundness restated over verdict semantics.
+** Claims: encode∘decode is the identity. The decoder never panics. No Chapel result becomes a verdict without check().
+** Items: I-1, NEW:capnp-fuzz, I-2, I-3, I-4, I-6, NEW:parallel-soundness-restate.
+* Rung 9 (W3b to W7): the first `sound`.
+** Tools: HOL4 and HOL Light replay of real OpenTheory articles (CR-8), dkcheck/lambdapi, proptests, then a mechanised proof on the λΠ fragment.
+** Claim: term_hash is injective and α-invariant on that fragment ("a complete invariant is a witness").
+** Items: A-4, A-5, NEW:lambda-pi-injectivity-proof, A-6b, B-1c, A-11.
+** Requires: C-3, the Rung-5 plumbing, and pacing ruling #20. Under the hold, this rung stays DEFERRED and STATUS says 'sound: not reached'.
+* Rung 10 (W0 to W5): consumer proofs.
+** Claims:
+*** DOM-2 (no laundering) holds in Ledger::read_all.
+*** DOM-3 to DOM-6 hold, checked by proptest.
+*** DOM-7 holds on parse_prove_result, if Creusot is chosen.
+*** echidnabot uses the spec-bound kernel.
+*** A grade never rises from one hop to the next.
+** Items: CI-15, CI-16, PB-1, B-4, NEW:burrower-dom-proptests.
+* Rung 11 (sampled in W2b, proved in W8, last): Neural Safety as non-interference.
+** Claim: acceptance depends only on the backend checking the same statement plus its evidence. It is invariant under every advice channel.
+** Binds: the acceptance predicate of verify_with_trust, set against gnn/, the VeriSim advisor (once L-10 is live), learning/policy.rs and the Burrower intake.
+** Items: NEW:advice-non-interference-test, F-13.
+** Requires: L1–L4 closed (P0-1/P0-2, V-8, V-7, V-1–V-3) and Rung 9. L-1, L-9 and L-10 must be live, or F-13 must state its scope without the channels still DEFERRED.
+* Rung 12 (W6): ECHIDNA checks its own proofs.
+** Tool: the dogfood gate.
+** Claim: every formal artefact carries a receipt from the spec-bound pipeline.
+** Trust anchor: the external Agda, Idris and Lean checkers, stated explicitly so the check is not circular.
+** Item: NEW:self-receipt-dogfood.
+
+[[solving-ladder]]
+=== Solving and testing ladder (cheapest guard first)
+
+1. W0: live good/bad fixture suite that fails on SKIP, with an XFAIL ledger that may only shrink (CI-11). The cheapest guard on verdict honesty.
+2. W0: exhaustive characterisation of both Rust trust-kernel copies, plus arbiter proptests (A-1). About 2.5 agent-days. It already exposed the latent Level4/Level5 defects.
+3. W0: golden corpus plus conformance tests in four repos. The cheapest guard against cross-repo wire drift.
+4. W1a: per-backend environment fault injection (empty PATH, a broken library path, a timeout). The result must be Error or Timeout, never Failed. The red-team's probes are committed as tests/containment_probes.rs.
+5. W1a: an Idris2 oracle differential test for fidelity_level, with committed goldens.
+6. W1a and W2b: Kani on the pure, float-free kernel functions, including the u32 saturation lemma.
+7. W1a: a required live z3+cvc5 cross-check job.
+8. W2a: a narrow, required fault-injection gate, kept separate from broad tests so it cannot flake. Its bwrap case tests 'requested but unavailable → error', so it stays true after the runner lands.
+9. W2a to W3a: the Command::new ratchet, falling from its W2a baseline to 0 outside the executor, with a reviewed, shrink-only allow-list.
+10. W2b: cargo-mutants on the trust kernel and result_arbiter, with 0 surviving mutants.
+11. W2b: an advice non-interference differential test using identity, reversed and adversarial rankers, plus the injected-disagreement fault case.
+12. W3a: external certificate checking, carcara for Alethe and drat-trim for DRAT/LRAT.
+13. W3a to W4a: fuzzing of the outcome parsers, the Chapel verdict parser, the three prove.result parsers, the Cap'n Proto decoder and the OpenTheory reader.
+14. W3a: Z3↔CVC5 consequence probes with standpoint records.
+15. W3a to W4a: identity-keyed held-out evaluation with bootstrap confidence intervals against a measured cosine baseline, plus a forced-regression check on the promotion gate.
+16. W3b to W7: kernel replay. HOL4 and HOL Light replay OpenTheory articles, then dkcheck/lambdapi. The most expensive step, and the only route to `sound`.
+17. W4b to W5: pre-registered benchmarks: Chapel #161, the PB-01 reduction, and the Tier-4 suites. These are evidence for performance and stage claims, not for soundness.
+
+[[theory-ladder]]
+=== Theory ladder (what has to be decided or proved, and when)
+
+* Θ1 (R0/R1, before W1a). Typed verdict algebra: {Proved, Refuted, Timeout, Error, Unknown}. Error and Unknown count as absent evidence, never as negative evidence. Settles D-B, V-2/V-3, how environment failure enters fusion, and that error rows are never used as training labels.
+* Θ2 (R0). Integrity as a precondition lattice: Verified > Unchecked > Uninitialized > Tampered. The gate is ok only for Verified, unless an opt-in is recorded. Settles ruling #21, Lean PI-11, and what IntegrityStatus contributes to the trust factors.
+* Θ3 (R0, before W2a). One canonical trust lattice. A single Idris2 object generates the Rust table and the Agda/Lean derivatives, and typed factors make impossible states unrepresentable. Later inputs (the coprocessor cap) and outputs (the combined grade) extend it without changing existing cells. Settles:
+** Level2 vs Level3. Recommended: Level3. Labelled most elegant: only confirmers at Epi or above count. *Ruled 2026-11-05: the Epi-gated arm (see <<ruling-32>>).*
+** Level5: requires at least two distinct small-kernel certified confirmers.
+** portfolio_confidence.
+** Stage 8c claims.
+* Θ4 (W2a). Stage order as data. PIPELINE is exported, and the ordering theorems quantify over it. Settles 'reorder vs rewrite', and makes ordering drift impossible.
+* Θ5 (before W3a). A certificate short-circuits fusion: it is a witness, not a weight. Numeric fusion applies only among non-certifying sources.
+* Θ6 (before W3a; echo-types is cite-only). Identity as equivalence in the Echo-fibre reading:
+** belief = a shared fibre under a lossy invariant.
+** epi = equal consequence partitions under standpoint-independent probes.
+** sound = a kernel-checked witness.
+** completeness = injectivity on the fragment.
+Settles the identity_complete join semantics, the cluster as the unit of the held-out split, and the A-5 acceptance criterion.
+* Θ7 (before W3a). Standpoint independence: sources are partitioned by kernel, library, encoding and authorship, and epi needs at least two classes. Z3 and CVC5 over the same encoding count as one standpoint until A-3 shows otherwise.
+* Θ8 (after A-3 data, W4a). Dependence-aware numeric evidence: discounted Dempster-Shafer grouped by standpoint, with the cautious rule inside each group. The alternative is Bayesian fusion with learned likelihoods and one vote per group.
+* Θ9 (before W4b). Combined grade: a product order with a cap rule, Level≥4 implies ≥Epi. Settles the single user-facing verdict and the regulator-mode thresholds.
+* Θ10 (before W3a). Lexicographic Pareto: epistemic level first, then latency, axiom cost and certificate size. Soundness is never traded for speed, and hypervolume is at most an additive field.
+* Θ11 (before W2b). Receipts are content-addressed warrants, and receipts are transitive: a consumer may keep or lower a grade, never raise it, and every hop re-derives the id. Content ids are UUIDv8 over JCS bytes. Record ids follow the ruled ADR-008 scheme, and parsers accept every version ever minted. Settles the ledger's no-laundering rule, the LedgerBackend semantics, and the panic-attack aggregate verdict.
+* Θ12 (before W3a). Learning as off-policy evaluation over logged advice. Promotion is decided only by the identity-keyed held-out evaluation, and every evaluation names its data store. Routing stays deterministic: no exploration budget unless the owner rules for one.
+* Θ13 (before W3a). Proof search as an MDP over proofstate/1, with reward ordered closure > goal reduction > cost. Settles the PB-6 fitness function, the Stage 3c rows, and whether the value head is learnable or stays a research item.
+* Θ14 (before W1b; restated in W6). Parallel search as refinement: Chapel proposes, Rust disposes. The coprocessor tier is a cap, never a raise. Turning parallel search on by default is a performance decision only.
+* Θ15 (stated in W2b, proved in W8). Non-interference for advisors: acceptance factors through verify_j of the same statement, and advisor outputs are typed as orderings only.
+
+[[experiments]]
+== Experiments before bigger work
+
+* E0 (day 0). Push-access probe: add_repo with access=push for echidnabot, gitbot-fleet, proof-burrower, panic-attack and verisimdb. Record which lanes will run in patch-plus-issue mode.
+* E1 (day 1). After CI-1 and CI-2 merge, open a no-op PR. Every context required by the ruleset must report, and every merge commit's check-runs must be at success. The owner posts the bypass-log check. Also confirm that GET /repos/{owner}/{repo}/rules/branches/main is readable with agent tokens, because every 'required' gate check depends on it.
+* E2 (before W1a). Toolchain census in agent worktrees and on hosted runners: idris2, agda 2.6.3/2.7.0.1, lean 4.13 with lake build on the five Lean files (this feeds NEW:lean-build-reconcile), kani, z3, cvc5, carcara, drat-trim, bwrap and podman. Record install time, cache size and pin for each.
+* E3 (before ruling #32). Trust-kernel divergence census. Run the characterisation table over both Rust copies, count the cells where Agda, Lean and Idris disagree, and count how many consumer-visible levels change under each ruling option.
+* E4 (before D-D). Check that bwrap and rootless podman work on ubuntu-24.04 hosted runners under AppArmor, and measure their overhead on the live suite.
+* E5 (W0 dry run). Hotspot-split golden diffs, plus a rebase-conflict measure against open PRs #455 and #458.
+* E6 (before D-B and the UUID ruling). Feed the golden corpus, with envelope fields and both v7 and v8 ids, to the echidnabot, proof-burrower and panic-attack parsers. Check whether any of them uses deny_unknown_fields or pins a UUID version.
+* E7 (before D-C). Certificate spike. Run cvc5 --produce-proofs and SAT DRAT on the fixtures, and measure proof sizes, carcara and drat-trim check times, and the version pins needed.
+* E8 (before F-9b). Kani unwind bounds and runtime for the kernel functions, plus cargo-mutants runtime on the two kernel files.
+* E9 (before the CI-9a swap). Run ci-gate in shadow mode for at least 2 days to measure the live-prover flake rate and the time per PR.
+* E10 (before the split and the promotion margin). Collect cluster statistics after dk-shape-v2, and the bootstrap variance of the cosine MRR.
+* E11 (before W4b). Check that libchpl links on hosted CI, and measure build time.
+* E12 (before the A-4 lane). Build the HOL4/HOL Light OpenTheory container and time a toy article replay.
+* E13 (before rulings #42 and #20). Measure the CI-minute budget each tier's live suite needs.
+* E14 (before W2a). Ratchet baseline census. Count Command::new across the ratchet scope (src/rust/**, crates/*/src/**, src/interfaces/**, excluding tests and executor), list every site by owner lane, and confirm the allow-list candidates (build scripts, echidna-mcp's self-spawn).
+
+[[session]]
+== The ultracode session, wave by wave
+
+**Conventions, set in W0 and used by every later wave:**
+- (a) **Gate convention.** Every check is PASS, FAIL or DEFERRED(reason), and DEFERRED is allowed only for a named ruling, secret, hardware item, owner host action or cross-repo push denial. A DEFERRED check is appended to the next wave's gate script, its item moves with it, and STATUS lists it.
+- (b) **Where gates run.** Each wave's gate runs on the integration ref `wave/WN`: the main agent's worktree stacks the wave's verified PRs, and the gate is run there. That makes the wave agent-complete. The gate runs again on main after the owner merges, which makes the wave landed. The next wave branches from `wave/WN`. If two waves are agent-complete but not landed, the session pauses for owner merges.
+- (c) **Integrator.** Each repository has one integrator lane per wave. It owns Cargo.toml/Cargo.lock, the lib.rs files, the module-registration files, workflows and ci-gate.kyaml.
+- (d) **Rulings role.** The rulings role (the main agent) is the only editor of the rulings-ledger ADR.
+
+**Phase α (serial).** Merge CI-1 (#458, with actions.lock relocked by the standards script) and CI-2. Run experiment E0, the push-access probe through add_repo with access=push for echidnabot, gitbot-fleet, proof-burrower, panic-attack and verisimdb.
+
+**Phase β (fan-out).** 15 lanes, each in its own worktree. Before spawning, the main agent writes the coordination.k9 claims and a script rejects any overlapping globs. Lanes may open PRs during α but merge only after it. The hotspot split merges next, and every Rust lane rebases onto it.
+
+**Phase γ (verification).** Two adversarial verifiers.
+- The first runs `just ci-local` on a clean checkout, opens a no-op probe PR, and runs the expiry check with FAKE_DATE=2026-12-01.
+- The second diffs the hotspot goldens and tries to sneak a bad fixture past CI-11.
+Failures go back to the owning lane.
+
+**Slip rule.** If R0 is late, CI-4 is DEFERRED(R0) to the head of W1a, using the recommended disposition only after the owner confirms it, and check (8) moves to w1a.sh.
+
+=== W0: unjam the gates, record the rulings, lay the nets, split the hotspots
+
+*Goal.* Make main mergeable without admin bypass. Dispose of the 14 allow-fail units well before 2026-11-30. Record every pending ruling in an ADR as open, and send selector batches R0 and R1. Characterise the trust kernel and the contract before either changes. Make the live-fixture suite honest by recording known failures in an XFAIL ledger that may only shrink. Settle the Lean build contradiction. Split main.rs, server.rs and the Justfile so later lanes can run in parallel. Establish the gate convention and the integrator role. Prepare the owner's host stopgap, and probe push access to every consumer repository.
+
+*Estimate:* 27 agent-days. *Items:* `CI-1`, `CI-2`, `CI-3`, `CI-4`, `CI-5`, `CI-7`, `CI-11`, `CI-13`, `CI-14`, `CI-15`, `CI-16`, `F-10`, `A-1`, `V-16`, `D-1`, `L-3`, `L-4`, `L-7`, `C-2`, `PB-3`, `NEW:hotspot-split`, `NEW:trust-kernel-characterisation`, `NEW:xfail-ledger`, `NEW:contract-golden-corpus`, `NEW:consumer-conformance-tests`, `NEW:lean-build-reconcile`, `NEW:gate-convention`, `NEW:ruling-citation-check`, `NEW:coordination-file-claims`, `NEW:agent-instructions-reconcile`, `NEW:host-stopgap-runbook`.
+
+*Rulings needed before the wave:*
+
+* R0: how to dispose of each CI-4 unit; keep or retire Guix (#43, #44)
+* #59 (pin part): target commit for the proof-burrower pin
+* #58: approval to reconcile echidna .claude/CLAUDE.md
+* No ruling is assumed. D-1 records D-A..D-N as open unless an owner record exists. The owner rules them through batches R0–R4.
+
+*Lanes (one owner per file):*
+
+* ci (owns .github/workflows/* except idris2-abi-ci.yml and agda-meta-checker.yml, plus actions.lock, and adds live-fixtures.yml from the fixtures lane's script): CI-1, then CI-3 (split out of #455), then CI-4 (all 14 units), then a one-line pin bump in security-scan.yml
+* integ (Cargo.toml, Cargo.lock, crates/echidna-core/src/lib.rs; the only lock owner in W0): CI-2, then NEW:gate-convention (scripts/gates/lib.sh, w0.sh)
+* split (src/rust/main.rs to cli/*, server.rs to server/*, src/rust/lib.rs registrations for them, Justfile to just/*.just, Mustfile): NEW:hotspot-split, then CI-7
+* formal (src/abi/echidnaabi.ipkg, the .idr files outside the ipkg, idris2-abi-ci.yml, agda-meta-checker.yml, the MetaChecker.agda import, proofs/agda statements, SoundnessPreservation and E9, the funext line in meta-checker/README.adoc, verification/proofs/lean4/**): CI-13, then F-10 (retract or rewrite; never strengthen), then NEW:lean-build-reconcile
+* net (new tests/arbiter_props.rs, tests/trust_kernel_characterisation.rs, tests/golden/trust_table.v0.jcs.json): A-1, then NEW:trust-kernel-characterisation
+* contract (tests/prove_output_json.rs, crates/echidna-core/schema/**, tests/golden/prove_result/**): V-16, then NEW:contract-golden-corpus
+* fixtures (tests/live_prover_verify*.rs, tests/fixtures/{good,bad}/**, tests/fixtures/XFAIL.json, scripts/ci/live-fixtures.sh): CI-11 together with NEW:xfail-ledger
+* rulings (main agent plus 1 agent; docs/decisions/ADR-*-rulings-ledger.adoc, coordination.k9, scripts/ci/ruling-cited.sh, .claude/CLAUDE.md only with owner approval): selector R0/R1, then D-1 (all pending rulings recorded as open), then NEW:ruling-citation-check, then NEW:coordination-file-claims, then NEW:agent-instructions-reconcile
+* jl (src/julia/run_training.jl, models/training_metrics.json and its test): L-3, then L-4
+* corpus (AxiomUsage in src/rust/corpus/mod.rs, and the adapters): C-2
+* deploy-runbook (new deploy/hetzner/STOPGAP.adoc and scripts/deploy/verify-host.sh): NEW:host-stopgap-runbook
+* pa (hyperpolymath/panic-attack): CI-5, then a prove.result conformance test
+* fleet (gitbot-fleet workflows plus canonical echidnabot tests): CI-14, then a conformance test
+* pb (proof-burrower; also its integrator in W0): CI-15, then CI-16 (diagnose run 37371572643; pin at or after a71aa2c per ruling #59), then PB-3, then a conformance test
+* vdb (hyperpolymath/verisimdb verisim-api): L-7
+
+*Exit gate.* scripts/gates/w0.sh exits 0 (no FAIL). It checks:
+(1) On a no-op probe PR, the check-runs show success for every context the live ruleset requires (read through the rules API).
+(2) Every W0 merge commit has all its check-runs at success. The bypass log itself needs admin scope, so it is an owner checkpoint whose script output is posted.
+(3) `cargo audit` exits 0.
+(4) `cargo test --locked --test arbiter_props --test trust_kernel_characterisation --test prove_output_json` passes.
+(5) The golden diffs are empty for every `echidna <sub> --help`, for the route table and for `just --list`.
+(6) live-fixtures is green with ECHIDNA_FAIL_ON_SKIP=1. Every bad fixture not listed in XFAIL.json is rejected, and XFAIL.json is JCS and lists only the V-3 backends and IR fallbacks.
+(7) idris2-abi-ci greps for postulate. The ipkg includes CapnSchemas.idr and CoprocessorForeign.idr, or those files are deleted. The meta-checker type-checks AxiomTrackerCompleteness.
+(8) `FAKE_DATE=2026-12-01 check-allow-fail-expiry.sh` exits 0. DEFERRED(R0) is allowed, moving the check to w1a.sh.
+(9) The fabricated training_metrics.json is gone.
+(10) The rulings ADR lists D-A..D-N and ADR D2/D3/D5/D6/D7. Each has `:status: open`, or `:status: ruled` with a link to the owner's recorded decision. ruling-cited.sh passes on the W0 PRs.
+(11) The conformance jobs are green in echidnabot, proof-burrower and panic-attack, and the verisim-api list test is green. Each may be DEFERRED(no push), with the patch and issue text committed under docs/handover/cross-repo/<repo>/.
+(12) The proof-burrower Agda job is green, or DEFERRED(no push).
+(13) The lake build result on Lean 4.13.0 is recorded in claims.json. Either it is green, or a repair item is filed and scheduled ahead of F-3.
+
+Owner checkpoints, which do not hold agent-completion: apply the stopgap on the host; approve the .claude/CLAUDE.md edit; post the bypass-log output.
+
+=== W1a: containment I. Fail-closed integrity, one pipeline, honest outcomes, auth everywhere, a signed image, a single aggregator
+
+*Goal.* Close the open doors at their source:
+- Integrity fails closed.
+- The three dispatch paths collapse into verify_with_trust. The old entry points stay only as deprecated one-line delegations, so call sites owned by other lanes still compile.
+- Asking for a sandbox that cannot be provided is an error.
+- Environment failures become Error.
+- No vacuous Ok(true) remains, so XFAIL drains to 0.
+- There is one ProverKind.
+- Every execution route and binary requires a bearer token, including echidnabot's /graphql.
+- Only the signed, verified image is published.
+- `ci-gate` exists.
+- The provenance envelope and the claims register are created.
+- The red-team probes become committed tests.
+
+*Estimate:* 41 agent-days. *Items:* `P0-1`, `V-5`, `NEW:prove-result-provenance-envelope`, `V-1`, `P0-3`, `P0-4 (a: server)`, `V-9`, `P0-4 (b: interfaces)`, `V-15`, `NEW:missing-binary-is-error`, `V-2`, `V-3`, `NEW:metamath-inprocess-verifier-removal`, `A-2`, `NEW:idris-oracle-harness`, `F-9 (a)`, `P0-8`, `CI-9 (a)`, `CI-12`, `NEW:claims-register`, `NEW:claims-gate (report-only)`, `NEW:containment-probes`, `P0-5`, `B-7`, `C-1`, `L-2`, `CI-10`, `NEW:wave-scaffold`.
+
+*Rulings needed before the wave:*
+
+* #21 integrity policy
+* #1 D-A
+* #2/#23/#24 D-B, the envelope and additive fields
+* #9 D-I aggregator, with #38 proof jobs required
+* #45 Containerfile and signing
+* #30 REST ProverKind
+* #48 canonical Julia server
+* #29 Metamath
+* #37 Rust–Idris tie before ECH-05 (satisfied by A-2)
+* #55/#56 where echidnabot work lands, and the transport
+
+*Lanes (one owner per file):*
+
+* integ (Cargo.toml, Cargo.lock, crates/echidna-core/src/lib.rs, src/rust/lib.rs, module-registration files, .github/workflows/**, .github/ci-gate.kyaml, cross-check-live.yml): NEW:wave-scaffold, then CI-9a, then CI-12, then folds the wave's jobs into the manifest (promotion PR)
+* K (src/rust/dispatch.rs, verification/mod.rs content other than module declarations): P0-1, then V-5
+* C (prove_result.rs, prove_contract.rs, cli/prove.rs, cli/verify.rs, cli/args.rs, tests/golden/prove_result/**): NEW:prove-result-provenance-envelope, then V-1, then call-site migration after V-5
+* X (src/rust/executor/**): P0-3
+* S (new server/auth.rs plus the router line in server/mod.rs): P0-4a
+* I (src/interfaces/**, From impls in prover_kind.rs, port constants in gnn/client.rs and neural.rs): V-9, then P0-4b, then V-15
+* P1 (provers/mod.rs trait default, provers/outcome.rs, coq.rs, rocq.rs, lean.rs, isabelle.rs): NEW:missing-binary-is-error, then V-2, then V-3
+* P2 (agda.rs, idris2.rs, cvc5.rs, z3.rs): V-2, then V-3 for the IR fallbacks
+* P3 (metamath.rs, hol4.rs, hol_light.rs, pvs.rs, acl2.rs): V-3 plus NEW:metamath-inprocess-verifier-removal
+* O (verification/oracle/**, verification/oracle/golden/**, tests/fidelity_oracle.rs, kani/**; kani.yml is handed to integ): A-2 with NEW:idris-oracle-harness, then F-9a
+* D (root Containerfile, .containerization/Containerfile; ghcr-publish.yml and container-ci.yml edits are written by D and landed by integ): P0-8. It publishes only to an immutable tag until the owner confirms AutoUpdate is off.
+* claims (docs/proofs/claims.json, scripts/ci/claims-gate.sh): NEW:claims-register, then NEW:claims-gate (report mode)
+* E (canonical echidnabot, also its integrator this wave): P0-5, then B-7, then the fleet pin bump
+* corpus (corpus/octad.rs, the identity flag in verisim_bridge.rs): C-1
+* learn (src/julia/api/**, api_server.jl, run_server.jl, EchidnaML.jl, just/ml.just, scripts/ml/julia-ci.sh): L-2, then CI-10
+
+*Exit gate.* scripts/gates/w1a.sh exits 0 (no FAIL), on wave/W1a and then on main. It checks:
+(1) The integrity tests pass: placeholder, tampered, unknown and missing-checker all produce an error, and an opt-in is recorded in provenance.
+(2) There is exactly one verify_with_trust and exactly one integrity call site. Every deprecated entry point's body is a single delegation (grep plus a syn-based check).
+(3) With bwrap removed from PATH, `echidna prove --sandbox bwrap` exits nonzero. The default provenance.sandbox is "unsandboxed" with its opt-in reason.
+(4) An unauthenticated call returns 401 on every execution route and on all three interface binaries.
+(5) A 141-variant round trip works through REST, GraphQL and gRPC.
+(6) With PATH emptied, every backend reports error, and the coqc library-path fixture reports error.
+(7) `jq length tests/fixtures/XFAIL.json` is 0 and live-fixtures is green.
+(8) The oracle and Kani are green.
+(9) The digest of the immutable-tag ghcr image equals the container-ci digest, `cosign verify` passes, and the SBOM attestation verifies.
+(10) ci-gate is green in shadow mode. The live ruleset either requires ci-gate (PASS) or does not yet (DEFERRED(owner swap)).
+(11) julia-ci boots the server without weights.
+(12) Upstream echidnabot is green, with a token test and 401 on /graphql mutations. DEFERRED(no push) is allowed.
+(13) `cargo test --test containment_probes` passes.
+(14) The claims-gate report is committed.
+(15) Carried in from W0 if it was DEFERRED: the CI-4 expiry check.
+
+Owner checkpoint: swap the ruleset to require ci-gate.
+
+=== W1b: containment II. Integrity before execution, a sound Chapel path, a real manifest, the typed contract on HTTP, the deploy pin, honest docs, the id scheme
+
+*Goal.* Reorder the pipeline so integrity runs before execution. Make a Chapel win only a candidate, re-checked by Rust. Make unread config fields fail to compile, and set gnn_api_url from config. Write a real manifest the owner can sign. Remove the integrity `which` subprocess and the server SMT passthrough. Emit prove.result/1 over HTTP and report real availability, then delete the deprecated dispatch wrappers. Generate the ProverKind model and tier docs from code. Pin the deployment to the signed digest. Make the README, SECURITY, CLAUDE.md, the deed and the module docs describe what the code now does. Land the ruled UUID scheme in ids.rs before attempt/1 freezes.
+
+*Estimate:* 31 agent-days. *Items:* `V-10`, `I-4`, `V-6`, `L-1`, `P0-2`, `NEW:shake256-rename`, `P0-6`, `P0-7 (a: prose docs)`, `P0-7 (b: module docs)`, `D-4 (a)`, `E-2`, `V-4`, `NEW:verify-raw-disposition`, `V-12`, `F-6`, `D-3`, `V-14`, `C-4`, `C-11`, `PB-1`, `B-9`, `L-15 (a)`, `NEW:ids-adr008-p3`, `NEW:wave-scaffold`.
+
+*Rulings needed before the wave:*
+
+* #22 reorder
+* #40 Chapel always re-checked
+* #24/#25 /api/verify and the SMT passthrough
+* #26 rename
+* #27 Tier-1
+* #28 headline counts
+* #8 D-H
+* #18 D7
+* #5 D-E Hypatia threshold
+* #60 (the E-2 part)
+* UUID scheme for new ids (new; ADR-008 P3 now, or a version-agnostic id field)
+
+*Lanes (one owner per file):*
+
+* integ (Cargo files, lib.rs files, registration files, workflows, ci-gate.kyaml): NEW:wave-scaffold (xtask crate skeleton, cli/integrity registration), then adds the V-4 golden and generator-drift jobs, then prepares the ruleset JSON
+* K (dispatch.rs, ProverConfig in provers/mod.rs, ffi/mod.rs:221, their `//!` docs): V-10, then I-4 (the dispatch.rs:1022 mapping is removed; tryProver parses the verdict token; the winner is re-checked through check()), then V-6, then L-1, then deprecated-wrapper removal
+* Int (integrity/**, solver-manifest.toml, new cli/integrity.rs, the SPARK companion's name): P0-2 (including in-process resolve_binary replacing the `which` subprocess at solver_integrity.rs:147), then NEW:shake256-rename
+* D (deploy/hetzner/**, Caddyfile, verify-host.sh): P0-6 repo side
+* docs (README.adoc, CLAUDE.md, echidna_chora.deed, SECURITY.adoc, PROOF-NEEDS.adoc, meta-checker README, docs/decisions/** except the rulings ledger): P0-7a, then D-4a, then E-2
+* moddocs (`//!` lines only in src/rust/executor/**, src/rust/verification/**, src/rust/confidence.rs): P0-7b
+* S (server/routes_prove.rs, routes_meta.rs, server/smt.rs, new server/availability.rs): V-4, then NEW:verify-raw-disposition (removes the server.rs:760 Command::new), then V-12
+* gen (xtask/**: the ProverKindInjectivity.idr generator, then tier() in prover_kind.rs and the PROVER_COUNT generator): F-6, then D-3
+* mcp (crates/echidna-mcp/**): V-14, and proposes the reviewed ratchet allow-list entry for its self-spawn
+* corpus (corpus/acl2_books.rs, corpus/lean.rs, corpus/query.rs): C-4, then C-11
+* ids (src/rust/ids.rs and its tests): NEW:ids-adr008-p3 under the ruled scheme
+* pb (proof-burrower ledger; its integrator this wave): PB-1
+* E (canonical echidnabot live lane): B-9
+* art (scripts/artefacts/**, artefacts/manifest.json): L-15a
+
+*Exit gate.* scripts/gates/w1b.sh exits 0 (no FAIL). It checks:
+(1) The stage-trace test shows integrity, then execute, then axioms, then trust, and a sentinel confirms a tampered binary is never spawned.
+(2) A Chapel z3 `sat` winner is never Proved.
+(3) A compile-fail test confirms unread ProverConfig fields break the build.
+(4) The manifest has 0 PLACEHOLDER entries and, regenerated inside the pinned CI prover image (by digest), shows an empty diff. `echidna integrity verify` passes with CI's recorded opt-in and fails without it while the manifest is unsigned.
+(5) /api/verify and /api/prove validate against prove.result/1. The timeout and unknown e2e tests pass. /api/provers shows available:false when a binary is absent.
+(6) The ProverKindInjectivity and PROVER_COUNT regeneration diffs are empty.
+(7) The quadlet uses @sha256 equal to the signed digest, with no AutoUpdate.
+(8) deed_lint passes. claims-gate (report mode) over README, SECURITY, CLAUDE.md, the deed and every `//!` doc shows 0 unmapped proved/verified/guaranteed/sandboxed/certified claims.
+(9) The echidna-mcp tests and the PB-1 tamper test are green, and so is the echidnabot live lane. The last two may be DEFERRED(no push).
+(10) The rescan counts from C-4 are committed.
+(11) ids.rs mints under the ruled scheme, and parsers accept v7 and v8. DEFERRED(UUID ruling) is allowed, but then attempt/1 cannot freeze in W2a.
+(12) `rg 'Command::new'` finds nothing in src/rust/integrity/ or src/rust/server/.
+(13) No deprecated dispatch entry point remains.
+
+Owner checkpoint: apply P0-6 on the host, run verify-host.sh and post its output. That output, committed, is the precondition for L-9 in W2b.
+
+=== W2a: the spec binds the kernel; one runner; observer and cross-check
+
+*Goal.* Write the canonical Idris2 trust-kernel spec and its oracle. Make the single Rust kernel equal to the spec over the whole domain. Make the defective factor states unrepresentable, and fix Level5. Land the runner and the ratchet. Add the outcome-observer, then reachable cross-check, then the exported stage order. Freeze attempt/1 with ids under the ruled scheme. Add the fault-injection gate. Unify Agda, add the proof jobs to ci-gate (CI-8), and make the claims gate required. Start dk-shape-v2.
+
+*Estimate:* 33 agent-days. *Items:* `F-1`, `NEW:trust-factors-typed`, `NEW:level5-semantics`, `V-7 (a)`, `NEW:command-ratchet`, `NEW:outcome-observer`, `V-11`, `NEW:pipeline-stage-export`, `NEW:attempt-contract`, `NEW:fault-injection-gate`, `NEW:agda-toolchain-unify`, `CI-8`, `NEW:claims-gate (required)`, `B-1 (a)`, `B-5`, `B-2`, `PB-2`, `L-8`, `C-3`, `C-8`, `NEW:wave-scaffold`.
+
+*Rulings needed before the wave:*
+
+* #32 canonical spec and Level semantics
+* #4 D-D
+* #23 cross-check opt-in
+* #17 D6
+* #50 retrain objective
+* #53 bridge keying
+* #38 proof jobs required
+
+*Lanes (one owner per file):*
+
+* integ (Cargo files, lib.rs files, registration files, workflows, ci-gate.kyaml): NEW:wave-scaffold, then NEW:agda-toolchain-unify, then CI-8 (proof jobs become members, shims removed), then the claims gate becomes required, then the fault-injection job is added
+* spec (TrustKernel.idr; retires TrustKernelMonotonicity, TrustLevelSoundness and ClampTrustBounds; verification/oracle/**; trust_table golden; echidna-core trust module; confidence.rs; echidna-core-creusot lib.rs; tests/trust_kernel_spec.rs): F-1, then NEW:trust-factors-typed, then NEW:level5-semantics, then the from_legacy removal
+* X (executor/process.rs, the sandbox read in provers/mod.rs, scripts/ci/command-new-ratchet.sh, scripts/ci/command-new-allow.kyaml): V-7a plus NEW:command-ratchet. The baseline count and allow-list entries are reviewed in the PR.
+* K (dispatch.rs, verification/policy.rs, the cross_check field in routes_prove.rs; cli/verify.rs flag work goes through C): NEW:outcome-observer, then V-11, then NEW:pipeline-stage-export, then the typed-constructor migration
+* C (echidna-core attempt.rs, docs/contracts/echidna.attempt-1.adoc, cli/verify.rs --cross-check flag): NEW:attempt-contract, with ids minted only through ids.rs under the ruled scheme
+* T (tests/fault_injection.rs, scripts/ci/fault-injection.sh): NEW:fault-injection-gate
+* E (canonical echidnabot client and dispatcher; its integrator this wave): B-1a (outcome and receipt), then B-5
+* fleet (gitbot-fleet FleetCoordinator, bots/echidnabot pin): B-2, then the wave's single pin bump
+* pb (proof-burrower ledger backend; its integrator this wave): PB-2
+* jl (src/julia/features.jl, the trainer): L-8
+* id (corpus/canonical.rs, lexicon/**): C-3
+* bridge (verisim_bridge.rs GraphPayload): C-8
+
+*Exit gate.* scripts/gates/w2a.sh exits 0 (no FAIL). It checks:
+(1) spec-drift regenerates the trust and fidelity goldens with an empty diff.
+(2) trust_kernel_spec passes over the full typed domain.
+(3) `rg 'fn compute_trust_level'` finds exactly one definition, and `rg from_legacy` finds nothing.
+(4) A compile-fail test shows certificate_verified without has_certificate cannot be represented, and the Level5 rows require at least two distinct small-kernel certified confirmers. DEFERRED(#32) is allowed for the Level5 part, with the spec block.
+(5) The runner tests pass (timeout, output cap, kill_on_drop). The ratchet negative test fails CI as it should, and the baseline count is recorded.
+(6) `echidna verify --cross-check z3,cvc5 --output json` includes an arbitration block.
+(7) pipeline.json equals the stage trace.
+(8) The attempt/1 golden round-trips and its ids come from ids.rs under the ruled scheme. If the UUID check was DEFERRED from W1b, this check is DEFERRED too, and attempt/1 stays a draft.
+(9) fault-injection is green and a ci-gate member. Its cases: tampered binary refused before spawn; missing binary gives error; bwrap requested but unavailable gives error; bwrap available gives provenance.sandbox=bwrap; 401; Chapel `sat` never Proved.
+(10) The proof jobs are ci-gate members and a grep finds no shim.
+(11) The claims gate is a member and green.
+(12) For checks 9–11, the live ruleset requires ci-gate (PASS) or not yet (DEFERRED(owner swap)).
+(13) The B-1a test against a live ECHIDNA passes, and B-5 moves an obligation from PENDING to terminal. DEFERRED(no push) is allowed.
+
+=== W2b: derive the models, the first runner tranche, the production write leg, non-interference
+
+*Goal.* Derive the meta-checker, Lean PI-11 and DispatchOrdering from the spec and from the exported pipeline. Finish Kani saturation and kernel mutation testing. Re-point echidnabot to the spec-bound kernel. Move the 12 core backends onto the runner. Test the write leg in CI on an ephemeral VeriSim, with the writer allowlist and advice provenance. Turn on the production writer (L-9) if the host evidence and ruling #46 are in. Make the non-interference test required, and add the injected-disagreement fault case. Build the identity join and the STATUS generator. Start stepwise proof state, and ship the honest UI page.
+
+*Estimate:* 30 agent-days. *Items:* `F-2`, `F-3`, `F-4`, `F-9 (b)`, `NEW:kernel-mutation-gate`, `B-4`, `V-7 (b)`, `NEW:writer-allowlist`, `NEW:advice-provenance`, `L-9`, `NEW:loop-ci-harness`, `NEW:verisim-api-pinned-image`, `NEW:advice-non-interference-test`, `L-11`, `C-7`, `D-2 (a)`, `PB-4 (a)`, `S-1`, `NEW:wave-scaffold`.
+
+*Rulings needed before the wave:*
+
+* #49 production writer stays off until the host P0-6 is applied
+* #46 (PAT part): rotate or drop VERISIMDB_PAT before the production writer
+* #52 VeriSimAdvisor advisory only
+* #14 D-N
+
+*Lanes (one owner per file):*
+
+* integ (Cargo files, lib.rs files, registration files, workflows, ci-gate.kyaml): NEW:wave-scaffold, then adds the s4-loop, non-interference, Kani-saturation and mutants jobs
+* formal (meta-checker/**, generated TrustTable.agda): F-2
+* formal2 (verification/proofs/lean4/IntegrityVerification.lean): F-3
+* formal3 (DispatchOrdering.agda and .idr, generated from pipeline.json): F-4
+* kernel (kani/**, mutants.toml, just/proofs.just): F-9b, then NEW:kernel-mutation-gate
+* E (canonical echidnabot Cargo.toml and trust bridge): B-4, then the fleet pin bump
+* X (the 12 all_core() backend files: agda, coq, lean, isabelle, z3, cvc5, metamath, hol_light, mizar, pvs, acl2, hol4): V-7b, with a shim test for each
+* loop (verisim writer config, server/state.rs observer registration, the published-image verisim feature, deploy env proposal): NEW:writer-allowlist, then NEW:advice-provenance, then L-9
+* vdb (verisimdb image; scripts/ml/s4-loop.sh): NEW:verisim-api-pinned-image, then NEW:loop-ci-harness
+* ani (tests/advice_noninterference.rs, tests/fault_injection.rs): NEW:advice-non-interference-test, then the injected-disagreement fault case
+* obs (agent/meta_controller.rs): L-11
+* id (corpus/identity_join.rs): C-7
+* status (xtask gen-status module, STATUS.adoc, claims link): D-2a
+* ps (src/rust/stepwise/**): PB-4a
+* ui (src/ui/**): S-1
+
+*Exit gate.* scripts/gates/w2b.sh exits 0 (no FAIL). It checks:
+(1) The meta-checker proves over the generated TrustTable.agda.
+(2) `lake build` passes with PI-11 on the pinned Lean image.
+(3) DispatchOrdering type-checks over the generated pipeline.
+(4) The Kani saturation proof is green.
+(5) cargo-mutants reports 0 survivors in the trust kernel and result_arbiter.
+(6) echidnabot depends on the echidna-core trust module (grep). DEFERRED(no push) is allowed.
+Checks 1, 4, 5 and 6 may be DEFERRED(#32) with the spec block.
+(7) The ratchet count is at least 12 below the W2a baseline, and every core backend returns timeout on the sleep fixture.
+(8) s4-loop shows rows>0 with no skip branch, on the pinned CI VeriSim, and error rows are excluded from training.
+(9) The non-interference test and the injected-disagreement fault case are ci-gate members and green, and the live ruleset is checked as in W2a.
+(10) The identity-join fixture passes.
+(11) The gen-status diff is empty, STATUS lists every DEFERRED check, and the claims gate rejects an injected unmapped claim.
+(12) Lean and Coq apply_tactic change the proof state.
+(13) The S-1 page builds and claims nothing unbuilt (claims gate).
+(14) L-9: the published image is built with the writer, the verify-host evidence is committed, and an owner-posted host log shows attempt rows written. DEFERRED(host P0-6) or DEFERRED(#46) is allowed. In that case STATUS says 'production writer: pending', and L-10 and L-13 are DEFERRED with it.
+
+=== W3a: cage and certify I; first probes; schema freeze; identity split; v0 weights
+
+*Goal.* Move every remaining subprocess onto the sandboxed runner in reviewable stacks of about 5 files, until the ratchet is 0. That covers the remaining prover files, kissat/cadical/minisat, the six coprocessors and the drat-trim checker. Make the external checkers real and emit SMT/SAT proofs. Freeze the canonical Cap'n Proto schema. Produce the first standpoint-aware consequence probes. Merge Pareto and prove the fusion laws. Split the data by identity cluster, then train v0 reproducibly on CPU. Shrink the echidnabot slot if that has been ruled.
+
+*Estimate:* 42 agent-days. *Items:* `V-7 (c)`, `V-7 (d)`, `V-8 (a)`, `V-8 (b)`, `I-1`, `NEW:capnp-fuzz`, `A-3`, `A-9`, `F-12`, `NEW:identity-keyed-split`, `L-5`, `PB-4 (b)`, `PB-6 (a)`, `NEW:echidnabot-thin-adapter`, `NEW:wave-scaffold`.
+
+*Rulings needed before the wave:*
+
+* #3 D-C
+* #15 D3
+* #20 pacing hold (PR 4)
+* #7/#39 D-G, schema and codec
+* #35 Pareto merge
+* #49 and CPU v0 as a Stage-2 candidate (new)
+* #60 PB-01/02 canonical numbers, D9 and D10
+* #55 thin adapter (if not already ruled in R0)
+
+*Lanes (one owner per file):*
+
+* integ (Cargo files, lib.rs files, verification/mod.rs, provers/mod.rs registration list, cli/mod.rs, workflows, ci-gate.kyaml): NEW:wave-scaffold, then the pareto_arbiter module-line removal, then the promotion PR
+* X1..X5 (prover files a–d, e–j, k–o, p–s and t–z, minus the 12 core files and the smt lane's files): V-7c
+* smt (z3.rs and cvc5.rs for proof emission only; kissat.rs, cadical.rs and minisat.rs for both runner migration and DRAT emission): V-7c for the three SAT files, then V-8b
+* coproc (src/rust/coprocessor/{fpga,gap,macaulay2,maxima,parigp,singular}.rs): V-7d
+* cert (certificates.rs, verification/checkers/**, the Containerfile checker install, checker entries in the manifest): drat-trim onto ProverProcess, then V-8a, which deletes the structural Alethe checker
+* schema (crates/echidna-wire/**, the retired schemas/**, CapnSchemas.idr, just/capnp.just, fuzz target): I-1, then NEW:capnp-fuzz
+* probe (consequence_probe.rs, result_arbiter.rs, Arbitration.idr, fidelity golden): A-3
+* pareto (pareto.rs, removal of pareto_arbiter.rs and its callers, proofs/agda/Fusion*.agda): A-9, then F-12
+* jl (src/julia/splits.jl, training, artefact publish): NEW:identity-keyed-split, then L-5
+* ps (cli/step.rs, the proofstate-1 contract doc): PB-4b
+* pb (proof-burrower fitness and mine; its integrator this wave): PB-6a
+* fleet (gitbot-fleet bots/echidnabot plus canonical echidnabot): NEW:echidnabot-thin-adapter, only if ruled, with [mass-delete-ok]
+
+*Exit gate.* scripts/gates/w3a.sh exits 0 (no FAIL). It checks:
+(1) Within the ratchet scope, the count is 0 outside src/rust/executor. command-new-allow.kyaml holds only the reviewed entries (build scripts, and echidna-mcp's self-spawn). Every backend and coprocessor has a shim test.
+(2) The Tier-1 sleep fixture returns timeout.
+(3) Unsandboxed execution is refused without an opt-in, and is recorded with one.
+(4) carcara and drat-trim accept the fixture proofs and reject mutated ones. DEFERRED(D-C) is allowed.
+(5) No structural checker remains (grep). DEFERRED(D-C) is allowed.
+(6) echidna-wire compiles, schemas/echidna.capnp is gone, CapnSchemas.idr is in the ipkg with the correct id, and 10 minutes of fuzzing are clean. DEFERRED(#7/#39) is allowed.
+(7) The probe job emits `distinct` and an agreeing correspondence with a standpoint record. The oracle covers standpoints, and correlatedNotEpi type-checks. DEFERRED(#15) or DEFERRED(#20) is allowed.
+(8) pareto_arbiter.rs is gone and the frontier golden matches Lean E10.
+(9) The Fusion Agda proofs are green in ci-gate.
+(10) The identity split shares 0 clusters between train and test.
+(11) `sha256sum -c` passes for gnn v0-cpu and julia-ci loads it. DEFERRED(CPU-v0 ruling) is allowed.
+(12) The proofstate goldens pass, and so do the PB-6a tests. PB-6a may be DEFERRED(no push).
+(13) The coprocessor tests pass through ProverProcess.
+
+=== W3b: certify II, evaluation, the obligation flow, choice of proof tool
+
+*Goal.* Thread the typed certificate status into the pipeline so Levels 3 to 5 become reachable exactly as the spec says. Settle SPARK and Creusot per D-F. Run the held-out evaluation. Emit Stage 3c rows, and wire the advisor as advisory only once the production writer exists. Make the identity read path real, with a dual-scheme migration. Make panic-attack obligations flow end to end. Give Burrower retrieval, Lean/Coq attempts and P1/P2/P4. Add non-dominated sort and hypervolume. Start the OpenTheory research lane. Re-specify the proof DAG in a supported format.
+
+*Estimate:* 41 agent-days. *Items:* `V-8 (c)`, `F-7`, `F-8`, `L-6`, `L-12`, `L-10`, `C-9`, `NEW:verisim-rekey-migration`, `B-6`, `NEW:pa-obligation-emit`, `NEW:pa-aggregate-prove-result`, `PB-5 (a)`, `PB-7`, `PB-8`, `E-1`, `NEW:hol-kernels-ci-image`, `A-4 (start)`, `NEW:proof-dag-format`, `NEW:wave-scaffold`.
+
+*Rulings needed before the wave:*
+
+* #6/#47 D-F and the SPARK gate
+* #57 panic-attack claims
+* #54 proof-DAG format
+* #36 echo-types
+* #20 pacing hold (A-4 lane)
+* #16 D5
+* #59 remainder: depend on echidna-core::prove_result, keep `burrower serve` or not, the clade (before PB-7/PB-8)
+* #60 WP0: the canonical ECH-01 issue body (before E-1)
+
+*Lanes (one owner per file):*
+
+* integ (Cargo files, lib.rs files, registration files, workflows, ci-gate.kyaml): NEW:wave-scaffold, then the live-certificates, D-F and HOL-image jobs
+* K (the certificate stage of dispatch.rs): V-8c, held until the spec block has merged
+* spark (spark/**, src/ada/spark/**, spark-theatre-gate script, the prove-spark recipe): F-7 per D-F
+* creusot (the echidna-core-creusot annotations): F-8 per D-F
+* jl (eval_held_out.jl, eval_results.jsonl): L-6
+* loop (emission in verification/proof.rs): L-12
+* adv (advisor calls in routes_prove.rs and cli/prove.rs): L-10, only if L-9 merged
+* vdbid (verisimdb index and view, vcl_ut.rs, the migration verb): C-9, then NEW:verisim-rekey-migration
+* obl (canonical echidnabot obligation schema; its integrator this wave): B-6
+* pa (panic-attack src/obligation/**, src/aggregate/prove_result.rs; its integrator): NEW:pa-obligation-emit, then NEW:pa-aggregate-prove-result
+* pb (proof-burrower integrator: Cargo.toml, Cargo.lock, burrower-cli registration; then burrower-core attempt.rs): scaffold, then PB-8
+* pbs (burrower-core/src/synth/**): PB-5a
+* pbr (echidna cli/corpus.rs near JSON, then burrower-core/src/retrieval/**): PB-7
+* pareto (pareto.rs): E-1
+* ot (exchange/opentheory.rs, containers/hol/**): NEW:hol-kernels-ci-image, then A-4
+* docs (the CROSS-REPO-PROOF-DAG respec as a deed clause or k9 contract): NEW:proof-dag-format
+
+*Exit gate.* scripts/gates/w3b.sh exits 0 (no FAIL). It checks:
+(1) The live-certificates job shows certificate_verified=true and a non-null hash, and the trust level equals the spec-table row. DEFERRED(D-C) or DEFERRED(#32 spec block) is allowed.
+(2) The D-F tool job is in ci-gate and green. Otherwise claims.json says 'model' and a grep finds no 'proved in SPARK' or 'Creusot-verified' wording.
+(3) eval_results.jsonl has v0-cpu and cosine-baseline rows with confidence intervals, each naming its store. The gate checks that results are recorded, not that the model wins. DEFERRED with L-5 is allowed.
+(4) Stage 3c rows appear in s4-loop.
+(5) The non-interference test still passes. If L-10 merged, VeriSimAdvisor is in its advice set. Otherwise DEFERRED(L-9).
+(6) A VCL-UT query returns a multi-prover cluster, and the dual-scheme test passes.
+(7) A panic-attack fixture reaches Backed or Contradicted. DEFERRED(no push) is allowed.
+(8) corpus.near/1 validates, and the burrower Lean/Coq e2e passes.
+(9) The hypervolume proptests pass.
+(10) The HOL image builds and the A-4 unit tests pass. DEFERRED(#20) is allowed.
+(11) The proof-DAG artefact passes deed_lint or `k9-validate.sh --strict`.
+
+=== W4a: first epi in the contract; the loop closes on the production store; the IPC transport
+
+*Goal.* Attach probe evidence in dispatch so `epi` reaches the contract. Calibrate fusion and make it dependence-aware. Prove certificate soundness over the real chain. Add the coprocessor tier as a spec-level cap. Close the loop: retrain, evaluate, gate, register, then /reload, with a rollback. The schedule reads production VeriSim, so it needs L-9. Bring up Cap'n Proto over UDS with an HTTP fallback. Make search_theorems honest for every backend, the 12 core ones included. Consolidate CI behind ci-gate. Make GraphQL apply_tactic real.
+
+*Estimate:* 46 agent-days. *Items:* `A-6 (a)`, `A-7`, `A-8`, `F-5`, `I-8`, `NEW:coprocessor-cap-in-spec`, `NEW:model-registry`, `NEW:promotion-gate`, `L-13`, `I-2`, `I-3`, `C-10`, `V-13`, `CI-9 (b)`, `PB-4 (c)`, `A-4 (continues)`, `NEW:wave-scaffold`.
+
+*Rulings needed before the wave:*
+
+* #34 default fusion
+* #20 pacing hold (PR 7a)
+* promotion margin (new)
+* #7 type freeze replaces the 7-day gate
+* #10 D-J maintainer identity (before CODEOWNERS)
+
+*Lanes (one owner per file):*
+
+* integ (Cargo files, lib.rs files, registration files, all workflows, ci-gate.kyaml, CODEOWNERS): NEW:wave-scaffold, then CI-9b (with CODEOWNERS per D-J)
+* K (the fidelity attachment in dispatch.rs, the coprocessor-factor thread): A-6a, then the factor thread
+* arb (bayesian_arbiter.rs, dempster_shafer.rs): A-7, then A-8
+* certproof (proofs/agda/Certificate*.agda): F-5
+* spec (TrustKernel.idr, oracle and its golden, echidna-core trust module, coprocessor/mod.rs): NEW:coprocessor-cap-in-spec, then I-8 wiring
+* loop (scripts/ml/retrain.sh, src/julia/registry.jl, /reload in api/server.jl): NEW:model-registry, then NEW:promotion-gate, then L-13 (only if L-9 merged)
+* ipcr (src/rust/ipc/**, gnn/client.rs): I-2, then the UDS/HTTP equality test stacked on I-2 and I-3
+* ipcj (src/julia/ipc.jl, run_server.jl, the Zig shim if ruled): I-3
+* schema (echidna-wire build.rs, verisim_er.capnp): C-10
+* X1..X4 (four disjoint groups of prover files, the 12 core files included, isabelle.rs excluded): V-13
+* ps (graphql resolvers.rs, stepwise Isabelle, isabelle.rs): PB-4c, then V-13 for isabelle.rs
+* ot (opentheory.rs): A-4
+
+*Exit gate.* scripts/gates/w4a.sh exits 0 (no FAIL). It checks:
+(1) A dispatch golden shows level=epi for a Z3↔CVC5 probe pair that agrees, and belief for a correlated pair. DEFERRED with A-3 is allowed.
+(2) The A-7 and A-8 proptests pass.
+(3) F-5 type-checks in ci-gate.
+(4) The oracle tables regenerate with an empty diff, every pre-existing row is unchanged at the cap factor's default (the diff touches only the new column), and the coprocessor cap test passes.
+(5) A workflow_dispatch of retrain reads rows>0 from the store its output names. That store is production if L-9 merged and the read secret is present, otherwise the pinned CI VeriSim. The run writes a registry entry with the recipe and manifest hashes and the evaluation, and either promotes or records a rejection. A forced-regression fixture is rejected, and rollback restores the previous id. If the promotion-margin ruling is absent, every candidate is recorded as 'not promoted: margin unruled' (DEFERRED(margin)). L-13's schedule is enabled only if L-9 merged; otherwise DEFERRED(L-9).
+(6) The UDS and HTTP paths give identical rankings, including after a socket kill.
+(7) The er-drift gate is green.
+(8) Every backend's search_theorems is either real (all 12 core backends, with tests) or returns UnsupportedFeature, and a grep for empty-Vec returns finds 0.
+(9) There are at most 12 workflow files and ci-gate lists every lane. CODEOWNERS matches D-J, or DEFERRED(#10) with CODEOWNERS unchanged.
+(10) The GraphQL apply_tactic golden passes.
+
+=== W4b: combined grade, consumer loops, the real Chapel link, lexicon, calibration
+
+*Goal.* Put the TrustLevel × EpistemicLevel cap rule into the spec, the oracle, Kani and the contract, as a new output that changes no existing trust cell. Close the fleet report-back and the status honesty work. Add Burrower's GoalReduction and outcome export. Align TacticPolicy with attempt/1. Grow the lexicon. Resolve Validator.idr. Finish the doc sweep. Decide Stapeln. Calibrate the rankers. Link real Chapel behind the re-check. Unify Zig. Stop checking corpora out of git.
+
+*Estimate:* 44 agent-days. *Items:* `A-10`, `NEW:combined-grade-in-spec`, `B-3`, `B-8`, `PB-6 (b)`, `NEW:burrower-outcome-export`, `L-14 (a)`, `C-5`, `C-6`, `F-11`, `D-4 (b)`, `S-3`, `E-3`, `I-5`, `I-6`, `I-11`, `L-15 (b)`, `A-4 (continues)`, `NEW:wave-scaffold`.
+
+*Rulings needed before the wave:*
+
+* #33 combined grade
+* #51 learning/
+* #45 Stapeln
+* #41 Zig
+* #60 E-3
+* #19 D2 residual
+* F-11 disposition (new): prove a Validator.idr soundness theorem, or retract CORRECTNESS-ARCHITECTURE Layer 5
+
+*Lanes (one owner per file):*
+
+* integ (Cargo files, lib.rs files, registration files, workflows, ci-gate.kyaml): NEW:wave-scaffold, then L-15b (workflow checkout steps)
+* spec (TrustKernel.idr grade, oracle grade table, verdict_grade, the grade field in prove_result.rs): A-10 plus NEW:combined-grade-in-spec
+* fleet (fleet-coordinator.sh, fleet-report-back.sh, bots/echidnabot pin): B-3, then B-8
+* pb (proof-burrower: integrator, fitness/**, then the ledger VeriSim backend): PB-6b, then NEW:burrower-outcome-export
+* learn (learning/policy.rs, learning/daemon.rs): L-14a
+* lex (data/synonyms, extractors): C-5, then C-6
+* formal (src/idris/Validator.idr, CORRECTNESS-ARCHITECTURE): F-11 per its disposition ruling
+* docs (remaining stale docs, excluding src/chapel/** and any licence text): D-4b
+* deploy (stapeln.toml, container/ct-build.sh, container/README): S-3
+* cal (src/julia/calibration/**): E-3
+* chapel (build.rs, src/chapel/**): I-5, then I-6
+* zig (ffi/zig/**, src/zig_ffi/**, src/zig/**): I-11, then the Chapel bridge init
+* ot (opentheory.rs): A-4
+
+*Exit gate.* scripts/gates/w4b.sh exits 0 (no FAIL). It checks:
+(1) The grade table regenerates with an empty diff, the existing trust table is unchanged, and the Kani combined-grade proof is green.
+(2) A live test confirms a result reaches Level4 or above only with Epi.
+(3) In fleet CI, fleet-report-back writes a non-not_run verdict from a recorded prove.result in fixture mode, and the 'ready' state is derived from evidence. Live mode passes, or is DEFERRED(secret) if the fleet has no ECHIDNA token. DEFERRED(no push) is allowed.
+(4) The PB-6b tests pass, and burrower rows validate as attempt/1.
+(5) The TacticPolicy tests pass.
+(6) The curated lexicon counts are committed.
+(7) Validator.idr has a theorem, or Layer 5 is retracted, per the ruling. DEFERRED(F-11 ruling) is allowed.
+(8) S-3 is wired with a test, or removed.
+(9) ml_calibration.json is committed, or STATUS says 'pending'.
+(10) rust-chapel-real is strict and green, and the Chapel `sat` is never Proved through the real FFI. DEFERRED(E11) is allowed.
+(11) `zig build` works on the single version.
+(12) No workflow checks out training_data/, and `sha256sum -c` passes.
+
+=== W5: second-generation loop; consumers surface level and grade; groundwork for sound; Tier-4; Zig ABI
+
+*Goal.* Run the second-generation promotion, and add the hardware run as one more candidate once the owner has run it. Have echidnabot show level and grade, and call burrower swarm. Finish Burrower synthesis. Finish OpenTheory and start the λΠ projection. Put Chapel behind ProverProcess and benchmark it. Deliver the Zig ABI, Tier-4 (or mock-only, if so ruled) and i18n.
+
+*Estimate:* 42 agent-days. *Items:* `NEW:generation-2-promotion`, `L-12b`, `B-1 (b)`, `PB-5 (b)`, `PB-9`, `PB-10`, `A-4 (finish)`, `A-5 (start)`, `I-7`, `I-12`, `I-10`, `I-9`, `S-2`, `NEW:loop-observatory`, `NEW:burrower-dom-proptests`, `NEW:wave-scaffold`.
+
+*Rulings needed before the wave:*
+
+* #12 D-L
+* #42/#31 Tier-4, QPU and Imandra
+* #41 Zig ABI tree
+* #14 follow-up for S-2 (i18n scope)
+
+*Lanes (one owner per file):*
+
+* integ (Cargo files, lib.rs files, registration files, workflows, ci-gate.kyaml): NEW:wave-scaffold
+* loop (retrain schedule config, registry): NEW:generation-2-promotion
+* hw (run by the owner; the agent commits metrics_baseline and the run manifest): L-12b
+* E (canonical echidnabot check-run rendering, then the swarm shell-out; its integrator): B-1b, then PB-9 (echidnabot side)
+* pbs (burrower-core/src/synth/**): PB-5b
+* pb (proof-burrower integrator, burrower-core proptests, swarm entry point, docs): PB-9 (burrower side), then NEW:burrower-dom-proptests, then PB-10
+* ot (opentheory.rs, new exchange/lambda_pi.rs): A-4 finish, then A-5 start
+* K (the Chapel selector in DispatchConfig): I-7
+* bench (scripts/bench/chapel-161.sh): I-12
+* zig (src/zig/echidna_abi.zig and the Idris Foreign mirror): I-10
+* t4a/t4b/t4c (.containerization/tier4/<backend>/**): I-9
+* ui (locale/**): S-2
+* status (registry → STATUS panel): NEW:loop-observatory
+
+*Exit gate.* scripts/gates/w5.sh exits 0 (no FAIL). It checks:
+(1) The registry holds at least 2 generations, each with identity-keyed evaluation rows that name their store and a recorded gate decision. DEFERRED(margin) is allowed while the margin is unruled.
+(2) The loop-observatory STATUS panel is byte-identical to its generator.
+(3) An echidnabot check-run shows level and grade. DEFERRED(no push) is allowed.
+(4) PB-01 acceptance passes and the prover-call benchmark is recorded.
+(5) The swarm comment test passes.
+(6) The HOL4/HOL Light CR-8 job is a ci-gate member, enforced by the live ruleset, and green. DEFERRED(#20) is allowed.
+(7) The term_hash proptests pass on 10k pairs.
+(8) The Chapel selector runs through ProverProcess, and the re-check still holds.
+(9) The #161 benchmark result is recorded against its pre-registered criterion. If no 8+-core runner has been provided, DEFERRED(hardware) with the runbook committed.
+(10) `nm` shows the 16 exports.
+(11) tier4 runs real suites, or STATUS says mock-only and ROADMAP 5d is amended.
+(12) The i18n and DOM proptests pass.
+(13) L-12b: metrics_baseline and the run manifest are committed. DEFERRED(hardware) is allowed, with the runbook committed and STATUS saying 'awaiting hardware'.
+
+=== W6: groundwork for sound, part II, and the research tails
+
+*Goal.* Finish the injective λΠ projection. Restate ParallelSoundness. Run the Chapel L2 sub-waves. Build the island model and Coursera delivery. Settle the learning research code. Dogfood ECHIDNA's own proofs through its pipeline.
+
+*Estimate:* 41 agent-days. *Items:* `A-5 (finish)`, `NEW:parallel-soundness-restate`, `I-13`, `E-4`, `S-4`, `L-14 (b)`, `NEW:self-receipt-dogfood`, `NEW:wave-scaffold`.
+
+*Rulings needed before the wave:*
+
+* #13 D-M
+* #60 ECH-03
+* #51 learning/ disposition (confirmed for L-14b)
+
+*Lanes (one owner per file):*
+
+* integ (Cargo files, build.rs chapel section, just/chapel.just, workflows, ci-gate.kyaml): NEW:wave-scaffold
+* ot (exchange/lambda_pi.rs, term_hash): A-5
+* ps (proofs/agda/ParallelSoundness.agda): NEW:parallel-soundness-restate
+* chapelL2a/b/c (disjoint existing src/chapel modules): I-13
+* island (new src/chapel/island/**): E-4
+* coursera (delivery over the Zig ABI): S-4
+* learn (learning/**, agent/**): L-14b
+* dogfood (scripts/ci/dogfood.sh, receipt ids in claims.json): NEW:self-receipt-dogfood
+
+*Exit gate.* scripts/gates/w6.sh exits 0 (no FAIL). It checks:
+(1) The projection returns Err on every echidna_opaque fixture.
+(2) The term_hash proptests pass.
+(3) ParallelSoundness type-checks over verdict semantics for the function the FFI calls.
+(4) Every I-13 sub-wave has a strict job. Multi-locale is gated, or DEFERRED(needs cluster).
+(5) The E-4 tests pass.
+(6) The S-4 smoke test calls the ABI.
+(7) learning/ has tests, or the research-label check passes.
+(8) dogfood produces receipts for 100% of formal modules, and the claims gate verifies their ids.
+
+=== W7: the first `sound` verdict
+
+*Goal.* Mechanise term_hash injectivity and α-invariance. Attach KernelTranslation evidence in dispatch so `sound` reaches the contract. Have echidnabot render it. Make Dedukti honest and checked. Land the pure-Rust ECH-04.
+
+*Estimate:* 22 agent-days. *Items:* `NEW:lambda-pi-injectivity-proof`, `A-6 (b)`, `B-1 (c)`, `A-11`, `E-5`, `NEW:wave-scaffold`.
+
+*Rulings needed before the wave:*
+
+* the language for the injectivity proof (new)
+* #20 pacing hold (PR 6/7b)
+* #60 ECH-04 in pure Rust
+
+*Lanes (one owner per file):*
+
+* integ (Cargo files, the ipkg, workflows, ci-gate.kyaml): NEW:wave-scaffold, then the dkcheck and sound-pilot jobs
+* proof (Idris2 next to Arbitration.idr, or Agda per ruling): NEW:lambda-pi-injectivity-proof
+* K (the KernelTranslation attachment in dispatch.rs): A-6b
+* E (canonical echidnabot sound-rendering fixture, then the fleet pin bump): B-1c
+* dk (exchange/dedukti.rs, lambdapi.rs): A-11
+* optabi (pure Rust plus OptimizationABI.idr): E-5
+
+*Exit gate.* scripts/gates/w7.sh exits 0 (no FAIL). It checks:
+(1) A required live job emits level=sound for the HOL4↔HOL Light pilot, with a kernel-replayed article and an equal term_hash. DEFERRED(#20) is allowed, with STATUS saying 'sound: not reached'.
+(2) The injectivity proof has zero postulates and is in ci-gate.
+(3) dkcheck and lambdapi accept the output and reject echidna_opaque.
+(4) OptimizationABI.idr is in the ipkg and the E-5 tests pass.
+(5) The echidnabot fixture built from the recorded pilot result renders `sound`. DEFERRED with (1), or DEFERRED(no push), is allowed.
+
+=== W8: capstone
+
+*Goal.* Prove Neural Safety as non-interference over code that now has the property. Close the claims register. Regenerate STATUS. Audit that every recon item is delivered, ruled out, or recorded as DEFERRED with its reason.
+
+*Estimate:* 10 agent-days. *Items:* `F-13`, `NEW:claims-register-closure`, `D-2 (b)`, `NEW:dod-audit`, `CI-6`.
+
+*Rulings needed before the wave:*
+
+* #63 academic paper
+* #46 (token part): the read-only ruleset token for CI-6
+* #11 D-K OpenSSF badge (owner action, any time)
+
+*Lanes (one owner per file):*
+
+* safety (proofs/agda/NeuralSafety*.agda): F-13, citing tests/advice_noninterference.rs as its Rust binding
+* status (claims.json, STATUS.adoc, ROADMAP rows): NEW:claims-register-closure, then D-2b
+* audit (scripts/dod/audit.sh): NEW:dod-audit
+* integ (the ruleset drift check, workflows, ci-gate.kyaml): CI-6
+
+*Exit gate.* scripts/gates/w8.sh exits 0 (no FAIL). It checks:
+(1) F-13 type-checks with --safe and zero postulates.
+(2) The claims gate finds 0 entries outside bound, model or retracted, and 0 overclaims in prose or `//!` docs.
+(3) gen-status runs with an empty diff.
+(4) dod-audit maps all 136 recon IDs and every NEW item to a merged PR, a ruling line, or a recorded DEFERRED reason, and lists the DEFERRED ones.
+(5) CI-6 is green, or DEFERRED(read-only token) with STATUS saying not_run.
+(6) w0.sh through w7.sh still pass on main, with their carried DEFERRED checks re-evaluated.
+
+[[cross-repo-actions]]
+== Actions in other repositories
+
+**hyperpolymath/gitbot-fleet**
+- CI-14 [W0].
+- One echidnabot pin bump per wave, after that wave's echidnabot merges [standing].
+- B-2 [W2a].
+- B-3 and B-8 [W4b]. A fixture-mode report-back test that needs no secret; live mode once the fleet has an ECHIDNA token.
+- NEW:echidnabot-thin-adapter [W3a, if ruled; marked `[mass-delete-ok]`].
+- Keep the fork-governance Hypatia report-back envelope unchanged.
+
+**hyperpolymath/echidnabot** (canonical, via add_repo push; one lane per wave acts as its integrator)
+- Conformance test [W0].
+- P0-5 and B-7 [W1a].
+- B-9 [W1b].
+- B-1a (outcome and receipt only) and B-5 [W2a].
+- B-4 [W2b].
+- B-6 [W3b].
+- B-1b and the echidnabot side of PB-9 [W5].
+- B-1c, the `sound` rendering fixture from the recorded W7 pilot result [W7].
+
+**hyperpolymath/proof-burrower** (one integrator lane per wave owns Cargo.lock and burrower-cli registration)
+- CI-15, CI-16 (diagnose run 37371572643; pin at or after a71aa2c per ruling #59), PB-3 and the conformance test [W0].
+- PB-1 [W1b].
+- PB-2 [W2a].
+- PB-6a [W3a].
+- PB-5a, PB-7 and PB-8 [W3b], after the #59 remainder.
+- PB-6b and NEW:burrower-outcome-export [W4b].
+- PB-5b, the burrower side of PB-9, PB-10 and NEW:burrower-dom-proptests [W5].
+- Its ids.rs migrates on that repo's own ADR-008 P3 timing. Not forced by this plan.
+
+**hyperpolymath/panic-attack**
+- CI-5 and the conformance test [W0].
+- NEW:pa-obligation-emit, NEW:pa-aggregate-prove-result and B-6 [W3b].
+- Flag to the owner that its src/a2ml/ and its .a2ml classification registry are legacy under the A2ML retirement. No conversion is planned here.
+
+**hyperpolymath/verisimdb**
+- L-7 [W0].
+- NEW:verisim-api-pinned-image [W2b].
+- Production ingestion of attempt rows (L-9) [W2b], only after the host P0-6 evidence and ruling #46.
+- C-9 and NEW:verisim-rekey-migration [W3b].
+- D5 consonance issue, if ruled [W3b].
+
+**metadatastician/standards**
+- CI-1 uses its reusables and its relock script [W0].
+- Request a coordination.k9 validator. None exists today, so the orchestrator checks globs.
+- deed_lint on echidna_chora.deed [W1b].
+- Propose the bound/model/retracted vocabulary, the golden-oracle binding pattern and the PASS/FAIL/DEFERRED gate convention as PROOF-POLICY companion notes. Owner's decision.
+- NEW:proof-dag-format under the standards grammars [W3b].
+
+**hyperpolymath/echo-types**: cite-only. Audit the lemma names before any import (ruling #36). The injectivity proof states the Echo-fibre reading in its docstring, with no dependency on the repo.
+
+[[risks]]
+== Risks and their mitigations
+
+* The W2a kernel change alters levels that consumers can see (Level5 tightening, typed factors). Mitigation: diff against the W0 characterisation golden, cite a ruled ADR anchor for every changed cell, add a CHANGELOG entry, and re-point echidnabot (B-4) in the following wave as part of the same spec block.
+* Fail-closed integrity and the default-deny sandbox could turn every CI job red at once. Mitigation: each lands with a recorded opt-in that shows up in provenance, CI sets that opt-in explicitly, `integrity init` lands in W1b, and bubblewrap is installed in the prover lanes.
+* Ubuntu 24.04 hosted runners restrict unprivileged user namespaces through AppArmor, so bwrap may fail there. Experiment E4 checks this before D-D. Podman is the fallback. The fault-injection case 'unavailable → error' stays valid either way.
+* dispatch.rs is serialised through a single K lane. Mitigation: keep each PR small, put all new logic in new modules, and have K only thread calls through.
+* The integrator lane can become a bottleneck, because every scaffold, registration and ci-gate edit goes through it. Mitigation: scaffolds land at wave start in one PR, lanes hand job bodies over as scripts, and promotion is batched at wave end.
+* Owner-merge throughput. About 13 waves of small stacked PRs need human review, and the session pauses at two unmerged waves. Mitigation: wave-level PR indexes, a verifier summary per PR, and a gate-pass record on the integration ref.
+* Owner-ruling latency: 68 rulings, nine batches. Mitigation: ask one wave ahead, DEFERRED checks with explicit carry-forward, flagged drafts, and lanes that need no ruling kept busy. CI-4 is the one hard deadline, and it is scheduled in W0.
+* Production loop slip. If the host P0-6 evidence or ruling #46 is late, L-9, L-10 and L-13 are all DEFERRED. The loop is then demonstrated only in CI, and STATUS must say so. No stand-in is presented as production.
+* The hotspot split could collide with open PRs #455 and #458. Mitigation: those land first, the split is byte-identical and golden-gated, and the other W0 Rust lanes only add new test files.
+* Proof toolchains are missing from agent containers, and the Lean status is contradictory. Mitigation: commit JCS goldens, use pinned CI images, run experiment E2, and run NEW:lean-build-reconcile in W0.
+* Flakes in ci-gate create pressure to bypass it. Mitigation: a shadow run first, small fixture sets with the full suites nightly, and a narrow fault-injection gate kept separate.
+* Contract churn could break consumers. Mitigation: one envelope, conformance tests in four repos before D-B lands, and /2 only if a field has to change meaning. The UUID migration is read-compatible: parsers accept v7 and v8.
+* The learning loop could be poisoned or leak test data. Mitigation: the writer allowlist, exclusion of error rows, and a cluster split with a zero-shared check. Residual risk: false negatives in dk-shape-v2, so its collision statistics are published with every eval.
+* v0-cpu may not beat cosine. The gates check that the result was recorded and decided, not that the model won. Stage 2 is not claimed until a generation passes the gate.
+* The dk-shape-v2 SCHEME bump could orphan keys. Mitigation: a dual-scheme migration in W3b, before the loop relies on production rows.
+* The OpenTheory/λΠ work is high-risk and can be blocked by the pacing hold. Mitigation: an isolated research lane with fuzz and round-trip nets. If it does not land, `epi` is the maximum grade, and STATUS reports 'sound: not reached' with the ruling cited.
+* Real Chapel may not link on hosted CI. Mitigation: the I-4 re-check comes first, so Chapel can stay experimental without risk to verdicts; experiment E11 checks feasibility, and I-5/I-6 have a DEFERRED branch.
+* carcara, drat-trim, the HOL kernels and dkcheck add supply-chain surface. Mitigation: pin each by digest and list it in the integrity manifest.
+* Cross-repo push access may be denied. Mitigation: E0 probes it on day 0. Denied lanes deliver a patch plus issue text, their checks are DEFERRED(no push), and the echidna side stays behind contract tests.
+* Overclaim could creep back into the docs. Mitigation: the claims gate covers prose and `//!` docs, runs report-only from W1a and is required from W2a. Docs lanes do not edit .rs files, STATUS is generated from W2b and lists every DEFERRED check, and a final audit runs in W8.
+* Self-receipts are circular evidence. Mitigation: name the external checkers as the trust anchor.
+
+[[owner-actions]]
+== What only the owner can do
+
+Owner rulings: 68 in total (63 from recon plus 5 new: the UUID scheme, the F-11 disposition, the promotion margin, the injectivity proof language and CPU v0). They are asked in selector batches R0–R8, each one wave before the work it gates.
+- If a ruling slips, its gate checks are DEFERRED(ruling) and its item moves to the next wave.
+- The lane takes other work, or keeps a flagged draft PR open.
+- No lane acts on a ruling it has assumed. ruling-cited.sh enforces this.
+
+Merging. The owner reviews and squash-merges every stacked PR in the GitHub UI, including the cross-repo ones. Waves become agent-complete on their integration ref without waiting. The session pauses when two waves are agent-complete but not merged, because deeper stacks are not realistically reviewable. 'Unverified' on agent commits is advisory.
+
+Ruleset and admin actions:
+- The one-time swap that makes `ci-gate` required.
+- The review rule.
+- Dropping the admin bypass.
+- Posting the bypass-log output.
+- The read-only token for CI-6.
+Agents commit the JSON and verification scripts. The gates read the live ruleset and report DEFERRED(owner swap) until the swap happens.
+
+Hetzner host actions: the W0 stopgap and P0-6 in W1b. The owner runs verify-host.sh and posts the output. That evidence, together with ruling #46, is the precondition for L-9, and through it for L-10 and L-13.
+
+Owner signature on the solver manifest (keyless cosign). Until it exists, integrity checks fail closed, and CI runs on a recorded opt-in.
+
+Secrets:
+- ECHIDNA tokens, including the one the fleet report-back uses.
+- Mirror credentials, or dropping those forges.
+- VERISIMDB_PAT, or its replacement.
+- A read token for production VeriSim, used by retrain.
+- The GitHub PAT or App used for live fleet dispatch.
+Jobs whose secret is missing report not_run, and the dependent gate check is DEFERRED(secret). Signing uses keyless OIDC.
+
+Hardware:
+- L-12b on a GPU or a large-CPU host.
+- I-12 on 8 or more cores.
+- I-13 L2.5 on a cluster.
+Agents write the runbooks and commit the results after the owner runs them. Until then, the checks are DEFERRED(hardware) or DEFERRED(needs cluster) and STATUS says so.
+
+CI-minute budget for Tier-4 and the HOL and dkcheck images: scheduled, path-filtered jobs until the budget is ruled.
+
+Third-party licences and accounts: Imandra, the OpenSSF badge, and non-free provers. Each stays experimental until decided.
+
+Licence matters are flag-only and owner-only:
+- The Julia README says 'MIT + Palimpsest'.
+- echidnabot carries MPL-2.0, PMPL and AGPL texts.
+- agents/*.007.
+New files carry MPL-2.0 for code and CC-BY-SA-4.0 for prose from creation, per echidna D262.
+
+Push access. Experiment E0 probes it on day 0. Where access is denied, the lane commits a patch plus issue text under docs/handover/cross-repo/<repo>/ and its checks are DEFERRED(no push) until the owner grants access or applies the patch. The proof-burrower PB-01/02 issue numbers could not be verified from here.
+
+Editorial decisions for the owner: the paper, the D-J maintainer identity, and the D-M milestones. Agents draft only.
+
+[[later-rulings]]
+== Ruling schedule after R0
+
+Batch schedule. Each batch is asked through the selector one wave before the work it gates, with the recommended option first and the most elegant one labelled.
+- R0: the first rulings, plus #59 (pin) and #58.
+- R1, asked in W0: #29, #48, #37, #24/#25, #28, #8, #18, #5, #60 (E-2), the UUID scheme, #22, #26, #27, #40.
+- R2, asked in W1a: #4, #17, #50, #53, #49, #46 (PAT), #52, #14.
+- R3, asked in W1b/W2a: #3, #15, #20, #7/#39, #35, CPU v0, #60 (PB numbers, D9, D10, WP0), #6/#47, #57, #54, #36, #16, #59 (remainder).
+- R4, asked in W3a: #34, the promotion margin, #10, #33, #51, #45 (Stapeln), #41, #60 (E-3), #19, the F-11 disposition.
+- R5, asked in W4a: #12, #42/#31, the S-2 scope.
+- R6, asked in W4b: #13, #60 (ECH-03).
+- R7, asked in W5: the injectivity proof language, #20 (PR 6/7b), #60 (ECH-04).
+- R8, asked in W6: #63, #46 (token), #11, and surfacing #61/#62.
+
+UUID scheme for new identifiers (new; R1, before W1b; resolves the recon contradiction 'UUID minting'):
+- (Recommended; most elegant) Land ADR-008 phase P3 for echidna now. ids.rs mints the v8 Profile T/C layout for records and content, and parsers keep reading v7, so attempt/1 freezes with v8 ids from creation.
+- A version-agnostic 'UUID minted by ids.rs' field in attempt/1, with the migration later.
+- (Unconventional) Attempts carry only a content id (v8 over the JCS row), with no time-ordered id at all.
+
+Execution and certificates:
+- #4 D-D, default-deny sandbox with a recorded opt-in. Needed before W2a. Recommended: yes.
+- #3 D-C, certificates. Needed before W3a. Recommended: implement carcara first, then drat-trim; pin both and list them in the manifest.
+
+Proof tooling:
+- #6 D-F tool choice and #47 SPARK theatre gate. Needed before W3b. Recommended: the spec plus Kani as the binding; SPARK only for linked modules; Creusot demoted until it is pinned. A proof counts toward Stage 8c only when it is bound to Rust.
+- #37 Rust–Idris tie before ECH-05. Needed before W1a. Recommended: yes, satisfied by A-2.
+
+IPC: #7 D-G and #39. Needed before W3a.
+- Sequence: freeze, then schema, then transport.
+- Canonical crate: echidna-wire.
+- Julia: a Zig C-ABI shim.
+- Settle L1 questions Q1–Q4.
+- The type freeze replaces the 7-day gate.
+
+Model and data storage:
+- #8 D-H storage. Needed before W1b. Recommended: a content-addressed store with a SHA-256 manifest.
+- #48 Julia server. Needed before W1a. Recommended: EchidnaML on :8090. Rename the logistic model as a prover classifier.
+
+Training-data rulings:
+- #49 writer and off-repo run. The writer stays off until P0-6 is applied on the host. Require an in-repo eval before Stage 2.
+- #46 (PAT part). Needed before W2b and L-9. Recommended: rotate VERISIMDB_PAT, or drop it in favour of a scoped write token.
+- #50 objective. Needed before W2a. Recommended: outcome-labelled, per obligation class.
+- #51 learning/ and agent/. Needed before W4b. Recommended: wire TacticPolicy and label the rest as research.
+- #52 VeriSimAdvisor. Needed before W2b. Recommended: advisory ordering only.
+- #53 bridge keying and compiling verisim_er. Needed before W2a. Recommended: yes to both.
+
+ADR-2026-10-19 items:
+- #15 D3. Recommended: Z3↔CVC5 now.
+- #16 D5. Recommended: open the issue.
+- #17 D6. Recommended: yes, with a dual-scheme migration.
+- #18 D7. Recommended: yes.
+- #19 D2 residual. Recommended: defer, since TOML is preserved by kyq.
+
+#20 pacing hold (W3a/W3b/W7). Recommended:
+- Release PR 4 now.
+- Run PRs 5–6 as an isolated research lane.
+- Use HOL4↔HOL Light via OpenTheory as the first pair.
+While it holds, the dependent gate checks are DEFERRED(#20) and STATUS says 'sound: not reached'.
+
+Arbitration semantics:
+- #33 combined grade. Needed before W4b. Recommended: a cap rule.
+- #34 fusion. Needed before W4a. Recommended: discounted Dempster-Shafer grouped by standpoint.
+- #35 Pareto. Needed before W3a. Recommended: merge.
+
+Formal dependencies and dispositions:
+- #36 echo-types and siblings. Needed before W3b. Recommended: cite-only until audited.
+- F-11 disposition (new). Needed before W4b. Recommended: retract Layer 5 unless a Rust caller for Validator.idr is planned, because a theorem about code nothing calls binds nothing.
+
+Chapel and Zig:
+- #12 D-L. Needed before W5. Recommended: 1.5× on 8 or more cores, written into #161 first.
+- #41 Zig tree and version. Needed before W4b. Recommended: src/zig/echidna_abi.zig on Zig 0.15.2, deleting the uncompiled files.
+
+Backend scope:
+- #42/#31 Tier-4 budget, QPU and Imandra. Needed before W5.
+- #28 headline counts. Needed before W1b. Recommended: exclude discipline variants and demote unprovisionable backends.
+- #29 Metamath. Needed before W1a. Recommended: depend on the CLI and delete the dead verifier.
+
+Governance and project direction:
+- #5 D-E Hypatia threshold. Needed before W1b. Recommended: baseline current findings and block only on new critical ones.
+- #10 D-J maintainer identity. Needed before W4a (CI-9b CODEOWNERS).
+- #11 D-K OpenSSF badge. Owner action, any time.
+- #13 D-M NeSy. Needed before W6. Recommended: park milestones 2–4.
+- #14 D-N UI. Needed before W2b. Recommended: an honest static page.
+
+Credentials, formats and claims:
+- #46 forges and the read-only ruleset token. Recommended: drop forges that lack credentials. Provide the token whenever possible, which pulls CI-6 forward.
+- #54 proof-DAG format. Needed before W3b. Recommended: a deed clause.
+- #57 panic-attack claims. Needed before W3b. Recommended: @covers sidecars routed through echidnabot obligations.
+
+#59 remainder (needed before W3b's PB-7/PB-8):
+- Burrower git-depends on echidna-core::prove_result. Recommended: yes.
+- Whether to keep burrower serve.
+- D9 and D10.
+- The clade.
+
+#60 ParadisEO:
+- WP0 canonical ECH-01..04 issue bodies, before E-1 in W3b.
+- PB-01/02 canonical numbers, before W3a. These could not be verified from here.
+- ECH-04 in pure Rust, before W7.
+- WP3 budget ADR, before W1b.
+- E-2 proofstate/1. Recommended: yes.
+
+Licensing and the paper:
+- #61 the agents/*.007 licence. Surface to the owner only.
+- #62 licence inconsistencies. Flag-only.
+- #63 the paper. Needed before W8. Source or withdraw its numbers, and qualify the theorem by the L1–L4 preconditions.
+
+Other new rulings:
+- Promotion margin. Needed before W4a. Recommended: the lower bootstrap bound beats the champion by more than 0.
+- Injectivity proof language. Needed before W7. Recommended: Idris2.
+- CPU v0 as a Stage-2 candidate. Needed before W3a. Recommended: yes, labelled v0-cpu.

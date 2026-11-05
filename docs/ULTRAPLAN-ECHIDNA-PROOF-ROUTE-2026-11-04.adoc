@@ -2,12 +2,12 @@
 // SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
 = Ultraplan: the echidna system — the proof route of the Kautz ladder, engineered and proved
 Jonathan D.A. Jewell (hyperpolymath)
-v0.2.1, 2026-11-04
+v0.2.2, 2026-11-04
 :toc: left
 :toclevels: 3
 :sectnums:
 :icons: font
-:status: DRAFT v0.2.1 — for owner review; v0.2.1 answers eight Codex review findings; v0.2.0 folded in an adversarial critic pass (four claims corrected, schema-wide auth gap added, merged PR order). Measured sections are facts with the command or file that produced them. Sections marked PROPOSED are design, not rulings. The decisions in <<decisions>> are open.
+:status: DRAFT v0.2.1 — for owner review; v0.2.1 answers eight Codex review findings; v0.2.0 folded in an adversarial critic pass (four claims corrected, schema-wide auth gap added, merged PR order). Measured sections are facts with the command or file that produced them. Sections marked PROPOSED are design, not rulings. D-4 to D-9 in <<decisions>> are open.
 
 [.lead]
 The "echidna system" is the proof route of the Kautz-ladder ultraplan
@@ -25,6 +25,10 @@ It does not change any code. Every claim about a repository cites a
 repo-relative path. Facts about `echidna`, `verisimdb`, `panic-attack` and
 `pons-asinorum` come only from what the attached repositories say about
 them and are marked _second-hand_.
+
+TIP: ECHIDNA itself is planned in the companion
+link:ULTRAPLAN-ECHIDNA-ENGINEERING-ROUTE-2026-11-05.adoc[engineering-route
+ultraplan] (2026-11-05). The two plans meet at `echidna.prove.result/1`.
 
 == Verdict in one page
 
@@ -766,12 +770,13 @@ rulings the rest depends on. None of them commits to Wave 3.
   and a separate administrative credential for `updateRepoSettings`,
   `recordTacticOutcome` and every other mutation. A stolen route credential
   must not reopen the webhook-secret rewrite or training-row writes. Planted
-  negatives: unauthenticated calls return 401; the route credential gets 403
-  on `updateRepoSettings` and `recordTacticOutcome` and on a repository
-  outside its allowlist; webhooks are unaffected.
+  negatives: unauthenticated calls return HTTP 401; the route credential is
+  refused on `updateRepoSettings` and `recordTacticOutcome` and on a
+  repository outside its allowlist (a GraphQL error with code `FORBIDDEN`);
+  webhooks are unaffected. In review as hyperpolymath/echidnabot#192.
 . *hypatia:* send the route credential from `HYPATIA_ECHIDNABOT_TOKEN`, and
   stop copying obligation claim and context into `pending.jsonl` for
-  echidnabot.
+  echidnabot. In review as hyperpolymath/hypatia#1010.
 . *hypatia:* close the eliminate ≥ 0.90 arm of the proof-obligation branch,
   which asks robot-repo-automaton to "Apply tactic"
   (`lib/fleet_dispatcher.ex:108-119`), and add the missing branch test.
@@ -1202,20 +1207,22 @@ upstream, and Idris2, Agda, Rocq, Creusot and TLC.
 == Decisions for the owner
 
 Each question has its arms in the order elegant first; the recommended arm
-is marked where it differs.
+is marked where it differs. D-1, D-2 and D-3 were ruled by the owner through
+the selector on 2026-11-04; the rest are open.
 
 . *D-1 Where the proof-route ABI lives.* (a) standards
   `2-protocols/proof-route/` with its own Idris2 CI — elegant, one canon;
   (b) Hypatia, beside `Verdict.idr` — less CI, but echidnabot then depends
-  on Hypatia's ABI.
+  on Hypatia's ABI. *Ruled 2026-11-04: (a), a standards package.*
 . *D-2 Route order.* (a) A, proof-first in full — elegant; (b) the hybrid in
-  <<recommendation>> — recommended; (c) B, pipe-first only.
+  <<recommendation>> — recommended; (c) B, pipe-first only. *Ruled
+  2026-11-04: (b), the hybrid.*
 . *D-3 Which tokens let a discharged obligation reach `sound`.* (A hole
   re-check is separate: it confirms when the prover's own diagnostic states
   the hole at the finding's span, and a clean run refutes.) (a) `proven`
   only; (b) `proven` and `proven-with-postulates` with the axioms listed —
-  recommended, matches
-  the ledger's own definition.
+  recommended, matches the ledger's own definition. *Ruled 2026-11-04:
+  (b), with the axioms listed beside the verdict.*
 . *D-4 The rung clause.* (a) nested and scoped,
   `(neurosym (ladder (rung :id :scope :state :falsifier :evidence :measured)))`
   — elegant and recommended, the only form that can scope a sub-claim;
@@ -1247,7 +1254,7 @@ rows 13-23 wait for the experiments and rulings named in their gate.
 |===
 |# |Repository |Title |Size |After |Gate
 
-|1 |echidnabot |Authentication and authorization on all of `/graphql`: a route credential (submit and read back, repository allowlist) and a separate administrative credential; loopback default; `/graphql` rate limit |S |— |Unauthenticated calls return 401; the route credential gets 403 on `updateRepoSettings`, `recordTacticOutcome` and unlisted repositories; non-loopback without credentials refuses to start
+|1 |echidnabot |Authentication and authorization on all of `/graphql`: a route credential (submit and read back, repository allowlist) and a separate administrative credential; loopback default; `/graphql` rate limit |S |— |Unauthenticated calls return 401; the route credential is refused (`FORBIDDEN`) on `updateRepoSettings`, `recordTacticOutcome` and unlisted repositories; non-loopback without credentials refuses to start
 |2 |hypatia |Route credential from `HYPATIA_ECHIDNABOT_TOKEN`; no claim or context in `pending.jsonl` |S |1 |Header test; manifest test
 |3 |hypatia |Proof-obligation eliminate arm never dispatches robot-repo-automaton; branch test |XS |— |No `:auto_fix_request` at any tier
 |4 |echidnabot |No nil-UUID fallback |XS |— |Error unit test; protocol contract green
