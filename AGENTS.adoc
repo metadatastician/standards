@@ -70,3 +70,18 @@ Run the relevant `+just+`/`+must+` targets, deed validation
 (`+1-formats/k9/tools/k9-validate.sh --strict+`) where applicable,
 link/canonical-name checks, and `+git diff --check+`.
 Regenerate twice and require a clean second pass for generated outputs.
+
+== Proofs and proof grades (read before claiming anything is proved)
+
+`+3-practice/PROOF-POLICY.adoc+` is normative for which prover carries which
+obligation. Its §8 defines the estate's only proof grade, the *Proof Witness
+Grade*: `+PWG-3+`, `+PWG-2i+`, `+PWG-2ii+` and `+PWG-1+`, where lower is
+stronger. Always write the `+PWG-+` prefix: CRG, TRG, ARG and FRG also use
+the word "grade", and ECHIDNA's `+TrustLevel+` counts the other way.
+
+A grade is derived from receipts and §2.2 correspondence records, never
+asserted. A claim that something was "verified" or "machine-checked" through
+a checker needs current receipts. Report a census with its denominator,
+never a percentage. The Mathesis architecture brief, which first proposed
+the ladder, is provenance only. The machine-readable route is the `+:proofs+`
+entry in the `+routing+` clause of `+standards_chora.deed+`.
