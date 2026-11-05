@@ -35,7 +35,7 @@
   (startup-checklist
     :steps ("Read THIS file, then README.adoc."
     "Read standards_chora.deed for repository metadata and state-source routing."
-    "Read the legacy .machine_readable/descriptiles/AGENTIC.a2ml for interaction patterns; do not extend it."
+    "Read the (agentic) clause of standards_chora.deed for interaction patterns; the retired AGENTIC.a2ml is archived under 9-archive/a2ml/."
     "Read .claude/CLAUDE.md for the language + licence policy (binding)."))
 
   (attestation

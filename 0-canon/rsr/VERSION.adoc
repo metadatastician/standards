@@ -150,9 +150,9 @@ The following components are locked in v1.0. Any changes require a new specifica
 | `.machine_readable/descriptiles/STATE.a2ml` | Gold | Project state tracking
 | `.machine_readable/descriptiles/META.a2ml` | Gold | Architecture decisions
 | `.machine_readable/descriptiles/ECOSYSTEM.a2ml` | Gold | Project relationships
-| `.machine_readable/descriptiles/AGENTIC.a2ml` | Gold | AI agent constraints
-| `.machine_readable/descriptiles/NEUROSYM.a2ml` | Gold | Neurosymbolic integration config
-| `.machine_readable/descriptiles/PLAYBOOK.a2ml` | Gold | Operational runbook
+| `(agentic)` clause of `<repo>_chora.deed`, or legacy `.machine_readable/descriptiles/AGENTIC.a2ml` | Gold | AI agent constraints
+| `(neurosym)` clause of the repo deed, or legacy `.machine_readable/descriptiles/NEUROSYM.a2ml` | Gold | Neurosymbolic integration config
+| `(playbook)` clause of the repo deed, or legacy `.machine_readable/descriptiles/PLAYBOOK.a2ml` | Gold | Operational runbook
 |===
 
 ==== .well-known/ Directory

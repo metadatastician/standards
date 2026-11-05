@@ -33,7 +33,7 @@
 [map]
 repo        = "hyperpolymath/standards"
 version     = "1.0.0"
-entry_count = 134
+entry_count = 135
 generated   = false   # hand-curated; the district index.adoc files ARE generated
 checked_by  = "scripts/check-standards-map.sh"
 
@@ -120,6 +120,19 @@ canon_slot  = ""
 canonical_doc = ""
 gate        = ""
 note        = "District root. This path did not exist before the 2026-10-09 archive move, so it is a new top-level entry and GATE D assertion 2 requires a record for it. canonical = false: the district holds frozen history, it is not itself a standard. lifecycle = frozen: the contents are the LAST COPY of dead upstream trees, are not maintained, and MUST NOT be edited for conformance - a change made here to satisfy a gate would falsify the historical record. .githooks/validate-k9.sh exempts this district from K9 validation and the debt ledger, for the same reason it exempts the validator fixtures."
+
+[[entry]]
+from        = ".gitbot-fleet"
+target      = ".gitbot-fleet/"
+district    = "5-machine"
+kind        = "machinery"
+files       = 2
+lifecycle   = "versioned"
+canonical   = false
+canon_slot  = ""
+canonical_doc = ""
+gate        = ""
+note        = "Fork-governance enrolment for the gitbot-fleet lane, added by #1363 without a map row, so GATE D assertion 2 failed on main from that merge. enrolment.json names which fleet members apply here; report-backs/ holds only a README, because envelopes are produced per run and never committed (see report-backs/README.md). Read by .github/workflows/fork-governance.yml and hypatia-scan-reusable.yml at render time."
 
 [[entry]]
 from        = "9-archive/rhodium-standard-repositories"

@@ -101,8 +101,10 @@ archetype presets and the `julia`/`plugin`/`deno`/`canon` rows lagged).
 *Universal baseline* (gate = ∅; always carried):
 
 `README.adoc`, `EXPLAINME.adoc`, `LICENSE`, `SECURITY.md`, `CONTRIBUTING.md`,
-`CODE_OF_CONDUCT.md`, `CHANGELOG.md`, `0-AI-MANIFEST.a2ml`,
-`.machine_readable/descriptiles/{STATE,META,ECOSYSTEM,AGENTIC,NEUROSYM,PLAYBOOK}.a2ml`,
+`CODE_OF_CONDUCT.md`, `CHANGELOG.md`, `0-AI-MANIFEST.deed` (or the legacy `0-AI-MANIFEST.a2ml`),
+`.machine_readable/descriptiles/{STATE,META,ECOSYSTEM}.a2ml`, the agent, neurosymbolic and
+playbook descriptiles as the `(agentic)` `(neurosym)` `(playbook)` clauses of the repo's
+`<repo>_chora.deed` (or the legacy `.machine_readable/descriptiles/{AGENTIC,NEUROSYM,PLAYBOOK}.a2ml`),
 `.machine_readable/rsr-profile.a2ml`, `.well-known/`, `.gitignore`, `Justfile`,
 and the SPDX licence invariant (`LICENCE-POLICY.adoc`).
 
