@@ -20,7 +20,7 @@ if [ "$guide_rc" -eq 0 ] && printf '%s\n' "$guide_out" | grep -q 'affinescript-t
 else
   bad "estate guides were missed or failed lint"
 fi
-bash "$CHK" "$ROOT/toolchain-readiness-grades/testing/affinescript-testing-guide.adoc" >/dev/null 2>&1 && ok "affinescript guide valid" || bad "affinescript guide invalid"
+bash "$CHK" "$ROOT/4-readiness/toolchain-readiness-grades/testing/affinescript-testing-guide.adoc" >/dev/null 2>&1 && ok "affinescript guide valid" || bad "affinescript guide invalid"
 
 echo "== rejects incomplete guides =="
 # missing a required section
@@ -39,7 +39,7 @@ bash "$CHK" "$g3" >/dev/null 2>&1 && bad "missing R1..R9 not caught" || ok "miss
 echo "== the stale duplicate snapshot is gone =="
 [ ! -f "$ROOT/docs/language-testing-standards-v1.0.0-2024-04-14.adoc" ] && ok "duplicate snapshot removed" || bad "duplicate snapshot still present"
 echo "== the standard is v2.0.0 with RFC-2119 =="
-grep -q 'Version:\* 2.0.0' "$ROOT/toolchain-readiness-grades/testing/LANGUAGE-TESTING-STANDARDS.adoc" && grep -qi 'RFC-2119' "$ROOT/toolchain-readiness-grades/testing/LANGUAGE-TESTING-STANDARDS.adoc" && ok "standard refreshed to v2.0.0 RFC-2119" || bad "standard not refreshed"
+grep -q 'Version:\* 2.0.0' "$ROOT/4-readiness/toolchain-readiness-grades/testing/LANGUAGE-TESTING-STANDARDS.adoc" && grep -qi 'RFC-2119' "$ROOT/4-readiness/toolchain-readiness-grades/testing/LANGUAGE-TESTING-STANDARDS.adoc" && ok "standard refreshed to v2.0.0 RFC-2119" || bad "standard not refreshed"
 
 echo
 echo "Wave-5 language-guides regression: $pass passed, $fail failed"

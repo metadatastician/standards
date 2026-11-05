@@ -175,10 +175,16 @@ fi
 # from the file rather than hardcoded — a hardcoded pair was true for two jobs
 # and false for the other fifteen until it was measured (2026-10-31).
 assert_sites="$(awk '
-  /^  [a-zA-Z0-9_-]+:[[:space:]]*$/ { job = $1; sub(/:$/, "", job); injob = 1 }
-  injob && /repository:[[:space:]]*(meta)?(datastician|hyperpolymath)\/standards[[:space:]]*$/ { repo = 1 }
-  injob && repo && /ref:[[:space:]]*\$\{\{[[:space:]]*(job\.workflow_sha|inputs\.[A-Za-z0-9_-]+[[:space:]]*\|\|[[:space:]]*job\.workflow_sha)/ { print job; repo = 0 }
-  injob && /^  [a-zA-Z0-9_-]+:[[:space:]]*$/ && $0 !~ /^  [a-zA-Z0-9_-]+:[[:space:]]*$/{ repo = 0 }
+  # One STEP at a time: `repository:` and `ref:` belong to the step they sit
+  # in, in either ORDER. Keying off "repository came first" omitted a checkout
+  # written the other way round, and the omission made this test weaker exactly
+  # where it is supposed to be strict.
+  function flush() { if (step_repo && step_ref) print job; step_repo = 0; step_ref = 0 }
+  /^  [A-Za-z0-9_-]+:[[:space:]]*$/ { flush(); job = $1; sub(/:$/, "", job); injob = 1; next }
+  /^      - / { flush(); next }
+  injob && /repository:[[:space:]]*(metadatastician|hyperpolymath)\/standards[[:space:]]*$/ { step_repo = 1; next }
+  injob && /ref:[[:space:]]*\$\{\{[[:space:]]*(job\.workflow_sha|inputs\.[A-Za-z0-9_-]+[[:space:]]*\|\|[[:space:]]*job\.workflow_sha)/ { step_ref = 1; next }
+  END { flush() }
 ' "$GOVERNANCE" | sort -u)"
 [ -n "$assert_sites" ] || fail "no job stages a standards helper from job.workflow_sha — the derivation found nothing, so this assertion would be vacuous; if the file really changed shape, change this test deliberately"
 for job in $assert_sites; do

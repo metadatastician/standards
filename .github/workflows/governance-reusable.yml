@@ -921,7 +921,19 @@ jobs:
           sparse-checkout: |
             scripts
             .machine_readable/template-capability-gates.toml
+            1-formats/deed/tools/deed_lint.js
           sparse-checkout-cone-mode: false
+
+      # The capability resolver reads a deed-era profile through the validated
+      # AST of the normative parser (deed_lint.js --ast-json) when Bun is on
+      # the runner. A failed install fails this gate job rather than quietly
+      # downgrading the parser (governance shape test, rule 5: no
+      # continue-on-error in a gate job). Off the runner, the resolver still
+      # falls back to its awk tokenizer and says so in a ::notice.
+      - name: Set up Bun for the deed parser
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: "1.4.2"
 
       - name: Enforce Guix-only packaging policy
         run: |
@@ -933,9 +945,10 @@ jobs:
           # with the checker, in the same relative layout, so applicability is read
           # from the same standards commit as the policy itself.
           pkg="$RUNNER_TEMP/pkg-policy"
-          mkdir -p "$pkg/scripts" "$pkg/.machine_readable"
+          mkdir -p "$pkg/scripts" "$pkg/.machine_readable" "$pkg/1-formats/deed/tools"
           cp .standards-checkout/scripts/check-package-policy.sh .standards-checkout/scripts/check-rsr-profile.sh "$pkg/scripts/"
           cp .standards-checkout/.machine_readable/template-capability-gates.toml "$pkg/.machine_readable/"
+          cp .standards-checkout/1-formats/deed/tools/deed_lint.js "$pkg/1-formats/deed/tools/"
           rm -rf .standards-checkout
           bash "$pkg/scripts/check-package-policy.sh" .
 

@@ -49,7 +49,7 @@ Every other "what is this repo" doc is now a thin pointer back to these two
 | the `*-protocol/` dirs
 
 | The **readiness grades** — ARG / FRG / CRG / TRG
-| link:adoption-readiness-grades/[ARG], link:foundations-readiness-grades/[FRG], link:component-readiness-grades/[CRG], link:toolchain-readiness-grades/[TRG]
+| link:4-readiness/adoption-readiness-grades/[ARG], link:4-readiness/foundations-readiness-grades/[FRG], link:4-readiness/component-readiness-grades/[CRG], link:4-readiness/toolchain-readiness-grades/[TRG]
 
 | Scope a bot's work across multiple repositories or estates
 | link:docs/MULTI-REPOSITORY-SCOPE-STANDARD.adoc[Multi-Repository Scope Standard] + link:docs/repo-scope.example.toml[declaration example]

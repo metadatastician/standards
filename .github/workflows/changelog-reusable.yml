@@ -119,6 +119,21 @@ jobs:
           fetch-depth: 0
           path: caller
 
+      # job.workflow_sha is unavailable on GitHub Enterprise Server, where it
+      # resolves to an EMPTY string and actions/checkout then follows the
+      # default branch — a float wearing a pin's clothes. Assert the value is a
+      # commit before the checkout it protects (the shape every helper-staging
+      # job in governance-reusable.yml uses).
+      - name: Assert this reusable's own commit resolved
+        env:
+          SELF_WORKFLOW_SHA: ${{ job.workflow_sha }}
+        run: |
+          if ! printf '%s' "$SELF_WORKFLOW_SHA" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "::error::job.workflow_sha resolved to '${SELF_WORKFLOW_SHA:-<empty>}', not a 40-hex commit, so the standards checkout below would follow the default branch and this caller would get the CHANGELOG policy of whatever main happened to be."
+            exit 1
+          fi
+          echo "Standards policy source: $SELF_WORKFLOW_SHA"
+
       - name: Checkout standards (for canonical cliff.toml)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

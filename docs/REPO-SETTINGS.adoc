@@ -117,6 +117,19 @@ As last measured across the estate, compliance against this canon sat at
 97–100% depending on the key, with the residue concentrated in the exclusion
 classes above rather than in genuine drift.
 
+== Applying `delete_branch_on_merge` estate-wide
+
+`scripts/apply-branch-autodelete.sh` turns on "Automatically delete head
+branches" wherever it is off. It walks the caller's own account and every
+organisation where the caller is an active admin. It skips forks, archived
+repositories and the `007` repository under any owner. It reads each
+repository on its own and reads the setting back after every write. A
+listing or read that fails stops the run, so nothing unexamined is reported
+as compliant. It only reports unless given `--apply`. No CI credential holds
+repository administration today, so the owner runs it with their own `gh`
+login. A fine-grained token limited to selected repositories would only see
+part of the estate, and the run would look complete.
+
 == Open owner decision
 
 `open_owner_decisions.O8` in the canon is unresolved and is recorded here so it
