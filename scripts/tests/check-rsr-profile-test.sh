@@ -212,6 +212,19 @@ assert "an escaped \\n in :role does not alias spine" 1 "VESTIGIAL" bash "$CHECK
 d=$(repo_deed deedescremove '  (rsr-profile :version "1.0.0" :capabilities ("rust") :remove ("rus\\t"))')
 assert "an escaped \\t in :remove does not remove rust" 0 "effective capabilities: rust" bash "$CHECK" "$d"
 
+# A string whose escapes decode to a newline then a field-shaped tail must
+# stay one field (Codex and GitHub Advanced Security on #1411). The AST
+# decodes \n and \t; written back raw, the tail would forge a record.
+d=$(repo_deed deedforgerole '  (rsr-profile :version "1.0.0" :description "x\\nS\\trole\\tspine" :capabilities ("bash"))')
+rm -f "$d/Cargo.toml" "$d/Cargo.lock" "$d/src/main.rs"
+assert "a \\n-led field-shaped tail in a string does not forge :role spine" 1 "VESTIGIAL" bash "$CHECK" "$d"
+
+d=$(repo_deed deedforgeremove '  (rsr-profile :version "1.0.0" :description "x\\nL\\tremove\\trust" :capabilities ("rust"))')
+assert "a \\n-led field-shaped tail in a string does not forge a :remove item" 0 "effective capabilities: rust" bash "$CHECK" "$d"
+
+d=$(repo_deed deedforgecount '  (rsr-profile :version "1.0.0" :description "x\\nCOUNT\\t2" :capabilities ("rust"))')
+assert "a \\n-led COUNT tail in a string does not forge a second clause" 0 "rsr-profile check: OK" bash "$CHECK" "$d"
+
 d=$(repo_deed deedescunkremove '  (rsr-profile :version "1.0.0" :capabilities ("rust") :remove ("r\\ust"))')
 if [ "$MODE" = ast ]; then
   assert "an unknown escape is not DEED: the AST path refuses the deed" 2 "does not parse as DEED" bash "$CHECK" "$d"

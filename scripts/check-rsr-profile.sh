@@ -162,7 +162,7 @@ deed_ast_fields() {
   ast="$(bun "$DEED_LINT" --ast-json "$1" 2>&1)" || {
     echo "ERROR: $1 does not parse as DEED: $ast" >&2; return 2; }
   printf '%s' "$ast" | jq -r '
-    def s: gsub("\n"; "\n") | gsub("\t"; "\t");
+    def s: gsub("\n"; "\\n") | gsub("\t"; "\\t");
     def atom: .[0] | IN("symbol", "integer", "boolean");
     def uuid: .[0] | IN("uuid5", "uuid8");
     [.. | arrays | select(.[0] == "clause" and .[1] == "rsr-profile")] as $c
@@ -206,9 +206,9 @@ DEED_PARSER="${RSR_DEED_PARSER:-auto}"
 case "$DEED_PARSER" in
   auto)
     if command -v bun >/dev/null 2>&1 && command -v jq >/dev/null 2>&1 && [ -f "$DEED_LINT" ]; then
-      DEED_PARSER=ast
+      DEED_PARSER="ast"
     else
-      DEED_PARSER=awk
+      DEED_PARSER="awk"
     fi ;;
   ast)
     command -v bun >/dev/null 2>&1 && command -v jq >/dev/null 2>&1 && [ -f "$DEED_LINT" ] || {

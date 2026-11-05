@@ -185,6 +185,13 @@ effective_capabilities() {
     return 0
   fi
   out="$(bash "$RSR_PROFILE_CHECKER" "$ROOT" 2>&1 || true)"
+  # A deed the normative parser rejects is a defect in the repo, not an
+  # unreadable profile: reading it as "no capabilities" would let a malformed
+  # deed that declares packaging pass with none shipped. Fail closed.
+  if printf '%s\n' "$out" | grep -q 'does not parse as DEED'; then
+    echo "::error::check-package-policy: ${found#"$ROOT"/} does not parse as DEED, so its declared capabilities cannot be read. Fix it (bun 1-formats/deed/tools/deed_lint.js ${found#"$ROOT"/}). $(printf '%s\n' "$out" | grep -m1 'does not parse as DEED')" >&2
+    return 1
+  fi
   if ! printf '%s\n' "$out" | grep -q '^effective capabilities:'; then
     echo "::warning::check-package-policy: ${found#"$ROOT"/} could not be resolved ($(printf '%s\n' "$out" | grep -m1 ERROR || echo "no effective capabilities line")); treating it as declaring no packaging capability." >&2
     return 0
