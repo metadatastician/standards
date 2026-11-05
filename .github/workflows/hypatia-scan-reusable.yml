@@ -417,6 +417,7 @@ jobs:
         env:
           PA_BIN: ${{ steps.panic-attack-install.outputs.bin }}
           PA_INSTALL_REASON: ${{ steps.panic-attack-install.outputs.reason }}
+          SCOPE_EXCLUDES: ${{ inputs.scope-excludes }}
         run: |
           set -euo pipefail
           # panic-attack-findings.json is a status ENVELOPE, never a bare array:
@@ -424,7 +425,10 @@ jobs:
           #   tool, ref  "panic-attack" and the pinned commit
           #   reason     why it did not run or failed; null when it ran
           #   exit_code  the assail exit code; null when it never started
-          #   counts     unsuppressed {critical, high, medium, low}; null unless ran
+          #   counts     unsuppressed {critical, high, medium, low} outside the
+          #              scope-excludes prefixes; null unless ran
+          #   counts_excluded  the same, for findings under those prefixes
+          #              (frozen history: reported, never counted; standards#1306)
           #   report     panic-attack's own AssailReport; null unless ran
           # Only status "ran" carries a result. Anything else is not a pass.
           out=panic-attack-findings.json
@@ -432,7 +436,7 @@ jobs:
             jq -n --arg status "$1" --arg reason "$2" --argjson exit_code "$3" \
               --arg ref "$PANIC_ATTACK_SHA" '{status: $status, tool: "panic-attack",
                 ref: $ref, reason: $reason, exit_code: $exit_code, counts: null,
-                report: null}' > "$out"
+                counts_excluded: null, report: null}' > "$out"
           }
           status=ran
           reason=""
@@ -462,14 +466,22 @@ jobs:
               reason="panic-attack assail exited 0 without a valid report"
               marker error "$reason" 0
             else
-              jq --arg ref "$PANIC_ATTACK_SHA" '
-                [.weak_points[] | select(.suppressed != true) | .severity] as $s
+              # A finding under a scope-excludes prefix is reported, never
+              # counted, as the verdict grid already treats it. Paths arrive
+              # repository-relative; a leading ./ is ignored.
+              jq --arg ref "$PANIC_ATTACK_SHA" --arg ex "${SCOPE_EXCLUDES:-}" '
+                def tally($s): {critical: ($s | map(select(. == "Critical")) | length),
+                                high: ($s | map(select(. == "High")) | length),
+                                medium: ($s | map(select(. == "Medium")) | length),
+                                low: ($s | map(select(. == "Low")) | length)};
+                ($ex | split(",") | map(select(length > 0))) as $prefixes
+                | def excluded: ((.file // .location // "") | ltrimstr("./")) as $p
+                    | $p != "" and any($prefixes[]; . as $x | $p | startswith($x));
+                [.weak_points[] | select(.suppressed != true)] as $live
                 | {status: "ran", tool: "panic-attack", ref: $ref, reason: null,
                    exit_code: 0,
-                   counts: {critical: ($s | map(select(. == "Critical")) | length),
-                            high: ($s | map(select(. == "High")) | length),
-                            medium: ($s | map(select(. == "Medium")) | length),
-                            low: ($s | map(select(. == "Low")) | length)},
+                   counts: tally([$live[] | select(excluded | not) | .severity]),
+                   counts_excluded: tally([$live[] | select(excluded) | .severity]),
                    report: .}' "$report" > "$out"
             fi
             if [ "$status" = error ]; then
@@ -485,6 +497,7 @@ jobs:
             high=$(jq '.counts.high' "$out")
             medium=$(jq '.counts.medium' "$out")
             low=$(jq '.counts.low' "$out")
+            excluded=$(jq '.counts_excluded | add' "$out")
             {
               echo "critical=$critical"
               echo "high=$high"
@@ -503,6 +516,10 @@ jobs:
               echo "| Low      | $low |"
               echo ""
               echo "Built from hyperpolymath/panic-attack@$PANIC_ATTACK_SHA. Findings panic-attack suppresses as likely false positives are not counted."
+              if [ "$excluded" -gt 0 ]; then
+                echo ""
+                echo "$excluded more finding(s) sit under \`${SCOPE_EXCLUDES:-}\` (frozen history). They are in \`counts_excluded\` and not counted above."
+              fi
             } >> "$GITHUB_STEP_SUMMARY"
           else
             if [ "$status" = error ]; then label=ERROR; else label="NOT RUN"; fi
