@@ -65,8 +65,8 @@ jobs:
           && github.event.workflow_run.head_repository.full_name != github.repository }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    # One publisher at a time per fork branch, so two cannot PATCH the comment
-    # at once; the "superseded" step below decides which one may write.
+    # One publisher at a time per fork branch, so the read-compare-write of
+    # the comment below never interleaves with another publisher's.
     concurrency:
       group: fork-governance-publish-${{ github.event.workflow_run.head_repository.full_name }}-${{ github.event.workflow_run.head_branch }}
       cancel-in-progress: false
@@ -74,37 +74,7 @@ jobs:
       actions: read
       pull-requests: write
     steps:
-      # Publishers can finish out of order: a re-run, or a close and reopen,
-      # gives two runs for one head. Only the newest may write. A run is
-      # superseded when its workflow has a newer run (higher id) from the
-      # same fork branch, or the run itself has a newer attempt.
-      - name: Check whether a newer run superseded this one
-        id: superseded
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RUN_ID: ${{ github.event.workflow_run.id }}
-          RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
-          WORKFLOW_ID: ${{ github.event.workflow_run.workflow_id }}
-          RUN_HEAD_REPO: ${{ github.event.workflow_run.head_repository.full_name }}
-          RUN_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
-        run: |
-          set -euo pipefail
-          newer=$(gh api -X GET "repos/$GITHUB_REPOSITORY/actions/workflows/$WORKFLOW_ID/runs" \
-              -f event=pull_request -f branch="$RUN_HEAD_BRANCH" -f per_page=100 \
-            | jq --arg repo "$RUN_HEAD_REPO" --argjson id "$RUN_ID" \
-                '[.workflow_runs[] | select(.head_repository.full_name == $repo and .id > $id)] | length')
-          attempt=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID" --jq '.run_attempt')
-          if [ "$newer" -gt 0 ] || [ "$attempt" -gt "$RUN_ATTEMPT" ]; then
-            echo "superseded=true" >> "$GITHUB_OUTPUT"
-            echo "A newer run (or attempt) exists for $RUN_HEAD_REPO:$RUN_HEAD_BRANCH; it publishes, not this one."
-          else
-            echo "superseded=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      # Any run that was not superseded must have left an artifact; the next
-      # step fails on one that did not, cancelled or not.
       - name: Download the rendered comment
-        if: ${{ steps.superseded.outputs.superseded == 'false' }}
         id: download
         continue-on-error: true
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
@@ -114,23 +84,44 @@ jobs:
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ github.token }}
 
+      # A run may leave no artifact only when it was replaced: a newer attempt
+      # of the same run, or a newer push to the fork branch (a newer run at a
+      # different commit; a push re-runs every pull request from the branch,
+      # so each one gets its own successor). Anything else is a missing report
+      # and fails here, including a run cancelled by hand with no successor.
       - name: Fail on a missing comment
-        if: ${{ steps.superseded.outputs.superseded == 'false' && steps.download.outcome != 'success' }}
+        if: ${{ steps.download.outcome != 'success' }}
         env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+          WORKFLOW_ID: ${{ github.event.workflow_run.workflow_id }}
+          RUN_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          RUN_HEAD_REPO: ${{ github.event.workflow_run.head_repository.full_name }}
+          RUN_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
           RUN_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
           RUN_URL: ${{ github.event.workflow_run.html_url }}
         run: |
           set -euo pipefail
-          # A run superseded by a newer push or re-run never reaches this step,
-          # so a cancelled run here was cancelled with no successor.
-          echo "::error::$RUN_URL ($RUN_CONCLUSION) uploaded no fork-governance-comment artifact and no newer run followed it, so its pull request has no governance comment"
+          pushed=$(gh api -X GET "repos/$GITHUB_REPOSITORY/actions/workflows/$WORKFLOW_ID/runs" \
+              -f event=pull_request -f branch="$RUN_HEAD_BRANCH" -f per_page=100 \
+            | jq --arg repo "$RUN_HEAD_REPO" --arg sha "$RUN_HEAD_SHA" --argjson id "$RUN_ID" \
+                '[.workflow_runs[] | select(.head_repository.full_name == $repo and .id > $id and .head_sha != $sha)] | length')
+          attempt=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID" --jq '.run_attempt')
+          if [ "$pushed" -gt 0 ] || [ "$attempt" -gt "$RUN_ATTEMPT" ]; then
+            echo "$RUN_URL left no comment, but a newer push or attempt replaced it; that run publishes."
+            exit 0
+          fi
+          echo "::error::$RUN_URL ($RUN_CONCLUSION) uploaded no fork-governance-comment artifact and nothing replaced it, so its pull request has no governance comment"
           exit 1
 
       - name: Publish the comment
-        if: ${{ steps.superseded.outputs.superseded == 'false' && steps.download.outcome == 'success' }}
+        if: ${{ steps.download.outcome == 'success' }}
         env:
           GH_TOKEN: ${{ github.token }}
           GRID_AUTHOR: ${{ inputs.grid-author }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
           RUN_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
           RUN_HEAD_REPO: ${{ github.event.workflow_run.head_repository.full_name }}
           RUN_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
@@ -168,18 +159,36 @@ jobs:
           if ! head -n 1 "$body" | grep -q '^<!-- fork-governance-verdict:'; then
             echo "::error::body does not start with the fork-governance marker"; exit 1
           fi
+          # The run stamp is the comment's last line, written here and never by
+          # the fork, so the last stamp in a comment is always the publisher's.
           {
             cat "$body"
             printf '\n<sub>Rendered by the fork pull request run %s and published by fork-governance-publish.</sub>\n' "$RUN_URL"
+            printf '<!-- fork-governance-publish-run: %s.%s -->\n' "$RUN_ID" "$RUN_ATTEMPT"
           } > "$dir/published.md"
-          if [ "$(wc -c < "$dir/published.md")" -gt 65000 ]; then
-            echo "::error::body exceeds the 65000-byte comment limit"; exit 1
+          # GitHub's limit is 65536 characters, not bytes; the glyphs are
+          # multibyte, so count characters.
+          if [ "$(LC_ALL=C.UTF-8 wc -m < "$dir/published.md")" -gt 65000 ]; then
+            echo "::error::body exceeds the 65000-character comment limit"; exit 1
           fi
 
-          comment_id=$(gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/issues/$pr/comments" \
-            | jq -r --arg a "$GRID_AUTHOR" \
+          existing=$(gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/issues/$pr/comments" \
+            | jq -c --arg a "$GRID_AUTHOR" \
                 '[.[][] | select((.user.login // "") == $a and ((.body // "") | contains("<!-- fork-governance-verdict:")))]
-                 | last | .id // ""')
+                 | last // {} | {id: (.id // ""), body: (.body // "")}')
+          comment_id=$(jq -r '.id' <<< "$existing")
+          # Runs for one pull request can finish out of order (a re-run, or a
+          # close and reopen). Never replace a comment a newer run published:
+          # compare this run's id, then attempt, with the comment's last stamp.
+          stamp=$(jq -r '.body' <<< "$existing" \
+            | sed -n 's/^<!-- fork-governance-publish-run: \([0-9]*\)\.\([0-9]*\) -->$/\1 \2/p' | tail -n 1)
+          if [ -n "$stamp" ]; then
+            read -r prev_id prev_attempt <<< "$stamp"
+            if [ "$prev_id" -gt "$RUN_ID" ] || { [ "$prev_id" -eq "$RUN_ID" ] && [ "$prev_attempt" -gt "$RUN_ATTEMPT" ]; }; then
+              echo "#$pr already carries the comment from newer run $prev_id.$prev_attempt; leaving it."; exit 0
+            fi
+          fi
+
           jq -n --rawfile body "$dir/published.md" '{body: $body}' > "$dir/comment.json"
           if [ -n "$comment_id" ]; then
             gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$comment_id" \
