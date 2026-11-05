@@ -243,16 +243,22 @@ literal_hit() {
   return 1
 }
 # closure_keeps PATH REF: return success if the closure file names this
-# workflow and dependency, comparing both fields case-insensitively. Return 1
-# if the file is absent or no row matches.
+# workflow and dependency. The workflow path and the ref are compared EXACTLY:
+# git refs and workflow paths are case-sensitive, and lowercasing them made
+# `@Release` and `@release` the same row, so a stale entry was "protected" by a
+# manifest that names a different ref. Only the owner/repository half of the
+# ref — which GitHub does treat case-insensitively — is folded. Return 1 if the
+# file is absent or no row matches.
 closure_keeps() {
   [ -n "$CLOSURE" ] && [ -f "$CLOSURE" ] || return 1
   awk -F'\t' -v p="$1" -v r="$2" '
-    /^#/ || NF < 3 { next }
-    {
-      want = tolower(r); got = tolower($3)
-      if (tolower($1) == tolower(p) && got == want) found = 1
+    function foldrepo(s,   at) {
+      at = index(s, "@")
+      if (at == 0) return tolower(s)
+      return tolower(substr(s, 1, at - 1)) substr(s, at)
     }
+    /^#/ || NF < 3 { next }
+    { if ($1 == p && foldrepo($3) == foldrepo(r)) found = 1 }
     END { exit(found ? 0 : 1) }' "$CLOSURE"
 }
 : > "$TMP/drop.tsv"
