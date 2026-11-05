@@ -301,6 +301,15 @@ pin_row() {
   fi
 }
 
+# has_canon_clause <deed>: true when a non-comment line opens a (canon …)
+# clause. One awk process, no pipe: `grep -v … | grep -q` under pipefail
+# reported a large deed as having no clause, because grep -q exits at the
+# first match and the writer's SIGPIPE made the pipeline false (CI read the
+# 1114-line spine deed that way).
+has_canon_clause() {
+  awk '!/^[[:space:]]*;/ && /[(]canon([[:space:]]|$)/ { found = 1; exit } END { exit !found }' "$1"
+}
+
 echo "[3] spine declares the same canon pin"
 if [ -z "$SPINE" ] || [ ! -d "$SPINE" ]; then
   skip "no --spine DIR given (set --strict in CI release jobs)"
@@ -310,7 +319,7 @@ else
   HEX='[0-9a-f]{64}'
   if [ "${#DEEDS[@]}" -gt 1 ]; then
     softfail "spine carries ${#DEEDS[@]} *_chora.deed files; one-deed-per-repo (#837) expects exactly 1"
-  elif [ "${#DEEDS[@]}" -eq 1 ] && grep -vE '^[[:space:]]*;' "${DEEDS[0]}" | grep -qE '[(]canon([[:space:]]|$)'; then
+  elif [ "${#DEEDS[@]}" -eq 1 ] && has_canon_clause "${DEEDS[0]}"; then
     DEED="${DEEDS[0]}"
     echo "  reading $(basename "$DEED") (canon …)"
     pin_row version         "$CANON_VERSION"        "$(deed_canon version "$DEED")"         '[0-9]+\.[0-9]+\.[0-9]+'
