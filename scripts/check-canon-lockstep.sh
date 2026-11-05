@@ -307,7 +307,7 @@ pin_row() {
 # first match and the writer's SIGPIPE made the pipeline false (CI read the
 # 1114-line spine deed that way).
 has_canon_clause() {
-  awk '!/^[[:space:]]*;/ && /[(]canon([[:space:]]|$)/ { found = 1; exit } END { exit !found }' "$1"
+  awk 'BEGIN { bs = sprintf("%c", 92); dq = sprintf("%c", 34) } { o = ""; q = 0; for (i = 1; i <= length($0); i++) { c = substr($0, i, 1); if (q && c == bs) { i++; continue } if (c == dq) { q = !q; o = o " "; continue } if (!q && c == ";") break; if (!q) o = o c } if (o ~ /[(]canon([[:space:]]|$)/) { found = 1; exit } } END { exit !found }' "$1"
 }
 
 echo "[3] spine declares the same canon pin"
