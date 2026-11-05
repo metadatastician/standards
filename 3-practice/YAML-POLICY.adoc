@@ -283,17 +283,22 @@ These issues are now booked, in this dependency order:
   the one rewriter step 2's proof covers, and it refuses (exit 2) a file that
   does not parse, has no final newline, or would change its data.
   _Known limitation (yq v4.54.1, found 2026-10-26):_ `yq -o kyaml` writes
-  U+0085 (NEL), U+2028, U+2029, U+007F–U+009F, U+FFFE and U+FFFF raw inside
-  double quotes. go-yaml reads NEL, LS and PS as line breaks, so a raw NEL in a
-  value becomes a space, and any of the three in a key makes the file
-  unparseable; yq also rejects its own U+FFFE/U+FFFF output. A file holding one
-  of these characters, correctly escaped as `\uXXXX`, is therefore refused with
-  "the KYAML rendering does not parse to the same data": the refusal is yq's
-  rewrite changing the data, not a fault in the file. The defect is reported
-  upstream to `mikefarah/yq`, with a tested patch to `escapeDoubleQuotedString`;
-  it clears with a yq release that escapes these characters.
-  `hyperpolymath/panic-attack` already emits them escaped (panic-attack#248,
-  #250).
+  U+007F–U+009F (DEL and the C1 controls, NEL among them), U+2028, U+2029,
+  U+FFFE and U+FFFF raw inside double quotes instead of escaping them. A file
+  that escapes one of these correctly as `\uXXXX` therefore fails `--check`
+  through no fault of its own, in one of two ways (measured 2026-11-05).
+  _Reported as "is not KYAML" (exit 1):_ DEL and the C1 controls other than
+  NEL, and U+2028 or U+2029 in a value. The raw rendering reads back to the
+  same data, so the check asks for yq's raw form, which for DEL and C1 is not
+  even YAML 1.2 (outside `c-printable`); keep the escaped form and do not
+  apply the rewrite. _Refused with "the KYAML rendering does not parse to the
+  same data" (exit 2):_ the rest, under one message for two causes. NEL in a
+  value reads back as a space, so the data changes; NEL, U+2028 or U+2029 in
+  a key, and U+FFFE or U+FFFF anywhere, make the rendering unparseable.
+  The defect is reported upstream to `mikefarah/yq`, with a tested patch to
+  `escapeDoubleQuotedString`; it clears with a yq release that escapes these
+  characters. `hyperpolymath/panic-attack` already emits them escaped
+  (panic-attack#248, #250).
   It is a gate for converted non-workflow files: the Self Test workflow runs
   `--check` on every file step 5 has converted (a ratchet list).
   _Correction, 2026-10-01:_ an earlier version of this step said that
@@ -402,7 +407,7 @@ owner ruling (§3.4), not inferred from the probe.
 
 | 2026-11-05
 | Known limitation
-| §5 step 3: records the yq v4.54.1 KYAML-encoder defect (raw NEL, LS/PS, C1
-  and U+FFFE/U+FFFF inside double quotes), why it makes `kyaml-format.sh`
-  refuse correctly escaped files, and what clears it.
+| §5 step 3: records the yq v4.54.1 KYAML-encoder defect (raw DEL/C1, LS/PS
+  and U+FFFE/U+FFFF inside double quotes), the two ways it makes
+  `kyaml-format.sh --check` fail correctly escaped files, and what clears it.
 |===
