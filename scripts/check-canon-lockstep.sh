@@ -387,14 +387,20 @@ echo "[5] the canon scores Gold on its own applicable set"
 # So both branches below are permanent, not a shim. Dotted is canonical;
 # hyphenated must still RESOLVE, never be rejected — a repo pinned to the
 # minority spelling is not a repo with a broken gate.
-CANON_PROFILE="$CANON/.machine_readable/rsr-profile.a2ml"
-[ -f "$CANON_PROFILE" ] || CANON_PROFILE="$CANON/machine-readable/rsr-profile.a2ml"
-if [ ! -f "$CANON_PROFILE" ]; then
-  softfail "the canon has NO rsr-profile.a2ml — it cannot be scored by the checker
-       it ships (scripts/check-rsr-profile.sh exits 2 on this repo).
-       -> see artefacts/rsr-profile.canon.a2ml; requires [canon] in the gate table."
+# The canon's profile is resolved by the resolver it ships, so both carriers
+# count exactly as they do for every other repo: the (rsr-profile …) clause of
+# standards_chora.deed (where it has lived since 2026-11-05), or a legacy
+# rsr-profile.a2ml. Reading the .a2ml here directly would make this assertion
+# a second, divergent reader.
+CANON_RESOLVED="$(bash "$CANON/scripts/check-rsr-profile.sh" "$CANON" 2>&1 || true)"
+if ! grep -q '^effective capabilities:' <<<"$CANON_RESOLVED"; then
+  softfail "the canon's rsr-profile could not be resolved — it cannot be scored by
+       the checker it ships (scripts/check-rsr-profile.sh $(grep -m1 'ERROR' <<<"$CANON_RESOLVED" || echo 'printed no effective capabilities')).
+       -> declare it in the (rsr-profile …) clause of standards_chora.deed;
+          role \"canon\" needs [canon] in the gate table."
 else
-  ROLE="$(grep -E '^[[:space:]]*role[[:space:]]*=' "$CANON_PROFILE" | head -1 | grep -oE '"[^"]+"' | tr -d '"')"
+  ROLE="$(sed -n 's/^role:[[:space:]]*//p' <<<"$CANON_RESOLVED" | head -1)"
+  [ "$ROLE" = unset ] && ROLE=""
   [ "$ROLE" = "canon" ] || softfail "canon rsr-profile role is '${ROLE:-unset}', expected 'canon'"
   [ "$ROLE" = "canon" ] && pass "canon rsr-profile declares role = \"canon\""
 
