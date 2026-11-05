@@ -33,6 +33,12 @@ set -euo pipefail
 
 WF_DIR="${1:-.github/workflows}"
 LOCK="$WF_DIR/actions.lock"
+# The reviewed closure baseline (check-reusable-closure.sh --write-baseline).
+# Optional: without it this gate only knows the refs named in the YAML, which is
+# the behaviour it had before; with it, a through-ref recorded under the calling
+# workflow is recognised as referenced in both directions.
+CLOSURE="$WF_DIR/actions-lock.closure.tsv"
+[ -f "$CLOSURE" ] || CLOSURE=""
 
 if [ ! -f "$LOCK" ]; then
   echo "check-lock-sync: FATAL: no lockfile at $LOCK" >&2
@@ -91,7 +97,7 @@ for wf in "${WORKFLOWS[@]}"; do
 done > "$MAP"
 mapfile -t SCAN < <(cut -f1 "$MAP" | LC_ALL=C sort -u)
 
-awk -v lockfile="$LOCK" -v mapfile="$MAP" '
+awk -v lockfile="$LOCK" -v mapfile="$MAP" -v closurefile="$CLOSURE" '
 BEGIN {
   # owners[file]: the workflows whose uses: set includes this file. WFS: the
   # workflows themselves, in glob order (a workflow is its own first owner).
@@ -99,6 +105,24 @@ BEGIN {
     split(l, mp, "\t")
     owners[mp[1]] = owners[mp[1]] SUBSEP mp[2]
     if (mp[1] == mp[2]) WFS[++nw] = mp[2]
+  }
+  # THE REVIEWED CLOSURE IS A THIRD SOURCE OF `uses:`. A ref reached THROUGH a
+  # remote reusable appears in no workflow text here — it is listed in the
+  # closure baseline as "workflow <TAB> reusable <TAB> ref". The
+  # unified-dataset-vocab#81 shape that clause 1 deliberately permits (job-level
+  # reusable ref absent from the lock, its through-ref recorded under the
+  # CALLING workflow) then failed direction 2: the through-ref looked like a
+  # stale lock entry because nothing in the YAML names it. Both directions must
+  # agree about what "referenced" means, or the supported shape cannot pass this
+  # gate at all.
+  if (closurefile != "") {
+    while ((getline c < closurefile) > 0) {
+      if (c ~ /^#/ || c ~ /^[[:space:]]*$/) continue
+      split(c, cf, "\t")
+      if (cf[1] == "" || cf[3] == "") continue
+      reached[cf[1], norm(cf[3])] = 1
+    }
+    close(closurefile)
   }
 }
 # owner/repo[/subpath...]@ref  ->  owner/repo@ref   ("" if not an external ref)
@@ -230,7 +254,7 @@ END {
     for (k in lock) {
       split(k, kp, SUBSEP)
       if (kp[1] != key) continue
-      if (!((wf SUBSEP kp[2]) in uses)) orphan = orphan " " kp[2]
+      if (!((wf SUBSEP kp[2]) in uses) && !((key SUBSEP kp[2]) in reached)) orphan = orphan " " kp[2]
     }
     if (orphan != "") {
       printf "FAIL %s\n     stale lockfile entries, no uses: references them:%s\n", key, orphan
