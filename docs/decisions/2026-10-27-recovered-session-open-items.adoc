@@ -12,7 +12,8 @@ date, so check each item against its repository before acting on it.
 
 Provenance: the items come from 24 cloud-session transcripts, most only partly read.
 Statements marked *checked* were confirmed against the repository's git history on
-2026-10-27. Statements marked *unverified* could not be.
+2026-10-27. Statements marked *unverified* could not be. Anything carrying neither marker is
+as the sessions reported it and was not checked.
 
 == Needs the owner
 
@@ -29,9 +30,21 @@ Statements marked *checked* were confirmed against the repository's git history 
 . *PanLL repin.* *Checked:* panll's workflows still call `hyperpolymath/standards/…@75bd5994`
   (and `rust-ci-reusable.yml@412a7031`), which Actions does not redirect. Choose "repin only" or
   "repin and adopt fork-governance".
-. *D332, A1, D304.* Uninstall Probot Settings, run the A1 ruleset convergence, and provision
-  the R2 bucket and token. `docs/reorg/2026-10-14-tidy/ISSUE-1234-CLOSEOUT-REPORT.adoc` and
+. *D332 and A1.* Uninstall Probot Settings and run the A1 ruleset convergence.
+  `docs/reorg/2026-10-14-tidy/ISSUE-1234-CLOSEOUT-REPORT.adoc` and
   `scripts/triage-2026-10-23-issue-1234-apply.sh` hold the commands.
+. *D304, the R2 mirror.* *Checked* against `mirror-reusable.yml`: the `mirror-r2-bundle` job
+  stays disabled until the variable `R2_BUNDLE_MIRROR_ENABLED` is `true`, and it uploads only
+  with all of: the secrets `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY`; `R2_AGE_RECIPIENT`
+  (`age1…`, or `ssh-ed25519` followed by the key material only, with no trailing comment; as a
+  secret or a variable); and the variables `R2_ENDPOINT_URL` (`*.r2.cloudflarestorage.com`) and
+  `R2_BUCKET`. Each caller must map the secrets explicitly in its `secrets:` block, not through
+  `secrets: inherit`, and must call a `mirror-reusable.yml` revision that has the job (added in
+  `cfad152`, 2026-10-23): an older pin skips it silently, and *checked*, `75bd5994` is one.
+  `docs/MIRROR-HOST-VERIFICATION.adoc` has the provisioning steps.
+. *A local mode for `scripts/regen-dependabot-locks.sh`.* It works only remotely, with App
+  tokens. A local mode reusing `regen_lock` would let a re-point pull request be repaired
+  without a hand-copied procedure.
 . *UUID v8 rename, stages 2 and 3* (#1260). They change branch protection estate-wide.
 . *Q9 follow-up in rsr-template-repo.* `rsr-template-repo#247` merged before the Q9 tier-split
   revision the overhaul called for.

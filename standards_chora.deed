@@ -39,7 +39,8 @@
     :contracts "1-formats/k9/"
     :coordination "2-protocols/k9-coordination/"
     :enforcement ".github/workflows/"
-    :governance "3-practice/fork-governance/")
+    :governance "3-practice/fork-governance/"
+    :proofs "3-practice/PROOF-POLICY.adoc")
   (status
     :phase active
     :since "2026-03-16"
@@ -92,4 +93,123 @@
   (policies
     (licensing
       :initial-assignment "Agents may author new files with the correct SPDX under repository policy, and initialise a brand-new repository's LICENSE."
-      :existing-declarations "Manual-Only; changes restricted to registered codeowner-admins. Agents flag drift and never sweep or relicense existing content.")))
+      :existing-declarations "Manual-Only; changes restricted to registered codeowner-admins. Agents flag drift and never sweep or relicense existing content."))
+  ; Egress attestation: this repo adopts its own ADR-009
+  ; (docs/decisions/ADR-009-declared-egress-for-secret-bearing-jobs.adoc;
+  ; grammar 1-formats/deed/spec/abnf/clauses/egress.abnf). Every local job that
+  ; reads a real secret (anything but GITHUB_TOKEN) is listed with exactly the
+  ; secrets it reads, the endpoints outside GitHub it reaches, and what holds
+  ; it to them. Hypatia RE001 accepts an entry here in place of
+  ; step-security/harden-runner and reports drift between an entry and its
+  ; workflow: when you add secrets.* to a job, change what it reaches, or
+  ; delete a workflow listed here, change this clause in the same commit.
+  ; The *-reusable.yml workflows also run in callers' repositories; an entry
+  ; here attests the job as this repository defines it.
+  (egress
+    :policy "standards ADR-009"
+    (job
+      :workflow ".github/workflows/boj-build.yml"
+      :job "trigger-boj"
+      :secrets ("BOJ_SERVER_URL")
+      :endpoints ("secret:BOJ_SERVER_URL" "var:BOJ_SERVER_URL")
+      :enforcement none
+      :reason "POSTs to the BoJ server's cartridge endpoint. The URL is the secret when set, else the variable.")
+    (job
+      :workflow ".github/workflows/allowlist-preflight-reusable.yml"
+      :job "live-policy"
+      :secrets ("HYPATIA_SCAN_PAT")
+      :endpoints ()
+      :enforcement none
+      :reason "Reads the live Actions allowlist through the GitHub API with gh; reaches only GitHub.")
+    (job
+      :workflow ".github/workflows/instant-sync.yml"
+      :job "dispatch"
+      :secrets ("FARM_DISPATCH_TOKEN")
+      :endpoints ()
+      :enforcement none
+      :reason "Sends a repository_dispatch event with peter-evans/repository-dispatch; reaches only the GitHub API.")
+    (job
+      :workflow ".github/workflows/mirror-reusable.yml"
+      :job "mirror-gitlab"
+      :secrets ("GITLAB_SSH_KEY")
+      :endpoints ("gitlab.com:22")
+      :enforcement none
+      :reason "Checks the host key with ssh-keyscan against an approved fingerprint, then pushes over SSH.")
+    (job
+      :workflow ".github/workflows/mirror-reusable.yml"
+      :job "mirror-bitbucket"
+      :secrets ("BITBUCKET_SSH_KEY")
+      :endpoints ("bitbucket.org:22")
+      :enforcement none
+      :reason "Checks the host key with ssh-keyscan against an approved fingerprint, then pushes over SSH.")
+    (job
+      :workflow ".github/workflows/mirror-reusable.yml"
+      :job "mirror-codeberg"
+      :secrets ("CODEBERG_SSH_KEY")
+      :endpoints ("codeberg.org:22")
+      :enforcement none
+      :reason "Checks the host key with ssh-keyscan against an approved fingerprint, then pushes over SSH.")
+    (job
+      :workflow ".github/workflows/mirror-reusable.yml"
+      :job "mirror-sourcehut"
+      :secrets ("SOURCEHUT_SSH_KEY")
+      :endpoints ("git.sr.ht:22")
+      :enforcement none
+      :reason "Checks the host key with ssh-keyscan against an approved fingerprint, then pushes over SSH.")
+    (job
+      :workflow ".github/workflows/mirror-reusable.yml"
+      :job "mirror-disroot"
+      :secrets ("DISROOT_SSH_KEY")
+      :endpoints ("git.disroot.org:22")
+      :enforcement none
+      :reason "Checks the host key with ssh-keyscan against an approved fingerprint, then pushes over SSH.")
+    (job
+      :workflow ".github/workflows/mirror-reusable.yml"
+      :job "mirror-gitea"
+      :secrets ("GITEA_SSH_KEY")
+      :endpoints ("var:GITEA_HOST")
+      :enforcement none
+      :reason "Mirrors to the caller's own Gitea instance, named by vars.GITEA_HOST: ssh-keyscan against an approved fingerprint, then an SSH push to port 22.")
+    (job
+      :workflow ".github/workflows/mirror-reusable.yml"
+      :job "mirror-radicle"
+      :secrets ("RADICLE_KEY")
+      :endpoints ("static.rust-lang.org" "index.crates.io" "static.crates.io" "*.radicle.garden" "*.radicle.xyz")
+      :enforcement none
+      :reason "Installs Rust (dtolnay/rust-toolchain) and radicle-cli with cargo, then rad sync announces to the CLI's preferred seed nodes. The seed hosts come from radicle-cli's defaults, not this workflow; check them against the installed version before enforcing.")
+    (job
+      :workflow ".github/workflows/mirror-reusable.yml"
+      :job "mirror-r2-bundle"
+      :secrets ("R2_ACCESS_KEY_ID" "R2_AGE_RECIPIENT" "R2_SECRET_ACCESS_KEY")
+      :endpoints ("var:R2_ENDPOINT_URL" "*.r2.cloudflarestorage.com" "azure.archive.ubuntu.com")
+      :enforcement none
+      :reason "Uploads an age-encrypted git bundle with aws s3 cp to the Cloudflare R2 endpoint in vars.R2_ENDPOINT_URL, which the job refuses unless it is *.r2.cloudflarestorage.com. apt-get reaches the runner's Ubuntu mirror only when age is not preinstalled.")
+    (job
+      :workflow ".github/workflows/github-backup-mirror-reusable.yml"
+      :job "mirror-github"
+      :secrets ("BACKUP_MIRROR_TOKEN")
+      :endpoints ()
+      :enforcement none
+      :reason "Mirrors to a backup GitHub organisation with gh and an HTTPS push to github.com; reaches only GitHub.")
+    (job
+      :workflow ".github/workflows/tailscale-connect-reusable.yml"
+      :job "connect"
+      :secrets ("TS_OAUTH_CLIENT_ID" "TS_OAUTH_SECRET")
+      :endpoints ("pkgs.tailscale.com" "*.tailscale.com" "log.tailscale.io")
+      :enforcement none
+      :reason "tailscale/github-action v4.4.0 downloads tailscale from pkgs.tailscale.com; tailscaled then reaches the control plane, DERP relays and log server under tailscale.com and tailscale.io. Peers on the tailnet are reached by address, which is this job's purpose.")
+    (job
+      :workflow ".github/workflows/hypatia-scan-reusable.yml"
+      :job "scan"
+      :secrets ("HYPATIA_SCAN_PAT")
+      :endpoints ("builds.hex.pm" "repo.hex.pm" "hex.pm" "index.crates.io" "static.crates.io")
+      :enforcement none
+      :reason "erlef/setup-beam installs OTP and Elixir from builds.hex.pm (its default mirror); mix deps.get fetches Hypatia's dependencies from Hex; cargo install builds panic-attack and pons-asinorum from GitHub with crates from crates.io. The PAT is passed to the scan as GITHUB_TOKEN for the GitHub API.")
+    (job
+      :workflow ".github/workflows/governance-reusable.yml"
+      :job "actions-policy-live"
+      :secrets ("HYPATIA_SCAN_PAT")
+      :endpoints ()
+      :enforcement none
+      :reason "Reads the live Actions policy through the GitHub API with gh; reaches only GitHub."))
+)

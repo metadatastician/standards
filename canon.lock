@@ -116,6 +116,34 @@
 
 # ---------------------------------------------------------------------------
 #
+# 2026-11-05 - PATCH 2.1.3 -> 2.1.4. THE DESCRIPTILE CARRIERS ARE THE DEED.
+#
+# One artefact changes: TEMPLATE-APPLICABILITY-POLICY.adoc, whose universal
+# baseline is the human mirror of the gate table. It now names the repo deed's
+# (agentic) (neurosym) (playbook) clauses as the carriers of those three
+# descriptiles, with the legacy .a2ml files as the alternative, and names
+# 0-AI-MANIFEST.deed first (the gate table already accepted it, #1229). No
+# criterion is added, removed, re-tiered or re-gated, and the gate table and
+# criteria file are unchanged, so this is the editorial category.
+#
+# Why it is editorial and not a tightening: both carriers satisfy the baseline,
+# so no repository loses conformance. A2ML is retired (D99, D312, D313) and the
+# three families have a ruled mapping into the repo deed (2026-10-27); the
+# mirror now says what the estate writes. Hypatia's RSR scorer accepts either
+# carrier for criteria 3.1.5 to 3.1.7 (hyperpolymath/hypatia#1013), and the
+# canon archives its own three files in the same change (owner selector,
+# 2026-11-04).
+#
+# The criteria file still describes 3.1.5 to 3.1.7 by their .a2ml names. It is
+# a legacy A2ML record waiting for kyX, and a fact may not be added to one, so
+# its prose is left as it is; the scorer decides what satisfies the criterion.
+#
+# Sequence, per [canon].order: the spine re-adopts the applicability hash. Gate
+# A reports the lag until it does; it is informational unless --strict.
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+#
 # 2026-10-25 - PATCH 2.1.2 -> 2.1.3. THE GATE TABLE CAN SEE NESTED LAYOUTS.
 #
 # One artefact changes: the gate table. No criterion is added, removed,
@@ -266,7 +294,7 @@
 # A released major is immutable. Bumping `version` to a new MAJOR means the
 # prior major's criteria file is copied to 0-canon/rsr/archive/ and pinned
 # there; a freeze guard fails any PR that mutates a frozen major.
-version      = "2.1.3"
+version      = "2.1.4"
 spec_family  = "rhodium-standard-repositories"
 status       = "draft"          # draft | stable
 released     = "2026-09-30"
@@ -296,7 +324,7 @@ gates = { path = ".machine_readable/template-capability-gates.toml",  # from .ma
           slot = "gates", normative = true }
 
 applicability = { path = "0-canon/TEMPLATE-APPLICABILITY-POLICY.adoc",
-                  sha256 = "1c5caa467769a85cd173d9bf680f1836d3fc18859acfeb5dd8cd4163b0572662",
+                  sha256 = "564e5ea1470a94878e25c3bd1e18faf6628a58aa2ec86146f6dd38355fd1d494",
                   slot = "applicability", normative = true }
 
 lifecycle = { path = "0-canon/rsr/SCAFFOLD-LIFECYCLE.adoc",

@@ -100,13 +100,17 @@ standalone `egui-winit`.
 repository depends on directly: `eframe`, or `egui-winit` when it is used on
 its own. That drops the whole chain, at the cost of screen-reader support.
 Prefer waiting for the upstream release unless the advisory must clear sooner.
-|Blocked on, as of 2026-10-19 |`atspi-common` 0.14.0 and `atspi` 0.30.0 still
-require `zbus ^5.5`. `accesskit_unix` 0.24.0 requires `atspi ^0.29` and
-`zbus ^5.19`.
-|Unblocking release |An `atspi` / `atspi-common` release on `zbus ^6`, with its
-`zbus-lockstep` and `zbus_xml` dependencies also off the zbus 5 crates. Then
-`accesskit_atspi_common` and `accesskit_unix` following it, then an
-`accesskit_winit` and `egui-winit` / `eframe` release that takes those.
+|Blocked on, as of 2026-11-04 |`zbus_xml` 6.0.0 is out, on `zbus ^6`, but
+nothing above it has moved yet. `zbus-lockstep` and `zbus-lockstep-macros`
+0.7.0 still require `zbus_xml ^5.2` and `zvariant ^5.13`. `atspi-common` 0.14.0
+and `atspi` 0.30.0 still require `zbus ^5.5`. `accesskit_atspi_common` 0.21.1
+requires `zvariant ^5.15` directly, and `accesskit_unix` 0.24.1 requires
+`atspi ^0.29` and `zbus ^5.19`.
+|Unblocking release |A `zbus-lockstep` / `zbus-lockstep-macros` release on
+`zbus_xml` 6, then an `atspi` / `atspi-common` release on `zbus ^6` that takes
+it. Then `accesskit_atspi_common`, which must also drop its direct `zvariant`
+requirement, and `accesskit_unix` following it. Last, an `accesskit_winit` and
+`egui-winit` / `eframe` release that takes those.
 |Action when cleared |Bump the crate each affected repository depends on
 directly, `eframe` or `egui-winit`. This is a manifest change and may carry
 egui API breaks, so build and test the GUI feature before merging.
@@ -144,13 +148,23 @@ Either option holds only if nothing else turns `winit/default` or
 dependency graph. Confirm that
 `cargo tree --target all --workspace --all-features -i ttf-parser` finds no
 `ttf-parser` before relying on it.
-|Blocked on, as of 2026-10-19 |`ab_glyph` 0.2.32 requires
-`owned_ttf_parser ^0.25`, which requires `ttf-parser ^0.25.1`. The advisory
-names `skrifa` as the maintained alternative.
-|Unblocking release |`ab_glyph` / `owned_ttf_parser` moving to `skrifa`, or a
-`sctk-adwaita` release that drops `ab_glyph`, then a `winit` release taking it.
-|Action when cleared |`cargo update` in each affected repository, or an
-`eframe` bump if `winit` moves a minor version.
+|Blocked on, as of 2026-11-04 |`ab_glyph` 0.2.32 still requires
+`owned_ttf_parser ^0.25`, which requires `ttf-parser ^0.25.1`. `sctk-adwaita`
+0.11.1 and later add an optional backend on `skrifa`, the maintained
+alternative the advisory names, but keep `ab_glyph` as the default. Stable
+`winit` 0.30.13 still requires `sctk-adwaita ^0.10.1`, which has no `skrifa`
+backend. `winit` 0.31.0-beta.4 adds a `wayland-csd-adwaita-skrifa` feature, but
+its default `wayland-csd-adwaita` still selects `ab_glyph`. With that beta,
+switching to `wayland-csd-adwaita-skrifa` removes `ttf-parser` and `ab_glyph`
+from the lockfile.
+|Unblocking release |A stable `winit` 0.31, then an `egui-winit` / `eframe`
+release on it. The advisory then clears on its own only if `winit` or
+`sctk-adwaita` makes `skrifa` the default. Otherwise each affected repository
+selects it, as under *Action when cleared*.
+|Action when cleared |Bump `eframe` or `egui-winit` to the release on `winit`
+0.31. Unless `skrifa` has become the default, also apply the *Local workaround*
+setup, with `wayland-csd-adwaita-skrifa` in place of the crossfont feature.
+That keeps the decorations in pure Rust.
 |Known affected |`hyperpolymath/panic-attack`, through its opt-in `gui`
 feature. As with W1, its `cargo audit` reports the advisory on every build.
 This is not a full census.

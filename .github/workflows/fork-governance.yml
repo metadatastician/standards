@@ -147,7 +147,7 @@ jobs:
     env:
       # hyperpolymath/gitbot-fleet commit whose driver and adapters run. Bump
       # deliberately; the envelope contract is docs/VERDICT-GRID-SPEC.adoc.
-      FLEET_REF: e85b71bf139a61f956c7e0717a2912cd6e347cc5
+      FLEET_REF: e44af8144789594fcce891ccc7b77fc9a464a520
       # panic-attack commit for panicbot, kept equal to PANIC_ATTACK_SHA in
       # hypatia-scan-reusable.yml so both rows describe one tool.
       PANIC_ATTACK_SHA: 410a8f821ea8297833162565b50a298f787815da

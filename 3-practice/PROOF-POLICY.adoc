@@ -12,6 +12,11 @@ and the repositories' `CLAUDE.md` files point here. A `CLAUDE.md` may carry a
 short summary of the mapping for agents arriving there; it names this file
 as normative and changes in the same change as this file.
 
+§8 names how much independent witness a theory theorem has, as Proof
+Witness Grades (`PWG-3`, `PWG-2i`, `PWG-2ii`, `PWG-1`). It was added by
+owner ruling of 2026-11-04, together with the clarifications to §1.1, §2,
+§2.1, §2.2, §4, §6 and §7 that close standards#1389.
+
 This policy decides *where a proof lives*. What counts as an escape hatch in
 a proof, and how such debt is recorded, stays with
 link:../docs/TRUSTED-BASE-REDUCTION-POLICY.adoc[`docs/TRUSTED-BASE-REDUCTION-POLICY.adoc`].
@@ -78,6 +83,17 @@ recorded as proved *relative to the assumption*: its row names the
 `ASSUMED` contract it rests on and is never counted as unconditionally
 `PROVEN` until the contract itself is checked.
 
+A dependency that the prover itself checks is not an assumption. When the
+whole import closure of a proof (the *import cone*: every module it
+transitively imports, first-party or library) compiles under the prover's
+safe mode with zero postulates, the dependency is *checked, not assumed*.
+Record the cone instead of an `ASSUMED` row: the root module, the flags in
+force, the postulate count (zero), and the library name, version and pin.
+A cone that contains a postulate, or that was compiled outside safe mode,
+is not checked; its postulates are recorded as §5 and
+link:../docs/TRUSTED-BASE-REDUCTION-POLICY.adoc[`TRUSTED-BASE-REDUCTION-POLICY.adoc`]
+require.
+
 When choosing between dependencies that fit equally well, prefer one that
 carries its own checking: published proofs (Creusot, Kani, Verus, Aeneas,
 SPARK, or kernel-checked Lean or Rocq), a model-checked or formally specified
@@ -114,6 +130,13 @@ No Mathlib, in Lean or elsewhere: a missing tactic or lemma is reproved by
 hand in the core library. A proof that needs a large external library to
 compile is a dependency, not a proof the estate owns.
 
+This rule forbids the *dependency*. Whether a *necessary axiom* is admissible
+is decided by disposition (c) of
+link:../docs/TRUSTED-BASE-REDUCTION-POLICY.adoc[`TRUSTED-BASE-REDUCTION-POLICY.adoc`].
+An axiom's justification may cite a formalisation in Mathlib or elsewhere
+as the canonical statement of that axiom. The axiom must not enter the
+proof by importing that library.
+
 === 2.1 Canonical Agda invocation (2026-11-01)
 
 First-party Agda theory proof entrypoints shall use the following
@@ -136,6 +159,14 @@ options require an explicit, separately reviewed proof profile.
 Prior \`--safe\` or \`--safe --without-K\` successes are historical
 evidence, not receipts for this new combined profile.
 
+This section fixes how a theory proof *entrypoint* is invoked. It does not
+decide which escape-hatch markers a repository must budget, or how. The
+budgets, dispositions and detection are set by
+link:../docs/TRUSTED-BASE-REDUCTION-POLICY.adoc[`TRUSTED-BASE-REDUCTION-POLICY.adoc`].
+That document's statement that prover invocation is a repository's own
+business covers its debt tooling only. It does not license a weaker
+entrypoint invocation than the one above.
+
 Existing Idris2 source/ABI proofs, Rust/Creusot and Ada/SPARK
 engineering checks remain active as their source repos reconcile
 theory: a translated model does not prove runtime refinement.
@@ -157,6 +188,14 @@ COUNTEREXAMPLE, QUARANTINED. A reconciled claim requires a checked
 bridge or justified statement correspondence, independent kernel
 results and explicit residual assumptions. A prover cannot inspect
 an arbitrary Agda witness by name alone.
+
+These are *correspondence states*. They say how far the statements in
+different provers have been tied together. They are not the §5 status
+tokens, which say how one leg was discharged, and they are not the §8
+Proof Witness Grades, which say how many independent witnesses a theorem
+has. A record carries all three, and none may be written in another's
+field. A leg can be `PROVEN` and still `BRIDGE-PENDING`. Such a leg does
+not count towards a grade.
 
 Mathesis may catalogue proof receipts, but source projects retain
 local proof ownership. ECHIDNA is the longer-term automation
@@ -218,6 +257,10 @@ no status token; instead its row carries a `waiver` field pointing to the
 exception record, so the closed vocabulary of §5 is unchanged. The theorem
 is complete when the Agda proof is `PROVEN` or `PROVEN-WITH-AXIOMS` and
 every leg that is not waived is too.
+
+"Complete" is a statement about this policy's ledger, not about a grade. A
+waived leg is not a witness. A theorem with one leg waived is at most
+`PWG-2i`, and a theorem with both legs waived is at most `PWG-3` (§8).
 
 Worked exception: *TLA+ model checking* of concurrency protocols, as in
 hypatia's `verification/proofs/tlaplus/KinGate.tla`. A finite model check
@@ -298,10 +341,236 @@ Dedukti build through opam, and SPARK's `gnatprove` comes from Alire or its
 release bundles. A session or runner without access to those hosts cannot
 run those legs; say so instead of reporting the leg as passing.
 
+A repository may install a proof toolchain another way, for example from
+the upstream package index or a release archive. It must then record a
+`deviation` with the same discipline as a §4 exception. The record goes in
+the repo's proof-status file and in the workflow that installs the
+toolchain, and it names:
+
+* the leg or obligation affected;
+* the tool, its asserted version, and a digest of what was installed;
+* why the Guix manifest or the container could not be used;
+* its state: `open`, or `closed` with the change that closed it.
+
+The run asserts the version it got and fails on a mismatch. Silence is not
+compliance: a CI lane that installs a proof toolchain outside Guix or the
+container without a deviation record breaks this section.
+
 == 7. Amending this document
 
 Change the mapping only by owner ruling, and update the repositories'
 `CLAUDE.md` pointers in the same campaign. A gate that enforces this policy
-cites this file. Verify any such gate both ways, as
+cites this file by repository, path and full 40-character commit. A path
+alone silently follows later amendments. The gate fails when the pin is
+missing, and moving the pin is a reviewed change. Verify any such gate both ways, as
 link:LANGUAGE-POLICY.adoc[`LANGUAGE-POLICY.adoc`] §3 requires: it passes on
 conforming input and fails on a planted violation.
+
+[[proof-witness-grades]]
+== 8. Proof Witness Grades (PWG)
+
+Owner ruling 2026-11-04. This section adopts as estate policy the grade
+ladder proposed in the Mathesis architecture brief
+(`hyperpolymath/mathesis`, `docs/proposals/estate-mathematical-architecture.adoc`
+§5–§6), with the corrections below. This section is normative. The brief is
+kept for provenance, and where the two differ this section governs. It binds
+every repository, bot and person that states or computes a grade for a
+proof.
+
+A Proof Witness Grade says *how many independent machine-checked witnesses a
+theory theorem has*. It describes an artefact. It is not a status token
+(§5), not a correspondence state (§2.2), and not a statement that the
+theorem complies with this policy.
+
+[IMPORTANT]
+.Which "grade" is this?
+====
+The estate has several schemes called "grade". Always write a PWG with its
+prefix: `PWG-3`, `PWG-2i`, `PWG-2ii`, `PWG-1`. Do not write a bare "Grade 2"
+or "Grade B" in a status line, README, ledger, issue or bot output. In
+prose, `PWG-2a` and `PWG-2b` are accepted aliases for `PWG-2i` and
+`PWG-2ii`. Records use the canonical labels only.
+
+[cols="1,2,3,2",options="header"]
+|===
+|Scheme |Values |What it measures |Where
+
+|*PWG*
+|`3`, `2i`, `2ii`, `1`. *Lower is stronger*: the numbers count down.
+|Independent machine witnesses for one theory theorem
+|This section
+
+|CRG
+|`X F E D C B A`
+|Readiness of a software component
+|`component-readiness-grades/`
+
+|TRG
+|`X F E D C B A`
+|Readiness of a language toolchain
+|`toolchain-readiness-grades/`
+
+|ARG
+|`X F E D C B A`
+|Readiness of a language for adoption
+|`adoption-readiness-grades/`
+
+|FRG
+|`X F E D C B A`
+|Readiness of a language's formal foundations
+|`foundations-readiness-grades/`
+
+|ECHIDNA `TrustLevel`
+|`1`–`5`. *Higher is stronger*: the opposite direction to PWG.
+|Confidence in one dispatch result
+|`hyperpolymath/echidna`, `src/rust/verification/confidence.rs`
+
+|ECHIDNA `EpistemicLevel`
+|`Belief < Epi < Sound`
+|Whether fused prover verdicts denote the same statement
+|`hyperpolymath/echidna`, `src/rust/verification/result_arbiter.rs`
+|===
+
+None of these converts into another. A `PWG-1` theorem says nothing about
+the CRG of the code that uses it, and an ECHIDNA `TrustLevel` of 5 is not a
+`PWG-1`. ECHIDNA may compute a PWG from receipts. It must report the PWG
+under that name, separately from its own levels.
+====
+
+=== 8.1 Scope
+
+PWG applies to *theory* obligations (§1): theorems whose source of truth is
+Agda and which §2 requires to be rechecked in Rocq and Lean. Engineering
+proofs (Creusot, SPARK, Idris2) are not graded on this ladder. They use the
+§5 tokens only.
+
+A theory theorem that does not reach `PWG-3` is `ungraded`. Write
+`ungraded`, never a grade with a qualifier. This covers an Agda proof that
+is `OPEN` or `ASSUMED`, a theorem with no Agda source, and a theorem with
+only target-prover evidence (§3).
+
+=== 8.2 The grades
+
+`PWG-3` — Agda source checked::
+The Agda proof is `PROVEN` or `PROVEN-WITH-AXIOMS` under the §2.1
+invocation, and no recheck leg counts yet. The receipt records the Agda
+version, the standard-library pin, the flags actually in force and the
+import cone (§1.1). A development that needs full `--cubical`, or any option
+outside §2.1, reaches `PWG-3` only under the separately reviewed proof
+profile §2.1 requires.
++
+The brief's example `--safe --erasure` is not the canonical invocation.
+
+`PWG-2i` — one recheck leg::
+`PWG-3`, plus exactly one of the §2 legs (Rocq or Lean) *counts*.
++
+A leg counts when the target kernel accepted it as `PROVEN` or
+`PROVEN-WITH-AXIOMS` and its §2.2 correspondence state is `RECONCILED`.
+`RECONCILED` means the statement was compared with the Agda statement, the
+comparison was recorded, and the residual assumptions are listed. A leg
+counts whether it was `transported` or `re-proved` (§2).
++
+These legs do not count:
++
+* a transported leg whose statement comparison is not done (it is
+`ASSUMED`, §2);
+* a waived leg (§4);
+* an `unavailable` leg;
+* any leg still `BRIDGE-PENDING`.
+
+`PWG-2ii` — both recheck legs::
+`PWG-3`, plus both the Rocq leg and the Lean leg count. This is the grade
+at which §2's recheck obligation is discharged.
+
+`PWG-1` — receipts per commit::
+`PWG-2ii`, plus every counted witness (Agda, Rocq and Lean) has a current
+receipt from a headless, isolated, pinned checker run on the exact source
+commit. A receipt records:
++
+* the checker and its version;
+* the invocation;
+* a digest of the inputs;
+* the observed result;
+* the axioms reported (§8.4);
+* the source repository and its full 40-character commit.
++
+The brief named checker services as the route: AXLE for Lean,
+`isabelle server`, and coq-lsp. These are examples, not requirements. A
+pinned kernel run in CI (`agda`, `rocq compile` or `coqc`, `lean` under
+`lake`) qualifies on the same terms. A checker service is no stronger than
+the kernel behind it. A hosted service counts only if it reports its
+checker version, and that version is recorded on the receipt.
+
+=== 8.3 Foundational diversity is a tag, not a grade
+
+Agda, Rocq and Lean all belong to the dependent-type-theory family. A
+witness in a different foundation (Isabelle/HOL, HOL4, HOL Light, Metamath
+and the like) guards against a blind spot the three share. It is recorded
+as the tag `+foundation-diverse` beside whatever grade the theorem has, for
+example `PWG-2ii +foundation-diverse`.
+
+The tag needs a kernel-checked witness whose statement correspondence is
+recorded as in §2.2. It never stands in for the Rocq or the Lean leg (§3).
+This corrects the brief, which made a non-DTT second translation the
+condition for its Grade 2ii.
+
+=== 8.4 Rules that apply to every grade
+
+. *A grade is not a discharge.* `PWG-3` and `PWG-2i` describe the
+artefact. They do not say the theorem meets §2. A theorem at those grades
+still owes its missing legs.
+. *Grades are derived, not asserted.* A grade is computed from the
+receipts and the §2.2 records. A grade written by hand that the receipts
+do not support is drift. A gate or a bot may recompute it at any time and
+reports the computed value.
+. *Claims need receipts.* A statement that a theory theorem is
+"verified", "machine-checked" or "kernel-checked" *through* a named
+checker, service or CI lane is a claim about the legs it names. Each of
+those legs needs a current receipt as `PWG-1` describes. This applies in a
+README, EXPLAINME, AFFIRMATION, release note, issue or bot output. A `PWG-1`
+label needs receipts for every witness. A grade that is not reached is not
+worded as if it were.
+. *Regression drops the grade.* If a later commit breaks a counted leg, the
+grade falls to the highest grade the current receipts support. Breaking
+includes a leg that fails, or one whose receipt cannot be reproduced at
+the new commit. Grades are never carried forward from an older commit.
+. *Lineage lives on the receipt.* A receipt that is kept but no longer
+current carries `state: superseded` (a newer receipt replaced it) or
+`state: regressed` (the source no longer checks), with the reason. These
+are receipt states. The §5 vocabulary stays closed, and no
+`Superseded` or `Regressed` status token exists.
+. *Axioms travel with the grade.* Every counted witness lists its axioms:
+`#print axioms` for Lean, `Print Assumptions` for Rocq. For Agda the
+mechanism has three parts: `--safe`, so the compiler refuses `postulate`;
+a comment-aware postulate scan of the import cone; and the recorded import
+cone itself (§1.1). A `PROVEN-WITH-AXIOMS` witness counts only if each
+axiom is admissible under disposition (c) of
+link:../docs/TRUSTED-BASE-REDUCTION-POLICY.adoc[`TRUSTED-BASE-REDUCTION-POLICY.adoc`].
+A grade never hides axioms. A summary that shows the grade shows whether
+it rests on axioms.
+. *A census, never a percentage.* Grade counts may be published only as a
+census: a count per grade with the denominator, and the `ungraded` and
+lower rungs named in the same line. Never publish "X% proved", an average
+grade, or a single confidence score.
+
+=== 8.5 Where a grade is recorded
+
+Each theorem's grade is recorded in its home repository's proof-status
+file, or in the machine ledger where there is one (README-EXPLAINME §5).
+The record holds:
+
+* `pwg`: one of `3`, `2i`, `2ii`, `1`, `ungraded`;
+* `foundation_diverse`: a boolean;
+* for each leg: its route (`transported`, `re-proved`, `waived`,
+`unavailable`), its §5 token, its §2.2 state, and its receipts, with their
+lineage states.
+
+Mathesis may catalogue grades. It derives them from those receipts and does
+not assign them (§2.2). The home repository owns the theorem and its
+evidence.
+
+=== 8.6 Naming
+
+`hyperpolymath/standards` and `metadatastician/standards` are the same
+repository. GitHub redirects the older name, and both names resolve to the
+same commits. Cite either name, and pin by commit (§7).

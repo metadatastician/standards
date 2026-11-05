@@ -60,6 +60,27 @@ d=$(repo deed-declared)
 deed "$d" deeddeclared '  (rsr-profile :version "1.0.0" :capabilities ("reproducible-build"))'
 assert "deed declares reproducible-build, nothing ships → violation (was a silent 0)" 1 "Package policy violation" bash "$GATE" "$d"
 
+# A deed the normative parser rejects must not read as "no capabilities"
+# (Codex on #1411): the AST resolver exits 2 on it, and swallowing that
+# would let a malformed deed that declares packaging pass with none shipped.
+d=$(repo deed-unparseable)
+deed "$d" deedunparseable '  (notes :x "bad\\q escape")\n  (rsr-profile :version "1.0.0" :capabilities ("reproducible-build"))'
+if command -v bun >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
+  assert "AST path: an unparseable deed declaring packaging fails closed" 1 "does not parse as DEED" env RSR_DEED_PARSER=ast bash "$GATE" "$d"
+else
+  echo "NOTE: bun or jq unavailable; the AST fail-closed case is skipped"
+fi
+assert "awk path: the same deed still enforces its declared packaging" 1 "Package policy violation" env RSR_DEED_PARSER=awk bash "$GATE" "$d"
+
+# With a legacy .a2ml beside the rejected deed, the error names the deed
+# (the file that failed to parse), not the .a2ml (CodeRabbit on #1411).
+d=$(repo deed-unparseable-a2ml)
+deed "$d" deedunparseablea2ml '  (notes :x "bad\\q escape")\n  (rsr-profile :version "1.0.0" :capabilities ("reproducible-build"))'
+printf '[rsr-profile]\nversion = "1.0.0"\ncapabilities = ["bash"]\n' > "$d/.machine_readable/rsr-profile.a2ml"
+if command -v bun >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
+  assert "AST path: the parse error names the rejected deed, not the .a2ml beside it" 1 "::error::check-package-policy: deedunparseablea2ml_chora.deed does not parse as DEED" env RSR_DEED_PARSER=ast bash "$GATE" "$d"
+fi
+
 d=$(repo deed-container)
 deed "$d" deedcontainer '  (rsr-profile :version "1.0.0" :capabilities ("container"))'
 assert "deed declares container, nothing ships → violation" 1 "Package policy violation" bash "$GATE" "$d"
