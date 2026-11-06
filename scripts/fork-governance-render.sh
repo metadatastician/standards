@@ -59,6 +59,7 @@ HYPATIA_RESULT=""
 HYPATIA_VERDICT=""
 HYPATIA_REPORT=""
 HYPATIA_ADVISORY=""
+REVIEWER_COVERAGE=""
 SHA=""
 RUN_ID=""
 RUN_URL=""
@@ -78,6 +79,7 @@ while [ $# -gt 0 ]; do
     --hypatia-verdict) shift; HYPATIA_VERDICT="${1:-}" ;;
     --hypatia-report) shift; HYPATIA_REPORT="${1:-}" ;;
     --hypatia-advisory) shift; HYPATIA_ADVISORY="${1:-}" ;;
+    --reviewer-coverage) shift; REVIEWER_COVERAGE="${1:-}" ;;
     --sha)            shift; SHA="${1:-}" ;;
     --run)            shift; RUN_ID="${1:-}" ;;
     --url)            shift; RUN_URL="${1:-}" ;;
@@ -300,6 +302,12 @@ BODY="$OUT/body.md"
     echo
     echo 'The lane did not run to completion, so this row certifies nothing. Open'
     echo 'the run and read the Hypatia job log; a missing grid is never a clean scan.'
+  fi
+  echo
+  if [ -n "$REVIEWER_COVERAGE" ] && [ -s "$REVIEWER_COVERAGE" ]; then
+    cat "$REVIEWER_COVERAGE"
+  else
+    echo '**External reviewer coverage:** INDETERMINATE — not collected; no review or approval inferred.'
   fi
 } > "$BODY"
 

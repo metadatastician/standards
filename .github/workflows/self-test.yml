@@ -123,6 +123,9 @@ jobs:
       - name: Run tests/*.sh and scripts/tests/*.sh
         run: bash scripts/run-shell-test-suite.sh
 
+      - name: Reviewer absence and quota regressions
+        run: node --test scripts/tests/reviewer-coverage.test.mjs
+
       # The suite above runs with whatever `awk` this image offers, and on
       # ubuntu-latest that is gawk. mawk is the default awk on a plain Debian or
       # Ubuntu install, and it rejects gawk-only constructs at parse time, so a

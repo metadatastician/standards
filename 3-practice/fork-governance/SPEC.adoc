@@ -97,6 +97,19 @@ A summary that silently loses a row reads as "nothing wrong there". That is
 the failure mode this system exists to prevent, so it is also the one it must
 never itself exhibit.
 
+=== 2.6 External reviewer coverage (advisory)
+
+After the Hypatia grid, the posting engine reports a snapshot of external
+reviewer coverage for the PR head observed while collecting evidence. This
+is not a fourth lane and MUST NOT alter any lane state or overall badge.
+A completed review on a different commit, a pending/dismissed review,
+a quota failure, or silence MUST NOT be interpreted as a completed review
+on the current head. In particular, a quota failure may itself be delivered
+as a `COMMENTED` review. A review observed on the head is a coverage fact,
+not a claim of approval. Quota notices in issue comments have unknown head
+scope. API failure or a head change during collection is indeterminate.
+The snapshot is refreshed when the summary runs; it is not live review state.
+
 == 3. State derivation
 
 The posting engine receives two different facts per lane and MUST NOT confuse
