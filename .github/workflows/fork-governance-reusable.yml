@@ -128,7 +128,9 @@ jobs:
             scripts/reviewer-coverage.sh
           sparse-checkout-cone-mode: false
 
-      - name: Checkout the coverage helper independently of canon-ref
+      # Optional metadata helper, not a test gate: failure is rendered as
+      # indeterminate coverage while the three lane reports remain available.
+      - name: Fetch the coverage helper independently of canon-ref
         if: ${{ github.repository_id != 1116521501 && github.repository != 'hyperpolymath/standards' && github.repository != 'metadatastician/standards' }}
         continue-on-error: true
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
