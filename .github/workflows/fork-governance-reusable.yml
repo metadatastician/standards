@@ -125,7 +125,21 @@ jobs:
           persist-credentials: false
           sparse-checkout: |
             scripts/fork-governance-render.sh
-            scripts/reviewer-coverage.mjs
+            scripts/reviewer-coverage.sh
+          sparse-checkout-cone-mode: false
+
+      # Optional metadata helper, not a test gate: failure is rendered as
+      # indeterminate coverage while the three lane reports remain available.
+      - name: Fetch the coverage helper independently of canon-ref
+        if: ${{ github.repository_id != 1116521501 && github.repository != 'hyperpolymath/standards' && github.repository != 'metadatastician/standards' }}
+        continue-on-error: true
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: metadatastician/standards
+          ref: ${{ job.workflow_sha }}
+          path: .fork-governance-coverage
+          persist-credentials: false
+          sparse-checkout: scripts/reviewer-coverage.sh
           sparse-checkout-cone-mode: false
 
       - name: Checkout the canon
@@ -142,7 +156,6 @@ jobs:
           persist-credentials: false
           sparse-checkout: |
             scripts/fork-governance-render.sh
-            scripts/reviewer-coverage.mjs
           sparse-checkout-cone-mode: false
 
       # `continue-on-error` on both downloads, and never a condition on the
@@ -177,6 +190,7 @@ jobs:
           PR_NUMBER: ${{ inputs.pr-number }}
           GH_TOKEN: ${{ github.token }}
           RENDERER: ${{ (github.repository_id == 1116521501 || github.repository == 'hyperpolymath/standards' || github.repository == 'metadatastician/standards') && 'scripts/fork-governance-render.sh' || '.fork-governance-canon/scripts/fork-governance-render.sh' }}
+          COVERAGE_HELPER: ${{ (github.repository_id == 1116521501 || github.repository == 'hyperpolymath/standards' || github.repository == 'metadatastician/standards') && 'scripts/reviewer-coverage.sh' || '.fork-governance-coverage/scripts/reviewer-coverage.sh' }}
         run: |
           set -euo pipefail
           [ -f "$RENDERER" ] || { echo "::error::renderer not found at $RENDERER"; exit 1; }
@@ -189,11 +203,14 @@ jobs:
              gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/reviews?per_page=100" > "$RUNNER_TEMP/reviews.json" &&
              gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments?per_page=100" > "$RUNNER_TEMP/review-comments.json" &&
              checked_head=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" --jq .head.sha); then
-            node "$(dirname "$RENDERER")/reviewer-coverage.mjs" "$head" "$RUNNER_TEMP/reviews.json" \
-              "$RUNNER_TEMP/review-comments.json" "$checked_head" > "$coverage" || true
+            helper="$COVERAGE_HELPER"
+            if [ -f "$helper" ]; then
+              bash "$helper" "$head" "$RUNNER_TEMP/reviews.json" \
+                "$RUNNER_TEMP/review-comments.json" "$checked_head" > "$coverage.new" || true
+              [ ! -s "$coverage.new" ] || mv "$coverage.new" "$coverage"
+            fi
           fi
           args=(--out "$RUNNER_TEMP/fork-governance"
-                --reviewer-coverage "$coverage"
                 --deed-result "$DEED_RESULT"
                 --k9-result "$K9_RESULT" --k9-verdict "$K9_VERDICT"
                 --hypatia-result "$HYPATIA_RESULT" --hypatia-verdict "$HYPATIA_VERDICT"
@@ -202,6 +219,36 @@ jobs:
           [ -s k9-grid/report.md ] && args+=(--k9-report k9-grid/report.md)
           [ -s verdict-grid/report.md ] && args+=(--hypatia-report verdict-grid/report.md)
           bash "$RENDERER" "${args[@]}" >/dev/null
+          # Older canon-ref renderers do not accept coverage arguments. Append
+          # outside the versioned renderer, only within the publisher's budget.
+          body="$RUNNER_TEMP/fork-governance/body.md"
+          # Recent older renderers emit this exact trailing fallback when no
+          # coverage argument is supplied. Remove only that known footer;
+          # lane text containing the same words remains untouched.
+          if awk -v legacy='**External reviewer coverage:** INDETERMINATE — not collected; no review or approval inferred.' '
+            { lines[NR]=$0 }
+            END {
+              last=NR
+              while (last>0 && lines[last]=="") last--
+              if (lines[last]==legacy) { last--; for (i=1;i<=last;i++) print lines[i] }
+              else { exit 3 }
+            }' "$body" > "$body.new"; then
+            mv "$body.new" "$body"
+          else
+            status=$?
+            rm -f "$body.new"
+            [ "$status" -eq 3 ] || exit "$status"
+          fi
+          # Always append our own section. Lane finding text is untrusted and
+          # cannot suppress it by mentioning reviewer coverage or its marker.
+          marker='<!-- fork-governance:reviewer-coverage -->'
+          # Reserve 2048 bytes for the fork publisher footer and run stamp.
+          if [ "$(( $(wc -c < "$body") + $(wc -c < "$coverage") + ${#marker} + 2 ))" -le 62952 ]; then
+              printf '\n%s\n' "$marker" >> "$body"
+              cat "$coverage" >> "$body"
+          else
+              echo '::warning::Reviewer coverage omitted to preserve the governance comment size budget.'
+          fi
           {
             echo "## Fork governance"
             echo

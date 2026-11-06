@@ -303,13 +303,18 @@ BODY="$OUT/body.md"
     echo 'The lane did not run to completion, so this row certifies nothing. Open'
     echo 'the run and read the Hypatia job log; a missing grid is never a clean scan.'
   fi
-  echo
-  if [ -n "$REVIEWER_COVERAGE" ] && [ -s "$REVIEWER_COVERAGE" ]; then
-    cat "$REVIEWER_COVERAGE"
-  else
-    echo '**External reviewer coverage:** INDETERMINATE — not collected; no review or approval inferred.'
-  fi
 } > "$BODY"
+
+# Optional direct callers get the same conservative byte budget as the
+# publisher. Keep the three lane reports intact when the advisory cannot fit.
+if [ -n "$REVIEWER_COVERAGE" ] && [ -s "$REVIEWER_COVERAGE" ]; then
+  if [ "$(( $(wc -c < "$BODY") + $(wc -c < "$REVIEWER_COVERAGE") + 1 ))" -le 62952 ]; then
+    printf '\n' >> "$BODY"
+    cat "$REVIEWER_COVERAGE" >> "$BODY"
+  else
+    printf '%s\n' 'reviewer coverage omitted: governance comment size budget' >&2
+  fi
+fi
 
 # ── Overall badge ──────────────────────────────────────────────────────────
 # Worst lane wins, with red outranking orange so missing evidence cannot hide a
