@@ -35,6 +35,7 @@ workflows:
     '.github/workflows/ci-pipeline.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'haskell-actions/setup@0f8e8c99d88aeb3fbfd523f1ef2c6f762d10d64d'
+        - 'metadatastician/standards@d55304a01b5260b0511aae0d14ed8b8770b00293'
         - 'oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6'
     '.github/workflows/cicd-squabbler-reusable.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
@@ -140,7 +141,8 @@ workflows:
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8'
         - 'webfactory/ssh-agent@e83874834305fe9a4a2997156cb26c5de65a8555'
-    '.github/workflows/mirror.yml': []
+    '.github/workflows/mirror.yml':
+        - 'metadatastician/standards@70019048f862250c04346f27e6ca196ff7aa187a'
     '.github/workflows/no-js-scan.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
     '.github/workflows/pages-archive.yml':
@@ -302,6 +304,25 @@ dependencies:
         commit: 'sha1-d88ff883d98abadb3d00b83e585cf202ce00e11e'
         owner_id: 6759885
         repo_id: 1284026967
+    'metadatastician/standards@70019048f862250c04346f27e6ca196ff7aa187a':
+        ref: '70019048f862250c04346f27e6ca196ff7aa187a'
+        commit: 'sha1-70019048f862250c04346f27e6ca196ff7aa187a'
+        owner_id: 297579217
+        repo_id: 1116521501
+        uses:
+            - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
+            - 'dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8'
+            - 'webfactory/ssh-agent@e83874834305fe9a4a2997156cb26c5de65a8555'
+    'metadatastician/standards@d55304a01b5260b0511aae0d14ed8b8770b00293':
+        ref: 'd55304a01b5260b0511aae0d14ed8b8770b00293'
+        commit: 'sha1-d55304a01b5260b0511aae0d14ed8b8770b00293'
+        owner_id: 297579217
+        repo_id: 1116521501
+        uses:
+            - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
+            - 'dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8'
+            - 'goto-bus-stop/setup-zig@abea47f85e598557f500fa1fd2ab7464fcb39406'
+            - 'swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6'
     'ocaml/setup-ocaml@ff66428f72b64472e749b22e0ad4dded4b2ddca6':
         ref: 'v3.9.1'
         commit: 'sha1-ff66428f72b64472e749b22e0ad4dded4b2ddca6'
@@ -327,6 +348,11 @@ dependencies:
         commit: 'sha1-46b06cea07f9e64621fdf066ba77ac6915163d43'
         owner_id: 88700172
         repo_id: 422287306
+    'swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6':
+        ref: 'v2.9.2'
+        commit: 'sha1-6323deb102c322ba6fcbdcafc7e3dddab59af2b6'
+        owner_id: 580492
+        repo_id: 298565987
     'swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0':
         ref: 'v2.9.3'
         commit: 'sha1-d1527c8f67ef9af357290475d4af4b0fab8f12e0'
