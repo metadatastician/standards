@@ -27,6 +27,9 @@ the recorded commit; their ref must be recordable under the official tool's
 ref-name rules, or the existing reviewed caller-side exact-SHA representation.
 Transitive edges use repository coordinates, and cycles fail verification even
 when every referenced record exists. Shared acyclic children remain valid.
+Unused dependency records also fail the reverse check. These estate locks run
+on GitHub.com, so an explicit hostname must be `github.com`; a syntactically
+valid foreign GHE hostname cannot be executed here.
 
 The estate's measured omitted-reusable-call policy remains in force: an
 unrecorded job-level reusable call does not itself require a caller-owned
