@@ -78,5 +78,29 @@ head -c "$((62940-overhead))" /dev/zero | tr '\0' x > "$tmp/large-grid.md"
 bash "$root/scripts/fork-governance-render.sh" --out "$tmp/large" --k9-report "$tmp/large-grid.md" \
   --reviewer-coverage "$tmp/coverage.md" >/dev/null 2>&1
 if [ "$(( $(wc -c < "$tmp/large/body.md") + 2048 ))" -le 65000 ]; then pass=$((pass+1)); else fail=$((fail+1)); fi
+# Execute the workflow's own append block, including its marker accounting.
+awk '/^          body="\$RUNNER_TEMP\/fork-governance\/body.md"/ { copying=1 }
+     copying && /^          \{$/ { exit }
+     copying { sub(/^          /, ""); print }' \
+  "$root/.github/workflows/fork-governance-reusable.yml" > "$tmp/workflow-append.sh"
+[ -s "$tmp/workflow-append.sh" ]
+marker='<!-- fork-governance:reviewer-coverage -->'
+printf 'coverage fixture\n' > "$tmp/coverage.md"
+mkdir -p "$tmp/workflow/fork-governance"
+coverage_size=$(wc -c < "$tmp/coverage.md")
+for excess in 0 1; do
+  body="$tmp/workflow/fork-governance/body.md"
+  head -c "$((62952-coverage_size-${#marker}-2+excess))" /dev/zero | tr '\0' x > "$body"
+  RUNNER_TEMP="$tmp/workflow" coverage="$tmp/coverage.md" bash "$tmp/workflow-append.sh" >/dev/null
+  if [ "$excess" -eq 0 ]; then
+    check 'workflow includes marker at exact budget' "$(cat "$body")" "$marker"
+    check 'workflow includes coverage at exact budget' "$(cat "$body")" 'coverage fixture'
+    [ "$(wc -c < "$body")" -eq 62952 ] && pass=$((pass+1)) || fail=$((fail+1))
+  elif grep -Fq -e "$marker" -e 'coverage fixture' "$body"; then
+    fail=$((fail+1))
+  else
+    pass=$((pass+1))
+  fi
+done
 printf 'reviewer-coverage: passed=%s failed=%s\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

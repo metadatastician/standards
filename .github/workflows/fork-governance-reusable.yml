@@ -128,6 +128,18 @@ jobs:
             scripts/reviewer-coverage.sh
           sparse-checkout-cone-mode: false
 
+      - name: Checkout the coverage helper independently of canon-ref
+        if: ${{ github.repository_id != 1116521501 && github.repository != 'hyperpolymath/standards' && github.repository != 'metadatastician/standards' }}
+        continue-on-error: true
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: metadatastician/standards
+          ref: ${{ job.workflow_sha }}
+          path: .fork-governance-coverage
+          persist-credentials: false
+          sparse-checkout: scripts/reviewer-coverage.sh
+          sparse-checkout-cone-mode: false
+
       - name: Checkout the canon
         if: ${{ github.repository_id != 1116521501 && github.repository != 'hyperpolymath/standards' && github.repository != 'metadatastician/standards' }}
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -142,7 +154,6 @@ jobs:
           persist-credentials: false
           sparse-checkout: |
             scripts/fork-governance-render.sh
-            scripts/reviewer-coverage.sh
           sparse-checkout-cone-mode: false
 
       # `continue-on-error` on both downloads, and never a condition on the
@@ -177,6 +188,7 @@ jobs:
           PR_NUMBER: ${{ inputs.pr-number }}
           GH_TOKEN: ${{ github.token }}
           RENDERER: ${{ (github.repository_id == 1116521501 || github.repository == 'hyperpolymath/standards' || github.repository == 'metadatastician/standards') && 'scripts/fork-governance-render.sh' || '.fork-governance-canon/scripts/fork-governance-render.sh' }}
+          COVERAGE_HELPER: ${{ (github.repository_id == 1116521501 || github.repository == 'hyperpolymath/standards' || github.repository == 'metadatastician/standards') && 'scripts/reviewer-coverage.sh' || '.fork-governance-coverage/scripts/reviewer-coverage.sh' }}
         run: |
           set -euo pipefail
           [ -f "$RENDERER" ] || { echo "::error::renderer not found at $RENDERER"; exit 1; }
@@ -189,7 +201,7 @@ jobs:
              gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/reviews?per_page=100" > "$RUNNER_TEMP/reviews.json" &&
              gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments?per_page=100" > "$RUNNER_TEMP/review-comments.json" &&
              checked_head=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" --jq .head.sha); then
-            helper="$(dirname "$RENDERER")/reviewer-coverage.sh"
+            helper="$COVERAGE_HELPER"
             if [ -f "$helper" ]; then
               bash "$helper" "$head" "$RUNNER_TEMP/reviews.json" \
                 "$RUNNER_TEMP/review-comments.json" "$checked_head" > "$coverage.new" || true
