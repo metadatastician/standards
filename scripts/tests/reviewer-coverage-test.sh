@@ -54,6 +54,10 @@ jq -n '[[{user:{login:"someone"},body:"Copilot was unable to review this pull re
 check 'human text cannot impersonate bot' "$(snapshot)" '| Copilot | NO REVIEW observed on this head |'
 jq -n '[[{user:{login:"copilot-pull-request-reviewer[bot]"},body:"Copilot was unable to review this pull request because of insufficient remaining quota."}]]' > "$comments"
 check 'issue comment head remains unknown' "$(snapshot)" 'comment head unknown'
+jq -n '[[{user:{login:"coderabbitai[bot]"},body:"## Rate limit exceeded\nPlease wait before retrying."}]]' > "$comments"
+check 'standalone CodeRabbit quota notice is retained' "$(snapshot)" '| CodeRabbit | NO REVIEW on this head — unavailable/quota notice observed; comment head unknown |'
+jq -n '[[{user:{login:"someone"},body:"## Rate limit exceeded\nPlease wait before retrying."}]]' > "$comments"
+check 'standalone notice is scoped to CodeRabbit identity' "$(snapshot)" '| CodeRabbit | NO REVIEW observed on this head |'
 printf '{}\n' > "$reviews"
 if report=$(snapshot); then fail=$((fail+1)); else check 'bad response is indeterminate' "$report" 'INDETERMINATE'; fi
 printf '[[]]\n' > "$reviews"
@@ -64,16 +68,15 @@ bash "$root/scripts/fork-governance-render.sh" --out "$tmp/render" \
   --hypatia-result success --hypatia-verdict green --reviewer-coverage "$tmp/coverage.md" >/dev/null
 check 'coverage is embedded in summary' "$(cat "$tmp/render/body.md")" 'NO REVIEW — quota exhausted on this head'
 check 'coverage does not change badge' "$(cat "$tmp/render/badge.json")" 'brightgreen'
-# Fill a previously publishable body to 64,980 bytes; the optional advisory
-# must not turn it into an unpublishable comment.
+# Fill the body near its budget after reserving the publisher's footer.
 # A nonempty grid replaces the missing-grid placeholder; calibrate its exact
 # overhead first so the boundary assertion is independent of header prose.
 printf x > "$tmp/large-grid.md"
 bash "$root/scripts/fork-governance-render.sh" --out "$tmp/base" --k9-report "$tmp/large-grid.md" >/dev/null
 overhead=$(( $(wc -c < "$tmp/base/body.md") - 1 ))
-head -c "$((64980-overhead))" /dev/zero | tr '\0' x > "$tmp/large-grid.md"
+head -c "$((62940-overhead))" /dev/zero | tr '\0' x > "$tmp/large-grid.md"
 bash "$root/scripts/fork-governance-render.sh" --out "$tmp/large" --k9-report "$tmp/large-grid.md" \
   --reviewer-coverage "$tmp/coverage.md" >/dev/null 2>&1
-if [ "$(wc -c < "$tmp/large/body.md")" -le 65000 ]; then pass=$((pass+1)); else fail=$((fail+1)); fi
+if [ "$(( $(wc -c < "$tmp/large/body.md") + 2048 ))" -le 65000 ]; then pass=$((pass+1)); else fail=$((fail+1)); fi
 printf 'reviewer-coverage: passed=%s failed=%s\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

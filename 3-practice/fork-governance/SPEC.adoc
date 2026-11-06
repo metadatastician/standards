@@ -113,6 +113,9 @@ The advisory may be omitted, with a workflow warning, when it would exceed
 the publisher's 65,000-character comment budget. Existing lane reports take
 precedence. Older `canon-ref` renderers remain supported; the posting engine
 appends the advisory without requiring a new renderer argument.
+The implementation reserves 2,048 bytes for the fork publisher footer and
+stamp, and uses a conservative byte count. Lane text cannot suppress the
+advisory by mentioning its title; the posting engine appends its own section.
 
 == 3. State derivation
 

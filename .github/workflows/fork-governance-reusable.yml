@@ -208,13 +208,15 @@ jobs:
           # Older canon-ref renderers do not accept coverage arguments. Append
           # outside the versioned renderer, only within the publisher's budget.
           body="$RUNNER_TEMP/fork-governance/body.md"
-          if ! grep -Fq 'External reviewer coverage' "$body"; then
-            if [ "$(( $(wc -c < "$body") + $(wc -c < "$coverage") + 1 ))" -le 65000 ]; then
-              printf '\n' >> "$body"
+          # Always append our own section. Lane finding text is untrusted and
+          # cannot suppress it by mentioning reviewer coverage or its marker.
+          marker='<!-- fork-governance:reviewer-coverage -->'
+          # Reserve 2048 bytes for the fork publisher footer and run stamp.
+          if [ "$(( $(wc -c < "$body") + $(wc -c < "$coverage") + ${#marker} + 2 ))" -le 62952 ]; then
+              printf '\n%s\n' "$marker" >> "$body"
               cat "$coverage" >> "$body"
-            else
+          else
               echo '::warning::Reviewer coverage omitted to preserve the governance comment size budget.'
-            fi
           fi
           {
             echo "## Fork governance"

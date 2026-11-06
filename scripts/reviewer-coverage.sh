@@ -19,10 +19,13 @@ done
 report=$(jq -nr --arg head "$head" --slurpfile reviews "$2" --slurpfile comments "$3" '
   # A substantive review can discuss rate limits. Only the known failure
   # notice shape in a COMMENTED review is an unavailable-review notice.
-  def absent: ((.state // "COMMENTED") == "COMMENTED") and
-    ((.body // "") | test("^\\s*((Copilot|Codex|CodeRabbit) (was )?(unable to|could not) review this pull request\\b|Copilot has reached (their|its|your) quota limit([.!]|$))"; "i"));
-  def quota: absent and ((.body // "" | split("\n")[0]) |
-    test("insufficient remaining quota|quota.{0,40}(exhausted|exceeded)|quota limit|rate limit exceeded|review limit reached"; "i"));
+  def rabbit_notice: ((.user.login == "coderabbitai") or (.user.login == "coderabbitai[bot]")) and
+    ((.state // "COMMENTED") == "COMMENTED") and
+    ((.body // "") | test("^(<!-- coderabbit-ai-generated:v1 -->\\s*)?(#{1,6}\\s*)?(Review limit reached|Rate limit exceeded)[.!]?(\\r?\\n|$)"; "i"));
+  def absent: rabbit_notice or (((.state // "COMMENTED") == "COMMENTED") and
+    ((.body // "") | test("^\\s*((Copilot|Codex|CodeRabbit) (was )?(unable to|could not) review this pull request\\b|Copilot has reached (their|its|your) quota limit([.!]|$))"; "i")));
+  def quota: rabbit_notice or (absent and ((.body // "" | split("\n")[0]) |
+    test("insufficient remaining quota|quota.{0,40}(exhausted|exceeded)|quota limit|rate limit exceeded|review limit reached"; "i")));
   ($reviews[0] | flatten(1)) as $reviews |
   ($comments[0] | flatten(1)) as $comments |
   [

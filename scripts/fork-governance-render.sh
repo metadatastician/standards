@@ -308,7 +308,7 @@ BODY="$OUT/body.md"
 # Optional direct callers get the same conservative byte budget as the
 # publisher. Keep the three lane reports intact when the advisory cannot fit.
 if [ -n "$REVIEWER_COVERAGE" ] && [ -s "$REVIEWER_COVERAGE" ]; then
-  if [ "$(( $(wc -c < "$BODY") + $(wc -c < "$REVIEWER_COVERAGE") + 1 ))" -le 65000 ]; then
+  if [ "$(( $(wc -c < "$BODY") + $(wc -c < "$REVIEWER_COVERAGE") + 1 ))" -le 62952 ]; then
     printf '\n' >> "$BODY"
     cat "$REVIEWER_COVERAGE" >> "$BODY"
   else
