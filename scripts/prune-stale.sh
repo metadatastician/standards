@@ -158,8 +158,7 @@ mapfile -t SCAN < <(cut -f1 "$TMP/reach.tsv" | LC_ALL=C sort -u)
 
 read -r -d '' CAND <<'AWK' || true
 function norm(r,   at, path, ref, n, parts) {
-  at = 0
-  for (n = length(r); n > 0; n--) { if (substr(r, n, 1) == "@") { at = n; break } }
+  at = index(r, "@")
   if (at == 0) return ""
   path = substr(r, 1, at - 1); ref = substr(r, at + 1)
   if (path == "" || ref == "") return ""
@@ -168,8 +167,7 @@ function norm(r,   at, path, ref, n, parts) {
   return parts[1] "/" parts[2] "@" ref
 }
 function ck(r,   at, s) {
-  at = 0
-  for (s = length(r); s > 0; s--) { if (substr(r, s, 1) == "@") { at = s; break } }
+  at = index(r, "@")
   if (at == 0) return tolower(r)
   return tolower(substr(r, 1, at - 1)) substr(r, at)
 }

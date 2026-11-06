@@ -200,6 +200,26 @@ grep -qxF "        - 'actions/checkout@v1'" "$k/actions.lock" \
 
 fi
 
+d="$WORK/at/.github/workflows"; mkdir -p "$d"
+cat > "$d/ci.yml" <<'EOF'
+jobs:
+  test:
+    steps:
+      - uses: o/r@Release@2026
+EOF
+cat > "$d/actions.lock" <<'EOF'
+workflows:
+    '.github/workflows/ci.yml':
+        - 'o/r@Release@2026'
+        - 'o/r@release@2026'
+dependencies: {}
+EOF
+(cd "$WORK/at" && bash "$TARGET") >/dev/null 2>&1
+grep -qxF "        - 'o/r@Release@2026'" "$d/actions.lock" \
+  && ok "embedded at-sign keeps the matching ref" || bad "embedded at-sign keeps the matching ref"
+! grep -qxF "        - 'o/r@release@2026'" "$d/actions.lock" \
+  && ok "embedded at-sign does not retain a case-different stale ref" || bad "embedded at-sign does not retain a case-different stale ref"
+
 mkdir -p "$WORK/n/.github/workflows"; (cd "$WORK/n" && bash "$TARGET") >/dev/null 2>&1; st=$?
 [ "$st" = 1 ] && ok "no lockfile → exit 1" || bad "no lockfile → exit 1 (got $st)"
 

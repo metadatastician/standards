@@ -143,12 +143,18 @@ dependencies:
     'actions/checkout@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa':
         ref: 'v1'
         commit: 'sha1-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+        owner_id: 1
+        repo_id: 2
     'actions/create-github-app-token@dddddddddddddddddddddddddddddddddddddddd':
         ref: 'v1'
         commit: 'sha1-dddddddddddddddddddddddddddddddddddddddd'
+        owner_id: 1
+        repo_id: 3
     'asana/push-signed-commits@cccccccccccccccccccccccccccccccccccccccc':
         ref: 'v1'
         commit: 'sha1-cccccccccccccccccccccccccccccccccccccccc'
+        owner_id: 4
+        repo_id: 5
 YAML
 expect 0 'refs used through local composites (nested, KYAML) count as used'
 cp "$WF/actions.lock" "$TMP/full.lock"
@@ -177,6 +183,8 @@ dependencies:
     'actions/checkout@bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb':
         ref: 'v1'
         commit: 'sha1-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
+        owner_id: 1
+        repo_id: 2
 YAML
 expect 1 'a through-ref with no closure manifest and no uses: is stale'
 printf '%s\t%s\t%s\n' '.github/workflows/smoke.yml' \
