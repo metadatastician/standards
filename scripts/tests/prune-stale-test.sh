@@ -10,6 +10,10 @@
 # Run: bash scripts/tests/prune-stale-test.sh
 # TARGET=<path> runs the suite against another copy (used for mutant checks).
 set -uo pipefail
+command -v jq >/dev/null && command -v yq >/dev/null && yq --version | grep -Eq 'github.com/mikefarah/yq/.*version v4\.' || {
+  echo 'prune-stale-test: requires jq and Mike Farah yq v4' >&2
+  exit 1
+}
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 TARGET="${TARGET:-$SCRIPT_DIR/../prune-stale.sh}"
 WORK="$(mktemp -d)"
@@ -232,6 +236,20 @@ for local_use in ./.github/actions/missing ./.github/workflows/missing.yml; do
   [ "$st" != 0 ] && cmp -s "$WORK/missing.before" "$d/actions.lock" \
     && ok "missing local use refuses pruning without changing the lock: $local_use" \
     || bad "missing local use was accepted or changed the lock: $local_use"
+done
+
+for malformed in syntax duplicate; do
+  d="$WORK/parser-$malformed/.github/workflows"; mkdir -p "$d"
+  printf "workflows:\n    '.github/workflows/ci.yml': []\ndependencies: {}\n" > "$d/actions.lock"
+  cp "$d/actions.lock" "$WORK/parser-$malformed.before"
+  case "$malformed" in
+    syntax) printf 'jobs: [\n' > "$d/ci.yml" ;;
+    duplicate) printf 'jobs: {}\njobs: {}\n' > "$d/ci.yml" ;;
+  esac
+  (cd "$WORK/parser-$malformed" && bash "$TARGET") >/dev/null 2>&1; st=$?
+  [ "$st" != 0 ] && cmp -s "$WORK/parser-$malformed.before" "$d/actions.lock" \
+    && ok "parser failure refuses pruning and preserves the lock: $malformed" \
+    || bad "parser failure was ignored or changed the lock: $malformed"
 done
 
 echo "prune-stale-test: $pass passed, $fail failed"
