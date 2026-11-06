@@ -275,5 +275,14 @@ cp "$d/actions.lock" "$WORK/quoted.before"
 (cd "$WORK/quoted" && bash "$TARGET") >/dev/null 2>&1
 cmp -s "$WORK/quoted.before" "$d/actions.lock" && ok "quoted pruning is byte-idempotent" || bad "quoted pruning is not byte-idempotent"
 
+d="$WORK/file-action/.github/workflows"; mkdir -p "$d" "$WORK/file-action/.github/actions"
+printf 'runs: {}\n' > "$WORK/file-action/.github/actions/plain.yml"
+printf 'jobs: {test: {steps: [{uses: ./.github/actions/plain.yml}]}}\n' > "$d/ci.yml"
+printf 'version: v0.0.3\nworkflows: {.github/workflows/ci.yml: []}\ndependencies: {}\n' > "$d/actions.lock"
+cp "$d/actions.lock" "$WORK/file-action.before"
+(cd "$WORK/file-action" && bash "$TARGET") >/dev/null 2>&1; st=$?
+[[ "$st" != 0 ]] && cmp -s "$WORK/file-action.before" "$d/actions.lock" \
+  && ok "pruning refuses a regular YAML file used as an action without rewriting" || bad "pruning accepted a file without action metadata"
+
 echo "prune-stale-test: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

@@ -244,5 +244,14 @@ bash "$SCRIPT_DIR/../check-lock-sync.sh" "$d" >/dev/null 2>&1; st=$?
 cp "$d/actions.lock" "$WORK/quoted.before"; run quoted >/dev/null
 cmp -s "$WORK/quoted.before" "$d/actions.lock" && ok "quoted completion is byte-idempotent" || bad "quoted completion is not byte-idempotent"
 
+d="$WORK/file-action/.github/workflows"; mkdir -p "$d" "$WORK/file-action/.github/actions"
+printf 'runs: {}\n' > "$WORK/file-action/.github/actions/plain.yml"
+printf 'jobs: {test: {steps: [{uses: ./.github/actions/plain.yml}]}}\n' > "$d/ci.yml"
+printf 'version: v0.0.3\nworkflows: {}\ndependencies: {}\n' > "$d/actions.lock"
+cp "$d/actions.lock" "$WORK/file-action.before"
+run file-action >/dev/null; st=$?
+[[ "$st" != 0 ]] && cmp -s "$WORK/file-action.before" "$d/actions.lock" \
+  && ok "completion refuses a regular YAML file used as an action without rewriting" || bad "completion accepted a file without action metadata"
+
 echo "complete-job-refs-test: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

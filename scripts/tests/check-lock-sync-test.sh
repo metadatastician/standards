@@ -120,7 +120,8 @@ jobs:
     steps:
       - uses: actions/checkout@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
       - uses: ./.github/actions/push
-      - uses: ./.github/workflows/not-followed.yml
+  child:
+    uses: ./.github/workflows/not-followed.yml
 YAML
 cat > "$R/.github/actions/push/action.yml" <<'YAML'
 runs:
