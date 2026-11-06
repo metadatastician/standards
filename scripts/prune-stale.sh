@@ -180,6 +180,34 @@ reach_files() {
   done
 }
 # ── end of the shared block ───────────────────────────────────────────────────
+# Encode modified mappings with the YAML library, not interpolated quotes.
+# Validate the round trip and preserve every value outside the chosen section.
+lock_write_section() {
+  local original=$1 section=$2 data=$3 staging expression status=1
+  case "$section" in workflows|dependencies) ;; *) return 1 ;; esac
+  jq -e 'type == "object"' "$data" >/dev/null || return 1
+  staging=$(mktemp -d "$(dirname "$original")/.actions-lock-edit.XXXXXX") || return 1
+  if [ "$section" = workflows ]; then
+    expression='explode(.) | .workflows = load(strenv(LOCK_EDIT_DATA)) | (.workflows | ...) style="" | (.workflows | ... | select(tag == "!!str")) style="single"'
+  else
+    expression='explode(.) | .dependencies = load(strenv(LOCK_EDIT_DATA)) | (.dependencies | ...) style="" | (.dependencies[]? | key) style="single" | (.dependencies[]? | select(tag == "!!map") | select(has("ref")) | .ref) style="single" | (.dependencies[]? | select(tag == "!!map") | select(has("commit")) | .commit) style="single" | (.dependencies[]? | select(tag == "!!map") | select(has("hostname")) | .hostname) style="single" | (.dependencies[]? | select(tag == "!!map") | select(has("uses")) | .uses[]?) style="single"'
+  fi
+  if lock_yaml_json "$original" > "$staging/before.json" &&
+     cp -p "$original" "$staging/new.lock" &&
+     LOCK_EDIT_DATA="$data" yq -I=4 "$expression" "$original" > "$staging/new.lock" &&
+     lock_yaml_json "$staging/new.lock" > "$staging/after.json" &&
+     jq -ne --arg section "$section" --slurpfile before "$staging/before.json" --slurpfile after "$staging/after.json" --slurpfile wanted "$data" '
+       $after[0][$section] == $wanted[0] and
+       ($before[0] | del(.[$section])) == ($after[0] | del(.[$section]))
+     ' >/dev/null; then
+    mv -f "$staging/new.lock" "$original" && status=0
+  else
+    echo "actions-lock: refusing a rewrite that changes lock semantics outside $section" >&2
+  fi
+  rm -rf -- "$staging"
+  return "$status"
+}
+
 
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 # reach.tsv: "file<TAB>lock key" — each file whose uses: count for that entry.
@@ -196,6 +224,8 @@ for f in "${SCAN[@]}"; do
   done <<< "$refs"
 done > "$TMP/uses.tsv"
 
+lock_yaml_json "$LOCK" > "$TMP/lock.json"
+jq -r '.workflows | to_entries[] | . as $wf | (.value // [])[] | [$wf.key, .] | @tsv' "$TMP/lock.json" > "$TMP/lock.tsv"
 read -r -d '' CAND <<'AWK' || true
 function norm(r,   at, path, ref, n, parts) {
   at = index(r, "@")
@@ -215,14 +245,7 @@ BEGIN {
   while ((getline l < mapfile) > 0) { split(l, mp, "\t"); owners[mp[1]] = owners[mp[1]] SUBSEP mp[2] }
 }
 FILENAME == lockfile {
-  if ($0 ~ /^workflows:[[:space:]]*$/)    { inwf = 1; next }
-  if ($0 ~ /^[a-z_]+:/)                   { inwf = 0; next }
-  if (!inwf) next
-  if (match($0, /^    '([^']+)':/, m)) { cur = m[1]; next }
-  if (match($0, /^        - '([^']+)'[[:space:]]*$/, m) && cur != "") {
-    lockref[cur, ck(m[1])] = m[1]
-  }
-  next
+  split($0, row, "\t"); lockref[row[1], ck(row[2])] = row[2]; next
 }
 # Every scanned file (a workflow, or a composite action it reaches) credits its
 # uses: to each lock key that reaches it.
@@ -240,7 +263,7 @@ END {
 }
 AWK
 
-"$AWK" -v lockfile="$LOCK" -v refsfile="$TMP/uses.tsv" -v mapfile="$TMP/reach.tsv" "$CAND" "$LOCK" "$TMP/uses.tsv" | LC_ALL=C sort -u > "$TMP/cand.tsv"
+"$AWK" -v lockfile="$TMP/lock.tsv" -v refsfile="$TMP/uses.tsv" -v mapfile="$TMP/reach.tsv" "$CAND" "$TMP/lock.tsv" "$TMP/uses.tsv" | LC_ALL=C sort -u > "$TMP/cand.tsv"
 
 # ── keys whose workflow file is gone. Both oracles must agree. ─────────────
 declare -A present=()
@@ -253,10 +276,7 @@ while IFS= read -r key; do
     continue
   fi
   printf '%s\n' "$key" >> "$TMP/gone.txt"
-done < <("$AWK" '
-  /^workflows:[[:space:]]*$/ { inwf = 1; next }
-  /^[a-z_]+:/                { inwf = 0; next }
-  inwf && match($0, /^    '\''([^'\'']+)'\'':/, m) { print m[1] }' "$LOCK")
+done < <(jq -r '.workflows | keys[]' "$TMP/lock.json")
 
 if [ ! -s "$TMP/cand.tsv" ] && [ ! -s "$TMP/gone.txt" ]; then
   echo "prune-stale: no stale workflow-entry refs; lockfile unchanged"
@@ -315,64 +335,15 @@ if [ ! -s "$TMP/drop.tsv" ] && [ ! -s "$TMP/gone.txt" ]; then
   exit 0
 fi
 
-read -r -d '' APPLY <<'AWK' || true
-NR == FNR { drop[$1 SUBSEP $2] = 1; next }
-{
-  if ($0 ~ /^workflows:[[:space:]]*$/) { inwf = 1; print; next }
-  if ($0 ~ /^[a-z_]+:/)                { inwf = 0; print; next }
-  if (!inwf) { print; next }
-  if (match($0, /^    '([^']+)':/, m)) { cur = m[1]; print; next }
-  if (match($0, /^        - '([^']+)'[[:space:]]*$/, m) && cur != "") {
-    if ((cur SUBSEP m[1]) in drop) { pruned++; next }
-  }
-  print
-}
-END { printf "prune-stale: pruned %d stale workflow-entry ref(s)\n", pruned + 0 > "/dev/stderr" }
-AWK
-
-if [ -s "$TMP/drop.tsv" ]; then
-  "$AWK" -F'\t' "$APPLY" "$TMP/drop.tsv" "$LOCK" > "$TMP/new.lock"
-else
-  cat "$LOCK" > "$TMP/new.lock"
-fi
-
-# An entry left with no items must become an explicit empty list, or the YAML
-# key would take a null value and the schema would reject it.
-"$AWK" '
-  # Scoped strictly to the workflows: section. A dependencies: record uses the
-  # same "    '\''key'\'':" shape but its children are "        ref:" style, so an
-  # unscoped pass would rewrite every dependency record to ": []" and orphan its
-  # children. That bug was caught by the gitbot-fleet test, not by review.
-  { lines[NR] = $0 }
-  END {
-    inwf = 0
-    for (i = 1; i <= NR; i++) {
-      if (lines[i] ~ /^workflows:[[:space:]]*$/) { inwf = 1; print lines[i]; continue }
-      else if (lines[i] ~ /^[a-z_]+:/)           { inwf = 0; print lines[i]; continue }
-      if (inwf && match(lines[i], /^    '\''[^'\'']+'\'':[[:space:]]*$/) \
-          && (i == NR || lines[i+1] !~ /^        - /)) {
-        sub(/:[[:space:]]*$/, ": []", lines[i])
-      }
-      print lines[i]
-    }
-  }' "$TMP/new.lock" > "$TMP/new2.lock"
-
-# Drop each gone key with its items, again scoped to the workflows: section.
-# The gone list is told apart by FILENAME, not by NR == FNR: gone.txt is
-# usually EMPTY, and then NR == FNR holds for every line of the lock, which
-# swallowed the whole file and wrote the lock back empty.
-"$AWK" '
-  FILENAME == ARGV[1] { gone[$0] = 1; next }
-  /^workflows:[[:space:]]*$/ { inwf = 1; skip = 0; print; next }
-  /^[a-z_]+:/                { inwf = 0; skip = 0; print; next }
-  inwf && match($0, /^    '\''([^'\'']+)'\'':/, m) {
-    skip = (m[1] in gone); if (skip) { dropped++; next }
-  }
-  skip && /^        - / { next }
-  { skip = 0; print }
-  END { if (dropped) printf "prune-stale: dropped %d key(s) for workflow files that no longer exist\n", dropped > "/dev/stderr" }
-' "$TMP/gone.txt" "$TMP/new2.lock" > "$TMP/new3.lock"
-
-if command -v diff >/dev/null 2>&1; then diff -u "$LOCK" "$TMP/new3.lock" | sed 's/^/   | /' || true; fi
-cat "$TMP/new3.lock" > "$LOCK"
+# Apply only vetted candidates to the typed workflow map. The YAML encoder
+# preserves apostrophes and empty arrays; dependency provenance is untouched.
+jq -Rn '[inputs | split("\t") | {path:.[0], ref:.[1]}]' "$TMP/drop.tsv" > "$TMP/drop.json"
+jq -Rn '[inputs]' "$TMP/gone.txt" > "$TMP/gone.json"
+jq --slurpfile drop "$TMP/drop.json" --slurpfile gone "$TMP/gone.json" '
+  .workflows | to_entries | map(. as $entry |
+    select(($gone[0] | index($entry.key)) == null) |
+    .value |= ((. // []) | map(. as $ref | select(any($drop[0][]; .path == $entry.key and .ref == $ref) | not)))) |
+  from_entries
+' "$TMP/lock.json" > "$TMP/workflows.json"
+lock_write_section "$LOCK" workflows "$TMP/workflows.json"
 echo "prune-stale: done (oracle vetoes: $kept_by_oracle)"

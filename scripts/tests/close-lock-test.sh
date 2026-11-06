@@ -54,6 +54,7 @@ case "\$2" in
   repos/o/*/commits/tags/*) echo '{"message":"No commit found"}'; exit 1 ;;
   repos/o/*/compare/$A...$C) echo ahead ;;
   repos/o/*/compare/*) echo diverged ;;
+  repos/o/quoted/commits/release%272026) echo $C ;;
   repos/o/*/commits/v1) echo $C ;;
   repos/o/*/commits/*) echo '{"message":"No commit found"}'; exit 1 ;;
   repos/o/*) echo '7 9' ;;
@@ -485,6 +486,42 @@ out=$(GH_BIN="$WORK/gh-trap" bash "$TARGET" --check "$WORK/flow-check.lock" 2>&1
 yq -o=json '.' "$WORK/flow-check.lock" | jq --arg k "o/b@$B" --arg commit "sha1-$B" '.dependencies[$k] = {ref:"v1",commit:$commit,owner_id:7,repo_id:9}' > "$WORK/flow-closed.lock"
 out=$(GH_BIN="$WORK/gh-trap" bash "$TARGET" --check "$WORK/flow-closed.lock" 2>&1); st=$?
 [[ "$st" == 0 && ! -s "$WORK/gh-calls" ]] && ok "check mode accepts closed JSON/flow YAML without network" || bad "closed flow check failed — st=$st $out"
+
+for location in map scalar; do
+  if [[ "$location" == map ]]; then
+    body=$(printf '      - { uses: "o/untagged@%s", } # v1\n' "$A")
+  else
+    body=$(printf '      - { uses: "o/untagged@%s", # v1\n        }\n' "$A")
+  fi
+  plant o/flowtag .github/workflows/ci.yml "$A" <<EOF
+jobs:
+  build:
+    steps:
+$body
+EOF
+  d=$(mklock "flowtag-$location" "o/flowtag@$A" </dev/null)
+  mkwf "flowtag-$location" "o/flowtag/.github/workflows/ci.yml@$A"
+  out=$(run "$d"); st=$?
+  [[ "$st" == 0 ]] && yq -o=json '.' "$d/actions.lock" | jq -e --arg key "o/untagged@$A" '.dependencies[$key].ref == "v1"' >/dev/null \
+    && ok "flow $location comment retains moved-tag evidence in called workflow" || bad "flow $location tag comment lost — st=$st $out"
+done
+
+d="$WORK/quoted/.github/workflows"; mkdir -p "$d"
+printf 'jobs:\n  a:\n    steps:\n      - uses: "o/quoted@release\0472026"\n' > "$d/ci.yml"
+cat > "$d/actions.lock" <<'EOF'
+# SPDX-License-Identifier: MPL-2.0
+version: v0.0.3
+workflows: {.github/workflows/ci.yml: ["o/quoted@release'2026"]}
+dependencies: {}
+EOF
+out=$(run "$d"); st=$?
+[[ "$st" == 0 ]] && yq -o=json '.' "$d/actions.lock" | jq -e --arg key "o/quoted@release'2026" --arg ref "release'2026" --arg commit "sha1-$C" '.dependencies[$key].ref == $ref and .dependencies[$key].commit == $commit' >/dev/null \
+  && ok "closure URL-encodes and YAML-encodes apostrophes in symbolic references" || bad "quoted closure corrupts the record — st=$st $out"
+bash "$SCRIPT_DIR/../check-lock-sync.sh" "$d" >/dev/null 2>&1; st=$?
+[[ "$st" == 0 ]] && grep -q '^# SPDX-License-Identifier: MPL-2.0' "$d/actions.lock" \
+  && ok "quoted closure preserves the header and satisfies the strict checker" || bad "quoted closure fails the checker or loses its header"
+cp "$d/actions.lock" "$WORK/quoted.before"; run "$d" >/dev/null
+cmp -s "$WORK/quoted.before" "$d/actions.lock" && ok "quoted closure is byte-idempotent" || bad "quoted closure is not byte-idempotent"
 
 echo "close-lock-test: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

@@ -209,5 +209,24 @@ run t3 >/dev/null; st=$?
 mkdir -p "$WORK/t4/.github/workflows"; run t4 >/dev/null; st=$?
 [ "$st" = 1 ] && ok "no lockfile → exit 1" || bad "no lockfile → exit 1 (got $st)"
 
+d="$WORK/quoted/.github/workflows"; mkdir -p "$d"
+printf 'jobs:\n  a:\n    steps:\n      - uses: "o/r@release\0472026"\n' > "$d/ci.yml"
+printf 'jobs: {a: {steps: [{run: echo}]}}\n' > "$d/quote'name.yml"
+cat > "$d/actions.lock" <<'EOF'
+# SPDX-License-Identifier: MPL-2.0
+version: v0.0.3
+workflows: {}
+dependencies:
+  "o/r@release'2026": {ref: "release'2026", commit: sha1-1111111111111111111111111111111111111111, owner_id: 7, repo_id: 9}
+EOF
+run quoted >/dev/null; st=$?
+[ "$st" = 0 ] && yq -o=json '.' "$d/actions.lock" | jq -e --arg ref "o/r@release'2026" --arg file ".github/workflows/quote'name.yml" '.workflows[".github/workflows/ci.yml"] == [$ref] and .workflows[$file] == []' >/dev/null \
+  && ok "completion encodes apostrophes in references and workflow keys" || bad "completion corrupts quoted scalars"
+bash "$SCRIPT_DIR/../check-lock-sync.sh" "$d" >/dev/null 2>&1; st=$?
+[ "$st" = 0 ] && grep -q '^# SPDX-License-Identifier: MPL-2.0' "$d/actions.lock" \
+  && ok "quoted completion preserves the header and satisfies the strict checker" || bad "quoted completion fails the strict checker or loses its header"
+cp "$d/actions.lock" "$WORK/quoted.before"; run quoted >/dev/null
+cmp -s "$WORK/quoted.before" "$d/actions.lock" && ok "quoted completion is byte-idempotent" || bad "quoted completion is not byte-idempotent"
+
 echo "complete-job-refs-test: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

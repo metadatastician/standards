@@ -22,6 +22,12 @@ these rules is `github/actions-lockfile` commit
 Repository names compare without case; the entire ref after the
 first `@` keeps its case.
 
+Symbolic coordinates must match the recorded ref. SHA coordinates must match
+the recorded commit; their ref must be recordable under the official tool's
+ref-name rules, or the existing reviewed caller-side exact-SHA representation.
+Transitive edges use repository coordinates, and cycles fail verification even
+when every referenced record exists. Shared acyclic children remain valid.
+
 The estate's measured omitted-reusable-call policy remains in force: an
 unrecorded job-level reusable call does not itself require a caller-owned
 record. Its workflow still needs a key, and any recorded step or transitive
@@ -32,6 +38,10 @@ Use the official generator and reviewed closure/merge process to refresh a
 lock. Completion, closure repair and pruning consume the same parsed workflow
 fields. Closure repair discovers called workflows structurally and verifies
 the resulting closure before reporting success.
+Writers use the YAML encoder and verify a typed round trip before replacing
+the lock. This preserves apostrophes in refs and workflow names, comments and
+values outside the changed section. Flow-map comments on actual action steps
+remain available as moved-tag evidence; API ref parameters are URL-encoded.
 Their lock-writing format remains the generator's block mapping format.
 Review their diff and run the checker afterward; they never manufacture
 dependency digests or repository provenance. Failed local traversal leaves

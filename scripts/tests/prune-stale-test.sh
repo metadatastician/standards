@@ -252,5 +252,28 @@ for malformed in syntax duplicate; do
     || bad "parser failure was ignored or changed the lock: $malformed"
 done
 
+d="$WORK/quoted/.github/workflows"; mkdir -p "$d"
+printf 'jobs:\n  a:\n    steps:\n      - uses: "o/r@release\0472026"\n' > "$d/ci.yml"
+cat > "$d/actions.lock" <<'EOF'
+# SPDX-License-Identifier: MPL-2.0
+version: v0.0.3
+workflows:
+  .github/workflows/ci.yml: ["o/r@release'2026", "o/r@stale'2026"]
+  ".github/workflows/gone'name.yml": []
+dependencies:
+  "o/r@release'2026": {ref: "release'2026", commit: sha1-1111111111111111111111111111111111111111, owner_id: 7, repo_id: 9}
+EOF
+yq -o=json '.dependencies' "$d/actions.lock" > "$WORK/quoted.deps"
+(cd "$WORK/quoted" && bash "$TARGET") >/dev/null 2>&1; st=$?
+[ "$st" = 0 ] && yq -o=json '.' "$d/actions.lock" | jq -e --arg ref "o/r@release'2026" '.workflows == {".github/workflows/ci.yml":[$ref]}' >/dev/null \
+  && ok "pruning encodes surviving apostrophes and removes quoted stale keys" || bad "quoted pruning corrupts the workflow map"
+yq -o=json '.dependencies' "$d/actions.lock" > "$WORK/quoted.after-deps"
+bash "$(dirname "$TARGET")/check-lock-sync.sh" "$d" >/dev/null 2>&1; st=$?
+[ "$st" = 0 ] && cmp -s "$WORK/quoted.deps" "$WORK/quoted.after-deps" && grep -q '^# SPDX-License-Identifier: MPL-2.0' "$d/actions.lock" \
+  && ok "quoted pruning preserves dependency provenance and the header" || bad "quoted pruning damages provenance or fails the checker"
+cp "$d/actions.lock" "$WORK/quoted.before"
+(cd "$WORK/quoted" && bash "$TARGET") >/dev/null 2>&1
+cmp -s "$WORK/quoted.before" "$d/actions.lock" && ok "quoted pruning is byte-idempotent" || bad "quoted pruning is not byte-idempotent"
+
 echo "prune-stale-test: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

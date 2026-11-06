@@ -97,6 +97,34 @@ reach_files() {
   done
 }
 # ── end of the shared block ───────────────────────────────────────────────────
+# Encode modified mappings with the YAML library, not interpolated quotes.
+# Validate the round trip and preserve every value outside the chosen section.
+lock_write_section() {
+  local original=$1 section=$2 data=$3 staging expression status=1
+  case "$section" in workflows|dependencies) ;; *) return 1 ;; esac
+  jq -e 'type == "object"' "$data" >/dev/null || return 1
+  staging=$(mktemp -d "$(dirname "$original")/.actions-lock-edit.XXXXXX") || return 1
+  if [ "$section" = workflows ]; then
+    expression='explode(.) | .workflows = load(strenv(LOCK_EDIT_DATA)) | (.workflows | ...) style="" | (.workflows | ... | select(tag == "!!str")) style="single"'
+  else
+    expression='explode(.) | .dependencies = load(strenv(LOCK_EDIT_DATA)) | (.dependencies | ...) style="" | (.dependencies[]? | key) style="single" | (.dependencies[]? | select(tag == "!!map") | select(has("ref")) | .ref) style="single" | (.dependencies[]? | select(tag == "!!map") | select(has("commit")) | .commit) style="single" | (.dependencies[]? | select(tag == "!!map") | select(has("hostname")) | .hostname) style="single" | (.dependencies[]? | select(tag == "!!map") | select(has("uses")) | .uses[]?) style="single"'
+  fi
+  if lock_yaml_json "$original" > "$staging/before.json" &&
+     cp -p "$original" "$staging/new.lock" &&
+     LOCK_EDIT_DATA="$data" yq -I=4 "$expression" "$original" > "$staging/new.lock" &&
+     lock_yaml_json "$staging/new.lock" > "$staging/after.json" &&
+     jq -ne --arg section "$section" --slurpfile before "$staging/before.json" --slurpfile after "$staging/after.json" --slurpfile wanted "$data" '
+       $after[0][$section] == $wanted[0] and
+       ($before[0] | del(.[$section])) == ($after[0] | del(.[$section]))
+     ' >/dev/null; then
+    mv -f "$staging/new.lock" "$original" && status=0
+  else
+    echo "actions-lock: refusing a rewrite that changes lock semantics outside $section" >&2
+  fi
+  rm -rf -- "$staging"
+  return "$status"
+}
+
 
 # uses_values FILE: every `uses:` value in FILE, with a trailing comment, YAML
 # quotes and a KYAML trailing comma stripped.
@@ -127,74 +155,24 @@ for f in "$WF"/*.yml "$WF"/*.yaml; do
   set -e
 done | LC_ALL=C sort -u >> "$WANT"
 
-# The dependency keys already recorded. When one workflow entry holds two
-# case spellings of the same owner/repo@ref, the one with a record is kept.
-awk -v q="'" '/^dependencies:/ { d = 1; next }
-  d && index($0, "    " q) == 1 && substr($0, length($0) - 1) == q ":" { print substr($0, 6, length($0) - 7) }' "$L" > "$DEPS"
-
-# 2. rewrite the workflows: section, merging wanted job refs into each path entry
-LC_ALL=C awk -v want="$WANT" -v deps="$DEPS" '
-BEGIN { while ((getline l < want) > 0) { split(l, w, "\t"); WANT[w[1]] = WANT[w[1]] SUBSEP w[2] }
-        while ((getline l < deps) > 0) DEP[l] = 1 }
-# ck: the dedup key of a ref, split at the FIRST @ (owner/repo cannot contain
-# one; a tag such as `release@2026` can). GitHub owner/repository names are
-# case-insensitive; refs are not (the same rule as check-lock-sync.sh). An
-# existing `swatinem/rust-cache@v2` entry therefore already covers
-# `uses: Swatinem/rust-cache@v2`; adding the second spelling left a ref that
-# close-lock then tried to resolve as a new repository.
-function ck(s,   i) { i = index(s, "@"); return i ? tolower(substr(s, 1, i - 1)) substr(s, i) : s }
-# keep: add ref a to out unless a case spelling of it is already there; of two
-# spellings, the one with a dependency record wins (a lock written before the
-# case fix can hold both, sorted capitalised-first).
-function keep(a,   k) {
-  if (a == "") return
-  k = ck(a)
-  if (!(k in seen)) { seen[k] = ++c; out[c] = a }
-  else if ((a in DEP) && !(out[seen[k]] in DEP)) out[seen[k]] = a
+# Parse existing entries before merging so escaped refs survive another pass.
+lock_yaml_json "$L" > "$TMP/before.json"
+jq -e '.workflows | type == "object"' "$TMP/before.json" >/dev/null || {
+  echo 'complete-job-refs: lock has no workflows mapping' >&2; exit 2;
 }
-# flush: write the current workflow entry, merged with its wanted refs, sorted and deduplicated.
-function flush(   i, n, arr, j, k) {
-  if (cur == "") return
-  SEEN[cur] = 1
-  n = split(items, arr, SUBSEP)
-  c = 0; delete seen; delete out
-  for (i = 1; i <= n; i++) keep(arr[i])
-  if (cur in WANT) { n = split(WANT[cur], arr, SUBSEP)
-    for (i = 1; i <= n; i++) keep(arr[i]) }
-  if (c == 0) { printf "    '\''%s'\'': []\n", cur; cur = ""; items = ""; return }
-  for (i = 1; i < c; i++) for (j = i + 1; j <= c; j++) if (out[j] < out[i]) { k = out[i]; out[i] = out[j]; out[j] = k }
-  printf "    '\''%s'\'':\n", cur
-  for (i = 1; i <= c; i++) printf "        - '\''%s'\''\n", out[i]
-  cur = ""; items = ""
-}
-# rest: create entries for wanted workflow paths the lock has no entry for yet.
-function rest(   k, ks, c, i, j, t) {
-  c = 0; for (k in WANT) if (!(k in SEEN)) ks[++c] = k
-  for (i = 1; i < c; i++) for (j = i + 1; j <= c; j++) if (ks[j] < ks[i]) { t = ks[i]; ks[i] = ks[j]; ks[j] = t }
-  for (i = 1; i <= c; i++) { cur = ks[i]; items = ""; flush() }
-}
-/^workflows:[[:space:]]*(\{\})?[[:space:]]*$/ { print "workflows:"; inwf = 1; sawwf = 1; next }
-inwf && /^[a-z_]+:/ { flush(); rest(); inwf = 0; print; next }
-inwf {
-  if (match($0, /^    '\''[^'\'']+'\'':/)) { flush()
-    cur = $0; sub(/^    '\''/, "", cur); sub(/'\''.*$/, "", cur)
-    items = ""
-    next
-  }
-  if (match($0, /^        - '\''[^'\'']+'\''[[:space:]]*$/)) {
-    it = $0; sub(/^        - '\''/, "", it); sub(/'\''[[:space:]]*$/, "", it)
-    items = items SUBSEP it; next
-  }
-  next
-}
-{ print }
-END {
-  if (inwf) { flush(); rest() }
-  if (!sawwf) for (k in WANT) { print "complete-job-refs: lock has no workflows: section" > "/dev/stderr"; exit 2 }
-}
-' "$L" > "$NEW"
-
-added=$(LC_ALL=C comm -13 <(grep -oE "^        - '[^']+'" "$L" | sed "s/.*- '//;s/'$//" | LC_ALL=C sort -u) \
-                 <(grep -oE "^        - '[^']+'" "$NEW" | sed "s/.*- '//;s/'$//" | LC_ALL=C sort -u) | wc -l)
-cat "$NEW" > "$L"
+jq -Rn '[inputs | split("\t") | {path:.[0], ref:(.[1] // "")}]' "$WANT" > "$TMP/wanted.json"
+jq --slurpfile wanted "$TMP/wanted.json" '
+  def norm: index("@") as $at | if $at == null then . else (.[:$at] | ascii_downcase) + .[$at:] end;
+  (.dependencies // {} | keys) as $records |
+  reduce $wanted[0][] as $row (.workflows;
+    .[$row.path] = ((.[$row.path] // []) + (if $row.ref == "" then [] else [$row.ref] end))) |
+  with_entries(.value |= (
+    reduce .[] as $ref ({}; ($ref | norm) as $key |
+       .[$key] as $kept | if $kept == null or (($records | index($ref)) != null and ($records | index($kept)) == null)
+      then .[$key] = $ref else . end) | [.[]] | sort)) |
+  to_entries | sort_by(.key) | from_entries
+' "$TMP/before.json" > "$TMP/workflows.json"
+added=$(jq -n --slurpfile before "$TMP/before.json" --slurpfile after "$TMP/workflows.json" '
+  ([$after[0][] | .[]] | unique) - ([$before[0].workflows[] | (. // [])[]] | unique) | length')
+lock_write_section "$L" workflows "$TMP/workflows.json"
 echo "complete-job-refs: distinct refs newly present in workflows section: $added"
