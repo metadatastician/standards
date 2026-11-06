@@ -33,9 +33,16 @@ jobs:
 YAML
 expect 1 'missing lockfile fails closed'
 cat > "$WF/actions.lock" <<'YAML'
+version: 'v0.0.3'
 workflows:
     '.github/workflows/test.yml':
         - 'actions/checkout@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+dependencies:
+    'actions/checkout@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa':
+        ref: 'v1'
+        commit: 'sha1-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+        owner_id: 1
+        repo_id: 2
 YAML
 expect 0 'repository names compare case-insensitively'
 sed -i 's/Actions\/Checkout/actions\/checkout/' "$WF/test.yml"
@@ -67,23 +74,30 @@ jobs:
     uses: owner/repo/.github/workflows/test.yml@Release
 YAML
 cat > "$WF/actions.lock" <<'YAML'
+version: 'v0.0.3'
 workflows:
     '.github/workflows/test.yml':
         - 'Owner/Repo@Release'
+dependencies:
+    'Owner/Repo@Release':
+        ref: 'Release'
+        commit: 'sha1-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+        owner_id: 1
+        repo_id: 2
 YAML
 expect 0 'job-level reusable workflow is checked and lock names normalised'
 sed -i 's/@Release/@release/' "$WF/test.yml"
 expect 1 'ref case remains significant'
 sed -i 's/@release/@Release/' "$WF/test.yml"
-printf "        - 'actions/checkout@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'\n" >> "$WF/actions.lock"
+sed -i "/^dependencies:/i\\        - 'actions/checkout@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'" "$WF/actions.lock"
 expect 1 'stale lock entries remain failures'
 sed -i '/actions\/checkout/d' "$WF/actions.lock"
-# A workflow with no lockfile entry is fatal when it has a STEP-LEVEL use (the
-# ref GitHub must find under that path), and harmless when its only use is a
-# job-level reusable call — measured across 159 repositories (standards#968) and
-# the shape hyperpolymath/unified-dataset-vocab#81 ships.
+# An omitted job-level call is harmless (standards#968), but its workflow
+# still needs an explicit key. An empty entry satisfies that separate rule.
 cp "$WF/test.yml" "$WF/unlocked.yml"
-expect 0 'job-level-only workflow with no lock entry is not fatal (standards#968)'
+expect 1 'job-level-only workflow still needs a lockfile key'
+sed -i "/^dependencies:/i\\    '.github/workflows/unlocked.yml': []" "$WF/actions.lock"
+expect 0 'job-level-only workflow accepts an explicit empty entry (standards#968)'
 cat > "$WF/unlocked.yml" <<'YAML'
 jobs:
   test:
@@ -106,7 +120,8 @@ jobs:
     steps:
       - uses: actions/checkout@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
       - uses: ./.github/actions/push
-      - uses: ./.github/workflows/not-followed.yml
+  child:
+    uses: ./.github/workflows/not-followed.yml
 YAML
 cat > "$R/.github/actions/push/action.yml" <<'YAML'
 runs:
@@ -116,22 +131,45 @@ runs:
     - uses: asana/push-signed-commits@cccccccccccccccccccccccccccccccccccccccc # v1
 YAML
 cat > "$R/.github/actions/token/action.yml" <<'YAML'
-runs:
-  using: composite
-  steps:
-    - uses: "actions/create-github-app-token@dddddddddddddddddddddddddddddddddddddddd",
+{
+  runs: {
+    using: composite,
+    steps: [
+      { uses: "actions/create-github-app-token@dddddddddddddddddddddddddddddddddddddddd", },
+    ],
+  },
+}
 YAML
 cat > "$WF/actions.lock" <<'YAML'
+version: 'v0.0.3'
 workflows:
     '.github/workflows/smoke.yml':
         - 'actions/checkout@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
         - 'actions/create-github-app-token@dddddddddddddddddddddddddddddddddddddddd'
         - 'asana/push-signed-commits@cccccccccccccccccccccccccccccccccccccccc'
+    '.github/workflows/not-followed.yml': []
+dependencies:
+    'actions/checkout@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa':
+        ref: 'v1'
+        commit: 'sha1-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+        owner_id: 1
+        repo_id: 2
+    'actions/create-github-app-token@dddddddddddddddddddddddddddddddddddddddd':
+        ref: 'v1'
+        commit: 'sha1-dddddddddddddddddddddddddddddddddddddddd'
+        owner_id: 1
+        repo_id: 3
+    'asana/push-signed-commits@cccccccccccccccccccccccccccccccccccccccc':
+        ref: 'v1'
+        commit: 'sha1-cccccccccccccccccccccccccccccccccccccccc'
+        owner_id: 4
+        repo_id: 5
 YAML
+printf 'jobs: {}\n' > "$WF/not-followed.yml"
 expect 0 'refs used through local composites (nested, KYAML) count as used'
 cp "$WF/actions.lock" "$TMP/full.lock"
 # The planted negative from the issue: the two composite lines deleted.
-sed -i '/create-github-app-token/d; /push-signed-commits/d' "$WF/actions.lock"
+sed -i '/^        - .*create-github-app-token/d; /^        - .*push-signed-commits/d' "$WF/actions.lock"
 expect 1 'composite deps missing from the calling workflow entry fail'
 cp "$TMP/full.lock" "$WF/actions.lock"
 sed -i '/push-signed-commits/d' "$R/.github/actions/push/action.yml"
@@ -142,15 +180,23 @@ expect 1 'a ref no composite uses any more is stale'
 #    Direction 1 permits it; direction 2 must not then call the through-ref a
 #    stale entry, or the shape cannot pass this gate at all.
 rm -f "$TMP/full.lock"
+rm "$WF/not-followed.yml"
 cat > "$WF/smoke.yml" <<'YAML'
 jobs:
   scan:
     uses: hyperpolymath/cicd-suite/.github/workflows/secret-scanner.yml@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 YAML
 cat > "$WF/actions.lock" <<'YAML'
+version: 'v0.0.3'
 workflows:
     '.github/workflows/smoke.yml':
         - 'actions/checkout@bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
+dependencies:
+    'actions/checkout@bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb':
+        ref: 'v1'
+        commit: 'sha1-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
+        owner_id: 1
+        repo_id: 2
 YAML
 expect 1 'a through-ref with no closure manifest and no uses: is stale'
 printf '%s\t%s\t%s\n' '.github/workflows/smoke.yml' \

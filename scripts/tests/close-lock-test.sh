@@ -49,11 +49,13 @@ case "\$2" in
   repos/o/a/tags*|repos/o/b/tags*|repos/o/c/tags*) echo 'v1.0.0' ;;
   repos/o/buildmeta/tags*) echo 'v1.2.3+build.4' ;;
   repos/o/releaseat/tags*) echo 'release@2026' ;;
+  repos/o/flow-child/tags*|repos/o/r2/tags*) echo 'v1.0.0' ;;
   repos/o/leaf/tags*) printf 'v4\nv4.38.0\n' ;;
   repos/o/*/commits/tags/v1) echo $C ;;
   repos/o/*/commits/tags/*) echo '{"message":"No commit found"}'; exit 1 ;;
   repos/o/*/compare/$A...$C) echo ahead ;;
   repos/o/*/compare/*) echo diverged ;;
+  repos/o/quoted/commits/release%272026) echo $C ;;
   repos/o/*/commits/v1) echo $C ;;
   repos/o/*/commits/*) echo '{"message":"No commit found"}'; exit 1 ;;
   repos/o/*) echo '7 9' ;;
@@ -431,6 +433,110 @@ done < "$CORPUS/expected.tsv"
 [[ ! -s "$WORK/gh-calls" ]] && ok "--check made no gh call" || bad "--check called gh: $(cat "$WORK/gh-calls")"
 GH_BIN="$WORK/gh-trap" bash "$TARGET" --check "$WORK/no-such.lock" >/dev/null 2>&1; st=$?
 [[ "$st" == 2 ]] && ok "--check with no lock → exit 2" || bad "--check with no lock → exit 2 (got $st)"
+
+echo "=== structured flow callers and called workflows retain nested closure ==="
+plant o/flow .github/workflows/outer.yml "$A" <<EOF
+{
+  env: { uses: "o/not-a-dependency@v1", },
+  jobs: {
+    child: { uses: "o/flow-child/.github/workflows/inner.yml@$B", },
+    build: { steps: [
+      { uses: "o/b/subdir@$B", },
+      { run: "echo uses: o/not-a-dependency@v1", },
+    ], },
+  },
+}
+EOF
+plant o/flow-child .github/workflows/inner.yml "$B" <<EOF
+{ jobs: { build: { steps: [ { uses: "o/c@$C", }, ], }, }, }
+EOF
+d="$WORK/flow/.github/workflows"; mkdir -p "$d"
+printf 'version: v0.0.3\nworkflows: {}\ndependencies: {}\n' > "$d/actions.lock"
+printf '{ jobs: { call: { uses: "o/flow/.github/workflows/outer.yml@%s", }, }, }\n' "$A" > "$d/ci.yml"
+(cd "$d/../.." && bash "$SCRIPT_DIR/../complete-job-refs.sh") >/dev/null 2>&1; completed=$?
+out=$(run "$d"); st=$?
+[[ "$completed" == 0 && "$st" == 0 ]] && record "$d/actions.lock" "o/flow@$A" | grep -qxF "            - 'o/flow-child@$B'" \
+  && record "$d/actions.lock" "o/flow-child@$B" | grep -qxF "            - 'o/c@$C'" \
+  && ok "flow completion and close-lock retain nested reusable records" || bad "flow completion lost nested reusable records — st=$st $out"
+record "$d/actions.lock" "o/flow@$A" | grep -qxF "            - 'o/b@$B'" \
+  && ! grep -qF 'not-a-dependency' "$d/actions.lock" \
+  && ok "flow step references count while environment/input examples do not" || bad "flow step/environment discrimination"
+bash "$SCRIPT_DIR/../check-lock-sync.sh" "$d" >/dev/null 2>&1; st=$?
+[[ "$st" == 0 ]] && ok "completed flow repair satisfies the strict sync gate" || bad "completed flow repair does not satisfy the strict sync gate"
+record "$d/actions.lock" "o/flow-child@$B" | grep -qxF "        ref: 'v1.0.0'" \
+  && ok "transitive reusable without a local caller records a symbolic tag" || bad "transitive reusable incorrectly received a raw-SHA exemption"
+
+plant o/badflow .github/workflows/bad.yml "$A" <<'EOF'
+jobs: {}
+jobs: {}
+EOF
+d=$(mklock badflow "o/badflow@$A" </dev/null); mkwf badflow "o/badflow/.github/workflows/bad.yml@$A"
+out=$(run "$d"); st=$?
+[[ "$st" == 3 ]] && ! grep -qxF "    'o/badflow@$A':" "$d/actions.lock" \
+  && ok "duplicate keys in called YAML cannot produce a leaf record" || bad "malformed called workflow was certified — st=$st $out"
+
+cat > "$WORK/flow-check.lock" <<EOF
+{ version: v0.0.3,
+  workflows: { '.github/workflows/ci.yml': [ 'o/a@$A' ], },
+  dependencies: {
+    'o/a@$A': { ref: v1, commit: 'sha1-$A', owner_id: 7, repo_id: 9, uses: [ 'o/b@$B' ], },
+  },
+}
+EOF
+out=$(GH_BIN="$WORK/gh-trap" bash "$TARGET" --check "$WORK/flow-check.lock" 2>&1); st=$?
+[[ "$st" == 1 ]] && grep -qxF "  o/b@$B" <<< "$out" \
+  && ok "check mode reads flow-style transitive edges without network" || bad "check mode omitted a flow edge — st=$st $out"
+yq -o=json '.' "$WORK/flow-check.lock" | jq --arg k "o/b@$B" --arg commit "sha1-$B" '.dependencies[$k] = {ref:"v1",commit:$commit,owner_id:7,repo_id:9}' > "$WORK/flow-closed.lock"
+out=$(GH_BIN="$WORK/gh-trap" bash "$TARGET" --check "$WORK/flow-closed.lock" 2>&1); st=$?
+[[ "$st" == 0 && ! -s "$WORK/gh-calls" ]] && ok "check mode accepts closed JSON/flow YAML without network" || bad "closed flow check failed — st=$st $out"
+
+for location in map scalar; do
+  if [[ "$location" == map ]]; then
+    body=$(printf '      - { uses: "o/untagged@%s", } # v1\n' "$A")
+  else
+    body=$(printf '      - { uses: "o/untagged@%s", # v1\n        }\n' "$A")
+  fi
+  plant o/flowtag .github/workflows/ci.yml "$A" <<EOF
+jobs:
+  build:
+    steps:
+$body
+EOF
+  d=$(mklock "flowtag-$location" "o/flowtag@$A" </dev/null)
+  mkwf "flowtag-$location" "o/flowtag/.github/workflows/ci.yml@$A"
+  out=$(run "$d"); st=$?
+  [[ "$st" == 0 ]] && yq -o=json '.' "$d/actions.lock" | jq -e --arg key "o/untagged@$A" '.dependencies[$key].ref == "v1"' >/dev/null \
+    && ok "flow $location comment retains moved-tag evidence in called workflow" || bad "flow $location tag comment lost — st=$st $out"
+done
+
+d="$WORK/quoted/.github/workflows"; mkdir -p "$d"
+printf 'jobs:\n  a:\n    steps:\n      - uses: "o/quoted@release\0472026"\n' > "$d/ci.yml"
+cat > "$d/actions.lock" <<'EOF'
+# SPDX-License-Identifier: MPL-2.0
+version: v0.0.3
+workflows: {.github/workflows/ci.yml: ["o/quoted@release'2026"]}
+dependencies: {}
+EOF
+out=$(run "$d"); st=$?
+[[ "$st" == 0 ]] && yq -o=json '.' "$d/actions.lock" | jq -e --arg key "o/quoted@release'2026" --arg ref "release'2026" --arg commit "sha1-$C" '.dependencies[$key].ref == $ref and .dependencies[$key].commit == $commit' >/dev/null \
+  && ok "closure URL-encodes and YAML-encodes apostrophes in symbolic references" || bad "quoted closure corrupts the record — st=$st $out"
+bash "$SCRIPT_DIR/../check-lock-sync.sh" "$d" >/dev/null 2>&1; st=$?
+[[ "$st" == 0 ]] && grep -q '^# SPDX-License-Identifier: MPL-2.0' "$d/actions.lock" \
+  && ok "quoted closure preserves the header and satisfies the strict checker" || bad "quoted closure fails the checker or loses its header"
+cp "$d/actions.lock" "$WORK/quoted.before"; run "$d" >/dev/null
+cmp -s "$WORK/quoted.before" "$d/actions.lock" && ok "quoted closure is byte-idempotent" || bad "quoted closure is not byte-idempotent"
+
+for malformed in duplicate multiple syntax; do
+  case "$malformed" in
+    duplicate) printf 'workflows: {}\nworkflows: {}\ndependencies: {}\n' > "$WORK/uninspected.lock" ;;
+    multiple) printf 'workflows: {}\ndependencies: {}\n---\nworkflows: {}\n' > "$WORK/uninspected.lock" ;;
+    syntax) printf 'workflows: [\n' > "$WORK/uninspected.lock" ;;
+  esac
+  cp "$WORK/uninspected.lock" "$WORK/uninspected.before"
+  GH_BIN="$WORK/gh-trap" bash "$TARGET" --check "$WORK/uninspected.lock" >/dev/null 2>&1; st=$?
+  [[ "$st" == 2 ]] && cmp -s "$WORK/uninspected.before" "$WORK/uninspected.lock" && [[ ! -s "$WORK/gh-calls" ]] \
+    && ok "unparseable $malformed lock is uninspected (exit 2), unchanged and offline" || bad "unparseable $malformed lock was misclassified"
+done
 
 echo "close-lock-test: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

@@ -10,6 +10,10 @@
 # Run: bash scripts/tests/prune-stale-test.sh
 # TARGET=<path> runs the suite against another copy (used for mutant checks).
 set -uo pipefail
+command -v jq >/dev/null && command -v yq >/dev/null && yq --version | grep -Eq 'github.com/mikefarah/yq/.*version v4\.' || {
+  echo 'prune-stale-test: requires jq and Mike Farah yq v4' >&2
+  exit 1
+}
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 TARGET="${TARGET:-$SCRIPT_DIR/../prune-stale.sh}"
 WORK="$(mktemp -d)"
@@ -114,7 +118,7 @@ jobs:
       - uses: actions/checkout@$A
       - uses: ./.github/actions/outer
 EOF
-printf 'runs:\n  using: composite\n  steps:\n    - uses: "o/direct@%s",\n    - uses: ./.github/actions/inner/\n' "$B" > "$c/.github/actions/outer/action.yml"
+printf '{ runs: { using: composite, steps: [\n  { uses: "o/direct@%s", },\n  { uses: ./.github/actions/inner/, },\n], }, }\n' "$B" > "$c/.github/actions/outer/action.yml"
 printf 'runs:\n  using: composite\n  steps:\n    - uses: o/nested/sub@%s # v1\n' "$S" > "$c/.github/actions/inner/action.yaml"
 cat > "$c/.github/workflows/actions.lock" <<EOF
 workflows:
@@ -200,8 +204,85 @@ grep -qxF "        - 'actions/checkout@v1'" "$k/actions.lock" \
 
 fi
 
+d="$WORK/at/.github/workflows"; mkdir -p "$d"
+cat > "$d/ci.yml" <<'EOF'
+jobs:
+  test:
+    steps:
+      - uses: o/r@Release@2026
+EOF
+cat > "$d/actions.lock" <<'EOF'
+workflows:
+    '.github/workflows/ci.yml':
+        - 'o/r@Release@2026'
+        - 'o/r@release@2026'
+dependencies: {}
+EOF
+(cd "$WORK/at" && bash "$TARGET") >/dev/null 2>&1
+grep -qxF "        - 'o/r@Release@2026'" "$d/actions.lock" \
+  && ok "embedded at-sign keeps the matching ref" || bad "embedded at-sign keeps the matching ref"
+! grep -qxF "        - 'o/r@release@2026'" "$d/actions.lock" \
+  && ok "embedded at-sign does not retain a case-different stale ref" || bad "embedded at-sign does not retain a case-different stale ref"
+
 mkdir -p "$WORK/n/.github/workflows"; (cd "$WORK/n" && bash "$TARGET") >/dev/null 2>&1; st=$?
 [ "$st" = 1 ] && ok "no lockfile → exit 1" || bad "no lockfile → exit 1 (got $st)"
+
+for local_use in ./.github/actions/missing ./.github/workflows/missing.yml; do
+  d="$WORK/missing/.github/workflows"; mkdir -p "$d"
+  printf 'jobs:\n  a:\n    steps:\n      - uses: %s\n' "$local_use" > "$d/ci.yml"
+  printf "workflows:\n    '.github/workflows/ci.yml': []\ndependencies: {}\n" > "$d/actions.lock"
+  cp "$d/actions.lock" "$WORK/missing.before"
+  (cd "$WORK/missing" && bash "$TARGET") >/dev/null 2>&1; st=$?
+  [ "$st" != 0 ] && cmp -s "$WORK/missing.before" "$d/actions.lock" \
+    && ok "missing local use refuses pruning without changing the lock: $local_use" \
+    || bad "missing local use was accepted or changed the lock: $local_use"
+done
+
+for malformed in syntax duplicate; do
+  d="$WORK/parser-$malformed/.github/workflows"; mkdir -p "$d"
+  printf "workflows:\n    '.github/workflows/ci.yml': []\ndependencies: {}\n" > "$d/actions.lock"
+  cp "$d/actions.lock" "$WORK/parser-$malformed.before"
+  case "$malformed" in
+    syntax) printf 'jobs: [\n' > "$d/ci.yml" ;;
+    duplicate) printf 'jobs: {}\njobs: {}\n' > "$d/ci.yml" ;;
+  esac
+  (cd "$WORK/parser-$malformed" && bash "$TARGET") >/dev/null 2>&1; st=$?
+  [ "$st" != 0 ] && cmp -s "$WORK/parser-$malformed.before" "$d/actions.lock" \
+    && ok "parser failure refuses pruning and preserves the lock: $malformed" \
+    || bad "parser failure was ignored or changed the lock: $malformed"
+done
+
+d="$WORK/quoted/.github/workflows"; mkdir -p "$d"
+printf 'jobs:\n  a:\n    steps:\n      - uses: "o/r@release\0472026"\n' > "$d/ci.yml"
+cat > "$d/actions.lock" <<'EOF'
+# SPDX-License-Identifier: MPL-2.0
+version: v0.0.3
+workflows:
+  .github/workflows/ci.yml: ["o/r@release'2026", "o/r@stale'2026"]
+  ".github/workflows/gone'name.yml": []
+dependencies:
+  "o/r@release'2026": {ref: "release'2026", commit: sha1-1111111111111111111111111111111111111111, owner_id: 7, repo_id: 9}
+EOF
+yq -o=json '.dependencies' "$d/actions.lock" > "$WORK/quoted.deps"
+(cd "$WORK/quoted" && bash "$TARGET") >/dev/null 2>&1; st=$?
+[ "$st" = 0 ] && yq -o=json '.' "$d/actions.lock" | jq -e --arg ref "o/r@release'2026" '.workflows == {".github/workflows/ci.yml":[$ref]}' >/dev/null \
+  && ok "pruning encodes surviving apostrophes and removes quoted stale keys" || bad "quoted pruning corrupts the workflow map"
+yq -o=json '.dependencies' "$d/actions.lock" > "$WORK/quoted.after-deps"
+bash "$(dirname "$TARGET")/check-lock-sync.sh" "$d" >/dev/null 2>&1; st=$?
+[ "$st" = 0 ] && cmp -s "$WORK/quoted.deps" "$WORK/quoted.after-deps" && grep -q '^# SPDX-License-Identifier: MPL-2.0' "$d/actions.lock" \
+  && ok "quoted pruning preserves dependency provenance and the header" || bad "quoted pruning damages provenance or fails the checker"
+cp "$d/actions.lock" "$WORK/quoted.before"
+(cd "$WORK/quoted" && bash "$TARGET") >/dev/null 2>&1
+cmp -s "$WORK/quoted.before" "$d/actions.lock" && ok "quoted pruning is byte-idempotent" || bad "quoted pruning is not byte-idempotent"
+
+d="$WORK/file-action/.github/workflows"; mkdir -p "$d" "$WORK/file-action/.github/actions"
+printf 'runs: {}\n' > "$WORK/file-action/.github/actions/plain.yml"
+printf 'jobs: {test: {steps: [{uses: ./.github/actions/plain.yml}]}}\n' > "$d/ci.yml"
+printf 'version: v0.0.3\nworkflows: {.github/workflows/ci.yml: []}\ndependencies: {}\n' > "$d/actions.lock"
+cp "$d/actions.lock" "$WORK/file-action.before"
+(cd "$WORK/file-action" && bash "$TARGET") >/dev/null 2>&1; st=$?
+[[ "$st" != 0 ]] && cmp -s "$WORK/file-action.before" "$d/actions.lock" \
+  && ok "pruning refuses a regular YAML file used as an action without rewriting" || bad "pruning accepted a file without action metadata"
 
 echo "prune-stale-test: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

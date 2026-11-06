@@ -119,47 +119,118 @@ mapfile -t WORKFLOWS < <(printf '%s\n' "$WF_DIR"/*.yml "$WF_DIR"/*.yaml | sort -
 # so it is not followed. Paths resolve from the repository root, as GitHub
 # resolves them from the workspace.
 LC_ROOT="$(cd "$WF_DIR/../.." 2>/dev/null && pwd)" || LC_ROOT=.
-# local_action_paths FILE: the path after `./` of every local `uses:` in FILE.
+# Parse one YAML document and reject duplicate mapping keys before converting
+# to JSON. yq exposes node keys without discarding duplicates; JSON alone does
+# not. jq handles typed fields after YAML comments, aliases and quoting decode.
+lock_yaml_json() {
+  command -v yq >/dev/null && command -v jq >/dev/null || {
+    echo 'actions-lock: requires Mike Farah yq v4 and jq' >&2; return 1;
+  }
+  yq --version | grep -Eq 'github.com/mikefarah/yq/.*version v4\.' || {
+    echo 'actions-lock: requires Mike Farah yq v4' >&2; return 1;
+  }
+  yq -o=json '[... | select(tag == "!!map") | keys]' "$1" |
+    jq -se 'length == 1 and all(.[0][]; length == (unique | length))' >/dev/null || {
+      echo "actions-lock: malformed YAML, multiple documents or duplicate mapping keys: $1" >&2; return 1;
+    }
+  yq -o=json '.' "$1" | jq -sce 'if length == 1 then .[0] else error("expected one YAML document") end'
+}
+# Only actual job/step fields count. Ordinary env/input maps, strings and
+# block scalars can contain the word uses without declaring a dependency.
+lock_uses() {
+  lock_yaml_json "$1" | jq -r '
+    def emit($kind):
+      if has("uses") then .uses |
+        if type != "string" or length == 0 or test("[\t\r\n]") then error("uses must be a nonempty single-line string")
+        else [$kind, .] | @tsv end
+      else empty end;
+    if type != "object" then error("workflow/action must be a mapping") else
+      (.jobs // {} | .[] | emit("job")),
+      (.jobs // {} | .[] | .steps // [] | .[] | emit("step")),
+      (.runs.steps? // [] | .[] | emit("step"))
+    end'
+}
 local_action_paths() {
-  awk -v q="'" '{
-    line = $0; sub(/[[:space:]]+#.*$/, "", line)
-    if (!match(line, /^[[:space:]]*-?[[:space:]]*uses:[[:space:]]*/)) next
-    raw = substr(line, RLENGTH + 1)
-    sub("[\"" q "],[[:space:]]*$", "", raw)
-    gsub("^[\"" q "]|[\"" q "]$", "", raw); sub(/[[:space:]]+$/, "", raw)
-    if (substr(raw, 1, 2) == "./") print substr(raw, 3)
-  }' "$1"
+  lock_uses "$1" | awk -F'\t' 'substr($2, 1, 2) == "./" { print $1 "\t" ($2 == "./" ? "." : substr($2, 3)) }'
 }
 reach_files() {
   local -A seen=()
-  local queue=("$1") f rel a
+  local queue=("$1") f kind rel a found paths
   while [ "${#queue[@]}" -gt 0 ]; do
     f="${queue[0]}"; queue=("${queue[@]:1}")
     [ -n "${seen[$f]:-}" ] && continue
     seen[$f]=1
     printf '%s\n' "$f"
-    while IFS= read -r rel; do
+    paths=$(local_action_paths "$f") || return 1
+    while IFS=$'\t' read -r kind rel; do
+      [ -n "$rel" ] || continue
       rel="${rel%/}"
-      case "$rel" in *.yml|*.yaml) continue ;; esac
+      if [ "$kind" = job ]; then
+        case "$rel" in
+          *.yml|*.yaml)
+            [ -f "$LC_ROOT/$rel" ] && continue ;;
+        esac
+        echo "actions-lock: missing local reusable workflow: $rel" >&2; return 1
+      fi
+      found=false
       for a in "$LC_ROOT/$rel/action.yml" "$LC_ROOT/$rel/action.yaml"; do
-        if [ -f "$a" ]; then queue+=("$a"); break; fi
+        if [ -f "$a" ]; then queue+=("$a"); found=true; break; fi
       done
-    done < <(local_action_paths "$f")
+      "$found" && continue
+      echo "actions-lock: missing local action metadata: $rel" >&2; return 1
+    done <<< "$paths"
   done
 }
 # ── end of the shared block ───────────────────────────────────────────────────
+# Encode modified mappings with the YAML library, not interpolated quotes.
+# Validate the round trip and preserve every value outside the chosen section.
+lock_write_section() {
+  local original=$1 section=$2 data=$3 staging expression status=1
+  case "$section" in workflows|dependencies) ;; *) return 1 ;; esac
+  jq -e 'type == "object"' "$data" >/dev/null || return 1
+  staging=$(mktemp -d "$(dirname "$original")/.actions-lock-edit.XXXXXX") || return 1
+  if [ "$section" = workflows ]; then
+    expression='explode(.) | .workflows = load(strenv(LOCK_EDIT_DATA)) | (.workflows | ...) style="" | (.workflows | ... | select(tag == "!!str")) style="single"'
+  else
+    expression='explode(.) | .dependencies = load(strenv(LOCK_EDIT_DATA)) | (.dependencies | ...) style="" | (.dependencies[]? | key) style="single" | (.dependencies[]? | select(tag == "!!map") | select(has("ref")) | .ref) style="single" | (.dependencies[]? | select(tag == "!!map") | select(has("commit")) | .commit) style="single" | (.dependencies[]? | select(tag == "!!map") | select(has("hostname")) | .hostname) style="single" | (.dependencies[]? | select(tag == "!!map") | select(has("uses")) | .uses[]?) style="single"'
+  fi
+  if lock_yaml_json "$original" > "$staging/before.json" &&
+     cp -p "$original" "$staging/new.lock" &&
+     LOCK_EDIT_DATA="$data" yq -I=4 "$expression" "$original" > "$staging/new.lock" &&
+     lock_yaml_json "$staging/new.lock" > "$staging/after.json" &&
+     jq -ne --arg section "$section" --slurpfile before "$staging/before.json" --slurpfile after "$staging/after.json" --slurpfile wanted "$data" '
+       $after[0][$section] == $wanted[0] and
+       ($before[0] | del(.[$section])) == ($after[0] | del(.[$section]))
+     ' >/dev/null; then
+    mv -f "$staging/new.lock" "$original" && status=0
+  else
+    echo "actions-lock: refusing a rewrite that changes lock semantics outside $section" >&2
+  fi
+  rm -rf -- "$staging"
+  return "$status"
+}
+
 
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 # reach.tsv: "file<TAB>lock key" — each file whose uses: count for that entry.
 for wf in "${WORKFLOWS[@]}"; do
-  while IFS= read -r f; do printf '%s\t.github/workflows/%s\n' "$f" "${wf##*/}"; done < <(reach_files "$wf")
+  reached=$(reach_files "$wf") || exit 1
+  while IFS= read -r f; do printf '%s\t.github/workflows/%s\n' "$f" "${wf##*/}"; done <<< "$reached"
 done > "$TMP/reach.tsv"
 mapfile -t SCAN < <(cut -f1 "$TMP/reach.tsv" | LC_ALL=C sort -u)
+: > "$TMP/uses.tsv"
+for f in "${SCAN[@]}"; do
+  refs=$(lock_uses "$f") || exit 1
+  while IFS=$'\t' read -r kind ref; do
+    if [ -n "$ref" ]; then printf '%s\t%s\n' "$f" "$ref"; fi
+  done <<< "$refs"
+done > "$TMP/uses.tsv"
 
+lock_yaml_json "$LOCK" > "$TMP/lock.json"
+jq -r '.workflows | to_entries[] | . as $wf | (.value // [])[] | [$wf.key, .] | @tsv' "$TMP/lock.json" > "$TMP/lock.tsv"
 read -r -d '' CAND <<'AWK' || true
 function norm(r,   at, path, ref, n, parts) {
-  at = 0
-  for (n = length(r); n > 0; n--) { if (substr(r, n, 1) == "@") { at = n; break } }
+  at = index(r, "@")
   if (at == 0) return ""
   path = substr(r, 1, at - 1); ref = substr(r, at + 1)
   if (path == "" || ref == "") return ""
@@ -168,8 +239,7 @@ function norm(r,   at, path, ref, n, parts) {
   return parts[1] "/" parts[2] "@" ref
 }
 function ck(r,   at, s) {
-  at = 0
-  for (s = length(r); s > 0; s--) { if (substr(r, s, 1) == "@") { at = s; break } }
+  at = index(r, "@")
   if (at == 0) return tolower(r)
   return tolower(substr(r, 1, at - 1)) substr(r, at)
 }
@@ -177,28 +247,15 @@ BEGIN {
   while ((getline l < mapfile) > 0) { split(l, mp, "\t"); owners[mp[1]] = owners[mp[1]] SUBSEP mp[2] }
 }
 FILENAME == lockfile {
-  if ($0 ~ /^workflows:[[:space:]]*$/)    { inwf = 1; next }
-  if ($0 ~ /^[a-z_]+:/)                   { inwf = 0; next }
-  if (!inwf) next
-  if (match($0, /^    '([^']+)':/, m)) { cur = m[1]; next }
-  if (match($0, /^        - '([^']+)'[[:space:]]*$/, m) && cur != "") {
-    lockref[cur, ck(m[1])] = m[1]
-  }
-  next
+  split($0, row, "\t"); lockref[row[1], ck(row[2])] = row[2]; next
 }
 # Every scanned file (a workflow, or a composite action it reaches) credits its
 # uses: to each lock key that reaches it.
-FNR == 1 { nown = split(substr(owners[FILENAME], 2), own, SUBSEP) }
-{
-  line = $0
-  sub(/[[:space:]]+#.*$/, "", line)
-  if (match(line, /^[[:space:]]*-?[[:space:]]*uses:[[:space:]]*(.+)$/, m)) {
-    raw = m[1]
-    sub(/["'],[[:space:]]*$/, "", raw)   # KYAML comma after a quoted scalar, as in check-lock-sync.sh
-    gsub(/^["']|["']$/, "", raw); gsub(/[[:space:]]+$/, "", raw)
-    n = norm(raw)
-    if (n != "") for (i = 1; i <= nown; i++) used[own[i], ck(n)] = 1
-  }
+FILENAME == refsfile {
+  split($0, row, "\t")
+  nown = split(substr(owners[row[1]], 2), own, SUBSEP)
+  n = norm(row[2])
+  if (n != "") for (i = 1; i <= nown; i++) used[own[i], ck(n)] = 1
 }
 END {
   for (k in lockref) {
@@ -208,7 +265,7 @@ END {
 }
 AWK
 
-"$AWK" -v lockfile="$LOCK" -v mapfile="$TMP/reach.tsv" "$CAND" "$LOCK" "${SCAN[@]}" | LC_ALL=C sort -u > "$TMP/cand.tsv"
+"$AWK" -v lockfile="$TMP/lock.tsv" -v refsfile="$TMP/uses.tsv" -v mapfile="$TMP/reach.tsv" "$CAND" "$TMP/lock.tsv" "$TMP/uses.tsv" | LC_ALL=C sort -u > "$TMP/cand.tsv"
 
 # ── keys whose workflow file is gone. Both oracles must agree. ─────────────
 declare -A present=()
@@ -221,10 +278,7 @@ while IFS= read -r key; do
     continue
   fi
   printf '%s\n' "$key" >> "$TMP/gone.txt"
-done < <("$AWK" '
-  /^workflows:[[:space:]]*$/ { inwf = 1; next }
-  /^[a-z_]+:/                { inwf = 0; next }
-  inwf && match($0, /^    '\''([^'\'']+)'\'':/, m) { print m[1] }' "$LOCK")
+done < <(jq -r '.workflows | keys[]' "$TMP/lock.json")
 
 if [ ! -s "$TMP/cand.tsv" ] && [ ! -s "$TMP/gone.txt" ]; then
   echo "prune-stale: no stale workflow-entry refs; lockfile unchanged"
@@ -283,64 +337,15 @@ if [ ! -s "$TMP/drop.tsv" ] && [ ! -s "$TMP/gone.txt" ]; then
   exit 0
 fi
 
-read -r -d '' APPLY <<'AWK' || true
-NR == FNR { drop[$1 SUBSEP $2] = 1; next }
-{
-  if ($0 ~ /^workflows:[[:space:]]*$/) { inwf = 1; print; next }
-  if ($0 ~ /^[a-z_]+:/)                { inwf = 0; print; next }
-  if (!inwf) { print; next }
-  if (match($0, /^    '([^']+)':/, m)) { cur = m[1]; print; next }
-  if (match($0, /^        - '([^']+)'[[:space:]]*$/, m) && cur != "") {
-    if ((cur SUBSEP m[1]) in drop) { pruned++; next }
-  }
-  print
-}
-END { printf "prune-stale: pruned %d stale workflow-entry ref(s)\n", pruned + 0 > "/dev/stderr" }
-AWK
-
-if [ -s "$TMP/drop.tsv" ]; then
-  "$AWK" -F'\t' "$APPLY" "$TMP/drop.tsv" "$LOCK" > "$TMP/new.lock"
-else
-  cat "$LOCK" > "$TMP/new.lock"
-fi
-
-# An entry left with no items must become an explicit empty list, or the YAML
-# key would take a null value and the schema would reject it.
-"$AWK" '
-  # Scoped strictly to the workflows: section. A dependencies: record uses the
-  # same "    '\''key'\'':" shape but its children are "        ref:" style, so an
-  # unscoped pass would rewrite every dependency record to ": []" and orphan its
-  # children. That bug was caught by the gitbot-fleet test, not by review.
-  { lines[NR] = $0 }
-  END {
-    inwf = 0
-    for (i = 1; i <= NR; i++) {
-      if (lines[i] ~ /^workflows:[[:space:]]*$/) { inwf = 1; print lines[i]; continue }
-      else if (lines[i] ~ /^[a-z_]+:/)           { inwf = 0; print lines[i]; continue }
-      if (inwf && match(lines[i], /^    '\''[^'\'']+'\'':[[:space:]]*$/) \
-          && (i == NR || lines[i+1] !~ /^        - /)) {
-        sub(/:[[:space:]]*$/, ": []", lines[i])
-      }
-      print lines[i]
-    }
-  }' "$TMP/new.lock" > "$TMP/new2.lock"
-
-# Drop each gone key with its items, again scoped to the workflows: section.
-# The gone list is told apart by FILENAME, not by NR == FNR: gone.txt is
-# usually EMPTY, and then NR == FNR holds for every line of the lock, which
-# swallowed the whole file and wrote the lock back empty.
-"$AWK" '
-  FILENAME == ARGV[1] { gone[$0] = 1; next }
-  /^workflows:[[:space:]]*$/ { inwf = 1; skip = 0; print; next }
-  /^[a-z_]+:/                { inwf = 0; skip = 0; print; next }
-  inwf && match($0, /^    '\''([^'\'']+)'\'':/, m) {
-    skip = (m[1] in gone); if (skip) { dropped++; next }
-  }
-  skip && /^        - / { next }
-  { skip = 0; print }
-  END { if (dropped) printf "prune-stale: dropped %d key(s) for workflow files that no longer exist\n", dropped > "/dev/stderr" }
-' "$TMP/gone.txt" "$TMP/new2.lock" > "$TMP/new3.lock"
-
-if command -v diff >/dev/null 2>&1; then diff -u "$LOCK" "$TMP/new3.lock" | sed 's/^/   | /' || true; fi
-cat "$TMP/new3.lock" > "$LOCK"
+# Apply only vetted candidates to the typed workflow map. The YAML encoder
+# preserves apostrophes and empty arrays; dependency provenance is untouched.
+jq -Rn '[inputs | split("\t") | {path:.[0], ref:.[1]}]' "$TMP/drop.tsv" > "$TMP/drop.json"
+jq -Rn '[inputs]' "$TMP/gone.txt" > "$TMP/gone.json"
+jq --slurpfile drop "$TMP/drop.json" --slurpfile gone "$TMP/gone.json" '
+  .workflows | to_entries | map(. as $entry |
+    select(($gone[0] | index($entry.key)) == null) |
+    .value |= ((. // []) | map(. as $ref | select(any($drop[0][]; .path == $entry.key and .ref == $ref) | not)))) |
+  from_entries
+' "$TMP/lock.json" > "$TMP/workflows.json"
+lock_write_section "$LOCK" workflows "$TMP/workflows.json"
 echo "prune-stale: done (oracle vetoes: $kept_by_oracle)"
