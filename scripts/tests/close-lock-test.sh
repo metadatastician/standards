@@ -432,5 +432,59 @@ done < "$CORPUS/expected.tsv"
 GH_BIN="$WORK/gh-trap" bash "$TARGET" --check "$WORK/no-such.lock" >/dev/null 2>&1; st=$?
 [[ "$st" == 2 ]] && ok "--check with no lock → exit 2" || bad "--check with no lock → exit 2 (got $st)"
 
+echo "=== structured flow callers and called workflows retain nested closure ==="
+plant o/flow .github/workflows/outer.yml "$A" <<EOF
+{
+  env: { uses: "o/not-a-dependency@v1", },
+  jobs: {
+    child: { uses: "o/flow-child/.github/workflows/inner.yml@$B", },
+    build: { steps: [
+      { uses: "o/b/subdir@$B", },
+      { run: "echo uses: o/not-a-dependency@v1", },
+    ], },
+  },
+}
+EOF
+plant o/flow-child .github/workflows/inner.yml "$B" <<EOF
+{ jobs: { build: { steps: [ { uses: "o/c@$C", }, ], }, }, }
+EOF
+d="$WORK/flow/.github/workflows"; mkdir -p "$d"
+printf 'version: v0.0.3\nworkflows: {}\ndependencies: {}\n' > "$d/actions.lock"
+printf '{ jobs: { call: { uses: "o/flow/.github/workflows/outer.yml@%s", }, }, }\n' "$A" > "$d/ci.yml"
+(cd "$d/../.." && bash "$SCRIPT_DIR/../complete-job-refs.sh") >/dev/null 2>&1; completed=$?
+out=$(run "$d"); st=$?
+[[ "$completed" == 0 && "$st" == 0 ]] && record "$d/actions.lock" "o/flow@$A" | grep -qxF "            - 'o/flow-child@$B'" \
+  && record "$d/actions.lock" "o/flow-child@$B" | grep -qxF "            - 'o/c@$C'" \
+  && ok "flow completion and close-lock retain nested reusable records" || bad "flow completion lost nested reusable records — st=$st $out"
+record "$d/actions.lock" "o/flow@$A" | grep -qxF "            - 'o/b@$B'" \
+  && ! grep -qF 'not-a-dependency' "$d/actions.lock" \
+  && ok "flow step references count while environment/input examples do not" || bad "flow step/environment discrimination"
+bash "$SCRIPT_DIR/../check-lock-sync.sh" "$d" >/dev/null 2>&1; st=$?
+[[ "$st" == 0 ]] && ok "completed flow repair satisfies the strict sync gate" || bad "completed flow repair does not satisfy the strict sync gate"
+
+plant o/badflow .github/workflows/bad.yml "$A" <<'EOF'
+jobs: {}
+jobs: {}
+EOF
+d=$(mklock badflow "o/badflow@$A" </dev/null); mkwf badflow "o/badflow/.github/workflows/bad.yml@$A"
+out=$(run "$d"); st=$?
+[[ "$st" == 3 ]] && ! grep -qxF "    'o/badflow@$A':" "$d/actions.lock" \
+  && ok "duplicate keys in called YAML cannot produce a leaf record" || bad "malformed called workflow was certified — st=$st $out"
+
+cat > "$WORK/flow-check.lock" <<EOF
+{ version: v0.0.3,
+  workflows: { '.github/workflows/ci.yml': [ 'o/a@$A' ], },
+  dependencies: {
+    'o/a@$A': { ref: v1, commit: 'sha1-$A', owner_id: 7, repo_id: 9, uses: [ 'o/b@$B' ], },
+  },
+}
+EOF
+out=$(GH_BIN="$WORK/gh-trap" bash "$TARGET" --check "$WORK/flow-check.lock" 2>&1); st=$?
+[[ "$st" == 1 ]] && grep -qxF "  o/b@$B" <<< "$out" \
+  && ok "check mode reads flow-style transitive edges without network" || bad "check mode omitted a flow edge — st=$st $out"
+yq -o=json '.' "$WORK/flow-check.lock" | jq --arg k "o/b@$B" --arg commit "sha1-$B" '.dependencies[$k] = {ref:"v1",commit:$commit,owner_id:7,repo_id:9}' > "$WORK/flow-closed.lock"
+out=$(GH_BIN="$WORK/gh-trap" bash "$TARGET" --check "$WORK/flow-closed.lock" 2>&1); st=$?
+[[ "$st" == 0 && ! -s "$WORK/gh-calls" ]] && ok "check mode accepts closed JSON/flow YAML without network" || bad "closed flow check failed — st=$st $out"
+
 echo "close-lock-test: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

@@ -105,21 +105,40 @@ if [[ -n "$PRIOR" && ! -f "$PRIOR" ]]; then
 fi
 SC="$(mktemp -d)"; trap 'rm -rf "$SC"' EXIT
 TAB="$(printf '\t')"
-# keys: list the dependency record keys already present in the lock.
-keys()   { awk '/^dependencies:/{f=1;next} f&&match($0,/^    '\''[^'\'']+'\'':$/){k=$0;sub(/^    '\''/,"",k);sub(/'\'':$/,"",k);print k}' "$L" | LC_ALL=C sort -u; }
-# nested: list the refs that dependency records themselves depend on.
-nested() { awk '/^dependencies:/{f=1} f&&match($0,/^            - '\''[^'\'']+'\''/){k=$0;sub(/^            - '\''/,"",k);sub(/'\''.*$/,"",k);print k}' "$L" | LC_ALL=C sort -u; }
-# wfrefs: list every ref named under the workflows: section.
-wfrefs() { awk '/^workflows:/{f=1;next} f&&/^[a-z_]+:/{f=0} f&&match($0,/^        - '\''[^'\'']+'\''/){k=$0;sub(/^        - '\''/,"",k);sub(/'\''.*$/,"",k);print k}' "$L" | LC_ALL=C sort -u; }
-# uses_values FILE: every `uses:` value in FILE, with a trailing comment, YAML
-# quotes and a KYAML trailing comma stripped (the same reading as
-# complete-job-refs.sh).
-uses_values() {
-  { sed 's/[[:space:]]\+#.*$//' "$1" \
-    | grep -E '^[[:space:]]*(-[[:space:]]+)?uses:[[:space:]]' \
-    | sed -E 's/^[[:space:]]*(-[[:space:]]+)?uses:[[:space:]]+//' \
-    | tr -d '"'"'"'' | awk '{print $1}' | sed 's/,$//'; } || true
+# Typed lock relations work for block and flow YAML and preserve quoting.
+keys() { lock_yaml_json "$L" | jq -r '.dependencies // {} | keys[]' | LC_ALL=C sort -u; }
+nested() { lock_yaml_json "$L" | jq -r '.dependencies // {} | .[] | .uses? // [] | .[]' | LC_ALL=C sort -u; }
+wfrefs() { lock_yaml_json "$L" | jq -r '.workflows // {} | .[] | .[]' | LC_ALL=C sort -u; }
+lock_yaml_json() {
+  command -v yq >/dev/null && command -v jq >/dev/null || {
+    echo 'actions-lock: requires Mike Farah yq v4 and jq' >&2; return 1;
+  }
+  yq --version | grep -Eq 'github.com/mikefarah/yq/.*version v4\.' || {
+    echo 'actions-lock: requires Mike Farah yq v4' >&2; return 1;
+  }
+  yq -o=json '[... | select(tag == "!!map") | keys]' "$1" |
+    jq -se 'length == 1 and all(.[0][]; length == (unique | length))' >/dev/null || {
+      echo "actions-lock: malformed YAML, multiple documents or duplicate mapping keys: $1" >&2; return 1;
+    }
+  yq -o=json '.' "$1" | jq -sce 'if length == 1 then .[0] else error("expected one YAML document") end'
 }
+# Only actual job/step fields count. Ordinary env/input maps, strings and
+# block scalars can contain the word uses without declaring a dependency.
+lock_uses() {
+  lock_yaml_json "$1" | jq -r '
+    def emit($kind):
+      if has("uses") then .uses |
+        if type != "string" or length == 0 or test("[\t\r\n]") then error("uses must be a nonempty single-line string")
+        else [$kind, .] | @tsv end
+      else empty end;
+    if type != "object" then error("workflow/action must be a mapping") else
+      (.jobs // {} | .[] | emit("job")),
+      (.jobs // {} | .[] | .steps // [] | .[] | emit("step")),
+      (.runs.steps? // [] | .[] | emit("step"))
+    end'
+}
+uses_values() { lock_uses "$1" | cut -f2-; }
+uses_reusable_calls() { lock_uses "$1" | awk -F'\t' '$1 == "job" { print $2 }' | reusable_calls; }
 # external_refs: read `uses:` values on stdin; print each external one as its
 # lock key owner/repo@ref.
 external_refs() {
@@ -221,7 +240,7 @@ mkdir -p "$SC/u" "$SC/cl"; : > "$SC/read"; : > "$SC/bad"; : > "$SC/more"; : > "$
 for f in "$WF"/*.yml "$WF"/*.yaml; do
   [ -e "$f" ] || continue
   uses_tags "$f" >> "$SC/ctags"
-  uses_values "$f" | reusable_calls
+  uses_reusable_calls "$f"
 done | LC_ALL=C sort -u > "$SC/calls"
 while :; do
   LC_ALL=C comm -23 "$SC/calls" "$SC/read" > "$SC/todo"
@@ -229,11 +248,13 @@ while :; do
   while IFS="$TAB" read -r k p; do
     [ -n "$k" ] || continue
     printf '%s\t%s\n' "$k" "$p" >> "$SC/read"
-    owner="${k%%/*}"; rest="${k#*/}"; name="${rest%@*}"; ref="${k##*@}"
+    owner="${k%%/*}"; rest="${k#*/}"; name="${rest%%@*}"; ref="${k#*@}"
     if "$GH_BIN" api "repos/$owner/$name/contents/$p?ref=$ref" -H 'Accept: application/vnd.github.raw' > "$SC/body" 2>/dev/null \
-       && grep -qE '^[[:space:]]*\{?[[:space:]]*"?jobs"?[[:space:]]*:' "$SC/body"; then
-      uses_values "$SC/body" | external_refs >> "$SC/u/$(keyfile "$k")"
-      uses_values "$SC/body" | reusable_calls >> "$SC/more"
+       && called_json=$(lock_yaml_json "$SC/body") \
+       && printf '%s' "$called_json" | jq -e '.jobs | type == "object"' >/dev/null \
+       && called_uses=$(lock_uses "$SC/body"); then
+      printf '%s\n' "$called_uses" | cut -f2- | external_refs >> "$SC/u/$(keyfile "$k")"
+      printf '%s\n' "$called_uses" | awk -F'\t' '$1 == "job" { print $2 }' | reusable_calls >> "$SC/more"
       uses_tags "$SC/body" >> "$SC/ctags"
       # The called repository's own lock at that ref. GitHub validates the called
       # workflow against it, and at a SHA pin it cannot change. A missing or
@@ -313,7 +334,7 @@ for pass in 1 2 3 4 5 6; do
     if grep -qxF "$k" "$SC/bad"; then
       echo "  SKIP $k (its called workflow is unreadable; no leaf record written)"; continue
     fi
-    owner="${k%%/*}"; rest="${k#*/}"; name="${rest%@*}"; ref="${k##*@}"
+    owner="${k%%/*}"; rest="${k#*/}"; name="${rest%%@*}"; ref="${k#*@}"
     ids=$("$GH_BIN" api "repos/$owner/$name" --jq '"\(.owner.id) \(.id)"') || ids=""
     if ! printf '%s' "$ids" | grep -qxE '[0-9]+ [0-9]+'; then
       echo "  SKIP $k (repo lookup failed or malformed)"; skipped=$((skipped + 1)); continue
@@ -376,14 +397,23 @@ for pass in 1 2 3 4 5 6; do
       else NB[nn] = NB[nn] "\n" l } }
   # emit_lt: print each pending new record whose key sorts before key.
   function emit_lt(key,   i) { for (i=1;i<=nn;i++) if (!used[i] && NK[i] < key) { print NB[i]; used[i]=1 } }
-  /^dependencies:[[:space:]]*$/ { print; indep=1; next }
+  /^dependencies:[[:space:]]*(\{\})?[[:space:]]*$/ { print "dependencies:"; indep=1; next }
   indep && /^[a-z_]+:/ { for (i=1;i<=nn;i++) if (!used[i]) { print NB[i]; used[i]=1 } indep=0; print; next }
   indep && /^    '\''[^'\'']+'\'':$/ { k=$0; sub(/^    '\''/,"",k); sub(/'\'':$/,"",k); emit_lt(k); print; next }
   { print }
-  END { if (indep) for (i=1;i<=nn;i++) if (!used[i]) print NB[i] }' "$L" > "$SC/new.lock" && cat "$SC/new.lock" > "$L"
+  END { if (indep) for (i=1;i<=nn;i++) if (!used[i]) print NB[i] }' "$L" > "$SC/new.lock"
+  if cmp -s "$SC/new.lock" "$L"; then
+    echo 'close-lock: cannot insert required records into this lock representation; lock is NOT closed' >&2
+    exit 3
+  fi
+  cat "$SC/new.lock" > "$L"
 done
 if [ "$skipped" -gt 0 ]; then
   echo "close-lock: $skipped ref(s) could not be resolved or read; lock is NOT closed" >&2
+  exit 3
+fi
+if ! bash "${BASH_SOURCE[0]}" --check "$L"; then
+  echo 'close-lock: repair did not establish closure; lock is NOT closed' >&2
   exit 3
 fi
 echo "close-lock: done"

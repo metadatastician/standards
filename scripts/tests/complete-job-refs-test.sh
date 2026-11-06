@@ -47,6 +47,7 @@ EOF
 echo "=== adds the job-level refs, and nothing else ==="
 mkrepo t1
 cat > "$WORK/t1/.github/workflows/actions.lock" <<EOF
+version: 'v0.0.3'
 workflows:
     '.github/workflows/ci.yml':
         - 'actions/checkout@$A'
@@ -72,6 +73,7 @@ cmp -s "$L" "$WORK/t1.before" && grep -qF 'newly present in workflows section: 0
 echo "=== a workflow with no lock entry gets one ==="
 mkrepo t2
 cat > "$WORK/t2/.github/workflows/actions.lock" <<EOF
+version: 'v0.0.3'
 workflows:
     '.github/workflows/ci.yml':
         - 'actions/checkout@$A'
@@ -95,7 +97,7 @@ jobs:
 EOF
 printf '{ runs: { using: composite, steps: [\n  { uses: "o/direct@%s", },\n  { uses: ./.github/actions/inner, },\n  { uses: "docker://alpine:3", },\n], }, }\n' "$A" > "$c/.github/actions/outer/action.yml"
 printf 'runs:\n  using: composite\n  steps:\n    - uses: o/nested/sub@%s # v1\n' "$S" > "$c/.github/actions/inner/action.yml"
-printf "workflows:\n    '.github/workflows/ci.yml':\n        - 'actions/checkout@%s'\ndependencies:\n" "$A" > "$c/.github/workflows/actions.lock"
+printf "version: 'v0.0.3'\nworkflows:\n    '.github/workflows/ci.yml':\n        - 'actions/checkout@%s'\ndependencies:\n" "$A" > "$c/.github/workflows/actions.lock"
 out=$(run comp)
 grep -qxF "        - 'o/direct@$A'" "$c/.github/workflows/actions.lock" \
   && ok "a local composite's ref is added to the calling workflow (KYAML-quoted)" || bad "a local composite's ref is added — $out"
@@ -121,6 +123,7 @@ mkdir -p "$WORK/t5/.github/workflows"
 printf 'jobs:\n  a:\n    runs-on: x\n    steps:\n      - uses: Swatinem/rust-cache@v2\n      - uses: o/r@V3\n' \
   > "$WORK/t5/.github/workflows/c.yml"
 cat > "$WORK/t5/.github/workflows/actions.lock" <<EOF
+version: 'v0.0.3'
 workflows:
     '.github/workflows/c.yml':
         - 'o/r@v3'
@@ -142,6 +145,7 @@ echo "=== a lock that already holds both spellings keeps the one with a record =
 mkdir -p "$WORK/t6/.github/workflows"
 cp "$WORK/t5/.github/workflows/c.yml" "$WORK/t6/.github/workflows/c.yml"
 cat > "$WORK/t6/.github/workflows/actions.lock" <<EOF
+version: 'v0.0.3'
 workflows:
     '.github/workflows/c.yml':
         - 'Swatinem/rust-cache@v2'
@@ -161,6 +165,7 @@ echo "=== a tag containing @ keeps its case (split at the first @) ==="
 mkdir -p "$WORK/t7/.github/workflows"
 printf 'jobs:\n  a:\n    runs-on: x\n    steps:\n      - uses: o/r@Release@2026\n' > "$WORK/t7/.github/workflows/c.yml"
 cat > "$WORK/t7/.github/workflows/actions.lock" <<EOF
+version: 'v0.0.3'
 workflows:
     '.github/workflows/c.yml':
         - 'o/r@release@2026'
@@ -177,7 +182,7 @@ mkdir -p "$WORK/empty/.github/workflows"
 printf 'jobs:\n  test:\n    steps:\n      - run: echo ok\n' > "$WORK/empty/.github/workflows/run.yml"
 cp "$WORK/empty/.github/workflows/run.yml" "$WORK/empty/.github/workflows/callee.yml"
 printf 'jobs:\n  child:\n    uses: ./.github/workflows/callee.yml\n' > "$WORK/empty/.github/workflows/caller.yml"
-printf 'workflows: {}\ndependencies: {}\n' > "$WORK/empty/.github/workflows/actions.lock"
+printf 'version: v0.0.3\nworkflows: {}\ndependencies: {}\n' > "$WORK/empty/.github/workflows/actions.lock"
 run empty >/dev/null; st=$?
 [ "$st" = 0 ] && yq -o=json '.' "$WORK/empty/.github/workflows/actions.lock" | jq -e '.workflows | length == 3 and all(.[]; . == [])' >/dev/null \
   && ok "run-only and local-only workflows receive empty keys from an empty generator map" \
@@ -190,7 +195,7 @@ cmp -s "$WORK/empty.before" "$WORK/empty/.github/workflows/actions.lock" && ok "
 for local_use in ./.github/actions/missing ./.github/workflows/missing.yml; do
   mkdir -p "$WORK/missing/.github/workflows"
   printf 'jobs:\n  a:\n    steps:\n      - uses: %s\n' "$local_use" > "$WORK/missing/.github/workflows/ci.yml"
-  printf 'workflows: {}\ndependencies: {}\n' > "$WORK/missing/.github/workflows/actions.lock"
+  printf 'version: v0.0.3\nworkflows: {}\ndependencies: {}\n' > "$WORK/missing/.github/workflows/actions.lock"
   cp "$WORK/missing/.github/workflows/actions.lock" "$WORK/missing.before"
   run missing >/dev/null; st=$?
   [ "$st" != 0 ] && cmp -s "$WORK/missing.before" "$WORK/missing/.github/workflows/actions.lock" \

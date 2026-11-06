@@ -12,7 +12,8 @@ Missing local action metadata or local reusable workflow files fail the gate.
 
 Every workflow needs an explicit lock entry, including `[]` when it has no
 recorded dependencies. Recorded edges require structurally complete dependency
-records at every depth. Flow sequences, YAML quoting, comments and aliases are
+records at every depth. Only reviewed schema versions `v0.0.2` and `v0.0.3`
+are accepted. Flow sequences, YAML quoting, comments and aliases are
 decoded by the parser; duplicate mapping keys and multiple documents are
 rejected. Repository names compare without case; the entire ref after the
 first `@` keeps its case.
@@ -24,7 +25,9 @@ edge still needs its dependency record. Reviewed remote closure coverage is
 read from `actions-lock.closure.tsv`; this gate does not invent that evidence.
 
 Use the official generator and reviewed closure/merge process to refresh a
-lock. The completion and pruning tools consume the same parsed workflow fields.
+lock. Completion, closure repair and pruning consume the same parsed workflow
+fields. Closure repair discovers called workflows structurally and verifies
+the resulting closure before reporting success.
 Their lock-writing format remains the generator's block mapping format.
 Review their diff and run the checker afterward; they never manufacture
 dependency digests or repository provenance. Failed local traversal leaves

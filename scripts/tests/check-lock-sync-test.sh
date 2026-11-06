@@ -33,6 +33,7 @@ jobs:
 YAML
 expect 1 'missing lockfile fails closed'
 cat > "$WF/actions.lock" <<'YAML'
+version: 'v0.0.3'
 workflows:
     '.github/workflows/test.yml':
         - 'actions/checkout@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
@@ -73,6 +74,7 @@ jobs:
     uses: owner/repo/.github/workflows/test.yml@Release
 YAML
 cat > "$WF/actions.lock" <<'YAML'
+version: 'v0.0.3'
 workflows:
     '.github/workflows/test.yml':
         - 'Owner/Repo@Release'
@@ -138,6 +140,7 @@ cat > "$R/.github/actions/token/action.yml" <<'YAML'
 }
 YAML
 cat > "$WF/actions.lock" <<'YAML'
+version: 'v0.0.3'
 workflows:
     '.github/workflows/smoke.yml':
         - 'actions/checkout@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
@@ -183,6 +186,7 @@ jobs:
     uses: hyperpolymath/cicd-suite/.github/workflows/secret-scanner.yml@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 YAML
 cat > "$WF/actions.lock" <<'YAML'
+version: 'v0.0.3'
 workflows:
     '.github/workflows/smoke.yml':
         - 'actions/checkout@bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
