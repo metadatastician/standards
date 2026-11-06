@@ -83,14 +83,14 @@ reach_files() {
       rel="${rel%/}"
       case "$rel" in
         *.yml|*.yaml)
-          [ -f "$LC_ROOT/$rel" ] || { echo "check-lock-sync: missing local workflow: $rel" >&2; return 1; }
+          [ -f "$LC_ROOT/$rel" ] || { echo "actions-lock: missing local workflow: $rel" >&2; return 1; }
           continue ;;
       esac
       found=false
       for a in "$LC_ROOT/$rel/action.yml" "$LC_ROOT/$rel/action.yaml"; do
         if [ -f "$a" ]; then queue+=("$a"); found=true; break; fi
       done
-      "$found" || { echo "check-lock-sync: missing local action metadata: $rel" >&2; return 1; }
+      "$found" || { echo "actions-lock: missing local action metadata: $rel" >&2; return 1; }
     done < <(local_action_paths "$f")
   done
 }

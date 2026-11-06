@@ -41,6 +41,7 @@ jobs:
       # uses: other/repo/.github/workflows/x.yml@$A
 EOF
   printf 'jobs:\n  b:\n    uses: "o/r/.github/workflows/y.yml@v2"\n' > "$d/other.yml"
+  printf 'jobs: {}\n' > "$d/local.yml"
 }
 
 echo "=== adds the job-level refs, and nothing else ==="
@@ -171,6 +172,16 @@ L7="$WORK/t7/.github/workflows/actions.lock"
   || bad "o/r@Release@2026 and o/r@release@2026 are different refs → both kept (st=$st)"
 
 echo "=== structural ==="
+for local_use in ./.github/actions/missing ./.github/workflows/missing.yml; do
+  mkdir -p "$WORK/missing/.github/workflows"
+  printf 'jobs:\n  a:\n    steps:\n      - uses: %s\n' "$local_use" > "$WORK/missing/.github/workflows/ci.yml"
+  printf 'workflows: {}\ndependencies: {}\n' > "$WORK/missing/.github/workflows/actions.lock"
+  cp "$WORK/missing/.github/workflows/actions.lock" "$WORK/missing.before"
+  run missing >/dev/null; st=$?
+  [ "$st" != 0 ] && cmp -s "$WORK/missing.before" "$WORK/missing/.github/workflows/actions.lock" \
+    && ok "missing local use refuses repair without changing the lock: $local_use" \
+    || bad "missing local use was accepted or changed the lock: $local_use"
+done
 mkrepo t3; printf 'dependencies:\n' > "$WORK/t3/.github/workflows/actions.lock"
 run t3 >/dev/null; st=$?
 [ "$st" != 0 ] && grep -qxF 'dependencies:' "$WORK/t3/.github/workflows/actions.lock" \

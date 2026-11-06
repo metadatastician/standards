@@ -49,7 +49,7 @@ local_action_paths() {
 }
 reach_files() {
   local -A seen=()
-  local queue=("$1") f rel a
+  local queue=("$1") f rel a found
   while [ "${#queue[@]}" -gt 0 ]; do
     f="${queue[0]}"; queue=("${queue[@]:1}")
     [ -n "${seen[$f]:-}" ] && continue
@@ -57,10 +57,16 @@ reach_files() {
     printf '%s\n' "$f"
     while IFS= read -r rel; do
       rel="${rel%/}"
-      case "$rel" in *.yml|*.yaml) continue ;; esac
+      case "$rel" in
+        *.yml|*.yaml)
+          [ -f "$LC_ROOT/$rel" ] || { echo "actions-lock: missing local workflow: $rel" >&2; return 1; }
+          continue ;;
+      esac
+      found=false
       for a in "$LC_ROOT/$rel/action.yml" "$LC_ROOT/$rel/action.yaml"; do
-        if [ -f "$a" ]; then queue+=("$a"); break; fi
+        if [ -f "$a" ]; then queue+=("$a"); found=true; break; fi
       done
+      "$found" || { echo "actions-lock: missing local action metadata: $rel" >&2; return 1; }
     done < <(local_action_paths "$f")
   done
 }
@@ -83,14 +89,15 @@ uses_values() {
 for f in "$WF"/*.yml "$WF"/*.yaml; do
   [ -e "$f" ] || continue
   b=".github/workflows/$(basename "$f")"
+  reach_files "$f" > "$TMP/reached" || exit 1
   set +e
   {
     uses_values "$f"
-    reach_files "$f" | tail -n +2 | while IFS= read -r a; do uses_values "$a"; done
+    tail -n +2 "$TMP/reached" | while IFS= read -r a; do uses_values "$a"; done
   } | while read -r u; do
       case "$u" in ./*|\$/*|docker://*|'') continue;; esac
       case "$u" in *@*) : ;; *) continue;; esac
-      p="${u%@*}"; r="${u##*@}"
+      p="${u%%@*}"; r="${u#*@}"
       o=$(printf '%s' "$p" | cut -d/ -f1); n=$(printf '%s' "$p" | cut -d/ -f2)
       printf '%s\t%s/%s@%s\n' "$b" "$o" "$n" "$r"
     done

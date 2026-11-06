@@ -223,5 +223,16 @@ grep -qxF "        - 'o/r@Release@2026'" "$d/actions.lock" \
 mkdir -p "$WORK/n/.github/workflows"; (cd "$WORK/n" && bash "$TARGET") >/dev/null 2>&1; st=$?
 [ "$st" = 1 ] && ok "no lockfile → exit 1" || bad "no lockfile → exit 1 (got $st)"
 
+for local_use in ./.github/actions/missing ./.github/workflows/missing.yml; do
+  d="$WORK/missing/.github/workflows"; mkdir -p "$d"
+  printf 'jobs:\n  a:\n    steps:\n      - uses: %s\n' "$local_use" > "$d/ci.yml"
+  printf "workflows:\n    '.github/workflows/ci.yml': []\ndependencies: {}\n" > "$d/actions.lock"
+  cp "$d/actions.lock" "$WORK/missing.before"
+  (cd "$WORK/missing" && bash "$TARGET") >/dev/null 2>&1; st=$?
+  [ "$st" != 0 ] && cmp -s "$WORK/missing.before" "$d/actions.lock" \
+    && ok "missing local use refuses pruning without changing the lock: $local_use" \
+    || bad "missing local use was accepted or changed the lock: $local_use"
+done
+
 echo "prune-stale-test: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]
