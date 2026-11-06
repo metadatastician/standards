@@ -277,4 +277,7 @@ assert "no profile → 2" 2 "no profile at" bash "$CHECK" "$WORK/does-not-exist"
 assert "missing gates table → 2" 2 "gates file not found" env RSR_GATES="$WORK/nope.toml" bash "$CHECK" "$(repo g)"
 
 printf '\npassed=%d failed=%d\n' "$pass" "$fail"
-[ "$fail" -eq 0 ]
+[ "$fail" -eq 0 ] || exit 1
+if [ "$MODE" = ast ]; then
+  bash "$SCRIPT_DIR/check-rsr-current-layout-test.sh"
+fi

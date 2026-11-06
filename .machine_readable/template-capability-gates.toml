@@ -10,7 +10,7 @@
 # Arrays are kept single-line so the checker can parse them with grep.
 
 [meta]
-version = "0.3.0"
+version = "0.3.1"
 policy = "0-canon/TEMPLATE-APPLICABILITY-POLICY.adoc"
 
 [capabilities]
@@ -42,6 +42,9 @@ known = ["rust", "zig", "agda", "idris2", "haskell", "gleam", "elixir", "affines
 #   (#851); the root spelling is kept for repos that have not moved.
 # * 3-practice/: hyperpolymath/standards keeps its own contributing and
 #   conduct guides in a district, not at the root of a 45-directory monorepo.
+# A single repo chora deed may carry the manifest and descriptive records.
+# The checker recognizes their substantive native AST clauses, not a wildcard
+# filename alternative: malformed, empty and wrong-repository records fail.
 paths = ["README.adoc", "EXPLAINME.adoc|docs/EXPLAINME.adoc", "LICENSE", "SECURITY.md|.github/SECURITY.md", "CONTRIBUTING.md|.github/CONTRIBUTING.md|CONTRIBUTING.adoc|3-practice/CONTRIBUTING.adoc", "CODE_OF_CONDUCT.md|.github/CODE_OF_CONDUCT.md|CODE_OF_CONDUCT.adoc|3-practice/CODE_OF_CONDUCT.adoc", "CHANGELOG.adoc|CHANGELOG.md", "0-AI-MANIFEST.a2ml|0-AI-MANIFEST.deed", ".machine_readable/descriptiles/|machine-readable/descriptiles/", ".machine_readable/rsr-profile.a2ml|machine-readable/rsr-profile.a2ml", ".well-known/|www/.well-known/", ".gitignore", "Justfile"]
 
 [gates]
@@ -71,9 +74,12 @@ paths = ["README.adoc", "EXPLAINME.adoc|docs/EXPLAINME.adoc", "LICENSE", "SECURI
 "abi.ipkg" = "abi"
 "src/interface/abi/|src/interface/Abi/" = "abi"
 "src/interface/generated/" = "abi"
-"verification/proofs/" = "formal-proofs"
+# Both layouts carry proof sources. The checker requires a nonempty prover
+# source file: an empty directory or a README is not a proof capability.
+"verification/proofs/|proofs/agda/" = "formal-proofs"
 ".github/workflows/e2e.yml" = "api-service"
-"build/container/|container/" = "container"
+# A root Containerfile is already an accepted recipe. Requiring an additional
+# container/ directory creates empty scaffolding without another obligation.
 "build/container/Containerfile|container/Containerfile|Containerfile" = "container"
 # Guix is primary; Nix is fallback-only (criterion 1.2.1). As two separate rows
 # this demanded BOTH, so every repo that correctly retired Nix failed the gate.

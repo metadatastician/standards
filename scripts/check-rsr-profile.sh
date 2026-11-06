@@ -157,7 +157,7 @@ deed_fields() {
 # instead of the awk tokenizer. The AST decodes every escape; a decoded
 # newline or tab is written back as the two characters \n or \t, so both
 # paths emit identical lines. A deed that does not parse fails here, closed.
-deed_ast_fields() {
+deed_ast() {
   local ast deed tooldir
   deed="$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"
   tooldir="$(cd "$(dirname "$DEED_LINT")" && pwd)"
@@ -165,6 +165,11 @@ deed_ast_fields() {
   # the caller's tree is untrusted, so the parser runs from its own directory.
   ast="$(cd "$tooldir" && bun "./$(basename "$DEED_LINT")" --ast-json "$deed" 2>&1)" || {
     echo "ERROR: $1 does not parse as DEED: $ast" >&2; return 2; }
+  printf '%s' "$ast"
+}
+deed_ast_fields() {
+  local ast
+  ast="${DEED_AST:-$(deed_ast "$1")}" || return 2
   printf '%s' "$ast" | jq -r '
     def s: gsub("\n"; "\\n") | gsub("\t"; "\\t");
     def atom: .[0] | IN("symbol", "integer", "boolean");
@@ -221,7 +226,7 @@ case "$DEED_PARSER" in
   *) echo "ERROR: RSR_DEED_PARSER must be auto, ast or awk (got '$DEED_PARSER')" >&2; exit 2 ;;
 esac
 
-DEED=""; DEED_PROFILE=""
+DEED=""; DEED_PROFILE=""; DEED_AST=""
 _deeds=()
 # estate_chora.deed is the estate-deed (deed.abnf filename dispatch reserves
 # that exact stem), never a second repo deed, so it does not count here.
@@ -239,6 +244,7 @@ if [ "${#_deeds[@]}" -gt 1 ]; then
 elif [ "${#_deeds[@]}" -eq 1 ]; then
   DEED="${_deeds[0]}"
   if [ "$DEED_PARSER" = ast ]; then
+    DEED_AST="$(deed_ast "$DEED")" || exit 2
     _lines="$(deed_ast_fields "$DEED")" || exit 2
     _n="$(printf '%s\n' "$_lines" | awk -F '\t' '$1 == "COUNT" { print $2 }')"
     _fields="$(printf '%s\n' "$_lines" | grep -v '^COUNT' || true)"
@@ -334,6 +340,18 @@ has_cap() { printf '%s\n' "$EFFECTIVE" | grep -qx "$1"; }
 # 1.2.1 ("Nix fallback only") and making `reproducible-build` unsatisfiable for
 # any repo that had correctly retired Nix. Alternation is what that table always
 # meant; it just had no way to say it.
+proof_sources_present() {
+  local directory="$REPO/${1%/}"
+  [ -d "$directory" ] || return 1
+  # Structural source evidence only. Successful proof checking still needs
+  # prover receipts; empty directories, empty files and prose cannot satisfy it.
+  [ -n "$(find "$directory" -type f -size +0c \
+    \( -name '*.agda' -o -name '*.lagda' -o -name '*.lagda.md' \
+       -o -name '*.lagda.rst' -o -name '*.lagda.tex' -o -name '*.idr' \
+       -o -name '*.lean' -o -name '*.v' -o -name '*.thy' -o -name '*.fst' \
+       -o -name '*.dfy' -o -name '*.why' -o -name '*.smt2' \) -print -quit)" ]
+}
+
 present() {
   local key="$1" alt
   if [[ "$key" == *"|"* ]]; then
@@ -345,10 +363,49 @@ present() {
     return 1
   fi
   case "$key" in
+    verification/proofs/|proofs/agda/) proof_sources_present "$key" ;;
+    Containerfile|container/Containerfile|build/container/Containerfile) [ -s "$REPO/$key" ] ;;
     */) [ -d "$REPO/${key%/}" ] ;;
     *'*'*) ( shopt -s globstar nullglob; compgen -G "$REPO/$key" >/dev/null ) ;;
     *) [ -e "$REPO/$key" ] ;;
   esac
+}
+
+# Folded baseline metadata is recognized from validated native AST nodes,
+# never from a basename, a quoted example or an empty metadata directory.
+# The legacy awk profile reader is retained, but it is not a DEED validator
+# and cannot establish these folded-metadata alternatives.
+deed_baseline_present() {
+  local kind="$1"
+  [ "$DEED_PARSER" = ast ] && [ -n "$DEED_AST" ] || return 1
+  printf '%s' "$DEED_AST" | jq -e --arg kind "$kind" '
+    def string_field($items; $key):
+      [$items[] | select(.[0] == "field" and .[1] == $key)] as $fields
+      | if ($fields | length) == 1 and $fields[0][2][0] == "string"
+        then $fields[0][2][1] else "" end;
+    def nonblank: type == "string" and test("\\S");
+    def substantive:
+      any(.. | arrays;
+        .[0] == "field" and
+        (.[2] | if .[0] == "string" then .[1] | nonblank
+                elif .[0] == "list" then (.[1] | length) > 0
+                else .[0] | IN("symbol", "integer", "boolean", "uuid5", "uuid8") end));
+    .head == "repo-deed" and
+    (if $kind == "manifest" then
+       string_field(.items; "canonical-name") as $name
+       | [.items[] | select(.[0] == "clause" and .[1] == "manifest")] as $records
+       | if ($records | length) != 1 then false else
+           ($name | nonblank) and
+           (string_field($records[0][2]; "project") == $name) and
+           (string_field($records[0][2]; "version") | nonblank) and
+           (string_field($records[0][2]; "purpose") | nonblank)
+         end
+     else
+       any(.items[];
+         .[0] == "clause" and
+         (.[1] | IN("meta", "ecosystem", "agentic", "neurosym", "playbook", "anchor", "clade", "state")) and
+         substantive)
+     end)' >/dev/null
 }
 
 echo "repo:    $REPO"
@@ -446,6 +503,11 @@ baseline_checked=0
 while IFS= read -r key; do
   [ -n "$key" ] || continue
   baseline_checked=$((baseline_checked + 1))
+  if [ -n "$DEED" ] && [ "$DEED_PARSER" != ast ] &&
+     [[ "$key" == *0-AI-MANIFEST* || "$key" == *descriptiles/* ]] && ! present "$key"; then
+    echo "ERROR: assessing folded baseline metadata needs RSR_DEED_PARSER=ast, bun and jq; the awk profile reader cannot validate the deed" >&2
+    exit 2
+  fi
   # The profile row names the .a2ml spellings. When the profile this run just
   # read came from the repo deed's (rsr-profile …) clause, that clause IS the
   # artefact the row asks for; failing the row would fail every deed-era repo,
@@ -454,6 +516,14 @@ while IFS= read -r key; do
   # is a canon release, not a checker change.
   if [ -n "$DEED_PROFILE" ] && [[ "$key" == *rsr-profile.a2ml* ]]; then
     echo "  baseline rsr-profile: satisfied by the (rsr-profile …) clause of $(basename "$DEED")"
+    continue
+  fi
+  if [[ "$key" == *0-AI-MANIFEST* ]] && deed_baseline_present manifest; then
+    echo "  baseline manifest: satisfied by the validated (manifest …) clause of $(basename "$DEED")"
+    continue
+  fi
+  if [[ "$key" == *descriptiles/* ]] && deed_baseline_present descriptions; then
+    echo "  baseline descriptiles: satisfied by substantive descriptive clauses of $(basename "$DEED")"
     continue
   fi
   present "$key" || { echo "  MISSING BASELINE: $(row_label "$key")"; fail=1; }
