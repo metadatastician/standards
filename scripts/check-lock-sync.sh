@@ -156,7 +156,7 @@ function norm(r,   at, path, ref, n, parts) {
 
 # Validate required scalar fields in the block-record format the generator emits.
 # Pin/ref correspondence is additionally checked by check-lock-pin-contract.sh.
-function quoted_value(s,   q, i, c, e, digits, hex, tail) {
+function quoted_value(s,   q, i, c, e, digits, hex, tail, code, j) {
   q = substr(s, 1, 1)
   if (q != "\047" && q != "\"") return ""
   for (i = 2; i <= length(s); i++) {
@@ -170,6 +170,9 @@ function quoted_value(s,   q, i, c, e, digits, hex, tail) {
       if (digits) {
         hex = substr(s, i + 1, digits)
         if (length(hex) != digits || hex !~ /^[0-9a-fA-F]+$/) return ""
+        code = 0
+        for (j = 1; j <= digits; j++) code = code * 16 + index("0123456789abcdef", tolower(substr(hex, j, 1))) - 1
+        if (code > 1114111 || (code >= 55296 && code <= 57343)) return ""
         i += digits
       } else if (e != "\\" && e != "\"" && e != "/" && index("0abtnvfre N_LP", e) == 0) return ""
       continue

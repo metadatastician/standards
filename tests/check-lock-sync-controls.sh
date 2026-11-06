@@ -191,10 +191,14 @@ good_lock
 edit_file "s/example\/action@v1/example\/action@v#1/g; s/ref: 'v1'/ref: 'v#1' # literal hash/" "$wf/actions.lock"
 expect 0 'hash inside a quoted ref is preserved'
 action_workflow
-for value in "'''" "'unclosed" '"v1"junk' '"\q"'; do
+for value in "'''" "'unclosed" '"v1"junk' '"\q"' '"\U00110000"' '"\uD800"'; do
   good_lock
   edit_file '/^        ref:/d' "$wf/actions.lock"
   printf '        ref: %s\n' "$value" >> "$wf/actions.lock"
   expect 1 "malformed quoted scalar is refused: $value"
 done
+good_lock
+edit_file '/^        ref:/d' "$wf/actions.lock"
+printf '        ref: "%s"\n' '\u0076\u0031' >> "$wf/actions.lock"
+expect 0 'valid escaped Unicode ref scalar is accepted'
 printf 'passed %s controls\n' "$passed"
