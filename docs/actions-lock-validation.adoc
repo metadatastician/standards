@@ -15,7 +15,11 @@ recorded dependencies. Recorded edges require structurally complete dependency
 records at every depth. Only reviewed schema versions `v0.0.2` and `v0.0.3`
 are accepted. Flow sequences, YAML quoting, comments and aliases are
 decoded by the parser; duplicate mapping keys and multiple documents are
-rejected. Repository names compare without case; the entire ref after the
+rejected. The reviewed schemas also constrain additional properties, canonical
+pins and the optional v0.0.3 hostname field. The schema source reviewed for
+these rules is `github/actions-lockfile` commit
+`54969dc7fee8b1e0e22b06bd4b591c44232f831c`.
+Repository names compare without case; the entire ref after the
 first `@` keeps its case.
 
 The estate's measured omitted-reusable-call policy remains in force: an
