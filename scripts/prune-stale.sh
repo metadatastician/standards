@@ -149,16 +149,17 @@ reach_files() {
     printf '%s\n' "$f"
     while IFS= read -r rel; do
       rel="${rel%/}"
-      case "$rel" in
-        *.yml|*.yaml)
-          [ -f "$LC_ROOT/$rel" ] || { echo "actions-lock: missing local workflow: $rel" >&2; return 1; }
-          continue ;;
-      esac
       found=false
       for a in "$LC_ROOT/$rel/action.yml" "$LC_ROOT/$rel/action.yaml"; do
         if [ -f "$a" ]; then queue+=("$a"); found=true; break; fi
       done
-      "$found" || { echo "actions-lock: missing local action metadata: $rel" >&2; return 1; }
+      "$found" && continue
+      case "$rel" in
+        *.yml|*.yaml)
+          [ -f "$LC_ROOT/$rel" ] || { echo "actions-lock: missing local workflow or action metadata: $rel" >&2; return 1; }
+          continue ;;
+      esac
+      echo "actions-lock: missing local action metadata: $rel" >&2; return 1
     done < <(local_action_paths "$f")
   done
 }
