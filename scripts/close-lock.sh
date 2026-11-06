@@ -248,6 +248,7 @@ moved_tag() {
 }
 
 if [[ "$CHECK" -eq 1 ]]; then
+  lock_yaml_json "$L" >/dev/null || exit 2
   keys | fold | LC_ALL=C sort -u > "$SC/have"
   { nested; wfrefs; } | LC_ALL=C sort -u > "$SC/want"
   : > "$SC/miss"

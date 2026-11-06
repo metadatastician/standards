@@ -118,6 +118,22 @@ else
   bad "the local-composite block differs between complete-job-refs, prune-stale and check-lock-sync"
 fi
 
+helper() { awk -v name="$2() {" '$0 == name {p=1} p{print} p && /^}$/ {exit}' "$1"; }
+for function in lock_yaml_json lock_uses; do
+  expected="$(helper "$SCRIPT_DIR/../complete-job-refs.sh" "$function")"
+  consistent=true
+  for script in prune-stale check-lock-sync close-lock; do
+    [ -n "$expected" ] && [ "$expected" = "$(helper "$SCRIPT_DIR/../$script.sh" "$function")" ] || consistent=false
+  done
+  "$consistent" && ok "$function agrees across all four readers" || bad "$function differs between readers"
+done
+expected="$(helper "$SCRIPT_DIR/../complete-job-refs.sh" lock_write_section)"
+consistent=true
+for script in prune-stale close-lock; do
+  [ -n "$expected" ] && [ "$expected" = "$(helper "$SCRIPT_DIR/../$script.sh" lock_write_section)" ] || consistent=false
+done
+"$consistent" && ok "all three YAML section writers agree" || bad "YAML section writers differ"
+
 echo "=== owner/repo case: an existing entry covers a differently cased uses: ==="
 mkdir -p "$WORK/t5/.github/workflows"
 printf 'jobs:\n  a:\n    runs-on: x\n    steps:\n      - uses: Swatinem/rust-cache@v2\n      - uses: o/r@V3\n' \

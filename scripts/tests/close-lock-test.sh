@@ -523,5 +523,17 @@ bash "$SCRIPT_DIR/../check-lock-sync.sh" "$d" >/dev/null 2>&1; st=$?
 cp "$d/actions.lock" "$WORK/quoted.before"; run "$d" >/dev/null
 cmp -s "$WORK/quoted.before" "$d/actions.lock" && ok "quoted closure is byte-idempotent" || bad "quoted closure is not byte-idempotent"
 
+for malformed in duplicate multiple syntax; do
+  case "$malformed" in
+    duplicate) printf 'workflows: {}\nworkflows: {}\ndependencies: {}\n' > "$WORK/uninspected.lock" ;;
+    multiple) printf 'workflows: {}\ndependencies: {}\n---\nworkflows: {}\n' > "$WORK/uninspected.lock" ;;
+    syntax) printf 'workflows: [\n' > "$WORK/uninspected.lock" ;;
+  esac
+  cp "$WORK/uninspected.lock" "$WORK/uninspected.before"
+  GH_BIN="$WORK/gh-trap" bash "$TARGET" --check "$WORK/uninspected.lock" >/dev/null 2>&1; st=$?
+  [[ "$st" == 2 ]] && cmp -s "$WORK/uninspected.before" "$WORK/uninspected.lock" && [[ ! -s "$WORK/gh-calls" ]] \
+    && ok "unparseable $malformed lock is uninspected (exit 2), unchanged and offline" || bad "unparseable $malformed lock was misclassified"
+done
+
 echo "close-lock-test: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]
