@@ -275,6 +275,7 @@ for f in "$WF"/*.yml "$WF"/*.yaml; do
   uses_tags "$f" >> "$SC/ctags"
   uses_reusable_calls "$f"
 done | LC_ALL=C sort -u > "$SC/calls"
+cut -f1 "$SC/calls" | fold | LC_ALL=C sort -u > "$SC/local-callers"
 while :; do
   LC_ALL=C comm -23 "$SC/calls" "$SC/read" > "$SC/todo"
   [ -s "$SC/todo" ] || break
@@ -374,7 +375,7 @@ for pass in 1 2 3 4 5 6; do
       echo "  SKIP $k (cannot resolve commit)"; skipped=$((skipped + 1)); continue
     fi
     rec_ref="$ref"
-    if printf '%s' "$ref" | grep -qxE '[0-9a-f]{40}' && ! grep -qxF "$k$TAB" "$SC/owed"; then
+    if printf '%s' "$ref" | grep -qxE '[0-9a-f]{40}' && ! grep -qxF "$(printf '%s\n' "$k" | fold)" "$SC/local-callers"; then
       # Consume all pages before choosing a tag. An early pipeline exit can
       # SIGPIPE gh under pipefail and discard an otherwise valid result.
       tag_ref=""; listed=0; why=""

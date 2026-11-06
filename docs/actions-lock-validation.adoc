@@ -24,7 +24,10 @@ first `@` keeps its case.
 
 Symbolic coordinates must match the recorded ref. SHA coordinates must match
 the recorded commit; their ref must be recordable under the official tool's
-ref-name rules, or the existing reviewed caller-side exact-SHA representation.
+ref-name rules, or the existing reviewed caller-side exact-SHA representation
+proven by an actual job-level reusable call in this checkout. A composite
+record's `uses` list does not establish that identity. Closure repair resolves
+a symbolic tag for transitive reusable records without a local caller.
 Transitive edges use repository coordinates, and cycles fail verification even
 when every referenced record exists. Shared acyclic children remain valid.
 Unused dependency records also fail the reverse check. These estate locks run

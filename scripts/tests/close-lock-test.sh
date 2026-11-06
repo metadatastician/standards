@@ -49,6 +49,7 @@ case "\$2" in
   repos/o/a/tags*|repos/o/b/tags*|repos/o/c/tags*) echo 'v1.0.0' ;;
   repos/o/buildmeta/tags*) echo 'v1.2.3+build.4' ;;
   repos/o/releaseat/tags*) echo 'release@2026' ;;
+  repos/o/flow-child/tags*|repos/o/r2/tags*) echo 'v1.0.0' ;;
   repos/o/leaf/tags*) printf 'v4\nv4.38.0\n' ;;
   repos/o/*/commits/tags/v1) echo $C ;;
   repos/o/*/commits/tags/*) echo '{"message":"No commit found"}'; exit 1 ;;
@@ -462,6 +463,8 @@ record "$d/actions.lock" "o/flow@$A" | grep -qxF "            - 'o/b@$B'" \
   && ok "flow step references count while environment/input examples do not" || bad "flow step/environment discrimination"
 bash "$SCRIPT_DIR/../check-lock-sync.sh" "$d" >/dev/null 2>&1; st=$?
 [[ "$st" == 0 ]] && ok "completed flow repair satisfies the strict sync gate" || bad "completed flow repair does not satisfy the strict sync gate"
+record "$d/actions.lock" "o/flow-child@$B" | grep -qxF "        ref: 'v1.0.0'" \
+  && ok "transitive reusable without a local caller records a symbolic tag" || bad "transitive reusable incorrectly received a raw-SHA exemption"
 
 plant o/badflow .github/workflows/bad.yml "$A" <<'EOF'
 jobs: {}
