@@ -121,8 +121,17 @@ mapfile -t WORKFLOWS < <(printf '%s\n' "$WF_DIR"/*.yml "$WF_DIR"/*.yaml | sort -
 LC_ROOT="$(cd "$WF_DIR/../.." 2>/dev/null && pwd)" || LC_ROOT=.
 # local_action_paths FILE: the path after `./` of every local `uses:` in FILE.
 local_action_paths() {
-  awk -v q="'" '{
+  awk -v q="'" 'BEGIN { block = -1 } {
+    # A uses: inside a literal/folded scalar is sample text, not a YAML field.
+    indent = match($0, /[^ ]/) - 1
+    if (indent < 0) next
+    if (block >= 0) { if (indent > block) next; block = -1 }
     line = $0; sub(/[[:space:]]+#.*$/, "", line)
+    if (line ~ /:[[:space:]]*[|>][1-9+-]*[[:space:]]*$/ || line ~ /^[[:space:]]*-[[:space:]]*[|>][1-9+-]*[[:space:]]*$/) {
+      block = indent
+      if (line ~ /:[[:space:]]*[|>]/ && match(line, /^[ ]*-[ ]+/)) block = RLENGTH
+      next
+    }
     if (!match(line, /^[[:space:]]*-?[[:space:]]*uses:[[:space:]]*/)) next
     raw = substr(line, RLENGTH + 1)
     sub("[\"" q "],[[:space:]]*$", "", raw)
