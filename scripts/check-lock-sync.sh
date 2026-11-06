@@ -140,8 +140,23 @@ function norm(r,   at, path, ref, n, parts) {
 
 # ---------- pass 1: the lockfile ----------
 FILENAME == lockfile {
-  if ($0 ~ /^workflows:[[:space:]]*$/) { inwf = 1; next }
-  if ($0 ~ /^[a-z_]+:/)                { inwf = 0; next }
+  if ($0 ~ /^workflows:[[:space:]]*$/) { inwf = 1; indep = 0; next }
+  if ($0 ~ /^dependencies:[[:space:]]*$/) { inwf = 0; indep = 1; next }
+  if ($0 ~ /^[a-z_]+:/) { inwf = 0; indep = 0; next }
+  if (indep) {
+    if (match($0, /^    \047[^\047]+\047:/)) {
+      s = substr($0, 6); i = index(s, "\047")
+      dep = norm(substr(s, 1, i - 1))
+      if (dep != "") haverec[dep] = 1
+    } else if (match($0, /^            - \047/)) {
+      s = substr($0, RLENGTH + 1); i = index(s, "\047")
+      if (i > 0) {
+        r = norm(substr(s, 1, i - 1))
+        if (r != "") want[r] = 1
+      }
+    }
+    next
+  }
   if (!inwf) next
 
   # "    '.github/workflows/x.yml':"  or  "... : []"
@@ -158,7 +173,9 @@ FILENAME == lockfile {
     s = substr($0, RLENGTH + 1)
     i = index(s, "\047")
     if (i > 0 && substr(s, i + 1) ~ /^[[:space:]]*$/) {
-      lock[cur, norm(substr(s, 1, i - 1))] = 1
+      r = norm(substr(s, 1, i - 1))
+      lock[cur, r] = 1
+      if (r != "") want[r] = 1
       lockcount[cur]++
     }
     next
@@ -273,6 +290,21 @@ END {
     if (!found) { printf "FAIL %s\n     lockfile entry for a workflow file that does not exist\n", p; bad = 1 }
   }
 
+  # Every workflow needs a key, even one without actions. Every recorded edge
+  # must resolve, including edges introduced by dependency records themselves.
+  for (w = 1; w <= nw; w++) {
+    key = WFS[w]; sub(/.*\//, "", key); key = ".github/workflows/" key
+    if (!(key in seen_path)) {
+      printf "FAIL %s\n     workflow has no lockfile key (use [] when it has no actions)\n", key
+      bad = 1
+    }
+  }
+  for (r in want) {
+    if (!(r in haverec)) {
+      printf "FAIL actions.lock\n     dangling dependency edge: %s\n", r
+      bad = 1
+    }
+  }
   if (jnote != "") print "NOTE: job-level reusable refs absent from the lockfile (not fatal; see standards#968):" jnote
 
   if (bad) {
