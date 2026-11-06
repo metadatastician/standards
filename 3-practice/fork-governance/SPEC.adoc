@@ -109,6 +109,10 @@ as a `COMMENTED` review. A review observed on the head is a coverage fact,
 not a claim of approval. Quota notices in issue comments have unknown head
 scope. API failure or a head change during collection is indeterminate.
 The snapshot is refreshed when the summary runs; it is not live review state.
+The advisory may be omitted, with a workflow warning, when it would exceed
+the publisher's 65,000-character comment budget. Existing lane reports take
+precedence. Older `canon-ref` renderers remain supported; the posting engine
+appends the advisory without requiring a new renderer argument.
 
 == 3. State derivation
 

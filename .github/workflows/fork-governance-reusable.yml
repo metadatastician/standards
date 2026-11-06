@@ -125,7 +125,7 @@ jobs:
           persist-credentials: false
           sparse-checkout: |
             scripts/fork-governance-render.sh
-            scripts/reviewer-coverage.mjs
+            scripts/reviewer-coverage.sh
           sparse-checkout-cone-mode: false
 
       - name: Checkout the canon
@@ -142,7 +142,7 @@ jobs:
           persist-credentials: false
           sparse-checkout: |
             scripts/fork-governance-render.sh
-            scripts/reviewer-coverage.mjs
+            scripts/reviewer-coverage.sh
           sparse-checkout-cone-mode: false
 
       # `continue-on-error` on both downloads, and never a condition on the
@@ -189,11 +189,14 @@ jobs:
              gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/reviews?per_page=100" > "$RUNNER_TEMP/reviews.json" &&
              gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments?per_page=100" > "$RUNNER_TEMP/review-comments.json" &&
              checked_head=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" --jq .head.sha); then
-            node "$(dirname "$RENDERER")/reviewer-coverage.mjs" "$head" "$RUNNER_TEMP/reviews.json" \
-              "$RUNNER_TEMP/review-comments.json" "$checked_head" > "$coverage" || true
+            helper="$(dirname "$RENDERER")/reviewer-coverage.sh"
+            if [ -f "$helper" ]; then
+              bash "$helper" "$head" "$RUNNER_TEMP/reviews.json" \
+                "$RUNNER_TEMP/review-comments.json" "$checked_head" > "$coverage.new" || true
+              [ ! -s "$coverage.new" ] || mv "$coverage.new" "$coverage"
+            fi
           fi
           args=(--out "$RUNNER_TEMP/fork-governance"
-                --reviewer-coverage "$coverage"
                 --deed-result "$DEED_RESULT"
                 --k9-result "$K9_RESULT" --k9-verdict "$K9_VERDICT"
                 --hypatia-result "$HYPATIA_RESULT" --hypatia-verdict "$HYPATIA_VERDICT"
@@ -202,6 +205,17 @@ jobs:
           [ -s k9-grid/report.md ] && args+=(--k9-report k9-grid/report.md)
           [ -s verdict-grid/report.md ] && args+=(--hypatia-report verdict-grid/report.md)
           bash "$RENDERER" "${args[@]}" >/dev/null
+          # Older canon-ref renderers do not accept coverage arguments. Append
+          # outside the versioned renderer, only within the publisher's budget.
+          body="$RUNNER_TEMP/fork-governance/body.md"
+          if ! grep -Fq 'External reviewer coverage' "$body"; then
+            if [ "$(( $(wc -c < "$body") + $(wc -c < "$coverage") + 1 ))" -le 65000 ]; then
+              printf '\n' >> "$body"
+              cat "$coverage" >> "$body"
+            else
+              echo '::warning::Reviewer coverage omitted to preserve the governance comment size budget.'
+            fi
+          fi
           {
             echo "## Fork governance"
             echo
