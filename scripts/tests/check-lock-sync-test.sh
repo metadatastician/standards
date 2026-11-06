@@ -139,6 +139,7 @@ workflows:
         - 'actions/checkout@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
         - 'actions/create-github-app-token@dddddddddddddddddddddddddddddddddddddddd'
         - 'asana/push-signed-commits@cccccccccccccccccccccccccccccccccccccccc'
+    '.github/workflows/not-followed.yml': []
 dependencies:
     'actions/checkout@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa':
         ref: 'v1'
@@ -156,6 +157,7 @@ dependencies:
         owner_id: 4
         repo_id: 5
 YAML
+printf 'jobs: {}\n' > "$WF/not-followed.yml"
 expect 0 'refs used through local composites (nested, KYAML) count as used'
 cp "$WF/actions.lock" "$TMP/full.lock"
 # The planted negative from the issue: the two composite lines deleted.
@@ -170,6 +172,7 @@ expect 1 'a ref no composite uses any more is stale'
 #    Direction 1 permits it; direction 2 must not then call the through-ref a
 #    stale entry, or the shape cannot pass this gate at all.
 rm -f "$TMP/full.lock"
+rm "$WF/not-followed.yml"
 cat > "$WF/smoke.yml" <<'YAML'
 jobs:
   scan:

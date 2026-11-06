@@ -73,7 +73,7 @@ local_action_paths() {
 }
 reach_files() {
   local -A seen=()
-  local queue=("$1") f rel a
+  local queue=("$1") f rel a found
   while [ "${#queue[@]}" -gt 0 ]; do
     f="${queue[0]}"; queue=("${queue[@]:1}")
     [ -n "${seen[$f]:-}" ] && continue
@@ -81,10 +81,16 @@ reach_files() {
     printf '%s\n' "$f"
     while IFS= read -r rel; do
       rel="${rel%/}"
-      case "$rel" in *.yml|*.yaml) continue ;; esac
+      case "$rel" in
+        *.yml|*.yaml)
+          [ -f "$LC_ROOT/$rel" ] || { echo "check-lock-sync: missing local workflow: $rel" >&2; return 1; }
+          continue ;;
+      esac
+      found=false
       for a in "$LC_ROOT/$rel/action.yml" "$LC_ROOT/$rel/action.yaml"; do
-        if [ -f "$a" ]; then queue+=("$a"); break; fi
+        if [ -f "$a" ]; then queue+=("$a"); found=true; break; fi
       done
+      "$found" || { echo "check-lock-sync: missing local action metadata: $rel" >&2; return 1; }
     done < <(local_action_paths "$f")
   done
 }
@@ -93,7 +99,8 @@ reach_files() {
 # reach map: "file<TAB>workflow" — each file whose uses: count for that workflow.
 MAP="$(mktemp)"; trap 'rm -f "$MAP"' EXIT
 for wf in "${WORKFLOWS[@]}"; do
-  while IFS= read -r f; do printf '%s\t%s\n' "$f" "$wf"; done < <(reach_files "$wf")
+  reached=$(reach_files "$wf") || exit 1
+  while IFS= read -r f; do printf '%s\t%s\n' "$f" "$wf"; done <<< "$reached"
 done > "$MAP"
 mapfile -t SCAN < <(cut -f1 "$MAP" | LC_ALL=C sort -u)
 

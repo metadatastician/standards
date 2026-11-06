@@ -113,6 +113,20 @@ sed '/^dependencies:/,$d' "$wf/actions.lock" > "$fixture/cut"
 mv "$fixture/cut" "$wf/actions.lock"
 printf 'dependencies: {}\n' >> "$wf/actions.lock"
 expect 1 'local composite cannot hide a missing dependency record'
+cat > "$wf/actions.lock" <<'LOCK'
+version: 'v0.0.3'
+workflows:
+    '.github/workflows/probe.yml': []
+dependencies: {}
+LOCK
+rm "$fixture/repo/.github/actions/local/action.yml"
+expect 1 'missing local action metadata is fatal'
+cat > "$wf/probe.yml" <<'YAML'
+jobs:
+  child:
+    uses: ./.github/workflows/missing.yml
+YAML
+expect 1 'missing local reusable workflow is fatal'
 action_workflow
 for field in ref commit owner_id repo_id; do
   good_lock
