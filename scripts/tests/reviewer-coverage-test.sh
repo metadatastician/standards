@@ -102,5 +102,12 @@ for excess in 0 1; do
     pass=$((pass+1))
   fi
 done
+body="$tmp/workflow/fork-governance/body.md"
+legacy='**External reviewer coverage:** INDETERMINATE — not collected; no review or approval inferred.'
+printf 'lane evidence\n%s\ncontinued lane evidence\n\n%s\n' "$legacy" "$legacy" > "$body"
+RUNNER_TEMP="$tmp/workflow" coverage="$tmp/coverage.md" bash "$tmp/workflow-append.sh" >/dev/null
+check 'authoritative snapshot replaces the legacy footer' "$(cat "$body")" 'coverage fixture'
+check 'lane evidence containing legacy words is retained' "$(cat "$body")" 'continued lane evidence'
+[ "$(grep -Fc "$legacy" "$body")" -eq 1 ] && pass=$((pass+1)) || fail=$((fail+1))
 printf 'reviewer-coverage: passed=%s failed=%s\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

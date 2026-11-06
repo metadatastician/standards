@@ -222,6 +222,23 @@ jobs:
           # Older canon-ref renderers do not accept coverage arguments. Append
           # outside the versioned renderer, only within the publisher's budget.
           body="$RUNNER_TEMP/fork-governance/body.md"
+          # Recent older renderers emit this exact trailing fallback when no
+          # coverage argument is supplied. Remove only that known footer;
+          # lane text containing the same words remains untouched.
+          if awk -v legacy='**External reviewer coverage:** INDETERMINATE — not collected; no review or approval inferred.' '
+            { lines[NR]=$0 }
+            END {
+              last=NR
+              while (last>0 && lines[last]=="") last--
+              if (lines[last]==legacy) { last--; for (i=1;i<=last;i++) print lines[i] }
+              else { exit 3 }
+            }' "$body" > "$body.new"; then
+            mv "$body.new" "$body"
+          else
+            status=$?
+            rm -f "$body.new"
+            [ "$status" -eq 3 ] || exit "$status"
+          fi
           # Always append our own section. Lane finding text is untrusted and
           # cannot suppress it by mentioning reviewer coverage or its marker.
           marker='<!-- fork-governance:reviewer-coverage -->'
