@@ -45,6 +45,14 @@ jobs:
       # The secret-scanner canary reads YAML with yq (preinstalled on the
       # runner; YAML-POLICY Y-1) -- no Python. Shell tests use ripgrep
       # (wave9-session-detritus-test.sh); the Ruby tests need minitest.
+      - name: Install pinned YAML parser
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/lock-tools"
+          curl --proto '=https' --proto-redir '=https' --tlsv1.2 -fsSL --retry 3 https://github.com/mikefarah/yq/releases/download/v4.54.1/yq_linux_amd64 -o "$RUNNER_TEMP/lock-tools/yq"
+          echo "8e34fc298390875de416e6a4afcb8cabeceb25d9aa8506c1a2f9353cf702ea5f  $RUNNER_TEMP/lock-tools/yq" | sha256sum --check
+          chmod u+x "$RUNNER_TEMP/lock-tools/yq"
+          echo "$RUNNER_TEMP/lock-tools" >> "$GITHUB_PATH"
       - name: Install test dependencies
         run: |
           sudo apt-get update -qq

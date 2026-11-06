@@ -128,10 +128,14 @@ runs:
     - uses: asana/push-signed-commits@cccccccccccccccccccccccccccccccccccccccc # v1
 YAML
 cat > "$R/.github/actions/token/action.yml" <<'YAML'
-runs:
-  using: composite
-  steps:
-    - uses: "actions/create-github-app-token@dddddddddddddddddddddddddddddddddddddddd",
+{
+  runs: {
+    using: composite,
+    steps: [
+      { uses: "actions/create-github-app-token@dddddddddddddddddddddddddddddddddddddddd", },
+    ],
+  },
+}
 YAML
 cat > "$WF/actions.lock" <<'YAML'
 workflows:

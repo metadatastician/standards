@@ -1,0 +1,31 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+= Actions lock validation
+
+Run `bash scripts/check-lock-sync.sh` from the repository root. The checker
+requires Bash 4 or later, jq, and Mike Farah yq v4. Lock CI installs yq 4.54.1
+from its official release and verifies its SHA-256 digest before use.
+
+YAML is parsed before comparison. Only job-level and step-level `uses` fields
+declare dependencies; an environment variable, action input or shell example
+named `uses` does not. Local composite actions are followed transitively.
+Missing local action metadata or local reusable workflow files fail the gate.
+
+Every workflow needs an explicit lock entry, including `[]` when it has no
+recorded dependencies. Recorded edges require structurally complete dependency
+records at every depth. Flow sequences, YAML quoting, comments and aliases are
+decoded by the parser; duplicate mapping keys and multiple documents are
+rejected. Repository names compare without case; the entire ref after the
+first `@` keeps its case.
+
+The estate's measured omitted-reusable-call policy remains in force: an
+unrecorded job-level reusable call does not itself require a caller-owned
+record. Its workflow still needs a key, and any recorded step or transitive
+edge still needs its dependency record. Reviewed remote closure coverage is
+read from `actions-lock.closure.tsv`; this gate does not invent that evidence.
+
+Use the official generator and reviewed closure/merge process to refresh a
+lock. The completion and pruning tools consume the same parsed workflow fields.
+Their lock-writing format remains the generator's block mapping format.
+Review their diff and run the checker afterward; they never manufacture
+dependency digests or repository provenance. Failed local traversal leaves
+the previous lock unchanged.

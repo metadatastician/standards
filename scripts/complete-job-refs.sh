@@ -36,35 +36,51 @@ WF_DIR="$WF"
 # so it is not followed. Paths resolve from the repository root, as GitHub
 # resolves them from the workspace.
 LC_ROOT="$(cd "$WF_DIR/../.." 2>/dev/null && pwd)" || LC_ROOT=.
-# local_action_paths FILE: the path after `./` of every local `uses:` in FILE.
-local_action_paths() {
-  awk -v q="'" 'BEGIN { block = -1 } {
-    # A uses: inside a literal/folded scalar is sample text, not a YAML field.
-    indent = match($0, /[^ ]/) - 1
-    if (indent < 0) next
-    if (block >= 0) { if (indent > block) next; block = -1 }
-    line = $0; sub(/[[:space:]]+#.*$/, "", line)
-    if (line ~ /:[[:space:]]*[|>][1-9+-]*[[:space:]]*$/ || line ~ /^[[:space:]]*-[[:space:]]*[|>][1-9+-]*[[:space:]]*$/) {
-      block = indent
-      if (line ~ /:[[:space:]]*[|>]/ && match(line, /^[ ]*-[ ]+/)) block = RLENGTH
-      next
+# Parse one YAML document and reject duplicate mapping keys before converting
+# to JSON. yq exposes node keys without discarding duplicates; JSON alone does
+# not. jq handles typed fields after YAML comments, aliases and quoting decode.
+lock_yaml_json() {
+  command -v yq >/dev/null && command -v jq >/dev/null || {
+    echo 'actions-lock: requires Mike Farah yq v4 and jq' >&2; return 1;
+  }
+  yq --version | grep -Eq 'github.com/mikefarah/yq/.*version v4\.' || {
+    echo 'actions-lock: requires Mike Farah yq v4' >&2; return 1;
+  }
+  yq -o=json '[... | select(tag == "!!map") | keys]' "$1" |
+    jq -se 'length == 1 and all(.[0][]; length == (unique | length))' >/dev/null || {
+      echo "actions-lock: malformed YAML, multiple documents or duplicate mapping keys: $1" >&2; return 1;
     }
-    if (!match(line, /^[[:space:]]*-?[[:space:]]*uses:[[:space:]]*/)) next
-    raw = substr(line, RLENGTH + 1)
-    sub("[\"" q "],[[:space:]]*$", "", raw)
-    gsub("^[\"" q "]|[\"" q "]$", "", raw); sub(/[[:space:]]+$/, "", raw)
-    if (substr(raw, 1, 2) == "./") print substr(raw, 3)
-  }' "$1"
+  yq -o=json '.' "$1" | jq -sce 'if length == 1 then .[0] else error("expected one YAML document") end'
+}
+# Only actual job/step fields count. Ordinary env/input maps, strings and
+# block scalars can contain the word uses without declaring a dependency.
+lock_uses() {
+  lock_yaml_json "$1" | jq -r '
+    def emit($kind):
+      if has("uses") then .uses |
+        if type != "string" or length == 0 or test("[\t\r\n]") then error("uses must be a nonempty single-line string")
+        else [$kind, .] | @tsv end
+      else empty end;
+    if type != "object" then error("workflow/action must be a mapping") else
+      (.jobs // {} | .[] | emit("job")),
+      (.jobs // {} | .[] | .steps // [] | .[] | emit("step")),
+      (.runs.steps? // [] | .[] | emit("step"))
+    end'
+}
+local_action_paths() {
+  lock_uses "$1" | awk -F'\t' 'substr($2, 1, 2) == "./" { print substr($2, 3) }'
 }
 reach_files() {
   local -A seen=()
-  local queue=("$1") f rel a found
+  local queue=("$1") f rel a found paths
   while [ "${#queue[@]}" -gt 0 ]; do
     f="${queue[0]}"; queue=("${queue[@]:1}")
     [ -n "${seen[$f]:-}" ] && continue
     seen[$f]=1
     printf '%s\n' "$f"
+    paths=$(local_action_paths "$f") || return 1
     while IFS= read -r rel; do
+      [ -n "$rel" ] || continue
       rel="${rel%/}"
       found=false
       for a in "$LC_ROOT/$rel/action.yml" "$LC_ROOT/$rel/action.yaml"; do
@@ -77,19 +93,14 @@ reach_files() {
           continue ;;
       esac
       echo "actions-lock: missing local action metadata: $rel" >&2; return 1
-    done < <(local_action_paths "$f")
+    done <<< "$paths"
   done
 }
 # ── end of the shared block ───────────────────────────────────────────────────
 
 # uses_values FILE: every `uses:` value in FILE, with a trailing comment, YAML
 # quotes and a KYAML trailing comma stripped.
-uses_values() {
-  sed 's/[[:space:]]\+#.*$//' "$1" \
-  | grep -E '^[[:space:]]*(-[[:space:]]+)?uses:[[:space:]]' \
-  | sed -E 's/^[[:space:]]*(-[[:space:]]+)?uses:[[:space:]]+//' \
-  | tr -d '"'"'"'' | awk '{print $1}' | sed 's/,$//'
-}
+uses_values() { lock_uses "$1" | cut -f2-; }
 
 # 1. enumerate each workflow's direct refs as well as reusable/composite refs.
 # This completes workflow membership for actions already resolved elsewhere in

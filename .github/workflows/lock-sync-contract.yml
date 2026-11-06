@@ -18,5 +18,13 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Install pinned YAML parser
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/lock-tools"
+          curl --proto '=https' --proto-redir '=https' --tlsv1.2 -fsSL --retry 3 https://github.com/mikefarah/yq/releases/download/v4.54.1/yq_linux_amd64 -o "$RUNNER_TEMP/lock-tools/yq"
+          echo "8e34fc298390875de416e6a4afcb8cabeceb25d9aa8506c1a2f9353cf702ea5f  $RUNNER_TEMP/lock-tools/yq" | sha256sum --check
+          chmod u+x "$RUNNER_TEMP/lock-tools/yq"
+          echo "$RUNNER_TEMP/lock-tools" >> "$GITHUB_PATH"
       - name: Verify positive and negative lock controls
         run: bash tests/check-lock-sync-controls.sh

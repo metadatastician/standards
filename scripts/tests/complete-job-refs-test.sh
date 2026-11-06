@@ -92,7 +92,7 @@ jobs:
       - uses: actions/checkout@$A
       - uses: ./.github/actions/outer
 EOF
-printf 'runs:\n  using: composite\n  steps:\n    - uses: "o/direct@%s",\n    - uses: ./.github/actions/inner\n    - uses: docker://alpine:3\n' "$A" > "$c/.github/actions/outer/action.yml"
+printf '{ runs: { using: composite, steps: [\n  { uses: "o/direct@%s", },\n  { uses: ./.github/actions/inner, },\n  { uses: "docker://alpine:3", },\n], }, }\n' "$A" > "$c/.github/actions/outer/action.yml"
 printf 'runs:\n  using: composite\n  steps:\n    - uses: o/nested/sub@%s # v1\n' "$S" > "$c/.github/actions/inner/action.yml"
 printf "workflows:\n    '.github/workflows/ci.yml':\n        - 'actions/checkout@%s'\ndependencies:\n" "$A" > "$c/.github/workflows/actions.lock"
 out=$(run comp)
