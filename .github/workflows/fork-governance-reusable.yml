@@ -123,7 +123,9 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          sparse-checkout: scripts/fork-governance-render.sh
+          sparse-checkout: |
+            scripts/fork-governance-render.sh
+            scripts/reviewer-coverage.mjs
           sparse-checkout-cone-mode: false
 
       - name: Checkout the canon
@@ -138,7 +140,9 @@ jobs:
           ref: ${{ inputs.canon-ref || job.workflow_sha }}
           path: .fork-governance-canon
           persist-credentials: false
-          sparse-checkout: scripts/fork-governance-render.sh
+          sparse-checkout: |
+            scripts/fork-governance-render.sh
+            scripts/reviewer-coverage.mjs
           sparse-checkout-cone-mode: false
 
       # `continue-on-error` on both downloads, and never a condition on the
@@ -170,11 +174,26 @@ jobs:
           HYPATIA_RESULT: ${{ inputs.hypatia-result }}
           HYPATIA_VERDICT: ${{ inputs.hypatia-verdict }}
           HYPATIA_ADVISORY: ${{ inputs.hypatia-advisory }}
+          PR_NUMBER: ${{ inputs.pr-number }}
+          GH_TOKEN: ${{ github.token }}
           RENDERER: ${{ (github.repository_id == 1116521501 || github.repository == 'hyperpolymath/standards' || github.repository == 'metadatastician/standards') && 'scripts/fork-governance-render.sh' || '.fork-governance-canon/scripts/fork-governance-render.sh' }}
         run: |
           set -euo pipefail
           [ -f "$RENDERER" ] || { echo "::error::renderer not found at $RENDERER"; exit 1; }
+          # Read metadata only, never code from a PR. API failure is an explicit
+          # unknown coverage snapshot and must not suppress the three lane grids.
+          coverage="$RUNNER_TEMP/reviewer-coverage.md"
+          printf '%s\n' '**External reviewer coverage:** INDETERMINATE — evidence unavailable; no approval inferred.' > "$coverage"
+          if [[ "$PR_NUMBER" =~ ^[0-9]+$ ]] &&
+             head=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" --jq .head.sha) &&
+             gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/reviews?per_page=100" > "$RUNNER_TEMP/reviews.json" &&
+             gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments?per_page=100" > "$RUNNER_TEMP/review-comments.json" &&
+             checked_head=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" --jq .head.sha); then
+            node "$(dirname "$RENDERER")/reviewer-coverage.mjs" "$head" "$RUNNER_TEMP/reviews.json" \
+              "$RUNNER_TEMP/review-comments.json" "$checked_head" > "$coverage" || true
+          fi
           args=(--out "$RUNNER_TEMP/fork-governance"
+                --reviewer-coverage "$coverage"
                 --deed-result "$DEED_RESULT"
                 --k9-result "$K9_RESULT" --k9-verdict "$K9_VERDICT"
                 --hypatia-result "$HYPATIA_RESULT" --hypatia-verdict "$HYPATIA_VERDICT"
