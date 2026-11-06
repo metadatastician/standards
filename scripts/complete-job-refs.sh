@@ -111,6 +111,8 @@ for f in "$WF"/*.yml "$WF"/*.yaml; do
   [ -e "$f" ] || continue
   b=".github/workflows/$(basename "$f")"
   reach_files "$f" > "$TMP/reached" || exit 1
+  # Even an action-free workflow needs a key; an empty wanted ref emits [].
+  printf '%s\t\n' "$b"
   set +e
   {
     uses_values "$f"
@@ -171,7 +173,7 @@ function rest(   k, ks, c, i, j, t) {
   for (i = 1; i < c; i++) for (j = i + 1; j <= c; j++) if (ks[j] < ks[i]) { t = ks[i]; ks[i] = ks[j]; ks[j] = t }
   for (i = 1; i <= c; i++) { cur = ks[i]; items = ""; flush() }
 }
-/^workflows:[[:space:]]*$/ { print; inwf = 1; sawwf = 1; next }
+/^workflows:[[:space:]]*(\{\})?[[:space:]]*$/ { print "workflows:"; inwf = 1; sawwf = 1; next }
 inwf && /^[a-z_]+:/ { flush(); rest(); inwf = 0; print; next }
 inwf {
   if (match($0, /^    '\''[^'\'']+'\'':/)) { flush()

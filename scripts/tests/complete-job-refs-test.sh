@@ -61,7 +61,8 @@ L="$WORK/t1/.github/workflows/actions.lock"
 grep -qxF "        - 'o/r@v2'" "$L" && ! grep -qF "    '.github/workflows/other.yml': []" "$L" \
   && ok "quoted ref fills an empty [] entry" || bad "quoted ref fills an empty [] entry"
 ! grep -qF 'other/repo' "$L" && ok "commented-out ref not added" || bad "commented-out ref not added"
-! grep -qF 'local.yml' "$L" && ok "local ./ reusable not added" || bad "local ./ reusable not added"
+! grep -qF "        - './.github/workflows/local.yml'" "$L" && ok "local ./ reusable not added as a dependency" || bad "local ./ reusable not added as a dependency"
+grep -qxF "    '.github/workflows/local.yml': []" "$L" && ok "local callee receives an explicit empty workflow key" || bad "local callee receives an explicit empty workflow key"
 [ "$(grep -cxF "        - 'actions/checkout@$A'" "$L")" = 1 ] && ok "existing step ref kept, not duplicated" || bad "existing step ref kept, not duplicated"
 grep -qxF "        ref: '$A'" "$L" && ok "dependencies: section untouched" || bad "dependencies: section untouched"
 cp "$L" "$WORK/t1.before"; out=$(run t1)
@@ -172,6 +173,20 @@ L7="$WORK/t7/.github/workflows/actions.lock"
   || bad "o/r@Release@2026 and o/r@release@2026 are different refs → both kept (st=$st)"
 
 echo "=== structural ==="
+mkdir -p "$WORK/empty/.github/workflows"
+printf 'jobs:\n  test:\n    steps:\n      - run: echo ok\n' > "$WORK/empty/.github/workflows/run.yml"
+cp "$WORK/empty/.github/workflows/run.yml" "$WORK/empty/.github/workflows/callee.yml"
+printf 'jobs:\n  child:\n    uses: ./.github/workflows/callee.yml\n' > "$WORK/empty/.github/workflows/caller.yml"
+printf 'workflows: {}\ndependencies: {}\n' > "$WORK/empty/.github/workflows/actions.lock"
+run empty >/dev/null; st=$?
+[ "$st" = 0 ] && yq -o=json '.' "$WORK/empty/.github/workflows/actions.lock" | jq -e '.workflows | length == 3 and all(.[]; . == [])' >/dev/null \
+  && ok "run-only and local-only workflows receive empty keys from an empty generator map" \
+  || bad "run-only and local-only workflows receive empty keys from an empty generator map"
+bash "$SCRIPT_DIR/../check-lock-sync.sh" "$WORK/empty/.github/workflows" >/dev/null 2>&1; st=$?
+[ "$st" = 0 ] && ok "the repair result satisfies the strict checker without manual lock edits" || bad "the repair result satisfies the strict checker without manual lock edits"
+cp "$WORK/empty/.github/workflows/actions.lock" "$WORK/empty.before"
+run empty >/dev/null
+cmp -s "$WORK/empty.before" "$WORK/empty/.github/workflows/actions.lock" && ok "empty-key completion is idempotent" || bad "empty-key completion is idempotent"
 for local_use in ./.github/actions/missing ./.github/workflows/missing.yml; do
   mkdir -p "$WORK/missing/.github/workflows"
   printf 'jobs:\n  a:\n    steps:\n      - uses: %s\n' "$local_use" > "$WORK/missing/.github/workflows/ci.yml"
