@@ -299,6 +299,7 @@ no policy is folklore.
 == 5. Proofs and verification
 
 Which prover carries which obligation is ruled in
-link:PROOF-POLICY.adoc[`PROOF-POLICY.adoc`] (owner ruling 2026-10-26):
-Creusot for Rust code, SPARK for Ada code, Idris2 for APIs and engineering
+link:PROOF-POLICY.adoc[`PROOF-POLICY.adoc`] (owner rulings 2026-10-26 and
+2026-11-07): Creusot with Pearlite contracts and Verus by default for Rust
+code (§1.2), SPARK for Ada code, Idris2 for APIs and engineering
 properties, and Agda for theory, rechecked in Rocq and Lean.

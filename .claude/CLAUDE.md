@@ -111,12 +111,12 @@ legacy. Anything new written there is a `.deed`, such as
 
 ### Proofs — which prover for which obligation
 
-Owner ruling 2026-10-26 (settles standards#692). Normative source:
+Owner rulings 2026-10-26 (standards#692) and 2026-11-07 (Rust defaults). Normative source:
 `3-practice/PROOF-POLICY.adoc`; read it, not a paraphrase.
 
 | Code or obligation | Verifier |
 |---|---|
-| Rust code | **Creusot** |
+| Rust code | **Creusot** with **Pearlite** contracts, and **Verus** by default (§1.2) |
 | Ada code | **SPARK** |
 | APIs, ABIs, engineering properties | **Idris2** |
 | Theory | **Agda**, rechecked in **Rocq** and **Lean** (Dedukti transport first, hand re-proof as fallback; no Mathlib) |
@@ -124,10 +124,17 @@ Owner ruling 2026-10-26 (settles standards#692). Normative source:
 Another tool (Isabelle/HOL, F*, TLA+, ...) only where it is plainly the right
 one, with the reason recorded beside the artefact (policy §4).
 
-Standing Rust exceptions, alongside Creusot and never instead of it (§4.1):
+Always name Creusot, Pearlite and Verus in Rust verification plans and
+proof-status files. Pearlite is Creusot's specification language, not a
+third verifier. Plan scopes for both verifiers; record unsupported,
+inapplicable or pending work explicitly. Preserve existing proofs and
+record correspondence to the shipped implementation. Shared solver trust
+does not establish independent witnesses (policy §1.2).
+
+Standing Rust exceptions, alongside the default toolset (§4.1):
 **Kani** for `unsafe` and FFI seams (reported `TESTED` with bounds), **Aeneas**
 where Rust implements an Agda-proved theorem (no Aeneas backend qualifies
-yet, so its results are `ASSUMED`). Verus is not adopted.
+yet, so its results are `ASSUMED`).
 
 Third-party code (crates such as Bevy, libraries, forks) is **not** converted
 or re-proved (§1.1): state what a proof relies on as an `ASSUMED` boundary
@@ -135,7 +142,7 @@ spec, and when choosing between equally fitting dependencies, prefer one that
 carries its own verification. A preference, not a gate.
 
 The 2026-04-10 note "Rust always means Rust/SPARK" is **withdrawn**: Rust
-means Rust, verified with Creusot; SPARK belongs to Ada code.
+means Rust, using Creusot/Pearlite and Verus by default; SPARK belongs to Ada code.
 
 **Proof Witness Grades (owner ruling 2026-11-04, policy §8).** Grades say how
 many independent machine-checked witnesses a *theory* theorem has. Lower is
@@ -163,7 +170,7 @@ receipts from a pinned, headless checker for every witness.
 | **AffineScript** | Primary application code | Compiles to typed-wasm; affine/linear types. Replaces ReScript across the estate (RS/TS/JS → AffineScript → typed-wasm). |
 | **Bun** | JS runtime & package management (tier 1) | Default for all new work. Runs compiled ESM/JS directly — no bundler step. Uses an npm-compatible `package.json` plus `bun.lock` — both are expected, not anti-patterns. |
 | **Deno** | JS runtime (tier 2) | Permitted, not gated (owner ruling 2026-10-14; order Bun > Deno > pnpm > npm). Reads the same `package.json`; every package carries a generated `deno.lock` (`tools/js-runtimes regen`, `3-practice/LANGUAGE-POLICY.adoc` §1.4). |
-| **Rust** | Performance-critical, systems, WASM, CLI tools, safety-critical | Verified with Creusot (`3-practice/PROOF-POLICY.adoc`). Preferred over Ada where reachable. |
+| **Rust** | Performance-critical, systems, WASM, CLI tools, safety-critical | Creusot with Pearlite contracts and Verus by default (`3-practice/PROOF-POLICY.adoc` §1.2). Preferred over Ada where reachable. |
 | **Zig** | **APIs, FFIs, gateways, client SDKs (estate default 2026-05-28)**, memory-safe systems where Rust is overkill | Zig is the estate-wide default for all API/FFI/gateway/client-SDK work unless explicitly special-cased; Idris2 owns ABIs. Completed V-lang→Zig migration 2026-05-28. |
 | **Idris2** | Proofs about APIs, ABIs and engineering properties | Per `3-practice/PROOF-POLICY.adoc`. ATS2 rejected. Proven-library status in `proven` repo. |
 | **Agda** | Theory proofs (source of truth; rechecked in Rocq and Lean) | Per `3-practice/PROOF-POLICY.adoc`. Used by `hyperpolymath/echo-types` (loss-with-residue / proof-relevant fibers) and other foundational formalisations. Constructive only — no postulates in load-bearing tracks. |
