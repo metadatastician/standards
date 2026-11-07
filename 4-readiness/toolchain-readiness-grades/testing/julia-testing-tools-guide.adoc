@@ -1,7 +1,7 @@
 == Julia Testing Tools Guide
 
-*Version:* 1.0.0 *Date:* 2024-04-14 *Purpose:* Equivalent tools to
-Rust’s Clippy, Rustfmt, and Cargo Audit for Julia
+*Version:* 1.0.1 *Date:* 2026-11-07 *Purpose:* Julia formatting, analysis,
+package quality and testing tools, with separate security-scan obligations
 
 === Julia Equivalent Tools
 
@@ -75,9 +75,12 @@ JET.test_package(path=".")
   '
 ----
 
-==== 3. Aqua.jl (✅ Equivalent to cargo audit)
+==== 3. Aqua.jl (package quality checks)
 
-*Purpose:* Package security and quality assurance
+*Purpose:* Package quality assurance: ambiguities, dependency compatibility,
+exports, type piracy and related package hygiene. Aqua does not query a
+vulnerability database and is not equivalent to `cargo audit`. Dependency
+advisories, secret scanning and supply-chain review need separate evidence.
 
 *Installation:*
 
@@ -100,14 +103,19 @@ Aqua.test_deps_compat(MyPackage)
 Aqua.test_project_extras(MyPackage)
 ----
 
+Replace `MyPackage` with the package module and make both that package and Aqua
+available in the active CI environment. The snippet is a package-quality
+check, not a dependency vulnerability scan. See
+https://juliatesting.github.io/Aqua.jl/stable/[Aqua's documented checks].
+
 *CI Integration:*
 
 [source,yaml]
 ----
-- name: Julia package audit
+- name: Julia package quality
   run: julia --project=docs -e '
-    using Aqua
-    Aqua.test_all(deps=true)
+    using Aqua, MyPackage
+    Aqua.test_all(MyPackage)
   '
 ----
 
@@ -195,7 +203,7 @@ jobs:
           JET.test_package(path=".")
         '
   
-  security:
+  package-quality:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -204,10 +212,10 @@ jobs:
           version: '1.10'
       - name: Install Aqua
         run: julia --project=docs -e 'using Pkg; Pkg.add("Aqua")'
-      - name: Package audit
+      - name: Package quality
         run: julia --project=docs -e '
-          using Aqua
-          Aqua.test_all(deps=true)
+          using Aqua, MyPackage
+          Aqua.test_all(MyPackage)
         '
   
   test:
@@ -235,7 +243,7 @@ jobs:
 |Rust Concept |Julia Equivalent
 |`+cargo fmt+` |`+JuliaFormatter.format(".")+`
 |`+cargo clippy+` |`+JET.test_package(".")+`
-|`+cargo audit+` |`+Aqua.test_all()+`
+|`+cargo audit+` |No equivalence is established here; use actual advisory/security scanning. `Aqua.test_all(MyPackage)` provides package quality checks only.
 |`+cargo test+` |`+Pkg.test()+`
 |`+cargo bench+` |`+BenchmarkTools.@benchmark+`
 |`+Cargo.toml+` |`+Project.toml+`
