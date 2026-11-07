@@ -275,9 +275,13 @@ then it is target-only evidence, recorded with its own status, and the Agda
 row stays `OPEN`.
 * An existing Isabelle proof of a *theory* statement is supplementary
 evidence. It satisfies neither the Rocq leg nor the Lean leg.
-* An existing proof of an *engineering* statement in a theorem prover
-other than Idris2 moves to Idris2 when it is next touched. Until then it
-stays, labelled with its prover.
+* An existing proof of an *interface or ABI engineering* statement in a
+theorem prover other than Idris2 moves to Idris2 when it is next touched,
+unless it has a recorded §4 exception. Until then it stays, labelled with
+its prover. This migration rule does not apply to implementation proofs
+assigned by §1: Rust proofs remain with Creusot/Pearlite and Verus (§1.2),
+and Ada proofs remain with SPARK. Preserve their checked evidence rather
+than moving it into a parallel Idris2 model.
 * Corpora that exist to exercise provers are not obligations. echidna's
 `proofs/<prover>/` trees and similar fixtures are test material for a
 multi-prover system and are outside this policy.
