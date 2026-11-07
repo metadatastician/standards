@@ -322,6 +322,7 @@ API_LOG="$TEST_DIR/api-requests"
 run_case_out "partial clone: canonical default API retains known-bad rejection" 1 \
   'predates.*carries the' "$R" \
   PATH="$MOCK_BIN:$PATH" STALENESS_TEST_API_LOG="$API_LOG" \
+  STALENESS_STANDARDS_NWO="" \
   STALENESS_API_BASE="https://api.example.invalid" \
   STALENESS_KNOWN_BAD_BEFORE="governance-reusable.yml:$C3"
 run_case_out "partial clone: explicit old-owner redirect remains visibly unchecked" 0 \
