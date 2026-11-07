@@ -115,6 +115,23 @@ else
   fail=$((fail+1)); echo "  FAIL  --write raised a ceiling"; sed -n '1,20p' Debtfile.a2ml
 fi
 
+# A grown probe must never leave behind a file check-debtfile-structure.sh
+# rejects (standards#955): --write refuses to write a count above its ceiling,
+# so the writer and its validator can never disagree. The breach is still
+# loud — the run exits 1 and the count stays where it was.
+STRUCTURE="${SCRIPT%run-debtfile.sh}check-debtfile-structure.sh"
+entry 'echo 9' 4 4 > Debtfile.a2ml
+got=0; bash "$SCRIPT" --write Debtfile.a2ml >/dev/null 2>&1 || got=$?
+if [ "$got" = 1 ] && grep -q '^- count: 4$' Debtfile.a2ml && grep -q '^- ceiling: 4$' Debtfile.a2ml; then
+  if bash "$STRUCTURE" Debtfile.a2ml >/dev/null 2>&1; then
+    pass=$((pass+1)); echo "  ok    --write refuses a breaching count and emits a file the structure check accepts"
+  else
+    fail=$((fail+1)); echo "  FAIL  --write emitted a file check-debtfile-structure.sh rejects"; sed -n '1,20p' Debtfile.a2ml
+  fi
+else
+  fail=$((fail+1)); echo "  FAIL  --write on a grown probe: want exit 1 with count/ceiling 4/4 untouched, got exit $got"; sed -n '1,20p' Debtfile.a2ml
+fi
+
 got=0; bash "$SCRIPT" no-such-file.a2ml >/dev/null 2>&1 || got=$?
 if [ "$got" = 2 ]; then pass=$((pass+1)); echo "  ok    a missing Debtfile exits 2, distinct from a probe failure"
 else fail=$((fail+1)); echo "  FAIL  missing file (wanted exit 2, got $got)"; fi
