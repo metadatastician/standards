@@ -294,7 +294,13 @@
 # A released major is immutable. Bumping `version` to a new MAJOR means the
 # prior major's criteria file is copied to 0-canon/rsr/archive/ and pinned
 # there; a freeze guard fails any PR that mutates a frozen major.
-version      = "2.1.4"
+# 2026-11-07: draft PATCH 2.1.5 records the gate-table 0.3.1 detection/layout
+# corrections and their applicability-policy mirror already merged in #1419.
+# No criterion, tier or capability is added or removed. Both previous digests
+# described the pre-#1419 files, so consumers correctly rejected the mismatch.
+# Publication identity below
+# remains draft/unassigned; this repair does not create a release or tag.
+version      = "2.1.5"
 spec_family  = "rhodium-standard-repositories"
 status       = "draft"          # draft | stable
 released     = "2026-09-30"
@@ -320,11 +326,11 @@ criteria = { path = "0-canon/rsr/rsr-criteria-v2.a2ml",           # relocated fr
              slot = "criteria", normative = true }
 
 gates = { path = ".machine_readable/template-capability-gates.toml",  # from .machine_readable/
-          sha256 = "2f31f46d4753432e0aa8c9c28f339e18e062c98dc6e6ef4ecbb76993cf37638b",
+          sha256 = "5c510bba025be718deebb12d0333bfe7db2da43c66578b728b1a334df65290b1",
           slot = "gates", normative = true }
 
 applicability = { path = "0-canon/TEMPLATE-APPLICABILITY-POLICY.adoc",
-                  sha256 = "564e5ea1470a94878e25c3bd1e18faf6628a58aa2ec86146f6dd38355fd1d494",
+                  sha256 = "677d2c346805100f1d7ed3cb64b44796a7e1bd00d44a5a4b1b6e54207fb7d9e6",
                   slot = "applicability", normative = true }
 
 lifecycle = { path = "0-canon/rsr/SCAFFOLD-LIFECYCLE.adoc",
