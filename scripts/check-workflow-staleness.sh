@@ -66,7 +66,7 @@ set -eo pipefail
 #                               error.
 #   STALENESS_STANDARDS_NWO   — owner/repo a pin must belong to, used for the
 #                               server-side integrity check (default
-#                               hyperpolymath/standards).
+#                               metadatastician/standards).
 #   STALENESS_STANDARDS_BRANCH— branch a pin must be reachable from (default main).
 #   STALENESS_API_BASE        — API root for the server-side integrity check
 #                               (default https://api.github.com; set for GHES,
@@ -84,7 +84,7 @@ WINDOW_DAYS="${STALENESS_WINDOW_DAYS:-14}"
 
 # Where to ask when the local checkout cannot be trusted (see verify-by-API
 # below). Overridable so a fork can point the gate at its own standards.
-STANDARDS_NWO="${STALENESS_STANDARDS_NWO:-hyperpolymath/standards}"
+STANDARDS_NWO="${STALENESS_STANDARDS_NWO:-metadatastician/standards}"
 STANDARDS_BRANCH="${STALENESS_STANDARDS_BRANCH:-main}"
 STANDARDS_API="${STALENESS_API_BASE:-https://api.github.com}"
 
