@@ -17,6 +17,11 @@ Witness Grades (`PWG-3`, `PWG-2i`, `PWG-2ii`, `PWG-1`). It was added by
 owner ruling of 2026-11-04, together with the clarifications to §1.1, §2,
 §2.1, §2.2, §4, §6 and §7 that close standards#1389.
 
+Owner ruling of 2026-11-07 adopts *Creusot, Pearlite and Verus* as the
+default first-party Rust verification toolset (§1.2). It supersedes the
+previous exclusion of Verus in §4.1. Adoption is a policy decision, not a
+claim that existing repositories already run or pass both verifiers.
+
 This policy decides *where a proof lives*. What counts as an escape hatch in
 a proof, and how such debt is recorded, stays with
 link:../docs/TRUSTED-BASE-REDUCTION-POLICY.adoc[`docs/TRUSTED-BASE-REDUCTION-POLICY.adoc`].
@@ -28,9 +33,10 @@ link:../docs/TRUSTED-BASE-REDUCTION-POLICY.adoc[`docs/TRUSTED-BASE-REDUCTION-POL
 |Code or obligation |Verifier |Scope
 
 |Rust code
-|*Creusot*
-|Contracts and proofs on first-party Rust. Verification sits on the code
-itself, not in a parallel model of it.
+|*Creusot* with *Pearlite* contracts, and *Verus*
+|Default toolset for contracts and proofs on first-party Rust (§1.2).
+Verification sits on the implementation; a separately rewritten model
+does not establish implementation correctness on its own.
 
 |Ada code
 |*SPARK*
@@ -51,7 +57,7 @@ Agda is the source of truth; the recheck is §2.
 
 The word "Rust" in estate documents means Rust. The 2026-04-10 note that
 read "Rust always means Rust/SPARK" is withdrawn: SPARK belongs to Ada code,
-and Rust is verified with Creusot.
+and Rust uses Creusot with Pearlite contracts and Verus by default.
 
 Deciding between *engineering* and *theory*: if the statement names a type,
 function or wire format of one repository, it is engineering (Idris2). If
@@ -60,7 +66,8 @@ it would be true of any implementation, it is theory (Agda).
 When an engineering property is about the behaviour of first-party Rust or
 Ada code (a function's pre- and postconditions, a loop invariant, absence
 of run-time errors), the code mapping takes precedence: it is verified with
-Creusot or SPARK on that code, not restated in Idris2. Idris2 carries the
+Creusot/Pearlite and Verus for Rust (§1.2), or SPARK for Ada, on that code,
+not restated in Idris2. Idris2 carries the
 *interface* contract that stands apart from any one implementation: types,
 ABI layouts, wire formats, and the protocols several languages share.
 
@@ -101,6 +108,41 @@ core, or at least sustained fuzzing. Record that choice where the dependency
 is added. This is a preference, not a gate: a dependency with no verified
 alternative is still allowed, and its absence of proofs is an assumption to
 record, not a reason to fork and convert it.
+
+=== 1.2 Default Rust toolset: Creusot, Pearlite and Verus
+
+Name all three in first-party Rust verification plans, proof-status files
+and agent-facing policy summaries so none is lost between work sessions:
+
+* *Creusot* verifies Rust implementations against contracts.
+* *Pearlite* expresses Creusot's contracts, predicates and mathematical
+  models. It is a specification language, not a third verifier or an
+  additional independent proof result.
+* *Verus* is the complementary default verifier, using its own executable,
+  specification and proof code. Pearlite contracts are not automatically
+  Verus specifications or proofs.
+
+Plan scopes for both verifiers by default. For each obligation, name its
+implementation entrypoint, verifier, specification, assumptions and result.
+Scopes may differ: this default does not require rewriting every function
+or duplicating every proof. Where both verify the same property, record how
+the statements correspond and how each proof is connected to the shipped
+implementation. Two separately implemented models are not two proofs of
+the production code.
+
+Preserve established Creusot/Pearlite proofs when adding Verus. If either
+verifier is not applicable, unsupported, blocked or not yet run, record the
+specific reason, actual scope and next action in the proof-status file;
+never omit it silently or represent an unexecuted check as a pass. Keep the
+closed §5 status vocabulary: a pending required proof remains `OPEN`, with
+the explanation in a separate field. An exception to a required obligation
+follows §4.
+
+Each proof receipt records exact tool and solver versions, source revision,
+invocation, discharged obligations and trust boundary (§5–§7). Shared SMT
+solvers and shared specification assumptions remain shared trust. Using
+Creusot and Verus does not by itself establish independent witnesses or
+increase a theory theorem's Proof Witness Grade (§8).
 
 == 2. Rechecking theory proofs
 
@@ -167,7 +209,7 @@ That document's statement that prover invocation is a repository's own
 business covers its debt tooling only. It does not license a weaker
 entrypoint invocation than the one above.
 
-Existing Idris2 source/ABI proofs, Rust/Creusot and Ada/SPARK
+Existing Idris2 source/ABI proofs, Rust verification under §1.2 and Ada/SPARK
 engineering checks remain active as their source repos reconcile
 theory: a translated model does not prove runtime refinement.
 
@@ -268,8 +310,8 @@ is reported as `TESTED`, with its bounds, not as `PROVEN`.
 
 === 4.1 Standing exceptions for Rust
 
-Two tools are standing exceptions for Rust. Each one runs alongside Creusot
-and never replaces it. The record in the repo's proof-status file still names
+Two further tools are standing exceptions for Rust. Each one runs alongside
+the default §1.2 toolset and never replaces it. The record in the repo's proof-status file still names
 the obligation; the reason below need not be restated.
 
 *Kani* (bounded model checking) covers `unsafe` blocks and FFI seams, the
@@ -295,8 +337,9 @@ correspondence row is recorded as `ASSUMED`. The model theorem remains
 kernel without those disallowed backend axioms or libraries. Adopting a
 backend needs a recorded owner decision.
 
-Verus is not a standing exception: it shares Creusot's SMT trust base, so it
-adds no independent assurance for the cost of rewriting code in its dialect.
+Verus belongs to the default toolset (§1.2), not to this exception list.
+The earlier exclusion is superseded by the owner ruling of 2026-11-07;
+shared solver trust is still recorded and is not claimed as independence.
 
 == 5. Status vocabulary
 
@@ -307,7 +350,7 @@ machine-readable proof ledger records the canonical lowercase token;
 prose and tables may use either.
 
 * `PROVEN` is `proven`: machine-checked with no escape hatch. Either a
-kernel accepted a proof term, or a mapped verifier (Creusot through Why3,
+kernel accepted a proof term, or a mapped verifier (Creusot through Why3, Verus,
 GNATprove, or a §4 exception tool such as F* or a direct SMT run) discharged
 every generated obligation with its automatic provers. In the second case
 the trust boundary names the tool, the provers and their versions. For a
@@ -441,7 +484,7 @@ under that name, separately from its own levels.
 
 PWG applies to *theory* obligations (§1): theorems whose source of truth is
 Agda and which §2 requires to be rechecked in Rocq and Lean. Engineering
-proofs (Creusot, SPARK, Idris2) are not graded on this ladder. They use the
+proofs (Creusot, Verus, SPARK, Idris2) are not graded on this ladder. They use the
 §5 tokens only.
 
 A theory theorem that does not reach `PWG-3` is `ungraded`. Write

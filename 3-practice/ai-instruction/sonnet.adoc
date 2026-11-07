@@ -82,7 +82,7 @@ You are implementing <one-line task statement> in <repo path>.
 
 - <License headers: SPDX-License-Identifier: MPL-2.0 unless otherwise
   stated (AGPL-3.0-or-later for IDApTIK / Airborne Submarine Squadron)>
-- <Language policy: AffineScript / Rust (Creusot) / Deno / Zig / Idris2 / Agda / Gleam; no
+- <Language policy: AffineScript / Rust (Creusot with Pearlite contracts and Verus by default) / Deno / Zig / Idris2 / Agda / Gleam; no
   TypeScript, ReScript, Node, npm/bun/yarn, Go, general Python (RS/TS/JS → AffineScript → typed-wasm; Agda for foundational proofs incl. echo-types)>
 - <Testing: run tests before claiming completion; "dune build passes" is NOT
   the same as "behaviourally correct" — cite a behavioural check>
@@ -114,7 +114,9 @@ IDApTIK / ASS; third-party code preserves its original licence. Every
 new file gets a header.
 . *Language policy* — the allowed/banned list, plus the proof mapping of
 `3-practice/PROOF-POLICY.adoc` ("`Rust`" means Rust, verified with
-Creusot; SPARK belongs to Ada code).
+Creusot with Pearlite contracts and Verus by default; name all three in plans
+and proof-status files, record each verifier's scope and any pending or
+inapplicable work (§1.2). SPARK belongs to Ada code).
 . *Architectural defaults* — Idris2 for ABI, Zig for FFI, Chainguard
 base images, Containerfile not Dockerfile, Podman not Docker, Deno first
 (pnpm fallback only when forced). V-lang is banned.

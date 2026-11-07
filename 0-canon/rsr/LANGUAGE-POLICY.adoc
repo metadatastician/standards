@@ -3,15 +3,17 @@
 
 = RSR Language Policy
 :author: Jonathan D.A. Jewell (hyperpolymath)
-:revnumber: 1.8.0
-:revdate: 2026-10-26
+:revnumber: 1.9.0
+:revdate: 2026-11-07
 :toc: left
 :icons: font
 :source-repo: https://github.com/hyperpolymath/standards
 
 [NOTE]
 ====
-*Version Status*: v1.8.0 — "Rust" means Rust, verified with Creusot;
+*Version Status*: v1.9.0 — first-party Rust verification defaults to
+Creusot with Pearlite contracts and Verus (owner ruling 2026-11-07,
+`3-practice/PROOF-POLICY.adoc` §1.2). v1.8.0: "Rust" means Rust, verified with Creusot;
 the Rust/SPARK terminology note is withdrawn (owner ruling 2026-10-26,
 `3-practice/PROOF-POLICY.adoc`). v1.7.0: Deno is permitted again as tier 2 (owner ruling
 2026-10-14): the order is Bun > Deno > pnpm > npm, with one `package.json` for
@@ -31,8 +33,10 @@ escape). See §Amendments for the full list.
 
 The 2026-04-10 note that read "Rust" as "Rust/SPARK" is *withdrawn* by the
 owner ruling of 2026-10-26 (link:../../3-practice/PROOF-POLICY.adoc[`3-practice/PROOF-POLICY.adoc`]).
-Rust is verified with *Creusot*; SPARK is the verifier for *Ada* code. Where
-this document still says "Rust/SPARK", read "Rust (verified with Creusot)".
+Rust verification defaults to *Creusot* with *Pearlite* contracts and
+*Verus* (owner ruling 2026-11-07, PROOF-POLICY §1.2); SPARK is the verifier
+for *Ada* code. Where this document still says "Rust/SPARK", read
+"Rust (Creusot/Pearlite and Verus)".
 Which prover carries which obligation is decided by PROOF-POLICY, not here.
 
 == Overview
@@ -55,7 +59,8 @@ NOTE: For full rationale and migration guides, see the link:{source-repo}[CCCP r
 
 | *Rust*
 | Systems, performance, WASM, CLI tools, safety-critical (preferred over Ada where reachable)
-| Verified with Creusot (link:../../3-practice/PROOF-POLICY.adoc[PROOF-POLICY]).
+| Creusot with Pearlite contracts and Verus by default
+  (link:../../3-practice/PROOF-POLICY.adoc[PROOF-POLICY] §1.2).
   See §Terminology.
 
 | *Zig*
@@ -69,7 +74,7 @@ NOTE: For full rationale and migration guides, see the link:{source-repo}[CCCP r
 | Formal verification: APIs, ABIs and engineering properties
 | Idris2 verifies APIs, ABIs and engineering properties. Other proof
   obligations are assigned by link:../../3-practice/PROOF-POLICY.adoc[PROOF-POLICY]
-  (Creusot for Rust, SPARK for Ada, Agda for theory). ATS2 is rejected.
+  (Creusot/Pearlite and Verus for Rust, SPARK for Ada, Agda for theory). ATS2 is rejected.
   See the `proven` repo for the canonical library status.
 
 | *Bun*
@@ -323,11 +328,11 @@ NOTE: For full rationale and migration guides, see the link:{source-repo}[CCCP r
   (`.v` is also Coq's and Verilog's source extension). See §Amendments.
 
 | *ATS2*
-| Idris2 (APIs, ABIs, engineering properties), Rust verified with Creusot (safety-critical code)
+| Idris2 (APIs, ABIs, engineering properties), Rust using Creusot/Pearlite and Verus (safety-critical code)
 | Which prover carries which proof is set by `3-practice/PROOF-POLICY.adoc`.
   ATS2 was previously considered for correctness-critical work but is
   rejected in favour of Idris2 (proven ecosystem) and Rust verified with
-  Creusot (formal verification on the code itself).
+  Creusot with Pearlite contracts and Verus (formal verification on the code itself).
 
 | *Makefiles*
 | Mustfile / Justfile
@@ -591,6 +596,15 @@ mirrored there so agents/tools enforce them from the machine-readable policy,
 not prose alone.
 
 == Amendments
+
+=== v1.9.0 — 2026-11-07 (Jonathan D.A. Jewell)
+
+* Adopt Creusot, Pearlite and Verus as the default first-party Rust
+  verification toolset, per PROOF-POLICY §1.2. Pearlite is Creusot's
+  specification language, not another independent verifier.
+* Plans and proof-status files name all three, allocate scopes for both
+  verifiers, and record blocked, pending or inapplicable work explicitly.
+  Adoption does not certify existing code or require duplicating every proof.
 
 === v1.8.0 — 2026-10-26 (Jonathan D.A. Jewell)
 
