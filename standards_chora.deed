@@ -111,7 +111,7 @@
   (rsr-profile
     :version "1.0.0"
     :spec "rsr-criteria-v2"
-    :declares-against "2.1.4"
+    :declares-against "2.1.5"
     :role "canon"
     :capabilities (
       ; scripts/: the gate implementations (check-*.sh)
