@@ -360,20 +360,23 @@ jobs:
     runs-on: ${{ inputs.runs-on }}
     if: vars.GITEA_MIRROR_ENABLED == 'true'
     # See mirror-gitlab: the `secrets` context is not valid in step `if:`;
-    # hoist to job-level `env` and gate steps on `env.GITEA_KEY`.
+    # hoist to job-level `env` and gate steps on `env.GITEA_KEY`. The host is
+    # hoisted too: a missing vars.GITEA_HOST must SKIP with a notice, never
+    # scan an empty hostname and redden the default branch (#1264).
     env:
       GITEA_KEY: ${{ secrets.GITEA_SSH_KEY }}
+      GITEA_MIRROR_HOST: ${{ vars.GITEA_HOST }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
       - uses: webfactory/ssh-agent@e83874834305fe9a4a2997156cb26c5de65a8555 # v0.10.0
-        if: ${{ env.GITEA_KEY != '' }}
+        if: ${{ env.GITEA_KEY != '' && env.GITEA_MIRROR_HOST != '' }}
         with:
           ssh-private-key: ${{ secrets.GITEA_SSH_KEY }}
       - name: Verify gitea SSH host
-        if: ${{ env.GITEA_KEY != '' }}
+        if: ${{ env.GITEA_KEY != '' && env.GITEA_MIRROR_HOST != '' }}
         env:
           MIRROR_HOST: ${{ vars.GITEA_HOST }}
           APPROVED_FINGERPRINT: ${{ vars.GITEA_SSH_FINGERPRINT }}
@@ -394,7 +397,7 @@ jobs:
           fi
           printf 'GIT_SSH_COMMAND=ssh -o StrictHostKeyChecking=yes -o GlobalKnownHostsFile=/dev/null -o UserKnownHostsFile=%s\n' "$CANDIDATE" >> "$GITHUB_ENV"
       - name: Mirror to Gitea
-        if: ${{ env.GITEA_KEY != '' }}
+        if: ${{ env.GITEA_KEY != '' && env.GITEA_MIRROR_HOST != '' }}
         env:
           MIRROR_ORG: ${{ vars.GITEA_ORG || vars.MIRROR_ORG || github.repository_owner }}
           REPO_NAME: ${{ github.event.repository.name }}
@@ -406,6 +409,10 @@ jobs:
         if: ${{ env.GITEA_KEY == '' }}
         run: |
           echo "::notice::GITEA_MIRROR_ENABLED=true but secrets.GITEA_SSH_KEY is empty. Skipping Gitea mirror. Configure the GITEA_SSH_KEY org/repo secret to enable."
+      - name: Skipped (GITEA_HOST not configured)
+        if: ${{ env.GITEA_KEY != '' && env.GITEA_MIRROR_HOST == '' }}
+        run: |
+          echo "::notice::GITEA_MIRROR_ENABLED=true and GITEA_SSH_KEY is set, but vars.GITEA_HOST is empty. Skipping Gitea mirror rather than scanning an empty hostname (#1264). Configure the GITEA_HOST org/repo variable to enable."
 
   mirror-radicle:
     timeout-minutes: 20

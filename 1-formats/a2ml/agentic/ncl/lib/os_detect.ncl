@@ -24,6 +24,10 @@
     match {
       'Edge_ASIC => "static_bin",
       'Kinoite_Layered => "podman_ostree",
+      'Apple_Darwin => "container_first", # explicit arm: same strategy the
+        # wildcard gave it, recorded rather than inherited (#1001). Whether
+        # macOS deserves "static_bin" is a design decision; when it is made,
+        # it is made here, in all three byte-identical copies.
       'Standard_PC => "nala_native",
       _ => "container_first",
     } target_type,

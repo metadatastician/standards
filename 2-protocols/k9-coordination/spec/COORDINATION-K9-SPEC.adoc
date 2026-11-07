@@ -91,11 +91,11 @@ Rules that MUST NOT be violated. Each invariant has an id, rule, and reason.
 invariants:
   - id: no-typescript
     rule: "Do not introduce TypeScript files anywhere in this project"
-    reason: "ReScript is the chosen frontend language — this is deliberate"
+    reason: "AffineScript is the chosen frontend language — this is deliberate"
     severity: critical
-  - id: custom-tea-runtime
-    rule: "Do not replace the custom TEA runtime in src/tea/"
-    reason: "18-module custom build — rescript-tea was deliberately rejected"
+  - id: custom-runtime
+    rule: "Do not replace the custom runtime in src/core/"
+    reason: "18-module custom build — the off-the-shelf alternative was deliberately rejected"
     severity: critical
 ----
 
@@ -131,8 +131,8 @@ deleted, reorganised, or replaced without explicit user approval.
 [source,yaml]
 ----
 protected:
-  - path: src/tea/
-    reason: "Custom TEA runtime — 18 modules"
+  - path: src/core/
+    reason: "Custom runtime — 18 modules"
   - path: .machine_readable/
     reason: "Canonical location for machine-readable state"
   - path: coordination.k9
