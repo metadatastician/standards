@@ -43,7 +43,7 @@ K9!
 
     scope = {
       applies_to = "theory",
-      not_graded = ["Creusot", "SPARK", "Idris2"],
+      not_graded = ["Creusot", "Verus", "SPARK", "Idris2"],
       below_lowest = "ungraded",
     },
 

@@ -297,6 +297,47 @@ run_case_out "partial clone: unverifiable deny-list check is reported SKIPPED, n
   STALENESS_API_BASE="$UNREACHABLE" \
   STALENESS_KNOWN_BAD_BEFORE="governance-reusable.yml:$C3"
 
+# 13b-redirect. The standards transfer must not turn the degraded-history
+# fallback into a skipped known-bad check. The fake API redirects the old
+# repository name but answers the canonical name; no real network is used.
+MOCK_BIN="$TEST_DIR/mock-bin"
+mkdir -p "$MOCK_BIN"
+cat > "$MOCK_BIN/curl" <<'CURL'
+#!/usr/bin/env bash
+url="${!#}"
+printf '%s\n' "$url" >> "$STALENESS_TEST_API_LOG"
+case "$url" in
+  */repos/metadatastician/standards/compare/*|*/repos/example/fork/compare/*)
+    printf '{"status":"ahead","ahead_by":1,"behind_by":0}\n200' ;;
+  */repos/hyperpolymath/standards/compare/*)
+    printf '{"message":"Moved Permanently"}\n301' ;;
+  *) printf '{"message":"Not Found"}\n404' ;;
+esac
+CURL
+chmod +x "$MOCK_BIN/curl"
+API_LOG="$TEST_DIR/api-requests"
+: > "$API_LOG"
+# C4 is locally after C3, so the partial clone's negative answer must take
+# the server fallback. The mock's positive answer must still reject the pin.
+run_case_out "partial clone: canonical default API retains known-bad rejection" 1 \
+  'predates.*carries the' "$R" \
+  PATH="$MOCK_BIN:$PATH" STALENESS_TEST_API_LOG="$API_LOG" \
+  STALENESS_STANDARDS_NWO="" \
+  STALENESS_API_BASE="https://api.example.invalid" \
+  STALENESS_KNOWN_BAD_BEFORE="governance-reusable.yml:$C3"
+run_case_out "partial clone: explicit old-owner redirect remains visibly unchecked" 0 \
+  'SKIPPED, not passed' "$R" \
+  PATH="$MOCK_BIN:$PATH" STALENESS_TEST_API_LOG="$API_LOG" \
+  STALENESS_STANDARDS_NWO="hyperpolymath/standards" \
+  STALENESS_API_BASE="https://api.example.invalid" \
+  STALENESS_KNOWN_BAD_BEFORE="governance-reusable.yml:$C3"
+run_case_out "partial clone: explicit repository override retains known-bad rejection" 1 \
+  'predates.*carries the' "$R" \
+  PATH="$MOCK_BIN:$PATH" STALENESS_TEST_API_LOG="$API_LOG" \
+  STALENESS_STANDARDS_NWO="example/fork" \
+  STALENESS_API_BASE="https://api.example.invalid" \
+  STALENESS_KNOWN_BAD_BEFORE="governance-reusable.yml:$C3"
+
 # 13c. A complete clone's negative IS trusted — no warning, no network.
 git -C "$FIX" config --unset remote.origin.promisor
 R="$TEST_DIR/complete-quiet"; mk_repo "$R"

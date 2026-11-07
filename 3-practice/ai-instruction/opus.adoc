@@ -106,11 +106,13 @@ multi-paragraph context. Include:
 - License / SPDX per file
 - Banned patterns: believe_me, assert_total, Admitted, sorry, unsafeCoerce,
   Obj.magic — zero tolerance
-- Prover per obligation follows 3-practice/PROOF-POLICY.adoc: Creusot on Rust
-  code, SPARK on Ada, Idris2 for APIs/ABIs, Agda for theory (rechecked in Rocq
+- Prover per obligation follows 3-practice/PROOF-POLICY.adoc: Creusot with
+  Pearlite contracts and Verus by default on Rust (§1.2; name all three in plans,
+  record each verifier's scope and any pending or inapplicable work),
+  SPARK on Ada, Idris2 for APIs/ABIs, Agda for theory (rechecked in Rocq
   and Lean); ECHIDNA orchestrates where dispatch is needed
 - When proven Idris2 code conflicts with Ephapax linear types, Idris2 wins
-- "Rust" means Rust, verified with Creusot; SPARK belongs to Ada code
+- "Rust" means Rust, using Creusot/Pearlite and Verus; SPARK belongs to Ada code
 - No JSON emit — A2ML (data) or Nickel (schemas)
 - Bot-primary design docs ship as .a2ml with optional .adoc narrative
 - No stubbing default; wire everything through
@@ -170,7 +172,7 @@ third-party licences.
 . *Architectural defaults* — Idris2 ABI, Zig FFI, ECHIDNA-orchestrated
 proofs mapped by 3-practice/PROOF-POLICY.adoc, A2ML checkpoint files,
 Chainguard base images, Containerfile, Podman, Deno first, V-lang banned,
-Rust verified with Creusot.
+Rust verification defaults to Creusot, Pearlite and Verus (policy §1.2).
 . *Banned patterns* — full list; no escape hatches.
 . *GitHub is single source of truth* — push ONLY to `+origin+`; other
 forges are mirrored downstream; exceptions are `+007+` (never mirrored)

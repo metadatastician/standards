@@ -145,6 +145,7 @@ jobs:
     uses: hyperpolymath/standards/.github/workflows/governance-reusable.yml@abc123
 EOF
 
+sed -i "/^dependencies:/i\\    '.github/workflows/reusable.yml': []" .github/workflows/actions.lock
 FAKE_VERIFY_FINDING=reusable-exact GH_BIN="$WORK/bin/fake-gh" \
   bash "$UPDATE" --verify-local .github/workflows >/dev/null
 echo "PASS: exact reusable-workflow dependency is accepted"
@@ -184,9 +185,13 @@ jobs:
   a:
     uses: ./.github/workflows/runonly.yml
 EOF
+# Keep this verifier fixture consistent with the separate strict sync gate:
+# even workflows with no external dependencies have explicit empty entries.
+sed -i "/^dependencies:/i\\    '.github/workflows/runonly.yml': []" .github/workflows/actions.lock
+sed -i "/^dependencies:/i\\    '.github/workflows/localcall.yml': []" .github/workflows/actions.lock
 FAKE_VERIFY_FINDING=not-pinned-nothing GH_BIN="$WORK/bin/fake-gh" \
   bash "$UPDATE" --verify-local .github/workflows >/dev/null
-echo "PASS: a run-only or ./-only workflow with no lock entry is accepted"
+echo "PASS: run-only and ./-only workflows accept explicit empty lock entries"
 
 if FAKE_VERIFY_FINDING=not-pinned-remote GH_BIN="$WORK/bin/fake-gh" \
    bash "$UPDATE" --verify-local .github/workflows >/dev/null 2>&1; then
@@ -202,6 +207,7 @@ if FAKE_VERIFY_FINDING=not-pinned-with-dependency GH_BIN="$WORK/bin/fake-gh" \
 fi
 echo "PASS: a not-pinned dependency remains blocking"
 rm -f .github/workflows/runonly.yml .github/workflows/localcall.yml
+sed -i "/^    '.github\/workflows\/runonly.yml':/d; /^    '.github\/workflows\/localcall.yml':/d" .github/workflows/actions.lock
 
 # v0.2.0 also reports every `uses: ./…` as `local-action`. The estate runs
 # `./` (check-lock-sync.sh fails the `$/` rewrite instead), so the finding is
@@ -216,6 +222,7 @@ jobs:
     steps:
       - uses: ./.github/actions/thing
 EOF
+sed -i "/^dependencies:/i\\    '.github/workflows/localaction.yml': []" .github/workflows/actions.lock
 if FAKE_VERIFY_FINDING=local-action GH_BIN="$WORK/bin/fake-gh" \
    bash "$UPDATE" --verify-local .github/workflows >/dev/null 2>&1; then
   echo "FAIL: a ./ action that does not exist was accepted" >&2
@@ -227,6 +234,7 @@ FAKE_VERIFY_FINDING=local-action GH_BIN="$WORK/bin/fake-gh" \
   bash "$UPDATE" --verify-local .github/workflows >/dev/null
 echo "PASS: a ./ action that exists in the checkout is accepted"
 rm -rf .github/workflows/localaction.yml .github/actions
+sed -i "/^    '.github\/workflows\/localaction.yml':/d" .github/workflows/actions.lock
 
 # The same caller in KYAML (YAML-POLICY Y-3). A line matcher never saw the
 # quoted value, so the exact dependency was rejected; the parser reads it.

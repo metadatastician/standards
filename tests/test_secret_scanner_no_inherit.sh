@@ -81,15 +81,9 @@ SUPPORTED_INHERIT=(
   "2-protocols/0-ai-gatekeeper/.github/workflows/hypatia-scan.yml	callee predates the declared HYPATIA_SCAN_PAT contract at its pin (standards#1108 §6b)"
 )
 
-# Workflows with no `workflows:` section in actions.lock yet. The cure is
-# `gh actions-lock` regeneration (machine-generated file), tracked in
-# standards#1108. An entry that gains a section must be deleted here.
-EXPECTED_ABSENT_FROM_LOCK=(
-  ".github/workflows/lock-sync-gate.yml"
-  ".github/workflows/scorecard.yml"
-  ".github/workflows/secret-scanner.yml"
-  ".github/workflows/self-ci.yml"
-)
+# Regeneration is complete: every workflow now has a lockfile key. Keep this
+# ratchet empty; a future unlisted workflow must fail rather than be exempted.
+EXPECTED_ABSENT_FROM_LOCK=()
 
 fails=0
 fail() { echo "::error::no-inherit: $*"; fails=$((fails + 1)); }
