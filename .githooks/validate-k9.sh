@@ -91,7 +91,11 @@ ledger_entries() {
 }
 
 in_ledger() {
-  ledger_entries | grep -qxF "$1"
+  # A here-string, deliberately, NOT `ledger_entries | grep -q`. Same SIGPIPE
+  # under `set -o pipefail` as the CHANGED check below (see that comment): a
+  # matching `grep -q` exits first and SIGPIPEs the grep reading the ledger, so
+  # a file that IS listed reports as unlisted (#1219).
+  grep -qxF -- "$1" <<< "$(ledger_entries)"
 }
 
 # Collect the file list.
