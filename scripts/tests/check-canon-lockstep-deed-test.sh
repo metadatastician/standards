@@ -110,10 +110,24 @@ expect "a deed larger than the pipe buffer is still read (no SIGPIPE false negat
 mkdir -p "$WORK/none"
 expect "no deed clause and no profile fails" "$WORK/none" FAIL "no (canon …) deed clause"
 
-# The shipped fixture is the vocabulary's own example; it must stay on the live
-# canon, or the page documents a pin nobody can use.
+# Both the shipped fixture and the example on the vocabulary page must stay
+# on the live canon. Checking only the fixture cannot catch drift in the page.
 mkdir -p "$WORK/fixture"; cp "$FIXTURE" "$WORK/fixture/"
 expect "vocabulary fixture is on the live canon" "$WORK/fixture" PASS
+
+mkdir -p "$WORK/example"
+if awk '
+  /^== Example$/ { section++; in_example=1; next }
+  in_example && /^== / { in_example=0 }
+  in_example && /^\[source,lisp\]$/ { source=1; next }
+  source && /^----$/ { if (!block) { block=1; next } complete++; block=0; source=0; next }
+  block { print }
+  END { if (section != 1 || complete != 1 || block) exit 1 }
+' "$REPO/1-formats/deed/vocabulary/canon.adoc" > "$WORK/example/example_chora.deed"; then
+  expect "vocabulary page example is on the live canon" "$WORK/example" PASS "reading example_chora.deed"
+else
+  FAILED=$((FAILED + 1)); echo "FAIL could not extract exactly one complete vocabulary example"
+fi
 
 echo "passed $PASSED failed $FAILED"
 [ "$FAILED" -eq 0 ]
