@@ -468,3 +468,57 @@ known lie from a gate.
 * type labels (`bug`, `cicd`, `governance`, `proofs`, `migration`, `tech-debt`,
   `meta:*`, `scope:*`, …) were left untouched — they still describe what an
   issue *is*; effort and priority now describe what it *costs* and *when*.
+== Appendix — trivial-tier sweep (same day, PR #1425 commit 46)
+
+The one-pass `effort:trivial` tier is now sorted — all 28, six dispositions.
+Every issue carries a per-issue comment with its evidence.
+
+*Fixed in PR #1425 (close on merge):*
+
+* #1264 — gitea mirror: a missing `GITEA_HOST` now prints a skip notice
+  instead of scanning an empty hostname and reddening the default branch.
+* #1001 — `os_detect.ncl` (all three byte-identical copies): explicit
+  `'Apple_Darwin` arm carrying the wildcard's value — behavior preserved, no
+  silent fallthrough; a future macOS strategy decision is a visible one-line
+  diff.
+* #945 — SD022 instance remediated (foreign-project examples genericised in
+  the k9 coordination spec); the scorecard half is acked and believed cleared
+  by the actions.lock repair.
+* #930 — the ledgered-debt notice names `gh actions-lock --fix`, a command
+  the consumer repo actually has.
+* #1080 — gate-scripts probe widened via `# covers:` coverage markers (the
+  owner's choice of the issue's option (b)); 31 -> 28 untested, positive
+  control run exactly as the AC asks; values refreshed via `run-debtfile
+  --write`.
+* #897 — the canonical `cliff.toml` strips invisible characters at changelog
+  generation, so bot regenerations cannot re-import defused mentions.
+
+*Closed — already landed in the tree (evidence in closing comments):*
+#1079 (per-line UUID check), #1243 (XDG-state survey dir), #1125 (flake.nix
+gate retired), #908 (root-allow.txt ledger deregistered with rationale),
+#1015 (pins-resolve reads workflows via the YAML parser only).
+
+*Closed — determination or supersession:*
+#1000 (the two non-sentinel k9 fixtures are deliberate negative controls),
+#923 (both Deno dates labelled superseded 2026-10-14), #905 (the Deno
+refusal gate the issue wanted armed is retired by that same ruling),
+#1224 (frozen-archive false positive), #937 (http_in_docs instances are
+archive links, redirect tests and policy prose — the rule needs carve-outs,
+tracked in #938), #940 (fake-action examples are frozen vendored content:
+fixed upstream or the mirror retires), #945 (scorecard half, above).
+
+*Re-tiered, honestly (not trivial):*
+#889 -> small (read-each-repo judgement; the issue forbids a blind sweep),
+#662 -> small (cross-repo wordpress-tools history determination),
+#346 -> small (bridge-forbidden-phrases hoist is a real optional job plus
+test), #646 -> small (in-repo clean; the remainder is an estate/emitter
+re-sweep), #938 -> small + `status:blocked` (the rule text is stale; the
+issue now tracks the upstream rule refresh).
+
+*Left trivial, blocked or awaiting input:*
+#933 (needs a Rust toolchain), #1068 (blocked on upstream yq v4.53.3),
+#698 (owner ruling on the 14 guix.scm shells), #727 (external
+`gh actions-lock` release follow-up).
+
+#1003 (ruleset policy on another repo) and #727 stay in the queue as
+recorded in the P2/P3 section above.
