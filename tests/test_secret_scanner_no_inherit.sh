@@ -157,7 +157,8 @@ check_declared() {
   declared="$(awk '
     /^[[:space:]]*(#|$)/ { next }
     /^  workflow_call:/ { call=1; next }
-    call && /^ {0,2}[^ ]/ { exit }
+    call && /^[^ ]/ { exit }
+    call && /^  [^ ]/ { exit }
     call && /^    secrets:[[:space:]]*(#.*)?$/ { secrets=1; next }
     secrets && /^    [^ ]/ { exit }
     secrets && /^      [A-Za-z_][A-Za-z0-9_]*:/ {
@@ -173,7 +174,8 @@ check_declared() {
     /^jobs:/ { jobs=1; next }
     jobs && /^[^ ]/ { exit }
     jobs && /^    secrets:[[:space:]]*(#.*)?$/ { secrets=1; next }
-    secrets && /^ {0,4}[^ ]/ { secrets=0 }
+    secrets && /^    [^ ]/ { secrets=0 }
+    secrets && /^[^ ]/ { jobs=0 }
     secrets && /^      [A-Za-z_][A-Za-z0-9_]*:/ {
       sub(/^      /, ""); sub(/:.*/, ""); print
     }
@@ -191,22 +193,83 @@ check_declared "$WF_DIR/governance.yml"  "$WF_DIR/governance-reusable.yml"
 # as hard as a local one, so verify against the callee AS IT IS AT THE PIN
 # — not as it is in the working tree. A pin absent from local history
 # fails rather than passes vacuously; run with full history (fetch-depth: 0).
+# Secrets are matched JOB-SCOPED: each job's secret mapping is verified
+# against the callee THAT JOB pins, so a valid multi-job caller cannot
+# cross-check one job's secrets against another job's callee.
+
+# job_triples CALLER: emit one line per (pin, rel, secret) triple, scoped to
+# the job that maps the secret, for every job whose `uses:` pins a standards
+# reusable (yml or yaml). Jobs pinning anything else, or nothing, emit no
+# triple — finding 2's vacuous-pass guard lives in check_pinned.
+job_triples() {
+  awk '
+    /^[[:space:]]*(#|$)/ { next }
+    /^jobs:/ { jobs=1; next }
+    jobs && /^[^ ]/ { exit }
+    /^  [A-Za-z0-9_-]+:/ { job=1; pin=""; rel=""; secrets=0; next }
+    job && /^    uses:[[:space:]]/ {
+      # mawk has no interval expressions, so the 40-hex check is done with
+      # length() + an anchored class test, never {40}.
+      if (match($0, /(hyperpolymath|metadatastician)\/standards\/\.github\/workflows\/[A-Za-z0-9_.-]+\.ya?ml@/)) {
+        tok = substr($0, RSTART, RLENGTH)
+        rel = tok; sub(/.*standards\//, "", rel); sub(/@$/, "", rel)
+        sha = substr($0, RSTART + RLENGTH, 40)
+        if (length(sha) == 40 && sha ~ /^[0-9a-f]+$/) pin = sha
+      }
+      next
+    }
+    job && /^    secrets:[[:space:]]*(#.*)?$/ { secrets=1; next }
+    secrets && /^    [^ ]/ { secrets=0 }
+    secrets && /^[^ ]/ { jobs=0; job=0; secrets=0 }
+    secrets && /^      [A-Za-z_][A-Za-z0-9_]*:/ {
+      k=$1; sub(/:.*/, "", k)
+      if (pin != "") printf "%s\t%s\t%s\n", pin, rel, k
+      next
+    }
+  ' "$1"
+}
+
 check_pinned() {
-  local caller="$1" line path_part rel pin declared name
+  local caller="$1" pin rel name triples declared passed
   [ -r "$caller" ] || { fail "packaged caller unreadable: $caller"; return; }
-  while IFS= read -r line; do
-    [ -n "$line" ] || continue
-    path_part="${line%@*}"
-    pin="${line#*@}"
-    rel="${path_part#*standards/}"
+  triples="$(job_triples "$caller")"
+  if [ -z "$triples" ]; then
+    # A caller that maps secrets but pins no standards reusable gives the
+    # contract test nothing to verify — refuse to pass vacuously. A caller
+    # passing no secrets at all has nothing to check.
+    passed="$(awk '
+      /^[[:space:]]*(#|$)/ { next }
+      /^jobs:/ { jobs=1; next }
+      jobs && /^[^ ]/ { exit }
+      jobs && /^    secrets:[[:space:]]*(#.*)?$/ { secrets=1; next }
+      secrets && /^    [^ ]/ { secrets=0 }
+      secrets && /^[^ ]/ { jobs=0 }
+      secrets && /^      [A-Za-z_][A-Za-z0-9_]*:/ {
+        sub(/^      /, ""); sub(/:.*/, ""); print
+      }
+    ' "$caller")"
+    if [ -n "$passed" ]; then
+      fail "$(basename "$caller") passes secrets ($(printf '%s' "$passed" | tr '\n' ' ')) but pins no standards reusable this contract test understands (owner/.yaml/pin drift?) — refusing to verify vacuously"
+    else
+      note "$(basename "$caller") passes no secrets — nothing to verify"
+    fi
+    return
+  fi
+  while IFS=$'\t' read -r pin rel name; do
+    [ -n "$name" ] || continue
     if ! git -C "$REPO_ROOT" cat-file -e "$pin^{commit}" 2>/dev/null; then
       fail "$(basename "$caller") pins $rel at $pin, absent from local history — full history required; refusing to verify vacuously"
       continue
     fi
-    declared="$(git -C "$REPO_ROOT" cat-file -p "$pin:$rel" 2>/dev/null | awk '
+    if ! declared="$(git -C "$REPO_ROOT" cat-file -p "$pin:$rel" 2>/dev/null)"; then
+      fail "$(basename "$caller") pins $rel at $pin but that workflow is not readable at the pin (missing file or partial clone) — refusing to verify vacuously"
+      continue
+    fi
+    declared="$(printf '%s\n' "$declared" | awk '
       /^[[:space:]]*(#|$)/ { next }
       /^  workflow_call:/ { call=1; next }
-      call && /^ {0,2}[^ ]/ { exit }
+      call && /^[^ ]/ { exit }
+    call && /^  [^ ]/ { exit }
       call && /^    secrets:[[:space:]]*(#.*)?$/ { secrets=1; next }
       secrets && /^    [^ ]/ { exit }
       secrets && /^      [A-Za-z_][A-Za-z0-9_]*:/ {
@@ -216,22 +279,10 @@ check_pinned() {
     if [ -z "$declared" ]; then
       note "$(basename "$caller") pins $rel at $pin — callee declares no workflow_call.secrets"
     fi
-    while IFS= read -r name; do
-      [ -n "$name" ] || continue
-      if ! grep -qxF -- "$name" <<< "$declared"; then
-        fail "$(basename "$caller") passes secret $name but $rel at its pin ($pin) does not declare it — every run startup-fails"
-      fi
-    done < <(awk '
-      /^[[:space:]]*(#|$)/ { next }
-      /^jobs:/ { jobs=1; next }
-      jobs && /^[^ ]/ { exit }
-      jobs && /^    secrets:[[:space:]]*(#.*)?$/ { secrets=1; next }
-      secrets && /^ {0,4}[^ ]/ { secrets=0 }
-      secrets && /^      [A-Za-z_][A-Za-z0-9_]*:/ {
-        sub(/^      /, ""); sub(/:.*/, ""); print
-      }
-    ' "$caller")
-  done < <(grep -oE '(hyperpolymath|metadatastician)/standards/\.github/workflows/[A-Za-z0-9_.-]+\.yml@[0-9a-f]{40}' "$caller" | sort -u)
+    if ! grep -qxF -- "$name" <<< "$declared"; then
+      fail "$(basename "$caller") passes secret $name but $rel at its pin ($pin) does not declare it — every run startup-fails"
+    fi
+  done <<< "$triples"
 }
 for packaged_dir in \
   "$REPO_ROOT/1-formats/a2ml/meta/.github/workflows" \
