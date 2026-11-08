@@ -21,5 +21,10 @@ jobs:
       actions: read
       contents: read
       security-events: write
-    uses: hyperpolymath/standards/.github/workflows/hypatia-scan-reusable.yml@210f14e753c80064ec1bcae72f1d654dd9b0e687
-    secrets: inherit
+    uses: hyperpolymath/standards/.github/workflows/hypatia-scan-reusable.yml@b5a8c536780e3a250e71dfe99ecdf18582638965
+    # Only the callee's one declared secret (HYPATIA_SCAN_PAT, optional) —
+    # passing any secret the callee does not declare startup-fails the run.
+    # Do not use `secrets: inherit`: it forwards every repo/org secret the
+    # caller can see, not just this one (standards#1108 §6b).
+    secrets:
+      HYPATIA_SCAN_PAT: ${{ secrets.HYPATIA_SCAN_PAT }}

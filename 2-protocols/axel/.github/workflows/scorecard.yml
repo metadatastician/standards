@@ -12,8 +12,13 @@ permissions: read-all
 
 jobs:
   analysis:
+    # Exactly the callee's declared calling-job contract (scorecard-
+    # reusable header): a smaller job-level grant startup-fails, because
+    # job-level permissions replace, never merge with, the workflow grant.
     permissions:
+      actions: read
       contents: read
       security-events: write
-    uses: hyperpolymath/standards/.github/workflows/scorecard-reusable.yml@210f14e753c80064ec1bcae72f1d654dd9b0e687
-    secrets: inherit
+      id-token: write
+    uses: hyperpolymath/standards/.github/workflows/scorecard-reusable.yml@8ff9ce65f7e54f8d5c5aa94584e2ead0f2ba460f
+    # No `secrets:` line: the reusable declares none (standards#1108 §6b).

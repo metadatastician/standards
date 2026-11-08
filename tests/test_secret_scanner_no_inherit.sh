@@ -29,11 +29,9 @@
 #      line of any kind.
 #   3. No live workflow in this repo (`.github/workflows/` plus the two
 #      packaged template `.github/workflows/` dirs) carries a non-comment
-#      `secrets: inherit` directive, except the explicit SUPPORTED list
-#      below — template callers pinned to callees whose declared contract
-#      at that pin requires inheritance. A listed file that stops
-#      inheriting is reported as a STALE exemption and fails, so the
-#      list can only shrink.
+#      `secrets: inherit` directive. The explicit SUPPORTED list below is
+#      empty; a file that stops inheriting is reported as a STALE exemption
+#      and fails, so the list can only shrink.
 #   4. No WH008 (`secrets: inherit`) suppression for the scanner caller
 #      remains in `.hypatia-baseline.json`: the finding was fixed, not
 #      silenced, so the suppression must not outlive the fix.
@@ -72,14 +70,12 @@ LOCKFILE="$WF_DIR/actions.lock"
 BASELINE="$REPO_ROOT/.hypatia-baseline.json"
 DEAD_PIN="a3308ea8d0cc513727c8ad149b1132317a886c98"
 
-# Template callers pinned to callees whose contract at their pin predates
-# explicit secret declaration; narrowing them before re-pinning would
-# startup-fail (passing an undeclared secret is a validation error).
-# Each line: path<TAB>reason. Shrinks as the templates are re-pinned.
-SUPPORTED_INHERIT=(
-  "1-formats/a2ml/meta/.github/workflows/hypatia-scan.yml	callee predates the declared HYPATIA_SCAN_PAT contract at its pin (standards#1108 §6b)"
-  "2-protocols/0-ai-gatekeeper/.github/workflows/hypatia-scan.yml	callee predates the declared HYPATIA_SCAN_PAT contract at its pin (standards#1108 §6b)"
-)
+# No supported-inherit exemptions remain: the two packaged hypatia callers
+# (1-formats/a2ml/meta, 2-protocols/0-ai-gatekeeper) were re-pinned to the
+# commit that declares HYPATIA_SCAN_PAT and narrowed to named secrets
+# (standards#1108 §6b). Keep this list EMPTY; a file that needs inherit is a
+# signal the callee contract regressed, never a supported state.
+SUPPORTED_INHERIT=()
 
 # Regeneration is complete: every workflow now has a lockfile key. Keep this
 # ratchet empty; a future unlisted workflow must fail rather than be exempted.
