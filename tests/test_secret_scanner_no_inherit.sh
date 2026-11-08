@@ -197,66 +197,83 @@ check_declared "$WF_DIR/governance.yml"  "$WF_DIR/governance-reusable.yml"
 # against the callee THAT JOB pins, so a valid multi-job caller cannot
 # cross-check one job's secrets against another job's callee.
 
-# job_triples CALLER: emit one line per (pin, rel, secret) triple, scoped to
-# the job that maps the secret, for every job whose `uses:` pins a standards
-# reusable (yml or yaml). Jobs pinning anything else, or nothing, emit no
-# triple — finding 2's vacuous-pass guard lives in check_pinned.
-job_triples() {
+# evaluate_jobs CALLER: emit one line per mapped secret of every job that
+# maps secrets, in either of two kinds:
+#   TRIPLE<TAB>pin<TAB>rel<TAB>name   — the job pins a standards reusable at a
+#                                       40-hex sha; the secret can be verified
+#   NOPIN<TAB>job<TAB>name            — the job maps a secret but its reusable
+#                                       pin is unrecognised (renamed owner,
+#                                       tag instead of sha, .yaml-less path,
+#                                       malformed pin) or the file order puts
+#                                       secrets before uses
+# Key order is irrelevant (YAML maps are unordered): each job is evaluated as
+# a unit at its boundary. A 2-space key (quoted or not — GitHub job ids are
+# bare words, optionally quoted) opens a new job boundary; quoted keys need
+# no special handling because ANY 2-space key is a boundary.
+evaluate_jobs() {
   awk '
     /^[[:space:]]*(#|$)/ { next }
-    /^jobs:/ { jobs=1; next }
-    jobs && /^[^ ]/ { exit }
-    /^  [A-Za-z0-9_-]+:/ { job=1; pin=""; rel=""; secrets=0; next }
-    job && /^    uses:[[:space:]]/ {
-      # mawk has no interval expressions, so the 40-hex check is done with
-      # length() + an anchored class test, never {40}.
+    function flush() {
+      if (!in_job) return
+      for (i = 1; i <= nsec; i++) {
+        if (pin != "") printf "TRIPLE\t%s\t%s\t%s\n", pin, rel, sec[i]
+        else           printf "NOPIN\t%s\t%s\n", job, sec[i]
+      }
+      in_job = 0; nsec = 0; pin = ""; rel = ""; secrets = 0; job = ""
+    }
+    /^jobs:/ { jobs = 1; next }
+    jobs && /^[^ ]/ { flush(); exit }
+    jobs && /^  [^ ]/ {
+      flush()
+      in_job = 1
+      job = $1
+      gsub(/[:"'"'"']/, "", job)
+      next
+    }
+    in_job && /^    uses:[[:space:]]/ {
+      # mawk has no interval expressions; the 40-hex check is length() + an
+      # anchored class test, never {40}.
       if (match($0, /(hyperpolymath|metadatastician)\/standards\/\.github\/workflows\/[A-Za-z0-9_.-]+\.ya?ml@/)) {
         tok = substr($0, RSTART, RLENGTH)
-        rel = tok; sub(/.*standards\//, "", rel); sub(/@$/, "", rel)
+        r = tok; sub(/.*standards\//, "", r); sub(/@$/, "", r)
         sha = substr($0, RSTART + RLENGTH, 40)
-        if (length(sha) == 40 && sha ~ /^[0-9a-f]+$/) pin = sha
+        if (length(sha) == 40 && sha ~ /^[0-9a-f]+$/) { pin = sha; rel = r }
       }
       next
     }
-    job && /^    secrets:[[:space:]]*(#.*)?$/ { secrets=1; next }
-    secrets && /^    [^ ]/ { secrets=0 }
-    secrets && /^[^ ]/ { jobs=0; job=0; secrets=0 }
+    in_job && /^    secrets:[[:space:]]*(#.*)?$/ { secrets = 1; next }
+    secrets && /^    [^ ]/ { secrets = 0 }
+    secrets && /^[^ ]/ { secrets = 0 }
     secrets && /^      [A-Za-z_][A-Za-z0-9_]*:/ {
-      k=$1; sub(/:.*/, "", k)
-      if (pin != "") printf "%s\t%s\t%s\n", pin, rel, k
+      k = $1; sub(/:.*/, "", k)
+      sec[++nsec] = k
       next
     }
+    END { flush() }
   ' "$1"
 }
 
 check_pinned() {
-  local caller="$1" pin rel name triples declared passed
+  local caller="$1" kind a b c pin rel name declared triples
   [ -r "$caller" ] || { fail "packaged caller unreadable: $caller"; return; }
-  triples="$(job_triples "$caller")"
+  triples="$(evaluate_jobs "$caller")"
   if [ -z "$triples" ]; then
-    # A caller that maps secrets but pins no standards reusable gives the
-    # contract test nothing to verify — refuse to pass vacuously. A caller
-    # passing no secrets at all has nothing to check.
-    passed="$(awk '
-      /^[[:space:]]*(#|$)/ { next }
-      /^jobs:/ { jobs=1; next }
-      jobs && /^[^ ]/ { exit }
-      jobs && /^    secrets:[[:space:]]*(#.*)?$/ { secrets=1; next }
-      secrets && /^    [^ ]/ { secrets=0 }
-      secrets && /^[^ ]/ { jobs=0 }
-      secrets && /^      [A-Za-z_][A-Za-z0-9_]*:/ {
-        sub(/^      /, ""); sub(/:.*/, ""); print
-      }
-    ' "$caller")"
-    if [ -n "$passed" ]; then
-      fail "$(basename "$caller") passes secrets ($(printf '%s' "$passed" | tr '\n' ' ')) but pins no standards reusable this contract test understands (owner/.yaml/pin drift?) — refusing to verify vacuously"
-    else
-      note "$(basename "$caller") passes no secrets — nothing to verify"
-    fi
+    note "$(basename "$caller") maps no job secrets — nothing to verify"
     return
   fi
-  while IFS=$'\t' read -r pin rel name; do
-    [ -n "$name" ] || continue
+  while IFS=$'\t' read -r kind a b c; do
+    case "$kind" in
+      NOPIN)
+        fail "$(basename "$caller") job $a maps secret $b but its reusable pin is unrecognised this contract test (renamed owner, tag instead of sha, shortened/malformed pin) — refusing to verify vacuously"
+        continue
+        ;;
+      TRIPLE)
+        pin="$a"; rel="$b"; name="$c"
+        ;;
+      *)
+        continue
+        ;;
+    esac
     if ! git -C "$REPO_ROOT" cat-file -e "$pin^{commit}" 2>/dev/null; then
       fail "$(basename "$caller") pins $rel at $pin, absent from local history — full history required; refusing to verify vacuously"
       continue
@@ -269,7 +286,7 @@ check_pinned() {
       /^[[:space:]]*(#|$)/ { next }
       /^  workflow_call:/ { call=1; next }
       call && /^[^ ]/ { exit }
-    call && /^  [^ ]/ { exit }
+      call && /^  [^ ]/ { exit }
       call && /^    secrets:[[:space:]]*(#.*)?$/ { secrets=1; next }
       secrets && /^    [^ ]/ { exit }
       secrets && /^      [A-Za-z_][A-Za-z0-9_]*:/ {
