@@ -76,7 +76,7 @@ project:
   license: PMPL-1.0-or-later
   repo: hyperpolymath/project-name
   languages:
-    - ReScript
+    - AffineScript
     - Rust
   build_system: just
   runtime: deno
@@ -91,11 +91,11 @@ Rules that MUST NOT be violated. Each invariant has an id, rule, and reason.
 invariants:
   - id: no-typescript
     rule: "Do not introduce TypeScript files anywhere in this project"
-    reason: "ReScript is the chosen frontend language — this is deliberate"
+    reason: "AffineScript is the chosen frontend language — this is deliberate"
     severity: critical
-  - id: custom-tea-runtime
-    rule: "Do not replace the custom TEA runtime in src/tea/"
-    reason: "18-module custom build — rescript-tea was deliberately rejected"
+  - id: custom-runtime
+    rule: "Do not replace the custom runtime in src/core/"
+    reason: "18-module custom build — the off-the-shelf alternative was deliberately rejected"
     severity: critical
 ----
 
@@ -131,8 +131,8 @@ deleted, reorganised, or replaced without explicit user approval.
 [source,yaml]
 ----
 protected:
-  - path: src/tea/
-    reason: "Custom TEA runtime — 18 modules"
+  - path: src/core/
+    reason: "Custom runtime — 18 modules"
   - path: .machine_readable/
     reason: "Canonical location for machine-readable state"
   - path: coordination.k9
@@ -153,9 +153,9 @@ architecture:
       - "Tauri"
       - "Electron"
       - "native GTK"
-  - id: deno-npm-hybrid
-    decision: "Deno orchestrates builds but npm used for ReScript compiler"
-    reason: "ReScript compiler requires npm — this is the only exception"
+  - id: project-compiler-build
+    decision: "Use the project-declared build command for the AffineScript frontend"
+    reason: "Compiler setup is project-specific — follow build_commands rather than inferring tooling"
 ----
 
 ==== `innervation` (1.2.0)
@@ -198,7 +198,7 @@ creating parallel systems.
 ----
 do_not_create:
   - pattern: **/*.ts
-    reason: "TypeScript is banned — use ReScript"
+    reason: "TypeScript is banned — use AffineScript"
   - pattern: Dockerfile
     reason: "Use Containerfile (Podman, not Docker)"
   - pattern: package-lock.json

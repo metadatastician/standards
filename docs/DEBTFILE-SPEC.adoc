@@ -125,9 +125,11 @@ all four.
 the field that makes the entry a claim rather than folklore. See
 <<probe-discipline>>.
 
-`count`:: The last measured value. Written by `run-debtfile.sh --write`. Hand-
-editing this to make a gate pass is the one thing the mechanism exists to
-prevent.
+`count`:: The last measured value. Written by `run-debtfile.sh --write`.
+Hand-editing it to make a gate pass is the one thing the mechanism exists to
+prevent. A breaching measurement is reported, not recorded: `--write` never
+writes a count above its ceiling, so a written file is always one
+`check-debtfile-structure.sh` accepts (standards#955).
 
 `ceiling`:: The maximum tolerated. The runner lowers it automatically when debt
 is paid down; nothing raises it except a human with a declaration.
@@ -299,7 +301,7 @@ for a PR gate, but it means a brand-new untracked file is invisible until added.
 |===
 |Condition |Result
 
-|`measured > ceiling` |❌ BREACH — exit 1
+|`measured > ceiling` |❌ BREACH — exit 1; `--write` leaves `count` unchanged
 |`measured < ceiling` |✅ PAID — with `--write`, the ceiling follows it down
 |`measured == 0` |🎉 RESOLVED
 |`measured == ceiling` |· HOLDING

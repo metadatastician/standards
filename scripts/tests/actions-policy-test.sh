@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: MPL-2.0
+# covers: check-actions-policy.sh set-allowed-actions.sh rsr-selfaudit.sh
 # Regression fixtures for the live Actions policy detector/setter (#486).
 set -uo pipefail
 

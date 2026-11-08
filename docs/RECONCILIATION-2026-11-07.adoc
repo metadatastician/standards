@@ -1,0 +1,542 @@
+// SPDX-License-Identifier: MPL-2.0
+// SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+= Issue reconciliation and priority list — 2026-11-07
+Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+:toc:
+
+== What this document is
+
+A full reconciliation of the `metadatastician/standards` issue list as of
+2026-11-07. The pile had grown to 227 open issues with duplicates, resolved
+work still open, junk titles and no consistent difficulty or priority
+signal. This pass:
+
+. **closed 11 issues** — 9 whose work has landed (each closed against the
+  merged PR that landed it, or the state verified on `main`), and 2 true
+  duplicates folded into their canonical issue;
+. **retitled 5 issues** that were titled `Problem` (real content, unusable titles);
+. **labelled everything left** (216 issues) with a consistent effort scale and
+  priority, keeping every pre-existing label that carried information;
+. **fixed two live defects** in this PR — the `run-debtfile.sh --write`
+  writer/validator contradiction (#955, acceptance criterion 4) and the
+  remaining `in_ledger` SIGPIPE pattern behind #1219;
+. **listed what remains by category, effort and priority** (below).
+
+Everything outstanding is represented either by a labelled open issue (the
+bulk of it — most items are fleet sweeps that cannot be expressed as a PR
+against this repo) or by the focused fix commits in this PR.
+
+== Closed in this pass
+
+=== Landed — closed against the evidence (9)
+
+[cols="1,3,2"]
+|===
+| Issue | What landed it | Evidence
+
+| #1383 | Canonical Agda safety flags + cross-prover witness receipts | PR #1386 ("Implements #1383", signed commit `9e35feb1`) + PR #1387
+| #1380 | ClusterFuzzLite subpath patterns in the tree allowlist canon | PRs #1393 + #1394 (exactly the two narrow patterns, idempotence exercised)
+| #1369 | SLSA generator reusable admitted at the exact reviewed path+SHA | PR #1388
+| #1306 | panic-attack advisory: 10 critical + 1 high | pin bump #1316 (rows 1–8), PR #1404 (rows 9–10, scope-excludes), remainder tracked in #1405
+| #1290 | actions.lock leaf entries `ref: <own SHA>` | PRs #1381 + #1382; verified absent from current `main`
+| #1174 | kyaml-format.sh exit contract vs fixture suite | contract adopted and encoded (exit 1 = not KYAML, exit 2 = REFUSED); `/tmp` hardcoded paths removed
+| #1390 | Old-path reusable calls dispatch 0 jobs | PR #1391 relocker + live proof (echidna#458, run 41926570302); fleet rollout continues under #1340
+| #1223 | Dangling references to `rhodium-standard-repositories/RSR.adoc` | both references now point at `0-canon/rsr/RSR-SPEC-v2.adoc` (verified present)
+| #953 | Debtfile re-baseline record (30→40 / 76→80) | superseded by later re-baselines (file now 31/31, 84/84); paydown self-tracks via the Debtfile ratchet
+|===
+
+=== Duplicates — folded (2)
+
+* *#1081* → duplicate of *#1082* (same ruleset 23787415, same unsatisfiable
+  `SonarCloud Code Analysis` context; #1082 carries the remediation and the
+  reinstatement condition).
+* *#1228* → duplicate of *#895* Case B (root-anchored gate rows vs nested
+  cargo workspaces; #895 owns both concrete cases and the gate-format cure).
+
+=== Cleanups
+
+* Retitled the five issues titled `Problem` (#1219, #1220, #1221, #1223, #1224)
+  to descriptive titles.
+* New labels: `status:done`, `effort:trivial|small|medium|large|epic`.
+* #1109 ("Estate: needs me") is the squabble-board dashboard, regenerated on
+  every run — kept open and labelled `meta:recurring` rather than closed.
+
+== The effort scale
+
+One scale, mapped to the two axes that matter (intellectual difficulty and
+time), because most items are one or the other:
+
+[cols="1,3"]
+|===
+| Label | Meaning
+
+| effort:trivial | Near-trivial: a mechanical fix anyone can land in an hour. Several are good first issues.
+| effort:small | Easy: cause and cure are clear; a day or less.
+| effort:medium | Moderate: some design, testing care, or a few days of work.
+| effort:large | Hard/complex technically, or a large measured sweep.
+| effort:epic | Campaign scale: many repos, many weeks, needs owner cadence.
+|===
+
+Priorities (`priority:p0`…`p3`) are re-assessed against the state of the
+tree today. P1 items are the ones that fester: they break CI foundations,
+ship security exposure, or block a whole cluster behind them.
+
+== Pre-sweep snapshot, by category (216 issues)
+
+The category tables, effort counts and priority list below record the state
+before the trivial-tier sweep; they are historical, not a current worklist.
+The final appendix records the sweep dispositions and re-tiering. The current
+worklist is the repository's open issues with their current effort, priority
+and status labels.
+
+[cols="3,1,1,1,1,1,1"]
+|===
+| Category | issues | trivial | small | medium | large | epic
+
+| CI machinery & action supply chain | 69 | 9 | 36 | 18 | 5 | 1
+| Security & scanning | 16 | 4 | 7 | 3 | 1 | 1
+| Policy & governance | 25 | 2 | 10 | 11 | 2 | 0
+| Proofs, deed & K9 formats | 17 | 1 | 3 | 6 | 5 | 2
+| RSR, templates & scaffolding | 14 | 1 | 8 | 4 | 1 | 0
+| Migration campaigns | 17 | 2 | 3 | 6 | 4 | 2
+| Estate sweeps & operations | 29 | 1 | 8 | 11 | 4 | 4
+| Tooling & script hygiene | 13 | 7 | 5 | 1 | 0 | 0
+| Automation & bots | 6 | 0 | 0 | 0 | 5 | 1
+| Documentation & knowledge | 5 | 0 | 1 | 3 | 1 | 0
+| Licensing & compliance | 5 | 1 | 2 | 1 | 1 | 0
+|===
+
+=== CI machinery & action supply chain (69)
+
+[cols="1,1,1,5"]
+|===
+| Issue | Effort | Pri | Title
+
+| #1286 | small | P2 | tools/js-runtimes: zero-dependency package.json cannot satisfy both lock-presence and frozen-i… |
+| #1266 | medium | P2 | startup_failure with zero jobs is also actor-level: a CodeRabbit-created PR head starts no wor… |
+| #1265 | medium | P2 | cargo-audit.yml template: vulnerability issues carry no findings, no acceptance criteria and n… |
+| #1264 | trivial | P2 | mirror-reusable: a missing GITEA_HOST reddens the default branch instead of printing a skip no… |
+| #1224 | trivial | P3 | Scorecard false positive: 9-archive template rename re-flags two pre-existing `curl | bash` in… |
+| #1147 | medium | P1 | fix(ci): replace the three actions the estate policy rejects at start-up (editorconfig-checker… |
+| #1141 | large | P2 | Reusable workflows reference secrets without declaring them, so callers cannot forward least-p… |
+| #1093 | large | P1 | codeql-action: ~53 repos startup-dead from 4.38.2 bumps without the lock record; 4.38.1 was ne… |
+| #1069 | medium | P2 | cargo-audit producer opens vulnerability trackers but never closes them (umbrella for 9 live t… |
+| #1037 | medium | P1 | 48 open Dependabot PRs re-introduce the codeql-action v4.38.1 startup-killer, and the dependab… |
+| #1036 | medium | P2 | Scorecard reconciler fails correct repos: gh actions-lock --verify is blind to job-level reusa… |
+| #1035 | small | P1 | 27 Scorecard callers omit actions:read and will startup_failure on their next standards pin bu… |
+| #1033 | small | P3 | gates.json: never_required_contexts cannot catch default-setup CodeQL by name |
+| #1032 | small | P2 | O6 propagation: four contradictions between the ruling and the committed rulesets |
+| #1031 | small | P2 | CodeQL default setup and a committed advanced workflow cannot coexist — 3 metadatastician repo… |
+| #1019 | medium | P2 | CodeRabbit's unsigned pushes re-kill CI on every required_signatures repo — re-signing is tria… |
+| #1018 | small | P2 | rust-ci-reusable: explicit ref refs/pull/N/merge dies when the PR merges mid-run (absolute-zer… |
+| #1015 | trivial | P3 | check-action-pins-resolve.sh scans prose: a documentation example SHA fails the gate |
+| #1010 | small | P2 | ci: retire the dead A2ML validation gate (13 repos — the renamed-action population) |
+| #1003 | trivial | P2 | rsr-template-repo: no ruleset requires pull requests on any branch |
+| #999 | small | P2 | config.ncl cannot be evaluated: std.record.merge does not exist |
+| #998 | small | P3 | ci-pipeline.yml: standards does not call its own pipeline (AC6 of #986) |
+| #993 | medium | P2 | actions.lock policy: job-level reusable refs are reported, never required — and the pin bump t… |
+| #992 | small | P2 | check-lock-sync.sh and GitHub startup disagree for job-level-reusable-only callers, and the ga… |
+| #991 | small | P2 | AC4 arming policy: retired-filename blocks, stale-version warns (each CURRENT_VERSION bump is … |
+| #987 | medium | P2 | Phantom blob-pin: 18 refs across 7 repos pin standards reusable workflows at non-commit SHAs (… |
+| #981 | small | P2 | validate-actions-lock prescribes a cure that can re-legitimise a blocked action version |
+| #980 | small | P2 | ci-pipeline.yml: the ledger pin's "same commit" invariant is unsatisfiable (12/12 merges are s… |
+| #972 | small | P2 | pre-commit hands validators git-QUOTED paths, so non-ASCII filenames are silently skipped (6 v… |
+| #969 | small | P3 | actions.lock omits job-level reusable refs in 159 repos (no runtime impact; tracks upstream #1… |
+| #968 | large | P1 | actions.lock step-level desync: 39 repos with silently dead CI (startup_failure) |
+| #967 | medium | P2 | ci-pipeline detect is blind to 56 code-bearing repos (and probes Deno, not Bun) |
+| #964 | small | P2 | governance-reusable.yml dupkey helper pin 317101e0 is stale by 45 files — and its sparse-check… |
+| #958 | medium | P2 | Debt-exception / Ratchet-exception trailers never survive the squash merge — 0 of 8 in the Deb… |
+| #955 | small | P1 | Debt ratchet red on every PR since #820 — run-debtfile.sh --write emits a file check-debtfile-… |
+| #950 | large | P1 | Mirror fleet: 27% of estate CI failures — destinations unprovisioned, advisory doctrine not im… |
+| #930 | trivial | P3 | actions-lock gate's remedy text names a repo-relative path that exists in no consumer repo |
+| #925 | small | P2 | check-ts-allowlist.deno.js cannot be deleted: 11 of the last 12 governance revisions still inv… |
+| #924 | medium | P1 | rsr-template-repo has 62 unpinned workflow refs, including two @main and one feature branch |
+| #922 | small | P2 | No pinned Bun lint/format gate: staged JavaScript is a declared skip |
+| #916 | medium | P2 | setup-deno pins are inconsistent and some look fabricated: one SHA labelled four different tags |
+| #914 | small | P2 | 46 genuinely unpinned third-party refs in the vendored seed trees |
+| #913 | small | P2 | 76 'uses: ../../...' relative refs in vendored seeds are invalid syntax and cause startup death |
+| #910 | medium | P1 | governance-reusable.yml still has 7 'ref: main' helper checkouts reached by 368 pinned callers |
+| #909 | small | P2 | actions.lock never covers denoland/setup-deno |
+| #908 | trivial | P3 | root-allow.txt is registered in the exemption ratchet but absent on disk, so that ledger is in… |
+| #907 | small | P2 | check-actions-lock-gate.sh unconditionally exempts actions/github-script, so @main passes today |
+| #906 | small | P2 | workflow-lint's lock regex is blind to '- uses:' list items, so its green is partly vacuous |
+| #905 | trivial | P3 | runtime-policy.yml's Deno branch emits only ::warning:: and cannot fail a job |
+| #904 | small | P2 | run_validator() is fail-open: 6 validators named by rsr-template-repo's pre-commit do not exist |
+| #903 | large | P1 | actions-lock cliff: ENFORCE_ACTIONS_LOCK_FROM=2026-10-01 reddens 163 callers with no human act… |
+| #896 | small | P1 | changelog-reusable can never start: called-job write perms are checked against caller TOP-LEVE… |
+| #888 | small | P2 | secret-scanner-reusable stages the estate baseline unconditionally, so it detonates on itself … |
+| #803 | medium | P2 | lockfile drift: 95 repo(s) as of 2026-11-03 |
+| #792 | small | P2 | Pin-consumption census TSV has TWO extractor defects — 145 of 1,434 rows carry a non-SHA in pi… |
+| #727 | trivial | P2 | gh actions-lock fix mode prepends its banner above the SPDX header — blocks the central lock-r… |
+| #708 | small | P2 | Lockfile Drift Detect anonymizes repos as _w, counts banners as entries, treats script errors … |
+| #707 | small | P1 | Phantom upload-artifact pin ea165f8d65b6db9a… (commit never existed, 422) live in 11 repos — s… |
+| #702 | small | P1 | install-tools.sh regenerated estate-wide WITHOUT the #678 cure — fake exit-0 gate re-propagate… |
+| #681 | epic | P1 | adaptive/must: 342 of 415 repos cannot merge a clean PR without --admin (unsatisfiable require… |
+| #674 | small | P3 | Scorecard's PinnedDependencies is wrong for lockfile-enforced repos — 79 alerts on _pathroot, … |
+| #670 | medium | P1 | Dependabot bumps uses: without regenerating actions.lock — every remediated repo is newly expo… |
+| #669 | medium | P2 | Orphaned/phantom action pins still live post-remediation: dtolnay ×35 repos (two orphaned SHAs… |
+| #657 | small | P3 | MEASURED: a lockfile policy kills 77% of dead workflows — the wiped allowlist is only 10%, and… |
+| #409 | small | P2 | promote CI-CRITICALITY tiers (Gate/Check/Advisory/Auto) → standards + rsr-template |
+| #346 | trivial | P3 | governance: hoist bridge-forbidden-phrases check into reusable workflow |
+| #324 | medium | P2 | [campaign] Long-tail non-canonical CodeQL cron sweep (~86 files / 30 repos) |
+| #323 | small | P3 | [standing] Estate CodeQL cron drift detection + 6-week budget review |
+| #288 | small | P2 | [campaign] Estate CodeQL weekly→monthly sweep (cut 3, standards#233 Option B — ~206 repos) |
+|===
+
+=== Security & scanning (16)
+
+[cols="1,1,1,5"]
+|===
+| Issue | Effort | Pri | Title
+
+| #1405 | small | P2 | panic-attack (advisory): eval in three test check() helpers reports 3 critical |
+| #1384 | epic | P2 | Implement evidence-backed, non-disruptive estate hardening (SELinux, firewall, ASVS, capabilit… |
+| #1327 | small | P2 | Let advisory Hypatia callers skip pull-request SARIF upload |
+| #1173 | small | P1 | Hypatia baseline and scan red on main: 12 new findings since #1143 |
+| #1102 | large | P1 | Fork-PR security gate has never started: the pull_request_target event is refused by Actions p… |
+| #1089 | medium | P2 | OWASP gate gap: method policy, ASVS probe and SSRF rule are declared but not gated |
+| #1086 | small | P2 | Launcher census: 20 launchers still put their PID file under ${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp… |
+| #1014 | medium | P2 | governance: the Hypatia scanner pin predates the consumer fixes it scans for — compiled-in sup… |
+| #957 | small | P1 | PAT-refresh tripwire: live HYPATIA_SCAN_PAT will arm 6 unackable CSA findings in both gates |
+| #945 | trivial | P3 | Hypatia misc: scorecard DependencyPinning + SD022 k9 spec stale path (2 instances) |
+| #943 | small | P3 | Hypatia workflow_hardening triage: secrets-inherit convention + WH013/WH006 false positives (7… |
+| #941 | small | P2 | Hypatia RE001: adopt step-security/harden-runner estate-wide, or record WONTFIX (23 instances) |
+| #940 | trivial | P3 | Hypatia content_patterns/known_fake_action_sha in vendored satellite examples (6 instances) |
+| #938 | trivial | P3 | Hypatia content_patterns/npx_in_workflow: npx/npm in CI config (9 instances, stale rule + vend… |
+| #937 | trivial | P3 | Hypatia content_patterns/http_in_docs: plain-HTTP URLs in prose (11 instances) |
+| #687 | medium | P2 | audit(hypatia): classify 61 structural-drift and canonical-home findings |
+|===
+
+=== Policy & governance (25)
+
+[cols="1,1,1,5"]
+|===
+| Issue | Effort | Pri | Title
+
+| #1379 | medium | P2 | Policy: evidence-based PR merge readiness, proof conformity, app review completion, and shared… |
+| #1341 | small | P2 | Apply signed four-format routing correction across canonical bot guidance |
+| #1230 | medium | P2 | Rule estate-chora UUIDv8 profile-C preimage/alias before launcher emission cutover |
+| #1226 | medium | P2 | Ruling needed: per-app launcher praxis field vocabulary before the 21-descriptor migration |
+| #1225 | medium | P2 | Ruling needed: canonical launcher metadata domains/encoding and offline fallback authority (#4… |
+| #1140 | medium | P2 | UUID v7 checker needs an explicit legacy/external identity preservation contract |
+| #1107 | large | P2 | Provisioning canon: four gaps found by the 8-repo pilot (doctor provenance, toolchain floors, … |
+| #1101 | medium | P2 | Carve-outs via subtree split strip every commit signature (lol, #680) — procedure must choose … |
+| #1091 | large | P2 | D217/D215b: convert unsigned commit producers, then enforce signatures on 61 repos |
+| #1082 | small | P3 | SonarCloud never reports on standards PRs; removed from ruleset 23787415 until it does |
+| #1080 | trivial | P3 | Debtfile gate-scripts-without-tests probe cannot see actions-policy-486-test.sh (over-counts b… |
+| #1066 | small | P2 | LANGUAGE-POLICY.adoc says Idris2-only; spec.scm/language-policy.scm still sanctions Agda |
+| #1007 | small | P2 | EstatePushing is scoped ~ALL but binds to 6 of 68 repos — push rulesets reach private repos on… |
+| #1006 | small | P3 | EstateTagging's workflows rule is vacuous (workflows: []), and no Integration can create a tag… |
+| #1004 | medium | P3 | Estate census: 124 of 456 repos carry retired or unsatisfiable ruleset rules (report only) |
+| #975 | small | P2 | 21 baseline acks lapse on 2026-10-22 and 17 point at closed issues |
+| #928 | small | P2 | language-policy.scm v2.0.0 has no wired regression test (needs a decision on guile in CI) |
+| #923 | trivial | P3 | The Deno ruling is dated two ways across the estate (2026-08-26 vs 2026-09-22) |
+| #921 | small | P2 | 55 agent-instruction files assert 'TypeScript IS PERMITTED under Bun', contradicting the 2026-… |
+| #890 | small | P2 | Optimus-Branch is enforcement:disabled on standards, hypatia and cicd-squabbler — 0 rules in f… |
+| #795 | medium | P2 | 1,073 byte-identical Optimus-Branch.json replicas are a STALE, WEAKER policy than the canonica… |
+| #759 | medium | P2 | [decision] 72 of 111 rhodibot workflows still run the MUTATING variant on a weekly cron — the … |
+| #692 | small | P2 | policy: enforce Rust = Rust + Creusot without proof theatre |
+| #659 | medium | P2 | Language policy is duplicated into ~372 per-repo CLAUDE.md files across 131 repos — fixing sta… |
+| #408 | medium | P2 | policy: estate settings standard — merge opts, protection, required-checks = 🔴 Gate set (WS4) |
+|===
+
+=== Proofs, deed & K9 formats (17)
+
+[cols="1,1,1,5"]
+|===
+| Issue | Effort | Pri | Title
+
+| #1399 | medium | P1 | Tracking: deed, K9 and contractiles ultraplan (P0–P3) and the work outside standards |
+| #1385 | large | P2 | refactor(actions): replace embedded Python allowlist preflight with Rust checker, preserving f… |
+| #1339 | small | P2 | 1-formats/deed/tools/migrate_a2ml_to_deed.sh is a stub that reads as a working translator |
+| #1221 | medium | P2 | root coordination.k9 does not parse under its own normative grammar (coordination-k9-grammar v… |
+| #1085 | large | P2 | k9-coordination: actor grants — fence (WHERE) × leash (WHAT), deny-by-default for agent/bot co… |
+| #1059 | large | P2 | decide the attestation/orchestration chain: canon → .deed → .k9 → Nickel → environment → seria… |
+| #1058 | large | P2 | grammar artifacts: .k9 has no grammar or contract at all, and deed.abnf states both “sole norm… |
+| #1000 | trivial | P3 | 8 of 16 *.k9.ncl files lack the K9! line-1 sentinel |
+| #944 | medium | P2 | Banned-language deed tools: port a2ml_to_deed.py + deed_lint.py off Python, or exempt permanen… |
+| #934 | small | P2 | 6 contractiles fail nickel typecheck: import path points one level off an existing file |
+| #926 | medium | P2 | k9-coordination-protocol vendors a Deno test harness: 260 Deno API lines across 10 files |
+| #837 | epic | P2 | DEED conversion campaign — tracking & acceptance criteria (.a2ml → .deed) |
+| #732 | medium | P2 | AI-MANIFEST ply: relay items after #731 — two renames, CI wiring, migration, and one owner rul… |
+| #705 | medium | P2 | proven: postulate cure is NOT on origin/main — 42 .idr files/360 sites still unparseable there… |
+| #675 | small | P2 | Estate sweep: Fork A 'postulate' damage confined to proven — but the Idris2/Agda keyword misco… |
+| #124 | epic | P2 | Epic: estate proof-debt remediation (2026-05-18 reconciled audit) |
+| #92 | large | P2 | Idris2 as source-of-truth: generate/verify Zig FFI from the ABI |
+|===
+
+=== RSR, templates & scaffolding (14)
+
+[cols="1,1,1,5"]
+|===
+| Issue | Effort | Pri | Title
+
+| #1347 | small | P2 | RSR 3.0.0: retire 5.2.1 spark-ready, add creusot-ready |
+| #1262 | medium | P2 | RSR applicability: workspace and named ABI layouts need a canonical decision |
+| #1229 | small | P2 | TEMPLATE-APPLICABILITY-POLICY baseline still requires 0-AI-MANIFEST.a2ml while the template re… |
+| #1227 | small | P2 | check-rsr-profile.sh never evaluates [baseline]; and its .well-known/ row predates the www/ mi… |
+| #1220 | medium | P2 | Decide the canonical home of rhodium-standard-repositories/actions-allowlist/ — the only rhodi… |
+| #1125 | trivial | P3 | canon: template-capability-gates.toml still counts flake.nix as reproducible-build (Nix retire… |
+| #1008 | small | P3 | rsr-template-repo Base ruleset repaired; 5-8 error-severity alerts remain (threshold semantics… |
+| #895 | large | P2 | Gate format cannot express partial modules or nested layouts (2 concrete cases) |
+| #894 | small | P2 | Gate table + criterion 1.2.1 ignore manifest.scm (estate Guix convention) |
+| #704 | small | P2 | examples/web-project-deno.json template ships phantom npm:affinescript@^12.1.0, replicated acr… |
+| #689 | medium | P2 | fix(rsr-certifier): complete or honestly gate the uncompilable satellite |
+| #634 | medium | P2 | [umbrella] Template family rationalisation — variant packs, not variant repos (measured: 6-fil… |
+| #411 | small | P3 | standard: discussion + wiki templates + discussions-toggle policy (WS5/WS8) |
+| #410 | small | P3 | standard: MCP settings template = boj-server cartridge config (WS6) |
+|===
+
+=== Migration campaigns (17)
+
+[cols="1,1,1,5"]
+|===
+| Issue | Effort | Pri | Title
+
+| #1025 | medium | P2 | KYAML step 6/6 — workflows, only if step 4 rules them in scope |
+| #1024 | medium | P2 | KYAML step 5/6 — migrate estate-authored non-bot YAML |
+| #919 | medium | P2 | Deno retirement sizing: 95 'deno task' definitions across 23 files in the 11 ledgered repos |
+| #917 | large | P2 | 234 .pre-commit-config.yaml files depend on Python, which LANGUAGE-POLICY bans |
+| #706 | large | P2 | mise.toml pins banned toolchains estate-wide — python in 543/573 files (249 repos); 59 files s… |
+| #698 | trivial | P3 | Banned languages appear in dev-environment definitions (guix.scm ×14, empty-linter mise.toml) |
+| #664 | small | P3 | 43% of estate .affine files are 200-byte Harvard Engine stubs — migration campaigns count dele… |
+| #663 | small | P3 | TypeScript retirement: measured — 308 of 613 .ts files were never exempt, and the largest exem… |
+| #662 | trivial | P3 | wordpress-tools PR #57 deleted 108 source files and added nothing — deletion scored as migrati… |
+| #658 | medium | P2 | Deno→Bun: all 30 deno.json locations assessed — 18 blocked on npm packages that do not exist |
+| #309 | small | P2 | [campaign] Python residual cleanup — ~45 estate-authored .py files remain (banned) |
+| #279 | large | P2 | [campaign #252] STEP 8 — MEGAPORT: idaptik (516, was 1235) + panll (726) batched conversion |
+| #278 | large | P2 | [campaign #252] STEP 7 — LARGE REPOS: 100-500 file repos (~6 repos) |
+| #276 | medium | P2 | [campaign #252] STEP 6 — MID-TIER: 20-100 file repos (~15 repos) |
+| #272 | medium | P2 | [campaign #252] STEP 5 — TAIL BATCH: smallest tail-end repos (≤20 files × ~50 repos) |
+| #252 | epic | P2 | [campaign] ReScript → AffineScript estate migration (UMBRELLA) |
+| #239 | epic | P2 | [campaign] TypeScript → AffineScript estate migration (UMBRELLA) |
+|===
+
+=== Estate sweeps & operations (29)
+
+[cols="1,1,1,5"]
+|===
+| Issue | Effort | Pri | Title
+
+| #1340 | large | P2 | Post-transfer: 390 files still name hyperpolymath/standards, and two coverage measurement paths |
+| #1261 | epic | P2 | Estate rollout: CI foundations from rpa-elysium #145 (432-repository audit) |
+| #1109 | — | — | Estate: needs me |
+| #1071 | medium | P3 | Umbrella: machine-readable currency deferred follow-ups — one estate-common list for 4 repos |
+| #1070 | medium | P2 | Umbrella: 14 per-repo triages of pre-existing red checks surfaced by the actions.lock cure |
+| #1056 | medium | P2 | slavia #100 closure: class determinations for #994, startup-death mechanics + Dependabot recur… |
+| #1055 | small | P2 | Orphan refs: automated agents leave unrelated-history branches that no gate can see (8 arena/*… |
+| #1049 | small | P3 | Estate listing: 35 repositories are below the RSR 7-topic minimum |
+| #1002 | medium | P2 | Mirror to Git Forges: 3 of 7 forges failing, three different root causes |
+| #994 | medium | P2 | Cross-cutting governance reds surfaced by the actions.lock cure — 9 classes across 17 PRs (inc… |
+| #960 | small | P2 | D73-C downstream: 21 launcher descriptors + trigger/ still name the deleted launcher-standard.… |
+| #949 | epic | P1 | Estate health: 87% of default branches are red (388 of 447) — a red branch is no longer a sign… |
+| #918 | small | P3 | Mirror callers drifted across >=3 live SHAs (de-duplicate worktrees before counting) |
+| #889 | trivial | P3 | Repo metadata hygiene: 22 hyperpolymath repos have blank descriptions (5 public) |
+| #751 | medium | P3 | Agent handover surface is lossy: `.claude/checkpoints/` prunes files and `developer/` is not a… |
+| #703 | medium | P2 | Duplicate checkout trees double-count every estate census — repos/ vs hyper-repos/ overlap on … |
+| #677 | medium | P1 | Estate: 13 repos have a DAMAGED GIT OBJECT DATABASE (not the corrupt-index problem) — 1 with 9… |
+| #653 | small | P2 | 40 referenced-but-absent files across 19 repos — triaged (estate sweep) |
+| #636 | large | P3 | [charter] git-logistics-office — the estate control plane (repo lifecycle: birth, enrollment, … |
+| #635 | medium | P3 | [umbrella] Surface the buried projects — DYADT is the worked example, the detector is the deli… |
+| #633 | large | P2 | [umbrella] Estate control plane — close the automation loop (the last link was never connected) |
+| #495 | small | P2 | [carve-out 6/9] Data out of spec dirs: grade data → archive, PORT-REGISTRY → verisim-data, ret… |
+| #493 | medium | P2 | [carve-out 4/9] rhodium-standard-repositories/ cleanup: de-vendor satellites/, merge templates… |
+| #479 | epic | P2 | [campaign] standards carve-out: evict products/impls, keep the canon (spec + policy + registry… |
+| #460 | epic | P2 | [umbrella] Estate audit & optimization — make the enforcement real (Waves 0–6) |
+| #438 | large | P1 | Estate recovery: audit + revert unauthorized mass migrations (README .adoc→.md sweep; protecte… |
+| #343 | small | P3 | audit: dotfile drift across estate (2026-06-02 sample) — .editorconfig / .gitignore / .gitattr… |
+| #331 | medium | P2 | [campaign] Estate boj-build.yml sweep — repair or retire (~30 repos with malformed JSON + dead… |
+| #281 | small | P3 | [campaign #239] Estate seam audit: stale .claude/CLAUDE.md language tables + carve-out candida… |
+|===
+
+=== Tooling & script hygiene (13)
+
+[cols="1,1,1,5"]
+|===
+| Issue | Effort | Pri | Title
+
+| #1243 | trivial | P3 | sweep-classifiers: four scripts default INPUT/BLOBS_DIR to a fixed /tmp/drift-survey path (har… |
+| #1219 | trivial | P2 | validate-k9.sh SIGPIPE false negatives: `grep -q` under pipefail (CHANGED check cured; `in_led… |
+| #1079 | trivial | P3 | check-uuid-v7: only the LAST UUID on a line is checked (<v4> <v7> passes) |
+| #1068 | trivial | P3 | yq -i is not idempotent: a second run moves a comment block (tag-ruleset-canon.yml) |
+| #1065 | small | P3 | apply-branch-gates: a path-filtered pull_request trigger is reported PR-reachable (#1040 resid… |
+| #1001 | trivial | P3 | os_detect.ncl: 'Apple_Darwin falls through to the wildcard in deployment_priority |
+| #976 | small | P3 | detect: the Nickel probe matches RSR template boilerplate, silencing the zero-denominator refu… |
+| #933 | trivial | P3 | All 12 Rust crates fail cargo fmt --check (pre-existing formatting debt) |
+| #932 | small | P2 | validate-lint-format.sh: Rust and Nickel arms ask a different question than their tool |
+| #897 | trivial | P3 | Canonical cliff.toml should strip ZWSP at generation (bot regens re-import GitHub-defused ment… |
+| #791 | small | P2 | githooks: validate-a2ml admits 0 of 222 files and validate-spdx rejects all 1,046 .adoc — neit… |
+| #678 | medium | P2 | Estate: 132 repos track files their own .gitignore hides; template-sync sweep (92 repos) left … |
+| #93 | small | P2 | Stop committing generated/* — gitignore + regenerate-on-trigger |
+|===
+
+=== Automation & bots (6)
+
+[cols="1,1,1,5"]
+|===
+| Issue | Effort | Pri | Title
+
+| #462 | large | P2 | Implement the DYADT production verifier (hyperpolymath/did-you-actually-do-that) |
+| #348 | large | P2 | automation: hypatia ruleset + gitbots should be able to fan-out doc + 6a2 + contractile refres… |
+| #100 | large | P2 | Phase E — Production wiring + staging validation + rollout/rollback runbook |
+| #91 | large | P2 | http-capability-gateway tier-2 production-wiring (ADR-0004) |
+| #90 | large | P2 | Roll unified-gated-adapter + SSE + regen-trigger into the iseriser scaffold |
+| #89 | epic | P2 | Epic: -iser regeneration-cartridge pattern — wire all 28 -isers into boj-server (unified gated… |
+|===
+
+=== Documentation & knowledge (5)
+
+[cols="1,1,1,5"]
+|===
+| Issue | Effort | Pri | Title
+
+| #463 | medium | P2 | Complete the per-language testing guides (Zig, BEAM, proofs) + Julia refresh + AffineScript SS… |
+| #446 | medium | P3 | Proposal: an honest, adoptable readiness/insight badge framework — grade our own work, and cha… |
+| #403 | large | P3 | Build the Estate Manifesto & Atlas (front-door, owner-gated) |
+| #401 | medium | P3 | Docs: complete the audience-split education layer (docs/wikis/) |
+| #156 | small | P3 | [#92 Class D] abbreviation / acronym-boundary drift across DB + cloud cartridges |
+|===
+
+=== Licensing & compliance (5)
+
+[cols="1,1,1,5"]
+|===
+| Issue | Effort | Pri | Title
+
+| #915 | medium | P2 | ~138 files cannot carry a '#' SPDX header; 58 .json need REUSE sidecars |
+| #646 | trivial | P2 | AGENTIC.a2ml instructs agents to 'Never use AGPL' — contradicts Rules 3, 4 and 5 |
+| #645 | small | P2 | Fix the scaffold that propagates 'License: PMPL-1.0-or-later' (runbook §7a source fix) |
+| #497 | small | P2 | [carve-out 8/9] ⚠️ OWNER-ONLY licence-flag items: 007 audits in public canon; PALIMPSEST.adoc … |
+| #404 | large | P2 | Estate licence cascade (PMPL -> MPL/CC-BY-SA axis) — per HANDOFF |
+|===
+== The priority list — what to do next, and why
+
+=== P0: nothing
+
+The P0-class breakages — the ones that made merges and CI lie — were the
+ones closed in this pass (#1290's callers dying at Set up job, #1390's zero-job
+dispatches, #1174's red Self Test, #1306's untracked criticals). Nothing left
+in the pile blocks a merge today.
+
+=== P1, ordered (do these in this order)
+
+[cols="1,1,4"]
+|===
+| Order | Issue | Why first
+
+| 1 | #955 | The last debt failure on `main`. The writer/validator contradiction is fixed in this PR; what remains is one owner ruling — pay down 3 marker files or declare the `todo-fixme-markers` ceiling 84→87 with a `Debt-exception:` trailer. Until then `run-debtfile.sh` exits 1 on the tree (measures 87 vs ceiling 84). Note #958 first: the declaration trailers do not survive squash merges.
+| 2 | #1173 | Hypatia gates on `main` are red. Items 1–3 (hardcoded `/tmp`) are already cured and item 4 belongs under #941; what is left is two baseline entries and a re-measure. Small, unblocks every Hypatia signal estate-wide.
+| 3 | #896 + #1035 + #924 + #910 | The “dies at startup” cluster in the shared machinery: changelog-reusable can never start (called-job write perms), 27 Scorecard callers will die on the next pin bump (missing `actions:read`), rsr-template-repo carries 62 unpinned refs (two `@main`), and governance-reusable still reaches 7 helper checkouts at `ref: main`. Each is small/medium; together they stop the next fleet-wide startup death.
+| 4 | #670 + #1037 + #1093 + #903 | The Dependabot recurrence cluster: bumps rewrite `uses:` without regenerating actions.lock; 48 open Dependabot PRs re-introduce the codeql-action startup-killer; ~53 repos are dead from 4.38.2 bumps without the lock record; and the 2026-10-01 enforcement cliff reddens 163 callers. This is why red branches are no longer a signal.
+| 5 | #677 | Data at risk: 13 repos with damaged git object databases, one holding 9 unpushed commits. Recovery before anything else touches those trees.
+| 6 | #957 + #1102 | The two security gates that are not actually protecting anything: the PAT-refresh tripwire (a live `HYPATIA_SCAN_PAT` arms 6 unackable findings) and the fork-PR security gate that has never started once (30/30 startup_failure on `pull_request_target`).
+| 7 | #438 | Governance incident hygiene: audit and revert the unauthorized mass migrations (README `.adoc`→`.md` sweep; protected rescript/v-ecosystem repos). Longer it sits, the harder to prove what happened.
+| 8 | #949 + #681 | The meta-problem behind everything: 388 of 447 default branches are red, and 342 of 415 repos cannot merge a clean PR without `--admin` (unsatisfiable required contexts). One campaign to make a red branch mean something again — but it needs the P1 cluster above cleared first.
+| 9 | #1399 | The active ultraplan tracker (deed, K9 and contractiles, P0–P3) — the owner-facing line of work; everything in D-category feeds it.
+| 10 | #702 + #707 | Two propagating poisons fixed at the template (not the copies): the install-tools.sh fake exit-0 gate re-published to 245/248 copies, and the phantom upload-artifact pin (a commit that never existed) live in 11 repos.
+|===
+
+=== The ruling queue (unblocks children)
+
+These need an owner decision, not labour. Clearing them collapses several
+medium/large items each:
+
+* #958 — `Debt-exception:`/`Ratchet-exception:` trailers do not survive squash
+  merges (0 of 8 in the Debtfile's whole history). Until this is fixed, every
+  ceiling-raise route is a dead end — including the #955 remainder.
+* #1220 — canonical home of `rhodium-standard-repositories/actions-allowlist/`
+  (the only rhodium piece outside `9-archive/`, and a live published interface).
+* #1225 + #1226 — launcher metadata domains/encoding and the per-app praxis
+  field vocabulary; both gate the 21-descriptor migration.
+* #1230 — estate-chora UUIDv8 profile-C preimage/alias before launcher emission cutover.
+* #1262 — RSR applicability for workspace and named ABI layouts (links to #895).
+* #1059 — the attestation/orchestration chain (canon → .deed → .k9 → Nickel → environment → serialization).
+* #941 — RE001: adopt `step-security/harden-runner` estate-wide, or record WONTFIX (23 instances).
+* #692 — Rust = Rust + Creusot enforcement without proof theatre.
+* #759 — the 72 mutating rhodibot weekly crons (canary migration is 39/111).
+* #1101 — carve-outs via subtree split strip every commit signature: choose squash-import or a ruled exception.
+* #1347 — RSR 3.0.0 is decided and queued for the next canon MAJOR (`status:blocked`); do not cut it on its own.
+
+=== P2 (queue it) and P3 (nice to have)
+
+Every remaining issue carries `priority:p2` or `priority:p3` plus an effort
+label; use the repository open-issue list as the current worklist. Within P2, the fastest
+wins are the `effort:trivial`/`effort:small` items in the CI and tooling
+categories — they are mechanical, testable in isolation, and each retires a
+known lie from a gate.
+
+== Appendix — label inventory used by this pass
+
+* effort: `effort:trivial`, `effort:small`, `effort:medium`, `effort:large`, `effort:epic`
+* priority: `priority:p0` … `priority:p3` (re-assigned everywhere)
+* status: `status:done` (new, on closed-as-landed), plus the existing
+  `status:ready|blocked|needs-ruling|needs-owner|do-not-automate`
+* type labels (`bug`, `cicd`, `governance`, `proofs`, `migration`, `tech-debt`,
+  `meta:*`, `scope:*`, …) were left untouched — they still describe what an
+  issue *is*; effort and priority now describe what it *costs* and *when*.
+
+== Appendix — trivial-tier sweep (same day, PR #1425 commit 46)
+
+The one-pass `effort:trivial` tier is now sorted — all 28 unique issues, six dispositions: 4 fixed pending merge,
+5 already landed, 7 closed by determination/supersession, 5 re-tiered,
+4 left trivial awaiting input, and 3 still open with acceptance work remaining.
+Every issue carries a per-issue comment with its evidence.
+
+*Fixed in PR #1425 (close on merge):*
+
+* #1264 — gitea mirror: a missing `GITEA_HOST` now prints a skip notice
+  instead of scanning an empty hostname and reddening the default branch.
+* #1001 — `os_detect.ncl` (both live byte-identical copies; archive unchanged): explicit
+  `'Apple_Darwin` arm carrying the wildcard's value — behavior preserved, no
+  silent fallthrough for macOS. Unknown targets now fail rather than inherit
+  `container_first`; a future macOS strategy decision is a visible one-line diff.
+* #1080 — gate-scripts probe widened via `# covers:` coverage markers (the
+  owner's choice of the issue's option (b)); 31 -> 28 untested, positive
+  control run exactly as the AC asks; values refreshed via `run-debtfile
+  --write`.
+* #897 — the canonical `cliff.toml` strips invisible characters at changelog
+  generation, so bot regenerations cannot re-import defused mentions.
+
+*Closed — already landed in the tree (evidence in closing comments):*
+#1079 (per-line UUID check), #1243 (XDG-state survey dir), #1125 (flake.nix
+gate retired), #908 (root-allow.txt ledger deregistered with rationale),
+#1015 (pins-resolve reads workflows via the YAML parser only).
+
+*Closed — determination or supersession:*
+#1000 (the two non-sentinel k9 fixtures are deliberate negative controls),
+#923 (both Deno dates labelled superseded 2026-10-14), #905 (the Deno
+refusal gate the issue wanted armed is retired by that same ruling),
+#1224 (frozen-archive false positive), #937 (http_in_docs instances are
+archive links, redirect tests and policy prose — the rule needs carve-outs,
+tracked in #938), #940 (fake-action examples are frozen vendored content:
+fixed upstream or the mirror retires), #945 (SD022 foreign-project examples
+in the k9 coordination spec genericised; closed disposition recorded here
+once; scorecard clearance is not established by the actions.lock repair).
+
+*Re-tiered, honestly (not trivial):*
+#889 -> small (read-each-repo judgement; the issue forbids a blind sweep),
+#662 -> small (cross-repo wordpress-tools history determination),
+#346 -> small (bridge-forbidden-phrases hoist is a real optional job plus
+test), #646 -> small (in-repo clean; the remainder is an estate/emitter
+re-sweep), #938 -> small + `status:blocked` (the rule text is stale; the
+issue now tracks the upstream rule refresh).
+
+*Left trivial, blocked or awaiting input:*
+#933 (needs a Rust toolchain), #1068 (blocked on upstream yq v4.53.3),
+#698 (owner ruling on the 14 guix.scm shells), #727 (external
+`gh actions-lock` release follow-up).
+
+*Still open — acceptance work remaining:*
+
+* #1219 — both SIGPIPE-prone lookup pipelines now use here-strings. The
+  requested `scripts/tests/validate-k9-sigpipe-test.sh` regression (50k-line
+  change list, 200 repetitions, red against the old form) remains outstanding;
+  keep the issue open until that acceptance work is complete.
+
+#930: the exemption notice now uses
+`gh actions-lock --no-migrate-local-actions --no-narrow` and asks for review
+before committing. Keep this issue open until all remedy strings name a
+consumer-runnable command, the SHA de-pinning warning is present, and the
+requested positive/negative controls pass. The actions.lock repair alone
+does not establish those acceptance criteria.
+#1003 (ruleset policy on another repo) remains open as recorded above.

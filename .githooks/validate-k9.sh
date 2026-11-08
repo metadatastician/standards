@@ -90,8 +90,26 @@ ledger_entries() {
   grep -vE '^[[:space:]]*(#|$)' "$LEDGER"
 }
 
+# Test whether $1, a repository-relative file path, exactly matches an entry
+# in $LEDGER. Return grep status: 0 for a match, 1 for no match, 2 on error.
 in_ledger() {
-  ledger_entries | grep -qxF "$1"
+  # A here-string, deliberately, NOT `ledger_entries | grep -q`. Same SIGPIPE
+  # under `set -o pipefail` as the CHANGED check below (see that comment): a
+  # matching `grep -q` exits first and SIGPIPEs the grep reading the ledger, so
+  # a file that IS listed reports as unlisted (#1219).
+  [ -n "$1" ] || return 1
+  local entries reader_rc
+  if entries="$(ledger_entries)"; then
+    reader_rc=0
+  else
+    reader_rc=$?
+  fi
+  # grep status 1 means an empty/comment-only ledger, not a read error.
+  if [ "$reader_rc" -gt 1 ]; then
+    echo "[validate-k9] ERROR: cannot read ledger: $LEDGER" >&2
+    exit 2
+  fi
+  grep -qxF -- "$1" <<< "$entries"
 }
 
 # Collect the file list.

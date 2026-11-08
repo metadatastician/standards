@@ -34,7 +34,13 @@
 #
 # Usage: run-debtfile.sh [--write] [path/to/Debtfile.a2ml]
 #   --write   update `count` in place, and lower `ceiling` to match when debt
-#             has been paid down (the auto-ratchet). Never raises a ceiling.
+#             has been paid down (the auto-ratchet). Never raises a ceiling,
+#             and never writes a count above its ceiling: a breaching
+#             measurement is REPORTED (❌ BREACH, exit 1), not recorded, so
+#             --write cannot emit a file check-debtfile-structure.sh rejects
+#             (standards#955). Recording the breach waits for a human — pay
+#             the debt down, or raise the ceiling with a Debt-exception:
+#             declaration.
 #   Default path: .machine_readable/Debtfile.a2ml
 #
 # Exit: 0 all entries at or under ceiling · 1 a ceiling was breached, a probe
@@ -66,6 +72,12 @@ declare -a NEW_COUNT_IDS=() NEW_COUNT_VALS=() NEW_CEIL_IDS=() NEW_CEIL_VALS=()
 
 is_uint() { case "${1:-}" in ''|*[!0-9]*) return 1;; *) return 0;; esac; }
 
+# Measure the current block from the parser globals; do nothing if unnamed.
+# Print its result and update summary counters. Missing, failed, or non-integer
+# probes set the global fail flag without queuing updates; breaches and
+# acceptance dates before TODAY also set it. Failures are recorded in fail,
+# not the return status. Queue count updates only at or below the ceiling and
+# ceiling reductions for positive paydown; the caller applies them with --write.
 measure() {
   [ -n "$name" ] || return 0
 
@@ -109,7 +121,14 @@ measure() {
     expired=$((expired + 1)); fail=1
   fi
 
-  if [ "$out" != "$count" ]; then
+  # Record the measurement — unless it breaches. A count above its ceiling is
+  # the internally inconsistent state that check-debtfile-structure.sh rejects
+  # ("it simultaneously records debt above the tolerated maximum and claims to
+  # be a passing state"), so a breaching measurement is reported and left
+  # unrecorded. The ceiling is never raised here either; the two rules
+  # together guarantee --write only ever emits files its own validator
+  # accepts (standards#955).
+  if [ "$out" != "$count" ] && [ "$out" -le "$ceiling" ]; then
     NEW_COUNT_IDS+=("$name"); NEW_COUNT_VALS+=("$out")
   fi
 }

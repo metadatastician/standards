@@ -80,3 +80,13 @@ skip_tags = "v0.0.0-test"
 ignore_tags = ""
 topo_order = false
 sort_commits = "newest"
+
+# Strip invisible characters from commit messages at generation time.
+# Squash-merge subjects carry GitHub's ZWSP-defused @-mentions (U+200B and
+# friends); every changelog-reusable regeneration re-imports them into
+# CHANGELOG.md and reddens invisible-character linters on the consuming repo
+# (maa-framework #192). Stripping in the repo is whack-a-mole — the next bot
+# run re-adds them — so the canonical config strips at the source (#897).
+[[git.commit_preprocessors]]
+pattern = '[\u{00A0}\u{00AD}\u{2060}\u{FEFF}\u{200B}-\u{200F}\u{202A}-\u{202F}\u{2066}-\u{2069}]+'
+replace = ''

@@ -71,11 +71,12 @@ jobs:
           fi
 
           # --write updates `count` and lowers any `ceiling` that has been paid
-          # down. It NEVER raises one. If debt grew past its ceiling the run
-          # exits 1 and the resulting file has count > ceiling — which the
-          # structure check rejects, so the PR opens RED. That is deliberate:
-          # growth is a human decision (pay it down, or raise the ceiling with a
-          # `Debt-exception:` trailer), never something a cron decides.
+          # down. It NEVER raises one, and it never writes a count above its
+          # ceiling (standards#955): if debt grew past its ceiling the run
+          # exits 1 and the count is left unchanged, so the recorded file is
+          # always one the structure check accepts. The run is still RED —
+          # growth is a human decision (pay it down, or raise the ceiling with
+          # a `Debt-exception:` trailer), never something a cron decides.
           rc=0
           bash scripts/run-debtfile.sh --write | tee "$RUNNER_TEMP/report.txt" || rc=$?
           echo "rc=$rc" >> "$GITHUB_OUTPUT"
