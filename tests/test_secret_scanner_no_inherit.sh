@@ -27,11 +27,15 @@
 #      same commit — that deliberateness is the point.)
 #   2. This repo's own caller (`secret-scanner.yml`) has no `secrets:`
 #      line of any kind.
-#   3. No live workflow in this repo (`.github/workflows/` plus the two
+#   3. No live workflow in this repo (`.github/workflows/` plus the three
 #      packaged template `.github/workflows/` dirs) carries a non-comment
 #      `secrets: inherit` directive. The explicit SUPPORTED list below is
 #      empty; a file that stops inheriting is reported as a STALE exemption
 #      and fails, so the list can only shrink.
+#   3b. Packaged caller examples (meta, gatekeeper, axel) pass only secrets
+#      the callee declares AT THE PINNED REVISION, not merely in the
+#      working tree — the pin is what runs, and an undeclared secret
+#      startup-fails every run.
 #   4. No WH008 (`secrets: inherit`) suppression for the scanner caller
 #      remains in `.hypatia-baseline.json`: the finding was fixed, not
 #      silenced, so the suppression must not outlive the fix.
@@ -178,6 +182,68 @@ check_declared() {
 check_declared "$WF_DIR/hypatia-scan.yml" "$WF_DIR/hypatia-scan-reusable.yml"
 check_declared "$WF_DIR/governance.yml"  "$WF_DIR/governance-reusable.yml"
 
+# --- 2d. Packaged callers vs the callee AT THEIR PINNED REVISION --------
+# check_declared validates local reusables at their working-tree content.
+# The packaged caller examples instead pin the callee remotely
+# (hyperpolymath/standards/.../<callee>.yml@<sha> — this repository at
+# that SHA, which after every re-pin is in this repository's history).
+# A named secret the pinned callee does not declare startup-fails exactly
+# as hard as a local one, so verify against the callee AS IT IS AT THE PIN
+# — not as it is in the working tree. A pin absent from local history
+# fails rather than passes vacuously; run with full history (fetch-depth: 0).
+check_pinned() {
+  local caller="$1" line path_part rel pin declared name
+  [ -r "$caller" ] || { fail "packaged caller unreadable: $caller"; return; }
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    path_part="${line%@*}"
+    pin="${line#*@}"
+    rel="${path_part#*standards/}"
+    if ! git -C "$REPO_ROOT" cat-file -e "$pin^{commit}" 2>/dev/null; then
+      fail "$(basename "$caller") pins $rel at $pin, absent from local history — full history required; refusing to verify vacuously"
+      continue
+    fi
+    declared="$(git -C "$REPO_ROOT" cat-file -p "$pin:$rel" 2>/dev/null | awk '
+      /^[[:space:]]*(#|$)/ { next }
+      /^  workflow_call:/ { call=1; next }
+      call && /^ {0,2}[^ ]/ { exit }
+      call && /^    secrets:[[:space:]]*(#.*)?$/ { secrets=1; next }
+      secrets && /^    [^ ]/ { exit }
+      secrets && /^      [A-Za-z_][A-Za-z0-9_]*:/ {
+        sub(/^      /, ""); sub(/:.*/, ""); print
+      }
+    ')"
+    if [ -z "$declared" ]; then
+      note "$(basename "$caller") pins $rel at $pin — callee declares no workflow_call.secrets"
+    fi
+    while IFS= read -r name; do
+      [ -n "$name" ] || continue
+      if ! grep -qxF -- "$name" <<< "$declared"; then
+        fail "$(basename "$caller") passes secret $name but $rel at its pin ($pin) does not declare it — every run startup-fails"
+      fi
+    done < <(awk '
+      /^[[:space:]]*(#|$)/ { next }
+      /^jobs:/ { jobs=1; next }
+      jobs && /^[^ ]/ { exit }
+      jobs && /^    secrets:[[:space:]]*(#.*)?$/ { secrets=1; next }
+      secrets && /^ {0,4}[^ ]/ { secrets=0 }
+      secrets && /^      [A-Za-z_][A-Za-z0-9_]*:/ {
+        sub(/^      /, ""); sub(/:.*/, ""); print
+      }
+    ' "$caller")
+  done < <(grep -oE '(hyperpolymath|metadatastician)/standards/\.github/workflows/[A-Za-z0-9_.-]+\.yml@[0-9a-f]{40}' "$caller" | sort -u)
+}
+for packaged_dir in \
+  "$REPO_ROOT/1-formats/a2ml/meta/.github/workflows" \
+  "$REPO_ROOT/2-protocols/0-ai-gatekeeper/.github/workflows" \
+  "$REPO_ROOT/2-protocols/axel/.github/workflows"; do
+  [ -d "$packaged_dir" ] || { fail "expected packaged caller dir missing: $packaged_dir"; continue; }
+  for f in "$packaged_dir"/*.yml "$packaged_dir"/*.yaml; do
+    [ -f "$f" ] || continue
+    check_pinned "$f"
+  done
+done
+
 # --- 3. No live `secrets: inherit` directive outside the supported list -
 supported_path() {
   local p="$1" entry
@@ -191,6 +257,7 @@ scan_dirs=(
   "$WF_DIR"
   "$REPO_ROOT/1-formats/a2ml/meta/.github/workflows"
   "$REPO_ROOT/2-protocols/0-ai-gatekeeper/.github/workflows"
+  "$REPO_ROOT/2-protocols/axel/.github/workflows"
 )
 scanned=0
 declare -a seen_supported=()
