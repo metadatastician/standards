@@ -97,7 +97,19 @@ in_ledger() {
   # under `set -o pipefail` as the CHANGED check below (see that comment): a
   # matching `grep -q` exits first and SIGPIPEs the grep reading the ledger, so
   # a file that IS listed reports as unlisted (#1219).
-  grep -qxF -- "$1" <<< "$(ledger_entries)"
+  [ -n "$1" ] || return 1
+  local entries reader_rc
+  if entries="$(ledger_entries)"; then
+    reader_rc=0
+  else
+    reader_rc=$?
+  fi
+  # grep status 1 means an empty/comment-only ledger, not a read error.
+  if [ "$reader_rc" -gt 1 ]; then
+    echo "[validate-k9] ERROR: cannot read ledger: $LEDGER" >&2
+    exit 2
+  fi
+  grep -qxF -- "$1" <<< "$entries"
 }
 
 # Collect the file list.

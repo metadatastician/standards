@@ -38,7 +38,7 @@ forgotten.
 
 ### gate-scripts-without-tests
 - description: Scripts under scripts/ with no matching scripts/tests/<name>-test.sh — a gate with no test has never been shown able to fail Re-baselined 2026-09-22 (round 2, issue #953): the committed count had fossilized at 31 while the tree measured 38+; set to measured 40 with a declared ceiling raise. Falls automatically as tests land. A test file may also declare coverage of scripts its name does not match via a `# covers: a.sh b.sh` marker line (#1080: one test exercises three scripts; the marker is the machine-readable record).
-- probe: n=0; covered=" $(grep -h '^# covers:' scripts/tests/*.sh 2>/dev/null | sed 's/^# covers://' | tr ',\n' '  ') "; for f in $(git ls-files 'scripts/*.sh'); do b=$(basename "$f" .sh); case "$b" in *-test) continue;; esac; if [ ! -f "scripts/tests/${b}-test.sh" ] && [ ! -f "scripts/tests/${b#check-}-test.sh" ] && [ ! -f "scripts/tests/${b#run-}-test.sh" ]; then case "$covered" in *" $b.sh "*) ;; *) n=$((n+1));; esac; fi; done; echo "$n"
+- probe: n=0; covered=" $(git ls-files -z 'scripts/tests/*.sh' | xargs -0 -r grep -h '^# covers:' | sed 's/^# covers://' | tr ',\n' '  ') "; for f in $(git ls-files 'scripts/*.sh'); do b=$(basename "$f" .sh); case "$b" in *-test) continue;; esac; if [ ! -f "scripts/tests/${b}-test.sh" ] && [ ! -f "scripts/tests/${b#check-}-test.sh" ] && [ ! -f "scripts/tests/${b#run-}-test.sh" ]; then case "$covered" in *" $b.sh "*) ;; *) n=$((n+1));; esac; fi; done; echo "$n"
 - count: 28
 - ceiling: 28
 - severity: high

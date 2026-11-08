@@ -1767,10 +1767,10 @@ jobs:
           if [ "$rc" -eq 3 ] && grep -qxF "$GITHUB_REPOSITORY" "$RUNNER_TEMP/lock-allow.txt"; then
             echo "::notice::actions-lock debt is LEDGERED for $GITHUB_REPOSITORY (missing-lock only, gate exit 3)."
             echo "lock debt: $GITHUB_REPOSITORY is 1 of $total ledgered repositories."
-            echo "This exemption is shrink-only. Run 'gh actions-lock --fix' in this"
+            echo "This exemption is shrink-only. Run 'gh actions-lock --no-migrate-local-actions --no-narrow' in this"
             echo "repository (hyperpolymath/standards wraps it at scripts/update-actions-lock.sh"
-            echo "for callers that have that checkout), commit the lockfile, and delete this"
-            echo "repository's line from .machine_readable/lock-allow.txt in hyperpolymath/standards."
+            echo "for callers that have that checkout). Review workflow changes before committing;"
+            echo "commit the lockfile, then delete this repository's line from .machine_readable/lock-allow.txt in hyperpolymath/standards."
             exit 0
           fi
           # Never a silent pass: state the denominator even when clean.

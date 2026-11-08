@@ -81,7 +81,13 @@ Priorities (`priority:p0`…`p3`) are re-assessed against the state of the
 tree today. P1 items are the ones that fester: they break CI foundations,
 ship security exposure, or block a whole cluster behind them.
 
-== What remains, by category (216 issues)
+== Pre-sweep snapshot, by category (216 issues)
+
+The category tables, effort counts and priority list below record the state
+before the trivial-tier sweep; they are historical, not a current worklist.
+The final appendix records the sweep dispositions and re-tiering. The current
+worklist is the repository's open issues with their current effort, priority
+and status labels.
 
 [cols="3,1,1,1,1,1,1"]
 |===
@@ -454,7 +460,7 @@ medium/large items each:
 === P2 (queue it) and P3 (nice to have)
 
 Every remaining issue carries `priority:p2` or `priority:p3` plus an effort
-label; the category tables above are the worklist. Within P2, the fastest
+label; use the repository open-issue list as the current worklist. Within P2, the fastest
 wins are the `effort:trivial`/`effort:small` items in the CI and tooling
 categories — they are mechanical, testable in isolation, and each retires a
 known lie from a gate.
@@ -468,24 +474,22 @@ known lie from a gate.
 * type labels (`bug`, `cicd`, `governance`, `proofs`, `migration`, `tech-debt`,
   `meta:*`, `scope:*`, …) were left untouched — they still describe what an
   issue *is*; effort and priority now describe what it *costs* and *when*.
+
 == Appendix — trivial-tier sweep (same day, PR #1425 commit 46)
 
-The one-pass `effort:trivial` tier is now sorted — all 28, six dispositions.
+The one-pass `effort:trivial` tier is now sorted — all 28 unique issues, six dispositions: 4 fixed pending merge,
+5 already landed, 7 closed by determination/supersession, 5 re-tiered,
+4 left trivial awaiting input, and 3 still open with acceptance work remaining.
 Every issue carries a per-issue comment with its evidence.
 
 *Fixed in PR #1425 (close on merge):*
 
 * #1264 — gitea mirror: a missing `GITEA_HOST` now prints a skip notice
   instead of scanning an empty hostname and reddening the default branch.
-* #1001 — `os_detect.ncl` (all three byte-identical copies): explicit
+* #1001 — `os_detect.ncl` (both live byte-identical copies; archive unchanged): explicit
   `'Apple_Darwin` arm carrying the wildcard's value — behavior preserved, no
-  silent fallthrough; a future macOS strategy decision is a visible one-line
-  diff.
-* #945 — SD022 instance remediated (foreign-project examples genericised in
-  the k9 coordination spec); the scorecard half is acked and believed cleared
-  by the actions.lock repair.
-* #930 — the ledgered-debt notice names `gh actions-lock --fix`, a command
-  the consumer repo actually has.
+  silent fallthrough for macOS. Unknown targets now fail rather than inherit
+  `container_first`; a future macOS strategy decision is a visible one-line diff.
 * #1080 — gate-scripts probe widened via `# covers:` coverage markers (the
   owner's choice of the issue's option (b)); 31 -> 28 untested, positive
   control run exactly as the AC asks; values refreshed via `run-debtfile
@@ -505,7 +509,9 @@ refusal gate the issue wanted armed is retired by that same ruling),
 #1224 (frozen-archive false positive), #937 (http_in_docs instances are
 archive links, redirect tests and policy prose — the rule needs carve-outs,
 tracked in #938), #940 (fake-action examples are frozen vendored content:
-fixed upstream or the mirror retires), #945 (scorecard half, above).
+fixed upstream or the mirror retires), #945 (SD022 foreign-project examples
+in the k9 coordination spec genericised; closed disposition recorded here
+once; scorecard clearance is not established by the actions.lock repair).
 
 *Re-tiered, honestly (not trivial):*
 #889 -> small (read-each-repo judgement; the issue forbids a blind sweep),
@@ -520,5 +526,17 @@ issue now tracks the upstream rule refresh).
 #698 (owner ruling on the 14 guix.scm shells), #727 (external
 `gh actions-lock` release follow-up).
 
-#1003 (ruleset policy on another repo) and #727 stay in the queue as
-recorded in the P2/P3 section above.
+*Still open — acceptance work remaining:*
+
+* #1219 — both SIGPIPE-prone lookup pipelines now use here-strings. The
+  requested `scripts/tests/validate-k9-sigpipe-test.sh` regression (50k-line
+  change list, 200 repetitions, red against the old form) remains outstanding;
+  keep the issue open until that acceptance work is complete.
+
+#930: the exemption notice now uses
+`gh actions-lock --no-migrate-local-actions --no-narrow` and asks for review
+before committing. Keep this issue open until all remedy strings name a
+consumer-runnable command, the SHA de-pinning warning is present, and the
+requested positive/negative controls pass. The actions.lock repair alone
+does not establish those acceptance criteria.
+#1003 (ruleset policy on another repo) remains open as recorded above.
