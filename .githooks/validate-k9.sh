@@ -90,6 +90,8 @@ ledger_entries() {
   grep -vE '^[[:space:]]*(#|$)' "$LEDGER"
 }
 
+# Test whether $1, a repository-relative file path, exactly matches an entry
+# in $LEDGER. Return grep status: 0 for a match, 1 for no match, 2 on error.
 in_ledger() {
   # A here-string, deliberately, NOT `ledger_entries | grep -q`. Same SIGPIPE
   # under `set -o pipefail` as the CHANGED check below (see that comment): a

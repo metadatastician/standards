@@ -72,6 +72,12 @@ declare -a NEW_COUNT_IDS=() NEW_COUNT_VALS=() NEW_CEIL_IDS=() NEW_CEIL_VALS=()
 
 is_uint() { case "${1:-}" in ''|*[!0-9]*) return 1;; *) return 0;; esac; }
 
+# Measure the current block from the parser globals; do nothing if unnamed.
+# Print its result and update summary counters. Missing, failed, or non-integer
+# probes set the global fail flag without queuing updates; breaches and
+# acceptance dates before TODAY also set it. Failures are recorded in fail,
+# not the return status. Queue count updates only at or below the ceiling and
+# ceiling reductions for positive paydown; the caller applies them with --write.
 measure() {
   [ -n "$name" ] || return 0
 
