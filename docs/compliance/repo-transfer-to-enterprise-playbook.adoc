@@ -366,6 +366,20 @@ gh api repos/hyperpolymath/hypatia/actions/runs/40451601571/jobs \
   workflows to the canonical `full_name`, retaining the immutable commit pins.
   Review changes and propagate in controlled batches; do not rewrite historical
   prose. Check the selected-actions policy and started jobs for each batch.
++
+  *Exception: a pin older than standards#1367 cannot be kept.* At such a pin
+  the governance reusable checks callers against its own tree allow-list,
+  which predates the transfer pattern, so `governance / Allowlist Preflight`
+  fails on every canonical call. Move that caller to a standards commit at or
+  after #1367 that `scripts/lock-selfcheck.sh` rates SELF-CONSISTENT, and
+  relock with `scripts/relock-standards-pin.sh --to <sha>` in the same change.
+  Measured on hyperpolymath/echidna (#458): at `3c00687` the called jobs
+  started but Allowlist Preflight reported all six calls as gaps (run
+  41925934029). At `087f6bf` it passed (run 41926570302).
++
+  Move every standards call in a caller to the same pin in one change.
+  `relock-standards-pin.sh` refuses a caller whose workflows pin standards at
+  more than one SHA, so a caller left mixed blocks its own next repin.
 
 [NOTE]
 ====

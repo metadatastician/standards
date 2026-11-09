@@ -118,7 +118,7 @@ sequential steps. A component with strong evidence can skip intermediate grades.
 
 == Full Specification
 
-See link:COMPONENT-READINESS-GRADES.md[COMPONENT-READINESS-GRADES.md] for the
+See link:COMPONENT-READINESS-GRADES.adoc[COMPONENT-READINESS-GRADES.adoc] for the
 complete standard, including:
 
 - Detailed grade definitions with examples
