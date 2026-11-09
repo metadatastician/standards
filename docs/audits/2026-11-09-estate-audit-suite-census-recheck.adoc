@@ -1,0 +1,257 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+// SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell (hyperpolymath)
+= Estate-audit suite census recheck — this repository carries no suite pin, and no lock entry for one
+:revdate: 2026-11-09
+:status: MEASURED — no change to workflows or lock required
+:signal: link:../CICD-SIGNAL-DISCIPLINE.adoc[CI/CD Signal Discipline]
+:startup: link:../GOVERNANCE-STARTUP-REPAIR.adoc[Governance startup repair]
+
+== Why this exists
+
+A historical census names `hyperpolymath/standards` as a repository that either
+copies an estate-audit composite from before the `fa71ac2a`-era fixes
+(2026-09-22), or carries an `actions.lock` entry for the suite that no longer
+matches its own workflow references. Census artefacts age badly: this
+repository was transferred to `metadatastician/standards`, its workflow set was
+rewritten, and the suite itself moved from `hyperpolymath/cicd-suite` to
+`hyperpolymath/proven-cicd-and-workflows`. This document is the recheck, taken
+against the *current* default branch and the *current* CI, so a later reader can
+tell a stale census row from a live defect.
+
+Nothing was edited to produce it. Every number below was read from the tree at
+`9bdf864c` or from the GitHub API on 2026-11-09.
+
+== Verdict
+
+This repository is *not affected by either limb*, so no workflow edit and no
+lock regeneration is required:
+
+. It *does not reference the estate-audit suite at all* — no `uses:` to
+  `hyperpolymath/cicd-suite`, to its successor
+  `hyperpolymath/proven-cicd-and-workflows`, or to any of their 26 composite
+  gates, anywhere in `.github/`.
+. Its `actions.lock` *carries no suite entry*, so there is no entry that could
+  disagree with a workflow reference.
+
+The census row is stale because it describes a different repository and a
+different era, not because this one was repaired quietly. <<what-the-census-was-measuring>>
+names the repository it does describe, and `rsr-template-repo` is still correct
+in its own right.
+
+== The two limbs, measured
+
+=== Limb (a): a copied or pre-`fa71ac2a` suite composite
+
+[cols="3,2,4",options="header"]
+|===
+| Probe | Result | How it was read
+
+| `uses:` to the suite (either slug), `.github/**` | *none* | `grep -rn` over `.github/` for the literals `cicd-suite` and `proven-cicd-and-workflows`
+| `main-estate-audit.yml` in this repository | *absent* | not in the 71 files of `.github/workflows/`, at `main` or at any commit
+| `cicd-suite` / `proven-cicd` in `actions.lock` | *0 keys* | lock keys are 30 leaf records + 71 workflow sections, none a suite
+| Local composite actions | *1*, `affirmation-check` | a fork of the suite's copy, but *consumed by nothing* (below)
+| Repository name reaching `main-estate-audit` history | *0 commits* | via both `metadatastician/standards` and the pre-transfer `hyperpolymath/standards`
+|===
+
+The single local composite action `.github/actions/affirmation-check` is the only
+thing in the tree that resembles a suite composite, and it is *not* a copy of the
+suite's:
+
+[cols="2,1,4",options="header"]
+|===
+| Artefact | Bytes | Relationship
+
+| `.github/actions/affirmation-check/check.sh` (this repo) | 5822 | independent implementation: rejects `AFFIRMATION.md`, searches root *and* `docs/`, exempts templates
+| suite `actions/affirmation-check/check.sh` @ `55556cf5` (2026-09-19) | 2563 | pre-`fa71ac2a`; accepts `AFFIRMATION.md`, root-only search
+| suite `actions/affirmation-check/check.sh` @ `fa71ac2a` (2026-09-22) | 2563 | *byte-identical to `55556cf5`* — the fix commit did not touch this file
+| suite `actions/affirmation-check/check.sh` @ suite `main` (v0.4.x) | 7723 | adds code-span stripping and web-flow/SSH signature verification
+|===
+
+So even the strongest reading — "it carries a copy" — fails on both halves: the
+file is not a copy, and its 13 controls pass
+(`bash .github/actions/affirmation-check/test.sh` → `affirmation-check controls passed`),
+including the two cases the suite's pre-`fa71ac2a` version got wrong. It is also
+*wired to nothing*: no workflow in `.github/workflows/` names it, and it appears
+in no `actions.lock` section, which is consistent with
+`docs/reorg/2026-10-14-tidy/workflow-audit.adoc` recording it as a
+zero-consumer action.
+
+=== Limb (b): an `actions.lock` entry that disagrees with the workflows
+
+The lock is *exactly* consistent with the tree. Reproduced independently of the
+repository's own gates by re-deriving both sides:
+
+[cols="2,1,5",options="header"]
+|===
+| Property | Value | Note
+
+| Workflow files | 71 | `.github/workflows/*.yml`
+| Lock workflow sections | 71 | one per file, no orphans either way
+| Leaf records | 30 | all SHA-pinned
+| SHA-pinned `uses:` in the tree | 28 | 28 of 30 keys used; the other 2 are transitive (below)
+| Workflows with pins but no lock section | *0* | —
+| Sections whose refs ≠ actual refs | *2*, both explainable | `ci-pipeline.yml`, `mirror.yml`
+| Refs reaching a missing record | *0* | every used ref is keyed
+| Unpinned remote refs (all `uses:`) | *0* | YAML-aware scan, not a line grep
+|===
+
+The two apparent mismatches are the intended *caller-side reusable edge* shape,
+not drift: `ci-pipeline.yml` pins
+`metadatastician/standards@d55304a01b52…` and `mirror.yml` pins
+`metadatastician/standards@70019048f862…`; in each case the lock's workflow
+section lists that self-repo pin while the tree's `uses:` names a *sub-path* of
+the same commit (`…/.github/workflows/secret-scanner-reusable.yml@d55304a01b52…`).
+`check-lock-pin-contract.sh` accepts exactly this shape by design ("ref repeats
+the pin by design"), and `check-reusable-closure.sh` resolves all 3 remote
+reusable sites at those commits.
+
+The two unused leaf keys are transitive, not stale:
+`actions/upload-artifact@bbbca2dd…` is reached only through
+`actions/upload-pages-artifact@fc324d35…`, and
+`swatinem/rust-cache@6323deb1…` is reached only through the
+`metadatastician/standards@d55304a01b52…` reusable. Both appear under a record's
+nested `uses:`, which is what makes the lock *closed*.
+
+== Gates run, with their output
+
+Run locally at `9bdf864c` with mikefarah yq v4.54.1 on `PATH` (the scripts fail
+closed with `NOT INSPECTED` without it, which is not a pass):
+
+[cols="3,1,5",options="header"]
+|===
+| Gate | Exit | Evidence
+
+| `.githooks/validate-actions-lock.sh` | 0 | `28 SHA-pinned ref(s) found among 30 lockfile keys, 0 doctrine exception(s)`
+| `scripts/check-lock-pin-contract.sh` | 0 | `inspected 30 dependency record(s) … (schema v0.0.3); caller-side reusable edges exempted: 2; contract violations: 0`
+| `scripts/close-lock.sh --check` | 0 | `close-lock: closed (no dangling edges)`
+| `scripts/check-reusable-closure.sh` | 0 | `3 remote reusable site(s), 3 resolved; failures: 0`
+| `scripts/check-lockfile-drift.sh` | 0 | `[drift] clean — 71 workflow(s) checked`
+| `scripts/lock-selfcheck.sh` | 0 | self-consistent at `9bdf864c`, and at both pinned callees `d55304a01b52` / `70019048f862`
+| `scripts/check-action-pins-resolve.sh` | 0 | `All 28 verifiable action pin(s) resolve upstream` (no phantom or orphan pins)
+| `scripts/check-workflow-duplicate-keys.sh` | 0 | `71 workflow file(s) clean`
+| `tools/policy/check-workflows-parse.sh` | 0 | `all 184 workflow(s) parse` (includes archived trees)
+| `.github/actions/affirmation-check/test.sh` | 0 | 13/13 controls pass
+|===
+
+*One gate could not be run here and one is red for an unrelated reason.*
+`scripts/check-actions-lock-gate.sh` shells out to the authoritative verifier
+(`gh actions-lock --verify-local`); the `gh-actions-lock` extension is not
+installable in this sandbox (its release asset host is unreachable), so the
+script reports `lockfile verification FAILED (exit 1)` with `unknown command
+"actions-lock" for "gh"` as the cause. That is a missing tool, not drift — and
+the same gate is *green in CI* at this commit (below), where the extension is
+installed at `v0.2.0`. `Self-CI` is red at `9bdf864c` on `Nickel` and on its
+`Verdict — block unless this repository is ledgered` step; neither touches the
+lock or the suite.
+
+=== CI at the current default branch
+
+Default branch is `main`; local `HEAD`, `refs/heads/main` and `origin/main` all
+read `9bdf864cc7f2c8e24b4df84bf00d04158eee3ad5`. The push run at that SHA
+started *jobs*, and the component checks *executed* — the distinction that
+<<startup>> exists to keep visible:
+
+[cols="3,1,1,4",options="header"]
+|===
+| Workflow (push, `9bdf864c`) | Jobs | Steps run | What it proves
+
+| Actions Lockfile Gate | 1 | 8 | `uses ⊆ actions.lock`, pin contract, closure and reusable closure all ran
+| Lock Self-Check | 1 | 5 | this commit is internally consistent, so it is safe to pin a caller to
+| Actions lock contract | 1 | — | lock representation contract
+| Governance | 21 | 20 × 7–15 | 19 concluded `success`; `Debt ratchet` / `Exemption ratchet` `skipped`
+| Self Test | 2 | 9, 21 | repo self-tests executed
+| Required contexts | 1 | 6 | every required context is producible on a PR
+| Secret Scanner | 3 | 5, 13, 5 | shell / gitleaks / rust lanes ran
+|===
+
+28 push-triggered workflows concluded at that SHA: 26 `success`, 1 `cancelled`
+(a superseded `GitHub Pages`), 1 `failure` (`Self-CI`, unrelated, above).
+
+For the retained contexts named in the brief: `Actions Lockfile Gate` publishes
+the check `uses ⊆ actions.lock` and `Lock Self-Check` publishes
+`Lockfile self-consistency`; both start and run their steps at this commit, so
+neither required context is a phantom.
+
+== What the census was measuring, and why the row no longer applies
+
+The census row is not wrong about the estate; it is wrong about *this
+repository*, in three separable ways.
+
+*Wrong repository.* The live consumer of the suite is
+`hyperpolymath/rsr-template-repo`, whose `.github/workflows/main-estate-audit.yml`
+checks out `hyperpolymath/cicd-suite` at `bf7dd95cf497…` (2026-10-19) and runs
+six gates from it. That pin is *19 commits ahead of* `fa71ac2a` and therefore
+already carries the fixes; measured at `bf7dd95c`, `required-files-check`
+contains the `set +e` guard the fix commit introduced (0 occurrences at
+`55556cf5`, 1 at `fa71ac2a`, 1 at `bf7dd95c`). The census entry that named
+"pre-`fa71ac2a` composites" described the *previous* pin (`55556cf5`, 2026-09-19),
+which `rsr-template-repo` has since left behind. `config/rulesets/gates.json`
+still lists `main-estate-audit.yml` under `never_required_workflows`, which is
+consistent with it being a template-repository gate and never a context this
+repository must publish.
+
+*Wrong era.* `.machine_readable/estate-board.tsv` and
+`.machine_readable/estate-residue-ledger.tsv` are stamped
+`2026-09-15T08:58:14Z`, from a `census-n440` posture run over local checkouts.
+At that timestamp this repository was still `hyperpolymath/standards` with 48
+workflow files; it now has 71 under a transferred slug. The ledger's one row for
+it — `hyperpolymath/standards  UNPINNED-REUSABLE  7` — counts 7 reusable `uses:`
+whose `@ref` is not a 40-hex SHA. That count is reproducible *today* only if
+comment lines are read as code: this tree holds *21* commented-out `uses:`
+examples pointing at `hyperpolymath/standards/…@<sha>` and `@<n>` placeholders
+(the `571cc734…` documentation examples), and the YAML-aware gates that replaced
+line-grepping — `validate-actions-lock.sh`, `check-lock-pin-contract.sh`,
+`check-reusable-closure.sh`, all of which cite YAML-POLICY Y-1 for exactly this
+reason — see *0* unpinned remote refs. `docs/reorg/2026-10-14-tidy/wiring-audit.adoc`
+records the same trap in the other direction: its author's `yq` was "not Go yq"
+and every selfcheck SHA read `UNEXAMINED`.
+
+*Wrong owner of the finding.* The suite itself has moved on: its gates now live
+in `hyperpolymath/proven-cicd-and-workflows` (the old slug redirects there), and
+its `main-estate-audit.yml` at `c519c452…` (2026-10-28) runs *five component
+check runs* — `governance`, `hygiene`, `manifests`, `languages`, `advisory` —
+instead of one job of 26 steps, and has dropped the pass-on-absence gates
+(`custom-tools`, `contractile-validation`, `proof-runner`) and the two stubs
+(`prat`, `semantic-audit`). Whatever this repository might adopt later, copying
+or pinning "the 26-composite workflow" would be adopting a shape the suite has
+already retired.
+
+== What was changed, and what was deliberately not
+
+* *No workflow edit.* There is no suite reference to repair, and inventing one
+  in order to "fix" a census row would add an unreviewed dependency to a
+  repository whose startup contract is measured and green.
+* *No lock regeneration.* The lock matches the workflows; regenerating it would
+  produce a byte-identical file and would be the kind of no-op churn
+  `dependabot-lock-regen.yml` exists to prevent.
+* *No required-check change.* Both retained lock contexts already start and
+  execute at the default branch.
+* *This document only.*
+
+If a future change *does* add a suite reference, the binding rules are already in
+the tree: pin the callee at a *branch-reachable full commit SHA* (never a blob
+SHA — `check-action-pins-resolve.sh` fails `NOT-ANCESTOR`, and `lock-selfcheck.sh`
+separates internal consistency from remote reachability), and regenerate
+`actions.lock` with the supported tool in the *same* change
+(`update-actions-lock.sh` / `gh actions-lock`, extension pinned `v0.2.0` as
+`governance-reusable.yml` and `dependabot-lock-regen.yml` install it) rather than
+hand-editing it. `docs/ACTIONS-LOCK-CLOSURE-POLICY.adoc` states the same
+obligation from the caller side.
+
+== Limits of this recheck
+
+* It is a statement about `9bdf864c` on 2026-11-09. Workflow and lock facts move;
+  re-run the table above rather than quoting it.
+* It did not execute the suite. It establishes that this repository does not
+  reference it, not that the suite's gates are correct.
+* It did not read branch-protection rules directly — the token available here
+  gets `403 Resource not accessible by integration` on
+  `GET /branches/main/protection`. The required-context claim therefore rests on
+  CI evidence: both lock contexts report `success` with their steps executed at
+  the default branch, and `required-contexts.yml` (which does read the ruleset)
+  concluded `success` at the same SHA.
+* Two scheduled workflows are red at `9bdf864c` — `Settings Drift Detect`
+  (`Scan estate for settings drift`) and `📅 Debt measure` (`Surface a breach
+  without minting an issue`). Both are estate-surface measurements, not lock or
+  suite defects, and neither is a required context; they are recorded here so
+  this document is not mistaken for a claim that all of CI is green.
