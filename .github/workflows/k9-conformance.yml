@@ -212,7 +212,7 @@ jobs:
           # grep's no-match exit is not an error here.
           git ls-files -z -- '*.k9.ncl' '*.k9' \
             | tr '\0' '\n' \
-            | { grep -v -E '^(\.k9-canon/|9-archive/|1-formats/k9/tools/fixtures/)' || [ $? -eq 1 ]; } \
+            | { grep -v -E '^(\.k9-canon/|9-archive/|1-formats/k9/tools/fixtures/|2-protocols/k9-coordination/tools/validate/fixtures/)' || [ $? -eq 1 ]; } \
             | sort > "$RUNNER_TEMP/expected"
           echo "$(wc -l < "$RUNNER_TEMP/expected") committed K9 file(s)"
           : > "$RUNNER_TEMP/changed"

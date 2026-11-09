@@ -87,19 +87,46 @@ set of byte strings with a derivation.
   a separately rewritten model does not), so no proof is planned.
 |===
 
-=== Actions-lock chain (standards#1242)
+=== CI gates: actions.lock and panic-attack scope
+
+Engineering properties of this repository's gates. Rows 1–3 follow
+standards#1432, which records them; that pull request also extends row 2.
 
 [cols="3,1,4",options="header"]
 |===
-| Claim | Status | Evidence
+| Claim | Status | Evidence and bounds
 
-| `actions.lock` stays in sync with the workflows in both directions,
-  closed, and pins only reviewed refs.
+| `scripts/close-lock.sh --check` reports exactly the refs an
+  `actions.lock` names without a top-level record (standards#963).
 | TESTED
-| The suites under `scripts/tests/` for `check-lock-sync.sh`,
-  `complete-job-refs.sh`, `prune-stale.sh`, relock and regen, and the
-  gates `check-lock-sync.sh` and `check-lock-pin-contract.sh` on every
-  pull request.
+| `scripts/tests/close-lock-test.sh` (74 assertions) replays the five-row
+  corpus `scripts/tests/fixtures/actions-lock-closure/`: 5 locks, 6
+  distinct refs, lockfile versions v0.0.2 and v0.0.3. The formal model
+  belongs to Hypatia, the closure authority:
+  `verification/proofs/idris2/ActionsLockClosure.idr` in hyperpolymath/hypatia
+  proves the decision procedure sound and complete and evaluates the same
+  rows. Runtime refinement of this script is not claimed.
+
+| `scripts/lock-selfcheck.sh` gives SELF-CONSISTENT only for a closed,
+  fully keyed lock.
+| TESTED
+| `scripts/tests/lock-selfcheck-test.sh`, 9 cases on main (10 with
+  standards#1432, which adds the UNEXAMINED verdict for a lock whose
+  closure could not be checked).
+
+| The panic-attack step's `counts` and `counts_excluded` partition the
+  unsuppressed findings by the `scope-excludes` prefixes, anchored at the
+  start of the repository-relative path (standards#1306).
+| TESTED
+| `scripts/tests/hypatia-blocking-gate-test.sh`, 3 cases: excluded
+  findings are reported but not counted; a critical only under an excluded
+  prefix raises no warning; an empty scope counts everything.
+
+| `actions.lock` is in sync with the workflows in both directions, and
+  pins only reviewed refs (standards#1242).
+| TESTED
+| `scripts/check-lock-sync.sh` and `scripts/check-lock-pin-contract.sh`
+  on every pull request, with their suites under `scripts/tests/`.
 |===
 
 === Overlay Protocol ABI (OverlayProtocol.idr)
