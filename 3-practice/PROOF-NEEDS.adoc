@@ -16,8 +16,10 @@ toc::[]
 
 == Census
 
-2 proven of 9 rows; 7 open. No row is `argued`, `tested-only` or
-`proven-with-postulates`.
+2 proven of 12 rows; 1 argued; 9 open. No row is `tested-only` or
+`proven-with-postulates`. Both `proven` rows hold *relative to* the
+`argued` row for the Idris2 library they import (PROOF-POLICY §1.1), so
+neither counts as unconditionally proven.
 
 Every row is an engineering obligation (PROOF-POLICY §1: Idris2 for
 interfaces and protocol properties). Proof Witness Grades apply to theory
@@ -30,8 +32,11 @@ One proof file is tracked outside `9-archive/`:
 `2-protocols/overlay/src/abi/OverlayProtocol.idr`. The owner decision
 link:../2-protocols/overlay/DECISION.adoc[`2-protocols/overlay/DECISION.adoc`]
 (`KEEP-SPEC-DEFER-IMPL`, 2026-04-05) classes it as an "ABI skeleton" for a
-spec-only protocol with no implementation and no consumer. The rows below
-say what it does and does not establish.
+spec-only protocol with no consumer. That decision also describes "an empty
+Zig FFI scaffold", but a Zig implementation was already there:
+`2-protocols/overlay/ffi/zig/src/main.zig`, added in `a3616688`
+(2026-03-07). See the last row. The rows below say what the model and the
+implementation do and do not establish.
 
 [cols="3,1,2,2,3",options="header"]
 |===
@@ -41,13 +46,19 @@ say what it does and does not establish.
 | proven
 | Idris2 0.7.0, `--check --total`, `%default total`; see <<receipt>>
 | `OverlayProtocol.idr:peerTypeExhaustive`
-| A fact about the model type, not about any implementation.
+| A fact about the model type, not about any implementation. Relative to the `argued` Idris2 library row below.
 
 | The two peer types are distinct
 | proven
 | As above
 | `OverlayProtocol.idr:peerTypesDistinct` (and the `DecEq PeerType` instance)
 | As above.
+
+| The imported Idris2 library behaves as its types state: the import cone of `OverlayProtocol.idr`, 34 modules of Idris2 0.7.0 `prelude` and `base`
+| argued
+| -
+| Root `Overlay.ABI.OverlayProtocol`; imports `Prelude` (implicit), `Data.So`, `Decidable.Equality`; see <<receipt>>
+| Not checked. Idris2 has no safe mode that refuses escape hatches, and the cone contains 44 lines matching an escape-hatch marker (`believe_me`, `really_believe_me`, `assert_total`, `assert_smaller`, `idris_crash`, `%unsafe`, `%default partial`) in 7 modules (`Builtin` 17, `Prelude.Types` 12, `Data.Fin` 6, `Decidable.Equality` 3, `Data.List` 3, `PrimIO` 2, `Prelude.Show` 1). Whether the two `proven` rows' terms reach any of them has not been traced.
 
 | Spec §2.1 Non-Modification: `base_state(with_overlay) = base_state(without_overlay)`
 | open
@@ -79,17 +90,29 @@ say what it does and does not establish.
 | `OverlayProtocol.idr:ValidDeclaration`
 | Only checks that three strings are non-empty. The spec still names `ECOSYSTEM.scm` and `0-AI-MANIFEST.a2ml` as the declaration site; both formats are retired (the chora deed's `(ecosystem)` clause replaces them, D312).
 
+| Spec §3.3 o-extension activation script: sets the declaring environment variables, extends the relevant paths, is idempotent and silent; deactivation unsets every variable and restores every path
+| open
+| -
+| none
+| Not modelled. `FlagBased` carries only a command string.
+
+| Spec §4.3 aggregate-library: every curated operation has an interface signature, documented behavioural semantics and executable test cases
+| open
+| -
+| none
+| Not modelled. `DepBased` carries only an import path.
+
 | Overlay composition and chaining (spec §6)
 | open
 | -
 | `OverlayProtocol.idr:Composable`, `mixedPeersComposable`, `OverlayChain`
 | `Composable` is only "same base state"; `mixedPeersComposable` wraps its argument. `OverlayChain.bIndependentOfA` is `NonModification x x`, vacuous as above.
 
-| The model corresponds to an implementation
+| The Zig implementation corresponds to the model
 | open
 | -
-| none
-| No implementation exists (DECISION.adoc). Nothing links the model to code.
+| `2-protocols/overlay/ffi/zig/src/main.zig`; tests in the same file (17) and `ffi/zig/test/integration_test.zig` (7)
+| No correspondence argument exists. The Zig `overlay_check_*` functions are runtime checks over caller-supplied states at one base state, the same shape as the model, so they inherit its gaps. No CI lane builds or tests the Zig code, and the tests were not run for this ledger (the session's network refuses `ziglang.org`; the repo pins Zig 0.15.2), so they give no `tested-only` evidence yet.
 |===
 
 `conformantPreservesBase` and `conformantReversible` are field projections
@@ -105,8 +128,9 @@ supplies, so they are not listed as discharged theorems.
 | Source | `OverlayProtocol.idr` as changed by the commit that rewrote this file, whose only change to it is the header comment. Before it, at `9bdf864cc7f2c8e24b4df84bf00d04158eee3ad5` (sha256 `89064f9ade81ffc5bfdeeb3fab28b778cb74f46a28b68276366318d5284419a1`), the file checked with the same result.
 | Input digest | `OverlayProtocol.idr`, sha256 `2e30a9169cbc1dece6159a5721495e917a9044359a6e6aa78a5fbecc7abd918f`
 | Invocation | `idris2 --check --total Overlay/ABI/OverlayProtocol.idr`, from a scratch directory holding an unchanged copy of the file at the path its module name requires
-| Result | exit 0; `%default total`; no `believe_me`, `assert_total`, `assert_smaller`, `postulate` or holes in the file
-| Escape hatches | none
+| Result | exit 0; `%default total`
+| Escape hatches | None in `OverlayProtocol.idr`: no `believe_me`, `assert_total`, `assert_smaller`, `postulate` or holes. Its import cone is a different matter: 44 occurrences in 7 of 34 library modules, recorded as the `argued` row.
+| Import cone | Computed from the `import` lines of the Idris2 0.7.0 `libs/prelude` and `libs/base` sources, starting at `Prelude`, `Data.So` and `Decidable.Equality`: `Builtin`, `Control.Function`, `Control.Ord`, `Control.Order`, `Control.Relation`, `Data.Bool`, `Data.Either`, `Data.Fin`, `Data.List`, `Data.List1`, `Data.List1.Properties`, `Data.Maybe`, `Data.Nat`, `Data.SnocList`, `Data.So`, `Data.These`, `Data.Zippable`, `Decidable.Equality`, `Decidable.Equality.Core`, `Prelude`, `Prelude.Basics`, `Prelude.Cast`, `Prelude.EqOrd`, `Prelude.IO`, `Prelude.Interfaces`, `Prelude.Interpolation`, `Prelude.Num`, `Prelude.Ops`, `Prelude.Show`, `Prelude.Types`, `Prelude.Uninhabited`, `PrimIO`, `Syntax.PreorderReasoning`, `Syntax.PreorderReasoning.Generic`
 | Run | one-off, 2026-11-09, in an agent session. No CI lane runs this check, so a regression would not be caught.
 |===
 
