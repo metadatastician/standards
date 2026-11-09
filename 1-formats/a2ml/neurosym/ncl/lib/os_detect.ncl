@@ -25,9 +25,9 @@
       'Edge_ASIC => "static_bin",
       'Kinoite_Layered => "podman_ostree",
       'Apple_Darwin => "container_first", # explicit arm: same strategy the
-        # wildcard gave it, recorded rather than inherited (#1001). Whether
-        # macOS deserves "static_bin" is a design decision; when it is made,
-        # it is made here, in both live byte-identical copies.
+      # wildcard gave it, recorded rather than inherited (#1001). Whether
+      # macOS deserves "static_bin" is a design decision; when it is made,
+      # it is made here, in both live byte-identical copies.
       'Standard_PC => "nala_native",
     } target_type,
 }

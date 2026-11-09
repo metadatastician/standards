@@ -1,74 +1,271 @@
-== PROOF-NEEDS.md
+= Proof status: standards
+:toc: macro
 
-=== Current State
+The proof-status file for this repository, in the sense of
+link:PROOF-POLICY.adoc[`PROOF-POLICY.adoc`] §5. It lists every proof
+obligation the repository speaks about, including the ones that are open.
+The Mathesis catalogue (`hyperpolymath/mathesis`,
+`docs/catalogue/catalogue.adoc`) names this file as standards' status
+document.
 
-* *LOC*: ~139,200 (monorepo with many sub-standards)
-* *Languages*: ReScript, Idris2, Agda, Rust, Haskell, Zig, Nickel
-* *Existing ABI proofs*: Multiple `+src/abi/*.idr+` across sub-projects
-(a2ml, axel-protocol, avow-protocol, lol, etc.)
-* *Existing verification*:
-`+lol/proofs/theories/information_theory.agda+` with A2ML Idris2 proofs
-in `+a2ml/src/A2ML/Proofs.idr+`
-* *Dangerous patterns*:
-** `+lol/proofs/theories/information_theory.agda+`: 6 `+postulate+`
-(information theory axioms)
-** `+2-protocols/axel/src/Tea.res+` and `+AxelApp.res+`: `+Obj.magic+` for
-DOM operations
-** `+lol/src/abi/Locale.idr+`: mentions avoiding believe_me (good
-practice)
+Rewritten 2026-11-09. The earlier version listed eleven paths that no
+longer exist here and did not mention the one proof file that does; see
+<<moved-out>>.
 
-=== What Needs Proving
+toc::[]
 
-==== LOL Information Theory Postulates (6)
+== Census
 
-* `+information_theory.agda+` has 6 postulated axioms about entropy,
-mutual information, etc.
-* Audit: which are genuine mathematical axioms vs. provable lemmas?
-* Entropy non-negativity and chain rule should be constructively
-provable
+2 proven of 18 rows; 1 argued; 3 tested-only; 12 open. No row is
+`proven-with-postulates`. The three `tested-only` rows are the CI gates in
+<<gate-obligations>>. Both `proven` rows hold *relative to* the
+`argued` row for the Idris2 library they import (PROOF-POLICY §1.1), so
+neither counts as unconditionally proven.
 
-==== A2ML Parser Proofs (a2ml/src/A2ML/)
+Every row is an engineering obligation (PROOF-POLICY §1: Idris2 for
+interfaces and protocol properties). Proof Witness Grades apply to theory
+theorems only (§8.1), so no row carries a `PWG-` grade.
 
-* `+Proofs.idr+` exists — audit completeness
-* `+Parser.idr+`, `+TypedCore.idr+`, `+Surface.idr+` — prove
-parser/type-system correspondence
-* A2ML is a markup format standard — parser correctness ensures
-documents are faithfully processed
+[[proof-ledger]]
+== Proof ledger
 
-==== Avow Protocol Consent Proofs
+One proof file is tracked outside `9-archive/`:
+`2-protocols/overlay/src/abi/OverlayProtocol.idr`. The owner decision
+link:../2-protocols/overlay/DECISION.adoc[`2-protocols/overlay/DECISION.adoc`]
+(`KEEP-SPEC-DEFER-IMPL`, 2026-04-05) classes it as an "ABI skeleton" for a
+spec-only protocol with no consumer. That decision also describes "an empty
+Zig FFI scaffold", but a Zig implementation was already there:
+`2-protocols/overlay/ffi/zig/src/main.zig`, added in `a3616688`
+(2026-03-07). See the last row. The rows below say what the model and the
+implementation do and do not establish.
 
-* `+2-protocols/avow/avow-lib/src/abi/Consent.idr+`, `+Unsubscribe.idr+`
-* Consent management is GDPR-relevant — prove consent state transitions
-are correct
-* Prove: unsubscribe always terminates in a non-consented state
+[cols="3,1,2,2,3",options="header"]
+|===
+| Obligation | Status | Checker (version, flags) | Where | Trust boundary
 
-==== Axel Protocol Obj.magic
+| Peer type has exactly two values
+| proven
+| Idris2 0.7.0, `--check --total`, `%default total`; see <<receipt>>
+| `2-protocols/overlay/src/abi/OverlayProtocol.idr:peerTypeExhaustive`
+| A fact about the model type, not about any implementation. Relative to the `argued` Idris2 library row below.
 
-* `+2-protocols/axel/src/Tea.res+` — 8+ `+Obj.magic+` calls for DOM
-rendering
-* Lower priority than the protocol specification proofs
+| The two peer types are distinct
+| proven
+| As above
+| `2-protocols/overlay/src/abi/OverlayProtocol.idr:peerTypesDistinct` (and the `DecEq PeerType` instance)
+| As above.
 
-==== Groove Protocol Reference
+| The imported Idris2 library behaves as its types state: the import cone of `2-protocols/overlay/src/abi/OverlayProtocol.idr`, 34 modules of Idris2 0.7.0 `prelude` and `base`
+| argued
+| -
+| Root `Overlay.ABI.OverlayProtocol`; imports `Prelude` (implicit), `Data.So`, `Decidable.Equality`; see <<receipt>>
+| Not checked. Idris2 has no safe mode that refuses escape hatches, and the cone contains 44 lines matching an escape-hatch marker (`believe_me`, `really_believe_me`, `assert_total`, `assert_smaller`, `idris_crash`, `%unsafe`, `%default partial`) in 7 modules (`Builtin` 17, `Prelude.Types` 12, `Data.Fin` 6, `Decidable.Equality` 3, `Data.List` 3, `PrimIO` 2, `Prelude.Show` 1). Whether the two `proven` rows' terms reach any of them has not been traced.
 
-* `+2-protocols/groove/reference/groove-proxy/GrooveProxy.idr+` — Idris2
-reference implementation
-* Prove: proxy faithfully implements the Groove protocol specification
+| Spec §2.1 Non-Modification: `base_state(with_overlay) = base_state(without_overlay)`
+| open
+| -
+| `2-protocols/overlay/src/abi/OverlayProtocol.idr:ConformantOverlay.nonModification`
+| Not established. The field has type `NonModification baseState baseState`, which `basePreserved` (i.e. `Refl`) inhabits for every overlay, so it constrains nothing. See <<counterexample>>.
 
-=== Recommended Prover
+| Spec §2.2 Additive Only
+| open
+| -
+| `2-protocols/overlay/src/abi/OverlayProtocol.idr:AdditiveOnly`
+| Not established. The record's states are unrelated to the overlay's `baseState` and activation function, and "no removal or shadowing" is modelled only as `overlayItems > 0`.
 
-* *Agda* for information theory (extend existing proofs, eliminate
-postulates)
-* *Idris2* for A2ML, Avow, Groove protocol correctness (already in use)
+| Spec §2.3 Switchable: `deactivate(activate(base)) = base`
+| open
+| -
+| `2-protocols/overlay/src/abi/OverlayProtocol.idr:Switchable`
+| Stated as a field to be supplied, at a single base state. `UniversallySwitchable` (all states) exists but `ConformantOverlay` does not require it.
 
-=== Priority
+| Spec §2.4 Idempotent Activation (both directions)
+| open
+| -
+| `2-protocols/overlay/src/abi/OverlayProtocol.idr:FullyIdempotent`
+| Stated as a field to be supplied, at a single base state.
 
-*MEDIUM* — Standards monorepo. The LOL information theory postulates and
-Avow consent proofs are the highest-value targets. A2ML proofs already
-exist and need completion audit.
+| Spec §2.5 Declared Relationship, with the §5 required fields of the `overlay-protocol` section (including `switchable` `#t` and `modifies-base` `#f`)
+| open
+| -
+| `2-protocols/overlay/src/abi/OverlayProtocol.idr:ValidDeclaration`
+| Only checks that three strings are non-empty; the §5 fields are not modelled. The spec still names `ECOSYSTEM.scm` as the declaration site. That format is retired, and its content maps to the chora deed's `(ecosystem)` clause (`1-formats/deed/mappings/meta-ecosystem-to-repo-deed.adoc`); where an `overlay-protocol` section would go there is not specified.
 
-=== Template ABI Cleanup (2026-03-29)
+| Spec §3.3 o-extension activation script: sets the declaring environment variables, extends the relevant paths, is idempotent and silent; deactivation unsets every variable and restores every path
+| open
+| -
+| none
+| Not modelled. `FlagBased` carries only a command string.
 
-Template ABI removed – was creating false impression of formal
-verification. The removed files (Types.idr, Layout.idr, Foreign.idr)
-contained only RSR template scaffolding with unresolved
-\{\{PROJECT}}/\{\{AUTHOR}} placeholders and no domain-specific proofs.
+| Spec §4.3 aggregate-library: every curated operation has an interface signature, documented behavioural semantics and executable test cases
+| open
+| -
+| none
+| Not modelled. `DepBased` carries only an import path.
+
+| Spec §7.1 conformance checklist, the items no other row covers: the declaration sets `modifies-base` to `#f` and `switchable` to `#t`; for an o-extension, `activate.sh` exists and is executable; the AI manifest declares the non-modification invariant
+| open
+| -
+| none
+| Not modelled. `OverlayDeclaration` has no `modifies-base` or `switchable` field, and nothing models files or a manifest. The checklist still names `0-AI-MANIFEST.a2ml`, a retired format. Its successor is `0-AI-MANIFEST.deed`, mapping to the repo deed (`deed.abnf`), and how its content translates awaits an owner decision (`1-formats/deed/mappings/ai-manifest-decision.adoc`), so where a non-modification declaration would go is unresolved. The checklist's other items are the §2.1, §2.3, §2.4 and §4.3 rows.
+
+| Overlay composition and chaining (spec §6): overlays do not depend on each other unless declared, avoid namespace collisions, keep each `activate.sh` independently sourceable, and every chain link satisfies the core invariants
+| open
+| -
+| `2-protocols/overlay/src/abi/OverlayProtocol.idr:Composable`, `mixedPeersComposable`, `OverlayChain`
+| `Composable` is only "same base state"; `mixedPeersComposable` wraps its argument. `OverlayChain.bIndependentOfA` is `NonModification x x`, vacuous as above.
+
+| The Zig implementation corresponds to the model
+| open
+| -
+| `2-protocols/overlay/ffi/zig/src/main.zig`; tests in the same file (17) and `ffi/zig/test/integration_test.zig` (7)
+| No correspondence argument exists. The Zig `overlay_check_*` functions are runtime checks over caller-supplied states at one base state, the same shape as the model, so they inherit its gaps. No CI lane builds or tests the Zig code, and the tests were not run for this ledger (the session's network refuses `ziglang.org`), so they give no `tested-only` evidence yet. No Zig version is pinned for this code: there is no `build.zig.zon` or tool-version file, `guix.scm` has no Zig, and the only `0.15.2` in the repo is a commented example in `rust-ci-reusable.yml` and an example Trustfile.
+
+| The shell conformance checker corresponds to the spec
+| open
+| -
+| `2-protocols/overlay/scripts/check-conformance.sh`
+| A second implementation: it validates an overlay directory against the spec and prints `RESULT: CONFORMANT`. No correspondence argument, no tests, and no CI lane runs it. It reads the declaration from `ECOSYSTEM.scm`, a retired format, so it cannot accept a deed-era overlay as written.
+
+| Spec §8 reference implementations conform: `echidna/HOL-o-extension/` and `developer-ecosystem/aggregate-library/`
+| open
+| -
+| Other repositories
+| The spec presents both as conforming implementations. No conformance check for either is recorded here or was run for this ledger.
+|===
+
+`conformantPreservesBase` and `conformantReversible` are field projections
+of `ConformantOverlay`. They restate an obligation that the caller
+supplies, so they are not listed as discharged theorems.
+
+[[gate-obligations]]
+=== Gate obligations: actions.lock closure and panic-attack scope
+
+These are the CI gates built for standards#963 and #1306. The formal
+closure model belongs to Hypatia, the closure authority:
+`verification/proofs/idris2/ActionsLockClosure.idr` in
+`hyperpolymath/hypatia` proves the decision procedure sound and complete,
+and evaluates the same corpus rows as equations. Its status is recorded in
+that repository's `verification/PROOF-STATUS.adoc`, not here.
+All three tests run in CI through `scripts/run-shell-test-suite.sh`, in
+the Self Test workflow (`.github/workflows/self-test.yml`).
+
+[cols="3,1,2,2,3",options="header"]
+|===
+| Obligation | Status | Checker (version, flags) | Where | Trust boundary
+
+| `close-lock.sh --check` reports exactly the refs an `actions.lock` names without a top-level record (standards#963)
+| tested-only
+| `scripts/tests/close-lock-test.sh`
+| `scripts/close-lock.sh`; corpus `scripts/tests/fixtures/actions-lock-closure/`
+| Bounds: 5 corpus locks, 6 distinct refs, lockfile versions v0.0.2 and v0.0.3. Each row's verdict and exact dangling refs are checked. Hypatia's suite replays the same corpus, and its model states the same rows as equations. Runtime refinement of this script against that model is not claimed.
+
+| `lock-selfcheck.sh` gives SELF-CONSISTENT only when the lock is closed and every action ref used by a workflow that has a lock entry is keyed for that workflow, and UNEXAMINED, never a dangling edge, when closure could not be checked
+| tested-only
+| `scripts/tests/lock-selfcheck-test.sh`
+| `scripts/lock-selfcheck.sh`
+| Bounds: 11 cases, among them a dangling nested edge (POISON), an unreadable lock (UNEXAMINED), and an unparseable workflow together with an unreadable lock (both reported). A workflow with no lock entry at all is listed as a note and is deliberately outside the verdict.
+
+| The panic-attack step's `counts` and `counts_excluded` partition the unsuppressed findings by the `scope-excludes` prefixes, anchored at the start of the repository-relative path (standards#1306)
+| tested-only
+| `scripts/tests/hypatia-blocking-gate-test.sh`
+| `.github/workflows/hypatia-scan-reusable.yml`, panic-attack step
+| Bounds: 3 cases. Excluded findings are reported but not counted. A critical that is only under an excluded prefix raises no warning. An empty scope counts everything. `docs/9-archive/` and `9-archive-not/` still count.
+|===
+
+[[receipt]]
+=== Receipt for the two proven rows
+
+[cols="1,3"]
+|===
+| Checker | Idris2 0.7.0, built from `idris-lang/Idris2` tag `v0.7.0` (`27780073c8631826d846499840b3857d9b9a4fd5`) with Chez Scheme 9.5.8
+| Source | `2-protocols/overlay/src/abi/OverlayProtocol.idr` as changed by the commit that rewrote this file, whose only change to it is the header comment. Before it, at `9bdf864cc7f2c8e24b4df84bf00d04158eee3ad5` (sha256 `89064f9ade81ffc5bfdeeb3fab28b778cb74f46a28b68276366318d5284419a1`), the file checked with the same result.
+| Input digest | `2-protocols/overlay/src/abi/OverlayProtocol.idr`, sha256 `2e30a9169cbc1dece6159a5721495e917a9044359a6e6aa78a5fbecc7abd918f`
+| Invocation | `idris2 --check --total Overlay/ABI/OverlayProtocol.idr`, from a scratch directory holding an unchanged copy of the file at the path its module name requires
+| Result | exit 0; `%default total`
+| Escape hatches | None in `2-protocols/overlay/src/abi/OverlayProtocol.idr`: no `believe_me`, `assert_total`, `assert_smaller`, `postulate` or holes. Its import cone is a different matter: 44 occurrences in 7 of 34 library modules, recorded as the `argued` row.
+| Import cone | Computed from the `import` lines of the Idris2 0.7.0 `libs/prelude` and `libs/base` sources, starting at `Prelude`, `Data.So` and `Decidable.Equality`: `Builtin`, `Control.Function`, `Control.Ord`, `Control.Order`, `Control.Relation`, `Data.Bool`, `Data.Either`, `Data.Fin`, `Data.List`, `Data.List1`, `Data.List1.Properties`, `Data.Maybe`, `Data.Nat`, `Data.SnocList`, `Data.So`, `Data.These`, `Data.Zippable`, `Decidable.Equality`, `Decidable.Equality.Core`, `Prelude`, `Prelude.Basics`, `Prelude.Cast`, `Prelude.EqOrd`, `Prelude.IO`, `Prelude.Interfaces`, `Prelude.Interpolation`, `Prelude.Num`, `Prelude.Ops`, `Prelude.Show`, `Prelude.Types`, `Prelude.Uninhabited`, `PrimIO`, `Syntax.PreorderReasoning`, `Syntax.PreorderReasoning.Generic`
+| Run | one-off, 2026-11-09, in an agent session. No CI lane runs this check, so a regression would not be caught.
+|===
+
+The file cannot be checked where it sits. It declares
+`module Overlay.ABI.OverlayProtocol` but lives at `src/abi/OverlayProtocol.idr`,
+and there is no `.ipkg` to map it. Run in place,
+`idris2 --check abi/OverlayProtocol.idr` fails with "Module name
+Overlay.ABI.OverlayProtocol does not match file name". That mismatch, and
+the absence of a CI lane, are left as they are under the
+`KEEP-SPEC-DEFER-IMPL` decision. Revisit them together with the open rows
+when a consumer appears.
+
+[[counterexample]]
+=== Counterexample: a destructive overlay is "conformant"
+
+This module typechecks against the file above with
+`idris2 --check --total` (Idris2 0.7.0, same receipt). It builds a
+`ConformantOverlay` whose activation discards any base state, so the model
+as written does not enforce Non-Modification:
+
+[source,idris]
+----
+module Witness
+
+import Overlay.ABI.OverlayProtocol
+import Data.So
+
+%default total
+
+wipe : ActivationFn
+wipe = MkActivationFn (\_ => MkBaseState 0 0) id
+
+empty : BaseState
+empty = MkBaseState 0 0
+
+decl : OverlayDeclaration OExtension
+decl = MkOverlayDeclaration "b" "u" (FlagBased "c") "d" "x"
+
+add : AdditiveOnly
+add = MkAdditiveOnly (MkBaseState 7 7) (MkBaseState 7 7) 1
+
+destructive : ConformantOverlay OExtension
+destructive = MkConformantOverlay decl wipe empty
+  (basePreserved empty)
+  add
+  (MkSwitchable Refl)
+  (MkFullyIdempotent (MkActivationIdempotent Refl) (MkDeactivationIdempotent Refl))
+  (MkValidDeclaration Oh Oh Oh)
+
+wipes : activate Witness.wipe (MkBaseState 1 5) = MkBaseState 0 0
+wipes = Refl
+----
+
+A model that discharges §2.1 would tie the base state before activation to
+the base component of the state after it, for every base state, so that
+`destructive` fails to typecheck. That redesign belongs to the
+implementation work the decision defers.
+
+[[moved-out]]
+== Obligations that left this repository
+
+The previous version of this file listed these. None is tracked here any
+more; each now belongs to the proof-status file of the repository that
+holds it.
+
+[cols="2,3",options="header"]
+|===
+| Previously listed | Where it went
+
+| `lol/proofs/theories/information_theory.agda` (6 postulates), `lol/src/abi/Locale.idr`
+| Evicted with the `lol` tree in `24a12d6f` (#680, 2026-08-28)
+
+| `a2ml/src/A2ML/Proofs.idr`, `Parser.idr`, `TypedCore.idr`, `Surface.idr`
+| Evicted with the `a2ml` tree in `24a12d6f` (#680). A2ML is retired (D99, D269c, D312, D313)
+
+| `avow-lib/src/abi/Consent.idr`, `Unsubscribe.idr`
+| Left when the nested avow protocol became a thin binding, `17e7f8f8` (2026-07-02)
+
+| `groove-proxy/GrooveProxy.idr`
+| Extracted to `hyperpolymath/groove-protocol`, `b3493a60` (#228, 2026-05-28)
+
+| `2-protocols/axel/src/Tea.res`, `AxelApp.res` (`Obj.magic`)
+| Not a proof obligation. Only the compiled `.res.js` files remain here
+|===
