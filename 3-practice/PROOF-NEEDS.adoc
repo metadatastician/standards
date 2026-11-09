@@ -16,10 +16,10 @@ toc::[]
 
 == Census
 
-2 proven of 15 rows; 1 argued; 12 open. No row is `tested-only` or
-`proven-with-postulates`. Both `proven` rows hold *relative to* the
-`argued` row for the Idris2 library they import (PROOF-POLICY §1.1), so
-neither counts as unconditionally proven.
+5 proven of 20 rows; 2 argued; 1 tested-only; 12 open. No row is
+`proven-with-postulates`. Every `proven` row holds *relative to* the
+`argued` row for the Idris2 library its file imports (PROOF-POLICY §1.1), so
+none counts as unconditionally proven.
 
 Every row is an engineering obligation (PROOF-POLICY §1: Idris2 for
 interfaces and protocol properties). Proof Witness Grades apply to theory
@@ -131,6 +131,36 @@ implementation do and do not establish.
 | -
 | Other repositories
 | The spec presents both as conforming implementations. No conformance check for either is recorded here or was run for this ledger.
+
+| K9 Hunt gate: `authorize_hunt` permits exactly when all five evidence flags hold (K9-CONTRACT-SPEC §9.2)
+| proven
+| Idris2 0.7.0, `--check`, `%default total`; see <<receipt-hunt>>
+| `1-formats/k9/spec/proofs/HuntGate.idr:permitIffAll`
+| A fact about the model of `authorize_hunt`. Relative to the `argued` Idris2 library row for this file, below. The model-to-Nickel bridge is the `tested-only` row below.
+
+| K9 Hunt gate: a refusal names a precondition exactly when its flag is false, and never names none
+| proven
+| As above
+| `1-formats/k9/spec/proofs/HuntGate.idr:unmetNamesExactlyTheFalse`, `refusalIsNonEmpty`
+| As above.
+
+| K9 Hunt gate: a verified signature alone does not authorise Hunt (owner directive 2026-06-03)
+| proven
+| As above
+| `1-formats/k9/spec/proofs/HuntGate.idr:signatureAloneInsufficient`
+| As above.
+
+| The imported Idris2 library behaves as its types state: the import cone of `1-formats/k9/spec/proofs/HuntGate.idr`, 36 modules of Idris2 0.7.0 `prelude` and `base`
+| argued
+| -
+| Root `HuntGate`; imports `Prelude` (implicit), `Data.List`, `Data.List.Elem`; see <<receipt-hunt>>
+| -
+
+| Both Nickel copies of `authorize_hunt` (`spec/contract/k9_contract.ncl`, `leash.ncl`) compute the `HuntGate.idr` model
+| tested-only
+| Nickel 1.18.0; `nickel export hunt-gate-exhaustive.ncl`
+| `1-formats/k9/spec/proofs/hunt-gate-exhaustive.ncl`, run by `k9-validate.sh --self-test` in `k9-conformance.yml`
+| Bound: all 32 evidence inputs for each copy (64 cases), the whole finite domain. It compares verdict, enforced level and the unmet list, in order. A planted bug (dropping `dry_run` from `leash.ncl`) fails it at case 0.
 |===
 
 `conformantPreservesBase` and `conformantReversible` are field projections
@@ -160,6 +190,35 @@ Overlay.ABI.OverlayProtocol does not match file name". That mismatch, and
 the absence of a CI lane, are left as they are under the
 `KEEP-SPEC-DEFER-IMPL` decision. Revisit them together with the open rows
 when a consumer appears.
+
+[[receipt-hunt]]
+=== Receipt for the K9 Hunt-gate rows
+
+[cols="1,3"]
+|===
+| Checker | Idris2 0.7.0, built from `idris-lang/Idris2` tag `v0.7.0` (`27780073c8631826d846499840b3857d9b9a4fd5`) with Chez Scheme 9.5.8; Nickel 1.18.0 for the `tested-only` row
+| Input digests | `1-formats/k9/spec/proofs/HuntGate.idr` sha256 `20ab44470afec01affc8ade89f08a83259ba00914b460afd293a4b2da2237920`; `hunt-gate-exhaustive.ncl` sha256 `b30b34835a3c916a85e633a7a4ec8eaed057cbf8d4bd46425d60ed0321bce0fe`; `leash.ncl` sha256 `a93f9a61055569eaf6730ac17d8d1b8f47d4d3ec512a1866fcdc71cf8288eb95`; `spec/contract/k9_contract.ncl` sha256 `35e887762080acd2854849499662711a5d03038d1079ab5e194df40523136f97`
+| Invocation | `idris2 --check HuntGate.idr` from `1-formats/k9/spec/proofs/`; `nickel export hunt-gate-exhaustive.ncl` from the same directory
+| Result | Idris2: exit 0, no `Error:` line, `%default total`. Nickel: `{"cases_checked": 64}`
+| Negative controls | Dropping `missing DryRun e` from the model's `unmet` breaks `permitSound`, `permitComplete` and `unmetSound`. Dropping the `dry_run` term from `leash.ncl` makes the Nickel check fail at case 0, naming `leash.ncl`.
+| Escape hatches | None in `HuntGate.idr`: no `believe_me`, `assert_total`, `assert_smaller`, `postulate`, `idris_crash` or holes. Its import cone: 40 occurrences of those names in 7 of 36 library modules, recorded as the `argued` row.
+| Import cone | Computed from the `import` lines of the Idris2 0.7.0 `libs/prelude` and `libs/base` sources, starting at `Prelude`, `Data.List` and `Data.List.Elem`: `Builtin`, `Control.Function`, `Control.Ord`, `Control.Order`, `Control.Relation`, `Data.Bool`, `Data.Either`, `Data.Fin`, `Data.List`, `Data.List.Elem`, `Data.List1`, `Data.List1.Properties`, `Data.Maybe`, `Data.Nat`, `Data.Singleton`, `Data.SnocList`, `Data.So`, `Data.These`, `Data.Zippable`, `Decidable.Equality`, `Decidable.Equality.Core`, `Prelude`, `Prelude.Basics`, `Prelude.Cast`, `Prelude.EqOrd`, `Prelude.IO`, `Prelude.Interfaces`, `Prelude.Interpolation`, `Prelude.Num`, `Prelude.Ops`, `Prelude.Show`, `Prelude.Types`, `Prelude.Uninhabited`, `PrimIO`, `Syntax.PreorderReasoning`, `Syntax.PreorderReasoning.Generic`
+| Run | 2026-11-09, in an agent session. CI then runs both: the Idris2 check in `echidna-verify.yml` (the Idris2 job, on changes under `1-formats/k9/spec/proofs/`, on push and on schedule) and the exhaustive Nickel check in the `k9-validate.sh --self-test` step of `k9-conformance.yml`.
+|===
+
+[[toolchain-deviations]]
+=== Toolchain deviations (PROOF-POLICY §6)
+
+[cols="1,1,2,2,1",options="header"]
+|===
+| Leg | Tool and version | How installed, and digest | Why not Guix or the container | State
+
+| The Idris2 checks in `echidna-verify.yml` (the AVOW proofs, and the K9 Hunt-gate proof above)
+| Idris2, as `pack install-app idris2` resolves it; the job prints `idris2 --version`
+| `stefan-hoeck/idris2-pack` cloned at its default branch, then `pack install-app idris2`. No digest is recorded, and the version is not asserted.
+| `guix.scm` has no Idris2 package, and the repository's container installs no prover.
+| open: pin pack and the Idris2 version, assert the version in the job and fail on a mismatch, or provide Idris2 through Guix
+|===
 
 [[counterexample]]
 === Counterexample: a destructive overlay is "conformant"

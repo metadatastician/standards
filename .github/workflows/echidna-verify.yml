@@ -80,7 +80,7 @@ jobs:
           base="${{ github.event.pull_request.base.sha }}"
           head="${{ github.event.pull_request.head.sha }}"
           changed=$(git diff --name-only "$base" "$head" 2>/dev/null || true)
-          if printf '%s\n' "$changed" | grep -qE '^(lol/proofs/|2-protocols/avow/avow-lib/src/abi/.*\.idr$|\.github/workflows/echidna-verify\.yml$)'; then
+          if printf '%s\n' "$changed" | grep -qE '^(lol/proofs/|2-protocols/avow/avow-lib/src/abi/.*\.idr$|1-formats/k9/spec/proofs/|\.github/workflows/echidna-verify\.yml$)'; then
             echo "proofs=true" >> "$GITHUB_OUTPUT"
           else
             echo "proofs=false" >> "$GITHUB_OUTPUT"
@@ -179,6 +179,9 @@ jobs:
             ${{ runner.os }}-idris2-pack-
 
       - name: Install Idris2 via pack
+        # PROOF-POLICY §6 deviation, recorded in 3-practice/PROOF-NEEDS.adoc
+        # (toolchain-deviations): installed outside Guix and the container, with
+        # no pinned version or digest yet. State: open.
         run: |
           set -e
           if command -v idris2 >/dev/null 2>&1; then
@@ -228,12 +231,32 @@ jobs:
             fi
           done
 
+      - name: Type-check the K9 Hunt-gate proof (K9-CONTRACT-SPEC §9.2)
+        run: |
+          export PATH="$HOME/.pack/bin:$HOME/.local/bin:$PATH"
+          # PROOF-POLICY §1: an interface property, proved in Idris2. Its bridge
+          # to the Nickel text is the exhaustive check that
+          # `k9-validate.sh --self-test` runs in k9-conformance.yml.
+          # `idris2 --check` can exit 0 on a missing import while printing
+          # `Error:`, so this step fails on either.
+          cd 1-formats/k9/spec/proofs
+          set +e
+          out="$(idris2 --check HuntGate.idr 2>&1)"; rc=$?
+          set -e
+          printf '%s\n' "$out" | tee "$GITHUB_WORKSPACE/idris2-k9.log"
+          if [ "$rc" -ne 0 ] || printf '%s\n' "$out" | grep -qE '^Error:'; then
+            echo "::error title=K9 Hunt-gate proof::HuntGate.idr does not typecheck"
+            exit 1
+          fi
+
       - name: Upload log
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: idris2-avow-log
-          path: idris2-avow.log
+          path: |
+            idris2-avow.log
+            idris2-k9.log
           if-no-files-found: ignore
 
   trust-summary:
@@ -251,6 +274,6 @@ jobs:
           echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
           echo "| Agda lol/proofs | ${{ needs.agda-lol.result }} |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Idris2 a2ml | _evicted — a2ml project officially retired 2026-09-17 |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Idris2 avow | ${{ needs.idris2-avow.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Idris2 avow + K9 Hunt gate | ${{ needs.idris2-avow.result }} |" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "See artefacts for verification logs." >> "$GITHUB_STEP_SUMMARY"

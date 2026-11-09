@@ -772,6 +772,19 @@ self_test() {
   hp="$(awk '/hunt_preconditions = \[/,/^  \]/' "$CONTRACT" | grep -oE '"[a-z_]+"' | tr -d '"' | tr '\n' ' ' | sed 's/ $//')"
   t "hunt_preconditions is exactly the five, closed (§9.2)" \
     "signature policy sandbox dry_run capability_grant" "$hp"
+  # §9.2 — the gate's BEHAVIOUR, not just its list of names. HuntGate.idr
+  # proves the gate's properties for a model of authorize_hunt; this checks
+  # both Nickel copies compute that model on all 32 evidence inputs (32 x 2 =
+  # 64). A skip is not a pass: without nickel this assertion fails.
+  local hg nbin
+  if nbin="$(nickel_bin)"; then
+    hg="$(cd "$SPEC_DIR/proofs" && "$nbin" export hunt-gate-exhaustive.ncl 2>&1 \
+      | grep -oE '"cases_checked": [0-9]+' | grep -oE '[0-9]+$' || true)"
+  else
+    hg="nickel not available"
+  fi
+  t "authorize_hunt matches the HuntGate.idr model on every input, both copies (§9.2)" \
+    "64" "$hg"
   # §7 — the leash taxonomy is likewise closed, in both directions.
   t "the leash taxonomy is exactly three, closed (§7)" \
     "'Kennel 'Yard 'Hunt" \

@@ -630,6 +630,15 @@ and a host implementing `leash.ncl` must reach the same verdict on the same
 evidence. The conformance suite asserts the precondition *lists* are equal so
 the two cannot drift.
 
+The gate's *behaviour* is checked as well. `spec/proofs/HuntGate.idr` proves,
+for a model of `authorize_hunt`, that it permits exactly when all five flags
+hold, that a refusal names a precondition exactly when its flag is false, and
+that a verified signature alone never authorises Hunt (PROOF-POLICY §1:
+Idris2). `spec/proofs/hunt-gate-exhaustive.ncl` checks that both Nickel
+copies compute that model on all 32 evidence inputs; `k9-validate.sh
+--self-test` runs it. The proof covers the model and the enumeration covers
+the bridge; the ledger is `3-practice/PROOF-NEEDS.adoc`.
+
 === Evidence provenance
 
 Each precondition's evidence MUST come from the layer that can actually
