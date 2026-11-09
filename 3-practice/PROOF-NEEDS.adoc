@@ -8,7 +8,7 @@ The Mathesis catalogue (`hyperpolymath/mathesis`,
 `docs/catalogue/catalogue.adoc`) names this file as standards' status
 document.
 
-Rewritten 2026-11-09. The earlier version listed eight paths that no
+Rewritten 2026-11-09. The earlier version listed eleven paths that no
 longer exist here and did not mention the one proof file that does; see
 <<moved-out>>.
 
@@ -16,7 +16,7 @@ toc::[]
 
 == Census
 
-2 proven of 13 rows; 1 argued; 10 open. No row is `tested-only` or
+2 proven of 15 rows; 1 argued; 12 open. No row is `tested-only` or
 `proven-with-postulates`. Both `proven` rows hold *relative to* the
 `argued` row for the Idris2 library they import (PROOF-POLICY §1.1), so
 neither counts as unconditionally proven.
@@ -84,11 +84,11 @@ implementation do and do not establish.
 | `2-protocols/overlay/src/abi/OverlayProtocol.idr:FullyIdempotent`
 | Stated as a field to be supplied, at a single base state.
 
-| Spec §2.5 Declared Relationship
+| Spec §2.5 Declared Relationship, with the §5 required fields of the `overlay-protocol` section (including `switchable` `#t` and `modifies-base` `#f`)
 | open
 | -
 | `2-protocols/overlay/src/abi/OverlayProtocol.idr:ValidDeclaration`
-| Only checks that three strings are non-empty. The spec still names `ECOSYSTEM.scm` and `0-AI-MANIFEST.a2ml` as the declaration site; both formats are retired (the chora deed's `(ecosystem)` clause replaces them, D312).
+| Only checks that three strings are non-empty; the §5 fields are not modelled. The spec still names `ECOSYSTEM.scm` as the declaration site. That format is retired, and its content maps to the chora deed's `(ecosystem)` clause (`1-formats/deed/mappings/meta-ecosystem-to-repo-deed.adoc`); where an `overlay-protocol` section would go there is not specified.
 
 | Spec §3.3 o-extension activation script: sets the declaring environment variables, extends the relevant paths, is idempotent and silent; deactivation unsets every variable and restores every path
 | open
@@ -106,9 +106,9 @@ implementation do and do not establish.
 | open
 | -
 | none
-| Not modelled. `OverlayDeclaration` has no `modifies-base` or `switchable` field, and nothing models files or a manifest. The checklist still names `ECOSYSTEM.scm` and `0-AI-MANIFEST.a2ml`, both retired formats. The checklist's other items are the §2.1, §2.3, §2.4 and §4.3 rows.
+| Not modelled. `OverlayDeclaration` has no `modifies-base` or `switchable` field, and nothing models files or a manifest. The checklist still names `0-AI-MANIFEST.a2ml`, a retired format. Its successor is `0-AI-MANIFEST.deed`, mapping to the repo deed (`deed.abnf`), and how its content translates awaits an owner decision (`1-formats/deed/mappings/ai-manifest-decision.adoc`), so where a non-modification declaration would go is unresolved. The checklist's other items are the §2.1, §2.3, §2.4 and §4.3 rows.
 
-| Overlay composition and chaining (spec §6)
+| Overlay composition and chaining (spec §6): overlays do not depend on each other unless declared, avoid namespace collisions, keep each `activate.sh` independently sourceable, and every chain link satisfies the core invariants
 | open
 | -
 | `2-protocols/overlay/src/abi/OverlayProtocol.idr:Composable`, `mixedPeersComposable`, `OverlayChain`
@@ -119,6 +119,18 @@ implementation do and do not establish.
 | -
 | `2-protocols/overlay/ffi/zig/src/main.zig`; tests in the same file (17) and `ffi/zig/test/integration_test.zig` (7)
 | No correspondence argument exists. The Zig `overlay_check_*` functions are runtime checks over caller-supplied states at one base state, the same shape as the model, so they inherit its gaps. No CI lane builds or tests the Zig code, and the tests were not run for this ledger (the session's network refuses `ziglang.org`), so they give no `tested-only` evidence yet. No Zig version is pinned for this code: there is no `build.zig.zon` or tool-version file, `guix.scm` has no Zig, and the only `0.15.2` in the repo is a commented example in `rust-ci-reusable.yml` and an example Trustfile.
+
+| The shell conformance checker corresponds to the spec
+| open
+| -
+| `2-protocols/overlay/scripts/check-conformance.sh`
+| A second implementation: it validates an overlay directory against the spec and prints `RESULT: CONFORMANT`. No correspondence argument, no tests, and no CI lane runs it. It reads the declaration from `ECOSYSTEM.scm`, a retired format, so it cannot accept a deed-era overlay as written.
+
+| Spec §8 reference implementations conform: `echidna/HOL-o-extension/` and `developer-ecosystem/aggregate-library/`
+| open
+| -
+| Other repositories
+| The spec presents both as conforming implementations. No conformance check for either is recorded here or was run for this ledger.
 |===
 
 `conformantPreservesBase` and `conformantReversible` are field projections
