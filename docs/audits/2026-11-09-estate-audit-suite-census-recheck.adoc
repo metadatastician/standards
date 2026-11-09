@@ -149,7 +149,7 @@ lock or the suite.
 Default branch is `main`; local `HEAD`, `refs/heads/main` and `origin/main` all
 read `9bdf864cc7f2c8e24b4df84bf00d04158eee3ad5`. The push run at that SHA
 started *jobs*, and the component checks *executed* — the distinction that
-<<startup>> exists to keep visible:
+{startup} exists to keep visible:
 
 [cols="3,1,1,4",options="header"]
 |===
