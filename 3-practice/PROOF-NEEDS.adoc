@@ -5,10 +5,14 @@
 * *LOC*: ~139,200 (monorepo with many sub-standards)
 * *Languages*: ReScript, Idris2, Agda, Rust, Haskell, Zig, Nickel
 * *Existing ABI proofs*: Multiple `+src/abi/*.idr+` across sub-projects
-(a2ml, axel-protocol, avow-protocol, lol, etc.)
+(axel-protocol, avow-protocol, lol, etc.). The a2ml sub-project is no
+longer one of them: it left this repository on 2026-08-28 (see A2ML
+below).
 * *Existing verification*:
-`+lol/proofs/theories/information_theory.agda+` with A2ML Idris2 proofs
-in `+a2ml/src/A2ML/Proofs.idr+`
+`+lol/proofs/theories/information_theory.agda+`. The A2ML Idris2 proofs
+formerly at `+a2ml/src/A2ML/Proofs.idr+` are not in this repository;
+they moved to `hyperpolymath/a2ml` at `+src/A2ML/Proofs.idr+` (see A2ML
+below).
 * *Dangerous patterns*:
 ** `+lol/proofs/theories/information_theory.agda+`: 6 `+postulate+`
 (information theory axioms)
@@ -27,13 +31,23 @@ mutual information, etc.
 * Entropy non-negativity and chain rule should be constructively
 provable
 
-==== A2ML Parser Proofs (a2ml/src/A2ML/)
+==== A2ML Parser Proofs (closed here: format retired, sources moved out)
 
-* `+Proofs.idr+` exists — audit completeness
-* `+Parser.idr+`, `+TypedCore.idr+`, `+Surface.idr+` — prove
-parser/type-system correspondence
-* A2ML is a markup format standard — parser correctness ensures
-documents are faithfully processed
+* *Status*: closed for this repository. A2ML is a retired format (owner
+rulings D99, D269c, D312, D313; see the Machine-Readable Metadata notice
+in the repository `README.adoc`). Its parser-correctness need is not
+carried forward here, and this document names no successor for it.
+* *Where the files are*: `+a2ml/src/A2ML/Proofs.idr+`, `+Parser.idr+`,
+`+TypedCore.idr+` and `+Surface.idr+` were removed from this repository
+by #680 (commit `+24a12d6f+`, 2026-08-28, "carve-out: evict a2ml, lol
+and the repo-guardian pair"), which moved the a2ml tree with its history
+to `hyperpolymath/a2ml` by `git subtree split`. They are at
+`+src/A2ML/+` there; at that repository's `HEAD` `+a1c1df44+`
+(2026-10-01) the four files are byte-identical to the versions removed
+here.
+* This document records no check receipts for those files. Any audit of
+them belongs to `hyperpolymath/a2ml`, not to this repository's proof
+needs.
 
 ==== Avow Protocol Consent Proofs
 
@@ -58,13 +72,16 @@ reference implementation
 
 * *Agda* for information theory (extend existing proofs, eliminate
 postulates)
-* *Idris2* for A2ML, Avow, Groove protocol correctness (already in use)
+* *Idris2* for Avow, Groove protocol correctness (already in use). A2ML
+no longer appears here: the format is retired and its proofs moved out
+(see A2ML above).
 
 === Priority
 
 *MEDIUM* — Standards monorepo. The LOL information theory postulates and
-Avow consent proofs are the highest-value targets. A2ML proofs already
-exist and need completion audit.
+Avow consent proofs are the highest-value targets. The A2ML proof need is
+closed here: A2ML is retired (D99, D269c, D312, D313) and its proof files
+are in `hyperpolymath/a2ml`, not in this repository.
 
 === Template ABI Cleanup (2026-03-29)
 
