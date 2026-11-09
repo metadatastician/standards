@@ -16,8 +16,9 @@ toc::[]
 
 == Census
 
-2 proven of 15 rows; 1 argued; 12 open. No row is `tested-only` or
-`proven-with-postulates`. Both `proven` rows hold *relative to* the
+2 proven of 18 rows; 1 argued; 3 tested-only; 12 open. No row is
+`proven-with-postulates`. The three `tested-only` rows are the CI gates in
+<<gate-obligations>>. Both `proven` rows hold *relative to* the
 `argued` row for the Idris2 library they import (PROOF-POLICY §1.1), so
 neither counts as unconditionally proven.
 
@@ -136,6 +137,41 @@ implementation do and do not establish.
 `conformantPreservesBase` and `conformantReversible` are field projections
 of `ConformantOverlay`. They restate an obligation that the caller
 supplies, so they are not listed as discharged theorems.
+
+[[gate-obligations]]
+=== Gate obligations: actions.lock closure and panic-attack scope
+
+These are the CI gates built for standards#963 and #1306. The formal
+closure model belongs to Hypatia, the closure authority:
+`verification/proofs/idris2/ActionsLockClosure.idr` in
+`hyperpolymath/hypatia` proves the decision procedure sound and complete,
+and evaluates the same corpus rows as equations. Its status is recorded in
+that repository's `verification/PROOF-STATUS.adoc`, not here.
+All three tests run in CI through `scripts/run-shell-test-suite.sh`, in
+the Self Test workflow (`.github/workflows/self-test.yml`).
+
+[cols="3,1,2,2,3",options="header"]
+|===
+| Obligation | Status | Checker (version, flags) | Where | Trust boundary
+
+| `close-lock.sh --check` reports exactly the refs an `actions.lock` names without a top-level record (standards#963)
+| tested-only
+| `scripts/tests/close-lock-test.sh`
+| `scripts/close-lock.sh`; corpus `scripts/tests/fixtures/actions-lock-closure/`
+| Bounds: 5 corpus locks, 6 distinct refs, lockfile versions v0.0.2 and v0.0.3. Each row's verdict and exact dangling refs are checked. Hypatia's suite replays the same corpus, and its model states the same rows as equations. Runtime refinement of this script against that model is not claimed.
+
+| `lock-selfcheck.sh` gives SELF-CONSISTENT only when the lock is closed and every action ref used by a workflow that has a lock entry is keyed for that workflow, and UNEXAMINED, never a dangling edge, when closure could not be checked
+| tested-only
+| `scripts/tests/lock-selfcheck-test.sh`
+| `scripts/lock-selfcheck.sh`
+| Bounds: 11 cases, among them a dangling nested edge (POISON), an unreadable lock (UNEXAMINED), and an unparseable workflow together with an unreadable lock (both reported). A workflow with no lock entry at all is listed as a note and is deliberately outside the verdict.
+
+| The panic-attack step's `counts` and `counts_excluded` partition the unsuppressed findings by the `scope-excludes` prefixes, anchored at the start of the repository-relative path (standards#1306)
+| tested-only
+| `scripts/tests/hypatia-blocking-gate-test.sh`
+| `.github/workflows/hypatia-scan-reusable.yml`, panic-attack step
+| Bounds: 3 cases. Excluded findings are reported but not counted. A critical that is only under an excluded prefix raises no warning. An empty scope counts everything. `docs/9-archive/` and `9-archive-not/` still count.
+|===
 
 [[receipt]]
 === Receipt for the two proven rows
