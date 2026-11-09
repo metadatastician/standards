@@ -646,6 +646,42 @@ Mathesis may catalogue grades. It derives them from those receipts and does
 not assign them (§2.2). The home repository owns the theorem and its
 evidence.
 
+==== 8.5.1 The machine-readable receipt
+
+A repository that records grades keeps them in a *proof receipt*. This is a
+praxis deed (`*_praxis.deed`, conventionally under `verification/receipts/`)
+with `:profile proof-receipt`. It is the record above in a form a gate and
+mathesis can both read:
+
+* top-level fields:
+** `:repository`, as `OWNER/REPO`;
+** `:source-commit`, the full 40-character commit the receipt describes;
+* `(trusted-base (primitive :prover … :module … :name … :binding …) …)`: the
+prover-supplied postulates of §8.4, by name and binding;
+* one `(claim :id … :pwg … :foundation-diverse …)` per theorem, holding one
+`(leg …)` per witness:
+** each leg carries `:prover`, `:route` (`source` for the Agda leg;
+`transported`, `re-proved`, `waived` or `unavailable` for the others), its
+§5 `:token` and §2.2 `:state`;
+** each leg holds its `(receipt :run … :commit … :checker … :invocation …
+:state …)` records, with a `:reason` on any that is not `current`.
+
+`:pwg` and `:foundation-diverse` are recorded *and* derived. The reader
+recomputes both from the legs and receipts under §8.2 and §8.3, and it
+refuses a receipt whose recorded value differs. That is §8.4's "grades are
+derived, not asserted", made executable.
+
+The reader is `readProofReceipt` in
+link:../1-formats/deed/tools/deed_lint.js[`1-formats/deed/tools/deed_lint.js`]:
+
+    bun 1-formats/deed/tools/deed_lint.js --proof-receipt-json FILE
+
+It is the normative definition of the profile's fields, vocabularies and
+derivation, and `deed_lint.test.js` tests it. The worked example is
+`1-formats/deed/tools/fixtures/proof-receipt/example_praxis.deed`. A gate
+that writes receipts validates them with this reader. Mathesis reads
+receipts through it and catalogues the result as a census (§8.4).
+
 === 8.6 Naming
 
 `hyperpolymath/standards` and `metadatastician/standards` are the same
