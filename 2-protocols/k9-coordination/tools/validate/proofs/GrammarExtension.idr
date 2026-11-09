@@ -232,11 +232,15 @@ v11FilesAreV12Files g11 g12 same b11 b12 = extensionPreservesAcceptance gx
   where
     gx : GExt g11 g12
     gx n e p with (decEq n "body")
-      gx "body" e p | Yes Refl =
+      -- The name is transported along isBody rather than matched with Refl:
+      -- Idris2 0.8 does not count a Refl match on a String literal as
+      -- covering `Yes _`.
+      gx n e p | Yes isBody =
         ( seq GrammarExtension.bodyV12
-        ** (b12, replace {p = \t => Ext t (seq GrammarExtension.bodyV12)}
-                         (justInj (trans (sym b11) p))
-                         (interleaveExt bodyInterleave)) )
+        ** ( replace {p = \m => g12 m = Just (seq GrammarExtension.bodyV12)} (sym isBody) b12
+           , replace {p = \t => Ext t (seq GrammarExtension.bodyV12)}
+                     (justInj (trans (sym (replace {p = \m => g11 m = Just (seq GrammarExtension.bodyV11)} (sym isBody) b11)) p))
+                     (interleaveExt bodyInterleave) ) )
       gx n e p | No notBody = (e ** (same n notBody e p, Same))
 
 --------------------------------------------------------------------------------

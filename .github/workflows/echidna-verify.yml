@@ -6,7 +6,7 @@
 # Scope:
 #   - lol/proofs/theories/**/*.agda
 #   - 2-protocols/avow/avow-lib/src/abi/*.idr
-#   - 2-protocols/overlay/src/**/*.idr and 2-protocols/k9-coordination/tools/validate/proofs/*.idr (this repo's own; idris2-standards)
+#   - 2-protocols/k9-coordination/tools/validate/proofs/*.idr (this repo's own; idris2-standards)
 #
 # Proof-corpus status (issue #748, updated 2026-09-17): the lol and AVOW
 # corpora are EVICTED from this repo — and their jobs keep the presence
@@ -31,7 +31,6 @@ on:
     paths:
       - 'lol/proofs/**'
       - '2-protocols/avow/avow-lib/src/abi/*.idr'
-      - '2-protocols/overlay/src/**.idr'
       - '2-protocols/k9-coordination/tools/validate/proofs/**'
       - '.github/workflows/echidna-verify.yml'
   # NO path filter on pull_request, deliberately. It once existed because
@@ -83,7 +82,7 @@ jobs:
           base="${{ github.event.pull_request.base.sha }}"
           head="${{ github.event.pull_request.head.sha }}"
           changed=$(git diff --name-only "$base" "$head" 2>/dev/null || true)
-          if printf '%s\n' "$changed" | grep -qE '^(lol/proofs/|2-protocols/avow/avow-lib/src/abi/.*\.idr$|2-protocols/overlay/src/.*\.idr$|2-protocols/k9-coordination/tools/validate/proofs/|\.github/workflows/echidna-verify\.yml$)'; then
+          if printf '%s\n' "$changed" | grep -qE '^(lol/proofs/|2-protocols/avow/avow-lib/src/abi/.*\.idr$|2-protocols/k9-coordination/tools/validate/proofs/|\.github/workflows/echidna-verify\.yml$)'; then
             echo "proofs=true" >> "$GITHUB_OUTPUT"
           else
             echo "proofs=false" >> "$GITHUB_OUTPUT"
@@ -243,6 +242,9 @@ jobs:
     # This repository's own Idris2 proofs (3-practice/PROOF-NEEDS.adoc, the proof-status file).
     # Unlike the evicted corpora above there is no presence guard: the files
     # live here, so a missing file is a failure, not a notice.
+    # 2-protocols/overlay/src/abi/OverlayProtocol.idr is deliberately absent:
+    # under the overlay's KEEP-SPEC-DEFER-IMPL decision it stays unchecked in
+    # CI until a consumer appears (3-practice/PROOF-NEEDS.adoc, standards#1436).
     # Toolchain deviation (PROOF-POLICY section 6), state open: Idris2 comes from
     # idris2-pack, not guix.scm (which provides none) or a container. The
     # type-check step logs the version and the SHA-256 of the executable it
@@ -254,7 +256,6 @@ jobs:
     timeout-minutes: 40
     env:
       PROOFS: >-
-        2-protocols/overlay/src/abi:OverlayProtocol.idr
         2-protocols/k9-coordination/tools/validate/proofs:GrammarExtension.idr
     steps:
       - name: Checkout
@@ -321,7 +322,7 @@ jobs:
           for entry in $PROOFS; do
             dir="${entry%%:*}" file="${entry#*:}"
             echo "--- $dir/$file ---" | tee -a idris2-standards.log
-            (cd "$dir" && idris2 --check "$file") 2>&1 | tee -a idris2-standards.log
+            (cd "$dir" && idris2 --check --total "$file") 2>&1 | tee -a idris2-standards.log
           done
 
       - name: Upload log
@@ -348,6 +349,6 @@ jobs:
           echo "| Agda lol/proofs | ${{ needs.agda-lol.result }} |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Idris2 a2ml | _evicted — a2ml project officially retired 2026-09-17 |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Idris2 avow | ${{ needs.idris2-avow.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Idris2 this repository (overlay ABI, coordination.k9 grammar) | ${{ needs.idris2-standards.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Idris2 this repository (coordination.k9 grammar) | ${{ needs.idris2-standards.result }} |" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "See artefacts for verification logs." >> "$GITHUB_STEP_SUMMARY"
