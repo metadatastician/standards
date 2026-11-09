@@ -88,7 +88,7 @@ would hide which one broke, so DEED keeps its own summary row above.
 |===
 | Workflow | `.github/workflows/hypatia-scan-reusable.yml` (`workflow_call`)
 | Question | Did the scanners run, and what did each of them report?
-| Passes on | nothing by default — this is a *findings* lane, not a conformance lane. Callers may set `block-on-high` to refuse current high or critical findings after baseline filtering.
+| Passes on | nothing by default — this is a *findings* lane, not a conformance lane. Callers may set `block-on-high` to refuse current high or critical findings after baseline filtering, or `block-on-critical` to refuse current critical findings only: Hypatia's after the same filtering, and panic-attack's, where a scan that did not run cannot pass.
 | Output | job result plus `verdict` (grid state), artifact `verdict-grid`
 | Permissions | `actions: read`, `contents: read`, `security-events: write`
 | Artifact | `verdict-grid/report.md`, `report.json`, `badge.json`
