@@ -254,13 +254,19 @@ for SHA in "$@"; do
     cut -f1 "$TMP/unkeyed_wf" | sort -u | sed 's/^/          /'
   fi
 
+  # The two UNEXAMINED causes are independent, so each is reported on its own.
+  unexamined=0
   if [ -s "$TMP/unparsed" ]; then
     echo "  VERDICT: UNEXAMINED — yq could not parse $(sort -u "$TMP/unparsed" | wc -l) workflow(s); their refs were not checked:"
     sort -u "$TMP/unparsed" | sed 's/^/             /'
-    overall_rc=1
-  elif [[ "$closure_rc" -ne 0 && "$closure_rc" -ne 1 ]]; then
+    unexamined=1
+  fi
+  if [[ "$closure_rc" -ne 0 && "$closure_rc" -ne 1 ]]; then
     echo "  VERDICT: UNEXAMINED — close-lock.sh --check exited ${closure_rc}; this SHA's lock closure was not checked:"
     sed 's/^/             /' "$TMP/closure"
+    unexamined=1
+  fi
+  if [ "$unexamined" -eq 1 ]; then
     overall_rc=1
   elif [[ "$n_missing" -eq 0 && "$n_self_sha" -eq 0 && "$n_dangling" -eq 0 ]]; then
     echo "  VERDICT: SELF-CONSISTENT — every action ref used is keyed in this SHA's own lock, and the lock is closed."
