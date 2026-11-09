@@ -158,7 +158,7 @@ started *jobs*, and the component checks *executed* — the distinction that
 | Actions Lockfile Gate | 1 | 8 | `uses ⊆ actions.lock`, pin contract, closure and reusable closure all ran
 | Lock Self-Check | 1 | 5 | this commit is internally consistent, so it is safe to pin a caller to
 | Actions lock contract | 1 | — | lock representation contract
-| Governance | 21 | 20 × 7–15 | 19 concluded `success`; `Debt ratchet` / `Exemption ratchet` `skipped`
+| Governance | 21 | 19 × 6–14 successful | 19 concluded `success`; `Debt ratchet` / `Exemption ratchet` `skipped`
 | Self Test | 2 | 9, 21 | repo self-tests executed
 | Required contexts | 1 | 6 | every required context is producible on a PR
 | Secret Scanner | 3 | 5, 13, 5 | shell / gitleaks / rust lanes ran
