@@ -322,7 +322,13 @@ jobs:
           for entry in $PROOFS; do
             dir="${entry%%:*}" file="${entry#*:}"
             echo "--- $dir/$file ---" | tee -a idris2-standards.log
-            (cd "$dir" && idris2 --check --total "$file") 2>&1 | tee -a idris2-standards.log
+            out=$(cd "$dir" && idris2 --check --total "$file" 2>&1) || { printf '%s\n' "$out" | tee -a idris2-standards.log; exit 1; }
+            printf '%s\n' "$out" | tee -a idris2-standards.log
+            # idris2 exits 0 on some errors: a missing Prelude did, measured
+            # 2026-11-09. Any reported error fails the check.
+            if printf '%s\n' "$out" | grep -q '^Error'; then
+              echo "::error file=$dir/$file::idris2 reported an error but exited 0"; exit 1
+            fi
           done
 
       - name: Upload log

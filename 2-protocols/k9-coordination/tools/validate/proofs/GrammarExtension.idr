@@ -299,13 +299,19 @@ mutual
         ( u1 ++ v
         ** (DMore dc r, trans (cong (u1 ++) prf) (appendAssociative u1 v dotDeed)) )
 
+-- A word-preserving map between element derivations lifts to a star. The
+-- inline/refer directions are its instances: Idris2 0.8 does not see a
+-- direct match on `Derives g (Star (Ref n)) u` as covering.
+0 starMap : ((v : Word) -> Derives g a v -> Derives g b v) ->
+            Derives g (Star a) u -> Derives g (Star b) u
+starMap f DNil = DNil
+starMap f (DMore {u = u1} d r) = DMore (f u1 d) (starMap f r)
+
 0 starInline : g n = Just c0 -> Derives g (Star (Ref n)) u -> Derives g (Star c0) u
-starInline h DNil = DNil
-starInline h (DMore d r) = DMore (refInv h d) (starInline h r)
+starInline h = starMap (\v, d => refInv h d)
 
 0 starRefer : g n = Just c0 -> Derives g (Star c0) u -> Derives g (Star (Ref n)) u
-starRefer h DNil = DNil
-starRefer h (DMore d r) = DMore (DRef h d) (starRefer h r)
+starRefer h = starMap (\v, d => DRef h d)
 
 0 oldTail : Derives g (Cat (Star c0) (Lit GrammarExtension.dotDeed)) w ->
             (u : Word ** (Derives g (Star c0) u, w = u ++ GrammarExtension.dotDeed))

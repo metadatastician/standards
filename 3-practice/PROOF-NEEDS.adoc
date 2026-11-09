@@ -263,12 +263,12 @@ that CI runs (`tools/validate/validate.js`) supplies the tested rows.
 
 [cols="1,3"]
 |===
-| Checker | Locally: Idris2 0.7.0, the build named in <<receipt>>. In CI: Idris2 from idris2-pack, whose version and executable digest each run writes to the `idris2-standards-log` artifact (see <<deviation>>).
-| Input digest | `2-protocols/k9-coordination/tools/validate/proofs/GrammarExtension.idr`, sha256 `e7372076648baee0069842246e687decdf01b30aa4285f61c3585c1ecd3606fc`
+| Checker | Locally, two builds: Idris2 0.7.0, the build named in <<receipt>>; and Idris2 0.8.0 at commit `74055b69dc13b58fd0326104324233964a867475`, the commit pack installed in CI on 2026-11-09, bootstrapped from source with Chez Scheme 9.5.8 (`idris2_app/idris2.so` sha256 `5ba1aac07718765000d106869c37a86f1ee079ef2415a8d6e67f96f6f2ed0963`). In CI: Idris2 from idris2-pack, whose version and executable digest each run writes to the `idris2-standards-log` artifact (see <<deviation>>).
+| Input digest | `2-protocols/k9-coordination/tools/validate/proofs/GrammarExtension.idr`, sha256 `6d0a591b22008c4d580406ba4cd323c07d26ccf061aa6db3bc84485de86f77b8`
 | Invocation | `idris2 --check --total GrammarExtension.idr`, from `2-protocols/k9-coordination/tools/validate/proofs/`
-| Result | exit 0 on Idris2 0.7.0
+| Result | exit 0 and no reported error on both builds. The CI step also fails on any reported error, because idris2 exited 0 with "Module Prelude not found" when its library path was wrong.
 | Escape hatches | None in the file. The `idris2-standards` job refuses holes, postulates, `believe_me`, `assert_*` and `partial`/`covering` before it checks.
-| Controls | Two mutants fail to typecheck: v1.2's `body` gaining a required element, and v1.2's `body` lacking a v1.1 element.
+| Controls | Two mutants fail to typecheck (exit 1) on 0.8.0: v1.2's `body` gaining a required element, and v1.2's `body` lacking a v1.1 element.
 | Run | Every change to `proofs/` or to `echidna-verify.yml`, and weekly, in the `idris2-standards` job.
 |===
 
