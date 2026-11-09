@@ -130,7 +130,7 @@ if [[ -f "$REPO_ROOT/scripts/close-lock.sh" ]] \
   STAGED_LOCK="$(mktemp)"
   if ! git show ":$LOCK_REL" > "$STAGED_LOCK" 2>/dev/null \
      || ! bash "$REPO_ROOT/scripts/close-lock.sh" --check "$STAGED_LOCK"; then
-    echo -e "${RED}[pre-commit] staged actions.lock is not closed (see above)${NC}" >&2
+    echo -e "${RED}[pre-commit] staged actions.lock failed the closure check (see above)${NC}" >&2
     ERRORS=$((ERRORS + 1))
   fi
   rm -f "$STAGED_LOCK"

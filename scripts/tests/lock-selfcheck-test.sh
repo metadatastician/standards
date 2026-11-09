@@ -167,6 +167,31 @@ EOF
 expect "a dangling nested edge is POISON (standards#963)" "$sha" 1 "dangling edge(s) in this SHA's own lock"
 expect "the dangling ref is named" "$sha" 1 "actions/setup-python@v2"
 
+# A lock close-lock.sh cannot read (here a duplicate mapping key, which the
+# parser refuses) is not a dangling edge: closure was never examined, so the
+# verdict is UNEXAMINED, and the SHA is still unsafe to pin to.
+cat > "$WF/actions.lock" <<EOF
+version: 'v0.0.2'
+workflows:
+    '.github/workflows/ci.yml':
+        - 'actions/checkout@$LOCKED'
+dependencies:
+    'actions/checkout@$LOCKED':
+        ref: 'v7.0.1'
+        ref: 'v7.0.1'
+        commit: 'sha1-$LOCKED'
+        owner_id: 1
+        repo_id: 2
+EOF
+sha=$(commit_ci <<EOF
+jobs:
+  a:
+    steps:
+      - uses: actions/checkout@$LOCKED # v7.0.1
+EOF
+)
+expect "an unreadable lock is UNEXAMINED, not a dangling edge" "$sha" 1 "VERDICT: UNEXAMINED — close-lock.sh --check exited 2"
+
 echo
 echo "lock-selfcheck: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]
