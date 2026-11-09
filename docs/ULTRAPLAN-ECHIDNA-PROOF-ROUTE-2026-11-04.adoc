@@ -2,12 +2,12 @@
 // SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
 = Ultraplan: the echidna system — the proof route of the Kautz ladder, engineered and proved
 Jonathan D.A. Jewell (hyperpolymath)
-v0.2.2, 2026-11-04
+v0.2.3, 2026-11-09
 :toc: left
 :toclevels: 3
 :sectnums:
 :icons: font
-:status: DRAFT v0.2.1 — for owner review; v0.2.1 answers eight Codex review findings; v0.2.0 folded in an adversarial critic pass (four claims corrected, schema-wide auth gap added, merged PR order). Measured sections are facts with the command or file that produced them. Sections marked PROPOSED are design, not rulings. D-4 to D-9 in <<decisions>> are open.
+:status: DRAFT v0.2.3 — for owner review; v0.2.3 aligns the proof ladder with PROOF-POLICY as amended on 2026-11-04 (§8, Proof Witness Grades) and 2026-11-07 (§1.2, Creusot/Pearlite and Verus), records the first theory receipts and marks merged rows 1, 2 and 8 done; v0.2.2 recorded D-1 to D-3; v0.2.1 answered eight Codex review findings; v0.2.0 folded in an adversarial critic pass. Measured sections are facts with the command or file that produced them. Sections marked PROPOSED are design, not rulings. D-4 to D-10 in <<decisions>> are open.
 
 [.lead]
 The "echidna system" is the proof route of the Kautz-ladder ultraplan
@@ -81,7 +81,7 @@ everything between them is missing.
 *What to build, in one sentence* (<<recommendation>>). Seal the route's
 wire formats in one Idris2 package first, then run one pipe end to end on
 the only class whose meaning HYP-01 already defines (a `sorry` hole in a
-Lean file), with any stub graded orange; and keep one record family,
+Lean file), with any stub shown orange; and keep one record family,
 keyed by the ADR-008 content-id domains, as the store every later rung
 reads from.
 
@@ -546,7 +546,8 @@ runs, including Hypatia's re-checker and any stub: read-only target, no
 network, no secrets, dropped capabilities (`unshare -rn` isolates the
 network only). Authentication on the whole schema, loopback bind by default,
 a rate limit on `/graphql`. A report-back writer and SARIF output for the
-grid. Creusot on the receipt parser and the store transition function.
+grid. Creusot (Pearlite contracts) and Verus on the receipt parser and the
+store transition function (PROOF-POLICY §1.2).
 
 === Layer 3 — Hypatia, the warrant
 
@@ -697,7 +698,7 @@ smart learning" on this route.
 |template only
 
 |echidnabot
-|Creusot contracts on receipt parser and store transition
+|Creusot (Pearlite) contracts and Verus on receipt parser and store transition
 |proof
 |no
 
@@ -812,20 +813,44 @@ Each obligation sits on the prover PROOF-POLICY assigns
 (link:../3-practice/PROOF-POLICY.adoc[]), in build order. A falsifier is the
 planted case that must be refused.
 
+Three fields are recorded for every row, in its home repository's
+proof-status file, and none is written in another's place:
+
+* the §5 token (`proven`, `proven-with-postulates`, `tested-only`, `argued`,
+  `open`) for each leg;
+* for a theory row, the §2.2 correspondence state of each recheck leg
+  (`BRIDGE-PENDING` until the statement comparison is recorded and reviewed,
+  then `RECONCILED`);
+* for a theory row, the Proof Witness Grade of §8, derived from receipts and
+  never asserted. The target is `PWG-2ii`, where the §2 recheck obligation is
+  discharged, and `PWG-1` once every witness has a per-commit CI receipt.
+  Below `PWG-3` a theorem is `ungraded`.
+
+Agda entrypoints use the §2.1 invocation,
+`agda --safe --without-K --cubical-compatible`. Rust rows name both default
+verifiers, Creusot with Pearlite contracts and Verus (§1.2); a verifier not
+yet run stays `open` with its reason, never omitted. Mathesis catalogues the
+grades it derives from these receipts and assigns none (§8.5).
+
 [cols="1,1,4,1,3",options="header"]
 |===
 |# |Rung |Obligation |Prover |Falsifier
 
 |1
 |K0
-|Prover classification is total. A result reaches `proven` by one of two
-roads: a small-kernel prover accepted it, or an SMT result carries a
-certificate an independent checker verified (PROOF-POLICY §5). An SMT
-result without a checked certificate gives `argued`; model checkers and
-bounded checkers give `tested-only`.
+|Prover classification is total and follows PROOF-POLICY §5. A result
+reaches `proven` by one of three roads: a kernel accepted a proof term; a
+mapped verifier (Creusot through Why3, Verus, GNATprove) discharged every
+generated obligation, with the tool, provers and versions named as the trust
+boundary; or a direct SMT result under §4 carries a certificate an
+independent checker verified, or a documented trusted checking boundary. A
+direct SMT result with neither gives `argued`; model checkers and bounded
+checkers give `tested-only`.
 |Idris2
-|A reject fixture assigning `proven` to an unchecked z3 result typechecks,
-or an accept fixture with a checked SMT certificate is refused.
+|A reject fixture assigning `proven` to a direct z3 result with no
+certificate and no documented boundary typechecks, or an accept fixture with
+a checked SMT certificate, or a fully discharged Creusot run with its trust
+boundary named, is refused.
 
 |2
 |K0
@@ -833,7 +858,7 @@ or an accept fixture with a checked SMT certificate is refused.
 monotone.
 |Agda, rechecked in Rocq and Lean (PROOF-POLICY lists lattices and orders as
 theory); the Idris2 ABI states the same laws for its own types and cites the
-Agda theorem as an `argued` correspondence row
+Agda theorem as an `argued` correspondence row. Home repository: D-10
 |`meet(proven, argued) = proven` is derivable.
 
 |2a
@@ -878,18 +903,24 @@ confirming independent re-run; existing `patternNotSound`,
 |7
 |K0
 |Retraction never raises a level; retracting `(prover, version)` kills exactly
-the verdicts resting on it.
+the verdicts resting on it. Retraction is by name, every occurrence at once,
+as the runtime does (`lib/hypatia/verdict/retraction.ex` removes a set of
+names). `Retraction.idr` today removes one occurrence by position, so in a
+context naming an assumption twice a dependent still thins into what remains:
+the statement needs a duplicate-free context or name-wise retraction, and the
+Idris2 ↔ Elixir row stays `argued` until that is settled.
 |Idris2 encoding; Agda source in residual-evidence-types, rechecked in Rocq
 (Dedukti transport first) and Lean (re-proved by hand until a released
 Lambdapi Lean exporter exists, PROOF-POLICY §2)
-|Retracting an unrelated version lowers a verdict.
+|Retracting an unrelated version lowers a verdict, or a verdict survives the
+retraction of an assumption that its context names twice.
 
 |8
 |K0
 |echidnabot's receipt parser accepts only well-formed `/2`; its store
 transition preserves the lifecycle relation. Same for burrower's
 `echidna_contract.rs`.
-|Creusot
+|Creusot with Pearlite contracts, and Verus (§1.2)
 |A fuzzed 63-hex digest is accepted; a closed row reopens.
 
 |9
@@ -916,7 +947,8 @@ write.
 |K2 / K4 enabler
 |The status fold over attempt multisets is a join on the token lattice:
 commutative, associative, idempotent, monotone.
-|Agda, rechecked in Rocq and Lean (Lean leg re-proved)
+|Agda, rechecked in Rocq and Lean (Lean leg re-proved). Home repository:
+D-10
 |Folding the same attempts in two orders gives two statuses.
 
 |13
@@ -930,9 +962,42 @@ commutative, associative, idempotent, monotone.
 |Work-order admissibility is a total, deny-by-default function of work
 order, grants and evidence; a proof receipt or CNO certificate counts only
 if it binds the declared files.
-|Idris2 model; Creusot once the evaluator is Rust
+|Idris2 model; Creusot/Pearlite and Verus once the evaluator is Rust
 |A work order with no matching grant is admitted.
+
+|15
+|K0 (shipped, merged row 1)
+|echidnabot's GraphQL gate: `RepoScope::allows` admits an exact slug or
+`owner/*` only, never every owner; `authenticate` maps each credential to
+its role and nothing else to a principal; with no principal every guarded
+field is refused; the peer map stays bounded by recent traffic.
+|Creusot with Pearlite contracts, and Verus (§1.2); recorded `open` in
+echidnabot's `docs/PROOF-STATUS.adoc` as E-AUTH-SCOPE, E-AUTH-ROLE,
+E-AUTH-GUARD and E-RATE-BOUND
+|A route principal passes `admin_only`, or a pattern admits `a/b` for an
+owner it does not name.
+
+|16
+|K0 (shipped, merged row 2)
+|Hypatia sends the route credential only to `HYPATIA_ECHIDNABOT_URL`, never
+follows a redirect with it, and writes no claim or context to the manifest.
+|Elixir has no mapped prover: ExUnit tests on the wire (`tested-only`),
+with the interface contract in row 3's Idris2 package once it exists
+|A captured request at the fleet coordinator or a redirect target carries
+the credential.
 |===
+
+Receipts already taken (2026-11-09):
+
+* echidnabot T-RECEIPT, the receipt-boundary theorem rows 4 and 5 build on:
+  Agda 2.8.0.2 under the §2.1 profile, a Lean 4.35.0 re-proof and a
+  Coq 8.18.0 re-proof, each kernel-accepted with no axioms
+  (hyperpolymath/echidnabot#195). Both legs are `BRIDGE-PENDING` until the
+  recorded statement comparison is reviewed, so the derived grade is `PWG-3`.
+* Hypatia `Verdict.idr`, `Retraction.idr` and their accept and reject
+  fixtures: Idris2 v0.7.0 in `verify-proofs.yml`, run 42559874988 at
+  `c639c465e9bbbd01522f1eae12ac98a071afac13`. Engineering proofs are not
+  graded (§8.1).
 
 Existing proofs this route inherits or must re-home, per PROOF-POLICY §3:
 
@@ -942,8 +1007,11 @@ Existing proofs this route inherits or must re-home, per PROOF-POLICY §3:
   Agda without Mathlib.
 * `KinGate.tla` is reported `tested-only` with its bounds, with the reason
   for TLA+ recorded beside it.
-* `Retraction.idr` and `Verdict.idr` are transcriptions from Agda sources;
-  their correspondence rows are `argued` until compared.
+* `Retraction.idr` and `Verdict.idr` are transcriptions from Agda sources
+  (residual-evidence-types `Revision.agda` and `Context.agda`;
+  epistemic-types `Warrant.agda`); their correspondence rows are `argued`
+  until compared. `Verdict.idr`'s `Sound` names a re-check of a file but not
+  the span or rule of the verdict it supports: row 2a closes that.
 
 [[kautz]]
 == How the echidna system follows the Kautz ladder
@@ -1185,7 +1253,7 @@ authors (merged rows 14-15).
 output byte-stable; every theory leg proven or waived.
 
 |P7 harden and surface
-|Verdict v2 agent; drain and store agent with Creusot and TLA+; dual-accept
+|Verdict v2 agent; drain and store agent with Creusot/Pearlite, Verus and TLA+; dual-accept
 agent; grid agent; a reviewer per repository (merged rows 16-20).
 |PRs out of draft; grid row with SARIF; vendored-pin bump in gitbot-fleet.
 |Each repo's CI green; `verdict-grid-test.sh` passes.
@@ -1208,7 +1276,7 @@ upstream, and Idris2, Agda, Rocq, Creusot and TLC.
 
 Each question has its arms in the order elegant first; the recommended arm
 is marked where it differs. D-1, D-2 and D-3 were ruled by the owner through
-the selector on 2026-11-04; the rest are open.
+the selector on 2026-11-04; D-4 to D-10 are open.
 
 . *D-1 Where the proof-route ABI lives.* (a) standards
   `2-protocols/proof-route/` with its own Idris2 CI — elegant, one canon;
@@ -1243,6 +1311,14 @@ the selector on 2026-11-04; the rest are open.
   ECHIDNA. (a) They count as numbers for committing to the pipe, not to
   ECHIDNA discharge — recommended; (b) only numbers through a real ECHIDNA
   count.
+. *D-10 Where the token-lattice theory lives.* Ladder rows 2 and 12 are
+  theory with no repository of their own: they are about the proof-ledger
+  vocabulary, not about one system's code. (a) `hyperpolymath/mathesis`,
+  whose README reserves it for Agda theory with no other natural home, with
+  receipts in its proof-status file — recommended, and the most elegant
+  fit; (b) the standards package that D-1 placed the Idris2 ABI in, so the
+  laws and the ABI that cites them sit together; (c) residual-evidence-types,
+  beside the retraction theory of row 7.
 
 [[merged-prs]]
 == The merged order of work (PROPOSED)
@@ -1254,14 +1330,14 @@ rows 13-23 wait for the experiments and rulings named in their gate.
 |===
 |# |Repository |Title |Size |After |Gate
 
-|1 |echidnabot |Authentication and authorization on all of `/graphql`: a route credential (submit and read back, repository allowlist) and a separate administrative credential; loopback default; `/graphql` rate limit |S |— |Unauthenticated calls return 401; the route credential is refused (`FORBIDDEN`) on `updateRepoSettings`, `recordTacticOutcome` and unlisted repositories; non-loopback without credentials refuses to start
-|2 |hypatia |Route credential from `HYPATIA_ECHIDNABOT_TOKEN`; no claim or context in `pending.jsonl` |S |1 |Header test; manifest test
+|1 |echidnabot |Authentication and authorization on all of `/graphql`: a route credential (submit and read back, repository allowlist) and a separate administrative credential; loopback default; `/graphql` rate limit. *Merged 2026-11-05, hyperpolymath/echidnabot#192* |S |— |Unauthenticated calls return 401; the route credential is refused (`FORBIDDEN`) on `updateRepoSettings`, `recordTacticOutcome` and unlisted repositories; non-loopback without credentials refuses to start
+|2 |hypatia |Route credential from `HYPATIA_ECHIDNABOT_TOKEN`; no claim or context in `pending.jsonl`; no redirects followed with the credential. *Merged 2026-11-05, hyperpolymath/hypatia#1010* |S |1 |Header test; manifest test
 |3 |hypatia |Proof-obligation eliminate arm never dispatches robot-repo-automaton; branch test |XS |— |No `:auto_fix_request` at any tier
 |4 |echidnabot |No nil-UUID fallback |XS |— |Error unit test; protocol contract green
 |5 |echidnabot |Refuse unknown prover slugs |XS |— |Planted slug gives an error and no row
 |6 |echidnabot |Fix the env-var test race; run `--lib` in CI |S |— |Three green runs under a timeout
 |7 |hypatia |No placeholder requeue obligations |S |3 |No `requeue-of-` claim sent
-|8 |standards |Proof-route rulings record |XS |— |Selector answers with dates
+|8 |standards |Proof-route rulings record. *D-1 to D-3 merged 2026-11-05, metadatastician/standards#1402* |XS |— |Selector answers with dates
 |9 |standards |Experiment records for this session's measurements |XS |— |Each number cites its log
 |10 |standards |Deed ladder clause: mapping row, `deed_lint` condition, template example |S |8 |Refuses `K7` and `measured` without evidence
 |11 |hypatia, then echidnabot, gitbot-fleet |Chora deed per repository |M |10 |`deed_lint` green; no A2ML touched
@@ -1271,7 +1347,7 @@ rows 13-23 wait for the experiments and rulings named in their gate.
 |15 |standards (with the Agda home) |Token order and meet, level monotonicity, fold join, retraction never raises: Agda, Rocq leg, Lean leg re-proved |M |8 |Every leg proven or waived, route recorded
 |16 |hypatia |`ProverRecheck` v2 with span and rule binding; sandboxed artefact re-run |M |13, 14 |`RecheckOfOtherLineIsNotSound` refused; `LeanHoleRecheckSound` still accepted
 |17 |echidnabot, proof-burrower |Dual-accept `prove.result` `/1` and `/2` |S |14 |Golden `/2` accepted by both
-|18 |echidnabot |Lifecycle store, `proofObligation` query, sandboxed drain; Creusot; TLA+ |L |1, 13, 14, 17 |Illegal transitions refused; sandbox off means refused; TLC bounds recorded
+|18 |echidnabot |Lifecycle store, `proofObligation` query, sandboxed drain; Creusot/Pearlite and Verus; TLA+ |L |1, 13, 14, 17 |Illegal transitions refused; sandbox off means refused; TLC bounds recorded
 |19 |hypatia |`ProofRoute` submit and ingest, `proof.attempt`/`proof.status` store, funnel attach for hole re-checks |M |16, 18 |`sorry.lean` reaches `sound`; a tampered file stays `epi`
 |20 |standards + echidnabot |Grid row with SARIF and report-back; severity table; level shown on the grid |S |19 |Stub orange; a real run whose results are all `proven` emits no finding and renders green; blue only for a run that emits a low or info finding
 |21 |hypatia + standards |`Discharged` support for claim-proving obligations |M |19, E7, D-3 |Rejects tested-only, SMT without certificate, empty output, goal mismatch
@@ -1302,8 +1378,9 @@ For the estate tracking list:
   on and a bearer token; `HYPATIA_ECHIDNABOT_URL` and its token; later
   `VERISIM_API_TOKEN`.
 * *Toolchains in CI:* Idris2 v0.7.0 in standards; Agda, Rocq and Dedukti for
-  theory legs; Creusot for echidnabot and proof-burrower; an Alethe checker
-  if SMT is ever to reach `proven`.
+  theory legs; Creusot (with Pearlite) and Verus for echidnabot and
+  proof-burrower; an Alethe checker, or a documented trusted checking
+  boundary (PROOF-POLICY §5), if a direct SMT result is ever to reach `proven`.
 * *This session's environment:* building Idris2 from source was refused by
   the session's permission check; a SessionStart setup that installs Idris2,
   Agda and Rocq from pinned releases would let a cloud session check the ABI
@@ -1324,7 +1401,12 @@ For the estate tracking list:
   states, the ABI's home and the rung clause. This plan picks one of each
   and lists the open ones in <<decisions>>.
 * Effort figures are the architects' estimates, not measurements.
-* No Idris2, Agda, Rocq, Creusot or Kani check was run in this session.
+* No Idris2, Agda, Rocq, Creusot or Kani check was run for v0.2.2 or
+  earlier. For v0.2.3, Agda 2.8.0.2, Lean 4.35.0 and Coq 8.18.0 checked
+  echidnabot's receipt-boundary theory (hyperpolymath/echidnabot#195); the
+  Idris2 results cited are Hypatia's own CI run. No Creusot, Verus or Kani
+  check has been run.
 * Nothing in this document is a ruling. The rulings it respects are the four
-  Kautz rulings of 2026-10-19, the DEED-K9 rulings of 2026-10-20 and
-  PROOF-POLICY of 2026-10-26.
+  Kautz rulings of 2026-10-19, the DEED-K9 rulings of 2026-10-20,
+  PROOF-POLICY of 2026-10-26, and its amendments of 2026-11-04 (§8, Proof
+  Witness Grades) and 2026-11-07 (§1.2, Creusot/Pearlite and Verus).
