@@ -961,17 +961,23 @@ from `k9-validate.sh --self-test` (`TESTED`, the whole domain). Ledger:
 manifests said otherwise. Four `ABI/` modules still fail and stay quarantined.
 The Agda check used `--safe` only, not the §2.1 invocation. `PROOF-STATUS`
 reported "0% proven" against §8.4. The prover guide recommended Lean "for
-mathlib". The TLA+ spec had no `.cfg` and could not be model-checked. All
-fixed in #310; the TLA+ model is `TESTED` with its bounds.
+mathlib". The TLA+ spec had no `.cfg` and could not be model-checked, and its
+`ProcessedMonotonic` checked only `processed >= 0`. The proof gate failed open
+three ways: `lean` exits 0 on `sorry`, `coqc` on `Admitted`, and a mistyped
+MANIFEST status read as quarantine. All fixed in #310 (each gated module now
+also passes the escape-hatch scan, with negative controls); the TLA+ model is
+`TESTED` with its bounds.
 
 |contractiles Ada runners (`runners/must`, `mustfile/src`)
 |Text search for `SPARK_Mode` and contract aspects
-|No `SPARK_Mode` and no contract aspect anywhere, so nothing is proved and
-seven documents that call the SPARK conversion complete are unsupported. Its
-copies of the template proofs did not compile, and its proof recipes reported
-`SKIP` as a pass. Fixed in hyperpolymath/contractiles (branch
-`claude/lucid-hopper-wvkv5e`): status corrections, SPARK-1 `OPEN`, the
-scaffold resynced.
+|Nothing sets `SPARK_Mode`, so `gnatprove` analyses none of it and nothing is
+proved; seven documents that call the SPARK conversion complete are
+unsupported. The only contract aspects are four `Pre` and eight `Post` on
+bounded-string conversions in `runners/must/src/must_types.ads` (a first
+reading missed them; review caught it). The two Ada trees diverge rather than
+copy each other. Its copies of the template proofs did not compile, and its
+proof recipes reported `SKIP` as a pass. Fixed in hyperpolymath/contractiles#74:
+status corrections, SPARK-1 `OPEN`, the scaffold resynced.
 
 |Mathesis census
 |Its own scripts
