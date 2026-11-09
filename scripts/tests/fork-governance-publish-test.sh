@@ -80,6 +80,10 @@ printf '%s<!--\n# Fork governance\n' "$MARKER" > "$TMP/tail.md"
 if assemble "$TMP/tail.md"; then bad "a marker with text appended is refused" "it was published"
 else grep -q 'not exactly the fork-governance marker' "$TMP/out/log" && ok "a marker with text appended is refused" || bad "a marker with text appended is refused" "$(cat "$TMP/out/log")"; fi
 
+printf '%s\0\n# Fork governance\n' "$MARKER" > "$TMP/nul.md"
+if assemble "$TMP/nul.md"; then bad "a marker followed by a NUL byte is refused" "it was published"
+else grep -q 'not exactly the fork-governance marker' "$TMP/out/log" && ok "a marker followed by a NUL byte is refused" || bad "a marker followed by a NUL byte is refused" "$(cat "$TMP/out/log")"; fi
+
 printf '# Fork governance\n' > "$TMP/none.md"
 if assemble "$TMP/none.md"; then bad "a body without the marker is refused" "it was published"
 else ok "a body without the marker is refused"; fi

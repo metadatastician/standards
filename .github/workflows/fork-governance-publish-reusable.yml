@@ -159,7 +159,9 @@ jobs:
           # Line 1 must be exactly the marker (SPEC §2.1): a prefix match would
           # let a fork append an unclosed "<!--" to it and hide what follows.
           marker='<!-- fork-governance-verdict: regenerated on every run -->'
-          if [[ "$(head -n 1 "$body")" != "$marker" ]]; then
+          # Byte-exact: command substitution would drop NUL bytes, so compare
+          # the raw first line, newline included, with cmp.
+          if ! head -n 1 "$body" | cmp -s - <(printf '%s\n' "$marker"); then
             echo "::error::body's first line is not exactly the fork-governance marker"; exit 1
           fi
           # The notice goes on line 2, before any of the fork's text, so nothing
