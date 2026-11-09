@@ -16,7 +16,7 @@ toc::[]
 
 == Census
 
-2 proven of 12 rows; 1 argued; 9 open. No row is `tested-only` or
+2 proven of 13 rows; 1 argued; 10 open. No row is `tested-only` or
 `proven-with-postulates`. Both `proven` rows hold *relative to* the
 `argued` row for the Idris2 library they import (PROOF-POLICY §1.1), so
 neither counts as unconditionally proven.
@@ -45,16 +45,16 @@ implementation do and do not establish.
 | Peer type has exactly two values
 | proven
 | Idris2 0.7.0, `--check --total`, `%default total`; see <<receipt>>
-| `OverlayProtocol.idr:peerTypeExhaustive`
+| `2-protocols/overlay/src/abi/OverlayProtocol.idr:peerTypeExhaustive`
 | A fact about the model type, not about any implementation. Relative to the `argued` Idris2 library row below.
 
 | The two peer types are distinct
 | proven
 | As above
-| `OverlayProtocol.idr:peerTypesDistinct` (and the `DecEq PeerType` instance)
+| `2-protocols/overlay/src/abi/OverlayProtocol.idr:peerTypesDistinct` (and the `DecEq PeerType` instance)
 | As above.
 
-| The imported Idris2 library behaves as its types state: the import cone of `OverlayProtocol.idr`, 34 modules of Idris2 0.7.0 `prelude` and `base`
+| The imported Idris2 library behaves as its types state: the import cone of `2-protocols/overlay/src/abi/OverlayProtocol.idr`, 34 modules of Idris2 0.7.0 `prelude` and `base`
 | argued
 | -
 | Root `Overlay.ABI.OverlayProtocol`; imports `Prelude` (implicit), `Data.So`, `Decidable.Equality`; see <<receipt>>
@@ -63,31 +63,31 @@ implementation do and do not establish.
 | Spec §2.1 Non-Modification: `base_state(with_overlay) = base_state(without_overlay)`
 | open
 | -
-| `OverlayProtocol.idr:ConformantOverlay.nonModification`
+| `2-protocols/overlay/src/abi/OverlayProtocol.idr:ConformantOverlay.nonModification`
 | Not established. The field has type `NonModification baseState baseState`, which `basePreserved` (i.e. `Refl`) inhabits for every overlay, so it constrains nothing. See <<counterexample>>.
 
 | Spec §2.2 Additive Only
 | open
 | -
-| `OverlayProtocol.idr:AdditiveOnly`
+| `2-protocols/overlay/src/abi/OverlayProtocol.idr:AdditiveOnly`
 | Not established. The record's states are unrelated to the overlay's `baseState` and activation function, and "no removal or shadowing" is modelled only as `overlayItems > 0`.
 
 | Spec §2.3 Switchable: `deactivate(activate(base)) = base`
 | open
 | -
-| `OverlayProtocol.idr:Switchable`
+| `2-protocols/overlay/src/abi/OverlayProtocol.idr:Switchable`
 | Stated as a field to be supplied, at a single base state. `UniversallySwitchable` (all states) exists but `ConformantOverlay` does not require it.
 
 | Spec §2.4 Idempotent Activation (both directions)
 | open
 | -
-| `OverlayProtocol.idr:FullyIdempotent`
+| `2-protocols/overlay/src/abi/OverlayProtocol.idr:FullyIdempotent`
 | Stated as a field to be supplied, at a single base state.
 
 | Spec §2.5 Declared Relationship
 | open
 | -
-| `OverlayProtocol.idr:ValidDeclaration`
+| `2-protocols/overlay/src/abi/OverlayProtocol.idr:ValidDeclaration`
 | Only checks that three strings are non-empty. The spec still names `ECOSYSTEM.scm` and `0-AI-MANIFEST.a2ml` as the declaration site; both formats are retired (the chora deed's `(ecosystem)` clause replaces them, D312).
 
 | Spec §3.3 o-extension activation script: sets the declaring environment variables, extends the relevant paths, is idempotent and silent; deactivation unsets every variable and restores every path
@@ -102,17 +102,23 @@ implementation do and do not establish.
 | none
 | Not modelled. `DepBased` carries only an import path.
 
+| Spec §7.1 conformance checklist, the items no other row covers: the declaration sets `modifies-base` to `#f` and `switchable` to `#t`; for an o-extension, `activate.sh` exists and is executable; the AI manifest declares the non-modification invariant
+| open
+| -
+| none
+| Not modelled. `OverlayDeclaration` has no `modifies-base` or `switchable` field, and nothing models files or a manifest. The checklist still names `ECOSYSTEM.scm` and `0-AI-MANIFEST.a2ml`, both retired formats. The checklist's other items are the §2.1, §2.3, §2.4 and §4.3 rows.
+
 | Overlay composition and chaining (spec §6)
 | open
 | -
-| `OverlayProtocol.idr:Composable`, `mixedPeersComposable`, `OverlayChain`
+| `2-protocols/overlay/src/abi/OverlayProtocol.idr:Composable`, `mixedPeersComposable`, `OverlayChain`
 | `Composable` is only "same base state"; `mixedPeersComposable` wraps its argument. `OverlayChain.bIndependentOfA` is `NonModification x x`, vacuous as above.
 
 | The Zig implementation corresponds to the model
 | open
 | -
 | `2-protocols/overlay/ffi/zig/src/main.zig`; tests in the same file (17) and `ffi/zig/test/integration_test.zig` (7)
-| No correspondence argument exists. The Zig `overlay_check_*` functions are runtime checks over caller-supplied states at one base state, the same shape as the model, so they inherit its gaps. No CI lane builds or tests the Zig code, and the tests were not run for this ledger (the session's network refuses `ziglang.org`; the repo pins Zig 0.15.2), so they give no `tested-only` evidence yet.
+| No correspondence argument exists. The Zig `overlay_check_*` functions are runtime checks over caller-supplied states at one base state, the same shape as the model, so they inherit its gaps. No CI lane builds or tests the Zig code, and the tests were not run for this ledger (the session's network refuses `ziglang.org`), so they give no `tested-only` evidence yet. No Zig version is pinned for this code: there is no `build.zig.zon` or tool-version file, `guix.scm` has no Zig, and the only `0.15.2` in the repo is a commented example in `rust-ci-reusable.yml` and an example Trustfile.
 |===
 
 `conformantPreservesBase` and `conformantReversible` are field projections
@@ -125,11 +131,11 @@ supplies, so they are not listed as discharged theorems.
 [cols="1,3"]
 |===
 | Checker | Idris2 0.7.0, built from `idris-lang/Idris2` tag `v0.7.0` (`27780073c8631826d846499840b3857d9b9a4fd5`) with Chez Scheme 9.5.8
-| Source | `OverlayProtocol.idr` as changed by the commit that rewrote this file, whose only change to it is the header comment. Before it, at `9bdf864cc7f2c8e24b4df84bf00d04158eee3ad5` (sha256 `89064f9ade81ffc5bfdeeb3fab28b778cb74f46a28b68276366318d5284419a1`), the file checked with the same result.
-| Input digest | `OverlayProtocol.idr`, sha256 `2e30a9169cbc1dece6159a5721495e917a9044359a6e6aa78a5fbecc7abd918f`
+| Source | `2-protocols/overlay/src/abi/OverlayProtocol.idr` as changed by the commit that rewrote this file, whose only change to it is the header comment. Before it, at `9bdf864cc7f2c8e24b4df84bf00d04158eee3ad5` (sha256 `89064f9ade81ffc5bfdeeb3fab28b778cb74f46a28b68276366318d5284419a1`), the file checked with the same result.
+| Input digest | `2-protocols/overlay/src/abi/OverlayProtocol.idr`, sha256 `2e30a9169cbc1dece6159a5721495e917a9044359a6e6aa78a5fbecc7abd918f`
 | Invocation | `idris2 --check --total Overlay/ABI/OverlayProtocol.idr`, from a scratch directory holding an unchanged copy of the file at the path its module name requires
 | Result | exit 0; `%default total`
-| Escape hatches | None in `OverlayProtocol.idr`: no `believe_me`, `assert_total`, `assert_smaller`, `postulate` or holes. Its import cone is a different matter: 44 occurrences in 7 of 34 library modules, recorded as the `argued` row.
+| Escape hatches | None in `2-protocols/overlay/src/abi/OverlayProtocol.idr`: no `believe_me`, `assert_total`, `assert_smaller`, `postulate` or holes. Its import cone is a different matter: 44 occurrences in 7 of 34 library modules, recorded as the `argued` row.
 | Import cone | Computed from the `import` lines of the Idris2 0.7.0 `libs/prelude` and `libs/base` sources, starting at `Prelude`, `Data.So` and `Decidable.Equality`: `Builtin`, `Control.Function`, `Control.Ord`, `Control.Order`, `Control.Relation`, `Data.Bool`, `Data.Either`, `Data.Fin`, `Data.List`, `Data.List1`, `Data.List1.Properties`, `Data.Maybe`, `Data.Nat`, `Data.SnocList`, `Data.So`, `Data.These`, `Data.Zippable`, `Decidable.Equality`, `Decidable.Equality.Core`, `Prelude`, `Prelude.Basics`, `Prelude.Cast`, `Prelude.EqOrd`, `Prelude.IO`, `Prelude.Interfaces`, `Prelude.Interpolation`, `Prelude.Num`, `Prelude.Ops`, `Prelude.Show`, `Prelude.Types`, `Prelude.Uninhabited`, `PrimIO`, `Syntax.PreorderReasoning`, `Syntax.PreorderReasoning.Generic`
 | Run | one-off, 2026-11-09, in an agent session. No CI lane runs this check, so a regression would not be caught.
 |===
