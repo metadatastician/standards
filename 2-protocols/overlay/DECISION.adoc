@@ -10,7 +10,7 @@ Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 
 The overlay-protocol directory contains a 420-line specification
 (`OVERLAY-PROTOCOL-SPEC.md`), an Idris2 ABI skeleton
-(`src/Overlay/ABI/OverlayProtocol.idr`; moved from `src/abi/` on 2026-11-09 so its path matches its module name, without which Idris2 rejects it), and an empty Zig FFI scaffold. There is
+(`src/abi/OverlayProtocol.idr`), and an empty Zig FFI scaffold. There is
 no reference implementation, no tests, no consumer.
 
 Three options were considered:

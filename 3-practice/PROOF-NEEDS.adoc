@@ -27,7 +27,7 @@ the census by grade is 0 graded of 0 theory theorems.
 | `idris2-standards` job, `.github/workflows/echidna-verify.yml`; locally
   Idris2 0.7.0, 2026-11-09
 
-| `2-protocols/overlay/src/Overlay/ABI/OverlayProtocol.idr`
+| `2-protocols/overlay/src/abi/OverlayProtocol.idr`
 | API/ABI
 | the same job; locally Idris2 0.7.0, 2026-11-09
 |===
@@ -169,9 +169,10 @@ made to a deferred protocol here):
   `bIndependentOfA` is again `NonModification x x`.
 . Invariant 5's comment names `ECOSYSTEM.scm`, a retired format; the
   relationship is now declared in the deed.
-. Until 2026-11-09 the file sat at `src/abi/` while declaring module
-  `Overlay.ABI.OverlayProtocol`, so Idris2 rejected it where it lay, and
-  no workflow checked it. It now sits at its module path.
+. Until 2026-11-09 the file declared module `Overlay.ABI.OverlayProtocol`
+  while sitting in `src/abi/`, so Idris2 rejected it where it lay, and no
+  workflow checked it. It is now `module OverlayProtocol`, checked from
+  `src/abi/` as the estate ABI layout does (`2-protocols/axel/ABI-FFI-README.adoc`).
 
 == Toolchain deviation (policy §6)
 

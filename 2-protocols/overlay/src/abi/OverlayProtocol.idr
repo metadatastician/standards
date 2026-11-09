@@ -14,7 +14,7 @@
 |||   4. Idempotent Activation — double-activate = single-activate
 |||   5. Declared Relationship — overlay declares its base in ECOSYSTEM.scm
 
-module Overlay.ABI.OverlayProtocol
+module OverlayProtocol
 
 import Data.So
 import Decidable.Equality

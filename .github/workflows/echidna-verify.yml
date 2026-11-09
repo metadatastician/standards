@@ -254,7 +254,7 @@ jobs:
     timeout-minutes: 40
     env:
       PROOFS: >-
-        2-protocols/overlay/src:Overlay/ABI/OverlayProtocol.idr
+        2-protocols/overlay/src/abi:OverlayProtocol.idr
         2-protocols/k9-coordination/tools/validate/proofs:GrammarExtension.idr
     steps:
       - name: Checkout
@@ -306,7 +306,9 @@ jobs:
           git clone --depth 1 https://github.com/stefan-hoeck/idris2-pack.git "$HOME/idris2-pack"
           cd "$HOME/idris2-pack"
           # See idris2-avow: the newlines take install.bash's detected scheme.
-          yes '' | bash install.bash
+          # yes dies of SIGPIPE once install.bash stops reading; under pipefail
+          # that alone would fail the step, so only install.bash's status counts.
+          { yes '' || true; } | bash install.bash
           pack install-app idris2
           idris2 --version
 
