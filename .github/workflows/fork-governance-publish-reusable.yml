@@ -156,15 +156,22 @@ jobs:
             echo "::error::artifact names #$pr, which is not from $RUN_HEAD_REPO:$RUN_HEAD_BRANCH"; exit 1
           fi
 
-          if ! head -n 1 "$body" | grep -q '^<!-- fork-governance-verdict:'; then
-            echo "::error::body does not start with the fork-governance marker"; exit 1
+          # Line 1 must be exactly the marker (SPEC §2.1): a prefix match would
+          # let a fork append an unclosed "<!--" to it and hide what follows.
+          marker='<!-- fork-governance-verdict: regenerated on every run -->'
+          if [[ "$(head -n 1 "$body")" != "$marker" ]]; then
+            echo "::error::body's first line is not exactly the fork-governance marker"; exit 1
           fi
-          # The run stamp is the comment's last line, written here and never by
-          # the fork, so the last stamp in a comment is always the publisher's.
+          # The notice goes on line 2, before any of the fork's text, so nothing
+          # the fork wrote (an unclosed HTML comment, an open <details>) can
+          # hide it; a footer after the body could be hidden that way. The run
+          # stamp is the comment's last line, written here and never by the
+          # fork, so the last stamp in a comment is always the publisher's.
           {
-            cat "$body"
-            printf '\n<sub>Rendered by the fork pull request run %s and published by fork-governance-publish.</sub>\n' "$RUN_URL"
-            printf '<!-- fork-governance-publish-run: %s.%s -->\n' "$RUN_ID" "$RUN_ATTEMPT"
+            printf '%s\n' "$marker"
+            printf '<sub>Rendered by the fork pull request run %s and published by fork-governance-publish. Everything below was written by that run; branch protection relies on the lane checks, not on this comment.</sub>\n' "$RUN_URL"
+            tail -n +2 "$body"
+            printf '\n<!-- fork-governance-publish-run: %s.%s -->\n' "$RUN_ID" "$RUN_ATTEMPT"
           } > "$dir/published.md"
           # GitHub's limit is 65536 characters, not bytes; the glyphs are
           # multibyte, so count characters.
