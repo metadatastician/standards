@@ -126,8 +126,21 @@ jobs:
           # on a repo holding no Nickel at all, and excluded by the SAME pathspec in
           # the `nickel` job: a guard that counts a different set than its consumer
           # checks is how a gate comes to fail over files the repo cannot fix.
-          N_NICKEL=$(count '*.ncl' ':!*.k9.ncl')
+          #
+          # A top-level `9-archive/` district is excluded too, by the SAME
+          # pathspec in the `nickel` job. It is frozen history: the last copy of
+          # dead upstream trees, kept byte-for-byte and deliberately unmaintained
+          # (standards' scripts/link-rot-guard.sh excludes it for the same
+          # reason). Reformatting it would rewrite archived bytes; checking it
+          # fails a gate over files the live tree must not touch. The count is
+          # disclosed below, so the exclusion cannot hide anything. A repository
+          # without a `9-archive/` directory matches nothing here.
+          N_NICKEL=$(count '*.ncl' ':!*.k9.ncl' ':!9-archive/')
           N_K9=$(count '*.k9.ncl')
+          # Derived by subtraction, so it counts exactly what the exclusion
+          # removed. (A direct `'9-archive/' ':!*.k9.ncl'` pathspec is not used:
+          # git 2.43 was seen to return an empty list for that combination.)
+          N_NICKEL_ARCHIVED=$(( $(count '*.ncl' ':!*.k9.ncl') - N_NICKEL ))
           N_RESCRIPT=$(count 'rescript.json' '*/rescript.json' 'bsconfig.json' '*/bsconfig.json' '*.res')
           # V is gated on `v.mod` ALONE. The `.v` extension is shared with Coq
           # proof scripts and Verilog sources, so globbing `*.v` would install
@@ -243,7 +256,7 @@ jobs:
             echo "| Ecosystem | Marker | Tracked files matched |"
             echo "|---|---|---|"
             echo "| Rust | \`Cargo.toml\` | ${N_RUST} |"
-            echo "| Nickel | \`*.ncl\` excluding \`*.k9.ncl\` | ${N_NICKEL} |"
+            echo "| Nickel | \`*.ncl\` excluding \`*.k9.ncl\` and \`9-archive/\` | ${N_NICKEL} |"
             echo "| ReScript | \`rescript.json\`, \`bsconfig.json\`, \`*.res\` | ${N_RESCRIPT} |"
             echo "| V | \`v.mod\` only | ${N_V} |"
             echo "| Haskell | root \`cabal.project\` or root \`*.cabal\` | ${N_HASKELL} |"
@@ -252,6 +265,10 @@ jobs:
             echo ""
             if [ "$N_K9" -gt 0 ]; then
               echo "> **${N_K9} \`*.k9.ncl\` excluded.** These are k9 contracts (a \`K9!\` sentinel on line 1), not Nickel source. They are neither typechecked nor counted above, and they cannot raise the Total."
+              echo ""
+            fi
+            if [ "$N_NICKEL_ARCHIVED" -gt 0 ]; then
+              echo "> **${N_NICKEL_ARCHIVED} archived \`*.ncl\` excluded.** They sit under \`9-archive/\`, the frozen-history district, whose bytes are not rewritten. They are neither format-checked nor typechecked, and they cannot raise the Total."
               echo ""
             fi
             if [ "$N_UNSUPPORTED" -gt 0 ]; then
@@ -378,12 +395,21 @@ jobs:
           # Same pathspec as `detect`. k9 contracts are a DIFFERENT format that
           # merely shares the suffix; typechecking them reports a parse error the
           # repo has no way to fix.
-          mapfile -d '' FILES < <(git ls-files -z -- '*.ncl' ':!*.k9.ncl')
+          #
+          # `9-archive/` is excluded by the same pathspec as in `detect`: it is
+          # the frozen-history district, kept byte-for-byte and deliberately
+          # unmaintained (see the comment there, and standards'
+          # scripts/link-rot-guard.sh). The archived count is printed and
+          # written to the summary, and the empty-set guards below still apply
+          # to what remains.
+          mapfile -d '' FILES < <(git ls-files -z -- '*.ncl' ':!*.k9.ncl' ':!9-archive/')
           N_K9=$(git ls-files -z -- '*.k9.ncl' | tr -cd '\0' | wc -c)
+          # By subtraction, as in `detect`: exactly what the exclusion removed.
+          N_ARCHIVED=$(( $(git ls-files -z -- '*.ncl' ':!*.k9.ncl' | tr -cd '\0' | wc -c) - ${#FILES[@]} ))
 
-          echo "Nickel files: ${#FILES[@]} (k9 contracts excluded: ${N_K9})"
+          echo "Nickel files: ${#FILES[@]} (k9 contracts excluded: ${N_K9}; archived under 9-archive/ excluded: ${N_ARCHIVED})"
           if [ "${#FILES[@]}" -eq 0 ]; then
-            echo "::error::detect said Nickel was present but zero Nickel files are tracked here (${N_K9} *.k9.ncl were excluded as k9 contracts). Refusing to report a pass over an empty set."
+            echo "::error::detect said Nickel was present but zero Nickel files are tracked here (${N_K9} *.k9.ncl were excluded as k9 contracts, ${N_ARCHIVED} as archived under 9-archive/). Refusing to report a pass over an empty set."
             exit 1
           fi
 
@@ -393,7 +419,8 @@ jobs:
 
           for f in "${FILES[@]}"; do
             # --check is read-only: it reports, it does not rewrite the file.
-            # Format is checked over EVERY genuine Nickel file, with no exemption.
+            # Format is checked over EVERY live Nickel file, with no exemption;
+            # only the frozen 9-archive/ district is outside the set.
             nickel format --check "$f" || { echo "::error file=$f::not formatted (nickel format --check)"; FAILED=1; }
 
             # A file importing a build artefact cannot be typechecked standalone:
@@ -436,6 +463,7 @@ jobs:
             echo "- typechecked: **${TYPECHECKED}**"
             echo "- typecheck skipped (untracked import): **${#SKIPPED[@]}**"
             echo "- k9 contracts excluded (\`*.k9.ncl\`, not Nickel): **${N_K9}**"
+            echo "- archived files excluded (\`9-archive/\`, frozen history): **${N_ARCHIVED}**"
             if [ "${#SKIPPED[@]}" -gt 0 ]; then
               echo ""
               echo "Skipped, and why:"
