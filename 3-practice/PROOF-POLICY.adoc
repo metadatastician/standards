@@ -539,6 +539,8 @@ commit. A receipt records:
 * a digest of the inputs;
 * the observed result;
 * the axioms reported (§8.4);
+* for Agda, the prover's trusted base: each prover-supplied postulate the
+import cone reaches, by name, with its binding (§8.4);
 * the source repository and its full 40-character commit.
 +
 The brief named checker services as the route: AXLE for Lean,
@@ -595,6 +597,34 @@ axiom is admissible under disposition (c) of
 link:../docs/TRUSTED-BASE-REDUCTION-POLICY.adoc[`TRUSTED-BASE-REDUCTION-POLICY.adoc`].
 A grade never hides axioms. A summary that shows the grade shows whether
 it rests on axioms.
+. *The prover's own modules are in the cone.* For Agda, the import cone is
+the module set Agda reports for the graded roots (`--dependency-graph`
+gives it), and that set includes modules supplied with the prover, such as
+`Agda.Primitive` and `Agda.Builtin.*`. The postulate scan covers those
+modules too. Some of them declare primitives by `postulate`, and `--safe`
+accepts them, because a `BUILTIN` or `primitive` binding gives each one its
+meaning in the prover. Such a postulate is part of the prover's trusted
+base, not an axiom of the development, and it is admissible only under
+three conditions:
++
+* the receipt lists it by name, with the binding that gives it its
+meaning;
+* the gate checks that exact list: the declared names and their bindings,
+not the file they sit in;
+* no other postulate appears in a prover-supplied module of the cone.
++
+A postulate outside the list fails the gate. A change to the list, which a
+prover pin bump can cause, means the receipt must be earned again.
++
+For example, Agda 2.6.4.3's `Agda.Primitive` postulates exactly `Level`,
+`lzero`, `lsuc` and `_⊔_`, bound by `BUILTIN LEVEL`, `LEVELZERO`, `LEVELSUC`
+and `LEVELMAX`. A `--cubical` development reaches more prover-supplied
+modules (`Agda.Primitive.Cubical`, `Agda.Builtin.Cubical.*`), and their list
+is longer. The scan must lex as Agda does: comments, string and character
+literals, pragma bodies and Agda's whitespace. Otherwise it can miss a
+postulate. hyperpolymath/januskey#170 (`scripts/check-agda.sh`,
+`scripts/scan-postulates.sh`) is a reference implementation with positive
+and negative controls.
 . *A census, never a percentage.* Grade counts may be published only as a
 census: a count per grade with the denominator, and the `ungraded` and
 lower rungs named in the same line. Never publish "X% proved", an average
