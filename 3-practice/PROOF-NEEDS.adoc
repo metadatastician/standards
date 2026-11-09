@@ -96,12 +96,15 @@ Hypatia, the closure authority:
 proves the decision procedure sound and complete, and evaluates the same
 five rows as equations. Runtime refinement of this script is not claimed.
 
-|`scripts/lock-selfcheck.sh` gives SELF-CONSISTENT only for a closed,
-fully keyed lock, and UNEXAMINED, never a dangling edge, when closure
-could not be checked
+|`scripts/lock-selfcheck.sh` gives SELF-CONSISTENT only when the lock is
+closed and every action ref used by a workflow that has a lock entry is
+keyed for that workflow, and UNEXAMINED, never a dangling edge, when
+closure could not be checked. A workflow with no lock entry at all is
+listed as a note and is deliberately outside the verdict.
 |TESTED
-|`scripts/tests/lock-selfcheck-test.sh`: 10 cases, among them a
-dangling nested edge (POISON) and an unreadable lock (UNEXAMINED).
+|`scripts/tests/lock-selfcheck-test.sh`: 11 cases, among them a
+dangling nested edge (POISON), an unreadable lock (UNEXAMINED), and an
+unparseable workflow together with an unreadable lock (both reported).
 
 |The panic-attack step's `counts` and `counts_excluded` partition the
 unsuppressed findings by the `scope-excludes` prefixes, anchored at the
