@@ -20,7 +20,7 @@ with session management and state capture capabilities.
 | Condition | Verification Method
 
 | CRG Grade B+ or higher 
-| Check link:../../../4-readiness/component-readiness-grades/COMPONENT-READINESS-GRADES.md[Component Readiness Grades]
+| Check link:../../../../4-readiness/component-readiness-grades/COMPONENT-READINESS-GRADES.adoc[Component Readiness Grades]
 
 | RSR Compliance 
 | Run `rsr-audit.sh` - must pass
@@ -296,6 +296,6 @@ echo "✅ Substantial Completion Protocol: PASSED"
 == See Also
 
 - link:../../../publication-pre-flight/PREFLIGHT.adoc[Publication Pre-Flight Standard]
-- link:../../../4-readiness/component-readiness-grades/README.adoc[Component Readiness Grades]
+- link:../../../../4-readiness/component-readiness-grades/README.adoc[Component Readiness Grades]
 - link:../../../rhodium-standard-repositories/COMPLIANCE_CHECKLIST.md[RSR Compliance Checklist]
 - link:../../../../2-protocols/k9-coordination/README.adoc[K9 Coordination Protocol]
