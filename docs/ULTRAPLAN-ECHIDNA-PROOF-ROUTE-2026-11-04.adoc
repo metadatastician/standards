@@ -2,12 +2,12 @@
 // SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
 = Ultraplan: the echidna system — the proof route of the Kautz ladder, engineered and proved
 Jonathan D.A. Jewell (hyperpolymath)
-v0.2.3, 2026-11-09
+v0.2.4, 2026-11-09
 :toc: left
 :toclevels: 3
 :sectnums:
 :icons: font
-:status: DRAFT v0.2.3 — for owner review; v0.2.3 aligns the proof ladder with PROOF-POLICY as amended on 2026-11-04 (§8, Proof Witness Grades) and 2026-11-07 (§1.2, Creusot/Pearlite and Verus), records the first theory receipts and marks merged rows 1, 2 and 8 done; v0.2.2 recorded D-1 to D-3; v0.2.1 answered eight Codex review findings; v0.2.0 folded in an adversarial critic pass. Measured sections are facts with the command or file that produced them. Sections marked PROPOSED are design, not rulings. D-4 to D-10 in <<decisions>> are open.
+:status: DRAFT v0.2.4 — for owner review; v0.2.4 records the owner's D-10 ruling (the token-lattice theory lives in mathesis); v0.2.3 aligns the proof ladder with PROOF-POLICY as amended on 2026-11-04 (§8, Proof Witness Grades) and 2026-11-07 (§1.2, Creusot/Pearlite and Verus), records the first theory receipts and marks merged rows 1, 2 and 8 done; v0.2.2 recorded D-1 to D-3; v0.2.1 answered eight Codex review findings; v0.2.0 folded in an adversarial critic pass. Measured sections are facts with the command or file that produced them. Sections marked PROPOSED are design, not rulings. D-4 to D-9 in <<decisions>> are open.
 
 [.lead]
 The "echidna system" is the proof route of the Kautz-ladder ultraplan
@@ -858,7 +858,7 @@ boundary named, is refused.
 monotone.
 |Agda, rechecked in Rocq and Lean (PROOF-POLICY lists lattices and orders as
 theory); the Idris2 ABI states the same laws for its own types and cites the
-Agda theorem as an `argued` correspondence row. Home repository: D-10
+Agda theorem as an `argued` correspondence row. Home repository: `hyperpolymath/mathesis` (D-10)
 |`meet(proven, argued) = proven` is derivable.
 
 |2a
@@ -948,7 +948,7 @@ write.
 |The status fold over attempt multisets is a join on the token lattice:
 commutative, associative, idempotent, monotone.
 |Agda, rechecked in Rocq and Lean (Lean leg re-proved). Home repository:
-D-10
+`hyperpolymath/mathesis` (D-10)
 |Folding the same attempts in two orders gives two statuses.
 
 |13
@@ -1276,7 +1276,7 @@ upstream, and Idris2, Agda, Rocq, Creusot and TLC.
 
 Each question has its arms in the order elegant first; the recommended arm
 is marked where it differs. D-1, D-2 and D-3 were ruled by the owner through
-the selector on 2026-11-04; D-4 to D-10 are open.
+the selector on 2026-11-04, and D-10 on 2026-11-09; D-4 to D-9 are open.
 
 . *D-1 Where the proof-route ABI lives.* (a) standards
   `2-protocols/proof-route/` with its own Idris2 CI — elegant, one canon;
@@ -1318,7 +1318,7 @@ the selector on 2026-11-04; D-4 to D-10 are open.
   receipts in its proof-status file — recommended, and the most elegant
   fit; (b) the standards package that D-1 placed the Idris2 ABI in, so the
   laws and the ABI that cites them sit together; (c) residual-evidence-types,
-  beside the retraction theory of row 7.
+  beside the retraction theory of row 7. *Ruled 2026-11-09: (a), mathesis.*
 
 [[merged-prs]]
 == The merged order of work (PROPOSED)
