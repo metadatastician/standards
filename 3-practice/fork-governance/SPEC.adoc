@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 // SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
-= Fork governance — specification v1.2
+= Fork governance — specification v1.3
 :toc: left
 :toclevels: 4
 :revdate: 2026-11-09
@@ -50,6 +50,10 @@ column of every later revision would be measured against it.
 The body MUST contain, in this order:
 
 . the marker;
+. on a comment written by the publisher (a pull request from a fork,
+  §4.1) only: the publisher's notice, a single line naming the fork run
+  the comment was rendered by. The posting engine never writes it, and a
+  scraper that reads by position skips this one line on fork comments;
 . the heading `# Fork governance`;
 . the summary table;
 . the scope note;
