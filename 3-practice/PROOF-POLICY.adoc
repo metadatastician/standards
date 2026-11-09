@@ -450,22 +450,22 @@ prose, `PWG-2a` and `PWG-2b` are accepted aliases for `PWG-2i` and
 |CRG
 |`X F E D C B A`
 |Readiness of a software component
-|`component-readiness-grades/`
+|`4-readiness/component-readiness-grades/`
 
 |TRG
 |`X F E D C B A`
 |Readiness of a language toolchain
-|`toolchain-readiness-grades/`
+|`4-readiness/toolchain-readiness-grades/`
 
 |ARG
 |`X F E D C B A`
 |Readiness of a language for adoption
-|`adoption-readiness-grades/`
+|`4-readiness/adoption-readiness-grades/`
 
 |FRG
 |`X F E D C B A`
 |Readiness of a language's formal foundations
-|`foundations-readiness-grades/`
+|`4-readiness/foundations-readiness-grades/`
 
 |ECHIDNA `TrustLevel`
 |`1`–`5`. *Higher is stronger*: the opposite direction to PWG.
