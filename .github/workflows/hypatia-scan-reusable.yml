@@ -129,7 +129,7 @@ jobs:
         uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1.24.1
         with:
           elixir-version: '1.19.4'
-          otp-version: '28.3'
+          otp-version: '28.5.0.8'
 
       - name: Resolve Hypatia scanner commit
         id: hypatia-rev
@@ -191,7 +191,7 @@ jobs:
           # SD022, hypatia#545) never reached CI. No restore-keys on purpose —
           # a partial restore would repopulate ~/hypatia and the guards below
           # would then skip the rebuild, reintroducing the staleness.
-          key: hypatia-scanner-v4-${{ runner.os }}-${{ steps.hypatia-rev.outputs.sha }}
+          key: hypatia-scanner-v4-${{ runner.os }}-otp28.5.0.8-${{ steps.hypatia-rev.outputs.sha }}
 
       - name: Check out resolved Hypatia commit
         env:
