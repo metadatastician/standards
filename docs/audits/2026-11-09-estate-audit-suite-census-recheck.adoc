@@ -49,26 +49,28 @@ in its own right.
 | `uses:` to the suite (either slug), `.github/**` | *none* | `grep -rn` over `.github/` for the literals `cicd-suite` and `proven-cicd-and-workflows`
 | `main-estate-audit.yml` in this repository | *absent* | not in the 71 files of `.github/workflows/`, at `main` or at any commit
 | `cicd-suite` / `proven-cicd` in `actions.lock` | *0 keys* | lock keys are 30 leaf records + 71 workflow sections, none a suite
-| Local composite actions | *1*, `affirmation-check` | a fork of the suite's copy, but *consumed by nothing* (below)
+| Local composite actions | *1*, `affirmation-check` | shares substantial code with the suite's action; *consumed by nothing* (below)
 | Repository name reaching `main-estate-audit` history | *0 commits* | via both `metadatastician/standards` and the pre-transfer `hyperpolymath/standards`
 |===
 
 The single local composite action `.github/actions/affirmation-check` is the only
-thing in the tree that resembles a suite composite, and it is *not* a copy of the
-suite's:
+thing in the tree that resembles a suite composite. It shares substantial code
+and distinctive comments with the suite's action, including the comments about
+commit signatures and dated affirmations. The behaviour differences below do
+not establish independent authorship or rule out an adapted copy; the evidence
+does not establish a definitive provenance:
 
 [cols="2,1,4",options="header"]
 |===
 | Artefact | Bytes | Relationship
 
-| `.github/actions/affirmation-check/check.sh` (this repo) | 5822 | independent implementation: rejects `AFFIRMATION.md`, searches root *and* `docs/`, exempts templates
+| `.github/actions/affirmation-check/check.sh` (this repo) | 5822 | local behaviour: rejects `AFFIRMATION.md`, searches root *and* `docs/`, exempts templates
 | suite `actions/affirmation-check/check.sh` @ `55556cf5` (2026-09-19) | 2563 | pre-`fa71ac2a`; accepts `AFFIRMATION.md`, root-only search
 | suite `actions/affirmation-check/check.sh` @ `fa71ac2a` (2026-09-22) | 2563 | *byte-identical to `55556cf5`* — the fix commit did not touch this file
 | suite `actions/affirmation-check/check.sh` @ suite `main` (v0.4.x) | 7723 | adds code-span stripping and web-flow/SSH signature verification
 |===
 
-So even the strongest reading — "it carries a copy" — fails on both halves: the
-file is not a copy, and its 13 controls pass
+The local action’s provenance remains unresolved. Its 13 controls pass
 (`bash .github/actions/affirmation-check/test.sh` → `affirmation-check controls passed`),
 including the two cases the suite's pre-`fa71ac2a` version got wrong. It is also
 *wired to nothing*: no workflow in `.github/workflows/` names it, and it appears
@@ -88,7 +90,7 @@ repository's own gates by re-deriving both sides:
 | Workflow files | 71 | `.github/workflows/*.yml`
 | Lock workflow sections | 71 | one per file, no orphans either way
 | Leaf records | 30 | all SHA-pinned
-| SHA-pinned `uses:` in the tree | 28 | 28 of 30 keys used; the other 2 are transitive (below)
+| Distinct SHA-pinned action references checked in the tree | 28 | 28 of 30 keys used; the other 2 are transitive (below)
 | Workflows with pins but no lock section | *0* | —
 | Sections whose refs ≠ actual refs | *2*, both explainable | `ci-pipeline.yml`, `mirror.yml`
 | Refs reaching a missing record | *0* | every used ref is keyed
@@ -149,7 +151,7 @@ lock or the suite.
 Default branch is `main`; local `HEAD`, `refs/heads/main` and `origin/main` all
 read `9bdf864cc7f2c8e24b4df84bf00d04158eee3ad5`. The push run at that SHA
 started *jobs*, and the component checks *executed* — the distinction that
-<<startup>> exists to keep visible:
+{startup} exists to keep visible:
 
 [cols="3,1,1,4",options="header"]
 |===
@@ -158,7 +160,7 @@ started *jobs*, and the component checks *executed* — the distinction that
 | Actions Lockfile Gate | 1 | 8 | `uses ⊆ actions.lock`, pin contract, closure and reusable closure all ran
 | Lock Self-Check | 1 | 5 | this commit is internally consistent, so it is safe to pin a caller to
 | Actions lock contract | 1 | — | lock representation contract
-| Governance | 21 | 20 × 7–15 | 19 concluded `success`; `Debt ratchet` / `Exemption ratchet` `skipped`
+| Governance | 21 | 19 × 6–14 successful steps | 19 concluded `success`; `Debt ratchet` / `Exemption ratchet` `skipped`
 | Self Test | 2 | 9, 21 | repo self-tests executed
 | Required contexts | 1 | 6 | every required context is producible on a PR
 | Secret Scanner | 3 | 5, 13, 5 | shell / gitleaks / rust lanes ran
@@ -172,6 +174,7 @@ the check `uses ⊆ actions.lock` and `Lock Self-Check` publishes
 `Lockfile self-consistency`; both start and run their steps at this commit, so
 neither required context is a phantom.
 
+[[what-the-census-was-measuring]]
 == What the census was measuring, and why the row no longer applies
 
 The census row is not wrong about the estate; it is wrong about *this
@@ -190,11 +193,12 @@ still lists `main-estate-audit.yml` under `never_required_workflows`, which is
 consistent with it being a template-repository gate and never a context this
 repository must publish.
 
-*Wrong era.* `.machine_readable/estate-board.tsv` and
-`.machine_readable/estate-residue-ledger.tsv` are stamped
-`2026-09-15T08:58:14Z`, from a `census-n440` posture run over local checkouts.
-At that timestamp this repository was still `hyperpolymath/standards` with 48
-workflow files; it now has 71 under a transferred slug. The ledger's one row for
+*Separate historical posture context.* `.machine_readable/estate-board.tsv`
+and `.machine_readable/estate-residue-ledger.tsv` are stamped
+`2026-09-15T08:58:14Z`; the board labels its source `census-n440`. These posture
+artefacts are separate from the suite census and do not establish when that
+census ran. The board records `hyperpolymath/standards` with 48 workflow files;
+it now has 71 under a transferred slug. The ledger's one row for
 it — `hyperpolymath/standards  UNPINNED-REUSABLE  7` — counts 7 reusable `uses:`
 whose `@ref` is not a 40-hex SHA. That count is reproducible *today* only if
 comment lines are read as code: this tree holds *21* commented-out `uses:`
