@@ -1,74 +1,175 @@
-== PROOF-NEEDS.md
+// SPDX-License-Identifier: CC-BY-SA-4.0
+// Copyright (c) 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+= Proof status: hyperpolymath/standards
+:updated: 2026-11-09
+:toc: preamble
 
-=== Current State
+This is the repository's proof-status file in the sense of
+link:PROOF-POLICY.adoc[`PROOF-POLICY.adoc`]. It uses that policy's
+vocabulary: `PROVEN`, `PROVEN-WITH-AXIOMS`, `TESTED`, `ASSUMED`, `OPEN`.
+It replaces a 2026-03 needs list whose every target had left this
+repository (see <<history>>).
 
-* *LOC*: ~139,200 (monorepo with many sub-standards)
-* *Languages*: ReScript, Idris2, Agda, Rust, Haskell, Zig, Nickel
-* *Existing ABI proofs*: Multiple `+src/abi/*.idr+` across sub-projects
-(a2ml, axel-protocol, avow-protocol, lol, etc.)
-* *Existing verification*:
-`+lol/proofs/theories/information_theory.agda+` with A2ML Idris2 proofs
-in `+a2ml/src/A2ML/Proofs.idr+`
-* *Dangerous patterns*:
-** `+lol/proofs/theories/information_theory.agda+`: 6 `+postulate+`
-(information theory axioms)
-** `+2-protocols/axel/src/Tea.res+` and `+AxelApp.res+`: `+Obj.magic+` for
-DOM operations
-** `+lol/src/abi/Locale.idr+`: mentions avoiding believe_me (good
-practice)
+== Census
 
-=== What Needs Proving
+Machine-checked proof files in this repository: *2 of 2* Idris2 files
+typecheck, and both carry `%default total` with no holes, postulates,
+`believe_me` or `assert_*`. There are no Agda, Rocq or Lean files, so no
+theory theorem lives here and no Proof Witness Grade applies (policy §8):
+the census by grade is 0 graded of 0 theory theorems.
 
-==== LOL Information Theory Postulates (6)
+[cols="3,1,3",options="header"]
+|===
+| File | Obligation class (policy §1) | Checked by
 
-* `+information_theory.agda+` has 6 postulated axioms about entropy,
-mutual information, etc.
-* Audit: which are genuine mathematical axioms vs. provable lemmas?
-* Entropy non-negativity and chain rule should be constructively
-provable
+| `2-protocols/k9-coordination/tools/validate/proofs/GrammarExtension.idr`
+| engineering property (a grammar)
+| `idris2-standards` job, `.github/workflows/echidna-verify.yml`; locally
+  Idris2 0.7.0, 2026-11-09
 
-==== A2ML Parser Proofs (a2ml/src/A2ML/)
+| `2-protocols/overlay/src/Overlay/ABI/OverlayProtocol.idr`
+| API/ABI
+| the same job; locally Idris2 0.7.0, 2026-11-09
+|===
 
-* `+Proofs.idr+` exists — audit completeness
-* `+Parser.idr+`, `+TypedCore.idr+`, `+Surface.idr+` — prove
-parser/type-system correspondence
-* A2ML is a markup format standard — parser correctness ensures
-documents are faithfully processed
+== Claims
 
-==== Avow Protocol Consent Proofs
+=== coordination.k9 grammar (GrammarExtension.idr)
 
-* `+2-protocols/avow/avow-lib/src/abi/Consent.idr+`, `+Unsubscribe.idr+`
-* Consent management is GDPR-relevant — prove consent state transitions
-are correct
-* Prove: unsubscribe always terminates in a non-consented state
+All three are statements about the RFC 5234 language of the grammars: the
+set of byte strings with a derivation.
 
-==== Axel Protocol Obj.magic
+[cols="3,1,4",options="header"]
+|===
+| Claim | Status | Trust boundary and correspondence
 
-* `+2-protocols/axel/src/Tea.res+` — 8+ `+Obj.magic+` calls for DOM
-rendering
-* Lower priority than the protocol specification proofs
+| `v11FilesAreV12Files`: if two grammars agree on every rule but `body`,
+  and v1.2's `body` is v1.1's with optional elements inserted, every v1.1
+  file is a v1.2 file.
+| PROVEN
+| Idris2 kernel and `base` (including `DecEq String`, which rests on
+  primitive string equality). The concrete `body` lists are transcribed in
+  the proof; `validate.js --self-test` checks on every CI run that they are
+  the committed grammars' `body` rules, and that every other v1.1 rule is
+  unchanged in v1.2. Those two checks are TESTED: a JavaScript comparison
+  of the committed files, not itself verified.
 
-==== Groove Protocol Reference
+| `deedFilenameEquiv`: the right-recursive `deed-filename` (2026-11-09)
+  denotes the same strings as `1*deed-char %s".deed"`.
+| PROVEN
+| As above. Holds for every definition of `deed-char`.
 
-* `+2-protocols/groove/reference/groove-proxy/GrooveProxy.idr+` — Idris2
-reference implementation
-* Prove: proxy faithfully implements the Groove protocol specification
+| `altSwap`: reordering `date`'s alternatives keeps its language.
+| PROVEN
+| As above.
 
-=== Recommended Prover
+| apg-js 4.4.0 (ordered choice, greedy repetition) accepts exactly the
+  grammar's language on these files.
+| TESTED
+| `validate.js --self-test`: the root `coordination.k9`, the examples and
+  3 valid fixtures (LF and CRLF), 13 invalid fixtures, 6 mutants of the
+  root file. Not proved: the two editorial rewrites of 2026-11-09 exist
+  because apg-js and the RFC 5234 meaning had diverged.
+|===
 
-* *Agda* for information theory (extend existing proofs, eliminate
-postulates)
-* *Idris2* for A2ML, Avow, Groove protocol correctness (already in use)
+=== K9 dialect discriminator
 
-=== Priority
+[cols="3,1,4",options="header"]
+|===
+| Claim | Status | Evidence
 
-*MEDIUM* — Standards monorepo. The LOL information theory postulates and
-Avow consent proofs are the highest-value targets. A2ML proofs already
-exist and need completion audit.
+| `k9-validate.sh` routes a file to the coordination dialect exactly when
+  it opens with the magic line and then `---` or `metadata:` (K9 spec §4.3).
+| TESTED
+| 4 cases in `1-formats/k9/tools/k9-validate.sh --self-test` ("the
+  dialect discriminator agrees with the coordination grammar"). A model of
+  the shell router would not establish the router's correctness (policy:
+  a separately rewritten model does not), so no proof is planned.
+|===
 
-=== Template ABI Cleanup (2026-03-29)
+=== Actions-lock chain (standards#1242)
 
-Template ABI removed – was creating false impression of formal
-verification. The removed files (Types.idr, Layout.idr, Foreign.idr)
-contained only RSR template scaffolding with unresolved
-\{\{PROJECT}}/\{\{AUTHOR}} placeholders and no domain-specific proofs.
+[cols="3,1,4",options="header"]
+|===
+| Claim | Status | Evidence
+
+| `actions.lock` stays in sync with the workflows in both directions,
+  closed, and pins only reviewed refs.
+| TESTED
+| The suites under `scripts/tests/` for `check-lock-sync.sh`,
+  `complete-job-refs.sh`, `prune-stale.sh`, relock and regen, and the
+  gates `check-lock-sync.sh` and `check-lock-pin-contract.sh` on every
+  pull request.
+|===
+
+=== Overlay Protocol ABI (OverlayProtocol.idr)
+
+The protocol is SPEC-ONLY with implementation deferred
+(`2-protocols/overlay/DECISION.adoc`). The file typechecks, and every
+function in it is total. What it establishes is narrower than its comments
+suggest:
+
+[cols="3,1,4",options="header"]
+|===
+| Claim | Status | Note
+
+| `peerTypeExhaustive`, `peerTypesDistinct`, `DecEq PeerType`
+| PROVEN
+| Small facts about a two-constructor type.
+
+| `conformantPreservesBase`, `conformantReversible`
+| PROVEN
+| Field projections of `ConformantOverlay`: they restate what a value of
+  that type already carries.
+
+| The five protocol invariants for any real overlay
+| OPEN
+| No implementation exists, so none is discharged. The types also need
+  revision before they can carry them; see the findings below.
+|===
+
+Design findings, recorded for when the protocol is revisited (no change is
+made to a deferred protocol here):
+
+. Invariant 1 is vacuous as stated. `ConformantOverlay` asks for
+  `NonModification baseState baseState`, which `Refl` inhabits for every
+  state. It needs the base state before and after activation.
+. `AdditiveOnly` carries its own two base states, unrelated to the
+  overlay's `baseState` or `activationFn`.
+. `Switchable` and `FullyIdempotent` are required at one base state only.
+  `UniversallySwitchable` is defined but not used.
+. `Composable` requires only equal base states, and `OverlayChain`'s
+  `bIndependentOfA` is again `NonModification x x`.
+. Invariant 5's comment names `ECOSYSTEM.scm`, a retired format; the
+  relationship is now declared in the deed.
+. Until 2026-11-09 the file sat at `src/abi/` while declaring module
+  `Overlay.ABI.OverlayProtocol`, so Idris2 rejected it where it lay, and
+  no workflow checked it. It now sits at its module path.
+
+== Toolchain deviation (policy §6)
+
+The `idris2-standards` job installs Idris2 through
+https://github.com/stefan-hoeck/idris2-pack[idris2-pack], not through the
+repository's Guix manifest or a container.
+
+* *Leg:* Idris2 typechecking of both files above.
+* *Tool and version:* Idris2 from pack's package collection at install
+  time. The job prints `idris2 --version` and the SHA-256 of the installed
+  executable into its `idris2-standards-log` artifact. The local checks of
+  2026-11-09 used Idris2 0.7.0 built from tag `v0.7.0` (commit
+  `27780073c8631826d846499840b3857d9b9a4fd5`; `idris2_app/idris2.so`
+  SHA-256 `86224b0e397039556c778cc3d3979812e54e4a9a783896f123c93ba45422516d`).
+* *Why not Guix:* `guix.scm` provides no Idris2 and the repository has no
+  Containerfile. The job reuses the install the `idris2-avow` job uses.
+* *State:* `open`. It closes when `guix.scm` (or a container) provides a
+  pinned Idris2 and the job uses it.
+
+[[history]]
+== History
+
+The 2026-03 version of this file listed needs for code that has since left
+this repository: `lol/` (proofs evicted to the lol repository, #748), the
+A2ML parser proofs (A2ML is retired, D99/D269c/D312/D313), the AVOW consent
+proofs (in the avow-protocol repository; only `BINDING.adoc` remains here),
+the AXEL ReScript sources and the Groove Idris2 reference proxy. Their
+needs belong to those repositories' own proof-status files.
