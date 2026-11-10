@@ -34,7 +34,7 @@ guix shell
 
 [source,bash]
 ----
-git clone https://github.com/hyperpolymath/standards.git
+git clone https://github.com/metadatastician/standards.git
 cd standards
 just --list
 ----
@@ -115,5 +115,5 @@ Or read `0-AI-MANIFEST.a2ml` and `.claude/CLAUDE.md` directly.
 == Get Help
 
 * **Architecture**: link:EXPLAINME.adoc[EXPLAINME.adoc]
-* **Wiki**: https://github.com/hyperpolymath/standards/wiki
+* **Wiki**: https://github.com/metadatastician/standards/wiki
 * **Report issue**: `just help-me`

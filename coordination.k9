@@ -26,7 +26,7 @@ project:
   name: "standards"
   description: "Constitutional authority for 290+ hyperpolymath repos. Defines CRG grades, RSR compliance, the DEED format, K9 components, contractiles, protocol specs (Groove, AVOW, AXEL, Consent-Aware HTTP), and the innervation architecture that binds them."
   license: MPL-2.0
-  repo: hyperpolymath/standards
+  repo: metadatastician/standards
   languages:
     - Rust
     - Zig

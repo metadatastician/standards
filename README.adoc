@@ -223,7 +223,7 @@ The Rhodium Standard Repository specification defines compliance requirements:
 === Document Formats
 
 * link:1-formats/deed/[deed] -- Repo metadata as s-expression deeds (grammar link:1-formats/deed/spec/abnf/deed.abnf[`deed.abnf`]); replaces A2ML, which is retired
-* https://github.com/hyperpolymath/standards/tree/main/k9-svc[k9-svc] -- Self-validating components (embedded contracts + deployment logic)
+* https://github.com/metadatastician/standards/tree/main/k9-svc[k9-svc] -- Self-validating components (embedded contracts + deployment logic)
 * https://github.com/hyperpolymath/stateful-artefacts-for-gitforges[stateful-artefacts-for-gitforges] -- Metadata-driven documentation pipeline
 
 === Palimpsest
