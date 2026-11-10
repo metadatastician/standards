@@ -1,0 +1,8 @@
+K9!
+# SPDX-License-Identifier: MPL-2.0
+# expect: rule 11
+metadata:
+  schema: k9
+project:
+  name: "x"
+invariants:

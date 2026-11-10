@@ -1,0 +1,8 @@
+K9!
+# SPDX-License-Identifier: MPL-2.0
+# expect: stops at line
+metadata:
+  schema: k9-coordination
+invariants:
+project:
+  name: "x"

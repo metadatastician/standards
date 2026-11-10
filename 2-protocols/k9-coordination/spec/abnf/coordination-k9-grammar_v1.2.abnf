@@ -21,6 +21,17 @@
 ;   - Comments are ASCII, as RFC 5234 requires, apart from the SPDX
 ;     copyright line (the earlier files also carried
 ;     non-ASCII arrows and comparison signs).
+;   - Editorial, 2026-11-09 (the language is unchanged):
+;     * deed-filename is right-recursive. As 1*(... / ".") %s".deed",
+;       a greedy repetition also consumed ".deed", so no deed_ref ever
+;       validated under apg-js. The new form denotes the same strings:
+;       one or more name characters, then ".deed" (proved in
+;       tools/validate/proofs/GrammarExtension.idr).
+;     * `date` lists iso8601-datetime first. RFC 5234 alternation is
+;       unordered, but ordered-choice parsers such as apg-js take the
+;       first alternative that matches, and the calendar-date prefix of
+;       a date-time matched first, so no date-time was ever accepted
+;       (spec rule 10).
 ;
 ; CHANGELOG (v1.1.0 -> v1.1.1), owner rulings D317 + D318:
 ;   - lang-list items are indented one level under "languages:" (indent2),
@@ -222,13 +233,16 @@ escape         = "\" (DQUOTE / "\" / %s"n" / %s"t")
 symbol         = ALPHA *(ALPHA / DIGIT / "-" / "_" / ".")
 spdx-id        = 1*(ALPHA / DIGIT / "-" / ".")
 repo-path      = 1*(ALPHA / DIGIT / "-" / "_" / "/")
-deed-filename  = 1*(ALPHA / DIGIT / "-" / "_" / ".") %s".deed"
+deed-filename  = deed-char deed-tail           ; 1*deed-char %s".deed", written
+deed-tail      = deed-char deed-tail / %s".deed"  ; so a greedy parser can end
+deed-char      = ALPHA / DIGIT / "-" / "_" / "."  ; (2026-11-09 changelog note)
 file-path      = 1*(ALPHA / DIGIT / "-" / "_" / "/" / ".")
 glob-pattern   = 1*(ALPHA / DIGIT / "-" / "_" / "/" / "."
                / "*" / "?" / "[" / "]" / "{" / "}")
 
-date           = 4DIGIT "-" 2DIGIT "-" 2DIGIT   ; ISO 8601 calendar date
-               / iso8601-datetime                ; or full RFC 3339 datetime
+date           = iso8601-datetime                ; full RFC 3339 datetime, first:
+               / 4DIGIT "-" 2DIGIT "-" 2DIGIT   ; or ISO 8601 calendar date
+                                                 ; (see the 2026-11-09 changelog note)
 
 iso8601-datetime = 4DIGIT "-" 2DIGIT "-" 2DIGIT "T"
                    2DIGIT ":" 2DIGIT ":" 2DIGIT

@@ -49,9 +49,9 @@ on:
   workflow_dispatch:
     inputs:
       strict:
-        description: 'Promote lockstep assertions 3/4/5 from SKIP to FAIL'
+        description: 'Promote lockstep assertions 3/4/5 to FAIL (always on for pull requests and pushes; two-phase lockstep)'
         type: boolean
-        default: false
+        default: true
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -103,10 +103,16 @@ jobs:
           # a token that call is unauthenticated and rate-limited; the script
           # degrades to SKIP rather than passing silently.
           GH_TOKEN: ${{ github.token }}
+          # Strict on every pull request and push: two-phase lockstep
+          # (1-formats/deed/vocabulary/canon.adoc) makes spine-first reachable,
+          # so a canon.lock the spine has not adopted is a hard failure. Only a
+          # manual dispatch may opt out.
+          EVENT: ${{ github.event_name }}
+          STRICT_INPUT: ${{ inputs.strict }}
         run: |
           set +e
           args=( --canon canon --spine spine --base "${{ steps.base.outputs.ref }}" )
-          if [ "${{ inputs.strict }}" = "true" ]; then args+=( --strict ); fi
+          if [ "$EVENT" != "workflow_dispatch" ] || [ "$STRICT_INPUT" = "true" ]; then args+=( --strict ); fi
           bash canon/scripts/check-canon-lockstep.sh "${args[@]}" | tee "$RUNNER_TEMP/gate-a.txt"
           rc=${PIPESTATUS[0]}
           echo "rc=$rc" >> "$GITHUB_OUTPUT"

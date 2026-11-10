@@ -28,6 +28,8 @@ Usage: deed_lint.js FILE...     exit 0 iff all files conform
        deed_lint.js --egress-fixtures DIR      DIR/valid pass the profile, DIR/invalid fail it
        deed_lint.js --ast-json FILE           emit the validated AST as JSON (integer lexemes stay strings)
        deed_lint.js --mustfile-json FILE      validate the Mustfile check profile and emit records
+       deed_lint.js --proof-receipt-json FILE validate a proof receipt (PROOF-POLICY §8.5), derive
+                                              each claim's PWG, refuse a recorded grade that differs
 `;
 
 import { readdirSync, readFileSync } from "node:fs";
@@ -570,6 +572,190 @@ export function readMustfileChecks(text, filename = null) {
   return checks;
 }
 
+/** Domain violations in an otherwise grammatical proof-receipt deed. */
+export class ProofReceiptError extends LintError {
+  constructor(msg) {
+    super(msg, null);
+    this.name = "ProofReceiptError";
+  }
+  toString() { return this.msg; }
+}
+
+// The closed vocabularies of standards/3-practice/PROOF-POLICY.adoc: §5 tokens
+// (canonical lowercase), §2.2 correspondence states, §8.2 grades, §8.4 receipt
+// states, §8.5 leg routes. A value outside them is refused, never coerced.
+export const PROOF_RECEIPT_VOCABULARY = {
+  pwg: ["PWG-3", "PWG-2i", "PWG-2ii", "PWG-1", "ungraded"],
+  token: ["proven", "proven-with-postulates", "tested-only", "argued", "open"],
+  state: ["AGDA-PENDING", "AGDA-VERIFIED", "COQ-CHECKED", "LEAN-CHECKED", "BRIDGE-PENDING",
+    "RECONCILED", "COUNTEREXAMPLE", "QUARANTINED"],
+  route: ["source", "transported", "re-proved", "waived", "unavailable"],
+  receiptState: ["current", "superseded", "regressed"],
+  dttProvers: ["agda", "rocq", "lean"],
+};
+
+/**
+ * Read a proof receipt (PROOF-POLICY §8.5, the proof-receipt profile of
+ * praxis-deed) into a plain record, and derive every claim's Proof Witness
+ * Grade from its legs and their receipts (§8.2). A recorded :pwg that the
+ * receipts do not support is refused: grades are derived, not asserted (§8.4).
+ * The same holds for :foundation-diverse (§8.3). Layout-independent: nothing
+ * here depends on physical lines.
+ */
+export function readProofReceipt(text, filename = null) {
+  const [head, items] = validate(text, filename);
+  const fail = (m) => { throw new ProofReceiptError(m); };
+  if (head !== "praxis-deed") fail("a proof receipt must be a praxis-deed");
+  const V = PROOF_RECEIPT_VOCABULARY;
+  const HEX40 = /^[0-9a-f]{40}$/;
+
+  // Collect a clause's fields, refusing unknown, duplicate and mistyped ones.
+  const fieldsOf = (where, members, spec, allowedClauses) => {
+    const fields = new Map();
+    const clauses = [];
+    for (const m of members) {
+      if (m[0] === "field") {
+        const [, key, value] = m;
+        if (!(key in spec)) fail(`unknown field :${key} in ${where}`);
+        if (fields.has(key)) fail(`duplicate field :${key} in ${where}`);
+        if (!spec[key].types.includes(value[0])) fail(`:${key} in ${where} must be a ${spec[key].types.join(" or ")}`);
+        if (value[0] === "string" && value[1].trim() === "") fail(`empty :${key} in ${where}`);
+        if (spec[key].oneOf && !spec[key].oneOf.includes(value[1])) {
+          fail(`:${key} ${value[1]} in ${where} is not one of ${spec[key].oneOf.join(", ")}`);
+        }
+        fields.set(key, value[1]);
+      } else {
+        if (!allowedClauses.includes(m[1])) fail(`unexpected clause (${m[1]}) in ${where}`);
+        clauses.push(m);
+      }
+    }
+    for (const [key, s] of Object.entries(spec)) {
+      if (s.required && !fields.has(key)) fail(`${where} is missing :${key}`);
+    }
+    return { fields, clauses };
+  };
+
+  const top = fieldsOf("the receipt", items, {
+    "schema-version": { types: ["string"], required: true },
+    "canonical-name": { types: ["string"], required: true },
+    "beholding-chora": { types: ["uuid5", "uuid8"] },
+    profile: { types: ["symbol"], required: true, oneOf: ["proof-receipt"] },
+    repository: { types: ["string"], required: true },
+    "source-commit": { types: ["string"], required: true },
+  }, ["trusted-base", "claim"]);
+  const repository = top.fields.get("repository");
+  const sourceCommit = top.fields.get("source-commit");
+  if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository)) fail(`:repository must be OWNER/REPO, got "${repository}"`);
+  if (!HEX40.test(sourceCommit)) fail(":source-commit must be the full 40-character lowercase commit");
+
+  // §8.4: the prover's trusted base, by name and binding.
+  const trustedBase = [];
+  const tbClauses = top.clauses.filter((c) => c[1] === "trusted-base");
+  if (tbClauses.length > 1) fail("more than one (trusted-base …) clause");
+  for (const c of tbClauses) {
+    const tb = fieldsOf("(trusted-base …)", c[2], {}, ["primitive"]);
+    const seen = new Set();
+    for (const p of tb.clauses) {
+      const f = fieldsOf("(primitive …)", p[2], {
+        prover: { types: ["symbol"], required: true },
+        module: { types: ["string"], required: true },
+        name: { types: ["string"], required: true },
+        binding: { types: ["string"], required: true },
+      }, []).fields;
+      const key = `${f.get("prover")} ${f.get("module")} ${f.get("name")}`;
+      if (seen.has(key)) fail(`duplicate trusted-base primitive ${key}`);
+      seen.add(key);
+      trustedBase.push({ prover: f.get("prover"), module: f.get("module"), name: f.get("name"), binding: f.get("binding") });
+    }
+    if (trustedBase.length === 0) fail("(trusted-base …) lists no (primitive …); omit the clause instead");
+  }
+
+  const claims = [];
+  const ids = new Set();
+  for (const c of top.clauses.filter((c) => c[1] === "claim")) {
+    const cl = fieldsOf("(claim …)", c[2], {
+      id: { types: ["string"], required: true },
+      pwg: { types: ["symbol"], required: true, oneOf: V.pwg },
+      "foundation-diverse": { types: ["boolean"], required: true },
+    }, ["leg"]);
+    const id = cl.fields.get("id");
+    if (ids.has(id)) fail(`duplicate claim id "${id}"`);
+    ids.add(id);
+    const where = `claim "${id}"`;
+    const legs = [];
+    const provers = new Set();
+    for (const l of cl.clauses) {
+      const lf = fieldsOf(`a leg of ${where}`, l[2], {
+        prover: { types: ["symbol"], required: true },
+        route: { types: ["symbol"], required: true, oneOf: V.route },
+        token: { types: ["symbol"], oneOf: V.token },
+        state: { types: ["symbol"], oneOf: V.state },
+        reason: { types: ["string"] },
+      }, ["receipt"]);
+      const prover = lf.fields.get("prover");
+      if (provers.has(prover)) fail(`${where} has two ${prover} legs`);
+      provers.add(prover);
+      const route = lf.fields.get("route");
+      if ((prover === "agda") !== (route === "source")) {
+        fail(`${where}: route source belongs to the agda leg, and only to it (got ${prover} ${route})`);
+      }
+      const discharged = route === "source" || route === "transported" || route === "re-proved";
+      if (discharged && (!lf.fields.has("token") || !lf.fields.has("state"))) {
+        fail(`${where}: the ${prover} leg (${route}) needs :token and :state`);
+      }
+      if (!discharged && (lf.fields.has("token") || lf.fields.has("state") || lf.clauses.length)) {
+        fail(`${where}: a ${route} ${prover} leg carries no :token, :state or receipts`);
+      }
+      if (!discharged && !lf.fields.has("reason")) fail(`${where}: a ${route} ${prover} leg needs :reason`);
+      const receipts = lf.clauses.map((r) => {
+        const rf = fieldsOf(`a receipt of the ${prover} leg of ${where}`, r[2], {
+          run: { types: ["string"], required: true },
+          commit: { types: ["string"], required: true },
+          checker: { types: ["string"], required: true },
+          invocation: { types: ["string"], required: true },
+          state: { types: ["symbol"], required: true, oneOf: V.receiptState },
+          reason: { types: ["string"] },
+        }, []).fields;
+        if (!HEX40.test(rf.get("commit"))) fail(`${where}: a receipt :commit must be the full 40-character commit`);
+        if (rf.get("state") !== "current" && !rf.has("reason")) fail(`${where}: a ${rf.get("state")} receipt needs :reason`);
+        return Object.fromEntries(rf);
+      });
+      if (receipts.filter((r) => r.state === "current").length > 1) fail(`${where}: the ${prover} leg has more than one current receipt`);
+      legs.push({ prover, route, token: lf.fields.get("token") ?? null, state: lf.fields.get("state") ?? null,
+        reason: lf.fields.get("reason") ?? null, receipts });
+    }
+    if (!provers.has("agda")) fail(`${where} has no agda leg`);
+
+    // §8.2: derive the grade. A leg counts when its kernel accepted it, it is
+    // tied to the Agda statement as §2.2 requires, and it has a current receipt.
+    const kernelOk = (l) => l.token === "proven" || l.token === "proven-with-postulates";
+    const current = (l) => l.receipts.find((r) => r.state === "current");
+    const agda = legs.find((l) => l.prover === "agda");
+    const canonical = (inv) => ["--safe", "--without-K"].every((f) => inv.split(/\s+/).includes(f))
+      && (inv.split(/\s+/).includes("--cubical-compatible") || inv.split(/\s+/).includes("--cubical"));
+    const agdaCounts = kernelOk(agda) && agda.state === "AGDA-VERIFIED" && current(agda) && canonical(current(agda).invocation);
+    const recheck = legs.filter((l) => (l.prover === "rocq" || l.prover === "lean")
+      && (l.route === "transported" || l.route === "re-proved") && kernelOk(l) && l.state === "RECONCILED" && current(l));
+    let pwg = "ungraded";
+    if (agdaCounts) {
+      pwg = ["PWG-3", "PWG-2i", "PWG-2ii"][recheck.length];
+      const counted = [agda, ...recheck];
+      if (recheck.length === 2 && counted.every((l) => current(l).commit === sourceCommit)) pwg = "PWG-1";
+    }
+    if (pwg !== cl.fields.get("pwg")) {
+      fail(`${where} records :pwg ${cl.fields.get("pwg")}, but its legs and receipts support ${pwg} (PROOF-POLICY §8.2, §8.4)`);
+    }
+    // §8.3: a kernel-checked witness outside the DTT family, with a current receipt.
+    const diverse = legs.some((l) => !V.dttProvers.includes(l.prover) && kernelOk(l) && current(l));
+    if (diverse !== (cl.fields.get("foundation-diverse") === "#t")) {
+      fail(`${where} records :foundation-diverse ${cl.fields.get("foundation-diverse")}, but its legs support ${diverse ? "#t" : "#f"} (§8.3)`);
+    }
+    claims.push({ id, pwg, foundation_diverse: diverse, legs });
+  }
+  if (claims.length === 0) fail("a proof receipt records at least one (claim …)");
+  return { repository, source_commit: sourceCommit, trusted_base: trustedBase, claims };
+}
+
 const H = ";; SPDX-License-Identifier: CC-BY-SA-4.0\n";
 
 /** The embedded self-test corpus (same 14 cases, order and expectations as the Python). */
@@ -842,6 +1028,20 @@ function fixtures(d) {
 
 /** CLI entry: dispatch on --self-test / --fixtures / file list; returns exit code. */
 function main(argv) {
+  if (argv.includes("--proof-receipt-json")) {
+    if (argv.length !== 2 || argv[0] !== "--proof-receipt-json" || argv[1].startsWith("-")) {
+      console.error("usage: deed_lint.js --proof-receipt-json FILE");
+      return 2;
+    }
+    const file = argv[1];
+    try {
+      console.log(JSON.stringify(readProofReceipt(readFileSync(file, "utf8"), file)));
+      return 0;
+    } catch (e) {
+      console.error("FAIL " + file + ": " + (e instanceof LintError ? e.toString() : e.message));
+      return 1;
+    }
+  }
   if (argv.includes("--mustfile-json")) {
     if (argv.length !== 2 || argv[0] !== "--mustfile-json" || argv[1].startsWith("-")) {
       console.error("usage: deed_lint.js --mustfile-json FILE");

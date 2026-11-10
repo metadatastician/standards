@@ -122,9 +122,12 @@ kill_mutant tracking_blind \
 # It then re-points EVERY 40-hex pin in the file, including actions/checkout, at
 # a standards commit. Catastrophic, and both the idempotency control and the
 # hit-the-target control stay green through it — which is precisely why the
-# third-party control had to be added.
+# third-party control had to be added. The rewrite now matches either owner
+# (it migrates the former one), so the anchor is two groups, (owner) and
+# (path); the mutant empties both. `%` delimits the mutant so the `\|` in the
+# pattern stays a literal pipe under sed -E.
 kill_mutant rewrite_overreaches \
-  's|s#\(hyperpolymath/standards/\\\.github/workflows/\[A-Za-z0-9\._-\]\+\\\.ya\?ml@\)|s#()|' \
+  's%s#\(hyperpolymath\|metadatastician\)/standards/\(\\\.github/workflows/\[A-Za-z0-9\._-\]\+\\\.ya\?ml@\)%s#()()%' \
   "FAIL rewrite overreached"
 
 # M5 — the illegal repair emits a ref with no SHA. A "repair" that leaves the

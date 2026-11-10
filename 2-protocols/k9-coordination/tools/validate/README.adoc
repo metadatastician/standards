@@ -1,0 +1,83 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+// Copyright (c) 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+= coordination.k9 validator
+:toc: preamble
+
+`validate.js` checks `coordination.k9` files against the normative grammar,
+`../../spec/abnf/coordination-k9-grammar_v1.2.abnf`, and against the schema
+rule the grammar cannot express. It closes standards#1221: until it existed,
+nothing checked a `coordination.k9` file, and a generic YAML parser does not
+conform.
+
+== Use
+
+[source,shell]
+----
+cd 2-protocols/k9-coordination/tools/validate
+bun install --frozen-lockfile
+bun validate.js path/to/coordination.k9 ...   # PASS/FAIL per file
+bun validate.js --self-test                   # the checks below
+----
+
+Exit status: 0 when every file conforms, 1 on a finding, 2 when it cannot
+run.
+
+== What a pass means
+
+A file passes when:
+
+* it parses as `k9-file` under the v1.2 grammar, through
+  https://github.com/ldthomas/apg-js[apg-js] 4.4.0 (pinned in `bun.lock`,
+  `deno.lock` and `pnpm-lock.yaml`). That covers rules 1–10 and 12 of the
+  spec's "Validation Rules";
+* its `metadata` section carries exactly one `schema: k9-coordination`
+  (rule 11).
+
+Rule 13 is a default and has nothing to check. Resolving `project.deed_ref`
+to an existing deed is the generator's duty (README "Usage"), not
+validation, and is not done here.
+
+== The self-test
+
+`--self-test` is what CI runs (`k9-conformance.yml`). It:
+
+. accepts the repository's own `coordination.k9`, every
+  `../../examples/*.k9` and every `fixtures/valid/*.k9`, each with LF and
+  with CRLF line ends, and reports which of them are also v1.1 files;
+. rejects every `fixtures/invalid/*.k9`, for the reason its `# expect:`
+  line names;
+. rejects six mutants of the root file: a `---` separator, a tab, a
+  quoted boolean, a lower-case magic line, a blank line inside a section,
+  and the wrong schema;
+. re-checks, on the committed v1.1 and v1.2 grammars, the side condition
+  of the proof below: every rule v1.1 defines other than `body` is
+  unchanged in v1.2, and v1.2's `body` only gains optional elements;
+. checks that the `body` lists the proof transcribes are the committed
+  grammars' `body` rules, so the proof and the grammars cannot drift apart.
+
+== The proof
+
+`proofs/GrammarExtension.idr` (Idris2, total, no holes, postulates,
+`believe_me` or `assert_*`) proves three claims made in the grammar
+changelogs, for the RFC 5234 meaning of a grammar:
+
+`v11FilesAreV12Files`:: every v1.1 file is a v1.2 file, given the side
+condition above.
+`deedFilenameEquiv`:: the right-recursive `deed-filename` written on
+2026-11-09 denotes the same strings as `1*deed-char %s".deed"`.
+`altSwap`:: reordering the alternatives of `date` keeps its language.
+
+CI typechecks it in the `idris2-standards` job of `echidna-verify.yml`.
+Locally:
+
+[source,shell]
+----
+cd proofs && idris2 --check GrammarExtension.idr
+----
+
+The proof is about the grammar's language. That apg-js, an ordered-choice
+parser with greedy repetition, accepts exactly that language on this grammar
+is *tested* by the self-test, not proved. The two editorial rewrites of
+2026-11-09 exist because it did not: before them, no date-time and no
+`deed_ref` validated. `3-practice/PROOF-NEEDS.adoc`, the repository's proof-status file, records the status of
+every claim.
