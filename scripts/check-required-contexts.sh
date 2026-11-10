@@ -858,7 +858,7 @@ name: Hypatia Security Scan
 on: [pull_request]
 jobs:
   hypatia:
-    uses: hyperpolymath/standards/.github/workflows/hypatia-scan-reusable.yml@cafebabe
+    uses: metadatastician/standards/.github/workflows/hypatia-scan-reusable.yml@cafebabe
     secrets: inherit
 YML
   cat >"$work/repo/.github/workflows/other.yml" <<'YML'
@@ -875,7 +875,7 @@ jobs:
     runs-on: ubuntu-latest
     steps: [{run: "true"}]
 YML
-  cat >"$work/cache/hyperpolymath_standards_.github_workflows_hypatia-scan-reusable.yml_cafebabe" <<'YML'
+  cat >"$work/cache/metadatastician_standards_.github_workflows_hypatia-scan-reusable.yml_cafebabe" <<'YML'
 name: Hypatia Reusable Scan
 on: [workflow_call]
 jobs:

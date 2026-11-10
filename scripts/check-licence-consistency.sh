@@ -214,7 +214,7 @@ if [ -n "$spdx_header" ]; then
     failed=1
   elif [ "$spdx_norm" = "mpl-2.0" ] && [ "$body_class" = "PMPL-1.0" ]; then
     emit ERROR "SPDX header says MPL-2.0 but LICENSE body text is still PMPL-1.0-or-later."
-    emit ERROR "Migrate body to canonical MPL-2.0 text (see hyperpolymath/standards docs/audits/2026-05-26-estate-licence-debt.md)."
+    emit ERROR "Migrate body to canonical MPL-2.0 text (see metadatastician/standards docs/audits/2026-05-26-estate-licence-debt.md)."
     failed=1
   elif [ "$body_norm" = "$spdx_norm" ]; then
     emit OK "LICENSE body text matches SPDX header."

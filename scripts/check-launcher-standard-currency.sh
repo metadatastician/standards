@@ -329,7 +329,7 @@ main() {
 
 Cure: name ${CANONICAL_FILE} at v${expect}.
 The standard lives at launcher/launcher-standard_praxis.deed in
-hyperpolymath/standards. Clause citations are s-expression heads --
+metadatastician/standards. Clause citations are s-expression heads --
 write (runtime ...), not [runtime] or the old section-sign notation.
 REMEDY
   return 1

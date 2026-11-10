@@ -78,7 +78,7 @@ expect 0 "" "comment lines that name the tool are not a step" "$WORK/r" o/r
 repo
 printf 'jobs:\n  a:\n    steps:\n      - run: gh extension install github/gh-actions-lock --pin v0.2.0\n' \
   > "$WORK/r/.github/workflows/self-test.yml"
-expect 0 "" "standards itself is skipped (its installs are the estate pin)" "$WORK/r" hyperpolymath/standards
+expect 0 "" "standards itself is skipped (its installs are the estate pin)" "$WORK/r" metadatastician/standards
 
 rm -rf "$WORK/r"; mkdir -p "$WORK/r"
 expect 0 "" "a repository without workflows is clean" "$WORK/r" o/r

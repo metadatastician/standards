@@ -102,7 +102,7 @@ count_at() {
       # with no verdict at all. Exit 1 means "ratchet FAILED", so a repo that
       # had cleared its ledger would be reported as violating the ratchet, with
       # no reason given and nothing to fix. Regression reported on 2026-08-06:
-      # https://github.com/hyperpolymath/standards/pull/588#discussion_r3731377032
+      # https://github.com/metadatastician/standards/pull/588#discussion_r3731377032
       # Keep the no-match case successful so the gate reports its actual verdict.
       printf '%s' "$blob" | { grep -vEc '^\s*(#|$)' || true; } | tr -d ' \n' ;;
   esac
