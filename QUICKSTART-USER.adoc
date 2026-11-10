@@ -21,7 +21,7 @@ them stick. See link:README.adoc[README.adoc] for the full overview and the
 
 [source,bash]
 ----
-git clone https://github.com/hyperpolymath/standards.git
+git clone https://github.com/metadatastician/standards.git
 ----
 
 . *Scaffold a compliant repo:* follow link:1-formats/A2ML-REPO-TEMPLATE.adoc[1-formats/A2ML-REPO-TEMPLATE.adoc]
@@ -41,5 +41,5 @@ link:README.adoc[README.adoc]. The generated spec registry was retired on
 == Get help
 
 * *Routing:* the table at the top of link:README.adoc[README.adoc]
-* *Report a problem:* https://github.com/hyperpolymath/standards/issues
+* *Report a problem:* https://github.com/metadatastician/standards/issues
 * *Architecture map (frozen snapshot):* link:TOPOLOGY.adoc[TOPOLOGY.adoc]

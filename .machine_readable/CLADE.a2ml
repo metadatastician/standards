@@ -3,9 +3,9 @@
 # See: https://github.com/hyperpolymath/gv-clade-index
 
 [identity]
-uuid = "01a0eaa4-72da-76fc-ae12-78d537f16cf6"
+uuid = "e5a3bf06-6a14-5846-ab95-c6dd9cca97b0"
 primary-forge = "github"
-primary-owner = "hyperpolymath"
+primary-owner = "metadatastician"
 canonical-name = "standards"
 prefixed-name = "gv-standards"
 
@@ -16,7 +16,7 @@ assigned = "2026-03-16"
 rationale = ""
 
 [forges]
-github = "hyperpolymath/standards"
+github = "metadatastician/standards"
 gitlab = "hyperpolymath/standards"
 bitbucket = "hyperpolymath/standards"
 

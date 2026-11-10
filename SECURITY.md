@@ -1,6 +1,6 @@
 # Security Policy
 
-`hyperpolymath/standards` is the policy-and-tooling canon for the estate: it
+`metadatastician/standards` is the policy-and-tooling canon for the estate: it
 ships specifications, CI workflows, and small local utilities — no networked
 services and no production credentials.
 
@@ -14,7 +14,7 @@ are superseded, not maintained.
 
 **Do not open a public issue.** Use one of these private channels:
 
-1. [Private vulnerability reporting](https://github.com/hyperpolymath/standards/security/advisories/new)
+1. [Private vulnerability reporting](https://github.com/metadatastician/standards/security/advisories/new)
    on this repository (preferred — keeps the report linked to the fix), or
 2. Email the maintainer: `j.d.a.jewell@open.ac.uk`.
 

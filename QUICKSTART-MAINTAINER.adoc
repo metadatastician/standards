@@ -22,7 +22,7 @@ means bundling the spec tree and its reference implementations.
 
 [source,bash]
 ----
-git clone https://github.com/hyperpolymath/standards.git
+git clone https://github.com/metadatastician/standards.git
 cd standards
 just build-release
 ----
@@ -122,5 +122,5 @@ Each instance has isolated config, data, and logs.
 
 == Reporting Issues
 
-* Upstream: https://github.com/hyperpolymath/standards/issues
+* Upstream: https://github.com/metadatastician/standards/issues
 * With diagnostic: `just help-me` (pre-fills context)
