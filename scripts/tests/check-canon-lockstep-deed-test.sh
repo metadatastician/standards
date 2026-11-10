@@ -67,6 +67,17 @@ done
 deed "$WORK/match" "$WANT_VER" "$WANT_CRIT" "$WANT_GATES"
 expect "deed matching canon.lock passes" "$WORK/match" PASS "reading spine_chora.deed"
 
+# Two-phase lockstep: a spine that adopted this canon ahead of its release
+# names the canon PR with :proposed-by. Gate A compares the pin alone, so the
+# extra field neither breaks the read nor excuses a mismatch.
+deed "$WORK/proposed" "$WANT_VER" "$WANT_CRIT" "$WANT_GATES"
+sed -i 's|    :gates-sha256 "\([0-9a-f]*\)"))|    :gates-sha256 "\1"\n    :proposed-by "metadatastician/standards#1"))|' "$WORK/proposed/spine_chora.deed"
+grep -q ':proposed-by' "$WORK/proposed/spine_chora.deed" || { echo "FAIL could not plant :proposed-by"; exit 1; }
+expect "a pin adopted ahead of release (:proposed-by) passes when it matches" "$WORK/proposed" PASS "reading spine_chora.deed"
+deed "$WORK/proposed-stale" "0.0.1" "$WANT_CRIT" "$WANT_GATES"
+sed -i 's|    :gates-sha256 "\([0-9a-f]*\)"))|    :gates-sha256 "\1"\n    :proposed-by "metadatastician/standards#1"))|' "$WORK/proposed-stale/spine_chora.deed"
+expect ":proposed-by does not excuse a mismatched pin" "$WORK/proposed-stale" FAIL "(version)"
+
 deed "$WORK/bad-gates" "$WANT_VER" "$WANT_CRIT" "$(printf '%064d' 0)"
 expect "wrong gates hash fails (criteria alone is not lockstep)" "$WORK/bad-gates" FAIL "(gates-sha256)"
 

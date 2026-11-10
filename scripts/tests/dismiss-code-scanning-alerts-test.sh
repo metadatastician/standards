@@ -103,7 +103,9 @@ check "the old Hypatia reusable line is no longer dismissed" \
 check "the comment line above the Hypatia caller permission is not the dismissal" \
   "[ \"\$(plan <(mk 210 TokenPermissionsID .github/workflows/hypatia-scan.yml 25))\" = '' ]"
 check "the comment line above the reusable-workflow permission is not the dismissal" \
-  "[ \"\$(plan <(mk 211 TokenPermissionsID .github/workflows/hypatia-scan-reusable.yml 97))\" = '' ]"
+  "[ \"\$(plan <(mk 211 TokenPermissionsID .github/workflows/hypatia-scan-reusable.yml 107))\" = '' ]"
+check "the reusable's line before block-on-critical is no longer dismissed" \
+  "[ \"\$(plan <(mk 213 TokenPermissionsID .github/workflows/hypatia-scan-reusable.yml 98))\" = '' ]"
 check "the comment line above the fork-governance permission is not the dismissal" \
   "[ \"\$(plan <(mk 212 TokenPermissionsID .github/workflows/fork-governance.yml 274))\" = '' ]"
 check "the old fork-governance line is no longer dismissed" \

@@ -10,7 +10,7 @@
       "number": 102,
       "state": "open",
       "rule": { "id": "TokenPermissionsID", "severity": "high" },
-      "most_recent_instance": { "location": { "path": ".github/workflows/hypatia-scan-reusable.yml", "start_line": 98 } }
+      "most_recent_instance": { "location": { "path": ".github/workflows/hypatia-scan-reusable.yml", "start_line": 108 } }
     },
     {
       "number": 103,
