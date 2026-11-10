@@ -12,6 +12,16 @@ on:
         type: boolean
         required: false
         default: false
+      block-on-critical:
+        description: >-
+          Refuse current critical findings only: Hypatia's, after the same
+          baseline and scope filtering as block-on-high, and panic-attack's,
+          where a scan that did not run cannot pass. For callers that block on
+          critical today and are not yet ready to block on high. block-on-high
+          takes precedence for Hypatia when both are set.
+        type: boolean
+        required: false
+        default: false
       scope-excludes:
         description: >-
           Comma-separated path prefixes that are reported but NEVER graded, and
@@ -22,6 +32,28 @@ on:
         type: string
         required: false
         default: "9-archive/"
+      inherited-language-paths:
+        description: >-
+          For a real fork only. Path, in the caller's repository, of a list of
+          exact file paths received from the fork's upstream (one per line,
+          `#` comments allowed). The `cicd_rules/banned_language_file` finding
+          on each listed path is reported but NEVER graded or gated, and its
+          SARIF is not uploaded. Every other rule on those files is unchanged.
+          Only TypeScript, JavaScript and ReScript paths are accepted; an
+          unusable list fails the job. Empty (the default) excuses nothing.
+        type: string
+        required: false
+        default: ""
+      sarif-upload-on-pull-request:
+        description: >-
+          Upload the SARIF to code scanning on pull_request events. Default
+          true. Set false where this lane is advisory on pull requests: an
+          upload there creates a separate "Code scanning results" check that
+          can block a merge while this job passes. Push and manual runs still
+          upload. The findings artifact and the verdict grid are unchanged.
+        type: boolean
+        required: false
+        default: true
       report-backs-artifact:
         description: >-
           Name of an artifact, uploaded earlier in the same run, holding the
@@ -119,7 +151,7 @@ jobs:
         uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1.24.1
         with:
           elixir-version: '1.19.4'
-          otp-version: '28.3'
+          otp-version: '28.5.0.8'
 
       - name: Resolve Hypatia scanner commit
         id: hypatia-rev
@@ -181,7 +213,7 @@ jobs:
           # SD022, hypatia#545) never reached CI. No restore-keys on purpose —
           # a partial restore would repopulate ~/hypatia and the guards below
           # would then skip the rebuild, reintroducing the staleness.
-          key: hypatia-scanner-v4-${{ runner.os }}-${{ steps.hypatia-rev.outputs.sha }}
+          key: hypatia-scanner-v4-${{ runner.os }}-otp28.5.0.8-${{ steps.hypatia-rev.outputs.sha }}
 
       - name: Check out resolved Hypatia commit
         env:
@@ -418,6 +450,8 @@ jobs:
           PA_BIN: ${{ steps.panic-attack-install.outputs.bin }}
           PA_INSTALL_REASON: ${{ steps.panic-attack-install.outputs.reason }}
           SCOPE_EXCLUDES: ${{ inputs.scope-excludes }}
+          # Only the summary wording depends on this; the gate is its own step.
+          PA_GATES: ${{ inputs.block-on-critical }}
         run: |
           set -euo pipefail
           # panic-attack-findings.json is a status ENVELOPE, never a bare array:
@@ -502,11 +536,22 @@ jobs:
               echo "critical=$critical"
               echo "high=$high"
             } >> "$GITHUB_OUTPUT"
+            # Advisory wording is unchanged for existing callers; with
+            # block-on-critical the critical count gates in its own step.
+            if [ "${PA_GATES:-false}" = true ]; then
+              title="panic-attack findings (critical blocks)"
+              note="Critical findings block (block-on-critical); high and below are advisory"
+              heading="critical findings block"
+            else
+              title="panic-attack findings (advisory)"
+              note="This scan does not gate"
+              heading="advisory, does not gate"
+            fi
             if [ $((critical + high)) -gt 0 ]; then
-              echo "::warning title=panic-attack findings (advisory)::$critical critical and $high high finding(s). This scan does not gate; see panic-attack-findings.json in the hypatia-scan-findings artifact."
+              echo "::warning title=$title::$critical critical and $high high finding(s). $note; see panic-attack-findings.json in the hypatia-scan-findings artifact."
             fi
             {
-              echo "## panic-attack assail (advisory, does not gate)"
+              echo "## panic-attack assail ($heading)"
               echo ""
               echo "| Severity | Count |"
               echo "|----------|-------|"
@@ -718,6 +763,38 @@ jobs:
           IFS=',' read -r -a _prefixes <<< "$SCOPE_EXCLUDES"
           bash "$FILTER" hypatia.sarif hypatia.sarif "${_prefixes[@]}"
 
+      # ── Inherited-language paths of a real fork ────────────────────────────
+      # Runs AFTER the scope filter, so hypatia.pre-scope.sarif still holds the
+      # findings and the grid can report them as excluded. Takes ONE rule off
+      # the EXACT paths the caller declares, in both gating projections, so
+      # the SARIF gate and the baseline gate cannot disagree.
+      #
+      # The LIST fails closed: a list that was asked for and is unusable is a
+      # configuration error. The FILTERS fail open, like the two above.
+      - name: Apply the inherited-language paths
+        id: inherited_language
+        if: ${{ inputs.inherited-language-paths != '' }}
+        env:
+          INHERITED_LANGUAGE_PATHS: ${{ inputs.inherited-language-paths }}
+        run: |
+          set -uo pipefail
+          helper=.standards-checkout/scripts/inherited-language.sh
+          if [ ! -f "$helper" ]; then
+            # Never run a caller-local or older helper against the gating
+            # projections. More visible findings are safer than suppression.
+            echo "::warning::revision-matched inherited-language helper unavailable; nothing is excused"
+            exit 0
+          fi
+          list="$RUNNER_TEMP/inherited-language-paths.txt"
+          if ! bash "$helper" paths "$INHERITED_LANGUAGE_PATHS" > "$list"; then
+            echo "::error::the inherited-language path list '$INHERITED_LANGUAGE_PATHS' is unusable; see the message above"
+            exit 2
+          fi
+          echo "  $(wc -l < "$list") inherited-language path(s) declared in $INHERITED_LANGUAGE_PATHS"
+          bash "$helper" sarif hypatia.sarif hypatia.sarif "$list"
+          bash "$helper" findings hypatia-findings.gating.json hypatia-findings.gating.json "$list"
+          echo "list=$list" >> "$GITHUB_OUTPUT"
+
       - name: Upload SARIF to code scanning
         # NOTE: this does NOT make under-permissioned callers "skip gracefully".
         # This workflow declares `security-events: write` at the top, so a
@@ -726,6 +803,10 @@ jobs:
         # that was never created. Callers MUST grant `security-events: write`.
         # This flag only tolerates a genuine upload failure (e.g. Advanced
         # Security disabled on a private repo) once the job is actually running.
+        #
+        # A caller whose lane is advisory on pull requests sets
+        # sarif-upload-on-pull-request to false; push and manual runs upload.
+        if: ${{ inputs.sarif-upload-on-pull-request || github.event_name != 'pull_request' }}
         continue-on-error: true
         uses: github/codeql-action/upload-sarif@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4.38.0 (4.38.1 blocked estate-wide; nexia-list#100)
         with:
@@ -878,6 +959,7 @@ jobs:
           SCOPE_MODE: ${{ steps.scope.outputs.mode }}
           SCOPE_EXCLUDES: ${{ inputs.scope-excludes }}
           BASELINE_FILTERED: ${{ steps.filter_baseline.outputs.filtered }}
+          INHERITED_LANGUAGE_LIST: ${{ steps.inherited_language.outputs.list }}
         run: |
           set -uo pipefail
           renderer=.standards-grid/scripts/verdict-grid.sh
@@ -913,8 +995,12 @@ jobs:
           # Prefixes from the caller; empty means grade everything. When scope
           # excludes are used, report from the pre-scope projection as well;
           # it contributes excluded counts only, never gate/grade findings.
-          if [ -n "${SCOPE_EXCLUDES:-}" ]; then
+          if [ -n "${SCOPE_EXCLUDES:-}" ] || [ -n "${INHERITED_LANGUAGE_LIST:-}" ]; then
             scope_args+=(--hypatia-sarif-unscoped hypatia.pre-scope.sarif)
+          fi
+          # The same normalised list the gating filters used.
+          if [ -n "${INHERITED_LANGUAGE_LIST:-}" ]; then
+            scope_args+=(--inherited-language-paths "$INHERITED_LANGUAGE_LIST")
           fi
           IFS=',' read -r -a _ex <<< "${SCOPE_EXCLUDES:-}"
           for _p in "${_ex[@]}"; do
@@ -975,13 +1061,29 @@ jobs:
             echo "No committed baseline — gate stays advisory (see next step)."
           fi
 
-      - name: Block high and critical findings when requested
+      - name: Block findings at the requested threshold
         id: blocking-findings
-        if: inputs.block-on-high
+        if: inputs.block-on-high || inputs.block-on-critical
         env:
           HYPATIA_BASELINE_FILTERED: ${{ steps.filter_baseline.outputs.filtered }}
+          BLOCK_THRESHOLD: ${{ inputs.block-on-high && 'high' || 'critical' }}
         run: |
           set -euo pipefail
+          # high: every error-level result (SARIF folds high and critical into
+          # "error"). critical: error-level results whose projected
+          # hypatia.severity is critical, or is missing, since an unknown
+          # severity must not slip under a critical-only gate.
+          case "${BLOCK_THRESHOLD:-high}" in
+            high)
+              selector='.level == "error"'
+              what="high or critical" ;;
+            critical)
+              selector='.level == "error" and ((.properties // {})["hypatia.severity"] // "") != "high"'
+              what="critical" ;;
+            *)
+              echo "::error::Unknown blocking threshold '${BLOCK_THRESHOLD}'"
+              exit 2 ;;
+          esac
           # Use the scanner's authoritative SARIF projection, after the same
           # baseline filter used for the Security tab. Raw JSON also contains
           # code_scanning_alerts: historical GitHub alert summaries, including
@@ -1022,15 +1124,39 @@ jobs:
             echo "::error::Hypatia did not produce one valid SARIF findings document"
             exit 2
           fi
-          count=$(jq '[.runs[].results[] | select(.level == "error")] | length' hypatia.sarif)
+          count=$(jq "[.runs[].results[] | select($selector)] | length" hypatia.sarif)
           if [ "$count" -gt 0 ]; then
-            echo "::error::Hypatia found $count current high or critical finding(s); see the SARIF artifact"
+            echo "::error::Hypatia found $count current $what finding(s); see the SARIF artifact"
             exit 1
           fi
-          echo "Hypatia blocking gate: no current high or critical findings after baseline filtering"
+          echo "Hypatia blocking gate: no current $what findings after baseline filtering"
+
+      - name: Block panic-attack critical findings when requested
+        id: blocking-panic
+        if: inputs.block-on-critical
+        env:
+          PA_STATUS: ${{ steps.panic-attack.outputs.status }}
+          PA_CRITICAL: ${{ steps.panic-attack.outputs.critical }}
+        run: |
+          set -euo pipefail
+          # A blocking gate cannot pass on a scan that did not run: not_run and
+          # error fail here, where the advisory mode only reports them.
+          if [ "${PA_STATUS:-}" != ran ]; then
+            echo "::error::panic-attack did not run (status ${PA_STATUS:-missing}); the critical gate cannot pass without its scan"
+            exit 2
+          fi
+          if ! [[ "${PA_CRITICAL:-}" =~ ^[0-9]+$ ]]; then
+            echo "::error::panic-attack ran but reported no critical count"
+            exit 2
+          fi
+          if [ "$PA_CRITICAL" -gt 0 ]; then
+            echo "::error::panic-attack found $PA_CRITICAL critical finding(s); see panic-attack-findings.json"
+            exit 1
+          fi
+          echo "panic-attack blocking gate: no critical findings"
 
       - name: Check for critical issues (ADVISORY — does not gate)
-        if: '!inputs.block-on-high && steps.scan.outputs.critical > 0'
+        if: '!inputs.block-on-high && !inputs.block-on-critical && steps.scan.outputs.critical > 0'
         run: |
           # This scan is ADVISORY / fix-forward WHEN NO BASELINE IS COMMITTED
           # (the step above becomes the blocking gate once .hypatia-baseline.json

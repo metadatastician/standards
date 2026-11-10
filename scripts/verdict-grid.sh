@@ -27,6 +27,12 @@
 #       --exclude-prefix P    repeatable. Findings whose path starts with P are
 #                             reported but never graded, in either mode. For
 #                             frozen history (9-archive/) that cannot be edited.
+#       --inherited-language-paths FILE
+#                             for a real fork: exact paths, one per line, of
+#                             files received from its upstream. The
+#                             cicd_rules/banned_language_file finding on a
+#                             listed path is reported but never graded; every
+#                             other rule on that file still grades.
 #     identity
 #       --lane NAME           grid lane (default: hypatia)
 #       --sha SHA --run ID --url URL --pr N --repo OWNER/NAME
@@ -83,7 +89,7 @@ case "$cmd" in
     out="" hyp="" sarif="" unscoped_sarif="" unscoped_requested=false pan="" pon="" backs="" enrol="" prev="" lane="hypatia"
     baseline_verified=true
     sha="" run="local" url="" pr="local" repo="" href="" pref="" qref=""
-    changed="" excludes=""
+    changed="" excludes="" inherited=""
     while [ $# -gt 0 ]; do
       case "$1" in
         --out) out="$2"; shift 2 ;;
@@ -107,6 +113,7 @@ case "$cmd" in
         --pons-ref) qref="$2"; shift 2 ;;
         --changed) changed="$2"; shift 2 ;;
         --exclude-prefix) excludes="${excludes}${2}"$'\n'; shift 2 ;;
+        --inherited-language-paths) inherited="$2"; shift 2 ;;
         *) echo "unknown option: $1" >&2; usage ;;
       esac
     done
@@ -158,14 +165,26 @@ case "$cmd" in
     changed_json='[]'
     [ "$scope_mode" = "delta" ] && changed_json=$(jq -R -s 'split("\n") | map(select(length > 0))' "$changed")
     excludes_json=$(printf '%s' "$excludes" | jq -R -s 'split("\n") | map(select(length > 0))')
+    # Exact paths, one per line; `#` comments and blank lines are allowed. A
+    # list that was asked for and cannot be read is a usage error, like a
+    # missing changed-file list: grading without it would answer a different
+    # question from the one the caller asked.
+    inherited_json='[]'
+    if [ -n "$inherited" ]; then
+      [ -f "$inherited" ] || { echo "inherited-language path list not found: $inherited" >&2; exit 2; }
+      inherited_json=$(jq -R -s 'split("\n") | map(sub("\r$"; "") | sub("^\\./+"; ""))
+        | map(select(length > 0 and (startswith("#") | not))) | unique' "$inherited")
+    fi
     scope=$(jq -n --arg mode "$scope_mode" --argjson changed "$changed_json" --argjson ex "$excludes_json" \
-      '{mode: $mode, changed: $changed, excluded_prefixes: $ex}')
+      --argjson inherited "$inherited_json" \
+      '{mode: $mode, changed: $changed, excluded_prefixes: $ex, inherited_language_paths: $inherited}')
 
     # The stable scope definition participates in comparisons: changing an
     # exclusion changes the grading universe. The actual changed-file list is
     # revision data and must NOT invalidate every PR delta. Exclusion order and
     # duplicates do not change semantics, so canonicalise them for the hash.
-    profile_scope=$(jq -c '{mode, excluded_prefixes: (.excluded_prefixes | unique | sort)}' <<< "$scope")
+    profile_scope=$(jq -c '{mode, excluded_prefixes: (.excluded_prefixes | unique | sort),
+      inherited_language_paths: (.inherited_language_paths | unique | sort)}' <<< "$scope")
     profile=$( { cat "$0" "$JQ_LIB"; [ -n "$enrol" ] && [ -f "$enrol" ] && cat "$enrol"; printf '%s\n' "$href" "$pref" "$qref" "$lane" "$profile_scope"; } | sha256sum | cut -d' ' -f1)
 
     dirty=false

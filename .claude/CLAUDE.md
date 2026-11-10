@@ -83,7 +83,7 @@ Each has a normative grammar in this repository:
 |---|---|---|---|
 | Repo facts: identity, state, meta, ecosystem, agentic, neurosym, playbook, and the `(bot-directives …)` and `(contractiles …)` clauses | `<repo>_chora.deed` at the repo root, one per repo (D312) | `1-formats/deed/spec/abnf/deed.abnf` (D308; prose: `1-formats/deed/spec/DEED-GRAMMAR-SPEC.adoc`) | `bun 1-formats/deed/tools/deed_lint.js FILE.deed` |
 | Contracts | `*.k9.ncl` | `1-formats/k9/spec/K9-CONTRACT-SPEC.adoc` | `1-formats/k9/tools/k9-validate.sh --strict FILE` |
-| Agent coordination | `coordination.k9` at the repo root: first line `K9!`, `schema_version: 1.2.0` | `2-protocols/k9-coordination/spec/abnf/coordination-k9-grammar_v1.2.abnf` (prose: `2-protocols/k9-coordination/spec/COORDINATION-K9-SPEC.adoc`) | No validator script exists yet, and a generic YAML parser does not conform. The generator is `2-protocols/k9-coordination/tools/k9-init/`. |
+| Agent coordination | `coordination.k9` at the repo root: first line `K9!`, `schema_version: 1.2.0` | `2-protocols/k9-coordination/spec/abnf/coordination-k9-grammar_v1.2.abnf` (prose: `2-protocols/k9-coordination/spec/COORDINATION-K9-SPEC.adoc`) | `cd 2-protocols/k9-coordination/tools/validate && bun install --frozen-lockfile && bun validate.js FILE` (a generic YAML parser does not conform). The generator is `2-protocols/k9-coordination/tools/k9-init/`. |
 
 - **Translating old content.** The mapping specs in `1-formats/deed/mappings/`,
   one per former A2ML family, decide where its content goes. Anything a

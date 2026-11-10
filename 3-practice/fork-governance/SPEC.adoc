@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 // SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
-= Fork governance — specification v1.2
+= Fork governance — specification v1.3
 :toc: left
 :toclevels: 4
-:revdate: 2026-11-04
-:revnumber: 1.2
+:revdate: 2026-11-09
+:revnumber: 1.3
 :status: normative
 
 This document is normative for the *comment*: its markers, its order, its
@@ -50,6 +50,10 @@ column of every later revision would be measured against it.
 The body MUST contain, in this order:
 
 . the marker;
+. on a comment written by the publisher (a pull request from a fork,
+  §4.1) only: the publisher's notice, a single line naming the fork run
+  the comment was rendered by. The posting engine never writes it, and a
+  scraper that reads by position skips this one line on fork comments;
 . the heading `# Fork governance`;
 . the summary table;
 . the scope note;
@@ -107,7 +111,11 @@ a quota failure, or silence MUST NOT be interpreted as a completed review
 on the current head. In particular, a quota failure may itself be delivered
 as a `COMMENTED` review. A review observed on the head is a coverage fact,
 not a claim of approval. Quota notices in issue comments have unknown head
-scope. API failure or a head change during collection is indeterminate.
+scope. A Codex review summary is the exception: it is an issue comment that
+names its commit in its own state marker, so a summary that reports a failed
+review for the head is reported as no review on that head. A Codex usage-limit
+notice names no commit. API failure or a head change during collection is
+indeterminate.
 The snapshot is refreshed when the summary runs; it is not live review state.
 The advisory may be omitted, with a workflow warning, when it would exceed
 the publisher's 65,000-character comment budget. Existing lane reports take
@@ -116,7 +124,7 @@ appends the advisory without requiring a new renderer argument.
 For external callers, the coverage helper is fetched independently at the
 reusable workflow's own commit (`job.workflow_sha`), even when `canon-ref`
 selects an older renderer. A failed helper fetch leaves coverage indeterminate.
-The implementation reserves 2,048 bytes for the fork publisher footer and
+The implementation reserves 2,048 bytes for the fork publisher notice and
 stamp, and uses a conservative byte count. Lane text cannot suppress the
 advisory by mentioning its title; the posting engine appends its own section.
 
@@ -171,7 +179,8 @@ Each row therefore carries three disjoint counts, and only the first grades:
 | no — reported, so the number cannot be mistaken for zero
 
 | `counts_excluded`
-| findings under a declared exclusion prefix (`9-archive/` by default)
+| findings under a declared exclusion prefix (`9-archive/` by default), and
+  banned-language findings on a real fork's declared inherited-language paths
 | no — reported, so exclusion is visible rather than silent
 |===
 
@@ -257,8 +266,12 @@ data, never instructions:
   a newer run at a different commit of the same fork branch (a push re-runs
   every pull request from the branch). Any other run without one, including
   one cancelled by hand, fails its publisher.
-. The published comment ends with a line naming the run it was rendered by.
-  The publisher cannot make a fork's verdicts honest; branch protection
+. The body's first line MUST be exactly the marker (§2.1), not merely start
+  with it. The publisher's second line names the run the comment was
+  rendered by and says it was published from a fork run. It comes before
+  any of the fork's text, so nothing in the body (an unclosed HTML comment,
+  an open `<details>`) can hide it, as it could hide a footer. The
+  publisher cannot make a fork's verdicts honest; branch protection
   requires the lane checks, never the comment (ADOPTION §4).
 
 == 5. Single poster

@@ -14,7 +14,7 @@ workflows:
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510'
         - 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9'
-        - 'step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43'
+        - 'step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a'
     '.github/workflows/boj-build.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
     '.github/workflows/canon-spine-lockstep.yml':
@@ -39,8 +39,8 @@ workflows:
         - 'oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6'
     '.github/workflows/cicd-squabbler-reusable.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'hyperpolymath/cicd-squabbler@d88ff883d98abadb3d00b83e585cf202ce00e11e'
-        - 'step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43'
+        - 'hyperpolymath/cicd-squabbler@d04055f4a26c4a0a5fa4f5149d40f0c42aeac274'
+        - 'step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a'
     '.github/workflows/cicd-squabbler.yml': []
     '.github/workflows/code-coverage.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
@@ -63,7 +63,7 @@ workflows:
     '.github/workflows/dependabot-lock-regen.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510'
-        - 'step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43'
+        - 'step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a'
     '.github/workflows/doc-format.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
     '.github/workflows/dyadt-verify.yml':
@@ -118,6 +118,7 @@ workflows:
         - 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9'
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9'
+        - 'oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6'
     '.github/workflows/k9-contractile.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9'
@@ -134,7 +135,7 @@ workflows:
     '.github/workflows/lockfile-drift-detect.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9'
-        - 'step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43'
+        - 'step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a'
     '.github/workflows/makefile-blocker.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
     '.github/workflows/mirror-reusable.yml':
@@ -158,7 +159,7 @@ workflows:
         - 'actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9'
     '.github/workflows/propagate-hooks.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43'
+        - 'step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a'
     '.github/workflows/provisioning-check-reusable.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
     '.github/workflows/readme-derive-reusable.yml':
@@ -194,14 +195,14 @@ workflows:
     '.github/workflows/settings-drift-detect.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9'
-        - 'step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43'
+        - 'step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a'
     '.github/workflows/spark-theatre-gate.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
     '.github/workflows/tag-ruleset-canon.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510'
         - 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9'
-        - 'step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43'
+        - 'step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a'
     '.github/workflows/tailscale-connect-reusable.yml':
         - 'tailscale/github-action@064b10558093f38325e838ddea35486bdc6b1d5c'
     '.github/workflows/uuid-v8.yml':
@@ -299,9 +300,9 @@ dependencies:
         commit: 'sha1-0f8e8c99d88aeb3fbfd523f1ef2c6f762d10d64d'
         owner_id: 75048950
         repo_id: 623796603
-    'hyperpolymath/cicd-squabbler@d88ff883d98abadb3d00b83e585cf202ce00e11e':
+    'hyperpolymath/cicd-squabbler@d04055f4a26c4a0a5fa4f5149d40f0c42aeac274':
         ref: 'main'
-        commit: 'sha1-d88ff883d98abadb3d00b83e585cf202ce00e11e'
+        commit: 'sha1-d04055f4a26c4a0a5fa4f5149d40f0c42aeac274'
         owner_id: 6759885
         repo_id: 1284026967
     'metadatastician/standards@70019048f862250c04346f27e6ca196ff7aa187a':
@@ -343,9 +344,9 @@ dependencies:
         commit: 'sha1-28959ce8df70de7be546dd1250a005dd32156697'
         owner_id: 18365890
         repo_id: 220359305
-    'step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43':
-        ref: 'v2.22.3'
-        commit: 'sha1-46b06cea07f9e64621fdf066ba77ac6915163d43'
+    'step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a':
+        ref: 'v2.22.4'
+        commit: 'sha1-1d88384fd173af6ecb012dfd0264a306b711241a'
         owner_id: 88700172
         repo_id: 422287306
     'swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6':

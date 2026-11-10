@@ -16,5 +16,5 @@
   (inputs (list coreutils bash))
   (synopsis "standards")
   (description "standards — part of the hyperpolymath ecosystem.")
-  (home-page "https://github.com/hyperpolymath/standards")
+  (home-page "https://github.com/metadatastician/standards")
   (license mpl2.0))

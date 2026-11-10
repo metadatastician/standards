@@ -242,7 +242,7 @@ jobs:
           # Always append our own section. Lane finding text is untrusted and
           # cannot suppress it by mentioning reviewer coverage or its marker.
           marker='<!-- fork-governance:reviewer-coverage -->'
-          # Reserve 2048 bytes for the fork publisher footer and run stamp.
+          # Reserve 2048 bytes for the fork publisher notice and run stamp.
           if [ "$(( $(wc -c < "$body") + $(wc -c < "$coverage") + ${#marker} + 2 ))" -le 62952 ]; then
               printf '\n%s\n' "$marker" >> "$body"
               cat "$coverage" >> "$body"

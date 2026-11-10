@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: MPL-2.0
-# Security contact information for hyperpolymath/standards (RFC 9116).
+# Security contact information for metadatastician/standards (RFC 9116).
 # Full policy: ../SECURITY.md
-Contact: https://github.com/hyperpolymath/standards/security/advisories/new
+Contact: https://github.com/metadatastician/standards/security/advisories/new
 Contact: mailto:6759885+hyperpolymath@users.noreply.github.com
 Expires: 2027-06-18T00:00:00.000Z
 Preferred-Languages: en
-Canonical: https://github.com/hyperpolymath/standards/blob/main/.well-known/security.txt
-Policy: https://github.com/hyperpolymath/standards/blob/main/SECURITY.md
+Canonical: https://github.com/metadatastician/standards/blob/main/.well-known/security.txt
+Policy: https://github.com/metadatastician/standards/blob/main/SECURITY.md

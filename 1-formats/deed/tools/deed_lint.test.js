@@ -4,7 +4,7 @@ import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { validate, LintError, SELF_TEST_CASES, checkEgress, EgressError, readMustfileChecks, MustfileError } from "./deed_lint.js";
+import { validate, LintError, SELF_TEST_CASES, checkEgress, EgressError, readMustfileChecks, MustfileError, readProofReceipt, ProofReceiptError } from "./deed_lint.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const LINT = join(HERE, "deed_lint.js");
@@ -250,6 +250,84 @@ describe("Mustfile check profile", () => {
   });
   test("a syntactically valid repo-deed is not a Mustfile praxis-deed", () => {
     expect(() => readMustfileChecks(HDR + '(repo-deed :schema-version "1" ' + one + ')')).toThrow(MustfileError);
+  });
+});
+
+
+describe("proof-receipt profile (PROOF-POLICY §8.5)", () => {
+  const C = "0123456789abcdef0123456789abcdef01234567";
+  const OTHER = "fedcba9876543210fedcba9876543210fedcba98";
+  const rcpt = (o = {}) => `(receipt :run "${o.run ?? "https://ci/run/1"}" :commit "${o.commit ?? C}" :checker "${o.checker ?? "agda 2.6.4.3"}"`
+    + ` :invocation "${o.inv ?? "agda --safe --without-K --cubical-compatible"}" :state ${o.rstate ?? "current"}${o.reason ? ` :reason "${o.reason}"` : ""})`;
+  const agda = (o = {}) => `(leg :prover agda :route source :token ${o.tok ?? "proven"} :state ${o.state ?? "AGDA-VERIFIED"} ${o.receipts ?? rcpt(o)})`;
+  const recheck = (p, o = {}) => o.route === "unavailable" || o.route === "waived" || o.route === undefined && o.counted === false
+    ? `(leg :prover ${p} :route ${o.route ?? "unavailable"} :reason "none yet")`
+    : `(leg :prover ${p} :route ${o.route ?? "transported"} :token ${o.tok ?? "proven"} :state ${o.state ?? "RECONCILED"} ${rcpt({ checker: p, inv: p, commit: o.commit })})`;
+  const claim = (pwg, legs, o = {}) => `(claim :id "${o.id ?? "T-1"}" :pwg ${pwg} :foundation-diverse ${o.fd ?? "#f"} ${legs})`;
+  const doc = (claims, o = {}) => HDR + `(praxis-deed :schema-version "1.0.0" :canonical-name "r" :profile ${o.profile ?? "proof-receipt"}`
+    + ` :repository "${o.repo ?? "hyperpolymath/x"}" :source-commit "${o.commit ?? C}" ${o.extra ?? ""} ${claims})`;
+  const read = (src) => readProofReceipt(src, "x_praxis.deed");
+  const none = recheck("rocq", { counted: false }) + " " + recheck("lean", { counted: false });
+
+  test("the worked example derives to PWG-3 and reports its trusted base", () => {
+    const r = readProofReceipt(readFileSync(join(FIX, "proof-receipt", "example_praxis.deed"), "utf8"), "example_praxis.deed");
+    expect(r.claims.map((c) => [c.id, c.pwg, c.foundation_diverse])).toEqual([["T-1", "PWG-3", false]]);
+    expect(r.trusted_base.map((p) => p.name)).toEqual(["Level", "lzero", "lsuc", "_⊔_"]);
+  });
+  test("each grade is derived from the legs, and only that grade is accepted", () => {
+    const rocqOk = recheck("rocq"), leanOk = recheck("lean");
+    expect(read(doc(claim("PWG-3", agda() + " " + none))).claims[0].pwg).toBe("PWG-3");
+    expect(read(doc(claim("PWG-2i", agda() + " " + rocqOk + " " + recheck("lean", { counted: false })))).claims[0].pwg).toBe("PWG-2i");
+    expect(read(doc(claim("PWG-2ii", agda() + " " + rocqOk + " " + recheck("lean", { commit: OTHER })))).claims[0].pwg).toBe("PWG-2ii");
+    expect(read(doc(claim("PWG-1", agda() + " " + rocqOk + " " + leanOk))).claims[0].pwg).toBe("PWG-1");
+    expect(read(doc(claim("ungraded", agda({ tok: "open", state: "AGDA-PENDING" }) + " " + none))).claims[0].pwg).toBe("ungraded");
+  });
+  test("a recorded grade the receipts do not support is refused (grades are derived, not asserted)", () => {
+    expect(() => read(doc(claim("PWG-2i", agda() + " " + none)))).toThrow(/records :pwg PWG-2i, but .* support PWG-3/);
+    expect(() => read(doc(claim("PWG-3", agda() + " " + recheck("rocq") + " " + recheck("lean", { counted: false }))))).toThrow(/support PWG-2i/);
+    expect(() => read(doc(claim("PWG-1", agda() + " " + recheck("rocq") + " " + recheck("lean", { commit: OTHER }))))).toThrow(/support PWG-2ii/);
+  });
+  test("what does not count: no §2.1 flags, no current receipt, BRIDGE-PENDING, argued", () => {
+    expect(() => read(doc(claim("PWG-3", agda({ inv: "agda --safe --without-K" }) + " " + none)))).toThrow(/support ungraded/);
+    expect(() => read(doc(claim("PWG-3", agda({ rstate: "superseded", reason: "old" }) + " " + none)))).toThrow(/support ungraded/);
+    expect(() => read(doc(claim("PWG-2i", agda() + " " + recheck("rocq", { state: "BRIDGE-PENDING" }) + " " + recheck("lean", { counted: false }))))).toThrow(/support PWG-3/);
+    expect(() => read(doc(claim("PWG-2i", agda() + " " + recheck("rocq", { tok: "argued" }) + " " + recheck("lean", { counted: false }))))).toThrow(/support PWG-3/);
+    expect(read(doc(claim("PWG-3", agda({ inv: "agda --safe --without-K --cubical --erasure" }) + " " + none))).claims[0].pwg).toBe("PWG-3");
+  });
+  test("foundation diversity is derived too (§8.3)", () => {
+    const isa = `(leg :prover isabelle :route re-proved :token proven :state RECONCILED ${rcpt({ checker: "isabelle", inv: "isabelle build" })})`;
+    expect(read(doc(claim("PWG-3", agda() + " " + none + " " + isa, { fd: "#t" }))).claims[0].foundation_diverse).toBe(true);
+    expect(() => read(doc(claim("PWG-3", agda() + " " + none + " " + isa)))).toThrow(/foundation-diverse #f, but .* #t/);
+    expect(() => read(doc(claim("PWG-3", agda() + " " + none, { fd: "#t" })))).toThrow(/foundation-diverse #t/);
+  });
+  test("malformed receipts fail closed", () => {
+    const ok = claim("PWG-3", agda() + " " + none);
+    expect(() => read(doc(ok, { profile: "mustfile" }))).toThrow(/:profile mustfile/);
+    expect(() => read(doc(ok, { commit: "0123456" }))).toThrow(/full 40-character/);
+    expect(() => read(doc(ok, { repo: "just-a-name" }))).toThrow(/OWNER\/REPO/);
+    expect(() => read(doc(ok, { extra: ':grade "3"' }))).toThrow(/unknown field :grade/);
+    expect(() => read(doc(""))).toThrow(/at least one \(claim/);
+    expect(() => read(doc(ok + " " + ok))).toThrow(/duplicate claim id/);
+    expect(() => read(doc(claim("PWG-3", none)))).toThrow(/no agda leg/);
+    expect(() => read(doc(claim("PWG-3", agda() + " " + agda())))).toThrow(/two agda legs/);
+    expect(() => read(doc(claim("PWG-3", agda({ receipts: rcpt() + " " + rcpt() }) + " " + none)))).toThrow(/more than one current receipt/);
+    expect(() => read(doc(claim("PWG-3", agda({ receipts: rcpt({ rstate: "superseded" }) + " " + rcpt() }) + " " + none)))).toThrow(/superseded receipt needs :reason/);
+    expect(() => read(doc(claim("PWG-3", agda({ commit: "abc" }) + " " + none)))).toThrow(/receipt :commit/);
+    expect(() => read(doc(claim("PWG-3", agda() + ' (leg :prover rocq :route unavailable :token proven :reason "x") ' + recheck("lean", { counted: false }))))).toThrow(/carries no :token/);
+    expect(() => read(doc(claim("PWG-3", agda() + ' (leg :prover rocq :route unavailable) ' + recheck("lean", { counted: false }))))).toThrow(/needs :reason/);
+    expect(() => read(doc(claim("PWG-3", agda() + ' (leg :prover rocq :route source :token proven :state RECONCILED) ' + recheck("lean", { counted: false }))))).toThrow(/route source belongs to the agda leg/);
+    expect(() => read(doc(claim("PWG-3", agda({ tok: "verified" }) + " " + none)))).toThrow(/:token verified .* not one of/);
+    expect(() => read(doc(claim("PWG-3", agda() + " " + none), { extra: '(trusted-base)' }))).toThrow(/lists no \(primitive/);
+    expect(() => readProofReceipt(HDR + '(repo-deed :schema-version "1" :x "y")')).toThrow(ProofReceiptError);
+  });
+  test("--proof-receipt-json emits records for a valid receipt and no JSON otherwise", () => {
+    const ok = cli("--proof-receipt-json", join(FIX, "proof-receipt", "example_praxis.deed"));
+    expect(ok.code).toBe(0);
+    expect(JSON.parse(ok.out).claims[0].pwg).toBe("PWG-3");
+    const bad = cli("--proof-receipt-json", join(FIX, "valid", "minimal_chora.deed"));
+    expect(bad.code).toBe(1);
+    expect(bad.out).toMatch(/^FAIL /);
+    expect(cli("--proof-receipt-json").code).toBe(2);
   });
 });
 

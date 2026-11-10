@@ -88,7 +88,7 @@ would hide which one broke, so DEED keeps its own summary row above.
 |===
 | Workflow | `.github/workflows/hypatia-scan-reusable.yml` (`workflow_call`)
 | Question | Did the scanners run, and what did each of them report?
-| Passes on | nothing by default — this is a *findings* lane, not a conformance lane. Callers may set `block-on-high` to refuse current high or critical findings after baseline filtering.
+| Passes on | nothing by default — this is a *findings* lane, not a conformance lane. Callers may set `block-on-high` to refuse current high or critical findings after baseline filtering, or `block-on-critical` to refuse current critical findings only: Hypatia's after the same filtering, and panic-attack's, where a scan that did not run cannot pass.
 | Output | job result plus `verdict` (grid state), artifact `verdict-grid`
 | Permissions | `actions: read`, `contents: read`, `security-events: write`
 | Artifact | `verdict-grid/report.md`, `report.json`, `badge.json`
@@ -109,6 +109,21 @@ therefore fail on an unbaselined high/critical finding that the delta grid
 reports as standing or excluded. The summary keeps the job result and grid
 verdict distinct, and the check-run annotations name the finding that failed
 the gate.
+
+Two inputs are opt-in and change nothing for a caller that does not set them:
+
+* `sarif-upload-on-pull-request: false` stops the SARIF upload on
+  `pull_request` events. Use it where this lane is advisory on pull requests:
+  an upload there creates a separate "Code scanning results" check that can
+  block a merge while the lane job passes. Push and manual runs still upload.
+* `inherited-language-paths: <file>` is for a real fork. The file lists exact
+  paths the fork received from its upstream. The
+  `cicd_rules/banned_language_file` finding on each listed path is reported as
+  excluded, and is never graded, gated or uploaded. Every other rule on those
+  files is unchanged. Only TypeScript, JavaScript and ReScript paths are
+  accepted, because the scanner bans Python, Go, Makefile and Gemfile without
+  exception. An unusable list fails the job. The list is the caller's ledger:
+  guard it in the caller, for example against a snapshot of the upstream tree.
 
 === A finding lane is not a pass/fail lane
 

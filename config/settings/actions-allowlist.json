@@ -23,7 +23,8 @@
     "pypa/gh-action-pypi-publish@*",
     "PyO3/maturin-action@*",
     "ad-m/github-push-action@*",
-    "swatinem/rust-cache@* (case duplicate of Swatinem/rust-cache@*)"
+    "swatinem/rust-cache@* (case duplicate of Swatinem/rust-cache@*)",
+    "dtolnay/rust-action@* (no such repository; the only callers are archived workflows under 9-archive/, which never run. Probably meant dtolnay/rust-toolchain@*, which is also listed)"
   ],
   "github_owned_allowed": true,
   "verified_allowed": true,

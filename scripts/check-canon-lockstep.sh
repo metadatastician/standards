@@ -84,18 +84,16 @@ skip() {
 
 # Assertions 3, 4 and 5 are INFORMATIONAL unless --strict.
 #
-# This is not leniency, it is the ordering rule made executable. canon.lock
-# [canon.lockstep].order is "spine-adopts-then-canon-releases", but a canon
-# change and the spine's adoption of it CANNOT both be first: the spine's
-# adoption necessarily pins hashes that exist only in the unmerged canon PR.
-# A hard check here therefore renders every canon release unmergeable, which is
-# the opposite of the rule it was meant to enforce.
-#
-# Sequence this enables:
-#   1. land the canon change with 3/4/5 informational  -> releases canon.lock
-#   2. land the spine's adoption against the released hashes
-#   3. turn --strict on, so drift is a hard failure from then on
-# See the [canon.lockstep] section of canon.lock, which states the order.
+# canon.lock [canon.lockstep].order is "spine-adopts-then-canon-releases". The
+# spine's adoption pins hashes that exist only in the unmerged canon PR, so the
+# order needs a pending state: two-phase lockstep (1-formats/deed/vocabulary/
+# canon.adoc, "Two-phase adoption"). The spine pins this PR's canon.lock and
+# names it with :proposed-by; its own Canon lockstep accepts that while the PR
+# is open. So canon-spine-lockstep.yml runs --strict on every pull request and
+# push: a canon PR that changes canon.lock is not mergeable until the spine's
+# main pins it. (Before 2026-11-09 CI ran this non-strict, because spine-first
+# had no legal state; the canon then released ahead of the spine and turned it
+# red, as #1424 did.) Without --strict, 3/4/5 stay informational for local use.
 #
 # softfail() — a REAL deviation. Promoted to a failure by --strict.
 softfail() {
@@ -296,8 +294,9 @@ pin_row() {
     softfail "spine is on a DIFFERENT canon ($1)
          canon.lock  $(echo "$2" | cut -c1-16)…
          spine       $(echo "$3" | cut -c1-16)…
-         -> land the spine's adoption AFTER this canon release; run with
-            --strict to make this a hard failure once both are on main."
+         -> adopt it in the spine FIRST: pin this canon.lock in the spine
+            deed's (canon …) clause, name this canon PR with :proposed-by,
+            merge that, then re-run this gate (canon.adoc, two-phase)."
   fi
 }
 

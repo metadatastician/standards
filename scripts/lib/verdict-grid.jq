@@ -9,7 +9,8 @@
 #     previous:  object | null,       # baseline embedded in the previous comment
 #     identity:  {lane, sha, run, url, pr, repo, dirty, refs: {hypatia, panic, pons}},
 #     profile:   "sha256 hex",
-#     scope:     {mode: whole-repo|delta, changed: [paths], excluded_prefixes: [prefixes]} }
+#     scope:     {mode: whole-repo|delta, changed: [paths], excluded_prefixes: [prefixes],
+#                 inherited_language_paths: [exact paths]} }
 #
 # SCOPE decides what the grid GRADES, and nothing else. Every finding is still
 # reported in the artifact and counted in the JSON; scope only chooses which
@@ -17,8 +18,10 @@
 #
 #   graded    the finding counts toward the row state and the table columns
 #   standing  outside this change (delta mode): reported, not graded
-#   excluded  under a declared out-of-scope prefix (frozen archive): reported,
-#             never graded, in either mode
+#   excluded  under a declared out-of-scope prefix (frozen archive), or a
+#             banned-language finding on a declared inherited-language path
+#             (a real fork's upstream files): reported, never graded, in
+#             either mode
 #
 # This exists because a findings lane that grades the WHOLE repository produces
 # a verdict that cannot change: 57 standing findings meant every pull request,
@@ -193,8 +196,18 @@ def scope_paths($f):
   if ($f.scope_files | type) == "array" and ($f.scope_files | length) > 0
   then $f.scope_files else [($f.file // "")] end;
 
+# An inherited-language path excuses ONE rule on ONE exact path: the
+# banned-language finding on a file a real fork received from its upstream.
+# Every other rule on that file still grades, and a path that is only a prefix
+# of the finding's path does not match. As for a prefix, every location of the
+# result must be declared, and an unknown location grades.
+def inherited_language($sc; $f):
+  ($f.id == "cicd_rules/banned_language_file")
+  and all(scope_paths($f)[]; . as $p | $p != ""
+          and any((($sc.inherited_language_paths // [])[]); . == $p));
+
 def under_exclusion($sc; $f):
-  all(scope_paths($f)[]; path_excluded($sc; .));
+  all(scope_paths($f)[]; path_excluded($sc; .)) or inherited_language($sc; $f);
 
 def bucket($sc; $f):
   (scope_paths($f)) as $paths
@@ -329,7 +342,8 @@ def build:
       generated: ($in.identity.generated // ""), refs: ($in.identity.refs // {}),
       scope: { mode: ($scope.mode // "whole-repo"),
                changed: (($scope.changed // []) | length),
-               excluded_prefixes: ($scope.excluded_prefixes // []) },
+               excluded_prefixes: ($scope.excluded_prefixes // []),
+               inherited_language_paths: (($scope.inherited_language_paths // []) | length) },
       reporters: $reporters,
       # The lane state is the worst GATING row. When a lane has no gating row
       # at all, the state falls back to every row, because "no row can block"
@@ -421,6 +435,10 @@ def render(prev):
   # An exclusion the reader cannot see is indistinguishable from a clean scan.
   + (if (($r.scope.excluded_prefixes // []) | length) > 0
        then " · excludes \((($r.scope.excluded_prefixes) | map("`" + . + "`") | join(", ")))"
+       else "" end)
+  # The declared paths are counted, not listed: a fork can inherit hundreds.
+  + (if ($r.scope.inherited_language_paths // 0) > 0
+       then " · \($r.scope.inherited_language_paths) inherited-language path(s) declared"
        else "" end) + "\n\n"
   # A row's gate status is stated in the table, not inferred from the prose:
   # "purple" from a reporter that cannot block a merge and "purple" from one
@@ -458,7 +476,7 @@ def render(prev):
             then "- \(.findings_standing | length) further finding(s) in files this change does not touch: reported, not graded (\(.counts_standing.critical) critical, \(.counts_standing.high) high).\n"
             else "" end)
          + (if (.findings_excluded | length) > 0
-            then "- \(.findings_excluded | length) finding(s) under a declared out-of-scope prefix: reported, never graded.\n"
+            then "- \(.findings_excluded | length) finding(s) under a declared out-of-scope prefix\(if ($r.scope.inherited_language_paths // 0) > 0 then " or inherited-language path" else "" end): reported, never graded.\n"
             else "" end)
          + "\n</details>\n" ] | add // "")
   + "\nScope: static findings reported by each row's tool at the named commit."

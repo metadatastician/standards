@@ -88,6 +88,26 @@ its downstream consumers are migrated. The DEED runner requires Bun and jq;
 both are present in the repository's self-test workflow. Its regression
 suite is `scripts/tests/check-mustfile-deed-test.sh`.
 
+== `deed_lint.js --proof-receipt-json` — the proof-receipt profile
+
+    bun deed_lint.js --proof-receipt-json path/to/proofs_praxis.deed
+
+Validates a proof receipt (`:profile proof-receipt`, PROOF-POLICY §8.5.1)
+and emits one JSON record. It holds `repository`, `source_commit`,
+`trusted_base`, and `claims` with each claim's legs and receipts. Each claim's
+Proof Witness Grade and foundation-diversity tag are *derived* from its legs
+and receipts (§8.2, §8.3). A receipt whose recorded `:pwg` or
+`:foundation-diverse` differs from the derived value is refused, because a
+grade is derived, not asserted (§8.4). The vocabularies (§5 tokens, §2.2
+states, routes, receipt states) are closed, and anything outside them is an
+error. Unknown or duplicate fields, short commits, a missing Agda leg,
+non-current receipts without a `:reason` and empty receipts fail closed, and
+then no JSON is written.
+
+The worked example is `fixtures/proof-receipt/example_praxis.deed`, and the
+tests are in `deed_lint.test.js` (`proof-receipt profile`). Mathesis's census
+reads receipts through this reader.
+
 == `deed_lint.js --egress` — the `(egress …)` clause profile
 
 Checks what `spec/abnf/clauses/egress.abnf` adds to the grammar, on a file
