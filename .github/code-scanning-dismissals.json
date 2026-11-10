@@ -28,7 +28,7 @@
     {
       "alert_number": null,
       "comment": "Same structural requirement as the caller above: the scan job uploads its own SARIF, so security-events: write is the minimum this reusable can declare. Workflow-level actions/contents stay read.",
-      "line": 108,
+      "line": 130,
       "path": ".github/workflows/hypatia-scan-reusable.yml",
       "reason": "won't fix",
       "rule_id": "TokenPermissionsID"

@@ -99,7 +99,9 @@ For example, replace the `deed`, `k9` and `hypatia` remote calls below with:
 Apply the same local-copy treatment to the posting engine if that remote
 reusable is refused. Preserve each lane's outputs, artifacts, event and
 permission boundaries; the WebUI also intentionally avoids PR SARIF uploads,
-a fork-specific choice that must not be silently applied estate-wide. Track
+a fork-specific choice that must not be silently applied estate-wide (since
+2026-11-10 it is the opt-in `sarif-upload-on-pull-request` input of the remote
+lane, so that choice alone no longer needs a copy). Track
 source-pin and contract drift in CI, refresh the copies deliberately, and test
 that the local calls start jobs. If the fleet reusable is refused, use the
 inline producer described in section 8.2.
@@ -211,6 +213,11 @@ below-threshold advisory findings in the JSON artifact and the separate
 JSON-only advisory summary; this does not change SARIF or either gate.
 The pinned CLI serialises WF028 as type `reusable_call_to_moved_repository`;
 the grid labels that type `WF028` without altering the raw finding.
+
+Two more inputs are opt-in (link:LANES.adoc[LANES], Lane 3):
+`sarif-upload-on-pull-request: false` where the lane is advisory on pull
+requests, and `inherited-language-paths: <file>` for a real fork whose upstream
+files are in a banned language.
 
 [NOTE]
 ====
