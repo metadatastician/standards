@@ -24,7 +24,7 @@ which profile produced it, so the field holding it declares the profile.
 [source,toml]
 ----
 [dependencies]
-estate-uuid-v8 = { git = "https://github.com/hyperpolymath/standards", rev = "<commit>" }
+estate-uuid-v8 = { git = "https://github.com/metadatastician/standards", rev = "<commit>" }
 ----
 
 Pin a commit, as with every estate git dependency. Profile T needs the

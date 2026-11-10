@@ -28,7 +28,8 @@ below). It consumes this standard by reference, in this resolution order:
   first existing path wins:
 +
 .. `$HP_ESTATE_ROOT/standards/launcher/launcher-standard_praxis.deed`
-.. `$XDG_DATA_HOME/hyperpolymath/standards/launcher/launcher-standard_praxis.deed`
+.. `$XDG_DATA_HOME/metadatastician/standards/launcher/launcher-standard_praxis.deed`
+.. `$XDG_DATA_HOME/hyperpolymath/standards/launcher/launcher-standard_praxis.deed` (former owner; installs from before the move)
 .. `/var/mnt/eclipse/repos/standards/launcher/launcher-standard_praxis.deed`
 .. `$HOME/developer/repos/standards/launcher/launcher-standard_praxis.deed`
 .. `$HOME/dev/repos/standards/launcher/launcher-standard_praxis.deed`

@@ -5,7 +5,7 @@ version = "0.1.0"
 edition = "2021"
 license = "MPL-2.0"
 description = "One package.json, every JavaScript runtime: keeps the Bun, Deno and pnpm outputs in step, checks each, picks the most-preferred runtime available, and checks the environment provisions Bun (3-practice/LANGUAGE-POLICY.adoc §1.4)."
-repository = "https://github.com/hyperpolymath/standards"
+repository = "https://github.com/metadatastician/standards"
 publish = false
 
 [lib]

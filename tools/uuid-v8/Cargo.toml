@@ -5,7 +5,7 @@ version = "0.1.0"
 edition = "2021"
 license = "MPL-2.0"
 description = "ESTATE-UUID-V8 (ADR-008): profile T (time-ordered) and profile C (SHA-256 of domain:name) identifiers."
-repository = "https://github.com/hyperpolymath/standards"
+repository = "https://github.com/metadatastician/standards"
 publish = false
 
 [lib]

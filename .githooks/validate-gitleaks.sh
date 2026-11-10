@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: MPL-2.0
 # Hyperpolymath Estate — staged-secret scan (pre-commit)
-# Source: https://github.com/hyperpolymath/standards
+# Source: https://github.com/metadatastician/standards
 #
 # Scans ONLY what is staged, so it runs in the time a commit can afford.
 #

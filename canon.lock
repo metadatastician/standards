@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
 #
 # canon.lock — the RELEASED identity of the Hyperpolymath canon.
-# Proposed location: hyperpolymath/standards/canon.lock   (repository root)
+# Proposed location: metadatastician/standards/canon.lock   (repository root)
 #
 # ---------------------------------------------------------------------------
 # WHY THIS FILE EXISTS
@@ -391,16 +391,16 @@ rsr-spec = { path = "0-canon/rsr/RSR-SPEC-v2.adoc",       # extracted from the v
 # ---------------------------------------------------------------------------
 
 [canon.workflows]
-governance = "hyperpolymath/standards/.github/workflows/governance-reusable.yml"
-hypatia    = "hyperpolymath/standards/.github/workflows/hypatia-scan-reusable.yml"
-allowlist  = "hyperpolymath/standards/.github/workflows/allowlist-preflight-reusable.yml"
-codeql     = "hyperpolymath/standards/.github/workflows/codeql-reusable.yml"
-scorecard  = "hyperpolymath/standards/.github/workflows/scorecard-reusable.yml"
-secrets    = "hyperpolymath/standards/.github/workflows/secret-scanner-reusable.yml"
-mirror     = "hyperpolymath/standards/.github/workflows/mirror-reusable.yml"
-changelog  = "hyperpolymath/standards/.github/workflows/changelog-reusable.yml"
-readme     = "hyperpolymath/standards/.github/workflows/readme-derive-reusable.yml"
-provisioning = "hyperpolymath/standards/.github/workflows/provisioning-check-reusable.yml"
+governance = "metadatastician/standards/.github/workflows/governance-reusable.yml"
+hypatia    = "metadatastician/standards/.github/workflows/hypatia-scan-reusable.yml"
+allowlist  = "metadatastician/standards/.github/workflows/allowlist-preflight-reusable.yml"
+codeql     = "metadatastician/standards/.github/workflows/codeql-reusable.yml"
+scorecard  = "metadatastician/standards/.github/workflows/scorecard-reusable.yml"
+secrets    = "metadatastician/standards/.github/workflows/secret-scanner-reusable.yml"
+mirror     = "metadatastician/standards/.github/workflows/mirror-reusable.yml"
+changelog  = "metadatastician/standards/.github/workflows/changelog-reusable.yml"
+readme     = "metadatastician/standards/.github/workflows/readme-derive-reusable.yml"
+provisioning = "metadatastician/standards/.github/workflows/provisioning-check-reusable.yml"
 
 # ---------------------------------------------------------------------------
 # THE ROLES. One owner per concern; a change belongs at its owning layer
@@ -408,7 +408,7 @@ provisioning = "hyperpolymath/standards/.github/workflows/provisioning-check-reu
 # ---------------------------------------------------------------------------
 
 [canon.roles]
-canon    = "hyperpolymath/standards"
+canon    = "metadatastician/standards"
 spine    = "hyperpolymath/rsr-template-repo"
 composer = "hyperpolymath/scaffoldia"
 oracle   = "hyperpolymath/hypatia"

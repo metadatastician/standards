@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: MPL-2.0
 # SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell (hyperpolymath)
 #
-# CodeQL configuration for hyperpolymath/standards.
+# CodeQL configuration for metadatastician/standards.
 #
 # ⚠ THIS FILE IS NOT PICKED UP AUTOMATICALLY. `codeql.yml` names it explicitly
 # via the reusable's `config-file` input, because codeql-action v4.38.0 does not

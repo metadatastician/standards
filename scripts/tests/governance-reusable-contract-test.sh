@@ -139,22 +139,19 @@ if grep -Fq 'relock-sha-keys.sh' "$LOCK_HELPER"; then
   fail "lock helper still rewrites generated lock keys around legacy inline SHAs"
 fi
 
-# Repository-transfer guard: canon self-recognition must not regress to the
-# pre-transfer slug alone. GitHub's immutable repository ID survives a
-# transfer/rename; either known slug remains a fallback for contexts where
-# an ID is unavailable. An old-slug-only branch silently makes the canon
-# take the consumer path in its own repository.
+# Repository-transfer guard: the canon recognises itself by GitHub's
+# immutable repository ID alone, which survives a transfer or rename. A slug
+# in an identity check is wrong after the next move: a slug-only branch
+# silently makes the canon take the consumer path in its own repository
+# (it happened with hyperpolymath/standards -> metadatastician/standards).
 for workflow in "$GOVERNANCE" "$FOCUSED" "$DEED" "$FORK" "$K9"; do
   grep -Fq '1116521501' "$workflow" ||
     fail "$workflow does not recognise the canon by immutable repository ID"
-  grep -Fq 'metadatastician/standards' "$workflow" ||
-    fail "$workflow does not recognise the transferred standards slug"
-  if grep -Eq "github\\.repository (==|!=) 'hyperpolymath/standards'( \\}\\})?$" "$workflow"; then
-    fail "$workflow still has an old-slug-only repository identity branch"
+  if grep -Eq "github\\.repository (==|!=) '[^']*/standards'" "$workflow"; then
+    fail "$workflow still has a slug-based repository identity check"
   fi
-  # shellcheck disable=SC2016
-  if grep -Fq 'if [ "$GITHUB_REPOSITORY" = hyperpolymath/standards ]; then' "$workflow"; then
-    fail "$workflow still has an old-slug-only shell identity branch"
+  if grep -Eq '"\$GITHUB_REPOSITORY" = "?[A-Za-z0-9_.-]+/standards"? \]' "$workflow"; then
+    fail "$workflow still has a slug-based shell identity check"
   fi
 done
 
