@@ -53,13 +53,24 @@ commit_ci() {
   git -C "$REPO" rev-parse HEAD
 }
 
-# expect <label> <sha> <want-rc> <needle> — runs lock-selfcheck on one commit
-# and checks its exit code and a substring of its output.
+# expect <label> <sha> <want-rc> <needle>... [-- <absent>...] — runs
+# lock-selfcheck on one commit and checks its exit code, that every needle
+# appears in its output, and that every string after `--` does not.
 expect() {
-  local label=$1 sha=$2 want=$3 needle=$4 out rc
+  local label=$1 sha=$2 want=$3 out rc s absent=0 bad=
+  shift 3
   out="$(cd "$WORK" && STANDARDS_DIR="$REPO" bash "$SELFCHECK" "$sha" 2>&1)"; rc=$?
-  if [ "$rc" -ne "$want" ] || ! printf '%s' "$out" | /usr/bin/grep -qF -- "$needle"; then
-    echo "FAIL: $label — wanted exit $want and '$needle', got exit $rc"
+  [ "$rc" -eq "$want" ] || bad="exit $rc"
+  for s in "$@"; do
+    if [ "$s" = "--" ]; then absent=1; continue; fi
+    if printf '%s' "$out" | /usr/bin/grep -qF -- "$s"; then
+      [ "$absent" -eq 0 ] || bad="${bad:+$bad; }unwanted '$s'"
+    else
+      [ "$absent" -eq 1 ] || bad="${bad:+$bad; }missing '$s'"
+    fi
+  done
+  if [ -n "$bad" ]; then
+    echo "FAIL: $label — wanted exit $want; $bad"
     printf '%s\n' "$out" | sed 's/^/      | /'
     fail=$((fail + 1)); return
   fi
@@ -166,6 +177,39 @@ EOF
 )
 expect "a dangling nested edge is POISON (standards#963)" "$sha" 1 "dangling edge(s) in this SHA's own lock"
 expect "the dangling ref is named" "$sha" 1 "actions/setup-python@v2"
+
+# A lock close-lock.sh cannot read (here a duplicate mapping key, which the
+# parser refuses) is not a dangling edge: closure was never examined, so the
+# verdict is UNEXAMINED, and the SHA is still unsafe to pin to.
+cat > "$WF/actions.lock" <<EOF
+version: 'v0.0.2'
+workflows:
+    '.github/workflows/ci.yml':
+        - 'actions/checkout@$LOCKED'
+dependencies:
+    'actions/checkout@$LOCKED':
+        ref: 'v7.0.1'
+        ref: 'v7.0.1'
+        commit: 'sha1-$LOCKED'
+        owner_id: 1
+        repo_id: 2
+EOF
+sha=$(commit_ci <<EOF
+jobs:
+  a:
+    steps:
+      - uses: actions/checkout@$LOCKED # v7.0.1
+EOF
+)
+expect "an unreadable lock is UNEXAMINED, not a dangling edge" "$sha" 1 \
+  "VERDICT: UNEXAMINED — close-lock.sh --check exited 2" \
+  "actions-lock: malformed YAML, multiple documents or duplicate mapping keys" \
+  -- "VERDICT: POISON"
+
+# With both causes at once, each UNEXAMINED verdict is reported.
+sha=$(printf '{\n  jobs: {\n' | commit_ci)
+expect "an unparseable workflow and an unreadable lock are both reported" "$sha" 1 \
+  "yq could not parse" "close-lock.sh --check exited 2" -- "VERDICT: POISON"
 
 echo
 echo "lock-selfcheck: $pass passed, $fail failed"
