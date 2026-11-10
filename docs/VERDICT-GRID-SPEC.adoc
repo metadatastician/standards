@@ -134,7 +134,15 @@ within the grid's own delta/whole-repo scope. A separate baseline-filtered,
 pre-scope SARIF snapshot supplies excluded findings for reporting only; it is
 not uploaded to code scanning and cannot add to the graded set. A result with
 multiple locations is excluded only if all locations are excluded; unknown
-locations remain gradable. High and
+locations remain gradable.
+
+A real fork may also declare *inherited-language paths*
+(`--inherited-language-paths FILE`, one exact path per line): files it
+received from its upstream in a language the estate bans. The
+`cicd_rules/banned_language_file` finding on a declared path is excluded in the
+same way: reported, never graded. Every other rule on that file still grades,
+and a path that only starts with a declared path does not match. The identity
+line states how many paths are declared; it does not list them. High and
 critical share SARIF's `error` level, so the projection carries the original severity separately.
 For pinned `code_safety` findings, the CWE is also recovered only from the
 CLI's exact generated `(... occurrences, CWE-..., line ...)` suffix when no
@@ -220,8 +228,9 @@ an optional prior-grid artifact to the Hypatia reusable. The reusable
 does *not* require PR-read permission, preserving compatibility for
 callers without comparison support. Failed or absent prior evidence is
 reported, never treated as clean. The profile is a
-SHA-256 over the renderer, enrolment manifest, pinned tool commits, scope mode
-and canonically ordered exclusion prefixes; a changed tool or scope yields
+SHA-256 over the renderer, enrolment manifest, pinned tool commits, scope mode,
+canonically ordered exclusion prefixes and inherited-language paths; a changed
+tool or scope yields
 `— no comparable baseline (scanner or policy profile changed)`, never an
 apparent improvement. The comparison now explains which incompatibility
 occurred (no prior PR grid, changed schema, scope or profile, different PR,

@@ -175,7 +175,8 @@ Each row therefore carries three disjoint counts, and only the first grades:
 | no — reported, so the number cannot be mistaken for zero
 
 | `counts_excluded`
-| findings under a declared exclusion prefix (`9-archive/` by default)
+| findings under a declared exclusion prefix (`9-archive/` by default), and
+  banned-language findings on a real fork's declared inherited-language paths
 | no — reported, so exclusion is visible rather than silent
 |===
 

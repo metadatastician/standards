@@ -32,6 +32,28 @@ on:
         type: string
         required: false
         default: "9-archive/"
+      inherited-language-paths:
+        description: >-
+          For a real fork only. Path, in the caller's repository, of a list of
+          exact file paths received from the fork's upstream (one per line,
+          `#` comments allowed). The `cicd_rules/banned_language_file` finding
+          on each listed path is reported but NEVER graded or gated, and its
+          SARIF is not uploaded. Every other rule on those files is unchanged.
+          Only TypeScript, JavaScript and ReScript paths are accepted; an
+          unusable list fails the job. Empty (the default) excuses nothing.
+        type: string
+        required: false
+        default: ""
+      sarif-upload-on-pull-request:
+        description: >-
+          Upload the SARIF to code scanning on pull_request events. Default
+          true. Set false where this lane is advisory on pull requests: an
+          upload there creates a separate "Code scanning results" check that
+          can block a merge while this job passes. Push and manual runs still
+          upload. The findings artifact and the verdict grid are unchanged.
+        type: boolean
+        required: false
+        default: true
       report-backs-artifact:
         description: >-
           Name of an artifact, uploaded earlier in the same run, holding the
@@ -741,6 +763,38 @@ jobs:
           IFS=',' read -r -a _prefixes <<< "$SCOPE_EXCLUDES"
           bash "$FILTER" hypatia.sarif hypatia.sarif "${_prefixes[@]}"
 
+      # ── Inherited-language paths of a real fork ────────────────────────────
+      # Runs AFTER the scope filter, so hypatia.pre-scope.sarif still holds the
+      # findings and the grid can report them as excluded. Takes ONE rule off
+      # the EXACT paths the caller declares, in both gating projections, so
+      # the SARIF gate and the baseline gate cannot disagree.
+      #
+      # The LIST fails closed: a list that was asked for and is unusable is a
+      # configuration error. The FILTERS fail open, like the two above.
+      - name: Apply the inherited-language paths
+        id: inherited_language
+        if: ${{ inputs.inherited-language-paths != '' }}
+        env:
+          INHERITED_LANGUAGE_PATHS: ${{ inputs.inherited-language-paths }}
+        run: |
+          set -uo pipefail
+          helper=.standards-checkout/scripts/inherited-language.sh
+          if [ ! -f "$helper" ]; then
+            # Never run a caller-local or older helper against the gating
+            # projections. More visible findings are safer than suppression.
+            echo "::warning::revision-matched inherited-language helper unavailable; nothing is excused"
+            exit 0
+          fi
+          list="$RUNNER_TEMP/inherited-language-paths.txt"
+          if ! bash "$helper" paths "$INHERITED_LANGUAGE_PATHS" > "$list"; then
+            echo "::error::the inherited-language path list '$INHERITED_LANGUAGE_PATHS' is unusable; see the message above"
+            exit 2
+          fi
+          echo "  $(wc -l < "$list") inherited-language path(s) declared in $INHERITED_LANGUAGE_PATHS"
+          bash "$helper" sarif hypatia.sarif hypatia.sarif "$list"
+          bash "$helper" findings hypatia-findings.gating.json hypatia-findings.gating.json "$list"
+          echo "list=$list" >> "$GITHUB_OUTPUT"
+
       - name: Upload SARIF to code scanning
         # NOTE: this does NOT make under-permissioned callers "skip gracefully".
         # This workflow declares `security-events: write` at the top, so a
@@ -749,6 +803,10 @@ jobs:
         # that was never created. Callers MUST grant `security-events: write`.
         # This flag only tolerates a genuine upload failure (e.g. Advanced
         # Security disabled on a private repo) once the job is actually running.
+        #
+        # A caller whose lane is advisory on pull requests sets
+        # sarif-upload-on-pull-request to false; push and manual runs upload.
+        if: ${{ inputs.sarif-upload-on-pull-request || github.event_name != 'pull_request' }}
         continue-on-error: true
         uses: github/codeql-action/upload-sarif@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4.38.0 (4.38.1 blocked estate-wide; nexia-list#100)
         with:
@@ -901,6 +959,7 @@ jobs:
           SCOPE_MODE: ${{ steps.scope.outputs.mode }}
           SCOPE_EXCLUDES: ${{ inputs.scope-excludes }}
           BASELINE_FILTERED: ${{ steps.filter_baseline.outputs.filtered }}
+          INHERITED_LANGUAGE_LIST: ${{ steps.inherited_language.outputs.list }}
         run: |
           set -uo pipefail
           renderer=.standards-grid/scripts/verdict-grid.sh
@@ -936,8 +995,12 @@ jobs:
           # Prefixes from the caller; empty means grade everything. When scope
           # excludes are used, report from the pre-scope projection as well;
           # it contributes excluded counts only, never gate/grade findings.
-          if [ -n "${SCOPE_EXCLUDES:-}" ]; then
+          if [ -n "${SCOPE_EXCLUDES:-}" ] || [ -n "${INHERITED_LANGUAGE_LIST:-}" ]; then
             scope_args+=(--hypatia-sarif-unscoped hypatia.pre-scope.sarif)
+          fi
+          # The same normalised list the gating filters used.
+          if [ -n "${INHERITED_LANGUAGE_LIST:-}" ]; then
+            scope_args+=(--inherited-language-paths "$INHERITED_LANGUAGE_LIST")
           fi
           IFS=',' read -r -a _ex <<< "${SCOPE_EXCLUDES:-}"
           for _p in "${_ex[@]}"; do
