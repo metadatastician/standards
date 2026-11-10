@@ -10,7 +10,7 @@
 generator were retired on 2026-10-09 (link:REGISTRY.adoc[REGISTRY.adoc]).
 What follows is their last output, kept as a snapshot: nothing regenerates
 it, so it does not follow later changes to the tree. The tree it describes is
-https://github.com/hyperpolymath/standards/tree/6d19ce0ebae047027dcfd594c7810bf35c642faa[`6d19ce0e`].
+https://github.com/metadatastician/standards/tree/6d19ce0ebae047027dcfd594c7810bf35c642faa[`6d19ce0e`].
 ====
 
 * *Phase:* active | *Maturity:* experimental | *STATE last-updated:* 2026-09-07T00:00:00Z
