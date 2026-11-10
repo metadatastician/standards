@@ -647,6 +647,17 @@ First existing path wins. A reference shell implementation lives at
 `hp_resolve_desktop_tools` and `hp_resolve_standard`). Downstream launchers
 SHOULD use the reference impl rather than re-implementing the ladder.
 
+`launcher-standard_praxis.deed` itself is located the same way, via
+`(resolution (standard-search ...))`, when neither `--standard <path>` nor
+`$LAUNCH_SCAFFOLDER_STANDARD` is set:
+
+1. `$HP_ESTATE_ROOT/standards/launcher/launcher-standard_praxis.deed`
+2. `$XDG_DATA_HOME/metadatastician/standards/launcher/launcher-standard_praxis.deed` — XDG default
+3. `$XDG_DATA_HOME/hyperpolymath/standards/launcher/launcher-standard_praxis.deed` — former owner; installs from before the repository moved
+4. `/var/mnt/eclipse/repos/standards/launcher/launcher-standard_praxis.deed`
+5. `$HOME/developer/repos/standards/launcher/launcher-standard_praxis.deed`
+6. `$HOME/dev/repos/standards/launcher/launcher-standard_praxis.deed`
+
 `launch-scaffolder` copies the same script into its baked-in standards
 so regenerated launchers stay in sync. The legacy single hard-coded path
 (`/var/mnt/eclipse/repos/.desktop-tools/keepopen.sh`) remains in the
