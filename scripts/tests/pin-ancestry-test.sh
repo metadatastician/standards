@@ -16,7 +16,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 export STANDARDS_REACHABILITY_API_BASE="file://$TEST_DIR"
 export GITHUB_TOKEN=test-token
-REPO=hyperpolymath/standards
+REPO=metadatastician/standards
 mkdir -p "$TEST_DIR/repos/$REPO/compare"
 
 pass=0 fail=0

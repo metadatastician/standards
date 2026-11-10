@@ -16,7 +16,7 @@ campaign. The CI gate is now `scripts/check-uuid-v8.sh`.
 
 Status: *Superseded by ADR-008 (`ESTATE-UUID-V8`), 2026-10-06; enforced in dual-accept until P4*  
 Applies to: the complete live `hyperpolymath` and `metadatastician` estates  
-Authority: `hyperpolymath/standards`
+Authority: `metadatastician/standards`
 
 == Decision
 
@@ -157,7 +157,7 @@ v7 before it is first registered, because the registry fixes it from then on.
 
 The specification is RFC 9562, *Universally Unique IDentifiers (UUIDs)*,
 Section 5.7 (UUID Version 7). The standard is owned by the maintainers of
-`hyperpolymath/standards`; changes require an explicit revision and a migration
+`metadatastician/standards`; changes require an explicit revision and a migration
 impact assessment for both estates.
 
 Revision history:

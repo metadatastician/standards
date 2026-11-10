@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 // SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
-= AFFIRMATION — hyperpolymath/standards
+= AFFIRMATION — metadatastician/standards
 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 :toc: macro
 :toclevels: 2
 :icons: font
-:std-docs: https://github.com/hyperpolymath/standards/blob/main/docs
+:std-docs: https://github.com/metadatastician/standards/blob/main/docs
 
 _What we affirm was true and checkable at a stamped moment._
 
@@ -143,7 +143,7 @@ failing at the anchor, or under coordinated realignment.
 === Ruled, not yet enforced
 
 * *Ruling R-B — `.a2ml` or `.deed`: RULED, not enforced.* It is ruled on
-  `hyperpolymath/standards#787`: A2ML is retired (D99, D269c), deed is the
+  `metadatastician/standards#787`: A2ML is retired (D99, D269c), deed is the
   destination (D312: descriptiles are clauses of `<repo>_chora.deed`; D313:
   conversion through kyX), and D308 makes `deed.abnf` authoritative over the
   deed README (comment `6023959688`). D308 itself does not say "A2ML is
@@ -245,7 +245,7 @@ The previous file is archived byte-identically at
 link:affirmations/AFFIRMATION-2026-10-07.adoc[affirmations/AFFIRMATION-2026-10-07.adoc].
 
 * *It did not land anchored.* `bash scripts/verify-affirmation-anchor.sh
-  hyperpolymath/standards 1203`, run at `2026-10-09T08:07:49Z`, printed
+  metadatastician/standards 1203`, run at `2026-10-09T08:07:49Z`, printed
   `DRAFT` and exited `1`. Three conditions failed: the signed head
   `f777d7c4` has parent `58db3356` (a README badge commit), not the anchor
   `85aa1934`; the squash `e35431d5` has first parent `a709d3a6`, because
@@ -281,7 +281,7 @@ link:affirmations/AFFIRMATION-2026-10-07.adoc[affirmations/AFFIRMATION-2026-10-0
 | Field | Value
 
 | Repo
-| `hyperpolymath/standards`
+| `metadatastician/standards`
 
 | Branch
 | `main`
@@ -290,7 +290,7 @@ link:affirmations/AFFIRMATION-2026-10-07.adoc[affirmations/AFFIRMATION-2026-10-0
 | `6d19ce0ebae047027dcfd594c7810bf35c642faa`
 
 | Permalink
-| https://github.com/hyperpolymath/standards/tree/6d19ce0ebae047027dcfd594c7810bf35c642faa
+| https://github.com/metadatastician/standards/tree/6d19ce0ebae047027dcfd594c7810bf35c642faa
 
 | Verified (UTC)
 | `2026-10-09T08:05:13Z` to `2026-10-09T08:23:53Z`. Battery
@@ -327,7 +327,7 @@ draft.
 * The commit on `main` that adds it is the owner's signed commit, and its
   parent is the anchor above (a fast-forward landing).
 * It lands by squash, and `bash scripts/verify-affirmation-anchor.sh
-  hyperpolymath/standards <PR> 6d19ce0ebae047027dcfd594c7810bf35c642faa`
+  metadatastician/standards <PR> 6d19ce0ebae047027dcfd594c7810bf35c642faa`
   exits `0`: all four conditions of
   link:AFFIRMATION-STANDARD.adoc#linear-history[AFFIRMATION-STANDARD §"Landing
   in a linear-history repository"] hold.
@@ -361,7 +361,7 @@ grep -n -e '^---$' -e schema_version coordination.k9        # 12, 15
 for c in $(git log --format=%H -- LICENSE); do
   git show -s --format=%B "$c" | grep -qi 'co-authored-by: claude' && echo "$c"
 done | wc -l                                                # 8
-bash scripts/verify-affirmation-anchor.sh hyperpolymath/standards 1203  # 1
+bash scripts/verify-affirmation-anchor.sh metadatastician/standards 1203  # 1
 git show e35431d5:docs/AFFIRMATION.adoc | sha256sum   # fceedc98…, the archive
 ----
 
