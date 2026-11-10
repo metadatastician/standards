@@ -56,7 +56,7 @@ that output drifted, kept a retired format alive. They went together.
 | Hypatia rule HYP-S009: flagged product/build manifests below a local spec
   home, as listed in the registry. Without the registry it had no input and
   only printed a warning. The carve-out debts it baselined stay tracked in
-  https://github.com/hyperpolymath/standards/issues/687[#687].
+  https://github.com/metadatastician/standards/issues/687[#687].
 
 | Justfile `registry`, `topology`, `registry-check`, `scorecards*`
 | Local entry points. `just validate` no longer depends on `registry-check`.
@@ -70,13 +70,13 @@ that output drifted, kept a retired format alive. They went together.
 == Where the old content is
 
 The last tree that carried the registry is frozen at
-https://github.com/hyperpolymath/standards/tree/6d19ce0ebae047027dcfd594c7810bf35c642faa[`6d19ce0e`]:
+https://github.com/metadatastician/standards/tree/6d19ce0ebae047027dcfd594c7810bf35c642faa[`6d19ce0e`]:
 
-* https://github.com/hyperpolymath/standards/blob/6d19ce0ebae047027dcfd594c7810bf35c642faa/.machine_readable/REGISTRY.a2ml[the registry itself];
-* https://github.com/hyperpolymath/standards/blob/6d19ce0ebae047027dcfd594c7810bf35c642faa/scripts/build-registry.sh[its generator],
+* https://github.com/metadatastician/standards/blob/6d19ce0ebae047027dcfd594c7810bf35c642faa/.machine_readable/REGISTRY.a2ml[the registry itself];
+* https://github.com/metadatastician/standards/blob/6d19ce0ebae047027dcfd594c7810bf35c642faa/scripts/build-registry.sh[its generator],
   including the `EXTERNAL_SPECS` table of external pointers (owning repo,
   canonical URL, version pin);
-* https://github.com/hyperpolymath/standards/blob/6d19ce0ebae047027dcfd594c7810bf35c642faa/REGISTRY.adoc[the previous version of this page],
+* https://github.com/metadatastician/standards/blob/6d19ce0ebae047027dcfd594c7810bf35c642faa/REGISTRY.adoc[the previous version of this page],
   which documents the fields and the drift automation.
 
 == What stays, frozen
@@ -88,7 +88,7 @@ https://github.com/hyperpolymath/standards/tree/6d19ce0ebae047027dcfd594c7810bf3
 * The per-spec scorecards are archived, frozen, at
   link:.machine_readable/archive/scorecards-v1/README.adoc[`.machine_readable/archive/scorecards-v1/`]
   (ruling R5 on
-  https://github.com/hyperpolymath/standards/issues/837[#837], option B,
+  https://github.com/metadatastician/standards/issues/837[#837], option B,
   2026-10-09; the mapping is in
   link:1-formats/deed/mappings/scorecard-corpus-decision.adoc[`scorecard-corpus-decision.adoc`]).
 

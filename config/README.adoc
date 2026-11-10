@@ -99,7 +99,7 @@ the detail column — rulesets are additive, so the org ruleset still enforces
 beside the repo-level one.
 
 *2. Multiple repo-level rulesets on the same target are the EXPECTED steady state when distinguished by shape.*
-Owner decision O6 (`hyperpolymath/standards#787` row D17) prescribes a baseline
+Owner decision O6 (`metadatastician/standards#787` row D17) prescribes a baseline
 ruleset carrying the review and signature rules plus a *second* checks-only
 ruleset whose short bypass list is the entire point, and owner rulings D94–D96
 add standalone zero-bypass floor rulesets (`branch-floor.json`, `tag-floor.json`).
@@ -346,13 +346,13 @@ at tag-creation time, which is why no workflow in the estate could create a
 tag. Creation is reserved to admins and to OikosBot (2538504) in `always`
 mode, so release workflows create tags *through the App*.
 
-That App credential does not exist yet. `hyperpolymath/standards` holds no
+That App credential does not exist yet. `metadatastician/standards` holds no
 `APP_ID` variable and no `APP_PRIVATE_KEY` secret (checked 2026-09-02, and
 again on 2026-10-19 when the last run of the since-removed `signed-push-smoke.yml`
 failed for that reason). Until the owner plants them (decision O11), the periodic
 `lock-refresh` and App-created tags cannot run; tags stay admin-only.
 
-There are *two* App slots on `hyperpolymath/standards`, one per duty (owner
+There are *two* App slots on `metadatastician/standards`, one per duty (owner
 ruling 2026-10-08), and neither is OikosBot:
 
 * `vars.APP_ID` + `secrets.APP_PRIVATE_KEY` — the pin applier (contents,
