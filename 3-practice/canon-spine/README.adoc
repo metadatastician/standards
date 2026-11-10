@@ -7,7 +7,7 @@
 :revnumber: 0.1
 :status: proposal
 
-This directory is the entry point for one subject: *how `hyperpolymath/standards`
+This directory is the entry point for one subject: *how `metadatastician/standards`
 and `hyperpolymath/rsr-template-repo` work as a single system.* It is written to
 be found from any estate repository, by a human arriving cold, by an agent
 reading conventions, or by a bot deciding whether it may add a file.
@@ -22,7 +22,7 @@ page is the orientation you need before that document makes sense.
 | Role | Repository | Owns | Must never own
 
 | *Canon*
-| `hyperpolymath/standards`
+| `metadatastician/standards`
 | The law: criteria, policy documents, and the 22 reusable workflows that
   implement them. Every gate in the estate that says "this is not allowed" is
   written here.

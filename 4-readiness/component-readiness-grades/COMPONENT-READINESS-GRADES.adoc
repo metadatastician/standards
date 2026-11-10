@@ -727,7 +727,7 @@ above line. This outputs a shields.io badge in Markdown format:
 
 [source,markdown]
 ----
-[![CRG B](https://img.shields.io/badge/CRG-B-green?style=flat-square)](https://github.com/hyperpolymath/standards/tree/main/component-readiness-grades)
+[![CRG B](https://img.shields.io/badge/CRG-B-green?style=flat-square)](https://github.com/metadatastician/standards/tree/main/component-readiness-grades)
 ----
 
 Embed this badge in `+README.adoc+` using Asciidoc image syntax or in

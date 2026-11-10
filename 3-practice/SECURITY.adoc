@@ -27,7 +27,7 @@ GitHub’s Security Advisory feature:
 
 [arabic]
 . Navigate to
-https://github.com/hyperpolymath/standards/security/advisories/new[Report
+https://github.com/metadatastician/standards/security/advisories/new[Report
 a Vulnerability]
 . Click *"`Report a vulnerability`"*
 . Complete the form with as much detail as possible
@@ -210,7 +210,7 @@ from your initial report.
 
 The following are within scope for security research:
 
-* This repository (`+hyperpolymath/standards+`) and all its code
+* This repository (`+metadatastician/standards+`) and all its code
 * Official releases and packages published from this repository
 * Documentation that could lead to security issues
 * Build and deployment configurations in this repository
@@ -342,7 +342,7 @@ To stay informed about security updates:
 * *Watch this repository*: Click "`Watch`" → "`Custom`" → Select
 "`Security alerts`"
 * *GitHub Security Advisories*: Published at
-https://github.com/hyperpolymath/standards/security/advisories[Security
+https://github.com/metadatastician/standards/security/advisories[Security
 Advisories]
 * *Release notes*: Security fixes noted in link:CHANGELOG.md[CHANGELOG]
 
@@ -393,7 +393,7 @@ When using Standards, we recommend:
 
 === Additional Resources
 
-* https://github.com/hyperpolymath/standards/security/advisories[Security
+* https://github.com/metadatastician/standards/security/advisories[Security
 Advisories]
 * link:CHANGELOG.md[Changelog]
 * link:CONTRIBUTING.md[Contributing Guidelines]
@@ -408,11 +408,11 @@ Advisories]
 |===
 |Purpose |Contact
 |*Security issues*
-|https://github.com/hyperpolymath/standards/security/advisories/new[Report
+|https://github.com/metadatastician/standards/security/advisories/new[Report
 via GitHub] or 6759885+hyperpolymath@users.noreply.github.com
 
 |*General questions*
-|https://github.com/hyperpolymath/standards/discussions[GitHub
+|https://github.com/metadatastician/standards/discussions[GitHub
 Discussions]
 
 |*Other enquiries* |See link:README.md[README] for contact information
