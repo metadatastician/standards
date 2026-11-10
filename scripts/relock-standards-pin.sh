@@ -6,8 +6,9 @@
 # commit its reusable-workflow pins were just re-pointed at.
 #
 # WHY: both pin bumpers (propagate-workflow-pins.sh and the scheduled
-# apply-workflow-pins-remote.sh) rewrite `uses: hyperpolymath/standards/...@SHA`
-# in workflow YAML and nothing else. In a repo with an actions.lock that leaves
+# apply-workflow-pins-remote.sh) rewrite `uses: metadatastician/standards/...@SHA`
+# (moving any pin still under the former owner, hyperpolymath) in workflow YAML
+# and nothing else. In a repo with an actions.lock that leaves
 # the lock keyed to the OLD standards commit: per-workflow entries name a ref no
 # `uses:` carries any more, and the standards dependency record still lists the
 # actions the OLD reusables used. check-lock-sync.sh fails, and GitHub refuses
@@ -17,8 +18,9 @@
 # `gh actions-lock` cannot repair it: v0.1.6 is blind to job-level `uses:`.
 #
 # WHAT IT WRITES, and nothing else:
-#   * per-workflow entries hyperpolymath/standards@OLD -> @TARGET;
-#   * the hyperpolymath/standards@TARGET dependency record, whose nested `uses:`
+#   * per-workflow entries <owner>/standards@OLD -> @TARGET;
+#   * the <owner>/standards@TARGET dependency record (the owner the workflows
+#     call), whose nested `uses:`
 #     is every action the called reusables use AT TARGET (owner/repo@ref);
 #   * records those actions need and the lock lacks, copied verbatim from
 #     standards' own actions.lock at TARGET;

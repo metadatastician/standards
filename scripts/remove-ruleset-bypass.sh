@@ -48,7 +48,7 @@
 
 set -uo pipefail
 
-REPO="${REPO:-hyperpolymath/standards}"
+REPO="${REPO:-metadatastician/standards}"
 ONLY="${ONLY:-}"          # space-separated ruleset ids; empty = every active branch ruleset
 GH="${GH:-gh}"            # injectable for scripts/tests/remove-ruleset-bypass-test.sh
 

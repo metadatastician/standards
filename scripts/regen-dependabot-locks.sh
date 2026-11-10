@@ -122,9 +122,9 @@ regen_lock() {
 
 # Commit messages: a Dependabot/applier PR repair, and a default-branch repair.
 BUMP_HEADLINE="chore(deps): regenerate actions.lock for this bump"
-BUMP_BODY="Dependabot updated workflow refs without the lockfile. Regenerated with the estate repair order (scripts/regen-dependabot-locks.sh in hyperpolymath/standards) and verified with update-actions-lock.sh --verify-local."
+BUMP_BODY="Dependabot updated workflow refs without the lockfile. Regenerated with the estate repair order (scripts/regen-dependabot-locks.sh in metadatastician/standards) and verified with update-actions-lock.sh --verify-local."
 REPAIR_HEADLINE="fix(ci): regenerate the stale actions.lock"
-REPAIR_BODY="The default branch's actions.lock no longer matches its workflows' uses: refs, so the lock gate is red and GitHub refuses to start the workflows whose refs drifted. Regenerated with the estate repair order (scripts/regen-dependabot-locks.sh in hyperpolymath/standards, REGEN_MAIN=1) and verified with update-actions-lock.sh --verify-local and check-lock-sync.sh. Only actions.lock changes."
+REPAIR_BODY="The default branch's actions.lock no longer matches its workflows' uses: refs, so the lock gate is red and GitHub refuses to start the workflows whose refs drifted. Regenerated with the estate repair order (scripts/regen-dependabot-locks.sh in metadatastician/standards, REGEN_MAIN=1) and verified with update-actions-lock.sh --verify-local and check-lock-sync.sh. Only actions.lock changes."
 
 # Commit the checkout's actions.lock onto branch $2 of repo $1, only if the
 # branch head is still $3, with headline $5 and body $6 (default: the
