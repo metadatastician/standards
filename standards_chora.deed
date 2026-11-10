@@ -15,16 +15,16 @@
 (repo-deed
   :schema-version "1.0.0"
   :canonical-name "standards"
-  :repo-uuid #u8"gv-clade-index:github.com/hyperpolymath/standards"
+  :repo-uuid #u8"gv-clade-index:github.com/metadatastician/standards"
   :beholding-chora #u5"estate/chora"
-  (identity :owner "hyperpolymath" :primary-forge github :prefixed-name "gv-standards")
+  (identity :owner "metadatastician" :primary-forge github :prefixed-name "gv-standards")
   (clade
     :primary gv
     :secondary ()
     :assigned "2026-03-16"
     :rationale "")
   (forges
-    :github "hyperpolymath/standards"
+    :github "metadatastician/standards"
     :gitlab "hyperpolymath/standards"
     :bitbucket "hyperpolymath/standards")
   (lineage

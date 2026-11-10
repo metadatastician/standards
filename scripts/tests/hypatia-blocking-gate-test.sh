@@ -13,7 +13,10 @@ if command -v ruby >/dev/null 2>&1; then
     scan_runner = steps.find { |step| step["name"] == "Run Hypatia scan" }
     validator = steps.find { |step| step["id"] == "scan" }
     gate = steps.find { |step| step["id"] == "blocking-findings" }
-    abort "blocking gate is not opt-in" unless gate.fetch("if") == "inputs.block-on-high"
+    abort "blocking gate is not opt-in" unless gate.fetch("if") == "inputs.block-on-high || inputs.block-on-critical"
+    panic_gate = steps.find { |step| step["id"] == "blocking-panic" } or abort("missing step: blocking-panic")
+    abort "panic-attack gate is not opt-in" unless panic_gate.fetch("if") == "inputs.block-on-critical"
+    abort "panic-attack gate must follow the scan" unless steps.index(panic_gate) > steps.index { |step| step["id"] == "panic-attack" }
     ["Relativize finding paths", "Filter SARIF through the baseline before upload", "Upload SARIF to code scanning", "Upload findings artifacts"].each do |name|
       s = steps.find { |step| step["name"] == name } or abort("missing step: #{name}")
       abort("#{name} must not use if: always() (standards#1050)") if s["if"].to_s.include?("always()")
@@ -25,6 +28,7 @@ if command -v ruby >/dev/null 2>&1; then
     File.write(ARGV[1] + "/scan.sh", scan_runner.fetch("run"))
     File.write(ARGV[1] + "/validate.sh", validator.fetch("run"))
     File.write(ARGV[1] + "/gate.sh", gate.fetch("run"))
+    File.write(ARGV[1] + "/panic-gate.sh", panic_gate.fetch("run"))
     File.write(ARGV[1] + "/pa-install.sh", pa_install.fetch("run"))
     File.write(ARGV[1] + "/pa-run.sh", pa_run.fetch("run"))
   ' "$repo/.github/workflows/hypatia-scan-reusable.yml" "$tmp"
@@ -53,6 +57,12 @@ else
       if (step_id == "scan") {
         printf "%s", run_body > (out_dir "/validate.sh")
         close(out_dir "/validate.sh")
+      }
+      if (step_id == "blocking-panic") {
+        panic_gate_if = step_if
+        panic_gate_idx = step_n
+        printf "%s", run_body > (out_dir "/panic-gate.sh")
+        close(out_dir "/panic-gate.sh")
       }
       if (step_id == "blocking-findings") {
         gate_if = step_if
@@ -94,8 +104,16 @@ else
     }
     END {
       flush_step()
-      if (gate_if != "inputs.block-on-high") {
+      if (gate_if != "inputs.block-on-high || inputs.block-on-critical") {
         print "blocking gate is not opt-in" > "/dev/stderr"
+        exit 1
+      }
+      if (panic_gate_if != "inputs.block-on-critical") {
+        print "panic-attack gate is missing or not opt-in" > "/dev/stderr"
+        exit 1
+      }
+      if (panic_gate_idx < pa_run_idx) {
+        print "panic-attack gate must follow the scan" > "/dev/stderr"
         exit 1
       }
       if (!pa_install_seen || !pa_run_idx || !fetch_filter_idx) {
@@ -204,6 +222,46 @@ printf '%s' '{}' > .hypatia-baseline.json
 sarif_check 'malformed baseline refuses even without findings' 2 "$clean"
 rm -f .hypatia-baseline.json hypatia-findings.gating.json
 unset HYPATIA_BASELINE_FILTERED
+
+# block-on-critical: the same step and SARIF, a critical-only threshold. The
+# projected hypatia.severity separates critical from high; an error-level
+# result without it blocks, since an unknown severity must not slip through.
+result_doc() { # result_doc LEVEL [SEVERITY]
+  local props=""
+  [[ -z "${2:-}" ]] || props=",\"properties\":{\"hypatia.severity\":\"$2\"}"
+  printf '{"version":"2.1.0","runs":[{"tool":{"driver":{"name":"Hypatia"}},"results":[{"ruleId":"hypatia/control/planted","level":"%s"%s}]}]}' "$1" "$props"
+}
+export BLOCK_THRESHOLD=critical
+sarif_check 'critical threshold: a clean scan passes' 0 "$clean"
+sarif_check 'critical threshold: a high finding passes' 0 "$(result_doc error high)"
+sarif_check 'critical threshold: a medium finding passes' 0 "$(result_doc warning medium)"
+sarif_check 'critical threshold: a critical finding blocks' 1 "$(result_doc error critical)"
+sarif_check 'critical threshold: an error without a projected severity blocks' 1 "$(result_doc error)"
+sarif_check 'critical threshold: missing SARIF still refuses' 2 MISSING
+export BLOCK_THRESHOLD=high
+sarif_check 'high threshold: a projected high finding blocks' 1 "$(result_doc error high)"
+export BLOCK_THRESHOLD=medium
+sarif_check 'an unknown threshold refuses' 2 "$clean"
+unset BLOCK_THRESHOLD
+
+# The panic-attack gate under block-on-critical: a scan that did not run
+# cannot pass, and only critical findings block.
+panic_gate_check() { # panic_gate_check NAME EXPECTED STATUS CRITICAL
+  local actual
+  if env PA_STATUS="$3" PA_CRITICAL="$4" bash panic-gate.sh >result.log 2>&1; then actual=0; else actual=$?; fi
+  if [[ "$actual" -ne "$2" ]]; then
+    printf 'FAIL: %s: expected %s, got %s\n' "$1" "$2" "$actual"
+    cat result.log
+    exit 1
+  fi
+  printf 'PASS: %s\n' "$1"
+}
+panic_gate_check 'panic gate: a clean scan passes' 0 ran 0
+panic_gate_check 'panic gate: a critical finding blocks' 1 ran 2
+panic_gate_check 'panic gate: not_run cannot pass' 2 not_run ''
+panic_gate_check 'panic gate: error cannot pass' 2 error ''
+panic_gate_check 'panic gate: a missing status cannot pass' 2 '' ''
+panic_gate_check 'panic gate: a run without a count refuses' 2 ran ''
 
 # CLI adapter contract controls (standards#1054): empty, warn, high, and crash fixtures
 mkdir -p "$tmp/home/hypatia"

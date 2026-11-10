@@ -235,10 +235,14 @@ for SHA in "$@"; do
   n_unkeyed_wf=$(cut -f1 "$TMP/unkeyed_wf" 2>/dev/null | sort -u | wc -l)
   # Closure (standards#963): close-lock.sh --check exits 1 and lists, two-space
   # indented, every ref the lock names without a top-level record of its own.
+  # Any other non-zero exit (2: no lock, an unparseable lock, or yq/jq missing)
+  # means closure was not examined. That is UNEXAMINED, never a dangling edge.
   n_dangling=0
-  if ! bash "$SCRIPT_DIR/close-lock.sh" --check "$TMP/lock" > "$TMP/closure" 2>&1; then
+  closure_rc=0
+  bash "$SCRIPT_DIR/close-lock.sh" --check "$TMP/lock" > "$TMP/closure" 2>&1 || closure_rc=$?
+  if [[ "$closure_rc" -eq 1 ]]; then
     n_dangling=$(/usr/bin/grep -c '^  [^ ][^ ]*@[^ ]*$' "$TMP/closure" || true)
-    # A failure that names no ref still fails: an unread lock is not a closed one.
+    # A dangling verdict that names no ref still fails.
     [[ "$n_dangling" -gt 0 ]] || n_dangling=1
   fi
 
@@ -250,9 +254,19 @@ for SHA in "$@"; do
     cut -f1 "$TMP/unkeyed_wf" | sort -u | sed 's/^/          /'
   fi
 
+  # The two UNEXAMINED causes are independent, so each is reported on its own.
+  unexamined=0
   if [ -s "$TMP/unparsed" ]; then
     echo "  VERDICT: UNEXAMINED — yq could not parse $(sort -u "$TMP/unparsed" | wc -l) workflow(s); their refs were not checked:"
     sort -u "$TMP/unparsed" | sed 's/^/             /'
+    unexamined=1
+  fi
+  if [[ "$closure_rc" -ne 0 && "$closure_rc" -ne 1 ]]; then
+    echo "  VERDICT: UNEXAMINED — close-lock.sh --check exited ${closure_rc}; this SHA's lock closure was not checked:"
+    sed 's/^/             /' "$TMP/closure"
+    unexamined=1
+  fi
+  if [ "$unexamined" -eq 1 ]; then
     overall_rc=1
   elif [[ "$n_missing" -eq 0 && "$n_self_sha" -eq 0 && "$n_dangling" -eq 0 ]]; then
     echo "  VERDICT: SELF-CONSISTENT — every action ref used is keyed in this SHA's own lock, and the lock is closed."

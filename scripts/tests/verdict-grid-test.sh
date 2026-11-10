@@ -322,6 +322,54 @@ check "changed excluded prefixes invalidate the profile" 3 "$(grep -c 'no compar
 check "profile mismatch is named" 3 "$(grep -c 'no comparable baseline (scanner or policy profile changed)' "$WORK/s10/report.md")"
 
 echo
+# 8b. Inherited-language paths: one rule, exact paths, reported and never graded.
+#     The quiet failures are a list that excuses another rule on the same file,
+#     a path that only starts with a listed path, and a finding that vanishes
+#     from the report instead of moving to the excluded count.
+cat > "$WORK/hyp-inherited.json" <<'JSON'
+[
+ {"severity":"critical","rule_module":"cicd_rules","type":"banned_language_file","file":"frontend/a.ts","reason":"upstream file"},
+ {"severity":"critical","rule_module":"cicd_rules","type":"banned_language_file","file":"frontend/a.ts.bak","reason":"prefix only"},
+ {"severity":"critical","rule_module":"cicd_rules","type":"banned_language_file","file":"frontend/fork-only.ts","reason":"fork file"},
+ {"severity":"high","rule_module":"security_errors","type":"secret_detected","file":"frontend/a.ts","reason":"another rule"}
+]
+JSON
+printf '# received from upstream\n./frontend/a.ts\n' > "$WORK/inherited-raw.txt"
+bash "$SCRIPT_DIR/../inherited-language.sh" paths "$WORK/inherited-raw.txt" > "$WORK/inherited.txt"
+render "$WORK/i-control" --hypatia "$WORK/hyp-inherited.json" --panic "$pan_clean" --pons "$pons_clean"
+check "without a list all three banned-language findings grade" 3 "$(jq '.reporters[] | select(.id=="hypatia") | .counts.critical' "$WORK/i-control/report.json")"
+bash "$SCRIPT_DIR/../inherited-language.sh" sarif "$WORK/i-control.fixture.sarif" "$WORK/i-gate.sarif" "$WORK/inherited.txt" >/dev/null
+render "$WORK/i1" --hypatia "$WORK/hyp-inherited.json" --hypatia-sarif "$WORK/i-gate.sarif" \
+  --hypatia-sarif-unscoped "$WORK/i-control.fixture.sarif" --panic "$pan_clean" --pons "$pons_clean" \
+  --inherited-language-paths "$WORK/inherited-raw.txt"
+check "the fork's own file and the prefix-only path still grade" 2 "$(jq '.reporters[] | select(.id=="hypatia") | .counts.critical' "$WORK/i1/report.json")"
+check "another rule on the inherited path still grades" 1 "$(jq '.reporters[] | select(.id=="hypatia") | .counts.high' "$WORK/i1/report.json")"
+check "the inherited finding is reported as excluded, not dropped" 1 "$(jq '.reporters[] | select(.id=="hypatia") | .counts_excluded.critical' "$WORK/i1/report.json")"
+check "the row is still purple for the fork's own file" purple "$(row "$WORK/i1" hypatia)"
+check "the report counts the declared paths" 1 "$(jq '.scope.inherited_language_paths' "$WORK/i1/report.json")"
+check "the identity line states the declared paths" yes \
+  "$(grep -q '1 inherited-language path(s) declared' "$WORK/i1/report.md" && echo yes)"
+check "the accordion names the inherited exclusion" yes \
+  "$(grep -q 'out-of-scope prefix or inherited-language path: reported, never graded' "$WORK/i1/report.md" && echo yes)"
+# If the gate filter failed open, the finding is in both inputs: it stays
+# excluded in the grid and is counted once.
+render "$WORK/i-open" --hypatia "$WORK/hyp-inherited.json" --hypatia-sarif "$WORK/i-control.fixture.sarif" \
+  --hypatia-sarif-unscoped "$WORK/i-control.fixture.sarif" --panic "$pan_clean" --pons "$pons_clean" \
+  --inherited-language-paths "$WORK/inherited-raw.txt"
+check "a fail-open gate filter does not duplicate the inherited finding" 1 "$(jq '.reporters[] | select(.id=="hypatia") | .counts_excluded.critical' "$WORK/i-open/report.json")"
+check "a fail-open gate filter does not grade the inherited finding" 2 "$(jq '.reporters[] | select(.id=="hypatia") | .counts.critical' "$WORK/i-open/report.json")"
+# A different list is a different grading universe: no revision comparison.
+printf 'frontend/a.ts\nfrontend/fork-only.ts\n' > "$WORK/inherited-wider.txt"
+render "$WORK/i-wider" --hypatia "$WORK/hyp-inherited.json" --hypatia-sarif "$WORK/i-gate.sarif" \
+  --hypatia-sarif-unscoped "$WORK/i-control.fixture.sarif" --panic "$pan_clean" --pons "$pons_clean" \
+  --inherited-language-paths "$WORK/inherited-wider.txt"
+check "a changed list changes the comparison profile" different \
+  "$([ "$(jq -r .profile "$WORK/i1/report.json")" != "$(jq -r .profile "$WORK/i-wider/report.json")" ] && echo different)"
+check "a list that was asked for and is missing is a usage error" 2 \
+  "$(bash "$GRID" render --out "$WORK/i-missing" --hypatia "$WORK/hyp-inherited.json" --hypatia-sarif "$WORK/i-gate.sarif" \
+      --panic "$pan_clean" --pons "$pons_clean" --inherited-language-paths "$WORK/not-there.txt" >/dev/null 2>&1; echo $?)"
+check "a grid without a list does not mention inherited paths" 0 "$(grep -c 'inherited-language' "$WORK/i-control/report.md" || true)"
+
 # 11. The grid grades the exact SARIF set the blocking gate sees, not the
 # raw JSON's historical alert echoes or findings removed by a baseline.
 cat > "$WORK/raw-alerts.json" <<'JSON'

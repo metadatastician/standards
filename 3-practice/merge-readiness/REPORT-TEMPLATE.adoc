@@ -1,0 +1,215 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+// SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+= PR Readiness Report Template v1.0
+:toc: left
+:toclevels: 2
+:revdate: 2026-11-09
+:contract: link:README.adoc[PR Readiness Evidence Contract v1.0]
+
+[IMPORTANT]
+====
+*A template, not a report.* Nothing in this repository produces this document
+today. The state words below are defined in {contract}; if a value here ever
+disagrees with that document, that document wins and this template is the defect.
+
+Every field marked `[verify]` must be filled from an observed reading at the
+named `head_sha`. A template delivered with `UNKNOWN` placeholders left in place
+is an honest report of an unrun check. A template delivered with those
+placeholders replaced by optimistic prose is not.
+====
+
+== 1. Identity
+
+The reading is worthless without its subject. Fill this before anything else.
+
+[cols="1,3",options="header"]
+|===
+| Field | Value
+| Repository | `<owner/repo>`
+| Pull request | `#<n>` — `<title>`
+| Base SHA | `<40-hex>`
+| Head SHA | `<40-hex>`
+| Reading taken at | `<RFC 3339 UTC>`
+| Checker | `<name> <version>`
+| Contract version | `prr-1`
+| Upstream policy in force | `<owner/repo's CONTRIBUTING or ruleset>`, or `none declared`
+| Overall state | `IN_PROGRESS` or `READY_FOR_APPROVAL` or `MERGED`
+| Blocking state, if any | `BLOCKED` or `FAIL` or `UNKNOWN` or `PENDING` or `none`
+| Requirement population | `<read> of <configured> read; <n> excluded`
+|===
+
+*Any new commit invalidates this reading.* If `head_sha` here is not the PR's
+current head, the whole report is history and must be labelled as such.
+
+== 2. Hard requirements
+
+Every applicable hard requirement, one row each. No omissions: a requirement the
+checker could not read appears here as `UNKNOWN` with its failure class.
+
+[cols="3,1,3,3",options="header"]
+|===
+| Requirement | State | Current-head evidence | Reason if not `PASS`
+| Required status contexts | `[verify]` | `<check name> → <run URL>` |
+| Required workflows (incl. zero-job start) | `[verify]` | `<workflow> → <run id>, <n> jobs` |
+| Build, test, lint (in scope) | `[verify]` | `<command> → exit <n>, <n> tests` |
+| Commit signatures | `[verify]` | `<sha> → Verified or Unsigned or Unknown key` |
+| Required approvals | `[verify]` | `<reviewer> → <review URL>` |
+| Review threads (substantive) | `[verify]` | `<n> open, <n> resolved with disposition` |
+| Base freshness | `[verify]` | `base <sha> is <n> commits behind target` |
+|===
+
+A `PASS` with no evidence cell filled is malformed. Delete the row or change the
+state to `UNKNOWN` with a reason.
+
+=== 2.1 Per-repository extensions
+
+Only the requirements *this* repository declares. Omit any row whose subject the
+repository does not use — omitting an inapplicable requirement is correct;
+declaring it `PASS` is not. The subjects below are *off by default* in
+{contract} §10 and appear only when the consumer names them.
+
+[cols="3,1,3,3",options="header"]
+|===
+| Requirement | State | Current-head evidence | Reason if not `PASS`
+| Domain / scientific correctness | `NOT_APPLICABLE` | predicate: `<why this repo does not declare it>` |
+| Theory proofs (per PROOF-POLICY §1) | `NOT_APPLICABLE` | predicate: `<no proof obligation for this change>` |
+| `proven-tests-and-benches` grade | `NOT_APPLICABLE` | predicate: `<not adopted>` |
+| K9 / DEED semantic conformance | `NOT_APPLICABLE` | predicate: `<not an estate conforming repo>` |
+| Hypatia findings / fleet report-back | `NOT_APPLICABLE` | predicate: `<not enrolled>` |
+|===
+
+Every `NOT_APPLICABLE` needs its predicate. An exclusion register entry is a
+promise change and belongs in the diff.
+
+== 3. Advisory findings
+
+*Separate block. Different word. Never coloured or worded like a pass.*
+
+[cols="3,1,3,3",options="header"]
+|===
+| Advisory check | Result | Evidence | Note
+| `<scan, linter, bot>` | `ADVISORY (passed)` or `ADVISORY (failed)` or `ADVISORY (did not run)` | `<URL>` |
+| `<posture or trend check>` | `ADVISORY (...)`. | `<URL>` |
+| `<non-substantive threads>` | `ADVISORY (...)`. | `<thread URLs>` |
+|===
+
+Rules that make this block honest:
+
+* a passed advisory is `ADVISORY (passed)`, never `PASS`;
+* an advisory that did not run is `ADVISORY (did not run)`, never "skipped, tick";
+* no count of passing advisories is evidence of assurance, and none may be used
+  to offset a hard `FAIL`, `BLOCKED`, `PENDING` or `UNKNOWN`.
+
+== 4. Blockers and unknowns, stated plainly
+
+If any of this section is non-empty, the overall state cannot be
+`READY_FOR_APPROVAL`. Do not soften these into a narrative of progress.
+
+[cols="1,3,3",options="header"]
+|===
+| State | Item | What would clear it
+| `BLOCKED` | `<requirement>` — `<subclass>` | `<the change outside the diff that is required>`
+| `UNKNOWN` | `<requirement>` — `<failure class>` | `<the read that must succeed>`
+| `PENDING` | `<requirement>` | `<the run that must conclude>`
+| `FAIL` | `<requirement>` — `<subclass>` | `<the fix>`
+|===
+
+`BLOCKED` and `UNKNOWN` are different and must not be merged into one line. A
+`BLOCKED` requirement needs someone else to act; an `UNKNOWN` one needs the
+checker to be able to look.
+
+== 5. What actually ran
+
+A factual list. Commands and URLs, not adjectives.
+
+[cols="2,3,2",options="header"]
+|===
+| What | Command or link | Result
+| `<test suite>` | `<command>` | `<n> passed, <n> failed`
+| `<negative / regression test>` | `<command>` | `<exit n>`
+| `<benchmark>` | `<command>` | `<before → after>`
+| `<proof / validator>` | `<tool> <version>, <statement>` | `<status>`
+| `<CI run>` | `<run URL>` | `<conclusion>, <n> jobs`
+|===
+
+A run that did not happen is absent from this table, not present with a hopeful
+result. "Not run" is information; a fabricated green is a defect.
+
+== 6. Human decisions that remain
+
+Everything the checker cannot decide, and nothing else. Each item names the
+person who must decide it.
+
+[cols="3,3",options="header"]
+|===
+| Decision | Owner
+| `<e.g. accept a known limitation>` | `<maintainer>`
+| `<e.g. approve the change>` | `<reviewer>`
+| `<e.g. merge>` | `<owner / maintainer>`
+|===
+
+Readiness never implies authority to merge. `READY_FOR_APPROVAL` is a statement
+that nothing *evidential* is missing; it is not an approval and not a merge.
+
+== 7. Post-merge
+
+`MERGED` is only assertable from observation of the target branch.
+
+[cols="1,3",options="header"]
+|===
+| Field | Value
+| Target-branch SHA | `<40-hex>`, or `not observed`
+| Post-merge CI | `<run URL and conclusion>`, or `not observed`
+|===
+
+A merge button press is not this section. If the target SHA was not read, the
+state is `IN_PROGRESS`, not `MERGED`.
+
+== 8. Worked example of a refused readiness
+
+This is what a *correct* refusal looks like. It is included because the common
+failure is a report that reads plausibly while being wrong, and a plausible
+wrong report is harder to spot than an obviously red one.
+
+....
+Overall state:  IN_PROGRESS
+Blocking:       BLOCKED (1), FAIL (1)
+
+Hard requirement        State    Evidence / reason
+required contexts       BLOCKED  `scan / Hypatia Neurosymbolic Analysis` is required but
+                                 its only publisher has no pull_request trigger
+                                 (PR-UNPRODUCIBLE). Nothing on this PR can satisfy it.
+build-and-test          FAIL     `ci.yml` run 1234: zero jobs, conclusion `failure`
+                                 (STARTUP_FAILURE). Cause: actions.lock rejects a pin.
+signed-commits          PASS     a1b2c3d -> Verified
+review-threads          UNKNOWN  API 502 while reading threads (HTTP_ERROR)
+
+Advisory
+CodeQL (default setup)  ADVISORY (passed)
+Dependabot threads      ADVISORY (2 non-substantive, unresolved)
+
+The green CodeQL advisory does NOT offset the blocker, and the `UNKNOWN` is not
+reported as "probably fine". Both are the point.
+....
+
+== 9. Anti-patterns
+
+Each of these has been seen in the wild, and each makes the report worse than no
+report.
+
+[cols="2,3",options="header"]
+|===
+| Anti-pattern | Why it is a defect
+| A percentage, score, or "90% green" | {contract} §8: no readiness score exists. Worst-of only.
+| A passed advisory shown as `PASS` or as a green tick beside hard checks | §9: an advisory green looks identical to a hard green, so coverage is counted that does not exist.
+| "All required checks pass" with none listed | Unfalsifiable. List them with their runs.
+| A `PASS` row with no `observed_sha` | Cannot be matched to `head_sha`; it is `UNKNOWN` wearing a green badge.
+| A skipped `relevance` job counted as passing | The work did not happen. `NOT_APPLICABLE` with the gate's `PASS`, or `UNKNOWN`.
+| Last-known-green from an older head carried forward | §4.1 stale-head. The current diff is unevaluated.
+| `UNKNOWN` rendered as `PENDING` | Waiting will not repair an API failure.
+| A zero-job run treated as "no result yet" | §4.2. It is a startup failure, and a `FAIL`.
+| Omission of a requirement the checker failed to read | An omitted row is indistinguishable from a passing one.
+| `MERGED` asserted from a merge event rather than a target SHA | §7 and §13.3. Observation, not narration.
+| Estate requirements imposed on an unrelated upstream repo | §10.1 and §10.2. That is a misconfigured checker, not a finding.
+| "The checker enforces this" before fixtures and two consumer evaluations | §15. Stage 4 is earned, not declared.
+|===

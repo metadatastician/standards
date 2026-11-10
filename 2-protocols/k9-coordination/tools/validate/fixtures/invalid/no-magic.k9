@@ -1,0 +1,4 @@
+# SPDX-License-Identifier: MPL-2.0
+# expect: stops at line 1
+metadata:
+  schema: k9-coordination

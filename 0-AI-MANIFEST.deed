@@ -3,7 +3,7 @@
 (repo-deed
   :schema-version "1.0.0"
   :canonical-name "standards"
-  :repo-uuid #u8"gv-clade-index:github.com/hyperpolymath/standards"
+  :repo-uuid #u8"gv-clade-index:github.com/metadatastician/standards"
   :beholding-chora #u5"estate/chora"
 
   (purpose

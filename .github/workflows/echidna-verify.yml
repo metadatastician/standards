@@ -6,6 +6,7 @@
 # Scope:
 #   - lol/proofs/theories/**/*.agda
 #   - 2-protocols/avow/avow-lib/src/abi/*.idr
+#   - 2-protocols/k9-coordination/tools/validate/proofs/*.idr (this repo's own; idris2-standards)
 #
 # Proof-corpus status (issue #748, updated 2026-09-17): the lol and AVOW
 # corpora are EVICTED from this repo — and their jobs keep the presence
@@ -30,6 +31,7 @@ on:
     paths:
       - 'lol/proofs/**'
       - '2-protocols/avow/avow-lib/src/abi/*.idr'
+      - '2-protocols/k9-coordination/tools/validate/proofs/**'
       - '.github/workflows/echidna-verify.yml'
   # NO path filter on pull_request, deliberately. It once existed because
   # `Idris2 - a2ml proofs` was recorded as a REQUIRED context; that is STALE —
@@ -80,7 +82,7 @@ jobs:
           base="${{ github.event.pull_request.base.sha }}"
           head="${{ github.event.pull_request.head.sha }}"
           changed=$(git diff --name-only "$base" "$head" 2>/dev/null || true)
-          if printf '%s\n' "$changed" | grep -qE '^(lol/proofs/|2-protocols/avow/avow-lib/src/abi/.*\.idr$|\.github/workflows/echidna-verify\.yml$)'; then
+          if printf '%s\n' "$changed" | grep -qE '^(lol/proofs/|2-protocols/avow/avow-lib/src/abi/.*\.idr$|2-protocols/k9-coordination/tools/validate/proofs/|\.github/workflows/echidna-verify\.yml$)'; then
             echo "proofs=true" >> "$GITHUB_OUTPUT"
           else
             echo "proofs=false" >> "$GITHUB_OUTPUT"
@@ -236,10 +238,111 @@ jobs:
           path: idris2-avow.log
           if-no-files-found: ignore
 
+  idris2-standards:
+    # This repository's own Idris2 proofs (3-practice/PROOF-NEEDS.adoc, the proof-status file).
+    # Unlike the evicted corpora above there is no presence guard: the files
+    # live here, so a missing file is a failure, not a notice.
+    # 2-protocols/overlay/src/abi/OverlayProtocol.idr is deliberately absent:
+    # under the overlay's KEEP-SPEC-DEFER-IMPL decision it stays unchecked in
+    # CI until a consumer appears (3-practice/PROOF-NEEDS.adoc, standards#1436).
+    # Toolchain deviation (PROOF-POLICY section 6), state open: Idris2 comes from
+    # idris2-pack, not guix.scm (which provides none) or a container. The
+    # type-check step logs the version and the SHA-256 of the executable it
+    # ran; 3-practice/PROOF-NEEDS.adoc carries the full record.
+    name: Idris2 — this repository's proofs
+    needs: detect-proof-changes
+    if: needs.detect-proof-changes.outputs.proofs == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      PROOFS: >-
+        2-protocols/k9-coordination/tools/validate/proofs:GrammarExtension.idr
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Escape-hatch audit (idris2 --check accepts holes, so they are refused here)
+        shell: bash
+        run: |
+          set -euo pipefail
+          bad=0
+          for entry in $PROOFS; do
+            f="${entry%%:*}/${entry#*:}"
+            [ -f "$f" ] || { echo "::error file=$f::proof file is missing"; bad=1; continue; }
+            grep -q '^%default total' "$f" || { echo "::error file=$f::no %default total"; bad=1; }
+            # Comments removed first: the doc comments name what is refused.
+            if sed -E 's/--.*$//; s/\|\|\|.*$//' "$f" \
+               | grep -nE '\b(believe_me|assert_total|assert_smaller|idris_crash|postulate|partial|covering)\b|\?[A-Za-z_]'; then
+              echo "::error file=$f::hole, postulate, believe_me, assert_* or a non-total annotation (lines above)"
+              bad=1
+            fi
+          done
+          exit "$bad"
+
+      - name: Cache pack
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v4
+        with:
+          path: |
+            ~/.pack
+            ~/.idris2
+          key: ${{ runner.os }}-idris2-pack-${{ hashFiles('**/pack.toml', '**/*.ipkg') }}
+          restore-keys: |
+            ${{ runner.os }}-idris2-pack-
+
+      - name: Install Idris2 via pack
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PATH="$HOME/.local/bin:$HOME/.pack/bin:$PATH"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          echo "$HOME/.pack/bin" >> "$GITHUB_PATH"
+          if command -v idris2 >/dev/null 2>&1; then
+            echo "idris2 already present: $(idris2 --version)"
+            exit 0
+          fi
+          sudo apt-get update
+          sudo apt-get install -y build-essential libgmp-dev chezscheme
+          git clone --depth 1 https://github.com/stefan-hoeck/idris2-pack.git "$HOME/idris2-pack"
+          cd "$HOME/idris2-pack"
+          # See idris2-avow: the newlines take install.bash's detected scheme.
+          # yes dies of SIGPIPE once install.bash stops reading; under pipefail
+          # that alone would fail the step, so only install.bash's status counts.
+          { yes '' || true; } | bash install.bash
+          pack install-app idris2
+          idris2 --version
+
+      - name: Type-check (fail-closed)
+        shell: bash
+        run: |
+          set -euo pipefail
+          idris2 --version | tee idris2-standards.log
+          sha256sum "$(readlink -f "$(command -v idris2)")" | tee -a idris2-standards.log
+          for entry in $PROOFS; do
+            dir="${entry%%:*}" file="${entry#*:}"
+            echo "--- $dir/$file ---" | tee -a idris2-standards.log
+            out=$(cd "$dir" && idris2 --check --total "$file" 2>&1) || { printf '%s\n' "$out" | tee -a idris2-standards.log; exit 1; }
+            printf '%s\n' "$out" | tee -a idris2-standards.log
+            # idris2 exits 0 on some errors: a missing Prelude did, measured
+            # 2026-11-09. Any reported error fails the check.
+            if printf '%s\n' "$out" | grep -q '^Error'; then
+              echo "::error file=$dir/$file::idris2 reported an error but exited 0"; exit 1
+            fi
+          done
+
+      - name: Upload log
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: idris2-standards-log
+          path: idris2-standards.log
+          if-no-files-found: ignore
+
   trust-summary:
     timeout-minutes: 10
     name: Trust pipeline summary
-    needs: [detect-proof-changes, agda-lol, idris2-avow]
+    needs: [detect-proof-changes, agda-lol, idris2-avow, idris2-standards]
     runs-on: ubuntu-latest
     if: always()
     steps:
@@ -252,5 +355,6 @@ jobs:
           echo "| Agda lol/proofs | ${{ needs.agda-lol.result }} |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Idris2 a2ml | _evicted — a2ml project officially retired 2026-09-17 |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Idris2 avow | ${{ needs.idris2-avow.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Idris2 this repository (coordination.k9 grammar) | ${{ needs.idris2-standards.result }} |" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "See artefacts for verification logs." >> "$GITHUB_STEP_SUMMARY"

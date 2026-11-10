@@ -90,7 +90,7 @@ frozen snapshots. See link:REGISTRY.adoc[REGISTRY.adoc] for details.
 This repository serves as the canonical source for policies, templates, and specifications governing all Hyperpolymath projects. It provides:
 
 * **Language Policy** -- Which languages and tools are permitted across the ecosystem
-* **Language-Maturation Grades** -- link:adoption-readiness-grades/[ARG (Adoption Readiness)] + link:foundations-readiness-grades/[FRG (Foundations Readiness)] per-language profile templates; aggregated into the link:https://github.com/hyperpolymath/nextgen-languages[nextgen-languages] dashboard. link:toolchain-readiness-grades/[TRG (Toolchain Readiness)] + link:component-readiness-grades/[CRG (Component Readiness)] profile templates live under each framework's `templates/` directory. These letter grades are not proof grades: see **Proof Witness Grades** below.
+* **Language-Maturation Grades** -- link:4-readiness/adoption-readiness-grades/[ARG (Adoption Readiness)] + link:4-readiness/foundations-readiness-grades/[FRG (Foundations Readiness)] per-language profile templates; aggregated into the link:https://github.com/hyperpolymath/nextgen-languages[nextgen-languages] dashboard. link:4-readiness/toolchain-readiness-grades/[TRG (Toolchain Readiness)] + link:4-readiness/component-readiness-grades/[CRG (Component Readiness)] profile templates live under each framework's `templates/` directory. These letter grades are not proof grades: see **Proof Witness Grades** below.
 * **Proof and Verification Policy** -- link:3-practice/PROOF-POLICY.adoc[which prover carries which obligation] (Creusot with Pearlite contracts and Verus by default for Rust; SPARK, Idris2, Agda rechecked in Rocq and Lean), and link:3-practice/PROOF-POLICY.adoc#proof-witness-grades[**Proof Witness Grades** (§8)]: `PWG-3`, `PWG-2i`, `PWG-2ii`, `PWG-1`, where lower is stronger. These say how many independent machine-checked witnesses a theory theorem has. Always write the `PWG-` prefix.
 * **Machine-readable metadata** -- repo facts as clauses of `<repo>_chora.deed` (grammar link:1-formats/deed/spec/abnf/deed.abnf[`deed.abnf`]), contracts as `*.k9.ncl`, agent coordination as `coordination.k9` (see <<Machine-Readable Metadata>>)
 * **Build System** -- Mustfile/justfile (no Makefiles)
@@ -223,7 +223,7 @@ The Rhodium Standard Repository specification defines compliance requirements:
 === Document Formats
 
 * link:1-formats/deed/[deed] -- Repo metadata as s-expression deeds (grammar link:1-formats/deed/spec/abnf/deed.abnf[`deed.abnf`]); replaces A2ML, which is retired
-* https://github.com/hyperpolymath/standards/tree/main/k9-svc[k9-svc] -- Self-validating components (embedded contracts + deployment logic)
+* https://github.com/metadatastician/standards/tree/main/k9-svc[k9-svc] -- Self-validating components (embedded contracts + deployment logic)
 * https://github.com/hyperpolymath/stateful-artefacts-for-gitforges[stateful-artefacts-for-gitforges] -- Metadata-driven documentation pipeline
 
 === Palimpsest

@@ -15,6 +15,10 @@
 ;
 ; Requires RFC 7405 (%s"..." case-sensitive string literals).
 ;
+; EDITORIAL NOTE, 2026-11-09 (the language is unchanged): deed-filename is
+; written right-recursively, as in v1.2, so that a greedy ABNF parser can
+; end it. See the v1.2 changelog; the two forms denote the same strings.
+;
 ; CHANGELOG (v1.1.0 -> v1.1.1), owner rulings D317 + D318:
 ;   - lang-list items are indented one level under "languages:" (indent2),
 ;     the same nesting every other list follows (was: indent, a defect)
@@ -179,7 +183,9 @@ escape         = "\" (DQUOTE / "\" / %s"n" / %s"t")
 symbol         = ALPHA *(ALPHA / DIGIT / "-" / "_" / ".")
 spdx-id        = 1*(ALPHA / DIGIT / "-" / ".")
 repo-path      = 1*(ALPHA / DIGIT / "-" / "_" / "/")
-deed-filename  = 1*(ALPHA / DIGIT / "-" / "_" / ".") %s".deed"
+deed-filename  = deed-char deed-tail           ; 1*deed-char %s".deed", written
+deed-tail      = deed-char deed-tail / %s".deed"  ; so a greedy parser can end
+deed-char      = ALPHA / DIGIT / "-" / "_" / "."  ; (2026-11-09 changelog note)
 file-path      = 1*(ALPHA / DIGIT / "-" / "_" / "/" / ".")
 glob-pattern   = 1*(ALPHA / DIGIT / "-" / "_" / "/" / "."
                / "*" / "?" / "[" / "]" / "{" / "}")

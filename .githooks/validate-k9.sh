@@ -65,6 +65,9 @@ fi
 is_fixture() {
   case "$1" in
     1-formats/k9/tools/fixtures/*) return 0 ;;
+    # The coordination.k9 validator's corpus: its invalid fixtures are negative
+    # controls for that validator (tools/validate/README.adoc), not live K9.
+    2-protocols/k9-coordination/tools/validate/fixtures/*) return 0 ;;
     # 9-archive/ is a frozen district, not the live K9 corpus. It holds the
     # LAST COPY of dead upstream trees, kept because the standards-map note
     # says "ARCHIVE, do not delete" — its contents are historical record, not
