@@ -57,4 +57,4 @@ ARG / FRG / CRG / TRG tell you how mature a repo/component is.
 === 6. Get help
 
 * `QUICKSTART-USER.adoc`, `llm-warmup-user.md`.
-* Issues: https://github.com/hyperpolymath/standards/issues
+* Issues: https://github.com/metadatastician/standards/issues

@@ -18,14 +18,14 @@ subtree-scoped (use `file_pattern` to scope an entry to a subtree).
 == Schema
 
 Authoritative JSON Schema:
-`hyperpolymath/standards/.machine_readable/hypatia-baseline.schema.json`
+`metadatastician/standards/.machine_readable/hypatia-baseline.schema.json`
 
 Validate locally with `ajv` or any JSON Schema 2020-12 validator:
 
 [source,sh]
 ----
 curl -sSfL \
-  https://raw.githubusercontent.com/hyperpolymath/standards/main/.machine_readable/hypatia-baseline.schema.json \
+  https://raw.githubusercontent.com/metadatastician/standards/main/.machine_readable/hypatia-baseline.schema.json \
   -o /tmp/schema.json
 ajv validate --spec=draft2020 -s /tmp/schema.json -d .hypatia-baseline.json
 ----
@@ -38,7 +38,7 @@ Hypatia finding, plus optional metadata.
 The committed file is I-JSON + JCS canonical (`3-practice/JSON-POLICY.adoc`
 J-1): one line, members sorted. The example below is indented for reading
 only. After any edit, by hand or with `jq`, run
-`ijson-jcs fix .hypatia-baseline.json`. In `hyperpolymath/standards`, CI
+`ijson-jcs fix .hypatia-baseline.json`. In `metadatastician/standards`, CI
 fails a non-canonical baseline.
 
 [source,json]

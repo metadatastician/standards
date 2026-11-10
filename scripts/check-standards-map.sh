@@ -4,7 +4,7 @@
 #
 # check-standards-map.sh — GATE D.
 #
-# Proposed location: hyperpolymath/standards/scripts/check-standards-map.sh
+# Proposed location: metadatastician/standards/scripts/check-standards-map.sh
 # Runs from:         .github/workflows/standards-map-verify.yml
 #
 # Keeps standards-map.toml honest. BIDIRECTIONAL, deliberately — this is the

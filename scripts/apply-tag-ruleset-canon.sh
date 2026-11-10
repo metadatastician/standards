@@ -193,7 +193,7 @@ NOCRED
   fi
 fi
 
-probe_repo="${GITHUB_REPOSITORY:-hyperpolymath/standards}"
+probe_repo="${GITHUB_REPOSITORY:-metadatastician/standards}"
 probe_body=$(mktemp); probe_out=$(mktemp); api_err=$(mktemp); inst_file=$(mktemp)
 trap 'rm -f "$probe_body" "$probe_out" "$api_err" "$inst_file"' EXIT
 

@@ -420,7 +420,7 @@ echo
 CARRIER=""
 # role = "spine": a template legitimately carries modules it does not declare,
 # because it ships them for the repos minted from it.
-# role = "canon": hyperpolymath/standards legitimately carries modules whose
+# role = "canon": metadatastician/standards legitimately carries modules whose
 # gating capability cannot apply to it — the criteria SSOT is the document that
 # DEFINES the gates, not an instance of one; docs/proofs/ holds proof artefacts
 # OF THE ESTATE, not proofs of the canon's own code; and *-reusable.yml are the

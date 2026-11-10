@@ -252,8 +252,8 @@ lockfile-verbatim flag for every ecosystem that has one.
 
 == Cross-refs
 
-* https://github.com/hyperpolymath/standards/issues/787[standards#787] — D269, the ruling this document implements.
-* https://github.com/hyperpolymath/standards/issues/297[standards#297] — the original policy issue.
+* https://github.com/metadatastician/standards/issues/787[standards#787] — D269, the ruling this document implements.
+* https://github.com/metadatastician/standards/issues/297[standards#297] — the original policy issue.
 * https://github.com/hyperpolymath/echidna/issues/92[echidna#92] — the incident; https://github.com/hyperpolymath/echidna/pull/128[echidna#128] — the revert.
-* https://github.com/hyperpolymath/standards/pull/299[standards#299] — `--locked` in rust-ci-reusable.
-* https://github.com/hyperpolymath/standards/issues/968[standards#968] — actions.lock drift after Dependabot bumps.
+* https://github.com/metadatastician/standards/pull/299[standards#299] — `--locked` in rust-ci-reusable.
+* https://github.com/metadatastician/standards/issues/968[standards#968] — actions.lock drift after Dependabot bumps.
