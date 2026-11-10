@@ -30,6 +30,7 @@ A minted repo's `repo-init` reads the clause and writes it into `PROVENANCE`.
 | `:criteria-sha256` | STRING | Required. 64 lowercase hex, equal to `canon.lock [canon.artifacts].criteria.sha256`.
 | `:gates-sha256` | STRING | Required. 64 lowercase hex, equal to `canon.lock [canon.artifacts].gates.sha256`.
 | `:lockstep-since` | STRING | Optional. `YYYY-MM-DD` the repo first adopted lockstep. Informational.
+| `:proposed-by` | STRING | Optional. `owner/standards#N` naming the open canon pull request whose `canon.lock` the pin adopts *ahead of its release* (two-phase lockstep, below). Absent when the pin follows the released canon. Spent, and to be dropped, once that pull request merges.
 |===
 
 == Reader obligations
@@ -40,10 +41,30 @@ A minted repo's `repo-init` reads the clause and writes it into `PROVENANCE`.
 * Comment lines (`;`) are not read: a `; (canon …)` in prose must not count.
 * The three readers share one function, `deed_canon`, kept byte-identical:
   `scripts/check-canon-lockstep.sh` (here, Gate A assertion 3),
-  rsr-template-repo `.github/workflows/dogfood-gate.yml` (`Canon lockstep`), and
+  rsr-template-repo `scripts/canon-pin-check.sh` (called by `dogfood-gate.yml` `Canon lockstep`), and
   rsr-template-repo `build/just/repo-init.just`.
 * Order is `canon.lock [canon.lockstep].order`, `spine-adopts-then-canon-releases`:
   the spine re-pins this clause **first**, and the canon release lands after.
+  The two-phase protocol below is what makes that order reachable.
+* A `:proposed-by` that is not `hyperpolymath/standards#N` or
+  `metadatastician/standards#N` (the same repository) is malformed: a failure.
+
+== Two-phase adoption
+
+The spine's adoption pins hashes that exist only in the unmerged canon pull
+request, so "spine first" needs a pending state. It is `:proposed-by`.
+
+. A canon pull request *P* changes `canon.lock`. Gate A on *P* runs `--strict`
+  and fails until the spine's `main` pins *P*'s `canon.lock`.
+. A spine pull request *Q* pins *P*'s hashes and names it:
+  `:proposed-by "metadatastician/standards#P"`. The spine's `Canon lockstep`
+  accepts a pin that equals the released `canon.lock`, or that equals
+  `canon.lock` at the head of the named pull request while it is open. *Q*
+  merges first.
+. Gate A on *P* re-runs green and *P* merges: the pin now equals the released
+  canon and `:proposed-by` is spent. A follow-up drops it.
+. If *P* is closed unmerged, or amended after *Q* merged, the spine pins a canon
+  that was never released and its `Canon lockstep` fails until it re-pins.
 
 == Example
 
