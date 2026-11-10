@@ -2,21 +2,21 @@
 = Unnecessarily-JavaScript → AffineScript estate migration
 :revdate: 2026-05-30
 :status: ACTIVE
-:campaign: hyperpolymath/standards#254
+:campaign: metadatastician/standards#254
 :label: js-to-affinescript
 
 This is the canonical campaign documentation for the
 **Unnecessarily-JavaScript → AffineScript** estate migration.
 
-Tracked under https://github.com/hyperpolymath/standards/issues/254[UMBRELLA #254].
+Tracked under https://github.com/metadatastician/standards/issues/254[UMBRELLA #254].
 Step issues #263, #266, #271, #274, #277 are the canonical
 implementation plan and are labelled `js-to-affinescript`.
 
 Sibling migration campaigns (not in scope here):
 
-- https://github.com/hyperpolymath/standards/issues/239[TS → AffineScript] (#239)
-- https://github.com/hyperpolymath/standards/issues/252[ReScript → AffineScript] (#252)
-- https://github.com/hyperpolymath/standards/issues/253[npm → Deno] (#253)
+- https://github.com/metadatastician/standards/issues/239[TS → AffineScript] (#239)
+- https://github.com/metadatastician/standards/issues/252[ReScript → AffineScript] (#252)
+- https://github.com/metadatastician/standards/issues/253[npm → Deno] (#253)
 
 == Campaign overview
 

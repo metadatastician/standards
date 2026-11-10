@@ -2,7 +2,7 @@
 = No Hand-Authored JavaScript (Source) Policy
 :revdate: 2026-06-02
 :status: ACTIVE (warn-first rollout)
-:issue-254: hyperpolymath/standards#254
+:issue-254: metadatastician/standards#254
 
 This document is the canonical estate-wide statement that estate-authored code
 MUST NOT contain hand-authored JavaScript or TypeScript *source*. It complements
