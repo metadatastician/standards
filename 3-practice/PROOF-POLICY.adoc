@@ -684,6 +684,6 @@ receipts through it and catalogues the result as a census (§8.4).
 
 === 8.6 Naming
 
-`hyperpolymath/standards` and `metadatastician/standards` are the same
+`metadatastician/standards` and `metadatastician/standards` are the same
 repository. GitHub redirects the older name, and both names resolve to the
 same commits. Cite either name, and pin by commit (§7).

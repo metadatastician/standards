@@ -228,7 +228,7 @@ preference.
 The owner decided scope once the step 1 probe had landed (§5 step 4):
 
 * *Content.* KYAML is the authoring dialect for every estate-owned YAML file,
-  workflows included (D280, `hyperpolymath/standards#1023`, 2026-10-01).
+  workflows included (D280, `metadatastician/standards#1023`, 2026-10-01).
 * *Extension.* Estate-owned configuration uses the `.kyaml` extension (D307,
   2026-10-06). `.yml` or `.yaml` stays only where a tool fixes the file name or
   extension: GitHub workflows (`.github/workflows/*.yml`), `action.yml`,
@@ -245,7 +245,7 @@ What is enforceable today:
   was refused with exit 2.
 * There is no estate-wide gate. An existing YAML file that has not been
   converted is migration backlog under steps 5 and 6
-  (`hyperpolymath/standards#1024`, `#1025`), not a violation. Workflows convert
+  (`metadatastician/standards#1024`, `#1025`), not a violation. Workflows convert
   under step 6 only, once its lock-coverage precondition holds.
 
 New estate-owned configuration is written as `.kyaml` with KYAML content.
@@ -272,13 +272,13 @@ preference: no step may start before its predecessor has landed evidence.
 
 These issues are now booked, in this dependency order:
 
-* Step 1 — `hyperpolymath/standards#1020` — *closed, gate met.* GitHub Actions
+* Step 1 — `metadatastician/standards#1020` — *closed, gate met.* GitHub Actions
   does parse a KYAML workflow: a two-arm same-commit probe gave `jobs = 1` and
   an executed-step marker on both the KYAML arm and its plain-YAML control.
   This settles the *parser* dimension only.
-* Step 2 — `hyperpolymath/standards#1021` — comment-preservation proof.
+* Step 2 — `metadatastician/standards#1021` — comment-preservation proof.
   _Closed._
-* Step 3 — `hyperpolymath/standards#1022` — formatter/linter for arbitrary YAML:
+* Step 3 — `metadatastician/standards#1022` — formatter/linter for arbitrary YAML:
   `scripts/kyaml-format.sh [--check] FILE...`. It runs `yq -o kyaml` verbatim,
   the one rewriter step 2's proof covers, and it refuses (exit 2) a file that
   does not parse, has no final newline, or would change its data.
@@ -310,10 +310,10 @@ These issues are now booked, in this dependency order:
   remains has nothing to do with syntax: the required
   `.githooks/validate-actions-lock.sh` checks lock membership across the whole
   file, not per workflow (standards#1025).
-* Step 4 — `hyperpolymath/standards#1023` — owner ruling on scope.
+* Step 4 — `metadatastician/standards#1023` — owner ruling on scope.
   _Closed:_ D280, refined by D307. See §3.4.
-* Step 5 — `hyperpolymath/standards#1024` — migrate non-bot estate YAML.
-* Step 6 — `hyperpolymath/standards#1025` — workflows. Step 4 ruled them in (D280).
+* Step 5 — `metadatastician/standards#1024` — migrate non-bot estate YAML.
+* Step 6 — `metadatastician/standards#1025` — workflows. Step 4 ruled them in (D280).
 
 Step 1 closing did *not* settle scope by itself. Step 4 was settled by an
 owner ruling (§3.4), not inferred from the probe.

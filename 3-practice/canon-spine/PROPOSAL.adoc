@@ -12,7 +12,7 @@
 the checks it describes exist. Where it disagrees with a shipped check, the
 check is the current truth and this document is the argument for changing it.
 
-*Scope*: the seam between `hyperpolymath/standards` (the canon) and
+*Scope*: the seam between `metadatastician/standards` (the canon) and
 `hyperpolymath/rsr-template-repo` (the spine). Not the internal structure of
 either repository, except where that structure is the seam's fault.
 
@@ -116,7 +116,7 @@ canon's artefact hashes in the `(canon …)` clause of its repo deed, and job 6 
 `dogfood-gate.yml` fetches `canon.lock` and compares.
 
 Except it fetches it from
-`raw.githubusercontent.com/hyperpolymath/standards/**main**/canon.lock`.
+`raw.githubusercontent.com/metadatastician/standards/**main**/canon.lock`.
 
 So the check reads the canon at `main` while the workflows run the canon at
 `b3ce78e1`. A canon release turns the spine red without a single commit in the
