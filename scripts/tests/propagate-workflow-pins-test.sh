@@ -48,14 +48,15 @@ fresh_only()    { contains FRESH "$1" && not_contains BEHIND "$1"; }
 file_has()      { grep -q "$2" "$1"; }
 staged_has()    { git -C "$1" diff --cached --name-only | grep -q "$2"; }
 
-mk_consumer() { # dir
+mk_consumer() { # dir [owner] — owner defaults to the canonical one
+  local owner="${2:-metadatastician}"
   mkdir -p "$1/.github/workflows"
   cat > "$1/.github/workflows/governance.yml" <<EOF
 name: Governance
 on: push
 jobs:
   governance:
-    uses: hyperpolymath/standards/.github/workflows/governance-reusable.yml@${OLD}
+    uses: ${owner}/standards/.github/workflows/governance-reusable.yml@${OLD}
 EOF
   cat > "$1/.github/workflows/scorecard.yml" <<EOF
 name: Scorecard
@@ -65,7 +66,7 @@ jobs:
     # a non-standards action pin that MUST be left untouched
     steps:
       - uses: actions/checkout@${OLD}
-    uses: hyperpolymath/standards/.github/workflows/scorecard-reusable.yml@${OLD}
+    uses: ${owner}/standards/.github/workflows/scorecard-reusable.yml@${OLD}
 EOF
 }
 
@@ -80,6 +81,7 @@ R="$TEST_DIR/fix"; mk_consumer "$R"
 bash "$PROP" --fix --to "$TARGET" "$R" >/dev/null
 try "fix bumps governance pin" file_has "$R/.github/workflows/governance.yml" "governance-reusable.yml@${TARGET}"
 try "fix bumps scorecard pin"  file_has "$R/.github/workflows/scorecard.yml"  "scorecard-reusable.yml@${TARGET}"
+try "fix keeps the canonical owner" file_has "$R/.github/workflows/governance.yml" "metadatastician/standards/.github/workflows/governance-reusable.yml@${TARGET}"
 
 # ── 3. Non-standards action pins are NOT touched ────────────────────────────
 try "actions/checkout pin untouched" file_has "$R/.github/workflows/scorecard.yml" "actions/checkout@${OLD}"
@@ -204,6 +206,24 @@ try "refused relock restores an edited workflow byte for byte" cmp -s "$TEST_DIR
 try "refused relock restores an unedited workflow byte for byte" cmp -s "$TEST_DIR/scorecard-before" "$R/.github/workflows/scorecard.yml"
 try "refused relock reports skipped staging" contains 'staging skipped' "$OUT"
 try "refused relock does not prevent other repo fixes" file_has "$ROOT/success/.github/workflows/governance.yml" "governance-reusable.yml@${TARGET}"
+
+# ── 12. A pin under the former owner is moved to the canonical owner ────────
+# Actions does not redirect a job-level `uses:` across a repository transfer,
+# so hyperpolymath/standards/...@<any sha> never resolves.
+R="$TEST_DIR/former-owner"; mk_consumer "$R" hyperpolymath
+OUT=$(bash "$PROP" --to "$TARGET" "$R")
+try "former-owner pin is reported BEHIND" contains BEHIND "$OUT"
+bash "$PROP" --fix --to "$TARGET" "$R" >/dev/null
+try "former-owner pin moved to canonical owner at target" file_has "$R/.github/workflows/governance.yml" "metadatastician/standards/.github/workflows/governance-reusable.yml@${TARGET}"
+try "no former-owner pin survives the fix" not_contains "hyperpolymath/standards" "$(cat "$R"/.github/workflows/*.yml)"
+
+# ── 13. A former-owner pin already AT the target is still not FRESH ─────────
+R="$TEST_DIR/former-owner-at-target"; mk_consumer "$R" hyperpolymath
+sed -i "s#standards/\(.github/workflows/[a-z-]*\.yml\)@${OLD}#standards/\1@${TARGET}#" "$R"/.github/workflows/*.yml
+OUT=$(bash "$PROP" --to "$TARGET" "$R")
+try "former-owner pin at target is not FRESH" contains BEHIND "$OUT"
+bash "$PROP" --fix --to "$TARGET" "$R" >/dev/null
+try "former-owner pin at target is moved" file_has "$R/.github/workflows/scorecard.yml" "metadatastician/standards/.github/workflows/scorecard-reusable.yml@${TARGET}"
 
 echo "----------------------------------------"
 echo "$PASS/$TOTAL test cases passed."

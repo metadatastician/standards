@@ -3,10 +3,10 @@
 = Trusted-Base Reduction Policy
 :revdate: 2026-05-27
 :status: ADOPTED
-:audit: hyperpolymath/standards#195
-:audit-licence: hyperpolymath/standards#196
-:audit-docs: hyperpolymath/standards#197
-:enforcement: hyperpolymath/standards#211
+:audit: metadatastician/standards#195
+:audit-licence: metadatastician/standards#196
+:audit-docs: metadatastician/standards#197
+:enforcement: metadatastician/standards#211
 :precedent: hyperpolymath/boj-server backend-assurance harness
 
 This document is the canonical estate-wide policy for managing
@@ -562,5 +562,5 @@ first (rough P0/P1/P2 ordering):
 * link:{audit-licence}[standards#196] — estate licence-debt audit
 * link:{audit-docs}[standards#197] — estate documentation-debt audit
 * link:{enforcement}[standards#211] — `scripts/check-trusted-base.sh` and the `trusted-base` job in `governance-reusable.yml`
-* https://github.com/hyperpolymath/standards/pull/213[standards#213] — seed `docs/proof-debt.md` for the `standards` repo itself (canonical schema example)
+* https://github.com/metadatastician/standards/pull/213[standards#213] — seed `docs/proof-debt.md` for the `standards` repo itself (canonical schema example)
 * `scripts/check-licence-consistency.sh` (standards#201) — the structural precedent for `check-trusted-base.sh`

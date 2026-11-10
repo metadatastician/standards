@@ -26,7 +26,8 @@
 #   scripts/propagate-gitignore-67-68.sh).
 #
 # Principles (do not violate):
-#   * Non-destructive: only rewrites the SHA after a standards reusable `@`.
+#   * Non-destructive: only rewrites the SHA after a standards reusable `@`,
+#     and moves a pin still under the former owner to the current one.
 #   * Idempotent: pins already at the target are left untouched.
 #   * No auto-commit / auto-push.
 #   * Shell-only: no Python, no Ruby.
@@ -69,9 +70,16 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# Matches `hyperpolymath/standards/.github/workflows/<name>.yml@<sha>` on any
-# active line. We rewrite the SHA only; everything else on the line is kept.
-PIN_RE='hyperpolymath/standards/\.github/workflows/[A-Za-z0-9._-]+\.yml@[0-9a-fA-F]{7,40}'
+# The canonical owner since the transfer (standards#1390). Actions does not
+# redirect a job-level `uses:` across a transfer ("workflow was not found"), so
+# a pin under the former owner is stale even at the target SHA: it is matched,
+# counted as behind and rewritten to the canonical owner.
+STANDARDS_REPO="metadatastician/standards"
+
+# Matches `<owner>/standards/.github/workflows/<name>.yml@<sha>`, for the
+# canonical and the former owner, on any active line. We rewrite the owner and
+# the SHA only; everything else on the line is kept.
+PIN_RE='(hyperpolymath|metadatastician)/standards/\.github/workflows/[A-Za-z0-9._-]+\.yml@[0-9a-fA-F]{7,40}'
 
 log() { printf '%s\n' "$*" >&2; }
 
@@ -98,7 +106,7 @@ resolve_target() {
 
   # Network fallback — the live standards HEAD.
   local remote
-  remote=$(git ls-remote https://github.com/hyperpolymath/standards.git refs/heads/main 2>/dev/null | awk '{print $1}')
+  remote=$(git ls-remote "https://github.com/${STANDARDS_REPO}.git" refs/heads/main 2>/dev/null | awk '{print $1}')
   if [ -n "$remote" ]; then printf '%s' "$remote"; return 0; fi
 
   return 1
@@ -145,7 +153,7 @@ validate_target() {
 
   # Neither usable local main ref proved reachability. Local refs can be stale,
   # so only the authoritative server comparison may return a negative result.
-  assert_pin_ancestry hyperpolymath/standards "$TARGET_SHA" main || {
+  assert_pin_ancestry "$STANDARDS_REPO" "$TARGET_SHA" main || {
     log "ERROR: refusing propagation of ${TARGET_SHA}."
     return 1
   }
@@ -157,18 +165,19 @@ validate_target || exit 2
 # Per-file rewrite (the unit-testable core)
 # ---------------------------------------------------------------------------
 
-# Echoes the count of pins in $1 that are NOT already at $TARGET_SHA.
+# Echoes the count of pins in $1 that are NOT already the canonical owner at
+# $TARGET_SHA. A former-owner pin at the target still counts: it never resolves.
 count_behind() {
   local f="$1"
   grep -hoE "$PIN_RE" "$f" 2>/dev/null \
-    | sed -E 's/.*@([0-9a-fA-F]+)/\1/' \
-    | grep -vcx "$TARGET_SHA" || true
+    | grep -vcE "^${STANDARDS_REPO}/.*@${TARGET_SHA}\$" || true
 }
 
-# Rewrite every standards reusable pin in $1 to $TARGET_SHA, in place.
+# Rewrite every standards reusable pin in $1 to the canonical owner at
+# $TARGET_SHA, in place.
 rewrite_file() {
   local f="$1"
-  sed -E -i "s#(${PIN_RE%@*}@)[0-9a-fA-F]{7,40}#\1${TARGET_SHA}#g" "$f"
+  sed -E -i "s#(hyperpolymath|metadatastician)/standards/(\\.github/workflows/[A-Za-z0-9._-]+\\.yml@)[0-9a-fA-F]{7,40}#${STANDARDS_REPO}/\\2${TARGET_SHA}#g" "$f"
 }
 
 # ---------------------------------------------------------------------------

@@ -4,7 +4,7 @@
 # check-lock-sync.sh — verify .github/workflows/actions.lock is in sync with the
 # workflow YAML, in BOTH directions, including job-level reusable-workflow refs.
 #
-# This is the estate-wide template from hyperpolymath/standards for issue #968.
+# This is the estate-wide template from metadatastician/standards for issue #968.
 # Adapted from metadatastician/burble#224.
 #
 # Why this exists rather than `gh actions-lock --verify-local` alone:

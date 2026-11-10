@@ -52,7 +52,7 @@ acting on them would edit the wrong thing. Read this before section 6.
 
 . *"The rewritten `actions.lock` (SHA-spelled keys migrated to tag-spelled keys)
   is what made the run stop starting."* — **falsified.**
-. *"The pre-transfer slug `hyperpolymath/standards` is not the cause, because the
+. *"The pre-transfer slug `metadatastician/standards` is not the cause, because the
   repository still redirects."* — **falsified.** The redirect is real for the
   REST API; it is not how `uses:` is resolved at run creation.
 
@@ -84,9 +84,9 @@ The lock and the workflow content therefore cannot explain the change. What does
 
 [TIP]
 Same commit, both outcomes. `cadastra` @ `23ddc1b724`: `governance.yml`
-(`hyperpolymath/standards/…@e3b9929c`) → **0 jobs**; `OpenSSF Compliance`
+(`metadatastician/standards/…@e3b9929c`) → **0 jobs**; `OpenSSF Compliance`
 (no such call) → **1 job**. `svalinn` @ `210628b0a7`: `hypatia-scan.yml` and
-`secret-scanner.yml` (`hyperpolymath/standards/…@fad242d3`) → **0 jobs each**;
+`secret-scanner.yml` (`metadatastician/standards/…@fad242d3`) → **0 jobs each**;
 `instant-sync.yml` (`peter-evans/repository-dispatch@v4.0.1` only) → **1 job**.
 
 [cols="2,1,1,2"]
@@ -94,9 +94,9 @@ Same commit, both outcomes. `cadastra` @ `23ddc1b724`: `governance.yml`
 |consumer |pin |`uses:` slug |governance run
 
 |`kyq` |`cf8f9121` |**`metadatastician/standards`** |21 jobs (success path)
-|`cadastra` |`e3b9929c` |`hyperpolymath/standards` |0 jobs
-|`svalinn` |`fad242d3` |`hyperpolymath/standards` |0 jobs
-|`burble` |`01c9b0c9` |`hyperpolymath/standards` |21 jobs on 2026-10-21 → **0**
+|`cadastra` |`e3b9929c` |`metadatastician/standards` |0 jobs
+|`svalinn` |`fad242d3` |`metadatastician/standards` |0 jobs
+|`burble` |`01c9b0c9` |`metadatastician/standards` |21 jobs on 2026-10-21 → **0**
 jobs on 2026-10-26, unchanged blob
 |===
 
@@ -123,7 +123,7 @@ display-name shape — validated against five sampled runs, every one with
 === Consequence
 
 The defect is consumer-side and is a **slug**, not a pin: six repositories call
-`hyperpolymath/standards/…@<40-hex>` and have not started since 2026-10-26.
+`metadatastician/standards/…@<40-hex>` and have not started since 2026-10-26.
 The repair is to point the same 40-hex SHA at `metadatastician/standards/…`.
 That is a change in *those* repositories, so this document can only specify it
 — section 6 now does, and the ordering in section 8 still applies. Nothing here
@@ -313,7 +313,7 @@ brief calls for. **Do not treat this document, or a green canary, as that
 proof.**
 
 The probe must be made through the **canonical** slug. A remote call that spells
-`hyperpolymath/standards/…` is now rejected at run creation (section 1a), so it
+`metadatastician/standards/…` is now rejected at run creation (section 1a), so it
 would produce a zero-job run that proves nothing about this commit.
 
 == 5. Audit of the shared source's own references
@@ -321,7 +321,7 @@ would produce a zero-job run that proves nothing about this commit.
 === Source-resolution expressions and helper refs, by commit
 
 Every checkout whose `repository:` is `metadatastician/standards` or its
-pre-transfer slug `hyperpolymath/standards`, classified by its `ref:`
+pre-transfer slug `metadatastician/standards`, classified by its `ref:`
 (`sites` counts checkouts; measured 2026-10-31):
 
 [cols="1,1,1,1,1,3"]
@@ -404,7 +404,7 @@ all; **pin** decides what runs. Section 1a is the authority on the first.
 . **Pre-transfer slug — slug repair required, all six.**
   `svalinn` (`fad242d3`), `odraz` (`da2c748a`), `cadastra` (`e3b9929c`),
   `lintel` (`e16a2317`), `burble`, `marid` (`01c9b0c9`) all call
-  `hyperpolymath/standards/…` and have created no jobs since 2026-10-26.
+  `metadatastician/standards/…` and have created no jobs since 2026-10-26.
   Change the owner to `metadatastician/standards/…` and **keep the 40-hex SHA
   exactly as it is**. One such edit, on one repository, creating a job with
   more than one step is both the repair and the proof that the remote path

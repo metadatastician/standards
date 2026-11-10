@@ -6,7 +6,7 @@
 // SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell
 
 *Generated:* 2026-05-18T05:01Z (read-only GitHub discovery, top-level `HEAD`). +
-*Tracker:* hyperpolymath/standards#102 (campaign) · *Wave 0:* #103 · *Policy:* #101. +
+*Tracker:* metadatastician/standards#102 (campaign) · *Wave 0:* #103 · *Policy:* #101. +
 *Authority for the gate rules:* see #102 and `spec/LANGUAGE-POLICY.adoc` §Package
 Management — *not duplicated here* (link, don't copy).
 

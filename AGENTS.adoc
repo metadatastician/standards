@@ -44,7 +44,7 @@ contract with every repository that calls this one.
 
 == The canon–spine seam (read before adding a workflow or a doc class)
 
-`hyperpolymath/standards` is the canon; `hyperpolymath/rsr-template-repo` is the
+`metadatastician/standards` is the canon; `hyperpolymath/rsr-template-repo` is the
 spine that mints every other repository. They are one system with one wired
 half: the canon is checked against the spine (Gate A), and nothing checks the
 spine against the canon. Adoption is therefore a habit — 8 of the 22 reusable

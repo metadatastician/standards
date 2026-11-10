@@ -187,7 +187,8 @@ check_declared "$WF_DIR/governance.yml"  "$WF_DIR/governance-reusable.yml"
 # --- 2d. Packaged callers vs the callee AT THEIR PINNED REVISION --------
 # check_declared validates local reusables at their working-tree content.
 # The packaged caller examples instead pin the callee remotely
-# (hyperpolymath/standards/.../<callee>.yml@<sha> — this repository at
+# (metadatastician/standards/.../<callee>.yml@<sha>, or the former owner
+# hyperpolymath — this repository at
 # that SHA, which after every re-pin is in this repository's history).
 # A named secret the pinned callee does not declare startup-fails exactly
 # as hard as a local one, so verify against the callee AS IT IS AT THE PIN

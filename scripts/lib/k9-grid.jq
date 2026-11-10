@@ -236,7 +236,7 @@ def render(prev):
   + "![\(grid_label) \($r.state)](\(badge_url($r.state)))\n\n"
   + "\($r.state | state_label) · commit `\($r.sha[0:12] | esc)` · "
   + (if $r.url != "" then "[run \($r.run | esc)](\($r.url))" else "local run" end)
-  + (if $r.canon_ref != "" then " · validator hyperpolymath/standards@`\($r.canon_ref[0:12] | esc)`" else "" end)
+  + (if $r.canon_ref != "" then " · validator metadatastician/standards@`\($r.canon_ref[0:12] | esc)`" else "" end)
   + (if $r.dirty then " · working tree modified" else "" end) + "\n\n"
   + "| Category | Status | Pass | Fail | Indeterminate | N/A | Since previous revision |\n|---|---|---:|---:|---:|---:|---|\n"
   + ([ $r.categories[]
