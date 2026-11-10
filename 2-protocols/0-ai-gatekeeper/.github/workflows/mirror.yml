@@ -14,7 +14,7 @@ jobs:
     permissions:
       actions: read
       contents: read
-    uses: hyperpolymath/standards/.github/workflows/mirror-reusable.yml@210f14e753c80064ec1bcae72f1d654dd9b0e687
+    uses: metadatastician/standards/.github/workflows/mirror-reusable.yml@210f14e753c80064ec1bcae72f1d654dd9b0e687
     # Exactly the seven optional secrets the callee declares at this pin
     # (verified declared ⊇ referenced) — not `secrets: inherit`
     # (standards#1108 §6b).

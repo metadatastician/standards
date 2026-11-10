@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: MPL-2.0
 name: Lock Sync Gate
 
-# Estate-wide template from hyperpolymath/standards for issue #968.
+# Estate-wide template from metadatastician/standards for issue #968.
 # Adapted from metadatastician/burble#224.
 #
 # Fails any pull request whose .github/workflows/actions.lock has drifted from
@@ -18,7 +18,7 @@ name: Lock Sync Gate
 # reports on pull requests that miss the filter, which deadlocks any branch
 # ruleset that requires this check.
 #
-# For the 39 repos with step-level desync (hyperpolymath/standards#968):
+# For the 39 repos with step-level desync (metadatastician/standards#968):
 #   - 37 have latest run conclusion = startup_failure
 #   - 2 are stale (will die on next run)
 # The cure: adopt this gate, then regenerate the lockfile with:

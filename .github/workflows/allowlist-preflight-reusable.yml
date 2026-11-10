@@ -39,7 +39,7 @@ jobs:
 
       - name: Stage policy tools outside the scanned tree
         run: |
-          if [ "${GITHUB_REPOSITORY_ID:-}" = "1116521501" ] || [ "$GITHUB_REPOSITORY" = hyperpolymath/standards ] || [ "$GITHUB_REPOSITORY" = metadatastician/standards ]; then
+          if [ "${GITHUB_REPOSITORY_ID:-}" = "1116521501" ]; then
             cp scripts/check-actions-policy.sh scripts/check-allowed-actions.sh "$RUNNER_TEMP/"
             cp rhodium-standard-repositories/actions-allowlist/allowed-actions.json \
                "$RUNNER_TEMP/allowed-actions.json"

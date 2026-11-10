@@ -350,7 +350,7 @@ Adding to this list requires explicit user approval and an unblock condition (ex
 
 The hyperpolymath "no new ReScript" policy (banned 2026-05-25) has the following approved exemptions, encoded as `path_allow_prefixes` on the hypatia rules `cicd_rules/rescript_detected` (matches `*.res`) and `cicd_rules/rescript_interface_detected` (matches `*.resi`).
 
-Existing pre-2026-05-25 `.res`/`.resi` outside these carve-outs is grandfathered while in-flight migration proceeds (~3,996 files across ~80 repos as of 2026-05-30; see project tracker `project_estate_rescript_to_affinescript_2026_05_28.md` and umbrella `hyperpolymath/standards#252`). New `.res`/`.resi` files in non-carve-out paths are blocked.
+Existing pre-2026-05-25 `.res`/`.resi` outside these carve-outs is grandfathered while in-flight migration proceeds (~3,996 files across ~80 repos as of 2026-05-30; see project tracker `project_estate_rescript_to_affinescript_2026_05_28.md` and umbrella `metadatastician/standards#252`). New `.res`/`.resi` files in non-carve-out paths are blocked.
 
 | Path / Pattern | Class | Rationale | Unblock condition |
 |---|---|---|---|
@@ -368,7 +368,7 @@ Retired 2026-08-31: the bootstrap-shim row (`affinescript-deno-test/**`, `affine
 
 The hyperpolymath "npm banned" policy (2026-05-25) has the following approved exemptions on the hypatia rule `cicd_rules/nodejs_detected` (matches `package-lock.json`).
 
-Migration substantially complete 2026-05-31 under umbrella `hyperpolymath/standards#253` (172 manifests at campaign start; all seven STEP issues #261/#262/#265/#268/#270/#273/#275 closed; ~22 physical-migration PRs landed plus three named-bucket audits closed `SUBSTANTIALLY DONE`; per-repo follow-up trackers cover the residual longtail). See `project_estate_npm_to_deno_2026_05_28.md`.
+Migration substantially complete 2026-05-31 under umbrella `metadatastician/standards#253` (172 manifests at campaign start; all seven STEP issues #261/#262/#265/#268/#270/#273/#275 closed; ~22 physical-migration PRs landed plus three named-bucket audits closed `SUBSTANTIALLY DONE`; per-repo follow-up trackers cover the residual longtail). See `project_estate_npm_to_deno_2026_05_28.md`.
 
 | Path / Pattern | Class | Rationale | Unblock condition |
 |---|---|---|---|
@@ -388,7 +388,7 @@ Migration substantially complete 2026-05-31 under umbrella `hyperpolymath/standa
 
 The hyperpolymath "Unnecessarily-JavaScript banned" policy (2026-05-25) has the following approved exemptions on the hypatia rules `cicd_rules/javascript_detected` (matches `*.js`) and `cicd_rules/javascript_jsx_detected` (matches `*.jsx`).
 
-Distinct from TS/RS policy: JavaScript is *allowed* where AffineScript cannot reach. The rule targets the gap between current AS bindings and current JS usage — JS that COULD be AS today but isn't. In-flight migration tracked under `hyperpolymath/standards#254` (1,609 files across the estate; see `project_estate_unnecessary_js_2026_05_28.md`). Ship mode: HARD-BLOCK + extensive carve-outs (umbrella#254 STEP 1 design question resolved 2026-05-30). Per-PR exemption via inline pragma `// hypatia: allow cicd_rules/javascript_detected -- <reason>`.
+Distinct from TS/RS policy: JavaScript is *allowed* where AffineScript cannot reach. The rule targets the gap between current AS bindings and current JS usage — JS that COULD be AS today but isn't. In-flight migration tracked under `metadatastician/standards#254` (1,609 files across the estate; see `project_estate_unnecessary_js_2026_05_28.md`). Ship mode: HARD-BLOCK + extensive carve-outs (umbrella#254 STEP 1 design question resolved 2026-05-30). Per-PR exemption via inline pragma `// hypatia: allow cicd_rules/javascript_detected -- <reason>`.
 
 | Path / Pattern | Class | Rationale | Unblock condition |
 |---|---|---|---|

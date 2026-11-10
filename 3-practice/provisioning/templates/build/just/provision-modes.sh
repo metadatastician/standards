@@ -15,7 +15,7 @@
 #   --setup exits non-zero); any other mode returns, so the app's own switch
 #   handles it. hp_provision_dispatch itself returns 99 for "not mine".
 #
-# Canon: hyperpolymath/standards launcher/launcher-standard_praxis.deed
+# Canon: metadatastician/standards launcher/launcher-standard_praxis.deed
 #        (archetypes, provisioning-modes) and
 #        3-practice/provisioning/PROVISIONING-STANDARD.adoc
 

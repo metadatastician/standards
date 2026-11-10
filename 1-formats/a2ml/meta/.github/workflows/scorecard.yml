@@ -20,5 +20,5 @@ jobs:
       contents: read
       security-events: write
       id-token: write
-    uses: hyperpolymath/standards/.github/workflows/scorecard-reusable.yml@8ff9ce65f7e54f8d5c5aa94584e2ead0f2ba460f
+    uses: metadatastician/standards/.github/workflows/scorecard-reusable.yml@8ff9ce65f7e54f8d5c5aa94584e2ead0f2ba460f
     # No `secrets:` line: the reusable declares none (standards#1108 §6b).

@@ -6,7 +6,7 @@ edition = "2021"
 description = "Initialise coordination.k9 from descriptile A2ML files (one-shot migration)"
 license = "PMPL-1.0-or-later"
 authors = ["Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>"]
-repository = "https://github.com/hyperpolymath/standards"
+repository = "https://github.com/metadatastician/standards"
 
 [[bin]]
 name = "k9-init"

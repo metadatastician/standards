@@ -32,7 +32,7 @@ staleness-test:
     @bash scripts/tests/propagate-workflow-pins-test.sh
 
 # Check the repository's workflow references and, when a repository slug is
-# supplied, its live Actions policy. Example: just check-allowlist hyperpolymath/standards
+# supplied, its live Actions policy. Example: just check-allowlist metadatastician/standards
 check-allowlist repository="":
     @bash scripts/check-allowed-actions.sh config/settings/actions-allowlist.json .github/workflows
     @if [ -n "{{repository}}" ]; then bash scripts/check-actions-policy.sh "{{repository}}"; fi
@@ -264,7 +264,7 @@ help-me:
     @echo "Shell: $SHELL"
     @echo ""
     @echo "To report an issue:"
-    @echo "  https://github.com/hyperpolymath/standards/issues/new"
+    @echo "  https://github.com/metadatastician/standards/issues/new"
     @echo ""
     @echo "Include the output of 'just doctor' in your report."
 
@@ -284,4 +284,4 @@ crg-badge:
       A) color="brightgreen" ;; B) color="green" ;; C) color="yellow" ;; \
       D) color="orange" ;; E) color="red" ;; F) color="critical" ;; \
       *) color="lightgrey" ;; esac; \
-    echo "[![CRG $grade](https://img.shields.io/badge/CRG-$grade-$color?style=flat-square)](https://github.com/hyperpolymath/standards/tree/main/4-readiness/component-readiness-grades)"
+    echo "[![CRG $grade](https://img.shields.io/badge/CRG-$grade-$color?style=flat-square)](https://github.com/metadatastician/standards/tree/main/4-readiness/component-readiness-grades)"

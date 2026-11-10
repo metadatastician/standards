@@ -59,7 +59,7 @@
 # repository whose gate already passes is a vacuous entry — it would inflate
 # the denominator this ledger prints and exempt nothing.
 #
-# hyperpolymath/standards#967 is the issue that retires these lines: each one
+# metadatastician/standards#967 is the issue that retires these lines: each one
 # leaves when a real gate exists for its ecosystem.
 
 # Julia. No Julia lint/format job exists. `JuliaFormatter.format(p; overwrite=false)`

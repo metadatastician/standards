@@ -5,7 +5,7 @@ link:./TRUSTED-BASE-REDUCTION-POLICY.adoc[`+docs/TRUSTED-BASE-REDUCTION-POLICY.a
 — the canonical policy, originally landed via this repo at PR#203.
 
 This file is the schema-conformant per-repo proof-debt index for
-`+hyperpolymath/standards+` itself. The broader strategic proof goals
+`+metadatastician/standards+` itself. The broader strategic proof goals
 across the standards monorepo live in
 link:../PROOF-NEEDS.md[`+PROOF-NEEDS.md+`]; this file enumerates the
 _specific_ soundness-relevant escape hatches the
