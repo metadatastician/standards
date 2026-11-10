@@ -311,7 +311,9 @@ Before writing output, the generator MUST:
 . Resolve and validate `project.deed_ref`, if present.
 . Stop without changing generated files if validation fails.
 
-A generic YAML parser is not a conforming K9 parser.
+A generic YAML parser is not a conforming K9 parser. The conforming
+validator is `tools/validate/` (`bun validate.js FILE`); see its README for
+what a pass covers.
 
 == Generated Output
 
