@@ -8,7 +8,7 @@
 # Usage:
 #   # Download, READ IT, then run — this script installs software and uses sudo.
 #   curl -fsSL -o setup.sh \
-#     https://raw.githubusercontent.com/hyperpolymath/standards/main/setup.sh
+#     https://raw.githubusercontent.com/metadatastician/standards/main/setup.sh
 #   less setup.sh && sh setup.sh
 #
 #   # or after cloning:
@@ -274,7 +274,7 @@ main() {
     # Step 2: Check if we're in the repo directory
     if [ ! -f "Justfile" ] && [ ! -f "justfile" ]; then
         warn "Not in a repo directory (no Justfile found)"
-        info "Clone first: git clone https://github.com/hyperpolymath/standards.git"
+        info "Clone first: git clone https://github.com/metadatastician/standards.git"
         info "Then: cd standards && ./setup.sh"
         exit 1
     fi

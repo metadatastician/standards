@@ -867,7 +867,7 @@ strace -f ./must deploy 2>&1 | tee execution.log
 - Disclosure: Coordinated (90-day window)
 
 **Public disclosure (for minor issues):**
-- GitHub Issues: https://github.com/hyperpolymath/standards/tree/main/k9-svc/issues
+- GitHub Issues: https://github.com/metadatastician/standards/tree/main/k9-svc/issues
 - Label: `security`
 - Discussion welcome
 
@@ -1003,7 +1003,7 @@ strace -f ./must deploy 2>&1 | tee execution.log
 - Contribute improvements
 
 **Questions not answered here?**
-- File an issue: https://github.com/hyperpolymath/standards/tree/main/k9-svc/issues
+- File an issue: https://github.com/metadatastician/standards/tree/main/k9-svc/issues
 - Email: j.d.a.jewell@open.ac.uk
 - We'll update this FAQ
 

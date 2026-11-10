@@ -30,7 +30,7 @@ https://github.com/hyperpolymath/blocky-writer/pull/73[blocky-writer#73]).
 
 The owner answered it as **D189** (2026-09-30, `scope: repo`, basis
 *applied-unless-struck*; surface
-https://github.com/hyperpolymath/standards/issues/787#issuecomment-5913118060[standards#787]):
+https://github.com/metadatastician/standards/issues/787#issuecomment-5913118060[standards#787]):
 
 [quote]
 ____

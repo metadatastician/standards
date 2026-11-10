@@ -24,7 +24,7 @@
 #     identity
 #       --lane NAME           grid lane (default: k9)
 #       --sha SHA --run ID --url URL --pr N --repo OWNER/NAME
-#       --canon-ref SHA       the hyperpolymath/standards commit that supplied the validator
+#       --canon-ref SHA       the metadatastician/standards commit that supplied the validator
 #   k9-grid.sh baseline FILE
 #     Print the baseline embedded in a previous comment body, or null.
 #

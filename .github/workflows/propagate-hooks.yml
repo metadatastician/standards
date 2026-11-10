@@ -114,7 +114,7 @@ jobs:
             # For production, this should query the GitHub API for all repos
             # in hyperpolymath and metadatastician orgs and filter by .githooks
             ALL_REPOS=(
-              "hyperpolymath/standards"
+              "metadatastician/standards"
             )
             
             # Filter to only repos that have .githooks directory.
@@ -151,10 +151,10 @@ jobs:
               exit 1
             fi
 
-            # CANARY (issue #807): hyperpolymath/standards OWNS .githooks — 14
+            # CANARY (issue #807): metadatastician/standards OWNS .githooks — 14
             # hooks. If the canonical repo classifies as hookless, the classifier
             # is broken, not the repo. Fail loudly instead of propagating nowhere.
-            CANARY="hyperpolymath/standards"
+            CANARY="metadatastician/standards"
             if [[ " ${ALL_REPOS[*]} " == *" $CANARY "* && ! " ${REPOS_WITH_HOOKS[*]} " == *" $CANARY "* ]]; then
               echo "::error::Discovery canary failed: $CANARY has .githooks yet classified hookless — discovery is broken, refusing to propagate"
               exit 1
@@ -280,7 +280,7 @@ jobs:
           #!/usr/bin/env bash
           # SPDX-License-Identifier: MPL-2.0
           # Git Hooks Installer for this repository
-          # Copied from: hyperpolymath/standards
+          # Copied from: metadatastician/standards
           
           set -euo pipefail
           

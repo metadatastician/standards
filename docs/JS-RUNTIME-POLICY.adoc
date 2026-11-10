@@ -2,9 +2,9 @@
 = JS Runtime & Package Management Policy
 :revdate: 2026-10-14
 :status: ACTIVE
-:issue-67: hyperpolymath/standards#67
-:issue-68: hyperpolymath/standards#68
-:issue-253: hyperpolymath/standards#253
+:issue-67: metadatastician/standards#67
+:issue-68: metadatastician/standards#68
+:issue-253: metadatastician/standards#253
 
 This document is the canonical estate-wide policy for JavaScript/TypeScript
 runtimes and package management.  It is referenced by

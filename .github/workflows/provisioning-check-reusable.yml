@@ -20,7 +20,7 @@
 # Caller:
 #   jobs:
 #     provisioning:
-#       uses: hyperpolymath/standards/.github/workflows/provisioning-check-reusable.yml@<sha>
+#       uses: metadatastician/standards/.github/workflows/provisioning-check-reusable.yml@<sha>
 name: "Provisioning Check Reusable"
 
 on:

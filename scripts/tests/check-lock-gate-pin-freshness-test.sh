@@ -84,7 +84,7 @@ jobs:
       - name: $name
         uses: actions/checkout@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
         with:
-          repository: hyperpolymath/standards
+          repository: metadatastician/standards
           ref: $ref
           path: .standards-lock
           sparse-checkout: |
@@ -155,7 +155,7 @@ jobs:
       - name: Checkout standards for the lock gate
         uses: actions/checkout@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
         with:
-          repository: hyperpolymath/standards
+          repository: metadatastician/standards
           sparse-checkout: |
             scripts/update-actions-lock.sh
 YAML

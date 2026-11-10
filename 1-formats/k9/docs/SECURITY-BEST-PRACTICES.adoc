@@ -930,7 +930,7 @@ std.serialize 'Json config
 
 4. **Report to K9 maintainers**
    - Email: security@k9-svc.org (not yet active, use GitHub Security)
-   - GitHub: https://github.com/hyperpolymath/standards/tree/main/k9-svc/security/advisories/new
+   - GitHub: https://github.com/metadatastician/standards/tree/main/k9-svc/security/advisories/new
    - Include: component file, signature, observed behavior
 
 5. **Warn the community**

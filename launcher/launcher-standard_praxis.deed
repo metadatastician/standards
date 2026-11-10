@@ -65,7 +65,9 @@
     ;; $LAUNCH_SCAFFOLDER_STANDARD is set.
     (standard-search
       (path :priority 10 :value "$HP_ESTATE_ROOT/standards/launcher/launcher-standard_praxis.deed")
-      (path :priority 20 :value "$XDG_DATA_HOME/hyperpolymath/standards/launcher/launcher-standard_praxis.deed")
+      (path :priority 20 :value "$XDG_DATA_HOME/metadatastician/standards/launcher/launcher-standard_praxis.deed")
+      (path :priority 25 :value "$XDG_DATA_HOME/hyperpolymath/standards/launcher/launcher-standard_praxis.deed"
+            :note "former owner; kept so installs from before the move still resolve")
       (path :priority 30 :value "/var/mnt/eclipse/repos/standards/launcher/launcher-standard_praxis.deed")
       (path :priority 40 :value "$HOME/developer/repos/standards/launcher/launcher-standard_praxis.deed")
       (path :priority 50 :value "$HOME/dev/repos/standards/launcher/launcher-standard_praxis.deed")))

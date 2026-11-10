@@ -34,7 +34,7 @@
 #     contents: read
 #   jobs:
 #     mirror:
-#       uses: hyperpolymath/standards/.github/workflows/mirror-reusable.yml@<sha>
+#       uses: metadatastician/standards/.github/workflows/mirror-reusable.yml@<sha>
 #       secrets:
 #         GITLAB_SSH_KEY: ${{ secrets.GITLAB_SSH_KEY }}
 #         BITBUCKET_SSH_KEY: ${{ secrets.BITBUCKET_SSH_KEY }}

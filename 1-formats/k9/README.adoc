@@ -78,7 +78,7 @@ A `.k9` file is not a document you open; it is a component you unleash.
 [source,bash]
 ----
 # Clone the repo
-git clone https://github.com/hyperpolymath/standards.git
+git clone https://github.com/metadatastician/standards.git
 # Note: K9-SVC is located in standards/k9-svc
 cd k9-svc
 

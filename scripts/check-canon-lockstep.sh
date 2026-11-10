@@ -4,7 +4,7 @@
 #
 # check-canon-lockstep.sh — GATE A.
 #
-# Proposed location: hyperpolymath/standards/scripts/check-canon-lockstep.sh
+# Proposed location: metadatastician/standards/scripts/check-canon-lockstep.sh
 # Runs from:         .github/workflows/canon-spine-lockstep.yml
 #
 # This is the gate that makes `standards` BOUND BY `rsr-template-repo`.
@@ -32,7 +32,7 @@
 # USAGE
 #   check-canon-lockstep.sh [--canon DIR] [--spine DIR] [--base REF] [--strict]
 #
-#   --canon DIR   path to hyperpolymath/standards   (default: .)
+#   --canon DIR   path to metadatastician/standards   (default: .)
 #   --spine DIR   path to a cloned rsr-template-repo
 #   --base REF    the ref to diff against for assertion 2 (default: origin/main)
 #   --strict      promote assertions 3/4/5 from SKIP to FAIL

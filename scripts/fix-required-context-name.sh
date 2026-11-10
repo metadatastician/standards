@@ -48,7 +48,7 @@
 
 set -uo pipefail
 
-REPO="${REPO:-hyperpolymath/standards}"
+REPO="${REPO:-metadatastician/standards}"
 RULESET="${RULESET:-23787415}"
 OLD_CONTEXT="${OLD_CONTEXT:-scan / Hypatia Neurosymbolic Analysis}"
 NEW_CONTEXT="${NEW_CONTEXT:-Hypatia verdict grid / Hypatia Neurosymbolic Analysis}"

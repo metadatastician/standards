@@ -292,7 +292,7 @@ a caller may still pass a 40-hex commit deliberately
 |===
 
 `readme-derive-reusable.yml`'s fetch also moves from the pre-transfer slug
-`hyperpolymath/standards` to `metadatastician/standards` (issue #1340 tracks the
+`metadatastician/standards` to `metadatastician/standards` (issue #1340 tracks the
 remaining instances of that coordinate; the redirect works today, which is why
 it was not urgent — it is corrected here because the fetch was being rewritten
 anyway).

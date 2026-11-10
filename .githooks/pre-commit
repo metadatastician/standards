@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: MPL-2.0
 # Hyperpolymath Estate Pre-commit Hook
-# Source: https://github.com/hyperpolymath/standards
+# Source: https://github.com/metadatastician/standards
 #
 # This hook enforces estate-wide standards BEFORE commit is finalized.
 # It runs on all staged files only (not the entire repo) for performance.
@@ -64,7 +64,7 @@ run_validator_required() {
   [ -z "$target_files" ] && [ "$scope" = "staged" ] && return 0
   if [ ! -f "$HOOK_DIR/$script" ]; then
     echo -e "${RED}[pre-commit] ($label) REQUIRED validator '$script' is missing — refusing to pass a check that does not exist.${NC}" >&2
-    echo "  Restore it from https://github.com/hyperpolymath/standards/tree/main/.githooks" >&2
+    echo "  Restore it from https://github.com/metadatastician/standards/tree/main/.githooks" >&2
     ERRORS=$((ERRORS + 1))
     return 1
   fi
@@ -155,7 +155,7 @@ fi
 echo ""
 if [ $ERRORS -gt 0 ]; then
   echo -e "${RED}Pre-commit check FAILED with $ERRORS error(s)${NC}"
-  echo "See: https://github.com/hyperpolymath/standards"
+  echo "See: https://github.com/metadatastician/standards"
   exit 1
 else
   echo -e "${GREEN}✅ All pre-commit checks PASSED${NC}"
