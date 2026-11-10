@@ -39,6 +39,7 @@ done
 printf '#!/usr/bin/env bash\nif [ "${1:-}" = --prior ] && [ -n "${PRIOR_COPY:-}" ]; then cp "$2" "$PRIOR_COPY"; fi\nexit "${CLOSE_RC:-0}"\n' > "$TOOLS/close-lock.sh"
 printf '#!/usr/bin/env bash\nexit "${VERIFY_RC:-0}"\n' > "$TOOLS/update-actions-lock.sh"
 printf '#!/usr/bin/env bash\nexit "${SYNC_RC:-0}"\n' > "$TOOLS/check-lock-sync.sh"
+printf '#!/usr/bin/env bash\nexit "${PIN_RC:-0}"\n' > "$TOOLS/check-lock-pin-contract.sh"
 
 # The `gh` stub. `actions-lock` (update mode) applies $TOOL_ACTION to the cwd;
 # `api graphql` records its stdin payload and answers with a commit oid.
@@ -161,6 +162,16 @@ d="$(fixture composite)"; mkdir -p "$d/.github/actions/x"
 expect "a repo with local composite actions is regenerated" changed "$(TOOL_ACTION=bump regen_lock "$d" 2>/dev/null)"
 d="$(fixture syncfail)"
 expect "a lock check-lock-sync rejects is unverified, not committed" unverified "$(TOOL_ACTION=bump SYNC_RC=1 regen_lock "$d" 2>/dev/null)"
+
+# A leaf whose ref: repeats its own SHA passes --verify-local (advisory
+# `sha-as-ref`) and check-lock-sync, but the runner refuses it. The contract
+# decides; a refusal (1) and a not-inspected (2) both stop the commit.
+d="$(fixture pinbad)"
+expect "a lock the pin contract rejects is unverified, not committed" unverified "$(TOOL_ACTION=bump PIN_RC=1 regen_lock "$d" 2>/dev/null)"
+d="$(fixture pinuninspected)"
+expect "a lock the pin contract cannot inspect is unverified, not committed" unverified "$(TOOL_ACTION=bump PIN_RC=2 regen_lock "$d" 2>/dev/null)"
+d="$(fixture pinok)"
+expect "control: the same bump with a passing contract is committed" changed "$(TOOL_ACTION=bump PIN_RC=0 regen_lock "$d" 2>/dev/null)"
 
 # Planted control for the dirty guard: a repair step that writes anything
 # besides the lock (after the restore has run) must stop the commit.

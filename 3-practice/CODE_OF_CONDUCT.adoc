@@ -320,7 +320,7 @@ spaces.
 If you have questions about this Code of Conduct:
 
 * Open a
-https://github.com/hyperpolymath/standards/discussions[Discussion] (for
+https://github.com/metadatastician/standards/discussions[Discussion] (for
 general questions)
 * Email \{\{CONDUCT_EMAIL}} (for private questions)
 * Contact any maintainer directly

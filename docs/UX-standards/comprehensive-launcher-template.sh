@@ -192,7 +192,7 @@ start_server() {
     err "  1. Check if port $APP_PORT is available: 'lsof -i :$APP_PORT'"
     err "  2. Review server logs: 'tail -50 $LOG_FILE'"
     err "  3. Verify dependencies: '$COMMAND --version'"
-    err "  4. See documentation: https://github.com/hyperpolymath/standards/blob/main/docs/UX-standards/launcher-standard.adoc"
+    err "  4. See documentation: https://github.com/metadatastician/standards/blob/main/docs/UX-standards/launcher-standard.adoc"
     err ""
     err "For LLM-assisted troubleshooting:"
     err "  hypatia diagnose --app $APP_NAME --log $LOG_FILE"
@@ -256,7 +256,7 @@ open_browser() {
     warn "If you're on a headless system or minimal environment:"
     warn "  1. Install a browser: 'sudo dnf install firefox' or 'sudo apt install chromium'"
     warn "  2. Or use curl to test: 'curl -v $URL'"
-    warn "  3. See: https://github.com/hyperpolymath/standards/blob/main/docs/UX-standards/launcher-standard.adoc#browser-issues"
+    warn "  3. See: https://github.com/metadatastician/standards/blob/main/docs/UX-standards/launcher-standard.adoc#browser-issues"
   fi
   
   # Soft-attach: Report browser launch attempt

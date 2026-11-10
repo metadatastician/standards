@@ -104,7 +104,7 @@
 
   ; === Cross-Repo Musts (owned elsewhere — listed for traceability only) ===
   ; These were established this session but belong in the named repo's own
-  ; MUST.contractile, not standards'. Tracked in hyperpolymath/standards#370.
+  ; MUST.contractile, not standards'. Tracked in metadatastician/standards#370.
   (cross-repo
     (hypatia
       (must "WF014 scorecard detector is JOB-scoped, not FILE-scoped")

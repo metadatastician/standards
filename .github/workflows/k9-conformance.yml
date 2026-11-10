@@ -37,7 +37,7 @@ name: k9-conformance
 # Caller:
 #   jobs:
 #     k9:
-#       uses: hyperpolymath/standards/.github/workflows/k9-conformance.yml@<sha>
+#       uses: metadatastician/standards/.github/workflows/k9-conformance.yml@<sha>
 #       permissions:
 #         contents: read
 #         pull-requests: read
@@ -98,7 +98,7 @@ jobs:
       # In this repo the PR's own validator is in the first checkout; a caller
       # gets validator, contract and renderer from the canon checkout at
       # job.workflow_sha.
-      CANON: ${{ (github.repository_id == 1116521501 || github.repository == 'hyperpolymath/standards' || github.repository == 'metadatastician/standards') && '.' || '.k9-canon' }}
+      CANON: ${{ github.repository_id == 1116521501 && '.' || '.k9-canon' }}
       NICKEL_VERSION: '1.18.0'
       NICKEL_SHA256: '9cba4dd65ae9915ec61f73033aafcff307a377665a83fd8f530df086763318cb'
       IJSON_JCS_REV: '0fdeea716fd558e9807362acf6f8202d56d8d88f'
@@ -113,7 +113,7 @@ jobs:
           persist-credentials: false
 
       - name: checkout the K9 validator, contract and renderer at this workflow's commit
-        if: github.repository_id != 1116521501 && github.repository != 'hyperpolymath/standards' && github.repository != 'metadatastician/standards'
+        if: github.repository_id != 1116521501
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: metadatastician/standards
@@ -130,10 +130,10 @@ jobs:
           WORKFLOW_SHA: ${{ job.workflow_sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
-          # Immutable repository ID first (it survives transfer/rename),
-          # then either known slug: recognising only the old slug silently
-          # flips this to the caller branch in the canon itself.
-          if [ "${GITHUB_REPOSITORY_ID:-}" = "1116521501" ] || [ "$GITHUB_REPOSITORY" = "hyperpolymath/standards" ] || [ "$GITHUB_REPOSITORY" = "metadatastician/standards" ]; then
+          # The immutable repository ID survives a transfer or rename, so it is
+          # the only identity the canon checks (no slug: a slug-only check
+          # silently flips this to the caller branch after a move).
+          if [ "${GITHUB_REPOSITORY_ID:-}" = "1116521501" ]; then
             echo "CANON_REF=$HEAD_SHA" >> "$GITHUB_ENV"
           else
             echo "CANON_REF=$WORKFLOW_SHA" >> "$GITHUB_ENV"
@@ -166,18 +166,18 @@ jobs:
             || echo "::warning::ijson-jcs did not install; report.json falls back to jq -S -c"
 
       - name: Renderer regression tests
-        if: (github.repository_id == 1116521501 || github.repository == 'hyperpolymath/standards' || github.repository == 'metadatastician/standards')
+        if: github.repository_id == 1116521501
         run: bash scripts/tests/k9-grid-test.sh
 
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        if: (github.repository_id == 1116521501 || github.repository == 'hyperpolymath/standards' || github.repository == 'metadatastician/standards')
+        if: github.repository_id == 1116521501
 
       - name: coordination.k9 validator self-test (v1.2 ABNF through apg-js, fixtures, mutants, v1.1 -> v1.2 side condition)
         # 2-protocols/k9-coordination/tools/validate (standards#1221). The
         # repository's own coordination.k9 is among the files it must accept,
         # and it re-checks the side condition of the Idris2 proof in its
         # proofs/ directory, which echidna-verify.yml typechecks.
-        if: (github.repository_id == 1116521501 || github.repository == 'hyperpolymath/standards' || github.repository == 'metadatastician/standards')
+        if: github.repository_id == 1116521501
         working-directory: 2-protocols/k9-coordination/tools/validate
         run: |
           bun install --frozen-lockfile

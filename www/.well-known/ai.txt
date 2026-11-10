@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: MPL-2.0
-# AI usage & training policy for hyperpolymath/standards.
+# AI usage & training policy for metadatastician/standards.
 # Informal, robots-style directives for AI/ML agents and crawlers.
 # The estate maintains a machine-readable bot-exclusion registry at
 # .machine_readable/bot_exclusion_registry.a2ml and an AI-gatekeeper
@@ -15,5 +15,5 @@ Disallow-Training: /
 # provided attribution and licence terms (see LICENSE, humans.txt) are kept.
 Allow: /
 
-Contact: https://github.com/hyperpolymath/standards/security/advisories/new
-Policy: https://github.com/hyperpolymath/standards/blob/main/.claude/CLAUDE.md
+Contact: https://github.com/metadatastician/standards/security/advisories/new
+Policy: https://github.com/metadatastician/standards/blob/main/.claude/CLAUDE.md

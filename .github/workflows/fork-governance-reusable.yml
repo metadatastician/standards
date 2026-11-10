@@ -119,7 +119,7 @@ jobs:
       # In this repository the renderer is already checked out below the
       # workspace; anywhere else it comes from the canon at a pinned ref.
       - name: Checkout the caller
-        if: ${{ (github.repository_id == 1116521501 || github.repository == 'hyperpolymath/standards' || github.repository == 'metadatastician/standards') }}
+        if: ${{ github.repository_id == 1116521501 }}
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -131,7 +131,7 @@ jobs:
       # Optional metadata helper, not a test gate: failure is rendered as
       # indeterminate coverage while the three lane reports remain available.
       - name: Fetch the coverage helper independently of canon-ref
-        if: ${{ github.repository_id != 1116521501 && github.repository != 'hyperpolymath/standards' && github.repository != 'metadatastician/standards' }}
+        if: ${{ github.repository_id != 1116521501 }}
         continue-on-error: true
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -143,7 +143,7 @@ jobs:
           sparse-checkout-cone-mode: false
 
       - name: Checkout the canon
-        if: ${{ github.repository_id != 1116521501 && github.repository != 'hyperpolymath/standards' && github.repository != 'metadatastician/standards' }}
+        if: ${{ github.repository_id != 1116521501 }}
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: metadatastician/standards
@@ -189,8 +189,8 @@ jobs:
           HYPATIA_ADVISORY: ${{ inputs.hypatia-advisory }}
           PR_NUMBER: ${{ inputs.pr-number }}
           GH_TOKEN: ${{ github.token }}
-          RENDERER: ${{ (github.repository_id == 1116521501 || github.repository == 'hyperpolymath/standards' || github.repository == 'metadatastician/standards') && 'scripts/fork-governance-render.sh' || '.fork-governance-canon/scripts/fork-governance-render.sh' }}
-          COVERAGE_HELPER: ${{ (github.repository_id == 1116521501 || github.repository == 'hyperpolymath/standards' || github.repository == 'metadatastician/standards') && 'scripts/reviewer-coverage.sh' || '.fork-governance-coverage/scripts/reviewer-coverage.sh' }}
+          RENDERER: ${{ github.repository_id == 1116521501 && 'scripts/fork-governance-render.sh' || '.fork-governance-canon/scripts/fork-governance-render.sh' }}
+          COVERAGE_HELPER: ${{ github.repository_id == 1116521501 && 'scripts/reviewer-coverage.sh' || '.fork-governance-coverage/scripts/reviewer-coverage.sh' }}
         run: |
           set -euo pipefail
           [ -f "$RENDERER" ] || { echo "::error::renderer not found at $RENDERER"; exit 1; }

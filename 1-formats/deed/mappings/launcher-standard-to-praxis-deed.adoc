@@ -14,7 +14,7 @@ proved on something whose blast radius can be enumerated rather than on the
 == 1. Source surface
 
 * **Canonical instance:** `launcher/launcher-standard.a2ml` in
-  `hyperpolymath/standards` — 268 lines, 11,863 B, 18 sections, `version =
+  `metadatastician/standards` — 268 lines, 11,863 B, 18 sections, `version =
   "0.3.0"`. Exactly one instance estate-wide; this family has no per-repo
   fan-out, which is why it is a safe first cut.
 * **Prose counterpart:** `docs/UX-standards/launcher-standard.adoc`, bound to
@@ -415,7 +415,7 @@ is the invariant worth trusting: when the worktree exclusion was corrected the
 path figures moved (36→31, 29→26, 71→66) while distinct descriptors stayed 21,
 distinct citing descriptors stayed 17 and distinct upstream repositories stayed
 18 — which is exactly what removing duplicates should do.
-`hyperpolymath/standards#960` carries the decision on what happens to these
+`metadatastician/standards#960` carries the decision on what happens to these
 descriptors.
 
 == 8. What this spec does not claim

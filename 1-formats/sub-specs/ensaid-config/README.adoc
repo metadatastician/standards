@@ -65,7 +65,7 @@ tailored portfolios, and workspace protection policies.
 [portfolios]       # Custom portfolio definitions for this repo context
 ----
 
-All content uses the https://github.com/hyperpolymath/standards/tree/main/a2ml[A2ML] format
+All content uses the https://github.com/metadatastician/standards/tree/main/a2ml[A2ML] format
 (TOML-compatible markup for AI-readable configuration).
 
 == Quick Example

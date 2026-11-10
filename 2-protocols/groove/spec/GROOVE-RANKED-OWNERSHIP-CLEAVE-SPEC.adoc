@@ -29,7 +29,7 @@ transport); those are separate documents.
 == Status of This Memo
 
 This document specifies an experimental protocol for the estate. It is a
-normative standard in `hyperpolymath/standards`; conformance is defined in
+normative standard in `metadatastician/standards`; conformance is defined in
 <<conformance>>. Discussion and suggestions for improvement are requested.
 It supersedes the ad-hoc `docs/proofs/spec-templates/T2-high/groove-browser-harness.md`
 as the canonical statement of groove teardown discipline.

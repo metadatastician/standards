@@ -62,7 +62,7 @@ tables are debt wearing an exemption's clothing, and they migrate to
 
 == Layer 1: Estate-wide bot write denylist
 
-**File:** `hyperpolymath/standards/.machine_readable/bot_exclusion_registry.a2ml`
+**File:** `metadatastician/standards/.machine_readable/bot_exclusion_registry.a2ml`
 
 **Scope:** All bots, all repos. Authoritative across the entire estate.
 
@@ -101,7 +101,7 @@ entry don't block CI; they're surfaced in the run summary as
 objects. See `docs/HYPATIA-BASELINE-FORMAT.adoc` for the full schema.
 
 **Consumer:** `apply-baseline.sh` invoked from
-`hyperpolymath/standards/.github/workflows/governance-reusable.yml`.
+`metadatastician/standards/.github/workflows/governance-reusable.yml`.
 Suppresses matching findings from the gate, downgrades severity if
 `severity_override` is set, fails on expired entries.
 
@@ -154,7 +154,7 @@ There is currently no supported per-PR exemption mechanism. `.hypatia-ignore`
 (Layer 2a) is committed to the default branch like any other file, so it
 is not per-PR either. **Do not invent new
 file conventions.** If you need per-PR exemption, file an issue against
-`hyperpolymath/standards` proposing a designed mechanism.
+`metadatastician/standards` proposing a designed mechanism.
 
 If a mechanism is added, it should be one of:
 
@@ -200,7 +200,7 @@ These have been attempted and should be refused at review:
   instead — keeps the finding visible while unblocking the gate.
 * Adding the offending path to `.gitignore`. The file still exists in
   history; Hypatia and other estate scanners still see it.
-* Forking `hyperpolymath/standards` to disable the rule for one repo.
+* Forking `metadatastician/standards` to disable the rule for one repo.
   If a rule is wrong for one repo, the rule needs scoping in the
   upstream, not a fork.
 
@@ -423,7 +423,7 @@ exemption is narrow and evidence-backed, not doubly justified.
   previously an AffineScript source compiled to a Deno artifact).
 * `scripts/tests/check-ts-allowlist-test.sh` — the 18-case regression
   corpus that pins its behaviour.
-* `hyperpolymath/standards#????` — proposal that landed this consumer.
-* `hyperpolymath/standards#1005` — the codeql-action re-pin campaign whose
+* `metadatastician/standards#????` — proposal that landed this consumer.
+* `metadatastician/standards#1005` — the codeql-action re-pin campaign whose
   census surfaced the Layer 5 population.
 * `hyperpolymath/hypatia` — the scanner that emits findings.

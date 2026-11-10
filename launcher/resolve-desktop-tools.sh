@@ -61,7 +61,8 @@ hp_resolve_standard() {
     local -a candidates=(
         "${LAUNCH_SCAFFOLDER_STANDARD:-}"
         "${HP_ESTATE_ROOT:+${HP_ESTATE_ROOT}/standards/launcher/launcher-standard_praxis.deed}"
-        "${XDG_DATA_HOME:-${HOME}/.local/share}/hyperpolymath/standards/launcher/launcher-standard_praxis.deed"
+        "${XDG_DATA_HOME:-${HOME}/.local/share}/metadatastician/standards/launcher/launcher-standard_praxis.deed"
+        "${XDG_DATA_HOME:-${HOME}/.local/share}/hyperpolymath/standards/launcher/launcher-standard_praxis.deed"  # former owner
         "/var/mnt/eclipse/repos/standards/launcher/launcher-standard_praxis.deed"
         "${HOME}/developer/repos/standards/launcher/launcher-standard_praxis.deed"
         "${HOME}/dev/repos/standards/launcher/launcher-standard_praxis.deed"

@@ -184,7 +184,7 @@ RSR boilerplate (LICENSE, CODE_OF_CONDUCT, CONTRIBUTING, SECURITY, MAINTAINERS) 
 |ECOSYSTEM.a2ml spec, IANA considerations
 
 |`standards-update/`
-|https://github.com/hyperpolymath/standards-update[standards-update]
+|https://github.com/metadatastician/standards-update[standards-update]
 |Standards update tooling and documentation
 |===
 

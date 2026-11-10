@@ -6,7 +6,7 @@
 #
 # provision-lib.sh — the shared provisioning engine behind build/just/provision.just
 #
-# Canon: hyperpolymath/standards 3-practice/provisioning/PROVISIONING-STANDARD.adoc
+# Canon: metadatastician/standards 3-practice/provisioning/PROVISIONING-STANDARD.adoc
 # Vendored into every repo at build/just/provision-lib.sh by `provision-set mint`.
 # DO NOT hand-edit a vendored copy: repo-specific facts live in
 # .machine_readable/descriptiles/provisioning_praxis.deed, and `provision-set realign`

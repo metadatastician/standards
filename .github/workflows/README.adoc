@@ -362,7 +362,7 @@ jobs:
     permissions:
       actions: read
       contents: read
-    uses: hyperpolymath/standards/.github/workflows/governance-reusable.yml@<full-40-char-commit-sha>
+    uses: metadatastician/standards/.github/workflows/governance-reusable.yml@<full-40-char-commit-sha>
     # Add a `secrets:` block ONLY when the callee declares named secrets
     # under `workflow_call.secrets`, passing each by name. Never use
     # `secrets: inherit` — it forwards every repo/org secret the caller

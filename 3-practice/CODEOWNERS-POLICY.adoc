@@ -9,7 +9,7 @@ Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 
 Canonical `CODEOWNERS` policy for all `hyperpolymath/*` repositories.
 All maintainers and AI agents must follow this document. It resolves
-link:https://github.com/hyperpolymath/standards/issues/55[standards#55].
+link:https://github.com/metadatastician/standards/issues/55[standards#55].
 
 == Problem
 
@@ -65,7 +65,7 @@ done without the co-owner's (or repo lead's) explicit confirmation.
 ----
 # SPDX-License-Identifier: MPL-2.0
 # Solo-maintained hyperpolymath repo: no owner lines by policy.
-# See hyperpolymath/standards 3-practice/CODEOWNERS-POLICY.adoc (Rule 1).
+# See metadatastician/standards 3-practice/CODEOWNERS-POLICY.adoc (Rule 1).
 # Sole-maintainer review is moot; SPDX headers carry attribution.
 ----
 
@@ -146,7 +146,7 @@ unless every listed owner is a genuine co-owner (Rule 2).
 
 == See Also
 
-* link:https://github.com/hyperpolymath/standards/issues/55[standards#55] — originating decision
+* link:https://github.com/metadatastician/standards/issues/55[standards#55] — originating decision
 * `3-practice/LICENCE-POLICY.adoc` (this directory) — companion canonical policy; SPDX headers cover attribution
 * `3-practice/MAINTAINERS.adoc` (this directory) — maintainer-of-record (separate from CODEOWNERS auto-ping)
 * link:https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners[GitHub: About code owners]

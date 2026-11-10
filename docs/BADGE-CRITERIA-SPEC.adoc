@@ -163,7 +163,7 @@ terms, a rule the estate already enforces somewhere else; the citation
 is given so the rule is not a new invention. The scorecard generator
 `scripts/build-scorecards.sh` was retired on 2026-10-09; citations to it in
 this document refer to the file as it stood at
-https://github.com/hyperpolymath/standards/tree/6d19ce0ebae047027dcfd594c7810bf35c642faa[commit `6d19ce0e`].
+https://github.com/metadatastician/standards/tree/6d19ce0ebae047027dcfd594c7810bf35c642faa[commit `6d19ce0e`].
 
 [[H1]]
 H1 — Evidence or silence:: Every criterion marked `pass` MUST carry a
@@ -644,7 +644,7 @@ three options, so it pre-empts nothing. The Glama listing links,
 == Provenance
 
 This document was drafted on 2026-08-28 against a read-only depth-1 clone of
-`hyperpolymath/standards` at commit `4e74daad2f74bd836eec04ff2f4202bee973107c`.
+`metadatastician/standards` at commit `4e74daad2f74bd836eec04ff2f4202bee973107c`.
 Nothing was written to the repository during drafting.
 
 It was reviewed on 2026-09-04 against `origin/main` at `516bd724`, *38 commits

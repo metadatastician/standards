@@ -26,7 +26,7 @@ the check passed. Nothing in the comment is a security certification.
 
 All of it, in AsciiDoc, in one place:
 
-https://github.com/hyperpolymath/standards/tree/main/3-practice/fork-governance
+https://github.com/metadatastician/standards/tree/main/3-practice/fork-governance
 
 * `README.adoc` — what the system is and how to read a row
 * `SPEC.adoc` — the normative comment contract (markers, order, states)

@@ -262,7 +262,7 @@ environment setup - Release automation (including K9 itself) -
 Deployment workflows - CI/CD pipelines
 
 *Community:* - Open source:
-https://github.com/hyperpolymath/standards/tree/main/k9-svc (spec),
+https://github.com/metadatastician/standards/tree/main/k9-svc (spec),
 https://github.com/hyperpolymath/k9-tools (tooling) - License: PMPL-1.0
 (Polymath Public Meta-License) - Built with: Nickel, Rust, Justfile
 
@@ -286,7 +286,7 @@ in your design.
 
 *Call to Action:* - Try K9: https://github.com/hyperpolymath/k9-tools -
 Read the spec:
-https://github.com/hyperpolymath/standards/tree/main/k9-svc - Join the
+https://github.com/metadatastician/standards/tree/main/k9-svc - Join the
 meta-dogfooding movement
 
 === Why Strange Loop?

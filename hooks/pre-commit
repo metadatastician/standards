@@ -90,7 +90,7 @@ echo ""
 if [ $ERRORS -gt 0 ]; then
     echo -e "${RED}Pre-commit check failed with $ERRORS error(s)${NC}"
     echo ""
-    echo "See: https://github.com/hyperpolymath/standards for language policy"
+    echo "See: https://github.com/metadatastician/standards for language policy"
     exit 1
 else
     echo -e "${GREEN}✓ All pre-commit checks passed${NC}"

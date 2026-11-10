@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: MPL-2.0
 # governance.yml — single wrapper calling the shared estate governance bundle
-# in hyperpolymath/standards instead of carrying per-repo copies.
+# in metadatastician/standards instead of carrying per-repo copies.
 #
 # Replaces the per-repo governance scaffolding removed in the same commit:
 #   quality.yml, guix-nix-policy.yml, npm-bun-blocker.yml, ts-blocker.yml,
@@ -27,4 +27,4 @@ jobs:
     permissions:
       actions: read
       contents: read
-    uses: hyperpolymath/standards/.github/workflows/governance-reusable.yml@210f14e753c80064ec1bcae72f1d654dd9b0e687
+    uses: metadatastician/standards/.github/workflows/governance-reusable.yml@210f14e753c80064ec1bcae72f1d654dd9b0e687

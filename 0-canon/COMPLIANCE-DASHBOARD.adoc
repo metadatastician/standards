@@ -12,7 +12,7 @@ registry. The generator and the registry were retired on 2026-10-09
 (link:../REGISTRY.adoc[REGISTRY.adoc]). What follows is their last output,
 kept as a snapshot: nothing regenerates it, and editing a scorecard no longer
 changes it. The scorecards' own fate is ruling R5 on
-https://github.com/hyperpolymath/standards/issues/837[#837].
+https://github.com/metadatastician/standards/issues/837[#837].
 ====
 
 ____

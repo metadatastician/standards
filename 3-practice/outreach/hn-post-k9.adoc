@@ -179,7 +179,7 @@ behavioral states: kennel (confined), yard (supervised), hunt
 Also, I’m dogfooding it. Literally.
 
 *Links:* - Spec:
-https://github.com/hyperpolymath/standards/tree/main/k9-svc - Tools:
+https://github.com/metadatastician/standards/tree/main/k9-svc - Tools:
 https://github.com/hyperpolymath/k9-tools - Examples: 10+ real
 contractiles across repos
 
@@ -261,7 +261,7 @@ adopter.
 open-source license designed for meta-tools (tools that
 generate/validate other tools). Similar to MPL-2.0 but with provisions
 for generated artifacts. Details:
-https://github.com/hyperpolymath/standards/blob/main/k9-svc/LICENSE
+https://github.com/metadatastician/standards/blob/main/k9-svc/LICENSE
 
 *Q: Can I use K9 without Nickel?* A: Technically, yes—the `+nickel+`
 section is optional. But you lose configuration validation. K9 without
