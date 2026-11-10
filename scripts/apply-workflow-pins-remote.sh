@@ -352,12 +352,33 @@ resolve_target() {
   gh api "repos/${STANDARDS_REPO}/commits/main" --jq '.sha' 2>/dev/null
 }
 
-# validate_target — prove the SHA is reachable from standards' main.
-# Existence is not enough (see the 2026-09-04 squash-merge incident above).
-# The comparison is done SERVER-side so a shallow/partial clone cannot produce
-# a false negative.
+# validate_target — prove the SHA is SAFE TO PIN A CALLER TO, in two halves.
+#
+# 1. Reachable from standards' main. Existence is not enough (see the
+#    2026-09-04 squash-merge incident above). The comparison is done
+#    SERVER-side so a shallow/partial clone cannot produce a false negative.
+# 2. Self-consistent lock. GitHub validates every caller against the target's
+#    OWN actions.lock, so a target whose lock carries a self-SHA leaf, an
+#    unkeyed action ref or a dangling edge kills every repinned caller at
+#    `Set up job` (standards fad242d3, 74d2f66f and 571cc734 are reachable and
+#    each carry 10-12 self-SHA leaves; their callers fail with "invalid
+#    lockfile pin"). lock-selfcheck.sh is the estate's answer to "is this SHA
+#    safe to pin a caller to?"; a sweep onto a target it rejects turns N
+#    quietly broken repos into N loudly broken ones. It reads git objects
+#    only, so the target is fetched first when this checkout lacks it — in
+#    audit mode too, since a census against an unsafe target is not evidence.
 validate_target() {
-  assert_pin_ancestry "$STANDARDS_REPO" "$1" main
+  assert_pin_ancestry "$STANDARDS_REPO" "$1" main || return 1
+  if ! git -C "$STANDARDS_ROOT" cat-file -e "${1}^{commit}" 2>/dev/null; then
+    git -C "$STANDARDS_ROOT" fetch -q --depth=1 origin "$1" 2>/dev/null || {
+      log "FATAL: ${1} is not in ${STANDARDS_ROOT} and could not be fetched; lock-selfcheck.sh needs it."
+      return 1
+    }
+  fi
+  if ! STANDARDS_DIR="$STANDARDS_ROOT" bash "$STANDARDS_ROOT/scripts/lock-selfcheck.sh" "$1" >&2; then
+    log "FATAL: target ${1} fails lock-selfcheck.sh (or could not be examined); refusing to re-point any caller at it."
+    return 1
+  fi
 }
 
 # sha_is_commit <sha> — is this a real commit in standards?
@@ -593,25 +614,11 @@ main() {
   TARGET_SHA=$(resolve_target)
   [ -n "$TARGET_SHA" ] || { log "FATAL: could not resolve a target SHA."; exit 1; }
   validate_target "$TARGET_SHA" || exit 1
-  # The relock and the self-check below read the target's reusables and lock
-  # from this checkout; a shallow CI checkout may hold a different commit, so
-  # fetch it if needed. Audit mode needs it too: the census must be taken
-  # against a target that is known safe to pin.
-  if ! git -C "$STANDARDS_ROOT" cat-file -e "${TARGET_SHA}^{commit}" 2>/dev/null; then
+  # The relock reads the target's reusables and lock from this checkout; a
+  # shallow CI checkout may hold a different commit, so fetch it if needed.
+  if [ "$DO_FIX" -eq 1 ] && ! git -C "$STANDARDS_ROOT" cat-file -e "${TARGET_SHA}^{commit}" 2>/dev/null; then
     git -C "$STANDARDS_ROOT" fetch -q --depth=1 origin "$TARGET_SHA" 2>/dev/null \
-      || { log "FATAL: ${TARGET_SHA} is not in ${STANDARDS_ROOT} and could not be fetched; the self-check and relock need it."; exit 1; }
-  fi
-  # Reachable is not enough: GitHub validates every caller against the
-  # target's OWN actions.lock, so a target whose lock carries a self-SHA leaf,
-  # an unkeyed action ref or a dangling edge kills every repinned caller at
-  # `Set up job` (standards fad242d3, 74d2f66f and 571cc734 each carry 10-12
-  # self-SHA leaves, and callers pinned there fail with "invalid lockfile
-  # pin"). lock-selfcheck.sh is the estate's answer to "is this SHA safe to
-  # pin a caller to?"; a sweep onto a target it rejects turns N quietly
-  # broken repos into N loudly broken ones.
-  if ! STANDARDS_DIR="$STANDARDS_ROOT" bash "$(dirname "${BASH_SOURCE[0]}")/lock-selfcheck.sh" "$TARGET_SHA" >&2; then
-    log "FATAL: target ${TARGET_SHA} fails lock-selfcheck.sh (or could not be examined); refusing to re-point any caller at it."
-    exit 1
+      || { log "FATAL: ${TARGET_SHA} is not in ${STANDARDS_ROOT} and could not be fetched; the lock relock needs it."; exit 1; }
   fi
   log "== target: ${TARGET_SHA} (reachable from ${STANDARDS_REPO} main; lock self-consistent) =="
   [ "$DO_FIX" -eq 1 ] && log "== MODE: --fix (will open PRs) ==" || log "== MODE: audit (writes nothing) =="
