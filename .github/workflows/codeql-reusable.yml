@@ -28,26 +28,26 @@
 #   # Single-language (~85% of estate):
 #   jobs:
 #     codeql:
-#       uses: hyperpolymath/standards/.github/workflows/codeql-reusable.yml@<sha>
+#       uses: metadatastician/standards/.github/workflows/codeql-reusable.yml@<sha>
 #       # defaults to language=javascript-typescript, build-mode=none
 #
 #   # Rust-only:
 #   jobs:
 #     codeql:
-#       uses: hyperpolymath/standards/.github/workflows/codeql-reusable.yml@<sha>
+#       uses: metadatastician/standards/.github/workflows/codeql-reusable.yml@<sha>
 #       with:
 #         language: rust
 #
 #   # Multi-language (JS/TS + actions + Rust):
 #   jobs:
 #     codeql-js:
-#       uses: hyperpolymath/standards/.github/workflows/codeql-reusable.yml@<sha>
+#       uses: metadatastician/standards/.github/workflows/codeql-reusable.yml@<sha>
 #     codeql-actions:
-#       uses: hyperpolymath/standards/.github/workflows/codeql-reusable.yml@<sha>
+#       uses: metadatastician/standards/.github/workflows/codeql-reusable.yml@<sha>
 #       with:
 #         language: actions
 #     codeql-rust:
-#       uses: hyperpolymath/standards/.github/workflows/codeql-reusable.yml@<sha>
+#       uses: metadatastician/standards/.github/workflows/codeql-reusable.yml@<sha>
 #       with:
 #         language: rust
 

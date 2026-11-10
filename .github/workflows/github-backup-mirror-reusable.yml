@@ -40,7 +40,7 @@
 #     contents: read
 #   jobs:
 #     backup:
-#       uses: hyperpolymath/standards/.github/workflows/github-backup-mirror-reusable.yml@<sha>
+#       uses: metadatastician/standards/.github/workflows/github-backup-mirror-reusable.yml@<sha>
 #       secrets:
 #         # The callee's one declared (optional) secret. Not `secrets:
 #         # inherit` — that forwards every caller secret (standards#1108 §6b).

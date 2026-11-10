@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: MPL-2.0
 # SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
 #
-# standards-map.toml - the machine-readable map of hyperpolymath/standards.
+# standards-map.toml - the machine-readable map of metadatastician/standards.
 #
 # WHY THIS EXISTS
 #   The spec registry (retired 2026-10-09, see REGISTRY.adoc) indexed 33 SPECS.
@@ -31,7 +31,7 @@
 #   gate         the CI gate that fails if this entry is wrong
 
 [map]
-repo        = "hyperpolymath/standards"
+repo        = "metadatastician/standards"
 version     = "1.0.0"
 entry_count = 136
 generated   = false   # hand-curated; the district index.adoc files ARE generated
@@ -80,7 +80,7 @@ canonical   = false
 canon_slot  = ""
 canonical_doc = ""
 gate        = ""
-note        = "The canon-spine seam: how hyperpolymath/standards and hyperpolymath/rsr-template-repo work as one system. README (the two roles, the four seam artefacts, adoption measured at 8 of 22 reusables) and PROPOSAL (six drift mechanisms, four moves, order of work, acceptance tests). Non-normative until ratified."
+note        = "The canon-spine seam: how metadatastician/standards and hyperpolymath/rsr-template-repo work as one system. README (the two roles, the four seam artefacts, adoption measured at 8 of 22 reusables) and PROPOSAL (six drift mechanisms, four moves, order of work, acceptance tests). Non-normative until ratified."
 
 [[entry]]
 from        = "3-practice/fork-governance"

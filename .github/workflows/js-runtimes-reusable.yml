@@ -22,7 +22,7 @@
 # Usage (caller):
 #   jobs:
 #     js-runtimes:
-#       uses: hyperpolymath/standards/.github/workflows/js-runtimes-reusable.yml@<sha>
+#       uses: metadatastician/standards/.github/workflows/js-runtimes-reusable.yml@<sha>
 #       # with:
 #       #   working-directory: web          # default "."
 #

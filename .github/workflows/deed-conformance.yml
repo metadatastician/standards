@@ -14,7 +14,7 @@ name: deed-conformance
 # Caller:
 #   jobs:
 #     deed:
-#       uses: hyperpolymath/standards/.github/workflows/deed-conformance.yml@<sha>
+#       uses: metadatastician/standards/.github/workflows/deed-conformance.yml@<sha>
 #       with:
 #         require-files: true   # fail when the caller has no .deed at all
 
@@ -51,13 +51,13 @@ jobs:
     env:
       # In this repo the PR's own linter is in the first checkout; a caller
       # gets the linter from the canon checkout at job.workflow_sha.
-      T: ${{ (github.repository_id == 1116521501 || github.repository == 'hyperpolymath/standards' || github.repository == 'metadatastician/standards') && '1-formats/deed/tools' || '.deed-canon/1-formats/deed/tools' }}
+      T: ${{ github.repository_id == 1116521501 && '1-formats/deed/tools' || '.deed-canon/1-formats/deed/tools' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: checkout the deed linter at this workflow's commit
-        if: github.repository_id != 1116521501 && github.repository != 'hyperpolymath/standards' && github.repository != 'metadatastician/standards'
+        if: github.repository_id != 1116521501
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: metadatastician/standards
@@ -68,28 +68,28 @@ jobs:
           sparse-checkout-cone-mode: false
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
       - name: validator self-test
-        if: (github.repository_id == 1116521501 || github.repository == 'hyperpolymath/standards' || github.repository == 'metadatastician/standards')
+        if: github.repository_id == 1116521501
         run: bun "$T/deed_lint.js" --self-test
       - name: validator unit tests
-        if: (github.repository_id == 1116521501 || github.repository == 'hyperpolymath/standards' || github.repository == 'metadatastician/standards')
+        if: github.repository_id == 1116521501
         run: bun test "$T/"
       - name: fixture corpus (valid must pass, invalid must fail)
-        if: (github.repository_id == 1116521501 || github.repository == 'hyperpolymath/standards' || github.repository == 'metadatastician/standards')
+        if: github.repository_id == 1116521501
         run: bun "$T/deed_lint.js" --fixtures "$T/fixtures"
       - name: grammar-vs-gate differential (deed.abnf through apg-js, against deed_lint.js)
         # Mutates every committed deed and valid fixture with a seeded generator
         # and fails when the gate and the normative grammar disagree, other than
         # on the gate's documented semantic checks. tools/deed-abnf-differential.
-        if: (github.repository_id == 1116521501 || github.repository == 'hyperpolymath/standards' || github.repository == 'metadatastician/standards')
+        if: github.repository_id == 1116521501
         working-directory: tools/deed-abnf-differential
         run: |
           bun install --frozen-lockfile
           bun differential.js
       - name: uuid-v8 generator against an independent sha256sum oracle (#u8 = profile C)
-        if: (github.repository_id == 1116521501 || github.repository == 'hyperpolymath/standards' || github.repository == 'metadatastician/standards')
+        if: github.repository_id == 1116521501
         run: bash scripts/tests/bun/uuid-v8-gen-test.sh
       - name: uuid-v8 Rust generator (tools/uuid-v8) against the same oracle, the bun generator and check-uuid-v8.sh
-        if: (github.repository_id == 1116521501 || github.repository == 'hyperpolymath/standards' || github.repository == 'metadatastician/standards')
+        if: github.repository_id == 1116521501
         run: |
           cargo test --quiet --locked --manifest-path tools/uuid-v8/Cargo.toml
           bash scripts/tests/rust/uuid-v8-rs-test.sh

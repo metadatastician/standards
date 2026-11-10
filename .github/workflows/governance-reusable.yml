@@ -240,7 +240,7 @@ jobs:
         run: |
           # Bootstrap rule: standards must test the scripts from its PR tree;
           # consumers use the canonical copies checked out from standards.
-          if [ "${GITHUB_REPOSITORY_ID:-}" = "1116521501" ] || [ "$GITHUB_REPOSITORY" = hyperpolymath/standards ] || [ "$GITHUB_REPOSITORY" = metadatastician/standards ]; then
+          if [ "${GITHUB_REPOSITORY_ID:-}" = "1116521501" ]; then
             cp scripts/check-actions-policy.sh scripts/check-allowed-actions.sh "$RUNNER_TEMP/"
             cp rhodium-standard-repositories/actions-allowlist/allowed-actions.json \
                "$RUNNER_TEMP/allowed-actions.json"
@@ -819,7 +819,7 @@ jobs:
             fi
           fi
           if [ -n "$FAILED" ]; then
-            echo "See hyperpolymath/standards docs/JS-RUNTIME-POLICY.adoc for remediation."
+            echo "See metadatastician/standards docs/JS-RUNTIME-POLICY.adoc for remediation."
             exit 1
           fi
           echo "✅ No npm/bun violations"
@@ -1678,7 +1678,7 @@ jobs:
           # Stage the gate, the verifier and the exemption ledger. When THIS
           # repository is standards, its own working tree already holds all
           # three (self-lint); every other caller uses the pinned checkout.
-          if [ "${GITHUB_REPOSITORY_ID:-}" = "1116521501" ] || [ "$GITHUB_REPOSITORY" = hyperpolymath/standards ] || [ "$GITHUB_REPOSITORY" = metadatastician/standards ]; then
+          if [ "${GITHUB_REPOSITORY_ID:-}" = "1116521501" ]; then
             SRC=scripts
             LEDGERSRC=.machine_readable
             echo "Using this repository's own gate + verifier + ledger (standards self-lint)."
@@ -1768,9 +1768,9 @@ jobs:
             echo "::notice::actions-lock debt is LEDGERED for $GITHUB_REPOSITORY (missing-lock only, gate exit 3)."
             echo "lock debt: $GITHUB_REPOSITORY is 1 of $total ledgered repositories."
             echo "This exemption is shrink-only. Run 'gh actions-lock --no-migrate-local-actions --no-narrow' in this"
-            echo "repository (hyperpolymath/standards wraps it at scripts/update-actions-lock.sh"
+            echo "repository (metadatastician/standards wraps it at scripts/update-actions-lock.sh"
             echo "for callers that have that checkout). Review workflow changes before committing;"
-            echo "commit the lockfile, then delete this repository's line from .machine_readable/lock-allow.txt in hyperpolymath/standards."
+            echo "commit the lockfile, then delete this repository's line from .machine_readable/lock-allow.txt in metadatastician/standards."
             exit 0
           fi
           # Never a silent pass: state the denominator even when clean.
@@ -2013,7 +2013,7 @@ jobs:
           #   not on file existence: a consumer repo that happened to contain a
           #   file at scripts/check-debt-ratchet.sh must NOT be able to
           #   substitute its own gate.
-          if [ "${GITHUB_REPOSITORY_ID:-}" = "1116521501" ] || [ "$GITHUB_REPOSITORY" = hyperpolymath/standards ] || [ "$GITHUB_REPOSITORY" = metadatastician/standards ]; then
+          if [ "${GITHUB_REPOSITORY_ID:-}" = "1116521501" ]; then
             echo "::notice title=Debt ratchet::gate scripts taken from this PR's tree (standards self-test)"
             cp scripts/check-debt-ratchet.sh \
                scripts/check-debtfile-structure.sh "$RUNNER_TEMP/"
@@ -2086,7 +2086,7 @@ jobs:
           # Bootstrap rule (as debt-ratchet): standards builds the tool from
           # the PR's own tree; every other caller from the pinned checkout,
           # never from a same-named directory of its own.
-          if [ "${GITHUB_REPOSITORY_ID:-}" = "1116521501" ] || [ "$GITHUB_REPOSITORY" = hyperpolymath/standards ] || [ "$GITHUB_REPOSITORY" = metadatastician/standards ]; then SRC=tools/js-runtimes; else SRC=.standards-js/tools/js-runtimes; fi
+          if [ "${GITHUB_REPOSITORY_ID:-}" = "1116521501" ]; then SRC=tools/js-runtimes; else SRC=.standards-js/tools/js-runtimes; fi
           echo "::notice title=js-runtimes::built from $SRC"
           cargo install --quiet --locked --path "$SRC" --root "$RUNNER_TEMP/jsr"
           rm -rf .standards-js
@@ -2165,7 +2165,7 @@ jobs:
         if: steps.has.outputs.pkg == 'true'
         run: |
           set -euo pipefail
-          if [ "${GITHUB_REPOSITORY_ID:-}" = "1116521501" ] || [ "$GITHUB_REPOSITORY" = hyperpolymath/standards ] || [ "$GITHUB_REPOSITORY" = metadatastician/standards ]; then SRC=tools/js-runtimes; else SRC=.standards-js/tools/js-runtimes; fi
+          if [ "${GITHUB_REPOSITORY_ID:-}" = "1116521501" ]; then SRC=tools/js-runtimes; else SRC=.standards-js/tools/js-runtimes; fi
           echo "::notice title=js-runtimes::built from $SRC"
           cargo install --quiet --locked --path "$SRC" --root "$RUNNER_TEMP/jsr"
           rm -rf .standards-js

@@ -278,7 +278,7 @@ jobs:
               echo ""
               echo "_These files were found and **not checked**. They are excluded from the"
               echo "total above on purpose: counting them would hide the fact that nothing"
-              echo "examined them. Tracked as hyperpolymath/standards#967._"
+              echo "examined them. Tracked as metadatastician/standards#967._"
               echo ""
             fi
           } >> "$GITHUB_STEP_SUMMARY"
@@ -304,7 +304,7 @@ jobs:
             # blindness: "we have no gate for Julia" and "we could not
             # recognise this repository at all" need different cures.
             if [ "$N_UNSUPPORTED" -gt 0 ]; then
-              MSG="Detected ${UNSUPPORTED}, but this pipeline has no lint or format job for any of them, so NOTHING was checked. This is measured debt, not an unrecognised repository — see hyperpolymath/standards#967."
+              MSG="Detected ${UNSUPPORTED}, but this pipeline has no lint or format job for any of them, so NOTHING was checked. This is measured debt, not an unrecognised repository — see metadatastician/standards#967."
             else
               MSG="No known ecosystem detected (denominator = 0). Every lint and format gate would be vacuous, so this pipeline refuses to report success. Add the ecosystem's marker file, or call this workflow with fail_on_no_ecosystem: false and say why."
             fi
@@ -811,7 +811,7 @@ jobs:
               echo ">"
               echo "> No job in this pipeline examines these. They are absent from the table"
               echo "> above because there is no result to report, not because they passed."
-              echo "> Tracked as hyperpolymath/standards#967."
+              echo "> Tracked as metadatastician/standards#967."
             fi
             echo ""
           } >> "$GITHUB_STEP_SUMMARY"
@@ -942,10 +942,10 @@ jobs:
           FAILED="${ANY_FAILED:-false}"
           if [ "$REF" = "true" ] && [ "$FAILED" = "true" ]; then
             DEBT="TWO debts at once: no ecosystem gate could run (${REASON}), AND at least one gate that does not depend on detection REALLY FAILED"
-            FIX="Fix what the report table names, and add a gate for the ecosystems named above (see hyperpolymath/standards#967)."
+            FIX="Fix what the report table names, and add a gate for the ecosystems named above (see metadatastician/standards#967)."
           elif [ "$REF" = "true" ]; then
             DEBT="NOTHING WAS CHECKED — ${REASON}"
-            FIX="Add a gate for the ecosystems named above (see hyperpolymath/standards#967). Until one exists this repository cannot be made green by fixing its own code."
+            FIX="Add a gate for the ecosystems named above (see metadatastician/standards#967). Until one exists this repository cannot be made green by fixing its own code."
           else
             DEBT="at least one gate above REALLY FAILED — this is grandfathered debt, not a pass"
             FIX="Fix what the report table names."
@@ -968,7 +968,7 @@ jobs:
               echo "carry. ${FIX}"
               echo ""
               echo "Then DELETE this repository's line from"
-              echo "\`.machine_readable/pipeline-allow.txt\` in \`hyperpolymath/standards\` —"
+              echo "\`.machine_readable/pipeline-allow.txt\` in \`metadatastician/standards\` —"
               echo "deletion needs no \`Ratchet-exception\` trailer, because shrinking is"
               echo "the point."
               echo ""
@@ -989,7 +989,7 @@ jobs:
             echo ""
             echo "The report table above names every gate that failed. Fix them, or — if"
             echo "this is debt the estate has agreed to carry — add \`${SLUG}\` to"
-            echo "\`.machine_readable/pipeline-allow.txt\` in \`hyperpolymath/standards\`,"
+            echo "\`.machine_readable/pipeline-allow.txt\` in \`metadatastician/standards\`,"
             echo "bumping the ledger pin in the same commit, with a"
             echo "\`Ratchet-exception: .machine_readable/pipeline-allow.txt — <why>\`"
             echo "trailer in column 0."
