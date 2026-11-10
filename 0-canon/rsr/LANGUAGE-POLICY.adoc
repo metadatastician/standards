@@ -7,7 +7,7 @@
 :revdate: 2026-11-07
 :toc: left
 :icons: font
-:source-repo: https://github.com/hyperpolymath/standards
+:source-repo: https://github.com/metadatastician/standards
 
 [NOTE]
 ====
@@ -187,7 +187,7 @@ NOTE: For full rationale and migration guides, see the link:{source-repo}[CCCP r
   grandfathered while in-flight migration to AffineScript proceeds
   (~3,996 files across ~80 repos; tracker
   `project_estate_rescript_to_affinescript_2026_05_28.md`; umbrella
-  hyperpolymath/standards#252; STEPS #260/#264/#267/#269/#272/#276/#278/#279/#280).
+  metadatastician/standards#252; STEPS #260/#264/#267/#269/#272/#276/#278/#279/#280).
   Detection: hypatia rules `cicd_rules/rescript_detected` (matches
   `*.res`) and `cicd_rules/rescript_interface_detected` (matches
   `*.resi`) with `path_allow_prefixes` covering six carve-out
@@ -234,7 +234,7 @@ NOTE: For full rationale and migration guides, see the link:{source-repo}[CCCP r
   (6) `**/example/**`, `**/examples/**`, `**/test-fixtures/**`,
   `**/fixtures/**` example/test fixtures.
   *Migration substantially complete 2026-05-31* under umbrella
-  hyperpolymath/standards#253: STEPS
+  metadatastician/standards#253: STEPS
   #261/#262/#265/#268/#270/#273/#275 all closed; 22+ physical-migration
   PRs landed across STEP 3 (smallest-first), the 4/5/6 named-bucket
   audits closed `SUBSTANTIALLY DONE` with per-repo follow-up trackers
@@ -263,7 +263,7 @@ NOTE: For full rationale and migration guides, see the link:{source-repo}[CCCP r
   current JS usage — JS that COULD be AS today but isn't. Existing JS
   grandfathered while in-flight migration proceeds (1,609 `.js`/`.jsx`
   files; tracker `project_estate_unnecessary_js_2026_05_28.md`;
-  umbrella hyperpolymath/standards#254; STEPS
+  umbrella metadatastician/standards#254; STEPS
   #263/#266/#271/#274/#277). Detection: hypatia rules
   `cicd_rules/javascript_detected` (matches `*.js`) and
   `cicd_rules/javascript_jsx_detected` (matches `*.jsx`) with
@@ -410,7 +410,7 @@ When encountering banned languages:
    `path_allow_prefixes` for documented carve-outs) and the
    `language-policy.yml` reusable.
 3. ✅ *Done 2026-05-31*: Replace Node/npm with Deno across the estate
-   (substantially complete under umbrella hyperpolymath/standards#253;
+   (substantially complete under umbrella metadatastician/standards#253;
    STEPS #261/#262/#265/#268/#270/#273/#275 closed; ~22 physical-migration
    PRs in STEP 3 plus 4/5/6 named-bucket audits each closed
    `SUBSTANTIALLY DONE`; longtail repos tracked as per-repo follow-ups
@@ -720,11 +720,11 @@ This amendment closes the doc-vs-policy drift across all three
 campaigns. Trackers:
 
 * RS: `project_estate_rescript_to_affinescript_2026_05_28.md` —
-  umbrella hyperpolymath/standards#252
+  umbrella metadatastician/standards#252
 * npm: `project_estate_npm_to_deno_2026_05_28.md` — umbrella
-  hyperpolymath/standards#253
+  metadatastician/standards#253
 * JS: `project_estate_unnecessary_js_2026_05_28.md` — umbrella
-  hyperpolymath/standards#254
+  metadatastician/standards#254
 
 Detection rule landing: hypatia#391 (Layer-1 batch — single PR for
 all three campaigns per the batch-seam finding).
