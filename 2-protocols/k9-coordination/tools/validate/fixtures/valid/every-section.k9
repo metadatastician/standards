@@ -1,0 +1,98 @@
+K9!
+# SPDX-License-Identifier: MPL-2.0
+# Fixture: every v1.2 section, each optional field and alternative used once.
+
+metadata:
+  schema: k9-coordination
+  schema_version: 1.2.0
+  generated_by: manual
+  last_updated: 2026-11-09T12:00:00.5+01:00
+
+project:
+  name: "fixture"
+  description: "Exercises every section of grammar v1.2.0 — with UTF-8 and \"escapes\"\t."
+  license: MPL-2.0
+  repo: example/fixture
+  deed_ref: fixture_chora.deed
+  languages:
+    - Rust
+    - AffineScript
+  build_system: just
+  runtime: bun
+
+build_commands:
+  - command: "just test"
+    purpose: "Run the tests"
+
+invariants:
+  - id: no-secrets
+    rule: "No secrets in the repository"
+    reason: "Public repository"
+    severity: critical
+  - id: default-severity
+    rule: "Severity may be omitted"
+    reason: "It defaults to critical (rule 13)"
+
+protected:
+  - path: spec/
+    reason: "Normative text"
+
+architecture:
+  - id: spec-first
+    decision: "Specs are authoritative"
+    reason: "Code follows the spec"
+    alternatives_rejected:
+      - "Code-first"
+
+innervation:
+  afferent:
+    - signal: "spec.updated"
+      description: "A spec changed"
+      triggers_on: "push to spec/"
+      consumers:
+        - hypatia
+  efferent:
+    - signal: "hypatia.finding"
+      action: "Log it"
+      auto_fix: false
+  reflex:
+    - trigger: "pre-commit"
+      guard: "scan"
+      action: "Block on critical findings"
+
+do_not_create:
+  - pattern: **/*.py
+    reason: "Python is banned"
+  - description: "Generated files by hand"
+    reason: "They are regenerated"
+
+terminology:
+  - correct: coordination.k9
+    incorrect:
+      - config-file
+    context: "It is a nerve receptor"
+
+ecosystem:
+  depends_on:
+    - name: hypatia
+      role: "Scanner"
+  consumed_by:
+    - name: estate
+      role: "Every repository"
+  related:
+    - name: mathesis
+      role: "Proof catalogue"
+
+coordination:
+  active:
+    - agent: claude
+      area: "validator"
+      started: 2026-11-09
+      status: in-progress
+      blocker: "none"
+  completed:
+    - agent: claude
+      area: "grammar v1.2"
+      completed: 2026-10-13
+  available:
+    - "Idris2 proofs"

@@ -120,7 +120,7 @@ export function collect(root, directory, env = process.env) {
     controls = controls.map(i => item(i.id, 'indeterminate', 'Normative contract did not typecheck; fixture verdict is not established. See fixtures.log.'));
   }
   add('fixtures', controls);
-  const expected = files.filter(f => /\.(k9|k9\.ncl)$/.test(f) && !f.startsWith('9-archive/') && !f.startsWith('1-formats/k9/tools/fixtures/'));
+  const expected = files.filter(f => /\.(k9|k9\.ncl)$/.test(f) && !f.startsWith('9-archive/') && !f.startsWith('1-formats/k9/tools/fixtures/') && !f.startsWith('2-protocols/k9-coordination/tools/validate/fixtures/'));
   const ledgerFile = path.join(root, '.machine_readable/k9-contract-debt.txt');
   const ledger = new Set(fs.existsSync(ledgerFile) ? read(ledgerFile).split('\n').filter(l => l && !/^\s*#/.test(l)) : []);
   let changed = new Set(), baseResolved = true;

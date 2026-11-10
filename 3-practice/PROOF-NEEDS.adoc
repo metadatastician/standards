@@ -16,11 +16,10 @@ toc::[]
 
 == Census
 
-2 proven of 18 rows; 1 argued; 3 tested-only; 12 open. No row is
-`proven-with-postulates`. The three `tested-only` rows are the CI gates in
-<<gate-obligations>>. Both `proven` rows hold *relative to* the
-`argued` row for the Idris2 library they import (PROOF-POLICY §1.1), so
-neither counts as unconditionally proven.
+5 proven of 25 rows; 2 argued; 6 tested-only; 12 open. No row is
+`proven-with-postulates`. Every `proven` row holds *relative to* the
+`argued` row for the Idris2 library its file imports (PROOF-POLICY §1.1),
+so none counts as unconditionally proven.
 
 Every row is an engineering obligation (PROOF-POLICY §1: Idris2 for
 interfaces and protocol properties). Proof Witness Grades apply to theory
@@ -29,8 +28,9 @@ theorems only (§8.1), so no row carries a `PWG-` grade.
 [[proof-ledger]]
 == Proof ledger
 
-One proof file is tracked outside `9-archive/`:
-`2-protocols/overlay/src/abi/OverlayProtocol.idr`. The owner decision
+Two proof files are tracked outside `9-archive/`. This section covers
+`2-protocols/overlay/src/abi/OverlayProtocol.idr`; <<grammar-ledger>>
+covers the other. The owner decision
 link:../2-protocols/overlay/DECISION.adoc[`2-protocols/overlay/DECISION.adoc`]
 (`KEEP-SPEC-DEFER-IMPL`, 2026-04-05) classes it as an "ABI skeleton" for a
 spec-only protocol with no consumer. That decision also describes "an empty
@@ -242,6 +242,119 @@ A model that discharges §2.1 would tie the base state before activation to
 the base component of the state after it, for every base state, so that
 `destructive` fails to typecheck. That redesign belongs to the
 implementation work the decision defers.
+
+[[grammar-ledger]]
+== Proof ledger: the coordination.k9 grammars
+
+`2-protocols/k9-coordination/tools/validate/proofs/GrammarExtension.idr`
+proves three claims made in the grammar changelogs, for the RFC 5234
+meaning of a grammar: the set of byte strings with a derivation. They are
+claims about the grammars' languages, not about any parser. The validator
+that CI runs (`tools/validate/validate.js`) supplies the tested rows.
+
+[cols="3,1,2,2,3",options="header"]
+|===
+| Obligation | Status | Checker (version, flags) | Where | Trust boundary
+
+| Every v1.1 file is a v1.2 file, given that the two grammars agree on every rule but `body` and that v1.2's `body` is v1.1's with optional elements inserted
+| proven
+| Idris2, `--check --total`, `%default total`; see <<grammar-receipt>>
+| `GrammarExtension.idr:v11FilesAreV12Files` (general lemma `extend`)
+| The side condition is the tested row below. Relative to the `argued` library row for this file.
+
+| The right-recursive `deed-filename` (2026-11-09) denotes the same strings as `1*deed-char %s".deed"`
+| proven
+| As above
+| `GrammarExtension.idr:deedFilenameEquiv`
+| Holds for every definition of `deed-char`. Relative to the `argued` library row for this file.
+
+| Reordering the alternatives of `date` keeps its language
+| proven
+| As above
+| `GrammarExtension.idr:altSwap`
+| As above.
+
+| The imported Idris2 library behaves as its types state: the import cone of `GrammarExtension.idr` (`Prelude`, `Data.List`, `Decidable.Equality`)
+| argued
+| -
+| `GrammarExtension.idr`
+| Not checked. The cone was not enumerated or traced as the overlay row's was. `DecEq String` rests on primitive string equality.
+
+| The proof's side condition holds of the committed grammars: every v1.1 rule other than `body` is unchanged in v1.2, `body` only gains optional elements, and the `body` lists the proof transcribes are the committed ones
+| tested-only
+| `validate.js --self-test` (Bun, apg-js 4.4.0), `k9-conformance.yml`
+| `validate.js:extensionViolations`, `idrisBody`
+| A comparison of normalised rule text over exactly the two committed grammar files, at each commit. The comparison itself is not verified.
+
+| apg-js, an ordered-choice parser with greedy repetition, accepts exactly the grammar's language on the inputs that matter
+| tested-only
+| As above
+| `validate.js:check`
+| Bounds: the root `coordination.k9`, 1 example and 3 valid fixtures, each with LF and CRLF line ends; 13 invalid fixtures; 6 mutants of the root file. The 2026-11-09 editorial rewrites exist because apg-js and the RFC 5234 meaning had diverged on `deed-filename` and `date`.
+|===
+
+[[grammar-receipt]]
+=== Receipt for the three proven grammar rows
+
+[cols="1,3"]
+|===
+| Checker | Locally, two builds: Idris2 0.7.0, the build named in <<receipt>>; and Idris2 0.8.0 at commit `74055b69dc13b58fd0326104324233964a867475`, the commit pack installed in CI on 2026-11-09, bootstrapped from source with Chez Scheme 9.5.8 (`idris2_app/idris2.so` sha256 `5ba1aac07718765000d106869c37a86f1ee079ef2415a8d6e67f96f6f2ed0963`). In CI: Idris2 from idris2-pack, whose version and executable digest each run writes to the `idris2-standards-log` artifact (see <<deviation>>).
+| Input digest | `2-protocols/k9-coordination/tools/validate/proofs/GrammarExtension.idr`, sha256 `6d0a591b22008c4d580406ba4cd323c07d26ccf061aa6db3bc84485de86f77b8`
+| Invocation | `idris2 --check --total GrammarExtension.idr`, from `2-protocols/k9-coordination/tools/validate/proofs/`
+| Result | exit 0 and no reported error on both builds. The CI step also fails on any reported error, because idris2 exited 0 with "Module Prelude not found" when its library path was wrong.
+| Escape hatches | None in the file. The `idris2-standards` job refuses holes, postulates, `believe_me`, `assert_*` and `partial`/`covering` before it checks.
+| Controls | Two mutants fail to typecheck (exit 1) on 0.8.0: v1.2's `body` gaining a required element, and v1.2's `body` lacking a v1.1 element.
+| Run | Every change to `proofs/` or to `echidna-verify.yml`, and weekly, in the `idris2-standards` job.
+|===
+
+[[gate-ledger]]
+== Tested obligations: K9 routing and CI gates
+
+[cols="3,1,2,2,3",options="header"]
+|===
+| Obligation | Status | Checker | Where | Evidence and bounds
+
+| `k9-validate.sh` routes a file to the coordination dialect exactly when it opens with the magic line and then `---` or `metadata:` (K9 spec §4.3)
+| tested-only
+| `1-formats/k9/tools/k9-validate.sh --self-test`
+| `k9-validate.sh`, check K9-E005
+| 4 cases ("the dialect discriminator agrees with the coordination grammar"). A separately written model would not establish the shell router's correctness, so no proof is planned.
+
+| `scripts/close-lock.sh --check` reports exactly the refs an `actions.lock` names without a top-level record (standards#963)
+| tested-only
+| `scripts/tests/close-lock-test.sh`
+| `scripts/close-lock.sh`
+| 74 assertions over the five-row corpus `scripts/tests/fixtures/actions-lock-closure/`: 5 locks, 6 distinct refs, lockfile versions v0.0.2 and v0.0.3. The formal model belongs to Hypatia, the closure authority: `verification/proofs/idris2/ActionsLockClosure.idr` in hyperpolymath/hypatia proves the decision procedure sound and complete. Runtime refinement of this script is not claimed.
+
+| `scripts/lock-selfcheck.sh` gives SELF-CONSISTENT only for a closed, fully keyed lock
+| tested-only
+| `scripts/tests/lock-selfcheck-test.sh`
+| `scripts/lock-selfcheck.sh`
+| 9 cases on main. standards#1432 adds a tenth, the UNEXAMINED verdict for a lock whose closure could not be checked.
+
+| The panic-attack step's `counts` and `counts_excluded` partition the unsuppressed findings by the `scope-excludes` prefixes, anchored at the start of the repository-relative path (standards#1306)
+| tested-only
+| `scripts/tests/hypatia-blocking-gate-test.sh`
+| `.github/workflows/hypatia-scan-reusable.yml`
+| 3 cases: excluded findings are reported but not counted; a critical only under an excluded prefix raises no warning; an empty scope counts everything.
+|===
+
+[[deviation]]
+== Toolchain deviation (PROOF-POLICY §6)
+
+The `idris2-standards` job installs Idris2 through
+https://github.com/stefan-hoeck/idris2-pack[idris2-pack], not through the
+repository's Guix manifest or a container.
+
+* *Leg:* Idris2 typechecking of `GrammarExtension.idr`.
+* *Tool and version:* Idris2 from pack's package collection at install
+  time (0.8.0, commit `74055b69dc13b58fd0326104324233964a867475`, on
+  2026-11-09). Each run logs `idris2 --version` and the SHA-256 of the
+  executable it ran.
+* *Why not Guix:* `guix.scm` provides no Idris2 and the repository has no
+  Containerfile. The job reuses the install the `idris2-avow` job uses.
+* *State:* `open`. It closes when `guix.scm` or a container provides a
+  pinned Idris2 and the job uses it.
 
 [[moved-out]]
 == Obligations that left this repository

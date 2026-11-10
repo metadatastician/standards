@@ -1,0 +1,8 @@
+K9!
+# SPDX-License-Identifier: MPL-2.0
+# Fixture: a deed name that contains ".deed" before its end (valid under RFC 5234).
+metadata:
+  schema: k9-coordination
+project:
+  deed_ref: a.deed.deed
+invariants:

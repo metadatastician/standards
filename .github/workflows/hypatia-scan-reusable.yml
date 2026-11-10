@@ -12,6 +12,16 @@ on:
         type: boolean
         required: false
         default: false
+      block-on-critical:
+        description: >-
+          Refuse current critical findings only: Hypatia's, after the same
+          baseline and scope filtering as block-on-high, and panic-attack's,
+          where a scan that did not run cannot pass. For callers that block on
+          critical today and are not yet ready to block on high. block-on-high
+          takes precedence for Hypatia when both are set.
+        type: boolean
+        required: false
+        default: false
       scope-excludes:
         description: >-
           Comma-separated path prefixes that are reported but NEVER graded, and
@@ -418,6 +428,8 @@ jobs:
           PA_BIN: ${{ steps.panic-attack-install.outputs.bin }}
           PA_INSTALL_REASON: ${{ steps.panic-attack-install.outputs.reason }}
           SCOPE_EXCLUDES: ${{ inputs.scope-excludes }}
+          # Only the summary wording depends on this; the gate is its own step.
+          PA_GATES: ${{ inputs.block-on-critical }}
         run: |
           set -euo pipefail
           # panic-attack-findings.json is a status ENVELOPE, never a bare array:
@@ -502,11 +514,22 @@ jobs:
               echo "critical=$critical"
               echo "high=$high"
             } >> "$GITHUB_OUTPUT"
+            # Advisory wording is unchanged for existing callers; with
+            # block-on-critical the critical count gates in its own step.
+            if [ "${PA_GATES:-false}" = true ]; then
+              title="panic-attack findings (critical blocks)"
+              note="Critical findings block (block-on-critical); high and below are advisory"
+              heading="critical findings block"
+            else
+              title="panic-attack findings (advisory)"
+              note="This scan does not gate"
+              heading="advisory, does not gate"
+            fi
             if [ $((critical + high)) -gt 0 ]; then
-              echo "::warning title=panic-attack findings (advisory)::$critical critical and $high high finding(s). This scan does not gate; see panic-attack-findings.json in the hypatia-scan-findings artifact."
+              echo "::warning title=$title::$critical critical and $high high finding(s). $note; see panic-attack-findings.json in the hypatia-scan-findings artifact."
             fi
             {
-              echo "## panic-attack assail (advisory, does not gate)"
+              echo "## panic-attack assail ($heading)"
               echo ""
               echo "| Severity | Count |"
               echo "|----------|-------|"
@@ -975,13 +998,29 @@ jobs:
             echo "No committed baseline — gate stays advisory (see next step)."
           fi
 
-      - name: Block high and critical findings when requested
+      - name: Block findings at the requested threshold
         id: blocking-findings
-        if: inputs.block-on-high
+        if: inputs.block-on-high || inputs.block-on-critical
         env:
           HYPATIA_BASELINE_FILTERED: ${{ steps.filter_baseline.outputs.filtered }}
+          BLOCK_THRESHOLD: ${{ inputs.block-on-high && 'high' || 'critical' }}
         run: |
           set -euo pipefail
+          # high: every error-level result (SARIF folds high and critical into
+          # "error"). critical: error-level results whose projected
+          # hypatia.severity is critical, or is missing, since an unknown
+          # severity must not slip under a critical-only gate.
+          case "${BLOCK_THRESHOLD:-high}" in
+            high)
+              selector='.level == "error"'
+              what="high or critical" ;;
+            critical)
+              selector='.level == "error" and ((.properties // {})["hypatia.severity"] // "") != "high"'
+              what="critical" ;;
+            *)
+              echo "::error::Unknown blocking threshold '${BLOCK_THRESHOLD}'"
+              exit 2 ;;
+          esac
           # Use the scanner's authoritative SARIF projection, after the same
           # baseline filter used for the Security tab. Raw JSON also contains
           # code_scanning_alerts: historical GitHub alert summaries, including
@@ -1022,15 +1061,39 @@ jobs:
             echo "::error::Hypatia did not produce one valid SARIF findings document"
             exit 2
           fi
-          count=$(jq '[.runs[].results[] | select(.level == "error")] | length' hypatia.sarif)
+          count=$(jq "[.runs[].results[] | select($selector)] | length" hypatia.sarif)
           if [ "$count" -gt 0 ]; then
-            echo "::error::Hypatia found $count current high or critical finding(s); see the SARIF artifact"
+            echo "::error::Hypatia found $count current $what finding(s); see the SARIF artifact"
             exit 1
           fi
-          echo "Hypatia blocking gate: no current high or critical findings after baseline filtering"
+          echo "Hypatia blocking gate: no current $what findings after baseline filtering"
+
+      - name: Block panic-attack critical findings when requested
+        id: blocking-panic
+        if: inputs.block-on-critical
+        env:
+          PA_STATUS: ${{ steps.panic-attack.outputs.status }}
+          PA_CRITICAL: ${{ steps.panic-attack.outputs.critical }}
+        run: |
+          set -euo pipefail
+          # A blocking gate cannot pass on a scan that did not run: not_run and
+          # error fail here, where the advisory mode only reports them.
+          if [ "${PA_STATUS:-}" != ran ]; then
+            echo "::error::panic-attack did not run (status ${PA_STATUS:-missing}); the critical gate cannot pass without its scan"
+            exit 2
+          fi
+          if ! [[ "${PA_CRITICAL:-}" =~ ^[0-9]+$ ]]; then
+            echo "::error::panic-attack ran but reported no critical count"
+            exit 2
+          fi
+          if [ "$PA_CRITICAL" -gt 0 ]; then
+            echo "::error::panic-attack found $PA_CRITICAL critical finding(s); see panic-attack-findings.json"
+            exit 1
+          fi
+          echo "panic-attack blocking gate: no critical findings"
 
       - name: Check for critical issues (ADVISORY — does not gate)
-        if: '!inputs.block-on-high && steps.scan.outputs.critical > 0'
+        if: '!inputs.block-on-high && !inputs.block-on-critical && steps.scan.outputs.critical > 0'
         run: |
           # This scan is ADVISORY / fix-forward WHEN NO BASELINE IS COMMITTED
           # (the step above becomes the blocking gate once .hypatia-baseline.json
