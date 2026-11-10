@@ -65,7 +65,7 @@
 #     --fix               open PRs (default: audit only, writes nothing)
 #     --repair-illegal    also rewrite ILLEGAL `../` refs (implies more risk)
 #     --to <sha>          target SHA (default: resolved from standards main)
-#     --owners <a,b>      owners to walk (default: hyperpolymath,metadatastician)
+#     --owners <a,b>      owners to walk (default: hyperpolymath,metadatastician,catachresis-colloquium)
 #     --only <repo>       restrict to one repo (for testing)
 #     --out <file>        write the TSV census here (default: stdout)
 #     --limit <n>         stop after n repos (for smoke runs)
@@ -84,7 +84,7 @@ FORMER_OWNER="hyperpolymath"
 TARGET_SHA="${STANDARDS_TARGET_SHA:-}"
 DO_FIX=0
 REPAIR_ILLEGAL=0
-OWNERS="hyperpolymath,metadatastician"
+OWNERS="hyperpolymath,metadatastician,catachresis-colloquium"
 ONLY_REPO=""
 OUT_FILE=""
 LIMIT=0
