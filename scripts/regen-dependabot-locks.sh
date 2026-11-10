@@ -30,8 +30,15 @@
 # MOVED TAGS).
 # The result is committed only when:
 #   * the ONLY changed path is .github/workflows/actions.lock,
-#   * the lock names no `$/` ref and close-lock resolved every edge, and
-#   * update-actions-lock.sh --verify-local (the gate's own verifier) passes.
+#   * the lock names no `$/` ref and close-lock resolved every edge,
+#   * update-actions-lock.sh --verify-local (the gate's own verifier) passes,
+#     and so does check-lock-sync.sh, and
+#   * check-lock-pin-contract.sh passes. --verify-local reports a leaf whose
+#     `ref:` repeats its own SHA as the ADVISORY `sha-as-ref` and stays valid,
+#     but the runner refuses that record ("invalid lockfile pin") in every
+#     workflow that uses it. Without this check the bot could commit such a
+#     record as a "repair" (hyperpolymath/laminar#99 carries five, written by
+#     `gh actions-lock --no-narrow`).
 # Anything else is reported and left for a human; nothing partial is written.
 #
 # The commit goes through GraphQL createCommitOnBranch with expectedHeadOid,
@@ -115,6 +122,12 @@ regen_lock() {
     # job-level reusable-workflow refs; check-lock-sync.sh is the authority on
     # both, and it is the gate the PR will meet in CI.
     if ! bash "$REGEN_TOOLS/check-lock-sync.sh" >&2; then echo unverified; exit 0; fi
+    # The representation contract is what the RUNNER enforces: a leaf whose
+    # `ref:` is its own SHA passes both checks above and still kills every job
+    # that uses it at `Set up job`. Exit 2 (not inspected) is refused too.
+    if ! bash "$REGEN_TOOLS/check-lock-pin-contract.sh" "$LOCK_PATH" >&2; then
+      echo unverified; exit 0
+    fi
     if [ -z "$changed" ]; then echo current; else echo changed; fi
   )
   rm -f "$prior"
