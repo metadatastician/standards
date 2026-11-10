@@ -14,7 +14,7 @@ This roadmap details the path from current state (v1.0.0) to industry-leading se
 **Investment:** $50-150k (mostly security audit + formal verification) +
 **Result:** 95% risk elimination, enterprise-ready
 
-**Status Tracking:** https://github.com/hyperpolymath/standards/tree/main/k9-svc/projects/security-roadmap
+**Status Tracking:** https://github.com/metadatastician/standards/tree/main/k9-svc/projects/security-roadmap
 
 ---
 
@@ -654,6 +654,6 @@ Bug$   |     |     |     |██████████████████
 ---
 
 **Maintainer:** Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk> +
-**Project Board:** https://github.com/hyperpolymath/standards/tree/main/k9-svc/projects/security-roadmap +
+**Project Board:** https://github.com/metadatastician/standards/tree/main/k9-svc/projects/security-roadmap +
 **Status Updates:** Monthly (GitHub Discussions) +
 **Last Updated:** 2026-01-30

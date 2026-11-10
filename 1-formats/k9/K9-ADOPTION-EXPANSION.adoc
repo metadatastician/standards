@@ -142,7 +142,7 @@ dogfooding!
 cryptographic signing
 
 *Repository:*
-https://github.com/hyperpolymath/standards/tree/main/k9-svc *Commit:*
+https://github.com/metadatastician/standards/tree/main/k9-svc *Commit:*
 2fcbb39
 
 '''''

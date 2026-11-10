@@ -46,7 +46,7 @@ A minted repo's `repo-init` reads the clause and writes it into `PROVENANCE`.
 * Order is `canon.lock [canon.lockstep].order`, `spine-adopts-then-canon-releases`:
   the spine re-pins this clause **first**, and the canon release lands after.
   The two-phase protocol below is what makes that order reachable.
-* A `:proposed-by` that is not `hyperpolymath/standards#N` or
+* A `:proposed-by` that is not `metadatastician/standards#N` or
   `metadatastician/standards#N` (the same repository) is malformed: a failure.
 
 == Two-phase adoption
