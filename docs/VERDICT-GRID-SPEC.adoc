@@ -111,7 +111,7 @@ Hypatia lane; the rest come from the fleet.
 |Row |Evidence read |How it goes orange
 
 |Hypatia scan
-|The same `hypatia.sarif` used by `block-on-high`, after validated baseline and scope filtering. Original severity and source line/class are carried in result properties; raw `hypatia-findings.json` is separate inventory.
+|The same `hypatia.sarif` used by the blocking gate (`block-on-high` or `block-on-critical`), after validated baseline and scope filtering. Original severity and source line/class are carried in result properties; raw `hypatia-findings.json` is separate inventory.
 |SARIF absent, malformed, not one document, or a committed baseline whose filtering was not verified. Missing JSON does not turn a valid SARIF into a clean alert-inventory claim.
 
 |panic-attack assail

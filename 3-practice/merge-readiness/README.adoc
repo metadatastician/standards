@@ -1,0 +1,591 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+// SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+= PR Readiness Evidence Contract v1.0 (PRR-1)
+:toc: left
+:toclevels: 3
+:sectnums:
+:revdate: 2026-11-09
+:status: PROPOSED — normative vocabulary, no checker exists yet
+:policy: link:../PROOF-POLICY.adoc[PROOF-POLICY]
+:signal: link:../../docs/CICD-SIGNAL-DISCIPLINE.adoc[CI/CD Signal Discipline]
+:signing: link:../../docs/SIGNING-POLICY.adoc[SIGNING-POLICY]
+:grid: link:../../docs/VERDICT-GRID-SPEC.adoc[VERDICT-GRID-SPEC]
+:required-contexts: link:../../scripts/check-required-contexts.sh[check-required-contexts.sh]
+
+[IMPORTANT]
+====
+*Nothing described here is implemented, installed or enforcing anything.*
+
+This document is the *normative vocabulary and decision rules* a PR-readiness
+checker must satisfy. It records the semantics half of standards#1379. The
+implementing half is a separate proposal in the CI/CD suite
+(link:https://github.com/hyperpolymath/proven-cicd-and-workflows/issues/63[proven-cicd-and-workflows#63]),
+and it is not built either. No workflow in this repository reads this file, and
+no required context depends on it.
+
+A checker may be described as *existing and enforcing* only when it satisfies
+<<maturity>>, which requires fixture-backed negative controls *and* at least
+two independent consumer evaluations. Until then every claim about readiness
+produced under this contract is *advisory under protest*: it is a reading taken
+by a named tool at a named SHA, not a gate.
+
+This distinction is not pedantry. {signal} §1 exists because a check that
+cannot fail gets counted as assurance, and an unbuilt gate described in the
+present tense is the same defect in prose.
+====
+
+== 1. Scope
+
+=== 1.1 What this contract covers
+
+One question, asked about one pull request at one commit:
+
+[quote]
+Is there *evidence at the current PR head* that every requirement this
+repository has declared applicable was *actually executed and satisfied* — and
+what exactly is missing where that is not true?
+
+That is *PR readiness*. It is not:
+
+* a release gate — link:../release-pre-flight/V1-GATE.adoc[`V1-GATE.adoc`] owns
+  what may be called `v1.0.0` stable, and readiness here is a strictly weaker
+  claim;
+* a grade or score — link:../../docs/BADGE-CRITERIA-SPEC.adoc[BADGE-CRITERIA-SPEC]
+  forbids a composite number, and this contract forbids one too (<<aggregation>>);
+* a merge action — nothing in this contract authorises merging, and no consumer
+  may treat a `READY_FOR_APPROVAL` reading as authorisation;
+* a substitute for the reviewer — <<review-threads>> decides whether a thread is
+  *substantively disposed*, never whether a human should approve the change.
+
+=== 1.2 Who must read it
+
+Whoever writes or consumes a readiness checker, and whoever configures one for a
+repository. Two audiences, two obligations: <<consumer-configuration>> is what a
+repository must declare, and <<states>> is what a tool must emit.
+
+== 2. The subject: one posture at one commit
+
+Every reading is bound to a commit. A reading that does not name its commit is
+not evidence (<<output-contract>>).
+
+[cols="1,3,4",options="header"]
+|===
+| Term | Definition | Consequence if absent
+| `head_sha` | The PR's current head commit as observed by the checker at `checked_at`. | The reading is void. There is no "latest" state to report, and no state may be emitted except `UNKNOWN`.
+| `base_sha` | The target branch commit the PR is being evaluated against. | Freshness and mergeability requirements become `UNKNOWN`, not `PASS`.
+| `observed_sha` | The commit a specific piece of evidence was produced *for*. | Evidence whose `observed_sha` is not recorded cannot be matched to `head_sha` and is `UNKNOWN`.
+|===
+
+The governing rule, from which most of <<states>> follows:
+
+[quote]
+A `PASS` requires `observed_sha == head_sha`, an execution that *concluded*,
+and a positive verdict. Every other combination is one of the non-PASS states,
+and the checker must name which.
+
+A push, a rebase, a force-push or a re-sign rewrites `head_sha` and therefore
+*invalidates every prior reading*. Re-read after any of them; a green board that
+predates the current head is the single most common false readiness signal in
+this estate's history (see <<stale-head>>).
+
+== 3. The seven states {#states}
+
+These seven words are the whole vocabulary. They are *not* a scale and have no
+ordering — any attempt to rank them, weight them or average them is a defect
+(<<aggregation>>).
+
+[cols="1,2,3,3",options="header"]
+|===
+| State | Meaning | Assigned when | May it reach `READY_FOR_APPROVAL`?
+| `PASS` | The requirement was *executed* at `head_sha` and *succeeded*. | A check run or job with `conclusion == success`, a `status == success` context, or a validator exit 0, whose `observed_sha == head_sha`, whose run *started jobs*. | Yes — the only state that may.
+| `FAIL` | The requirement was *executed* at `head_sha` and did not succeed. | `conclusion` in `failure`, `timed_out`, `action_required`, or a validator exit non-zero. Also: a *zero-job startup failure* (<<zero-job>>). | No. Hard blocker when the requirement is hard (<<tiers>>).
+| `BLOCKED` | The requirement *cannot be satisfied by anyone* until something outside the diff changes. | A required context no workflow can publish; a required signature the platform refuses; a permission, plan, or tool the runner cannot obtain; a phantom requirement. | No. Never repaired by an edit to the PR.
+| `PENDING` | The requirement has not concluded *yet*, and nothing observed says it will fail. | `status` in `queued`, `in_progress`, `waiting`, `requested`; or a required context that has not reported and is still producible. | No — not *yet*. Expected to resolve without human action.
+| `UNKNOWN` | The checker could not determine the state. | An API failure, rate limit, truncated response, unreadable payload, missing evidence, no `head_sha`, or evidence with no `observed_sha`. | No. Fail-closed: inability to inspect is not a pass.
+| `NOT_APPLICABLE` | The requirement does not apply to this PR, *for a stated reason in the policy*. | An applicability predicate in the consumer policy evaluated false, recordable and reviewable. | Yes — it is excluded from the required set, not waived.
+| `ADVISORY` | The requirement was evaluated but is *non-blocking by declaration*. | Its tier in the consumer policy is advisory, or the producer is classified advisory (<<tiers>>). | Yes, but it must *never* be rendered as a pass (<<advisory-is-not-pass>>).
+|===
+
+=== 3.1 `PASS` is a claim about execution, not about appearance
+
+The recurring defect this contract exists to stop: a green tick that summarises
+*absence* of work.
+
+==== A skipped or neutral job is not `PASS`
+
+GitHub reports `conclusion: skipped` for a job whose `if:` evaluated false, and
+`neutral` for a step that exited 78. Both render as a non-red icon, and a
+`skipped` check run *satisfies* a required status check on GitHub.
+
+That platform behaviour is exactly why this contract must not inherit it. A
+skipped job means *the work did not happen*. Therefore:
+
+* a job skipped by a `relevance` gate that decided "not relevant" is
+  `NOT_APPLICABLE`, and the gate itself must be `PASS` — the gate is the thing
+  that vouches for the absence, so it cannot also be the thing that is absent;
+* a job skipped for any other reason — a failed `needs`, a missing matrix
+  dimension, an `if:` nobody reasoned about — is `PENDING` if it can still run
+  and `UNKNOWN` if it cannot, *never* `PASS`;
+* `neutral` is treated as `FAIL` for a hard requirement and `ADVISORY` for an
+  advisory one. A step that exits 78 has decided not to decide.
+
+==== A required check that never reported is not green
+
+A required context with no check run at `head_sha` is `PENDING` while it remains
+publishable and `BLOCKED` when nothing on `pull_request` (or
+`pull_request_target`) can publish it. It is never `NOT_APPLICABLE` and never
+`PASS`. The classification of *why* it is unproducible is already computed by
+{required-contexts}, and <<state-mapping>> fixes how its verdicts map onto
+these states rather than inventing a second vocabulary.
+
+== 4. Decision rules for the cases that go wrong
+
+=== 4.1 Stale-head evidence {#stale-head}
+
+*Rule.* Evidence whose `observed_sha != head_sha` is `PENDING` when it is being
+regenerated and `UNKNOWN` when it is not, and it is *never* `PASS`.
+
+A `PASS` observed at an ancestor of `head_sha` is *history*, not evidence about
+the current diff. It is reported as a distinct annotation — `STALE_HEAD` — with
+both SHAs, so a reader can see the reading is about `a1b2c3d` while the PR is
+now at `d4e5f6a`.
+
+Do not let a "last successful run" from an older head fill a current-head slot.
+This is precisely the shape that makes a force-push after a passing run look
+ready.
+
+=== 4.2 Zero-job startup failures {#zero-job}
+
+*Rule.* A workflow run with `total_count == 0` jobs, or a *required* workflow
+whose run exists but no job exists, is `FAIL` with subclass `STARTUP_FAILURE` —
+*not* `UNKNOWN` and not "still pending".
+
+Justification, measured in this estate and recorded in
+link:../../docs/GOVERNANCE-STARTUP-REPAIR.adoc[GOVERNANCE-STARTUP-REPAIR]:
+GitHub reports a startup failure as `conclusion: failure` (not
+`startup_failure`), with *zero jobs*, with run `name` equal to the run `path`,
+and with no reason in REST or GraphQL — only on the run page. It therefore
+*looks* like a red check in some views and like nothing at all in others, and a
+view that lists only check runs shows no check for it at all.
+
+A consumer must therefore read *workflow runs* as well as check runs, and must
+treat "the required workflow has no job" as a failure to start, because that is
+what it is. This is a `FAIL`, not a `BLOCKED`: the cause is in the repository's
+own files (a lock the runner rejects, a callee ref that does not resolve), and
+the repository can fix it.
+
+=== 4.3 API and read failures {#api-failures}
+
+*Rule.* Any inability to read evidence is `UNKNOWN` for the affected
+requirement, and the checker records the failure class: `RATE_LIMITED`,
+`HTTP_ERROR`, `TRUNCATED`, `MALFORMED`, `NOT_AUTHORISED`, or `NO_DATA`.
+
+`UNKNOWN` is *not* `PENDING`: nothing says it will resolve, and no amount of
+waiting is the repair. `UNKNOWN` is *not* `BLOCKED` either — `BLOCKED` names a
+requirement nobody can satisfy, `UNKNOWN` names a checker that could not look.
+
+A checker must never silently omit a requirement it failed to read. An omitted
+row and a green row are indistinguishable to a human reader, which makes silent
+omission the most dangerous output the tool can produce.
+
+=== 4.4 Required-but-advisory is a configuration error, not a state {#tier-conflict}
+
+*Rule.* If the repository's ruleset *requires* a context that the consumer policy
+declares advisory, that is a `BLOCKED` requirement with subclass
+`TIER_CONFLICT`, and the repair is to reconcile the two declarations. It is not
+`ADVISORY` just because the policy file says so: the platform will still block
+the merge on it, and reporting it as non-blocking would be a false readiness.
+
+== 5. Signatures
+
+Signatures are their own evidence class because the platform's three outcomes
+are routinely conflated ({signing}, "Who signs what").
+
+[cols="1,1,3",options="header"]
+|===
+| Platform verdict | State | Rule
+| `Verified` | `PASS` for a signature requirement | Only when the verification is against a key valid for the committer. A signature from an unregistered vendor key is *not* this.
+| `Unverified`, or no signature on a required commit | `FAIL` | A missing signature on a commit that must be signed is a real, fixable failure.
+| `Unknown key` (verification impossible) | `BLOCKED` with subclass `UNVERIFIABLE_KEY` | The platform cannot classify a signature whose key it does not hold. This is *not* `FAIL` (nothing says the signature is bad) and emphatically *not* `PASS`.
+| No signature requirement configured | `NOT_APPLICABLE` | With the policy predicate named, and listed in the shrink-only register so a later removal is visible.
+|===
+
+Do not equate a *signed-looking* string in a commit message with a verified
+signature; the signature is a property of the commit object and the key, not of
+its text. {signing} owns which *writer* must use which key; this contract only
+fixes how a verdict becomes a state.
+
+== 6. Review threads {#review-threads}
+
+=== 6.1 Substantive versus non-substantive
+
+A thread is *substantive* when it asks the author to change the change, supply
+evidence, or answer a question. It is *non-substantive* when it is a greeting, a
+bot's summary banner, a link-back, a "thanks", or an automated "I will review
+this" placeholder.
+
+The checker cannot judge this reliably, and must not pretend to. Therefore:
+
+* the *classification* is a declared function of the consumer policy
+  (<<consumer-configuration>>): an explicit list of bot logins and marker
+  strings treated as non-substantive;
+* anything not matched by that list is *substantive by default* — the
+  conservative direction, because a wrongly-substantive thread costs a reply and
+  a wrongly-non-substantive thread costs a defect;
+* a non-substantive thread that is *unresolved* is `ADVISORY`; a substantive
+  thread that is unresolved is `FAIL` for a hard review requirement.
+
+=== 6.2 What "resolved" means
+
+[cols="2,1,3",options="header"]
+|===
+| Condition | State | Note
+| Thread resolved, disposition recorded | `PASS` | A resolution is only evidence if something says how it was disposed: a fix, or an evidence-backed non-change.
+| Thread resolved with no disposition recorded | `ADVISORY` | Resolving without saying why is the silent-close defect. Visible, not blocking.
+| Thread `isOutdated` only, never resolved | `FAIL` | Outdated means the diff moved past it. Outdated is *not* answered, and the question may still stand.
+| Substantive thread open | `FAIL` | Includes bot findings (`CodeRabbit`, `CodeQL`, `Sonar`) — a bot thread is evidence from a real tool, not noise to be ignored because a machine wrote it.
+|===
+
+`CHANGES_REQUESTED` is `FAIL` for a hard requirement regardless of the thread
+state: a reviewer who requested changes has not been answered by resolutions
+elsewhere. Withdrawal of the review, not a reply, is its repair.
+
+=== 6.3 Approvals
+
+An approval is evidence that a human reviewed, *only* where the consumer policy
+requires one. It is never evidence that a scientific, proof or test requirement
+passed, and it never substitutes for one. Where no approval requirement is
+configured the requirement is `NOT_APPLICABLE`, not `PASS`.
+
+== 7. Requirement tiers: hard blockers versus advisory {#tiers}
+
+Every requirement carries a tier, and the tier decides whether the state can
+block `READY_FOR_APPROVAL`.
+
+[cols="1,2,4",options="header"]
+|===
+| Tier | Blocks readiness? | Which requirements
+| `hard` | Yes — any of `FAIL`, `BLOCKED`, `PENDING`, `UNKNOWN` prevents readiness | Required status contexts; zero-job startup failures of required workflows; required signatures; required approvals; substantive unresolved threads where review is required; any requirement the *platform* enforces
+| `advisory` | No — reported, never averaged in | Non-required scans, informational linters, trend and posture checks, bot summaries, non-substantive threads, scorecard-style repository measurements
+|===
+
+The tier is declared by the consumer, *except* for one constraint that the
+consumer may not override: a requirement the platform actually enforces is
+`hard` no matter what the policy file says (<<tier-conflict>>). A policy cannot
+demote a merge blocker by asserting it, and the checker must detect the
+conflict rather than respect the assertion.
+
+[NOTE]
+====
+An advisory requirement that *fails* must still be surfaced, in its own section,
+with its evidence. "Not a blocker" and "not shown" are different things, and
+conflating them is how advisory findings disappear. See <<advisory-is-not-pass>>.
+====
+
+== 8. Aggregation: worst-of, never a percentage {#aggregation}
+
+[quote]
+There is no readiness score. A consumer that prints a percentage has implemented
+a different product.
+
+The overall state is computed by a fixed precedence over the applicable
+requirements, worst first:
+
+[cols="1,2,3",options="header"]
+|===
+| Rank | Resulting overall state | Condition over applicable `hard` requirements
+| 1 | *not ready — `BLOCKED`* | any `BLOCKED`
+| 2 | *not ready — `FAIL`* | else any `FAIL`
+| 3 | *not ready — `UNKNOWN`* | else any `UNKNOWN`
+| 4 | *not ready — `PENDING`* | else any `PENDING`
+| 5 | *`READY_FOR_APPROVAL`* | every applicable hard requirement is `PASS` or `NOT_APPLICABLE`
+|===
+
+`BLOCKED` outranks `FAIL` deliberately: a reading that contains a requirement
+nobody can satisfy is not usefully described as "has a failure", because the
+failure may be incidental while the blocker is not.
+
+`ADVISORY` requirements never move the overall state. They are printed beside
+it.
+
+Any stated rationale of the form "only 2 of 30 checks are red", "90% green", or
+"all required checks pass" without listing them is a violation of this section,
+not a summary of it.
+
+== 9. Advisory is not a pass {#advisory-is-not-pass}
+
+An `ADVISORY` row must not be rendered with the same glyph, word or colour as a
+`PASS`. The rule exists because the failure is silent: an advisory green looks
+identical to a hard green, so a reader counts coverage that does not exist.
+
+* advisory rows are printed in a separate block with the word `ADVISORY` in the
+  status column;
+* an advisory check that *passed* is reported as `ADVISORY (passed)`, never as
+  `PASS`;
+* a skipped advisory check is `ADVISORY (did not run)`;
+* no count of passing advisories may be presented as evidence of assurance.
+
+== 10. Modularity: the contract is shared, the policy is local {#modularity}
+
+This is the section that keeps the contract adoptable, and it is normative.
+
+=== 10.1 Nothing estate-specific is required by default
+
+A consumer policy starts *empty of estate-specific requirements*. In
+particular, a default policy must not require, and a checker must not assume:
+
+* K9 semantic conformance, DEED rules, or any verdict-grid lane;
+* Hypatia symbolic or neural findings, or gitbot-fleet report-backs;
+* any proof language or prover from link:../PROOF-POLICY.adoc[PROOF-POLICY] —
+  Creusot, SPARK, Idris2, Agda, Rocq or Lean;
+* `proven-tests-and-benches` grades;
+* any particular CI suite, reusable workflow, or naming convention.
+
+Each of these is *available* to a consumer that wants it, and *off* until the
+consumer names it. A checker that reds an upstream repository for not carrying
+this estate's governance artifacts has misconfigured itself, not evaluated the
+repository.
+
+=== 10.2 Upstream owner's policy outranks the consumer's defaults
+
+Where a contribution targets a repository the contributor does not own, the
+*upstream's* declared requirements are authoritative. This contract governs how
+evidence is *read*, not what any particular repository must require. If the
+upstream requires nothing, the reading is `READY_FOR_APPROVAL` with a thin
+evidence set — and that is a correct result, not a gap to be filled with estate
+policy.
+
+Contributed assurance that the upstream does not require is `ADVISORY` there,
+and may be run in the contributor's fork. It is never a condition on the
+upstream's merge.
+
+=== 10.3 `NOT_APPLICABLE` must be justified and shrink-only
+
+Every `NOT_APPLICABLE` names the policy predicate that excluded it. A register
+of exclusions is *shrink-only*: adding one is a change to what the repository
+promises, so it appears in the diff and is reviewed like one. A checker must
+report a `NOT_APPLICABLE` whose predicate no longer excludes anything as stale,
+the same way {required-contexts} reports a declared-but-absent context.
+
+== 11. What a consumer must configure {#consumer-configuration}
+
+A consumer supplies exactly one *policy document* and nothing else. The
+contract fixes its meaning; the consumer fixes its contents.
+
+[cols="1,1,4",options="header"]
+|===
+| Field | Required? | Meaning
+| `schema` | yes | Names this contract and its version. An unknown version is `UNKNOWN`, never "assume latest".
+| `repository` | yes | Canonical `owner/repo`, so a reading cannot be replayed against the wrong repository.
+| `requirements[]` | yes | One entry per requirement: `id`, `tier` (`hard` or `advisory`), `kind`, and the evidence class that satisfies it.
+| `requirements[].kind` | yes | One of `status-context`, `workflow`, `signature`, `review-thread`, `approval`, `validator-output`.
+| `requirements[].applies_when` | no | An explicit predicate. Absent means *always applies* — the fail-closed default.
+| `non_substantive[]` | no | Bot logins and marker strings excluded from <<review-threads>>. Absent means *everything substantive*.
+| `signature_scope` | no | Which commits must be signed. Absent means no signature requirement (`NOT_APPLICABLE`, registered).
+| `approval_policy` | no | Count and identity of required approvals. Absent means none required.
+|===
+
+=== 11.1 What a consumer may *not* configure
+
+* a requirement the platform enforces, as advisory (<<tier-conflict>>);
+* a `PASS` without an `observed_sha`;
+* suppression of an `UNKNOWN` or `BLOCKED` row — it may be *declared* in the
+  exclusion register with a reason, but it may not be deleted from the output;
+* an `ADVISORY` tier on a required status context;
+* a percentage or score in place of <<aggregation>>.
+
+=== 11.2 Minimum viable configuration
+
+A consumer that configures nothing but its required status contexts still gets a
+valid reading: those contexts as `hard`, everything else absent, `UNKNOWN` where
+the checker could not look. That is the intended adoption path — the contract is
+useful at its smallest, and grows by declaration.
+
+The example below is *illustrative of shape only*. It deliberately contains no
+estate-specific requirement, and a real consumer for an upstream scientific
+repository would contain fewer still.
+
+[source,json]
+----
+{
+  "schema": "prr-1",
+  "repository": "example-owner/example-repo",
+  "requirements": [
+    { "id": "required-contexts", "tier": "hard", "kind": "status-context" },
+    { "id": "build-and-test",     "tier": "hard", "kind": "workflow",
+      "workflow": "ci.yml" },
+    { "id": "signed-commits",     "tier": "hard", "kind": "signature" },
+    { "id": "review-threads",     "tier": "hard", "kind": "review-thread" }
+  ],
+  "non_substantive": ["dependabot[bot]", "github-actions[bot]"],
+  "signature_scope": "head-commit",
+  "approval_policy": { "required": 1 }
+}
+----
+
+== 12. State mapping for existing verdicts {#state-mapping}
+
+The estate already computes verdicts about required contexts in
+{required-contexts}. This contract does *not* invent a second vocabulary for
+the same question; it fixes the mapping so a consumer reads both the same way.
+
+[cols="2,1,4",options="header"]
+|===
+| Existing verdict | State | Note
+| `producible` | — (no state) | This is a predicate about a *name*, not evidence about a commit. It removes the `BLOCKED` reason; it does not produce a `PASS`.
+| `app-owned` | `UNKNOWN` until the app reports | A context published by a third-party app is that app's to publish. If it never reports, the requirement is `UNKNOWN` (could not observe), not `BLOCKED`.
+| `PR-UNPRODUCIBLE` | `BLOCKED` | The name is satisfiable but nothing publishes it on the event that gates the merge. Repair is a trigger or a different required name — never a rename.
+| `UNSATISFIABLE` | `BLOCKED` | Nothing publishes the name at all. A phantom requirement.
+| `UNSATISFIED-RULE` | `BLOCKED` | A data-dependent rule whose data nothing uploads. Distinct verdict, distinct repair.
+|===
+
+== 13. The output contract {#output-contract}
+
+A checker emits two artefacts from one evaluation. Neither is valid alone.
+
+=== 13.1 Machine record
+
+One record per evaluation, JSON, I-JSON + JCS per
+link:../JSON-POLICY.adoc[`JSON-POLICY.adoc`]:
+
+[cols="1,1,4",options="header"]
+|===
+| Field | Required | Meaning
+| `contract`, `contract_version` | yes | `prr-1`.
+| `repository`, `pr`, `base_sha`, `head_sha` | yes | The subject. Absent `head_sha` means the whole record is `UNKNOWN` and says why.
+| `checked_at` | yes | RFC 3339 UTC. A reading is a timestamped observation, not a standing fact.
+| `overall` | yes | One of `IN_PROGRESS`, `READY_FOR_APPROVAL`, `MERGED` — plus the blocking state that produced it. Never a percentage.
+| `requirements[]` | yes | One entry per *configured* requirement, including ones the checker failed to read. No silent omission.
+| `requirements[].state` | yes | One of the seven, verbatim from <<states>>.
+| `requirements[].observed_sha` | when state is `PASS` | Mandatory. A `PASS` without it is rejected as malformed.
+| `requirements[].evidence` | when state is `PASS` | URL, run id, check name, or validator output reference.
+| `requirements[].subclass` | when applicable | `STARTUP_FAILURE`, `TIER_CONFLICT`, `UNVERIFIABLE_KEY`, `STALE_HEAD`, or a failure class from <<api-failures>>.
+| `requirements[].why` | when state is not `PASS` | The reason, in words. A non-PASS row with no reason is malformed.
+| `exclusions[]` | yes (may be empty) | Every `NOT_APPLICABLE` with its predicate, and the register of declared exclusions.
+|===
+
+=== 13.2 Human draft
+
+A concise Markdown draft for review, shaped by
+link:REPORT-TEMPLATE.adoc[`REPORT-TEMPLATE.adoc`]: overall state first, then
+hard requirements, then a *separate* advisory block, then exclusions, then the
+SHAs and the timestamp. Every non-PASS row links its evidence or states its
+reason. Any `BLOCKED` or `UNKNOWN` appears plainly — never folded into a
+narrative of progress.
+
+=== 13.3 The three human-facing states
+
+[cols="1,3,3",options="header"]
+|===
+| State | Meaning | Transition rule
+| `IN_PROGRESS` | The engineering work is not finished, or any applicable hard requirement is not `PASS`/`NOT_APPLICABLE`. | Default. The starting state of every PR.
+| `READY_FOR_APPROVAL` | Every applicable hard requirement is `PASS` or `NOT_APPLICABLE`, at the current `head_sha`, and no substantive thread is unresolved. | Only from a reading at the *current* head. Any new commit returns the PR to `IN_PROGRESS`.
+| `MERGED` | The change is integrated into the target branch and post-merge validation was *observed*. | Requires an actual target-branch SHA and an observed post-merge result. A merge button press is not this state.
+|===
+
+`MERGED` deserves emphasis: it is assertable only from *observation of the
+target branch*, never from "the merge succeeded" as narrated by a tool. The
+distinction is the same one <<stale-head>> draws for the head.
+
+== 14. Checker self-conduct
+
+A checker is subject to the same standard it applies. It must:
+
+* *fail closed* — exit non-zero on inability to inspect, and never print `PASS`
+  over zero inspected requirements. An empty population is a `NOT_INSPECTED`
+  condition, not a clean one;
+* *state its population* — how many requirements it read, of how many
+  configured;
+* *be read-only* — no resolve, no approve, no merge, no dismissal, no write of
+  any kind, against any PR;
+* *name itself and its version* in every record, so a later reader can tell
+  which checker produced a reading;
+* *refuse to claim enforcement* until <<maturity>> is satisfied.
+
+== 15. Maturity: when a checker may be called enforcing {#maturity}
+
+The suite proposal (proven-cicd-and-workflows#63) owns the implementation. This
+contract owns what "done" means, so that "done" is not asserted by whoever is
+impatient.
+
+[cols="1,2,3",options="header"]
+|===
+| Stage | Entry condition | What it may claim
+| *0. Vocabulary* (this document) | Contract ratified. | "The semantics are specified."
+| *1. Implemented* | A checker reads fixtures and emits the machine record + human draft. | "The checker runs on saved data."
+| *2. Controlled* | Fixture-backed negative controls for every case in <<negative-controls>>, each with a planted-positive counterpart proving the control can fail. | "The checker refuses readiness on known-bad input."
+| *3. Evaluated* | At least *two independent consumer evaluations* on distinct repositories, with before/after classifications reported, including at least one failing sample. | "The checker has been tested against reality twice."
+| *4. Enforcing* | Stage 3, plus a declared tier in the consumer's policy, plus the consumer's own decision to require it. | "This repository requires it."
+|===
+
+Until stage 4 for a given repository, everything is `ADVISORY` by
+configuration — and per <<advisory-is-not-pass>>, reported as `ADVISORY`, never
+as a pass. The suite's own GOVERNANCE requires two real repositories before
+merging a gate; <<maturity>> is the readiness-specific restatement of that rule,
+not a replacement for it.
+
+=== 15.1 Required negative controls {#negative-controls}
+
+A checker that passes these controls only in the positive direction has not been
+tested. Each must have a fixture that must *refuse* readiness, and a planted
+positive that must be *ready*, so that the control can fail:
+
+. required job skipped;
+. required context absent entirely;
+. `PASS` observed at an older head (`STALE_HEAD`);
+. a validator that failed inside a green summary wrapper;
+. zero-job workflow startup failure;
+. API/read failure mid-evaluation;
+. an unverified required signature, and an `unknown key` signature;
+. an unresolved substantive review thread;
+. `CHANGES_REQUESTED` with all threads resolved;
+. a required context the policy calls advisory (tier conflict);
+. a `PASS` row emitted without `observed_sha` (malformed-record rejection);
+. an empty population (zero requirements inspected).
+
+The suite proposal's list and this one agree; where they differ, the union is
+required, and a missing control is a reason to withhold stage 2.
+
+== 16. Coordination with the implementation
+
+[cols="1,3,4",options="header"]
+|===
+| Owner | Owns | Must not own
+| This document (standards#1379) | The seven states, their decision rules, tier semantics, aggregation, modularity, the output contract, and the maturity gate. | The implementation, its language, its fixture layout, or its release schedule.
+| Suite proposal (proven-cicd-and-workflows#63) | The read-only adapter, fixture format, live-data capture behind narrow scopes, and the CLI. | The meaning of a state, or permission to widen a state's definition to make a repository pass.
+| The consumer repository | Which requirements it declares, their tiers, its exclusions, and whether it enforces. | A state's meaning, or the tier of a requirement the platform itself enforces.
+|===
+
+Readiness semantics that turn out to be wrong are repaired *here* first, then in
+the checker. A checker that has diverged from this document is out of
+conformance even if it is green, and the divergence is the finding.
+
+MetaManifold PR #306 is an example consumer, not the specification. A defect
+found while adopting this contract in a real PR is fixed in that PR when it is a
+blocker, and otherwise tracked in the owning repository — it is not absorbed
+into the framework, and it is not a reason to hold the PR.
+
+== 17. Non-goals and limits
+
+* *No gate yet.* Stated in the banner, repeated here so a reader arriving at
+  this section does not miss it.
+* *No claim about any named tool.* This document does not assert that any
+  existing workflow, badge, dashboard or bot computes these states correctly.
+* *Not a substitute for the platform.* The ruleset is authoritative about what
+  blocks a merge. This contract describes how to *read* that authority; a
+  disagreement between the two is a `TIER_CONFLICT` to be reconciled, not
+  something the checker may resolve by preferring itself.
+* *Not proof of correctness.* `PASS` on a test requirement means the test suite
+  ran and exited zero at that SHA. It does not mean the change is correct, and
+  the vocabulary deliberately has no state that means "correct".
+* *Advisory classification is lossy by design.* <<review-threads>> asks the
+  consumer to *declare* what is non-substantive, which is a judgement. The
+  default-substantive rule bounds the damage; it does not remove the judgement.
+* *This contract does not opt into doctrine coverage.* A
+  `// doctrine-coverage: on` marker requires either an `Enforced-by:` path or a
+  `Review-only:` reason for every normative heading. Nothing enforces this
+  document yet, so every tag would be `Review-only:` — true but unhelpful forty
+  times over — and an `Enforced-by:` tag pointing at a checker that does not
+  exist would be exactly the decorative claim <<maturity>> forbids. The marker
+  lands in the change that brings the checker to stage 2, with real paths behind
+  the tags that earn one.

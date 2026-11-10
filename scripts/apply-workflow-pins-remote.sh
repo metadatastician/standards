@@ -30,6 +30,11 @@
 #   ILLEGAL    `uses: ../../...` or `uses: $/...`. Rejected at PARSE time, so the
 #              run dies before any job starts. Seeded into repos by RSR templates
 #              (issue #808). Repaired only under --repair-illegal.
+#   MOVED      a SHA pin still under the former owner (`hyperpolymath/standards/…`).
+#              GitHub does not follow the transfer for `jobs.<id>.uses`, so the
+#              run dies at plan time ("workflow was not found") even when the SHA
+#              is FRESH. Rewritten to the canonical owner with the same relock.
+#              Combines with FRESH or BEHIND; a repo moves all its pins at once.
 #   TRACKING   `@main` or another non-SHA ref. Gets cures for free; also
 #              unpinned, which the estate's own policy forbids. Reported, not
 #              rewritten, because re-pointing it is a policy change, not a fix.
@@ -72,7 +77,10 @@ set -uo pipefail
 # shellcheck source-path=SCRIPTDIR source=lib/pin-ancestry.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/pin-ancestry.sh"
 
-STANDARDS_REPO="hyperpolymath/standards"
+# The canonical owner since the transfer (standards#1390). Pins under the
+# former owner never resolve as `jobs.<id>.uses`, so the applier moves them.
+STANDARDS_REPO="metadatastician/standards"
+FORMER_OWNER="hyperpolymath"
 TARGET_SHA="${STANDARDS_TARGET_SHA:-}"
 DO_FIX=0
 REPAIR_ILLEGAL=0
@@ -94,9 +102,9 @@ log() { printf '%s\n' "$*" >&2; }
 # ---------------------------------------------------------------------------
 
 # A standards reusable-workflow reference, pinned to a hex SHA.
-PIN_RE='hyperpolymath/standards/\.github/workflows/[A-Za-z0-9._-]+\.ya?ml@[0-9a-fA-F]{7,40}'
+PIN_RE='(hyperpolymath|metadatastician)/standards/\.github/workflows/[A-Za-z0-9._-]+\.ya?ml@[0-9a-fA-F]{7,40}'
 # The same reference pinned to anything at all (SHA, branch, tag).
-ANYREF_RE='hyperpolymath/standards/\.github/workflows/[A-Za-z0-9._-]+\.ya?ml@[A-Za-z0-9._/-]+'
+ANYREF_RE='(hyperpolymath|metadatastician)/standards/\.github/workflows/[A-Za-z0-9._-]+\.ya?ml@[A-Za-z0-9._/-]+'
 # A `uses:` that can never parse: relative, or the `$/` form that
 # `gh actions-lock` once invented. Both are rejected before any job starts.
 ILLEGAL_RE='^[[:space:]]*uses:[[:space:]]*['"'"'"]?(\.\.?/|\$/)'
@@ -120,7 +128,7 @@ illegal_uses() {
 
 # classify_file <file> <target_sha>
 # Echoes ONE token per distinct condition found, newline separated, from:
-#   ILLEGAL TRACKING BEHIND FRESH NONE
+#   ILLEGAL TRACKING BEHIND FRESH MOVED NONE
 # A file can be several at once (e.g. BEHIND and ILLEGAL); every applicable
 # token is emitted. NONE means the file references standards not at all.
 #
@@ -149,15 +157,29 @@ classify_file() {
 
   [ "$behind" -eq 1 ] && { echo BEHIND; emitted=1; }
   [ "$fresh"  -eq 1 ] && { echo FRESH;  emitted=1; }
+  # A SHA pin still under the former owner never resolves as a job-level
+  # `uses:` ("workflow was not found"), even at the target SHA, so it needs a
+  # rewrite on its own. Tracking refs are reported, not moved (see TRACKING).
+  if grep -qE "${FORMER_OWNER}/standards/\.github/workflows/[A-Za-z0-9._-]+\.ya?ml@[0-9a-fA-F]{7,40}" "$f" 2>/dev/null; then
+    echo MOVED; emitted=1
+  fi
   [ "$emitted" -eq 0 ] && echo NONE
   return 0
 }
 
-# rewrite_pins <file> <target_sha> — re-point every standards SHA pin, in place.
-# Only the SHA after a standards reusable `@` is touched. Idempotent.
+# needs_rewrite <classification> — true when fix mode must re-point the file's
+# pins: some pin is BEHIND the target, or still under the former owner (MOVED).
+needs_rewrite() {
+  case ",$1," in *,BEHIND,*|*,MOVED,*) return 0 ;; esac
+  return 1
+}
+
+# rewrite_pins <file> <target_sha> — re-point every standards SHA pin, in place,
+# under the canonical owner. Only a standards reusable path and the SHA after
+# its `@` are touched. Idempotent.
 rewrite_pins() {
   local f="$1" target="$2"
-  sed -E -i "s#(hyperpolymath/standards/\.github/workflows/[A-Za-z0-9._-]+\.ya?ml@)[0-9a-fA-F]{7,40}#\1${target}#g" "$f"
+  sed -E -i "s#(hyperpolymath|metadatastician)/standards/(\.github/workflows/[A-Za-z0-9._-]+\.ya?ml@)[0-9a-fA-F]{7,40}#${STANDARDS_REPO}/\2${target}#g" "$f"
 }
 
 # rewrite_illegal <file> <target_sha> — turn an unparseable relative ref into a
@@ -168,10 +190,10 @@ rewrite_pins() {
 rewrite_illegal() {
   local f="$1" target="$2"
   sed -E -i \
-    "s#(uses:[[:space:]]*)['\"]?(\.\./)+\.github/workflows/([A-Za-z0-9._-]+\.ya?ml)['\"]?#\1hyperpolymath/standards/.github/workflows/\3@${target}#g" \
+    "s#(uses:[[:space:]]*)['\"]?(\.\./)+\.github/workflows/([A-Za-z0-9._-]+\.ya?ml)['\"]?#\1${STANDARDS_REPO}/.github/workflows/\3@${target}#g" \
     "$f"
   sed -E -i \
-    "s#(uses:[[:space:]]*)['\"]?\\\$/\.github/workflows/([A-Za-z0-9._-]+\.ya?ml)['\"]?#\1hyperpolymath/standards/.github/workflows/\2@${target}#g" \
+    "s#(uses:[[:space:]]*)['\"]?\\\$/\.github/workflows/([A-Za-z0-9._-]+\.ya?ml)['\"]?#\1${STANDARDS_REPO}/.github/workflows/\2@${target}#g" \
     "$f"
 }
 
@@ -184,12 +206,18 @@ self_test() {
   local d rc=0 t="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
   d=$(mktemp -d)
 
-  printf 'jobs:\n  a:\n    uses: hyperpolymath/standards/.github/workflows/x.yml@%s\n' "$t" > "$d/fresh.yml"
-  printf 'jobs:\n  a:\n    uses: hyperpolymath/standards/.github/workflows/x.yml@%s\n' "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" > "$d/behind.yml"
+  printf 'jobs:\n  a:\n    uses: metadatastician/standards/.github/workflows/x.yml@%s\n' "$t" > "$d/fresh.yml"
+  printf 'jobs:\n  a:\n    uses: metadatastician/standards/.github/workflows/x.yml@%s\n' "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" > "$d/behind.yml"
   printf 'jobs:\n  a:\n    uses: ../../.github/workflows/x.yml\n' > "$d/illegal.yml"
-  printf 'jobs:\n  a:\n    uses: hyperpolymath/standards/.github/workflows/x.yml@main\n' > "$d/tracking.yml"
+  printf 'jobs:\n  a:\n    uses: metadatastician/standards/.github/workflows/x.yml@main\n' > "$d/tracking.yml"
   printf 'jobs:\n  a:\n    runs-on: ubuntu-latest\n' > "$d/none.yml"
-  printf 'jobs:\n  a:\n    uses: hyperpolymath/standards/.github/workflows/x.yml@%s\n' "${t:0:7}" > "$d/short.yml"
+  printf 'jobs:\n  a:\n    uses: metadatastician/standards/.github/workflows/x.yml@%s\n' "${t:0:7}" > "$d/short.yml"
+  # Former-owner pins: dead as job-level `uses:` even at the target SHA.
+  printf 'jobs:\n  a:\n    uses: hyperpolymath/standards/.github/workflows/x.yml@%s\n' "$t" > "$d/moved-fresh.yml"
+  printf 'jobs:\n  a:\n    uses: hyperpolymath/standards/.github/workflows/x.yml@%s\n' "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" > "$d/moved-behind.yml"
+  printf 'jobs:\n  a:\n    uses: hyperpolymath/standards/.github/workflows/x.yml@main\n' > "$d/moved-tracking.yml"
+  # An unrelated repository that merely ends in /standards is not a standards pin.
+  printf 'jobs:\n  a:\n    uses: someone/standards/.github/workflows/x.yml@%s\n' "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" > "$d/other-owner.yml"
 
   check() {
     local file="$1" want="$2" got
@@ -209,6 +237,34 @@ self_test() {
   # A short pin that PREFIXES the target is FRESH, not BEHIND. Without this the
   # applier rewrites the same file every run and never converges.
   check short.yml    "FRESH,"
+  # A former-owner pin needs a rewrite even when its SHA is the target.
+  check moved-fresh.yml    "FRESH,MOVED,"
+  check moved-behind.yml   "BEHIND,MOVED,"
+  # Tracking refs are reported, never rewritten, under either owner.
+  check moved-tracking.yml "TRACKING,"
+  check other-owner.yml    "NONE,"
+
+  echo "control: needs_rewrite decides fix mode"
+  local cls want_rw got_rw ok_rw=1
+  for cls in "FRESH:no" "BEHIND:yes" "FRESH,MOVED:yes" "BEHIND,MOVED:yes" \
+             "TRACKING:no" "ILLEGAL:no" "NONE:no" "BEHIND,DEAD-REF:yes"; do
+    want_rw="${cls##*:}"; cls="${cls%:*}"
+    if needs_rewrite "$cls"; then got_rw=yes; else got_rw=no; fi
+    [ "$got_rw" = "$want_rw" ] || { echo "  FAIL needs_rewrite '$cls' -> $got_rw, want $want_rw" >&2; ok_rw=0; rc=1; }
+  done
+  [ "$ok_rw" -eq 1 ] && echo "  PASS rewrite for BEHIND or MOVED only"
+
+  echo "control: rewrite_pins moves the owner and is then FRESH"
+  rewrite_pins "$d/moved-fresh.yml" "$t"
+  rewrite_pins "$d/moved-behind.yml" "$t"
+  if grep -q "uses: metadatastician/standards/.github/workflows/x.yml@$t" "$d/moved-fresh.yml" \
+     && grep -q "uses: metadatastician/standards/.github/workflows/x.yml@$t" "$d/moved-behind.yml" \
+     && ! grep -q "hyperpolymath/" "$d/moved-fresh.yml" "$d/moved-behind.yml" \
+     && [ "$(classify_file "$d/moved-behind.yml" "$t" | sort | tr '\n' ',')" = "FRESH," ]; then
+    echo "  PASS former-owner pins moved to the canonical owner at the target"
+  else
+    echo "  FAIL owner move: $(cat "$d/moved-fresh.yml" "$d/moved-behind.yml")" >&2; rc=1
+  fi
 
   echo "control: rewrite_pins is idempotent"
   rewrite_pins "$d/behind.yml" "$t"
@@ -454,7 +510,7 @@ land_pr() {
 
   local msg_head="chore(ci): re-point standards reusable-workflow pins to ${TARGET_SHA:0:12}"
   local msg_body
-  msg_body=$(printf 'Opened by the standards pin applier (scripts/apply-workflow-pins-remote.sh).\n\nRe-points this repository'"'"'s pinned references to hyperpolymath/standards reusable\nworkflows at %s, which is proven reachable from standards main.\n\nCo-Authored-By: Claude Opus 5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01HfgwLCdKNd5iZVo6VTiSim' "$TARGET_SHA")
+  msg_body=$(printf 'Opened by the standards pin applier (scripts/apply-workflow-pins-remote.sh).\n\nRe-points this repository'"'"'s pinned references to metadatastician/standards reusable\nworkflows at %s, which is proven reachable from standards main.\n\nCo-Authored-By: Claude Opus 5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01HfgwLCdKNd5iZVo6VTiSim' "$TARGET_SHA")
 
   # The request body goes in whole via --input. `-F input=<json>` sends the
   # JSON as a STRING, which GitHub rejects as an invalid CreateCommitOnBranchInput
@@ -585,7 +641,7 @@ main() {
 
       if [ "$DO_FIX" -eq 1 ]; then
         local before; before=$(cat "$wf")
-        case ",$st," in *,BEHIND,*) rewrite_pins "$wf" "$TARGET_SHA" ;; esac
+        if needs_rewrite "$st"; then rewrite_pins "$wf" "$TARGET_SHA"; fi
         if [ "$REPAIR_ILLEGAL" -eq 1 ]; then
           case ",$st," in *,ILLEGAL,*) rewrite_illegal "$wf" "$TARGET_SHA" ;; esac
         fi
