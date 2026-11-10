@@ -26,6 +26,16 @@ report=$(jq -nr --arg head "$head" --slurpfile reviews "$2" --slurpfile comments
     ((.body // "") | test("^\\s*((Copilot|Codex|CodeRabbit) (was )?(unable to|could not) review this pull request\\b|Copilot has reached (their|its|your) quota limit([.!]|$))"; "i")));
   def quota: rabbit_notice or (absent and ((.body // "" | split("\n")[0]) |
     test("insufficient remaining quota|quota.{0,40}(exhausted|exceeded)|quota limit|rate limit exceeded|review limit reached"; "i")));
+  # Codex reports a failed review in issue comments, not in a review. Its
+  # summary comment names the commit in its own state marker. Its usage-limit
+  # notice names no commit. Both count only from the Codex account.
+  def codex: .user.login == "chatgpt-codex-connector[bot]";
+  def codex_failed_on($sha): codex and
+    ((((.body // "") | capture("^<!-- codex-pull-request-review-summary -->\\s*<!-- codex-review-state:v1 (?<state>\\{.*\\}) -->") | .state | fromjson?) // null) as $state |
+     ($state | type) == "object" and ($state.code_review | type) == "object" and
+     $state.code_review.status == "failed" and $state.code_review.commit_sha == $sha);
+  def codex_usage: codex and
+    ((.body // "") | test("^You have reached your Codex usage limits for code reviews\\."));
   ($reviews[0] | flatten(1)) as $reviews |
   ($comments[0] | flatten(1)) as $comments |
   [
@@ -40,7 +50,11 @@ report=$(jq -nr --arg head "$head" --slurpfile reviews "$2" --slurpfile comments
     (if ($completed | length) > 0 then "review observed on this head (not an approval inference)"
      elif any($current[]; quota) then "NO REVIEW — quota exhausted on this head"
      elif any($current[]; absent) then "NO REVIEW — reviewer reported unavailable on this head"
-     elif any($comments[]; (.user.login as $login | $reviewer.accounts | index($login)) and absent)
+     elif $reviewer.name == "Codex" and any($comments[]; codex_failed_on($head))
+       then (if any($comments[]; codex_usage)
+             then "NO REVIEW on this head (review failed; usage-limit notice observed, comment head unknown)"
+             else "NO REVIEW on this head (review failed)" end)
+     elif any($comments[]; (.user.login as $login | $reviewer.accounts | index($login)) and (absent or codex_usage))
        then "NO REVIEW on this head — unavailable/quota notice observed; comment head unknown"
      elif ($own | length) > 0 then "NO REVIEW on this head — only stale, pending or dismissed evidence"
      else "NO REVIEW observed on this head" end) as $state |
