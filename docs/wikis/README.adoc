@@ -6,7 +6,7 @@
 :status: Scaffold v0.1.0 (2026-06-21)
 
 This directory is the **long-form, audience-segmented education layer** for
-`hyperpolymath/standards`. It is deliberately *deeper* than the
+`metadatastician/standards`. It is deliberately *deeper* than the
 `QUICKSTART-*.adoc` files: those get you set up and running; these explain the
 *why*, the model, and how to engage with the materials fully.
 

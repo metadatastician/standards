@@ -782,7 +782,7 @@ Columns: `chk` local checkouts -- `en` Actions enabled -- `allowed` allow-list m
 
 |`hyperpolymath/ssg-collection` |1 |Y |all |Y |n/a |n/a |11 |0 |4 |0 |0 |0 |clean
 
-|`hyperpolymath/standards` |5 |Y |selected |Y |Y |92 |48 |0 |10 |*7* |0 |0 |*RESIDUE*
+|`metadatastician/standards` |5 |Y |selected |Y |Y |92 |48 |0 |10 |*7* |0 |0 |*RESIDUE*
 
 |`hyperpolymath/stateful-artefacts` |1 |Y |selected |Y |Y |92 |28 |0 |7 |0 |73 |0 |clean
 
