@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/hyperpolymath/standards/blob/main/.machine_readable/hypatia-baseline.schema.json",
+  "$id": "https://github.com/metadatastician/standards/blob/main/.machine_readable/hypatia-baseline.schema.json",
   "title": "Hypatia per-repo baseline",
   "description": "Authoritative schema for `.hypatia-baseline.json` files in hyperpolymath estate repos. A baseline is an array of acknowledged Hypatia findings that should be suppressed from blocking governance gates.",
   "type": "array",

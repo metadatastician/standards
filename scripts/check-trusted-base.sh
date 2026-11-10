@@ -773,7 +773,7 @@ fi
 # tier split is that a repo is not failed by the act of widening the detector.
 if [ ${#debt_docs[@]} -eq 0 ] && [ ${#trusted_base_ignores[@]} -eq 0 ] && [ "$core_count" -gt 0 ]; then
   echo "[ERROR] No docs/proof-debt.md (or equivalent) found, but $core_count escape hatches exist."
-  echo "[ERROR] Seed one per the schema at hyperpolymath/standards/docs/TRUSTED-BASE-REDUCTION-POLICY.adoc."
+  echo "[ERROR] Seed one per the schema at metadatastician/standards/docs/TRUSTED-BASE-REDUCTION-POLICY.adoc."
   exit 1
 fi
 
@@ -909,7 +909,7 @@ if [ "$undocumented" -gt 0 ]; then
   echo ""
   echo "[ERROR] $undocumented/$core_count escape hatch(es) are undocumented."
   echo "[ERROR] Each must be annotated inline, enumerated in one of: ${debt_docs[*]:-<none>}, or exempted via .trusted-base-ignore."
-  echo "[ERROR] See https://github.com/hyperpolymath/standards/blob/main/docs/TRUSTED-BASE-REDUCTION-POLICY.adoc"
+  echo "[ERROR] See https://github.com/metadatastician/standards/blob/main/docs/TRUSTED-BASE-REDUCTION-POLICY.adoc"
   core_failed=true
 fi
 

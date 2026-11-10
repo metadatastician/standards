@@ -46,7 +46,7 @@ on:
 jobs:
   $2:
     name: Hypatia Neurosymbolic Analysis
-    uses: hyperpolymath/standards/.github/workflows/hypatia-scan-reusable.yml@84355587cb2a1f86e6882de83514a32db2646e7a
+    uses: metadatastician/standards/.github/workflows/hypatia-scan-reusable.yml@84355587cb2a1f86e6882de83514a32db2646e7a
     secrets: inherit
 EOF
 }
@@ -122,7 +122,7 @@ jobs:
       actions: read
       contents: read
       security-events: write
-    uses: hyperpolymath/standards/.github/workflows/hypatia-scan-reusable.yml@210f14e753c80064ec1bcae72f1d654dd9b0e687
+    uses: metadatastician/standards/.github/workflows/hypatia-scan-reusable.yml@210f14e753c80064ec1bcae72f1d654dd9b0e687
     secrets: inherit
 EOF
 
@@ -135,7 +135,7 @@ on: [push]
 
 jobs:
   scan: # estate scan gate
-    uses: hyperpolymath/standards/.github/workflows/hypatia-scan-reusable.yml@210f14e753c80064ec1bcae72f1d654dd9b0e687
+    uses: metadatastician/standards/.github/workflows/hypatia-scan-reusable.yml@210f14e753c80064ec1bcae72f1d654dd9b0e687
     secrets: inherit
 EOF
 
@@ -148,7 +148,7 @@ on: [push]
 
 jobs:
   scan:
-    uses: hyperpolymath/standards/.github/workflows/hypatia-scan-reusable.yml@8f2ee50841e216cd8c192eeb68953118190f105c' > "$work/fleet/iii-no-newline/.github/workflows/hypatia-scan.yml"
+    uses: metadatastician/standards/.github/workflows/hypatia-scan-reusable.yml@8f2ee50841e216cd8c192eeb68953118190f105c' > "$work/fleet/iii-no-newline/.github/workflows/hypatia-scan.yml"
 
 job_key() { # the job key governing the reusable call, detected structurally
   local n; n="$(awk '/^[[:space:]]*uses:.*hypatia-scan-reusable\.ya?ml@/ { print NR; exit }' "$1")"

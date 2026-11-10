@@ -174,7 +174,7 @@ See: https://github.com/hyperpolymath/palimpsest-license[palimpsest-license repo
 
 Multi-session estate-wide migration of TypeScript to AffineScript, parallel to the completed V→Zig sweep (2026-05-28) but at very different scale (~50-80 PRs across ~38 repos vs V→Zig's 16-PR single session).
 
-**Campaign umbrella**: https://github.com/hyperpolymath/standards/issues/239[#239]
+**Campaign umbrella**: https://github.com/metadatastician/standards/issues/239[#239]
 
 ==== 4-layer architecture
 
@@ -206,25 +206,25 @@ Multi-session estate-wide migration of TypeScript to AffineScript, parallel to t
 |Step |Description |Issue
 
 |**①** |SEED PORT — phronesis 54L VSCode extension to `.affine` (binding coverage confirmed)
-|https://github.com/hyperpolymath/standards/issues/240[#240]
+|https://github.com/metadatastician/standards/issues/240[#240]
 
 |**②** |TAIL BATCH 1 — pure-logic small repos (≤3 files each)
-|https://github.com/hyperpolymath/standards/issues/241[#241]
+|https://github.com/metadatastician/standards/issues/241[#241]
 
 |**③** |STDLIB FILL — discharge gaps surfaced by step 2
-|https://github.com/hyperpolymath/standards/issues/242[#242]
+|https://github.com/metadatastician/standards/issues/242[#242]
 
 |**④** |TAIL BATCH 2 — 4-9 file mid-tier repos
-|https://github.com/hyperpolymath/standards/issues/243[#243]
+|https://github.com/metadatastician/standards/issues/243[#243]
 
 |**⑤** |IDAPTIK DLC PORT — 52 files (VM/instruction core)
-|https://github.com/hyperpolymath/standards/issues/244[#244]
+|https://github.com/metadatastician/standards/issues/244[#244]
 
 |**⑥** |PLUGIN-HOST BINDINGS — cross-ref AS top-50 roadmap
-|https://github.com/hyperpolymath/standards/issues/245[#245]
+|https://github.com/metadatastician/standards/issues/245[#245]
 
 |**⑦** |PLUGIN REPOS — 5 repos / 70 files (post step 6)
-|https://github.com/hyperpolymath/standards/issues/246[#246]
+|https://github.com/metadatastician/standards/issues/246[#246]
 |===
 
 ==== Dependency graph

@@ -136,7 +136,7 @@ if [ -n "$blocking_missing" ]; then
   echo "  docs/CONTRIBUTING.md     (or docs/CONTRIBUTING.adoc)"
   echo "  3-practice/CONTRIBUTING.adoc"
   echo
-  echo "Estate policy: docs are AsciiDoc by default; see hyperpolymath/standards."
+  echo "Estate policy: docs are AsciiDoc by default; see metadatastician/standards."
   exit 1
 fi
 
