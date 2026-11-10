@@ -58,6 +58,36 @@ jq -n '[[{user:{login:"coderabbitai[bot]"},body:"## Rate limit exceeded\nPlease 
 check 'standalone CodeRabbit quota notice is retained' "$(snapshot)" '| CodeRabbit | NO REVIEW on this head — unavailable/quota notice observed; comment head unknown |'
 jq -n '[[{user:{login:"someone"},body:"## Rate limit exceeded\nPlease wait before retrying."}]]' > "$comments"
 check 'standalone notice is scoped to CodeRabbit identity' "$(snapshot)" '| CodeRabbit | NO REVIEW observed on this head |'
+# Codex reports a failed review in issue comments. The two bodies below are
+# the shapes observed on metadatastician/MetaManifold-Evidence#17 (2026-11-10).
+codex_summary() {
+  jq -n --arg account "$1" --arg sha "$2" --arg status "$3" '
+    [[{user:{login:$account},body:("<!-- codex-pull-request-review-summary -->\n<!-- codex-review-state:v1 " +
+      ({code_review:{commit_sha:$sha,has_any_findings:true,has_unresolved_findings:true,status:$status},
+        security_review:{commit_sha:null,has_any_findings:null,has_unresolved_findings:null,status:null}} | tojson) +
+      " -->\n\n<details>\n<summary><strong>Codex Review Summary</strong>: ❌ Failed</summary>\n")}]]'
+}
+codex_usage='You have reached your Codex usage limits for code reviews. You can see your limits in the [Codex usage dashboard](https://chatgpt.com/codex/cloud/settings/usage).'
+codex_summary 'chatgpt-codex-connector[bot]' "$head" failed > "$comments"
+check 'Codex failed summary for the head is no review' "$(snapshot)" '| Codex | NO REVIEW on this head (review failed) |'
+jq --arg body "$codex_usage" '.[0] += [{user:{login:"chatgpt-codex-connector[bot]"},body:$body}]' "$comments" > "$tmp/both.json"
+mv "$tmp/both.json" "$comments"
+check 'Codex failed summary with usage notice names the limit' "$(snapshot)" '| Codex | NO REVIEW on this head (review failed; usage-limit notice observed, comment head unknown) |'
+jq -n --arg head "$head" '[[{user:{login:"chatgpt-codex-connector[bot]"},commit_id:$head,state:"COMMENTED",body:"Reviewed"}]]' > "$reviews"
+check 'Codex review on the head outranks a failed summary' "$(snapshot)" '| Codex | review observed on this head'
+printf '[[]]\n' > "$reviews"
+jq -n --arg body "$codex_usage" '[[{user:{login:"chatgpt-codex-connector[bot]"},body:$body}]]' > "$comments"
+check 'Codex usage notice alone has unknown head' "$(snapshot)" '| Codex | NO REVIEW on this head — unavailable/quota notice observed; comment head unknown |'
+codex_summary 'chatgpt-codex-connector[bot]' bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb failed > "$comments"
+check 'Codex failed summary for another commit is not head evidence' "$(snapshot)" '| Codex | NO REVIEW observed on this head |'
+codex_summary 'chatgpt-codex-connector[bot]' "$head" unknown-status > "$comments"
+check 'Codex summary with another status is not a failure' "$(snapshot)" '| Codex | NO REVIEW observed on this head |'
+codex_summary someone "$head" failed > "$comments"
+jq --arg body "$codex_usage" '.[0] += [{user:{login:"someone"},body:$body}]' "$comments" > "$tmp/both.json"
+mv "$tmp/both.json" "$comments"
+check 'human text cannot impersonate Codex' "$(snapshot)" '| Codex | NO REVIEW observed on this head |'
+jq -n '[[{user:{login:"chatgpt-codex-connector[bot]"},body:"<!-- codex-pull-request-review-summary -->\n<!-- codex-review-state:v1 {not json} -->\n"}]]' > "$comments"
+check 'malformed Codex state is not a failure and not a crash' "$(snapshot)" '| Codex | NO REVIEW observed on this head |'
 printf '{}\n' > "$reviews"
 if report=$(snapshot); then fail=$((fail+1)); else check 'bad response is indeterminate' "$report" 'INDETERMINATE'; fi
 printf '[[]]\n' > "$reviews"

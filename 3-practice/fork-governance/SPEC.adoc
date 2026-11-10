@@ -107,7 +107,11 @@ a quota failure, or silence MUST NOT be interpreted as a completed review
 on the current head. In particular, a quota failure may itself be delivered
 as a `COMMENTED` review. A review observed on the head is a coverage fact,
 not a claim of approval. Quota notices in issue comments have unknown head
-scope. API failure or a head change during collection is indeterminate.
+scope. A Codex review summary is the exception: it is an issue comment that
+names its commit in its own state marker, so a summary that reports a failed
+review for the head is reported as no review on that head. A Codex usage-limit
+notice names no commit. API failure or a head change during collection is
+indeterminate.
 The snapshot is refreshed when the summary runs; it is not live review state.
 The advisory may be omitted, with a workflow warning, when it would exceed
 the publisher's 65,000-character comment budget. Existing lane reports take
