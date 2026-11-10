@@ -60,7 +60,7 @@ Interoperability considerations:
 
 Published specification:
   K9 SVC Specification v1.0.0
-  https://github.com/hyperpolymath/standards/blob/main/k9-svc/SPEC.adoc
+  https://github.com/metadatastician/standards/blob/main/k9-svc/SPEC.adoc
 
 Applications which use this media type:
   - K9 validators and processors
