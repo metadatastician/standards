@@ -1668,6 +1668,8 @@ jobs:
           sparse-checkout: |
             scripts/check-actions-lock-gate.sh
             scripts/update-actions-lock.sh
+            scripts/check-lock-pin-contract.sh
+            scripts/close-lock.sh
             .machine_readable/lock-allow.txt
           sparse-checkout-cone-mode: false
       - name: Check locked or SHA-pinned actions
@@ -1686,7 +1688,9 @@ jobs:
             SRC=.standards-lock/scripts
             LEDGERSRC=.standards-lock/.machine_readable
           fi
-          for f in check-actions-lock-gate.sh update-actions-lock.sh; do
+          # check-lock-pin-contract.sh finds close-lock.sh beside itself, so
+          # both are staged into the same directory.
+          for f in check-actions-lock-gate.sh update-actions-lock.sh check-lock-pin-contract.sh close-lock.sh; do
             if [ ! -f "$SRC/$f" ]; then
               echo "::error::actions-lock gate: $f not found in $SRC (pinned standards checkout failed?)"
               exit 1
@@ -1744,6 +1748,26 @@ jobs:
           rc=0
           bash "$RUNNER_TEMP/check-actions-lock-gate.sh" || rc=$?
 
+          # The representation contract, on the CALLER's lock. The verifier
+          # above treats `sha-as-ref` (a leaf whose `ref:` repeats its own SHA)
+          # as advisory and stays valid, but the runner refuses that record at
+          # `Set up job` in every workflow that uses it: "Unable to resolve
+          # action `actions/checkout@3d3c42e5…`: invalid lockfile pin".
+          # standards' own actions-lock-gate.yml has enforced this contract on
+          # standards since #1290; callers had no such check, and carried the
+          # record unseen (hyperpolymath/laminar: five such leaves, written by
+          # `gh actions-lock --no-narrow` in its #99). Not ledgerable: the
+          # ledger excuses a MISSING lock, and this only runs on a present one.
+          # Exit 2 (not inspected, e.g. no mikefarah yq v4) is not a pass.
+          if [ -f .github/workflows/actions.lock ]; then
+            crc=0
+            bash "$RUNNER_TEMP/check-lock-pin-contract.sh" .github/workflows/actions.lock || crc=$?
+            if [ "$crc" -ne 0 ]; then
+              echo "::error::actions.lock breaks the lock pin contract (exit $crc); see the findings above. A self-SHA leaf must name its reviewed tag in ref:. The estate repair order (gh actions-lock, relock-sha-keys.sh, complete-job-refs.sh, close-lock.sh, prune-stale.sh in metadatastician/standards; run by scripts/regen-dependabot-locks.sh) regenerates the lock with workflow bytes unchanged."
+              case "$rc" in 1|2) ;; *) rc=$crc ;; esac
+            fi
+          fi
+
           # Shrink-only exemption ledger (.machine_readable/lock-allow.txt in
           # standards, guarded by scripts/check-exemption-ratchet.sh so it can
           # never grow without a `Ratchet-exception` trailer).
@@ -1769,8 +1793,11 @@ jobs:
             echo "lock debt: $GITHUB_REPOSITORY is 1 of $total ledgered repositories."
             echo "This exemption is shrink-only. Run 'gh actions-lock --no-migrate-local-actions --no-narrow' in this"
             echo "repository (metadatastician/standards wraps it at scripts/update-actions-lock.sh"
-            echo "for callers that have that checkout). Review workflow changes before committing;"
-            echo "commit the lockfile, then delete this repository's line from .machine_readable/lock-allow.txt in metadatastician/standards."
+            echo "for callers that have that checkout). Review workflow changes before committing."
+            echo "Then run scripts/check-lock-pin-contract.sh from metadatastician/standards on the new lock: over"
+            echo "SHA-pinned uses: the tool can record ref: <sha>, which the runner refuses ('invalid lockfile pin')."
+            echo "Commit the lockfile only once it passes, then delete this repository's line from"
+            echo ".machine_readable/lock-allow.txt in metadatastician/standards."
             exit 0
           fi
           # Never a silent pass: state the denominator even when clean.
