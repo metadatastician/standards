@@ -2,12 +2,12 @@
 // SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
 = Ultraplan: getting the deed, K9 and contractile system right, estate-wide
 Jonathan D.A. Jewell (hyperpolymath)
-v0.3.2, 2026-11-04
+v0.3.3, 2026-11-09
 :toc: left
 :toclevels: 3
 :sectnums:
 :icons: font
-:status: DRAFT — for owner review. v0.3.2 records all sixteen owner rulings of 2026-10-20 (<<owner-model>>, <<decisions>>) and measures progress against them on 2026-11-04 (<<progress>>). Measured sections are facts with commands. Sections marked PROPOSED are design, not rulings, and are written to be reviewed by a second, unanchored reader.
+:status: DRAFT — for owner review. v0.3.3 records all sixteen owner rulings of 2026-10-20 (<<owner-model>>, <<decisions>>), measures progress against them on 2026-11-04 (<<progress>>), and records the proof review of 2026-11-09 (<<proof-review>>). Measured sections are facts with commands. Sections marked PROPOSED are design, not rulings, and are written to be reviewed by a second, unanchored reader.
 
 [.lead]
 The owner found the template with what looked like only an Adjustfile in its
@@ -421,8 +421,10 @@ hyperpolymath/standards#1302)
   Bun.
 * The contractile CLI executes nothing in a deed-era repo (above).
 * The coaptation loop is the estate's only working descriptile↔contractile
-  comparison. Its Idris2 core proves that an unwitnessed `Must` clause cannot
-  typecheck, but it is not wired to the runner's output, and on the template
+  comparison. Its Idris2 core, as measured here, proved less than it said: its
+  witness relation accepted any fact for any clause, and its negative test was
+  one example (corrected by rsr-template-repo#310, <<proof-review>>). It is not
+  wired to the runner's output, and on the template
   only 1 of 52 clauses is witnessed by the deed; 26 defer to a Hunt-tier run that
   does not exist.
 
@@ -537,8 +539,8 @@ global"
 |Not typed; not checked.
 
 |Evidence
-|HYP-01 `support` / `evidence` / `level` (sound, epi, belief), machine-checked
-in Hypatia; the deed spec's proposed *warrant* vs *receipt* vocabulary from
+|HYP-01 `support` / `evidence` / `level` (sound, epi, belief), typed in
+Hypatia (no receipt read here, so not claimed as machine-checked); the deed spec's proposed *warrant* vs *receipt* vocabulary from
 `epistemic-types`
 |Not shared between Hypatia and the deed.
 
@@ -621,12 +623,13 @@ already lives rather than in a new record.
 * *A checkable rule.* Panoply's "no guarantee without an envelope; no envelope
   without evidence" becomes: a clause whose witness is labelled `tested` or
   stronger must name its evidence, and `audited` needs independent
-  reproduction. The template's `Coaptation.idr` already proves the same shape
-  for `Must` coverage (`MayGap` has no constructor for `Must`), so the proof
-  route exists.
+  reproduction. The template's `Coaptation.idr` gives the proof route: since
+  rsr-template-repo#310 it proves its Must/Trust gate model sound and complete
+  against a content-bearing witness, with no gap for Must or Trust
+  (<<proof-review>>).
 * *Exnovation as a Dustfile entry.* A retirement records its basis, decision,
   switching cost, reversibility class, and the evidence that would reverse it.
-  Hypatia's `Retraction.idr` already rests on `residual-evidence-types`'
+  Hypatia's `Retraction.idr` is the Idris2 counterpart of `residual-evidence-types`'
   `Revision.agda`, the formal account of retraction to cite.
 * *Failure modes are the Bustfile.* Copilot's sixth field needs no new home.
 * *Drop* `CC`, `VL`, `DC` and the numeric ES table unless experiment X6 shows a
@@ -915,6 +918,87 @@ from the base branch (the `deno-residue` count of 3 exceeded its ceiling of
 
 The open steps are tracked one per checkbox in metadatastician/standards#1399,
 which also lists the work outside this repository.
+
+[[proof-review]]
+== Proof review at 2026-11-09
+
+Every proof this plan relies on, and every proof in the repositories it
+touches, was re-run against `3-practice/PROOF-POLICY.adoc` on 2026-11-09. The
+toolchains were installed in an agent session from Ubuntu 24.04 packages and
+upstream release archives. That is a §6 deviation for this one-off run; the
+digests are below. Status words are the §5 tokens. Nothing here is graded on
+the §8 ladder: every row is an engineering obligation or a template example,
+so no `PWG-` grade applies.
+
+[cols="2,2,3",options="header"]
+|===
+|Artefact |Checker |Result
+
+|rsr-template-repo `.machine_readable/coaptation/core/Coaptation.idr` (as on `main`)
+|Idris2 0.7.0
+|Typechecked, but proved less than it claimed. Its `Witnesses` relation
+accepted any fact for any clause, and its negative test was one example. Fixed
+in hyperpolymath/rsr-template-repo#310: a content-bearing witness, with
+`hardGateSound`, `hardGateComplete`, `mustCannotGap` and `trustCannotGap`
+proved (`PROVEN` for the model; the model-to-Nickel bridge is `ASSUMED`).
+
+|rsr-template-repo `coapt.ncl`
+|Nickel 1.18.0
+|An empty witness list counted as witnessed (`std.array.all` over `[]`).
+Fixed in #310: refuted. No verdict changed. The committed receipt was stale on
+`main` (two newer `must` clauses) and is regenerated there.
+
+|K9 `authorize_hunt` (K9-CONTRACT-SPEC §9.2)
+|Idris2 0.7.0; Nickel 1.18.0
+|Had no proof. Now proved for a model in `1-formats/k9/spec/proofs/HuntGate.idr`
+(`PROVEN`). Both Nickel copies are checked against that model on all 32 inputs
+from `k9-validate.sh --self-test` (`TESTED`, the whole domain). Ledger:
+`3-practice/PROOF-NEEDS.adoc`.
+
+|rsr-template-repo proof scaffold (`verification/proofs`, `src/interface`)
+|Idris2 0.7.0; Agda 2.6.3 with agda-stdlib 1.7.3; Coq 8.18.0; Lean 4.15.0; TLC 1.8.0
+|The ABI package builds. `Types.idr` and `ApiTypes.lean` compile though their
+manifests said otherwise. Four `ABI/` modules still fail and stay quarantined.
+The Agda check used `--safe` only, not the §2.1 invocation. `PROOF-STATUS`
+reported "0% proven" against §8.4. The prover guide recommended Lean "for
+mathlib". The TLA+ spec had no `.cfg` and could not be model-checked, and its
+`ProcessedMonotonic` checked only `processed >= 0`. The proof gate failed open
+three ways: `lean` exits 0 on `sorry`, `coqc` on `Admitted`, and a mistyped
+MANIFEST status read as quarantine. All fixed in #310 (each gated module now
+also passes the escape-hatch scan, with negative controls); the TLA+ model is
+`TESTED` with its bounds.
+
+|contractiles Ada runners (`runners/must`, `mustfile/src`)
+|Text search for `SPARK_Mode` and contract aspects
+|Nothing sets `SPARK_Mode`, so `gnatprove` analyses none of it and nothing is
+proved; seven documents that call the SPARK conversion complete are
+unsupported. The only contract aspects are four `Pre` and eight `Post` on
+bounded-string conversions in `runners/must/src/must_types.ads` (a first
+reading missed them; review caught it). The two Ada trees diverge rather than
+copy each other. Its copies of the template proofs did not compile, and its
+proof recipes reported `SKIP` as a pass. Fixed in hyperpolymath/contractiles#74:
+status corrections, SPARK-1 `OPEN`, the scaffold resynced.
+
+|Mathesis census
+|Its own scripts
+|It counted every `.ads`/`.adb` in a repository with a `.gpr` as SPARK (36
+rows), and it set the template's proofs aside everywhere, the template
+included, so `Coaptation.idr` was catalogued nowhere. Fixed in
+hyperpolymath/mathesis (branch `claude/lucid-hopper-wvkv5e`), with a fresh
+census run.
+|===
+
+Toolchain digests (sha256, first 16 hex digits): TLA+ `tla2tools.jar` v1.8.0
+`e1f11b75c4b5bc44`; Lean `lean-4.15.0-linux.tar.zst` `af71a2569a9f6833`;
+Idris2 built from tag `v0.7.0` (`27780073c8631826d846499840b3857d9b9a4fd5`)
+with Chez Scheme 9.5.8; Agda `2.6.3-1build1` and Coq `8.18.0+dfsg-1build2`
+from Ubuntu packages.
+
+What stays open: no CI lane runs the template's or contractiles' prover
+checks (neither has a prover container or a Guix manifest that provides
+them), and the standards Idris2 job installs through `pack` without a pinned
+version (recorded as an open §6 deviation in `3-practice/PROOF-NEEDS.adoc`).
+Both are tracked in metadatastician/standards#1399.
 
 == The plan
 
@@ -1330,8 +1414,8 @@ waits. The five Hunt preconditions need real evidence at run time. CI does not
 yet verify signatures (L3), so "signed" stays unverified until it does.
 |The executor could be one estate-wide component, pinned like the reusables, so
 probes become data it interprets. That is also the natural home for the
-"witness or block" rule in P2.1, and it lets `Coaptation.idr` prove totality over
-the comparator alone.
+"witness or block" rule in P2.1, and it could let `Coaptation.idr` state totality
+over the comparator alone (a possibility, not a result).
 
 |Every contractile `'Hunt`, signed
 |Honest per file: each record declares its own side effects. No new component.
