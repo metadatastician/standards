@@ -37,7 +37,7 @@ on:
         default: false
       owners:
         description: 'Comma-separated owners to walk'
-        default: 'hyperpolymath,metadatastician'
+        default: 'hyperpolymath,metadatastician,catachresis-colloquium'
       limit:
         description: 'Stop after N repos (0 = no limit); use for smoke runs'
         default: '0'
@@ -69,9 +69,12 @@ jobs:
       # the rules it exists to uphold. Separation of duties, not style.
       #
       # The App needs `contents: write` and `pull_requests: write`, and must be
-      # installed on BOTH owners. An installation token is scoped to ONE owner
-      # and carries its own rate limit, so `owner:` is required — without it the
-      # token is scoped to THIS repository and every consumer write 404s.
+      # installed on EVERY owner walked. An installation token is scoped to ONE
+      # owner and carries its own rate limit, so `owner:` is required — without
+      # it the token is scoped to THIS repository and every consumer write 404s.
+      # For the same reason the applier runs once PER OWNER with that owner's
+      # token (see "Run the applier"): one token cannot write to another owner's
+      # repositories.
       - name: Mint an App installation token for hyperpolymath
         id: tok-user
         if: vars.APP_ID != ''
@@ -92,6 +95,20 @@ jobs:
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
           owner: metadatastician
 
+      # The 5 repositories that moved from metadatastician on 2026-11-10
+      # (gv-clade-index ADR 0007) and the rest of this owner's callers: 26
+      # repositories pinned a former-owner standards reusable in the 2026-11-10
+      # census, and no run reached them.
+      - name: Mint an App installation token for catachresis-colloquium
+        id: tok-cc
+        if: vars.APP_ID != ''
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        continue-on-error: true
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: catachresis-colloquium
+
       # A nonexistent secret resolves to an EMPTY STRING in silence, and a run
       # over an empty credential reports a clean sweep while writing nothing.
       # Decide here, before any enumeration, and say exactly what is missing.
@@ -99,41 +116,75 @@ jobs:
       - name: Decide which credential is in play
         id: cred
         env:
-          APP_USER: ${{ steps.tok-user.outputs.token }}
+          TOK_HYPERPOLYMATH: ${{ steps.tok-user.outputs.token }}
+          TOK_METADATASTICIAN: ${{ steps.tok-org.outputs.token }}
+          TOK_CATACHRESIS_COLLOQUIUM: ${{ steps.tok-cc.outputs.token }}
           MODE: ${{ inputs.mode || 'audit' }}
+          OWNERS: ${{ inputs.owners || 'hyperpolymath,metadatastician,catachresis-colloquium' }}
         run: |
           set -euo pipefail
-          if [ -n "${APP_USER:-}" ]; then
+          # Every owner walked needs its OWN installation token: a token for one
+          # owner cannot write to another owner's repositories. Until 2026-11-10
+          # this step checked only the hyperpolymath token, and the run step used
+          # it for every owner, so fix mode could not write to metadatastician.
+          missing=""
+          for owner in ${OWNERS//,/ }; do
+            var="TOK_$(printf '%s' "$owner" | tr 'a-z-' 'A-Z_')"
+            [ -n "${!var:-}" ] || missing="${missing} ${owner}"
+          done
+          if [ -z "$missing" ]; then
             echo "have_app=true" >> "$GITHUB_OUTPUT"
-            echo "An App credential is present."
+            echo "An App credential is present for every owner: ${OWNERS}."
             exit 0
           fi
           echo "have_app=false" >> "$GITHUB_OUTPUT"
           if [ "$MODE" = "fix" ]; then
+            echo "::error::fix mode was requested but there is no App installation token for:${missing}." >&2
             cat >&2 <<'MSG'
-          FATAL: fix mode was requested but no App credential exists.
-            vars.APP_ID and secrets.APP_PRIVATE_KEY must both be set, and the App
-            must be installed on hyperpolymath and metadatastician.
-            Refusing to report a clean run that wrote nothing.
+          FATAL: vars.APP_ID and secrets.APP_PRIVATE_KEY must both be set, and the
+            App must be installed on every owner walked (an installation token
+            is scoped to one owner). Refusing to report a clean run that wrote
+            nothing.
           MSG
             exit 1
           fi
-          echo "::notice::AUDIT-ONLY: no App credential; census will run on GITHUB_TOKEN."
+          echo "::notice::AUDIT-ONLY: no App credential for:${missing}; those owners' census runs on GITHUB_TOKEN (public repositories only)."
 
       - name: Run the applier
         env:
-          # Prefer the App token; fall back to GITHUB_TOKEN for audit reads only.
-          GH_TOKEN: ${{ steps.tok-user.outputs.token || secrets.GITHUB_TOKEN }}
+          # Each owner's App token; GITHUB_TOKEN is the audit-only fallback
+          # (the previous step has already refused fix mode without them).
+          TOK_HYPERPOLYMATH: ${{ steps.tok-user.outputs.token }}
+          TOK_METADATASTICIAN: ${{ steps.tok-org.outputs.token }}
+          TOK_CATACHRESIS_COLLOQUIUM: ${{ steps.tok-cc.outputs.token }}
+          FALLBACK_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           MODE: ${{ inputs.mode || 'audit' }}
           REPAIR: ${{ inputs.repair_illegal || false }}
-          OWNERS: ${{ inputs.owners || 'hyperpolymath,metadatastician' }}
+          OWNERS: ${{ inputs.owners || 'hyperpolymath,metadatastician,catachresis-colloquium' }}
           LIMIT: ${{ inputs.limit || '0' }}
         run: |
           set -euo pipefail
-          args=(--owners "$OWNERS" --limit "$LIMIT" --out census.tsv)
-          [ "$MODE" = "fix" ] && args+=(--fix)
-          [ "$REPAIR" = "true" ] && args+=(--repair-illegal)
-          bash scripts/apply-workflow-pins-remote.sh "${args[@]}"
+          # One applier run per owner, each with that owner's token. LIMIT
+          # applies per owner: a canary of `limit: 5` over three owners opens
+          # at most 15 PRs (narrow it with `owners:`).
+          rc=0; first=1
+          for owner in ${OWNERS//,/ }; do
+            var="TOK_$(printf '%s' "$owner" | tr 'a-z-' 'A-Z_')"
+            args=(--owners "$owner" --limit "$LIMIT" --out "census-${owner}.tsv")
+            [ "$MODE" = "fix" ] && args+=(--fix)
+            [ "$REPAIR" = "true" ] && args+=(--repair-illegal)
+            echo "::group::applier: ${owner}"
+            GH_TOKEN="${!var:-$FALLBACK_TOKEN}" bash scripts/apply-workflow-pins-remote.sh "${args[@]}" || rc=$?
+            echo "::endgroup::"
+            # One merged census, one header row.
+            if [ -f "census-${owner}.tsv" ]; then
+              if [ "$first" -eq 1 ]; then cat "census-${owner}.tsv" > census.tsv; first=0
+              else tail -n +2 "census-${owner}.tsv" >> census.tsv; fi
+            fi
+          done
+          # An owner whose run failed (enumeration, auth, controls) fails the
+          # job after the other owners have still been walked.
+          exit "$rc"
 
       - name: Summarise the census
         if: always()

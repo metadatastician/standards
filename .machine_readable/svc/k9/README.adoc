@@ -130,7 +130,7 @@ K9 contractiles integrate with other RSR standards:
 ⚠️ **Never run as root unless required** +
 ⚠️ **Sandbox external components**
 
-**See:** https://github.com/hyperpolymath/standards/blob/main/1-formats/k9/docs/SECURITY-BEST-PRACTICES.adoc
+**See:** https://github.com/metadatastician/standards/blob/main/1-formats/k9/docs/SECURITY-BEST-PRACTICES.adoc
 
 == Template Files
 
@@ -168,16 +168,16 @@ chmod +x nickel && sudo mv nickel /usr/local/bin/
 cargo install just
 
 # Clone K9-SVC (for must shim and tooling)
-git clone https://github.com/hyperpolymath/standards.git
+git clone https://github.com/metadatastician/standards.git
 # Note: K9-SVC is located in standards/1-formats/k9
 ----
 
 == Learn More
 
-- **K9-SVC Specification:** https://github.com/hyperpolymath/standards/blob/main/1-formats/k9/SPEC.adoc
-- **K9 User Guide:** https://github.com/hyperpolymath/standards/blob/main/1-formats/k9/GUIDE.adoc
-- **Security Documentation:** https://github.com/hyperpolymath/standards/blob/main/1-formats/k9/docs/SECURITY-FAQ.adoc
-- **IANA Media Type:** `application/vnd.k9` (application drafted, not yet filed; see https://github.com/hyperpolymath/standards/blob/main/1-formats/k9/IANA-MEDIA-TYPE-APPLICATION.adoc)
+- **K9-SVC Specification:** https://github.com/metadatastician/standards/blob/main/1-formats/k9/SPEC.adoc
+- **K9 User Guide:** https://github.com/metadatastician/standards/blob/main/1-formats/k9/GUIDE.adoc
+- **Security Documentation:** https://github.com/metadatastician/standards/blob/main/1-formats/k9/docs/SECURITY-FAQ.adoc
+- **IANA Media Type:** `application/vnd.k9` (application drafted, not yet filed; see https://github.com/metadatastician/standards/blob/main/1-formats/k9/IANA-MEDIA-TYPE-APPLICATION.adoc)
 
 == Contributing
 
@@ -189,4 +189,4 @@ When adding K9 contractiles to your repository:
 4. Sign Hunt-level components before committing
 5. Add K9 validation to CI/CD pipeline
 
-**Questions?** Open an issue on https://github.com/hyperpolymath/standards/tree/main/1-formats/k9
+**Questions?** Open an issue on https://github.com/metadatastician/standards/tree/main/1-formats/k9

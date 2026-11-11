@@ -6,7 +6,7 @@ edition = "2021"
 description = "Extracts @trust/@contract/@grade annotations from source comments, emits A2ML"
 license = "AGPL-3.0-or-later"
 authors = ["Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>"]
-repository = "https://github.com/hyperpolymath/standards"
+repository = "https://github.com/metadatastician/standards"
 
 [[bin]]
 name = "inline-annotations"

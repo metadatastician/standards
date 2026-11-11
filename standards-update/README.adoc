@@ -297,7 +297,7 @@ standards/
 
 **Standards Hub:**
 
-* https://github.com/hyperpolymath/standards[standards] — This repository (hub)
+* https://github.com/metadatastician/standards[standards] — This repository (hub)
 * link:1-formats/SATELLITES.a2ml[1-formats/SATELLITES.a2ml] — Machine-readable satellite registry
 
 **A2ML Format Family (Satellites):**

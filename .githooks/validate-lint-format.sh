@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: MPL-2.0
 # Hyperpolymath Estate — ecosystem-scoped lint + format check (pre-commit)
-# Source: https://github.com/hyperpolymath/standards
+# Source: https://github.com/metadatastician/standards
 #
 # CONFINEMENT IS THE POINT. Each check runs only when THIS repo has staged
 # files of that kind. A Rust check must not fire in a ReScript repo, and a V

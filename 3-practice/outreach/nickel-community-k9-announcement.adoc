@@ -84,7 +84,7 @@ common infrastructure errors.
 Here’s where it gets fun: *K9 releases itself using a K9 component*!
 
 See:
-https://github.com/hyperpolymath/standards/blob/main/k9-svc/release-k9.k9.ncl
+https://github.com/metadatastician/standards/blob/main/k9-svc/release-k9.k9.ncl
 
 This contractile: - Validates the build environment - Bumps version
 numbers - Runs tests - Creates GitHub releases - All automated via the
@@ -148,7 +148,7 @@ system?
 === Links
 
 * *K9 Specification:*
-https://github.com/hyperpolymath/standards/tree/main/k9-svc
+https://github.com/metadatastician/standards/tree/main/k9-svc
 * *K9 Tools:* https://github.com/hyperpolymath/k9-tools
 * *Examples:* https://github.com/hyperpolymath/k9-svc/tree/main/examples
 
@@ -161,4 +161,4 @@ wouldn’t be possible without Nickel’s solid foundation.
 
 P.S. - If you’re interested in formally verified markup languages, check
 out A2ML (Attested Markup Language), which uses Idris2 dependent types:
-https://github.com/hyperpolymath/standards/tree/main/a2ml
+https://github.com/metadatastician/standards/tree/main/a2ml

@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MPL-2.0
 # lock-selfcheck.yml — is THIS commit safe for a caller to pin to?
 #
-# `uses: hyperpolymath/standards/.github/workflows/x.yml@<sha>` is resolved at
+# `uses: metadatastician/standards/.github/workflows/x.yml@<sha>` is resolved at
 # workflow STARTUP, and GitHub validates the callee against the CALLEE repo's
 # own `.github/workflows/actions.lock` AS IT EXISTS AT THAT SHA. If a reusable
 # here names an action ref that the lock at that SHA does not key, then every

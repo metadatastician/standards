@@ -573,7 +573,7 @@ If you encounter performance issues:
 
 1. **Run benchmarks:** `./benchmarks/k9-bench.sh`
 2. **Profile the operation:** Use timing/profiling tools
-3. **File an issue:** https://github.com/hyperpolymath/standards/tree/main/k9-svc/issues
+3. **File an issue:** https://github.com/metadatastician/standards/tree/main/k9-svc/issues
 4. **Include:**
    - System info (OS, CPU, RAM)
    - Benchmark results

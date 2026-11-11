@@ -202,6 +202,32 @@ halfway through. Where the shim is genuinely not affordable, the cutover is sche
 a single bounded increment with a tested rollback, and that exception is recorded rather
 than assumed.
 
+== Cheap models for upkeep
+
+[IMPORTANT]
+====
+*Proposal status: not canonical.*
+
+* *Owner decision:* Pending ratification. The 2026-11-10 owner instruction asked
+  for the rule to be recorded, not for its adoption as permanent policy.
+* *Dissent:* Pending the required contest and review period. No completed dissent
+  record exists yet.
+* *Effective version/hash:* Not assigned.
+* *Proposal record:* None yet. The rule is already projected as arrival-pack rule 16
+  in `hyperpolymath/rsr-template-repo`, so this is the same case as rule 15 (see the
+  `contradiction` row in `0-canon/constitution/KNOWN-TENSIONS.adoc`).
+* *Propagation:* This principle MUST NOT be treated as canonical until the owner
+  decision, dissent, effective version/hash, superseded material, and migration
+  limits are recorded under `0-canon/constitution/CHANGE-PROCEDURE.adoc`.
+====
+
+*Do not spend a top-tier model on execution and maintenance work.*
+
+CI/CD, workflow, template-drift and status-file work does not get a top-tier model.
+When such work needs real effort, stop and say so, then open a coordinated thread on
+cheaper models (Sonnet and Haiku, or Opus, Sonnet and Haiku) and do it there. Keep
+the top-tier model for proof work and hard design.
+
 == The full Doctrine
 
 The complete, always-current operating Doctrine is maintained as estate-common

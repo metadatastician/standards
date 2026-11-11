@@ -8,7 +8,7 @@
 # Source it; do not execute it:
 #
 #   . "$(dirname "${BASH_SOURCE[0]}")/lib/pin-ancestry.sh"
-#   assert_pin_ancestry hyperpolymath/standards "$sha" || exit 1
+#   assert_pin_ancestry metadatastician/standards "$sha" || exit 1
 #
 # WHY: a pin can be a real commit that GitHub still refuses to run. A PR head
 # that is later squash-merged, or a commit on a deleted unmerged branch, is an

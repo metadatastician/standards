@@ -79,6 +79,6 @@ secondary surface, never the primary one.
 
 Everything normative lives here, in this directory. The repository you are in
 calls three lane workflows and one posting workflow, all pinned to a commit of
-`hyperpolymath/standards`. If the pins are stale, that repository's verdicts
+`metadatastician/standards`. If the pins are stale, that repository's verdicts
 are computed by an old renderer — check `canon-ref` against the `uses:` refs
 before believing a comment that disagrees with another repository's.

@@ -32,8 +32,8 @@ K9!
 
   config = {
     policy = {
-      repository = "hyperpolymath/standards",
-      repository_aliases = ["metadatastician/standards"],
+      repository = "metadatastician/standards",
+      repository_aliases = ["hyperpolymath/standards"],
       path = "3-practice/PROOF-POLICY.adoc",
       section = "8",
       anchor = "proof-witness-grades",

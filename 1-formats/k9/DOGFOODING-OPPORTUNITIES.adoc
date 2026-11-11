@@ -27,7 +27,7 @@ run.
 Podman integration, packaging
 
 *Repository:*
-https://github.com/hyperpolymath/standards/tree/main/k9-svc
+https://github.com/metadatastician/standards/tree/main/k9-svc
 
 '''''
 
@@ -138,7 +138,7 @@ templates - [ ] Blog post: "`Bunsenite Eats Its Own Dog Food with K9`"
 
 *Repository Links:* - Bunsenite:
 https://github.com/hyperpolymath/bunsenite - K9-SVC:
-https://github.com/hyperpolymath/standards/tree/main/k9-svc
+https://github.com/metadatastician/standards/tree/main/k9-svc
 
 '''''
 
@@ -269,7 +269,7 @@ validation to RSR CI - [ ] Document contractile-K9 integration
 
 *Repository Links:* - RSR Template:
 https://github.com/hyperpolymath/rsr-template-repo - K9-SVC:
-https://github.com/hyperpolymath/standards/tree/main/k9-svc
+https://github.com/metadatastician/standards/tree/main/k9-svc
 
 '''''
 
@@ -349,7 +349,7 @@ pipeline - [ ] Require signatures for production MCP configs
 
 *Repository Links:* - MCP Servers:
 https://github.com/hyperpolymath?q=poly-*-mcp - K9-SVC:
-https://github.com/hyperpolymath/standards/tree/main/k9-svc
+https://github.com/metadatastician/standards/tree/main/k9-svc
 
 '''''
 
@@ -503,7 +503,7 @@ ERROR-CATALOG.scm - [ ] Require K9 validation before applying fixes
 
 *Repository Links:* - Robot-Repo-Bot:
 https://github.com/hyperpolymath/robot-repo-bot - K9-SVC:
-https://github.com/hyperpolymath/standards/tree/main/k9-svc
+https://github.com/metadatastician/standards/tree/main/k9-svc
 
 '''''
 
@@ -724,7 +724,7 @@ rules)
 
 ==== Core Repositories
 
-* *K9-SVC:* https://github.com/hyperpolymath/standards/tree/main/k9-svc
+* *K9-SVC:* https://github.com/metadatastician/standards/tree/main/k9-svc
 * *RSR Template:* https://github.com/hyperpolymath/rsr-template-repo
 * *Bunsenite:* https://github.com/hyperpolymath/bunsenite
 * *Robot-Repo-Bot:* https://github.com/hyperpolymath/robot-repo-bot

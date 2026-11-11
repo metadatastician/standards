@@ -434,6 +434,33 @@ case_public_fail "$APPLIER"
 case_main_app "$APPLIER"
 case_main_fail "$APPLIER"
 
+# --- 5. a reachable target is refused when its own lock fails lock-selfcheck --
+# GitHub validates each caller against the TARGET's actions.lock, so a target
+# that is reachable from main but whose lock the runner refuses (standards
+# fad242d3: ten self-SHA leaves) must never be pinned. Ancestry is stubbed
+# green and lock-selfcheck.sh is replaced by a stub whose verdict is set per
+# case, so what is under test is validate_target's own wiring: a refusal (1)
+# and a not-inspected (2) both stop the run; a pass lets it through.
+echo "== 5. target self-check =="
+# case_target_selfcheck <applier> <selfcheck-rc> <want-rc> <label>
+case_target_selfcheck() {
+  local root sha got=0
+  root=$(mktemp -d "$TMP/selfcheck.XXXX")
+  mkdir -p "$root/scripts"
+  printf '#!/usr/bin/env bash\nexit %s\n' "$2" > "$root/scripts/lock-selfcheck.sh"
+  git -C "$root" init -q
+  git -C "$root" -c user.name=t -c user.email=t@t -c commit.gpgsign=false \
+    commit -q --allow-empty -m target
+  sha=$(git -C "$root" rev-parse HEAD)
+  # shellcheck disable=SC2016  # expanded by the inner shell
+  bash -c 'source "$1"; STANDARDS_ROOT="$2"; assert_pin_ancestry() { return 0; }; validate_target "$3"' \
+    _ "$1" "$root" "$sha" >/dev/null 2>&1 || got=$?
+  if [ "$got" = "$3" ]; then pass "target self-check: $4"; else fail "target self-check: $4 — rc=$got (want $3)"; fi
+}
+case_target_selfcheck "$APPLIER" 1 1 "a target lock-selfcheck rejects is refused"
+case_target_selfcheck "$APPLIER" 2 1 "a target lock-selfcheck cannot examine is refused"
+case_target_selfcheck "$APPLIER" 0 0 "control: a self-consistent reachable target is accepted"
+
 # list_mutant <name> <sed-expr> <case-fn> — apply <sed-expr> to a copy of the
 # applier, prove the edit landed and still parses, then require <case-fn> to
 # report FAIL against it.

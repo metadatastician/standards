@@ -5,7 +5,7 @@
 // Copyright (C) 2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 //
 // Part of the Hyperpolymath Standards Repository.
-// https://github.com/hyperpolymath/standards
+// https://github.com/metadatastician/standards
 //
 // Status: ACTIVE
 // Declared: 2026-04-17

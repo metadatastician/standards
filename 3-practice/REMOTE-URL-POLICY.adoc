@@ -10,8 +10,8 @@ Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 Canonical git remote-URL policy for all `hyperpolymath/*` repositories
 and every local clone. All maintainers and AI agents must follow this
 document. It resolves
-link:https://github.com/hyperpolymath/standards/issues/69[standards#69]
-(parent link:https://github.com/hyperpolymath/standards/issues/66[#66]).
+link:https://github.com/metadatastician/standards/issues/69[standards#69]
+(parent link:https://github.com/metadatastician/standards/issues/66[#66]).
 
 == Problem
 

@@ -35,13 +35,13 @@
 #
 #   jobs:
 #     elixir-ci:
-#       uses: hyperpolymath/standards/.github/workflows/elixir-ci-reusable.yml@571cc734cd69fb846032ec77a662aa8ee4fc32cd
+#       uses: metadatastician/standards/.github/workflows/elixir-ci-reusable.yml@571cc734cd69fb846032ec77a662aa8ee4fc32cd
 #
 # With dialyzer + customised versions:
 #
 #   jobs:
 #     elixir-ci:
-#       uses: hyperpolymath/standards/.github/workflows/elixir-ci-reusable.yml@571cc734cd69fb846032ec77a662aa8ee4fc32cd
+#       uses: metadatastician/standards/.github/workflows/elixir-ci-reusable.yml@571cc734cd69fb846032ec77a662aa8ee4fc32cd
 #       with:
 #         elixir-version: "1.18"
 #         enable_dialyzer: true
@@ -51,7 +51,7 @@
 #
 #   jobs:
 #     elixir-ci:
-#       uses: hyperpolymath/standards/.github/workflows/elixir-ci-reusable.yml@571cc734cd69fb846032ec77a662aa8ee4fc32cd
+#       uses: metadatastician/standards/.github/workflows/elixir-ci-reusable.yml@571cc734cd69fb846032ec77a662aa8ee4fc32cd
 #       with:
 #         working_directory: server
 #
@@ -64,7 +64,7 @@
 #
 #   jobs:
 #     elixir-ci:
-#       uses: hyperpolymath/standards/.github/workflows/elixir-ci-reusable.yml@<sha>
+#       uses: metadatastician/standards/.github/workflows/elixir-ci-reusable.yml@<sha>
 #       with:
 #         postgres-image: "postgres:16@sha256:<digest>"
 #         arangodb-image: "arangodb:3.12@sha256:<digest>"

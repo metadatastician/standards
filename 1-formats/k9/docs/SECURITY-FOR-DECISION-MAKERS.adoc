@@ -619,7 +619,7 @@ ATTACHMENTS:
 === Before Approval
 
 **Technical:**
-- [ ] Review source code (https://github.com/hyperpolymath/standards/tree/main/k9-svc)
+- [ ] Review source code (https://github.com/metadatastician/standards/tree/main/k9-svc)
 - [ ] Test in isolated environment
 - [ ] Verify dependencies (Nickel, Just, OpenSSL)
 - [ ] Assess operational complexity
@@ -674,7 +674,7 @@ ATTACHMENTS:
 ---
 
 **For more information:**
-- Project: https://github.com/hyperpolymath/standards/tree/main/k9-svc
+- Project: https://github.com/metadatastician/standards/tree/main/k9-svc
 - Security docs: /docs/SECURITY-*.adoc
 - Contact: j.d.a.jewell@open.ac.uk
 

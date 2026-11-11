@@ -7,7 +7,7 @@
 :toclevels: 2
 
 Triaged record of open / deferred / closed Dependabot advisories against
-`hyperpolymath/standards`. Updated whenever an advisory is resolved or a
+`metadatastician/standards`. Updated whenever an advisory is resolved or a
 deferral is re-evaluated.
 
 Estate-wide advisories that wait on an upstream release are tracked in

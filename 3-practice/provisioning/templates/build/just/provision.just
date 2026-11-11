@@ -3,7 +3,7 @@
 #
 # provision.just — the estate provisioning contract, as a just MODULE.
 #
-# Canon: hyperpolymath/standards 3-practice/provisioning/PROVISIONING-STANDARD.adoc
+# Canon: metadatastician/standards 3-practice/provisioning/PROVISIONING-STANDARD.adoc
 # Loaded from the root Justfile with:
 #
 #     mod provision 'build/just/provision.just'
