@@ -12,8 +12,12 @@ registration uses "application/vnd.deed" as the base type, matching the
 `:media-type:` attribute declared normatively in DEED-GRAMMAR-SPEC.adoc
 and following the same reasoning already applied to application/vnd.k9.
 
-Submission Date: NOT YET SUBMITTED (Revision 2, prepared 2026-10-13)
+Submission Date: NOT YET SUBMITTED (Revision 3, prepared 2026-11-11)
 Submitted By: Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+
+Every link below is pinned to commit e2a03dc913e1029c6ef90ad0a9432838d197ee49
+of metadatastician/standards, so that it keeps resolving to the text that
+this registration describes.
 
 ---
 
@@ -24,7 +28,7 @@ Subtype name:
   vnd.deed
 
 Required parameters:
-  None
+  N/A
 
 Optional parameters:
   charset
@@ -44,14 +48,22 @@ Encoding considerations:
   no opaque binary payload construct, so the encoding is 8bit rather
   than binary.
 
+  The grammar sets no limit on line length.  A document with a line
+  longer than 998 octets is conforming, and for such a document the
+  8bit label does not hold (see the IANA form notes on encoding).
+
   Line endings are LF (U+000A) by convention; parsers MUST accept
-  CR+LF (U+000D U+000A) as well and normalise to LF internally.
+  CR+LF (U+000D U+000A) as well and normalise to LF internally.  A bare
+  CR is not a separator.  A tab (U+0009) is invalid anywhere in a deed.
 
 Security considerations:
   DEED is a declarative s-expression format for repository and estate
   identity, provenance and praxis declarations.  It is not executable
   and contains no active content: the grammar admits no code block, no
-  include directive, no evaluation form and no opaque payload.
+  include directive, no evaluation form and no opaque payload.  It
+  uses no compression and no container format.  It links to other
+  resources only by URL or name inside string values, and a processor
+  does not fetch them as part of parsing.
 
   DEED documents are nevertheless consumed by automated agents to make
   decisions about repositories, so the following apply:
@@ -71,6 +83,21 @@ Security considerations:
       attestations MUST validate signature correctness against the
       stated public key, timestamp freshness, and public-key trust.
       Documents without attestation SHOULD be treated as unverified.
+
+  (d) Open item: an override mechanism is not yet in the grammar.  The
+      owner has designed a mechanism by which a deed could loosen a
+      policy (narrow, named, justified, expiring and countable), but it
+      appears nowhere in DEED-GRAMMAR-SPEC.adoc v0.2.4 or in deed.abnf
+      v1.2.1.  This registration therefore describes only what the
+      grammar admits today.  If an override construct is added, it will
+      be security-relevant to every processor that consumes a deed,
+      because it would let a document change the policy applied to it.
+      The registration would then need a change request (RFC 6838
+      Section 5.5) with new security text.  Until then, no processor
+      should honour any override-like field in a deed.
+
+  (e) The specification is a DRAFT and is not ratified.  Its security
+      properties have not been independently reviewed.
 
   Privacy considerations:
   - DEED documents routinely contain author and maintainer identifiers
@@ -103,11 +130,14 @@ Interoperability considerations:
   estate-deed, never as repo-deed.
 
 Published specification:
-  Primary specification (v0.2.2, DRAFT):
-  https://github.com/hyperpolymath/standards/blob/main/1-formats/deed/spec/DEED-GRAMMAR-SPEC.adoc
+  The specification is a DRAFT and is NOT ratified.  Nothing in it is
+  deployed.
 
-  Formal grammar (ABNF v1.1.0, normative for parsing):
-  https://github.com/hyperpolymath/standards/blob/main/1-formats/deed/spec/abnf/deed.abnf
+  Primary specification (v0.2.4, DRAFT, not ratified):
+  https://github.com/metadatastician/standards/blob/e2a03dc913e1029c6ef90ad0a9432838d197ee49/1-formats/deed/spec/DEED-GRAMMAR-SPEC.adoc
+
+  Formal grammar (ABNF v1.2.1, normative for parsing):
+  https://github.com/metadatastician/standards/blob/e2a03dc913e1029c6ef90ad0a9432838d197ee49/1-formats/deed/spec/abnf/deed.abnf
 
 Applications which use this media type:
   - DEED validators and CI gates (the validate-action composite action)
@@ -118,7 +148,7 @@ Applications which use this media type:
     with application/vnd.k9 (which enforces)
 
   Reference implementation:
-  https://github.com/hyperpolymath/standards/tree/main/1-formats/deed
+  https://github.com/metadatastician/standards/tree/e2a03dc913e1029c6ef90ad0a9432838d197ee49/1-formats/deed
 
 Fragment identifier considerations:
   None defined at this revision.  DEED documents are whole-document
@@ -127,12 +157,12 @@ Fragment identifier considerations:
   as an error.
 
 Restrictions on usage:
-  None
+  N/A
 
 Additional information:
 
   Deprecated alias names for this type:
-    None.
+    N/A
 
     DEED was developed under the earlier working name "A2ML"
     (Attestation Markup Language), and documents in the wild may
@@ -144,14 +174,15 @@ Additional information:
     NOT emit it.
 
   Magic number(s):
-    None.
+    N/A
 
-    DEED is text-based and is identified by file extension together
-    with content detection: a conforming document begins with one or
-    more SPDX header lines, followed by "(" and one of the four head
-    tokens "estate-deed", "repo-deed", "estate-atlas-deed" or
+    DEED has no fixed byte magic.  It is identified by file extension
+    together with content detection: a conforming document begins with
+    one or more SPDX header lines, followed by "(" and one of the four
+    head tokens "estate-deed", "repo-deed", "estate-atlas-deed" or
     "praxis-deed".  The absence of "=" as an assignment form is a
-    reliable negative signal.
+    reliable negative signal.  DEED does not use the "K9!" magic of
+    application/vnd.k9 and application/vnd.k9.coordination.
 
   File extension(s):
     .deed
@@ -161,12 +192,21 @@ Additional information:
       ATLAS.deed               -> estate-atlas-deed
       <stem>_praxis.deed       -> praxis-deed
       <stem>_chora.deed        -> repo-deed
+      0-AI-MANIFEST.deed       -> repo-deed
 
   Macintosh file type code(s):
-    None
+    N/A
 
   Object Identifier(s) or OID(s):
-    None
+    N/A
+
+Intended usage:
+  COMMON
+
+Other information and comments:
+  "deed" is used in its ordinary legal-instrument sense, a signed
+  declaration of record.  It is not an acronym.  No expansion is
+  supplied.
 
 Person & email address to contact for further information:
   Jonathan D.A. Jewell
@@ -174,31 +214,23 @@ Person & email address to contact for further information:
   The Open University
   Milton Keynes, MK7 6AA, United Kingdom
 
-Intended usage:
-  COMMON
-
 Author/Change controller:
   Jonathan D.A. Jewell
   The Open University
   j.d.a.jewell@open.ac.uk
 
-Provisional registration: Yes
+Provisional registration: No
 
-  Registered provisionally to establish the subtype name while the
-  grammar specification is at v0.2.2 DRAFT (ABNF v1.1.0).  A full
-  registration will
-  be re-filed, superseding this one, once DEED-GRAMMAR-SPEC.adoc is
-  marked Stable.  The re-filing is expected to change only the
-  specification reference and the Security considerations (see OPEN
-  item 2 below, on the override mechanism); the subtype name, encoding
-  and fragment semantics registered here are settled and are not
-  expected to change.
-
----
-
-Note: "deed" is used here in its ordinary legal-instrument sense — a
-signed declaration of record — and is not an acronym.  No expansion
-should be supplied in the registration.
+  This is a vendor-tree request.  RFC 6838 Section 5.2.1 provides
+  provisional registration for standards-tree types only, and the IANA
+  form requires "No" here.  Because the specification is a DRAFT, the
+  registration can be updated later by a change request (RFC 6838
+  Section 5.5), which uses the same procedure as the original request.
+  Registrations cannot be deleted, and a change request may be denied
+  if it makes documents that were valid under the old definition
+  invalid.  The subtype name, encoding and fragment semantics are
+  intended to stay as registered.  The specification reference and the
+  Security considerations are expected to change.
 
 ---
 
@@ -210,14 +242,14 @@ References:
 [2] RFC 3629 - UTF-8, a transformation format of ISO 10646
     https://www.rfc-editor.org/rfc/rfc3629.html
 
-[3] DEED Grammar Specification (v0.2.2, DRAFT)
-    https://github.com/hyperpolymath/standards/blob/main/1-formats/deed/spec/DEED-GRAMMAR-SPEC.adoc
+[3] DEED Grammar Specification (v0.2.4, DRAFT, not ratified)
+    https://github.com/metadatastician/standards/blob/e2a03dc913e1029c6ef90ad0a9432838d197ee49/1-formats/deed/spec/DEED-GRAMMAR-SPEC.adoc
 
-[4] DEED ABNF grammar (v1.1.0)
-    https://github.com/hyperpolymath/standards/blob/main/1-formats/deed/spec/abnf/deed.abnf
+[4] DEED ABNF grammar (v1.2.1)
+    https://github.com/metadatastician/standards/blob/e2a03dc913e1029c6ef90ad0a9432838d197ee49/1-formats/deed/spec/abnf/deed.abnf
 
 [5] application/vnd.k9 registration (companion enforcement format)
-    https://github.com/hyperpolymath/standards/blob/main/1-formats/k9/docs/iana/application-vnd.k9-registration.txt
+    https://github.com/metadatastician/standards/blob/e2a03dc913e1029c6ef90ad0a9432838d197ee49/1-formats/k9/docs/iana/application-vnd.k9-registration.txt
 
 ---
 
@@ -243,6 +275,18 @@ Change Log:
             survived only in the archived v0.1; it is restored there.
             Override mechanism re-checked: still absent.
 
+2026-11-11: Revision 3 -- corrected to meet RFC 6838 and the IANA form.
+            "Provisional registration" is now "No": provisional
+            registration is for the standards tree only.  Links now
+            point at a pinned commit of metadatastician/standards, not
+            a moving branch, and cite spec v0.2.4 and ABNF v1.2.1.  The
+            draft status of the specification is stated.  The override
+            mechanism is listed in Security considerations as not yet
+            in the grammar.  The 998-octet line note is added to
+            Encoding considerations.  Every form field is now filled,
+            with N/A where it does not apply.  Not yet reviewed or
+            filed by the owner.
+
 ---
 
 SETTLED BY OWNER RULING, 2026-09-14:
@@ -254,24 +298,26 @@ SETTLED BY OWNER RULING, 2026-09-14:
 
   * The "Canonical copy: format-registrations/iana/..." convention
     declared by the vnd.a2ml and vnd.k9 files is DROPPED, in all three
-    files.  That directory existed in no repository — verified
+    files.  That directory existed in no repository.  It was verified
     2026-09-14 across standards, a2ml, deed-ecosystem and k9-ecosystem
-    (0 hits; positive controls of 126/7/47/139 paths matching "k9") —
-    so both earlier registrations described themselves as synchronised
+    (0 hits; positive controls of 126/7/47/139 paths matching "k9").
+    So both earlier registrations described themselves as synchronised
     copies of an original that was never created.  The document beside
     the specification is now the canonical one, with no second copy.
 
-  * FILE PROVISIONALLY, THEN RE-FILE.  The spec is v0.1.0 DRAFT, and
-    RFC 6838 permits registering against a published specification
-    either way.  The ruling is to claim the subtype name NOW with a
-    provisional registration, and to re-file a full registration once
-    the grammar is marked Stable.  Rationale: the point of filing is to
-    lock the name down, and an unclaimed vnd.deed is the risk being
-    managed.  The "Provisional registration" field above is written
-    accordingly.
+  * CLAIM THE NAME NOW, AND UPDATE LATER.  The 2026-09-14 ruling said
+    to file provisionally, then re-file once the grammar is Stable.
+    The mechanism it named is not available for this type: provisional
+    registration exists for the standards tree only (RFC 6838 Section
+    5.2.1), and the IANA form requires "No" for vendor-tree requests.
+    The aim of the ruling, to lock down the subtype name early, is met
+    by an ordinary vendor-tree registration.  When the grammar is
+    marked Stable, the registration is updated by a change request (RFC
+    6838 Section 5.5), not by a second filing.  This revision awaits
+    the owner's confirmation that this is acceptable.
 
   * "A2ML" EXPANDS TO "Attestation Markup Language".  Three repositories
-    each carried a different expansion — Attested Agent Markup Language
+    each carried a different expansion: Attested Agent Markup Language
     (deed-core), Attestation Markup Language (deed-ecosystem) and
     Annotated Markup Language (standards).  The deed-ecosystem reading
     is canonical for all historical references: it drops "agent",
@@ -284,11 +330,12 @@ OPEN BEFORE SUBMISSION (owner action, not blocking this file):
   1. An override mechanism (@trust_override / @adjust_override, narrow +
      named + justified + expiring + countable, loosening only) has been
      designed for this family but appears NOWHERE in
-     DEED-GRAMMAR-SPEC.adoc at v0.1.0 — verified 2026-09-14, 0
-     occurrences of "override" in the spec against 28 ABNF rules.
-     Re-verified 2026-10-13 at spec v0.2.2 / ABNF v1.1.0: still 0.  It is
-     therefore deliberately absent from the Security considerations
-     above, which describe only what the registered grammar actually
-     admits.  If overrides land in the normative grammar, this
-     registration needs a revision, because an override construct is
-     security-relevant to any processor consuming a deed.
+     DEED-GRAMMAR-SPEC.adoc.  It was checked 2026-09-14 at v0.1.0 (0
+     occurrences of "override" in the spec against 28 ABNF rules),
+     2026-10-13 at v0.2.2 / ABNF v1.1.0 (still 0), and 2026-11-11 at
+     v0.2.4 / ABNF v1.2.1 (still 0 in both files).  Security
+     considerations (d) above now says so.  The owner decides whether
+     to file before the construct exists, or to wait for it.  If
+     overrides land in the normative grammar, this registration needs a
+     change request, because an override construct is security-relevant
+     to any processor consuming a deed.

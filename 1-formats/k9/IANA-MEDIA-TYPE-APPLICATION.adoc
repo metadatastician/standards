@@ -2,7 +2,7 @@
 
 ____
 Prepared for submission to IANA per RFC 6838 (Vendor Tree) Submission
-URL: https://www.iana.org/form/media-types Revision 4 – 2026-10-13
+URL: https://www.iana.org/form/media-types Revision 5 – 2026-11-11
 ____
 
 '''''
@@ -59,6 +59,9 @@ conventional indicator that the K9 file uses Nickel syntax.
 
 === Technical Parameters
 
+All published-specification links in this file are pinned to commit
+`e2a03dc913e1029c6ef90ad0a9432838d197ee49` of `metadatastician/standards`.
+
 ==== Required Parameters
 
 N/A
@@ -91,6 +94,10 @@ external binary artefacts by hash.
 Line endings are LF (U+000A) only. A CR+LF file is non-conforming (rule
 K9-E003): a CR in the magic line would make it four octets, and byte
 sniffers would then disagree with validators.
+
+The body is Nickel, and Nickel sets no limit on line length. A document with
+a line longer than 998 octets is conforming, and for such a document the
+8bit label does not hold (see the IANA form notes on encoding).
 
 After the magic line and an SPDX comment header, the body is a single
 Nickel term. The magic line itself is *not* Nickel. A reader that
@@ -172,6 +179,22 @@ window.
 requested privileges, preventing bypass of all security due to excessive
 restrictions.
 
+==== Referenced formats and linked resources
+
+The body is Nickel. A Hunt-level component also names Just recipes and POSIX
+shell scripts, which a host executes only after the Hunt preconditions hold.
+Pedigree metadata may reference external binary artefacts by hash. A
+processor MUST NOT fetch or run such an artefact on the strength of the
+reference alone. The format defines no compression, no container format and
+no binary payload block.
+
+==== Misclassification
+
+The magic `K9!` is shared with `application/vnd.k9.coordination`. A reader
+that applies the component contract to a coordination file, or the reverse,
+reports wrong results. Readers MUST classify by the rule given under
+_Magic number(s)_ below before validating.
+
 ==== Privacy
 
 K9 pedigree metadata may contain author information, version history,
@@ -234,11 +257,11 @@ Component Contract Specification, K9-E005); a coordination file is never
 === Published Specification
 
 * *K9 Component Contract Specification v1.0.0 (normative):*
-https://github.com/hyperpolymath/standards/blob/main/1-formats/k9/spec/K9-CONTRACT-SPEC.adoc
+https://github.com/metadatastician/standards/blob/e2a03dc913e1029c6ef90ad0a9432838d197ee49/1-formats/k9/spec/K9-CONTRACT-SPEC.adoc
 * *Machine-readable contract:*
-https://github.com/hyperpolymath/standards/blob/main/1-formats/k9/spec/contract/k9_contract.ncl
+https://github.com/metadatastician/standards/blob/e2a03dc913e1029c6ef90ad0a9432838d197ee49/1-formats/k9/spec/contract/k9_contract.ncl
 * *K9 SVC Specification v1.0.0 (format overview, informative):*
-https://github.com/hyperpolymath/standards/blob/main/1-formats/k9/SPEC.adoc
+https://github.com/metadatastician/standards/blob/e2a03dc913e1029c6ef90ad0a9432838d197ee49/1-formats/k9/SPEC.adoc
 * *Nickel configuration language:* https://nickel-lang.org/
 * *Just command runner:* https://just.systems/
 
@@ -257,7 +280,7 @@ K9 SVC files are used by:
 * The Contractile CLI system (must/trust/dust/intend/k9)
 
 Reference implementation:
-https://github.com/hyperpolymath/standards/blob/main/1-formats/k9/tools/k9-validate.sh
+https://github.com/metadatastician/standards/blob/e2a03dc913e1029c6ef90ad0a9432838d197ee49/1-formats/k9/tools/k9-validate.sh
 
 '''''
 
@@ -297,14 +320,30 @@ signature verification and explicit user consent.
 [cols=",",options="header",]
 |===
 |Field |Value
-|*Deprecated alias names* |None
+|*Deprecated alias names* |N/A
 |*Magic number(s)* |`+K9!+` (0x4B 0x39 0x21) at byte offset 0, followed by
-LF. Shared with `application/vnd.k9.coordination` (see <<companion-type>>).
+LF. A CR before the LF is non-conforming (K9-E003), so for this type the magic
+line is exactly four octets: 0x4B 0x39 0x21 0x0A. The same three octets begin
+`application/vnd.k9.coordination` files, whose magic line may end in LF or
+CR+LF. The magic alone does not identify the type; the rule that does is
+given below.
 |*File extension(s)* |`+.k9.ncl+` (`+.k9+` is `application/vnd.k9.coordination`)
-|*Macintosh file type code(s)* |None
-|*Object Identifier(s) / OID(s)* |None
+|*Macintosh file type code(s)* |N/A
+|*Object Identifier(s) / OID(s)* |N/A
 |*Intended usage* |COMMON
 |===
+
+*How to tell this type from `application/vnd.k9.coordination` (K9-E005).*
+Read the first significant line after the magic line and the `# SPDX-`
+comment header:
+
+* `{`, `[`, `(`, `let `, a string literal, or an `identifier =` binding: a
+Nickel term, so `application/vnd.k9`.
+* A bare `key:` line (no `=`): a coordination file, so
+`application/vnd.k9.coordination`.
+* `---`: routed to the coordination type and rejected by its grammar, so it
+is never `application/vnd.k9`.
+* Anything else: unclaimed. It is a defect and is neither type.
 
 ==== Other Comments
 
@@ -347,9 +386,9 @@ https://www.rfc-editor.org/rfc/rfc6838.html
 . RFC 8032 – Edwards-Curve Digital Signature Algorithm (EdDSA)
 https://www.rfc-editor.org/rfc/rfc8032.html
 . K9 Component Contract Specification v1.0.0
-https://github.com/hyperpolymath/standards/blob/main/1-formats/k9/spec/K9-CONTRACT-SPEC.adoc
+https://github.com/metadatastician/standards/blob/e2a03dc913e1029c6ef90ad0a9432838d197ee49/1-formats/k9/spec/K9-CONTRACT-SPEC.adoc
 . K9 SVC Specification v1.0.0 (overview)
-https://github.com/hyperpolymath/standards/blob/main/1-formats/k9/SPEC.adoc
+https://github.com/metadatastician/standards/blob/e2a03dc913e1029c6ef90ad0a9432838d197ee49/1-formats/k9/SPEC.adoc
 . Nickel Configuration Language https://nickel-lang.org/
 . Just Command Runner https://just.systems/
 
@@ -364,6 +403,11 @@ https://github.com/hyperpolymath/standards/blob/main/1-formats/k9/SPEC.adoc
 * [x] Unify file extensions under base type
 * [x] Align with the K9 Component Contract Specification v1.0.0 (Revision 3)
 * [x] Settle the coordination.k9 question: own subtype, application/vnd.k9.coordination (Revision 4)
+* [x] Pin published-specification links to a commit, not a moving branch (Revision 5)
+* [x] State the K9-E005 rule and the line-ending rule in "Magic number(s)" (Revision 5)
+* [ ] Owner decision: subtype name (a reviewer may ask for a producer facet)
+* [ ] Owner decision: change controller (person, institution, or both)
+* [ ] Owner decision: file all three registrations together
 * [ ] File application/vnd.k9.coordination in the same submission round
 * [ ] Submit via IANA web form at https://www.iana.org/form/media-types
 * [ ] Monitor IANA email for review feedback
@@ -386,5 +430,5 @@ independent media types - Community consensus on suffix semantics
 
 '''''
 
-_Prepared: 2026-01-30_ _Revised: 2026-10-13 (Revision 4)_ _Status: Draft
+_Prepared: 2026-01-30_ _Revised: 2026-11-11 (Revision 5)_ _Status: Draft
 – ready for submission with application/vnd.k9.coordination_
