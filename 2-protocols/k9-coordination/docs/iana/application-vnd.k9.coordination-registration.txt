@@ -16,8 +16,12 @@ considerations.
 
 STATUS: NOT FILED; file together with application/vnd.k9.
 
-Prepared: 2026-10-13 (Revision 1)
+Prepared: 2026-11-11 (Revision 2)
 Prepared By: Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+
+Every link below is pinned to commit e2a03dc913e1029c6ef90ad0a9432838d197ee49
+of metadatastician/standards, so that it keeps resolving to the text that
+this registration describes.
 
 ---
 
@@ -28,10 +32,10 @@ Subtype name:
   vnd.k9.coordination
 
 Required parameters:
-  None
+  N/A
 
 Optional parameters:
-  None
+  N/A
 
 Encoding considerations:
   8bit
@@ -41,7 +45,13 @@ Encoding considerations:
   then the body.  The body is a line-oriented, YAML-like language with
   its own ABNF grammar; it is NOT YAML and MUST NOT be handed to a
   general YAML parser.  Indentation is exactly two spaces per level;
-  tabs are invalid.  Line endings are LF or CR+LF.
+  tabs are invalid.  Line endings are LF or CR+LF, and that includes
+  the line end after the magic "K9!".  This differs from
+  application/vnd.k9, where the magic line must end in LF alone.
+
+  The grammar sets no limit on line length.  A document with a line
+  longer than 998 octets is conforming, and for such a document the
+  8bit label does not hold (see the IANA form notes on encoding).
 
 Security considerations:
   A coordination file is pure data.  The grammar admits no executable
@@ -66,6 +76,17 @@ Security considerations:
       format, so that text in the file cannot become instructions the
       file's author did not write.
 
+  (d) The "K9!" magic is shared with application/vnd.k9.  A reader that
+      applies the wrong grammar reports wrong results, and a component
+      read as a coordination file is never executed.  Readers MUST
+      classify by the rule given under "Magic number(s)" before
+      validating.
+
+  The format defines no compression and no container format, and it
+  has no opaque payload.  It links to other resources only by path or
+  name inside string values, and a processor does not fetch them as
+  part of parsing.
+
   Privacy: coordination files name agents, work areas and dates, and
   usually live in public repositories.  They SHOULD NOT carry secrets,
   credentials or personal data.
@@ -83,10 +104,10 @@ Interoperability considerations:
 
 Published specification:
   K9 Coordination File Specification v1.2.0:
-  https://github.com/hyperpolymath/standards/blob/main/2-protocols/k9-coordination/spec/COORDINATION-K9-SPEC.adoc
+  https://github.com/metadatastician/standards/blob/e2a03dc913e1029c6ef90ad0a9432838d197ee49/2-protocols/k9-coordination/spec/COORDINATION-K9-SPEC.adoc
 
   Formal grammar (ABNF, normative for parsing):
-  https://github.com/hyperpolymath/standards/blob/main/2-protocols/k9-coordination/spec/abnf/coordination-k9-grammar_v1.2.abnf
+  https://github.com/metadatastician/standards/blob/e2a03dc913e1029c6ef90ad0a9432838d197ee49/2-protocols/k9-coordination/spec/abnf/coordination-k9-grammar_v1.2.abnf
 
 Applications which use this media type:
   - The k9-coordination generator, which emits per-tool AI-agent
@@ -96,7 +117,7 @@ Applications which use this media type:
     to the coordination grammar
 
   Reference implementation:
-  https://github.com/hyperpolymath/standards/tree/main/2-protocols/k9-coordination
+  https://github.com/metadatastician/standards/tree/e2a03dc913e1029c6ef90ad0a9432838d197ee49/2-protocols/k9-coordination
 
 Fragment identifier considerations:
   None defined.  Processors encountering a fragment SHOULD treat it as
@@ -107,13 +128,33 @@ Restrictions on usage:
 
 Additional information:
 
-  Deprecated alias names for this type:  None
+  Deprecated alias names for this type:  N/A
   Magic number(s):  "K9!" (0x4B 0x39 0x21) at byte offset 0, followed by
-                    a line terminator.  Shared with application/vnd.k9;
-                    see "Interoperability considerations".
+                    LF or CR+LF, then one or more "# SPDX-" comment
+                    lines.  The magic line is therefore four octets
+                    (0x4B 0x39 0x21 0x0A) or five (0x4B 0x39 0x21 0x0D
+                    0x0A).  For application/vnd.k9 only the four-octet
+                    form conforms.
+
+                    The same three octets begin application/vnd.k9
+                    files.  The magic alone does not identify the
+                    type.  The rule that tells the two apart is
+                    K9-E005 (K9 Component Contract Specification).
+                    Read the first significant line after the magic
+                    line and the "# SPDX-" comment header:
+
+                      - a bare "key:" line (no "="): this type.
+                      - "---": routed to this type and then rejected
+                        by its grammar, so it is never a valid
+                        coordination file.
+                      - "{", "[", "(", "let ", a string literal, or an
+                        "identifier =" binding: a Nickel term, so
+                        application/vnd.k9.
+                      - anything else: unclaimed.  It is a defect and
+                        is neither type.
   File extension(s):  .k9  (".k9.ncl" is application/vnd.k9)
-  Macintosh file type code(s):  None
-  Object Identifier(s) or OID(s):  None
+  Macintosh file type code(s):  N/A
+  Object Identifier(s) or OID(s):  N/A
 
 Person & email address to contact for further information:
   Jonathan D.A. Jewell
@@ -131,6 +172,11 @@ Author/Change controller:
 
 Provisional registration: No (Vendor-tree registration.)
 
+Other information and comments:
+  The specification (v1.2.0) states its status as Stable.  The
+  normative grammar is the ABNF; where the prose disagrees with it
+  about syntax, the ABNF wins.
+
 ---
 
 References:
@@ -142,10 +188,10 @@ References:
     https://www.rfc-editor.org/rfc/rfc3629.html
 
 [3] K9 Coordination File Specification v1.2.0
-    https://github.com/hyperpolymath/standards/blob/main/2-protocols/k9-coordination/spec/COORDINATION-K9-SPEC.adoc
+    https://github.com/metadatastician/standards/blob/e2a03dc913e1029c6ef90ad0a9432838d197ee49/2-protocols/k9-coordination/spec/COORDINATION-K9-SPEC.adoc
 
 [4] application/vnd.k9 registration (companion type)
-    https://github.com/hyperpolymath/standards/blob/main/1-formats/k9/docs/iana/application-vnd.k9-registration.txt
+    https://github.com/metadatastician/standards/blob/e2a03dc913e1029c6ef90ad0a9432838d197ee49/1-formats/k9/docs/iana/application-vnd.k9-registration.txt
 
 ---
 
@@ -154,3 +200,16 @@ Change Log:
 2026-10-13: Revision 1 -- initial registration, following the owner
             ruling that the k9-coordination dialect is its own subtype
             rather than a parameter of application/vnd.k9.
+
+2026-11-11: Revision 2 -- corrected to meet RFC 6838 and the IANA form.
+            Links now point at a pinned commit of
+            metadatastician/standards, not a moving branch.  The
+            "Magic number(s)" field states the rule that tells this
+            type from application/vnd.k9 (K9-E005) and the line-ending
+            rule after the magic (LF or CR+LF here).  Security
+            considerations now cover misclassification, linked
+            resources and the absence of compression or containers.
+            The 998-octet line note is added to Encoding
+            considerations.  Every form field is filled, with N/A
+            where it does not apply.  Not yet reviewed or filed by the
+            owner.
