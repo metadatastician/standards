@@ -31,14 +31,14 @@ counts: DEED-GRAMMAR-SPEC.adoc is marked DRAFT, draft A2 is not
 ratified (Security considerations (d)), and the two k9 registrations
 ahead of it are not yet filed.
 
-Submission Date: NOT YET SUBMITTED (Revision 4, prepared 2026-11-12)
+Submission Date: NOT YET SUBMITTED (Revision 5, prepared 2026-11-12)
 Prepared By: Jonathan D.A. Jewell <jonathan@metadatastician.art>
 
-Every link below is pinned to commit e2a03dc913e1029c6ef90ad0a9432838d197ee49
+Every link below is pinned to commit e880a2d0c2832f4965dac528f454438083577c5c
 of metadatastician/standards, so that it keeps resolving to the text that
-this registration describes.  That commit predates the 2026-11-12
-rulings (subtype names, line limit), so before filing, every link is
-re-pinned to a commit that carries them.
+this registration describes.  It is the merge of
+metadatastician/standards#1476, which carries the 2026-11-12 rulings
+(subtype names, line limit).
 
 ---
 
@@ -159,11 +159,11 @@ Published specification:
   The specification is a DRAFT and is NOT ratified.  Nothing in it is
   deployed.
 
-  Primary specification (v0.2.4, DRAFT, not ratified):
-  https://github.com/metadatastician/standards/blob/e2a03dc913e1029c6ef90ad0a9432838d197ee49/1-formats/deed/spec/DEED-GRAMMAR-SPEC.adoc
+  Primary specification (v0.2.5, DRAFT, not ratified):
+  https://github.com/metadatastician/standards/blob/e880a2d0c2832f4965dac528f454438083577c5c/1-formats/deed/spec/DEED-GRAMMAR-SPEC.adoc
 
-  Formal grammar (ABNF v1.2.1, normative for parsing):
-  https://github.com/metadatastician/standards/blob/e2a03dc913e1029c6ef90ad0a9432838d197ee49/1-formats/deed/spec/abnf/deed.abnf
+  Formal grammar (ABNF v1.3.0, normative for parsing):
+  https://github.com/metadatastician/standards/blob/e880a2d0c2832f4965dac528f454438083577c5c/1-formats/deed/spec/abnf/deed.abnf
 
 Applications which use this media type:
   - DEED validators and CI gates (the validate-action composite action)
@@ -174,7 +174,7 @@ Applications which use this media type:
     with application/vnd.metadatastician.k9 (which enforces)
 
   Reference implementation:
-  https://github.com/metadatastician/standards/tree/e2a03dc913e1029c6ef90ad0a9432838d197ee49/1-formats/deed
+  https://github.com/metadatastician/standards/tree/e880a2d0c2832f4965dac528f454438083577c5c/1-formats/deed
 
 Fragment identifier considerations:
   None defined at this revision.  DEED documents are whole-document
@@ -267,15 +267,15 @@ References:
 [2] RFC 3629 - UTF-8, a transformation format of ISO 10646
     https://www.rfc-editor.org/rfc/rfc3629.html
 
-[3] DEED Grammar Specification (v0.2.4, DRAFT, not ratified)
-    https://github.com/metadatastician/standards/blob/e2a03dc913e1029c6ef90ad0a9432838d197ee49/1-formats/deed/spec/DEED-GRAMMAR-SPEC.adoc
+[3] DEED Grammar Specification (v0.2.5, DRAFT, not ratified)
+    https://github.com/metadatastician/standards/blob/e880a2d0c2832f4965dac528f454438083577c5c/1-formats/deed/spec/DEED-GRAMMAR-SPEC.adoc
 
-[4] DEED ABNF grammar (v1.2.1)
-    https://github.com/metadatastician/standards/blob/e2a03dc913e1029c6ef90ad0a9432838d197ee49/1-formats/deed/spec/abnf/deed.abnf
+[4] DEED ABNF grammar (v1.3.0)
+    https://github.com/metadatastician/standards/blob/e880a2d0c2832f4965dac528f454438083577c5c/1-formats/deed/spec/abnf/deed.abnf
 
 [5] application/vnd.metadatastician.k9 registration (companion
     enforcement format)
-    https://github.com/metadatastician/standards/blob/e2a03dc913e1029c6ef90ad0a9432838d197ee49/1-formats/k9/docs/iana/application-vnd.k9-registration.txt
+    https://github.com/metadatastician/standards/blob/e880a2d0c2832f4965dac528f454438083577c5c/1-formats/k9/docs/iana/application-vnd.metadatastician.k9-registration.txt
 
 ---
 
@@ -328,6 +328,14 @@ Change Log:
             file is renamed to match the subtype; the pinned link to
             the companion registration keeps that file's name at the
             pinned commit.  Not yet filed.
+2026-11-12: Revision 5 -- every link is re-pinned to commit
+            e880a2d, the merge of metadatastician/standards#1476, which
+            carries Revision 4.  The link to the companion
+            registration now uses its new file name.  At that
+            commit the specification is v0.2.5 and the ABNF v1.3.0,
+            which adds the 998-octet line limit, so the version labels
+            are updated.  Not yet
+            filed.
 
 ---
 

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 = A4: Office and Farm (the boundary, the intake envelope, work orders, the move of the scripts)
 :version: 0.2.3-draft
-:status: DRAFT v0.2.3. Decisions F1 to F15 approved by the owner on 2026-11-10. Not yet ratified as a whole. Builds on A1 v0.3.8, A2 v0.2.3 and A3 v0.2.2. Consistency pass applied 2026-11-10. Proposed in standards#1474; bot-review fixes applied 2026-11-12.
+:status: DRAFT v0.2.3. Decisions F1 to F15 approved by the owner on 2026-11-10. Not yet ratified as a whole. Builds on A1 v0.3.9, A2 v0.2.3 and A3 v0.2.2. Consistency pass applied 2026-11-10. Proposed in standards#1474; bot-review fixes applied 2026-11-12.
 :toc:
 
 Specification A4 of the Estate Reconciliation Plan. The office decides and the farm executes (R2). A4 defines the line between them, the one envelope in which every finding and every verdict enters the office, the work order that leaves it, and the rules for moving the farm's label and merge scripts.
@@ -125,6 +125,7 @@ DSSE envelope        payloadType "application/vnd.in-toto+json"; signatures[]
 ----
 
 * The Statement is `https://in-toto.io/Statement/v1`. Its `subject` is one entry: `name` is the repo UUID (A1 `:repo-uuid` value as a string) and `digest` is `{"gitCommit": "<40 hex>"}` [I: in-toto accepts `gitCommit` as a digest key].
+** *Resolved by rule V8 (A1 section 9.1).* The repo UUID is the profile C UUIDv8 of the birth path, so the subject `name` is a version 8 value that the estate UUID gate (`scripts/check-uuid-v8.sh`) accepts without typing. `examples/a4-statement.json.example` is therefore not in `.uuid-v8-exempt` [M].
 * The signed payload is the Statement canonicalised with JCS (RFC 8785) [I]. The estate routes I-JSON/JCS data through `kyq` [M], so the same canonical form serves the signature and the data route.
 * A signature has one of 2 forms, matching the 2 publisher forms of section 12.
 ** *ed25519.* The signature has a `keyid` and an ed25519 signature [I: DSSE]. The `keyid` is a publisher id in the federation root's `(publishers)` clause (A3 E1) whose entry carries `:ed25519`. A signature whose `keyid` is not listed is not valid.
@@ -244,11 +245,11 @@ A work order is a `praxis-deed` named `<order-id>_praxis.deed` with a `(work-ord
 (praxis-deed
   :schema-version "1.0.0"
   :canonical-name "wo-0001"
-  :beholding-chora #uuid"47e1501b-26b4-5bbd-8a3f-1afa81c69dbe"
+  :beholding-chora #uuid"0889b37b-defb-831f-973c-e119500db00e"
   (work-order
     :id "wo-0001"
     :class "fix-unpinned-actions"
-    :repo #uuid"3f76e427-3bff-53b5-be46-3a1aa5c2cb43"
+    :repo #uuid"806d4d6f-f107-8b36-939b-f89ba6279377"
     :base "<40 hex>"
     :tier review
     :trigger dispatch

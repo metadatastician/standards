@@ -3,7 +3,7 @@
 (praxis-deed
   :schema-version "1.0.0"
   :canonical-name "estate-gate"
-  :beholding-chora #uuid"47e1501b-26b4-5bbd-8a3f-1afa81c69dbe"
+  :beholding-chora #uuid"0889b37b-defb-831f-973c-e119500db00e"
 
   (checks
     (check :id "secret-scan"  :when baseline :obligation required :runs-on github :rule "check/secret-scan")

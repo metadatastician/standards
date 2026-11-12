@@ -33,7 +33,7 @@
 [map]
 repo        = "metadatastician/standards"
 version     = "1.0.0"
-entry_count = 136
+entry_count = 137
 generated   = false   # hand-curated; the district index.adoc files ARE generated
 checked_by  = "scripts/check-standards-map.sh"
 
@@ -1304,6 +1304,18 @@ canonical   = false
 canon_slot  = ""
 canonical_doc = "5-machine//index.adoc"
 gate        = "actions-lock-gate"
+
+[[entry]]
+from        = ".uuid-v8-exempt"
+target      = "5-machine/ (root if spine-mandated): .uuid-v8-exempt"
+district    = "5-machine"
+kind        = "machinery"
+files       = 1
+lifecycle   = "versioned"
+canonical   = false
+canon_slot  = ""
+canonical_doc = "5-machine//index.adoc"
+gate        = ""
 
 [[entry]]
 from        = ".governance-allowlist"
