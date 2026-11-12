@@ -188,7 +188,7 @@ K9 takes security seriously. Self-executing components require careful design an
 |`K9!` (`\x4B\x39\x21`)
 
 |MIME Type
-|`application/vnd.k9`
+|`application/vnd.metadatastician.k9`
 
 |Extensions
 |`.k9`, `.k9.ncl`

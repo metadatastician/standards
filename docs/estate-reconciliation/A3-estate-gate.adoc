@@ -1,0 +1,482 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+= A3: The Single Gate (one required check, the caller contract, the check table)
+:version: 0.2.2-draft
+:status: DRAFT v0.2.2. Decisions E1 to E11 approved by the owner on 2026-11-10. Not yet ratified as a whole. Builds on A1 v0.3.8 and A2 v0.2.3. Consistency pass applied 2026-11-10. Proposed in standards#1474; bot-review fixes applied 2026-11-12.
+:toc:
+
+Specification A3 of the Estate Reconciliation Plan. It defines the one required status check of a repo, the one caller workflow, the table from profile to checks, and the rules by which a verdict is computed.
+
+== 0. How to read the evidence
+
+[cols="1,4"]
+|===
+| Tag | Meaning
+
+| [M] | Measured by me on 2026-11-10 in a shallow clone at the commit listed in section 14.
+| [R] | Estate record: a statement in an estate document or in the plan. I did not recount it.
+| [I] | Inferred by me. Check before relying on it.
+| [O] | Owner ruling given in this session, 2026-11-10.
+|===
+
+Identifiers. Every decision, law and test id in this specification is local to it. Outside it, write the spec first (for example `A3 G4`). A test runner reports a test as `<spec>/<id>` (for example `A3/G10`).
+
+== 1. Summary
+
+* A repo has exactly 1 required status context. Its name is `estate-gate`, and it is a commit status context. Any publisher may post it [O].
+* A repo has exactly 1 caller workflow, which calls a reusable aggregate at a full SHA. The caller has no per-repo inputs. The profile comes from the repo chora (A2).
+* The set of required checks is: baseline, plus the checks of declared capabilities, plus the checks of capabilities detected in the tree [O]. A repo cannot dodge a check by under-declaring.
+* A required check that did not run fails the gate. Owned-compute checks get a bounded wait, then fail [O]. There is no pass on absence.
+* The check table is a new table in `proven-cicd`, keyed by A2 capability names [O]. It replaces the per-profile file detection in `gates.json` as the source of required checks.
+* A name-only context cannot be bound to a publisher. A3 therefore requires a signed verdict envelope and a post-merge verification of every merged head (section 9).
+* A3 does not widen the required set. Its first table reproduces the checks that are required today (section 5.3). Widening needs an owner ruling.
+
+== 2. Findings that shape the design
+
+. [M] `standards/config/rulesets/gates.json` maps 9 profiles (`base`, `rust`, `elixir`, `julia`, `ada`, `zig`, `bun`, `proof`, `host`) to gate workflow files. Profiles are found by file presence (`Cargo.toml`, `mix.exs`, `Project.toml`, `alire.toml`, `build.zig`, `bun.lock`). The base gates are `governance.yml`, `secret-scanner.yml`, `hypatia-scan.yml` and `codeql.yml`.
+. [M] The same `gates.json` lists `codeql.yml` under `never_required_workflows`. A file cannot be both a base gate and never required. One of the two entries is wrong.
+. [M] The applier derives required contexts from the check-run names that the latest default-branch run emitted, bound to integration 15368 (GitHub Actions). Contexts are never typed by hand. A reusable caller publishes `<caller job id> / <reusable job name>`. Both names are frozen, because a rename turns a live required context into a phantom on every consumer.
+. [M] A required context is satisfied by a check run or by a legacy commit status of that name (`config/README.adoc`, the context-witness rule). A required context that has never reported is a permanent block with zero red checks. A context is written only after it has reported on a recent default-branch head.
+. [M] `check-required-contexts.sh` states that a name must be published and must be published on the event that gates the merge. A workflow whose only trigger is push or schedule is producible and absent from every pull request (verdict `PR-UNPRODUCIBLE`). The measured case was `scan / Hypatia Neurosymbolic Analysis` in `standards`, where the only way through was a ruleset bypass that discarded the other 19 required checks.
+. [M] `proven-cicd` publishes 32 capabilities in 8 clades: 20 enforcing, 3 tool-dependent, 7 advisory, 2 stubs (`prat`, `semantic-audit`) (counted from `catalogue/capabilities.json`). Its checks exit 1 when they ran and failed, and 2 when no check was performed (`status=not_run`).
+. [M] `main-estate-audit.yml` reports 5 component checks (`governance`, `hygiene`, `manifests`, `languages`, `advisory`). It is listed under `never_required_workflows` in `gates.json`. The audit reusable can only be called at a full SHA, and the caller must be de-onboarded from `actions.lock` (header of `main-estate-audit.yml`: remote ref at a branch or tag startup-fails with zero jobs under `sha_pinning_required`).
+. [M] The suite has 3 repo names in estate documents: `cicd-suite` (the caller template and the audit header), `proven-cicd-and-workflows` (the 2026-11-09 census recheck), and `proven-cicd` (the README says it is the canonical destination).
+. [M] `proven-cicd` has an experimental CI profile contract (`profiles/README.adoc`): 3 mother profiles, flat composition, capabilities marked `required` or `advisory`, "advisory actions cannot satisfy a required obligation". It is non-enforcing and states that its validator cannot decide whether a PR may weaken policy, because a PR can edit the inputs. It names a future resolver that loads a trusted baseline independently of the candidate change. That resolver is not built.
+. [M] `continuation-mesh` runs a check on an owned node and freezes the verdict in a `BAG-CHECK-BATON v2` envelope with an HMAC digest and an ed25519 signature. It reports the verdict to GitHub as a commit status, not a check run, because the Checks API needs a GitHub App token (`docs/ci-report-to-github.adoc`). A manifest check may carry a `github_context`, the required-check name its verdict posts to.
+. [M] A fork's pull request run has a read-only token. `fork-governance` solves this with a `workflow_run` publisher (`fork-governance-publish-reusable.yml`, spec section 4.1).
+. [M] `standards` carries 74 workflow files, 19 of them reusable. It has reusable workflows for governance (19 jobs), Hypatia scan, secret scanner, Rust CI and Elixir CI, and none for Julia, Ada, Zig, Bun or host. `gates.json` names `julia-ci.yml`, `ada-ci.yml`, `zig-ci.yml`, `bun-ci.yml` and `host.yml`, which are repo-local files [I: no reusable of those names found].
+. [M] `standards` does not call the estate audit suite at all (census recheck 2026-11-09).
+. [R] Plan: 388 of 447 default branches are red; 342 of 415 repos cannot merge a clean PR without `--admin`; the stored deadlock report shows 49 deadlocked repos, 38 from Hypatia or governance checks.
+
+== 3. The gate
+
+=== 3.1 Name and kind
+
+* The required context is `estate-gate`. It is a commit status context [O].
+* No component, input or advisory result is ever a required context. Their names are listed as never required (section 11).
+* The ruleset for a repo requires `estate-gate` and no other status context. It sets no `integration_id`, because a commit status is not published by the Actions integration [I].
+
+=== 3.2 Publishers
+
+Any of these may post `estate-gate` on a head commit:
+
+[cols="1,3"]
+|===
+| Publisher | When
+
+| Actions aggregate | The default. The caller's job runs the reusable aggregate, which posts the status with the job's `GITHUB_TOKEN` (`statuses: write`).
+| Owned compute | When Actions is unavailable or its minutes are exhausted. The farm or the mesh runs the same aggregate code and posts the status. [R: plan, R1; `continuation-mesh` bridge [M]]
+| `workflow_run` publisher | For a pull request from a fork, whose token is read-only (section 2, finding 11).
+|===
+
+All publishers run the same aggregate, from the same pinned source, and compute the same verdict function (section 7). The status carries `target_url` pointing to the verdict envelope (section 3.4). A publisher that is not the Actions aggregate MUST post only after it has verified every owned-compute input.
+
+=== 3.3 Status states
+
+[cols="1,3"]
+|===
+| State | Meaning
+
+| `pending` | The aggregate has started, or is within the bounded wait for an owned-compute input.
+| `success` | Verdict `pass` (section 7).
+| `failure` | Verdict `fail`. The description names every failing check.
+| `error` | The aggregate itself could not compute a verdict (chora unreadable, table unreadable). Never `success`.
+|===
+
+The description is at most 140 characters and names the first failing checks and a count [I: GitHub's status description limit]. The full list is in the envelope.
+
+=== 3.4 Verdict envelope
+
+The `target_url` resolves to an envelope with at least: the head SHA; the pin of the aggregate and of the check table (commit SHA and sha256); the repo chora blob SHA; the required set with the state of each check; the waivers applied; the publisher id; the time; and a signature (section 9). The storage location and the format are for A4, which owns the intake envelope [R: plan A4]. A3 fixes the fields. A4 section 5 fixes the encoding and the storage (decision E9 is resolved there).
+
+== 4. The caller contract
+
+=== 4.1 The file
+
+Each repo carries exactly one caller: `.github/workflows/estate-gate.yml`, job id `gate`, and one fork publisher (4.4). The job ids and the file names are frozen, like every context-producing name (finding 3).
+
+----
+name: Estate gate
+on:
+  pull_request:
+    branches: ["<default-branch>"]
+  merge_group:
+  push:
+    branches: ["<default-branch>"]
+permissions:
+  contents: read
+  statuses: write
+  id-token: write
+jobs:
+  gate:
+    uses: hyperpolymath/proven-cicd/.github/workflows/estate-gate.yml@<40-hex commit>
+----
+
+The generator fills `<default-branch>` with the repo's default branch, for example `main` or `master` (rule 1 of 4.2). The sample parses as YAML once the two placeholders are filled [M]. I did not run it on GitHub [I].
+
+=== 4.2 Rules
+
+. The caller has no `with:` inputs and no `secrets:` other than what the reusable names. All per-repo facts come from the repo chora. The template has 2 generated values: the 40-hex pin and `<default-branch>`, which the generator takes from the repo's default branch on the platform. A caller that differs from the template in anything else is a deviation of kind `exemption` for rule `generation/drift`, or it is drift.
+. The reference is `<owner>/<repo>/.github/workflows/estate-gate.yml@<full 40-hex SHA>`. A branch or tag reference is invalid, because it startup-fails under `sha_pinning_required` [M: audit header]. The caller is de-onboarded from `actions.lock`, as the existing audit caller is.
+. The triggers include `pull_request` on the default branch, and no `paths` or `paths-ignore` filter. A path-filtered caller does not run on every PR, so `estate-gate` would never report on some heads and the PR would wait forever (finding 5).
+. `merge_group` is present so that a merge queue can satisfy the gate [I].
+. `permissions` is `contents: read`, `statuses: write` and `id-token: write`. `id-token: write` lets the reusable aggregate request the OIDC token for the attestation of section 9.1 (A4 F3). A called reusable workflow cannot raise the permissions of its caller, so the caller must grant it [I: GitHub reusable-workflow permission rules]. No other permission is granted to the caller.
+. The pin is advanced by a reviewed PR. The existing weekly tracker `track-estate-audit.yml` does this for the audit [M]. A3 does not define a new tracker.
+. The caller is a generated file. A2's `(generation)` records the pack that produced it. Law L4 (A2) applies: realign may overwrite it, because it is an `engine` file.
+
+=== 4.3 Suite coordinate
+
+The coordinate `hyperpolymath/proven-cicd` is the canonical one [M: README]. The other 2 names in estate documents are historical (finding 8). Decision E2.
+
+=== 4.4 Fork publisher (E8)
+
+A pull request from a fork runs the caller with a read-only token, so the aggregate cannot post `estate-gate` there (finding 11). The repo therefore also carries `.github/workflows/estate-gate-publish.yml`, job id `publish`, generated from the same pack as the caller, on the pattern of `fork-governance-publish-reusable.yml` [M]:
+
+----
+name: Estate gate publish
+on:
+  workflow_run:
+    workflows: ["Estate gate"]
+    types: [completed]
+permissions:
+  actions: read
+  statuses: write
+jobs:
+  publish:
+    uses: hyperpolymath/proven-cicd/.github/workflows/estate-gate-publish.yml@<40-hex commit>
+----
+
+. In a fork run the aggregate computes the verdict and uploads the verdict envelope (3.4) as an artifact. It posts nothing.
+. The publisher runs from the default branch, with the base repo's token. It downloads the artifact of the triggering run and accepts it only when the run's head SHA equals the envelope's subject commit and the envelope is valid (9.1). It then posts `estate-gate` on that head SHA. It never checks out or runs code from the fork.
+. An artifact that is missing or invalid gives `estate-gate` `failure` with the reason, never no status (law G3).
+. The publisher's rules match 4.2 rules 1, 2 and 6: no `with:`, a full-SHA pin, pin advanced by a reviewed PR.
+
+== 5. The check table
+
+=== 5.1 Form
+
+The table is a `praxis-deed` named `estate-gate_praxis.deed` that `proven-cicd` owns, with a `(checks)` clause profile. It reuses the head that A2 chose for packs. It needs no grammar change.
+
+----
+(praxis-deed
+  :schema-version "1.0.0"
+  :canonical-name "estate-gate"
+  :beholding-chora #uuid"47e1501b-26b4-5bbd-8a3f-1afa81c69dbe"
+  (checks
+    (check :id "secret-scan" :when baseline :obligation required
+           :runs-on github :rule "check/secret-scan")
+    (check :id "rust-ci" :when rust :obligation required
+           :runs-on either :timeout 900
+           :detect ("Cargo.toml" "*/Cargo.toml") :rule "check/rust-ci")))
+----
+
+The sample in `docs/estate-reconciliation/examples/a3-estate-gate_praxis.deed.example` (the caller sample is `docs/estate-reconciliation/examples/a3-estate-gate.yml.example`) lints clean under `deed_lint.js` as written: `deed.abnf` v1.3.0 and its linter accept the opaque literal since #1473 [M: linted 2026-11-12]. The linter checks syntax only [I].
+
+[cols="2,1,4"]
+|===
+| Field | Cardinality | Rule
+
+| `:id` | 1, STRING | A `proven-cicd` capability id. Unique with `:when` in the table.
+| `:when` | 1, symbol | `baseline`, or an A2 capability name (a root term of kind `capability`).
+| `:obligation` | 1, symbol | `required` or `advisory`. An advisory check never fails the gate and never counts toward a required obligation [M: same rule in the mother contract].
+| `:runs-on` | 1, symbol | `github`, `owned` or `either`.
+| `:timeout` | 0..1, INTEGER | Seconds an owned-compute input may take (section 8). Applies when `:runs-on` is `owned` or `either`. When such a row omits it, the default of 5.4 applies. A row with `:runs-on github` has none.
+| `:detect` | 0..1, list of STRING | Repo-relative globs. A non-empty match means the capability is detected (section 6). A row with `:when baseline` has none.
+| `:rule` | 1, STRING | `check/<id>`. The rule identifier that a deviation names (section 10).
+|===
+
+A check row appears once per `(:id, :when)`. Where 2 capabilities need the same check, there are 2 rows.
+
+=== 5.2 Where it lives, and what it replaces
+
+The table lives in `proven-cicd`, with the checks it names [O]. It replaces the per-profile detection of `gates.json` as the source of required checks. The ruleset applier then derives its single context from this table and not from emitted job names. The experimental mother profiles (`profiles/mothers.json`) stay experimental and are not used by A3.
+
+=== 5.3 First population, provisional
+
+A3 does not widen the required set. The first table reproduces the checks required today. Each row records where the check exists today.
+
+[cols="2,2,2,3"]
+|===
+| `:when` | Check (`:id`) | Today's home [M] | Note
+
+| baseline | `governance` | `standards` `governance-reusable.yml` (19 jobs) | Not in the `proven-cicd` catalogue. Needs a home (E4).
+| baseline | `secret-scan` | `proven-cicd` (enforcing) and `standards` `secret-scanner-reusable.yml` | 2 implementations today.
+| baseline | `hypatia-scan` | `standards` `hypatia-scan-reusable.yml` | Not in the catalogue. Needs a home (E4).
+| baseline | `codeql` | `standards` `codeql-reusable.yml` | `gates.json` lists it as base gate and as never required. Table lists it advisory until ruled (E5).
+| `rust` | `rust-ci` | `proven-cicd` (enforcing) and `standards` `rust-ci-reusable.yml` | 2 implementations today.
+| `elixir` | `elixir-ci` | `standards` `elixir-ci-reusable.yml` | Not in the catalogue.
+| `julia` | `julia-ci` | repo-local `julia-ci.yml` named in `gates.json` | No reusable found [I].
+| `zig` | `zig-ci` | repo-local `zig-ci.yml` named in `gates.json` | No reusable found [I]. Not the same as `zig-unified-api-adapter`.
+| `formal-proofs` | `proofs` | repo-local `proofs.yml`, `abi-ffi-gate.yml`, `spark-theatre-gate.yml` named in `gates.json` | `proven-cicd` has `creusot`, `spark`, `kanren`, `idris2-abi`, `proof-runner`. Mapping needs a ruling.
+| none yet | `ada-ci`, `bun-ci`, `host` | repo-local files named in `gates.json` | The 28 capabilities of A2 have no `ada`, `bun` or `host` term (E3).
+|===
+
+All other catalogue capabilities are `advisory` in the first table. Promoting one to `required` is an owner ruling and a table change. The enforcing checks of the original audit (14 of its 26 actions [M: README]) are not required by `gates.json` today (finding 7) and A3 does not require them.
+
+=== 5.4 Defaults
+
+`:timeout` defaults to 900 seconds for `owned` and `either` rows when a row omits it [I: my proposal, E7].
+
+=== 5.5 Capability gaps
+
+[cols="1,3"]
+|===
+| `gates.json` profile | A2 capability
+
+| `rust`, `elixir`, `julia`, `zig` | present in the 28
+| `proof` | `formal-proofs`, `abi`, `ffi` (the file names point to all three)
+| `ada`, `bun`, `host` | absent. A3 proposes root terms `ada`, `bun` and `desktop-host`.
+| `base` | the `baseline` pseudo-capability
+|===
+
+== 6. Applicability
+
+Let `D` be the capabilities that the repo declares in its `(profile)` after resolution (A2 5.2), and `S` the capabilities detected in the tree by the table's `:detect` globs [O].
+
+----
+capabilities(repo) = D union S
+required(repo) = { c in table : c.obligation = required and (c.when = baseline or c.when in capabilities(repo)) }
+----
+
+* A capability in `S` and not in `D` is reported as profile drift (A2 vestigial and missing verdicts). The gate still requires its checks.
+* A capability in `D` and not in `S` still requires its checks. A check with no subject is `not_applicable` only when the aggregate's own probe finds no subject. A check cannot declare itself not applicable.
+* Detection is done by the aggregate from the tree at the head commit. It is never read from a deed field (the self-assertion rule [M: deed spec]).
+* A detected capability that is not a root term does not enter `S`. The aggregate reports it and does not fail on it (E3 covers adding the terms).
+
+== 7. The verdict function
+
+Each required check ends in exactly one state:
+
+[cols="1,3"]
+|===
+| State | Meaning
+
+| `passed` | The check ran and exited 0.
+| `failed` | The check ran and exited 1.
+| `not_run` | The check exited 2 ("no check was performed"), timed out, or its input never arrived.
+| `not_applicable` | The aggregate's probe found no subject (section 6).
+| `waived` | A valid deviation covers it (section 10).
+|===
+
+----
+verdict(repo, head) = pass   iff every c in required(repo) is in { passed, not_applicable, waived }
+                      fail   otherwise
+----
+
+* `not_run` fails the gate [O]. The description names the check and the reason.
+* An advisory check has no effect on the verdict. Its state appears in the envelope.
+* The function depends only on: the table at its pin, the repo chora at the head, the tree at the head, the check results for the head, the deviations at the head, and the date. Two publishers given the same inputs compute the same verdict (law G1, section 12).
+* The aggregate runs every required check to completion even after a failure, so one run names every failing check [M: the same discipline as `main-estate-audit`].
+
+== 8. Owned-compute inputs
+
+R1 allows estate scans on owned compute, through the farm and `continuation-mesh` [O: R1]. A check whose row has `:runs-on owned` or `either` can arrive that way.
+
+. The node posts a commit status on the head commit with context `estate-input/<id>`, state `success` or `failure`, and `target_url` to the signed baton envelope. These contexts are never required.
+. The aggregate looks for the input. While none has arrived and the row's `:timeout` has not passed, the check is `pending` and the gate status is `pending`.
+. After the timeout the check is `not_run` and the gate fails [O]. A late input that arrives after the gate failed does not change that status. A re-run of the aggregate on the same head may pick it up.
+. An input counts only if its envelope verifies (section 9.1) and the signed `check` of its `check-verdict` predicate (A4 5.5) equals `<id>`. An input with no envelope, a bad signature, a check id that differs or a head SHA that differs is `not_run`. The status context alone never binds an envelope to a check.
+. `either` means the check may run on GitHub or on owned compute. A result from GitHub and one from owned compute for one head are both read. If they disagree, `failed` wins.
+
+The routing of a check to a node (capability matching) is the mesh's concern [M: `docs/ci-check-baton.adoc`]. A3 states only the input contract.
+
+== 9. Trust: a name-only context cannot be bound
+
+A status context is matched by name. A ruleset cannot bind it to a publisher (finding 4; `integration_id` omitted [I]). Any token with status-write on the repo can post `success` for `estate-gate`. A3 cannot prevent this. It makes it detectable.
+
+=== 9.1 What is verified
+
+* Each owned-compute input carries an ed25519 signature over the canonical string of the baton, with the signing public key. The aggregate accepts the input only when the public key is in the publisher list (9.2). The baton's HMAC digest is keyed by a secret that a GitHub runner does not hold, so the aggregate cannot check it [I]. It is a node-internal integrity check.
+* The aggregate signs the verdict envelope (3.4). The signing key is the publisher's. For the Actions aggregate, A4 section 12 (F3) fixes the signing: an OIDC-bound attestation. Until that is in place, the Actions aggregate posts the envelope unsigned and the post-merge check (9.3) treats it as `unsigned`.
+
+=== 9.2 Publisher list
+
+A list of publisher ids and ed25519 public keys is part of the estate's trusted baseline, outside any candidate change. A3 proposes `(publishers (publisher :id "<id>" :ed25519 "<64 hex>"))` in the federation root (E1). A4 F3 adds an OIDC form to an entry. A public key in a public deed is not a secret [I]. The `:id` is a name, and a rotation adds a second entry before it removes the first.
+
+=== 9.3 Post-merge verification
+
+An observer verifies every head that merged. For a merged head it recomputes the verdict from the envelope's recorded inputs and compares it with the posted status. A mismatch, an unsigned envelope from a non-Actions creator, a status creator not in the publisher list, or a missing envelope is reported as `forged-or-unverified`. This is the same design as the deed spec's rule that a judgement is computed by an external observer from observed state. The observer belongs to A4 and to `cadastra`. A3 defines its test (G10).
+
+[IMPORTANT]
+====
+Detection after merge is weaker than a bound context. A forged `success` merges before anyone looks. The estate accepted this trade by choosing a publisher-independent name [O]. If the estate later wants prevention, the ruleset can add a second required context that only the Actions integration can publish. That is a ruleset change and not a change to this specification.
+====
+
+== 10. Deviations and waivers (A2)
+
+. A required check is waived by a deviation (A2 section 7) whose `:rule` is `check/<id>`. The deviation may sit at the repo, estate or root level. A2 7.4 applies: a repo-level deviation may not name a rule that a higher level declares.
+. A waiver is valid when: `:authority` is present and names a ruling or issue that the trusted baseline records, outside the candidate change (the base commit of the PR, or the federation root's ruling register, not the head) [I: A5 names the store]; a deviation in the head cannot supply its own authority; `:evidence` is present; `:kind` is `exemption` and its `:review-by` or `:expires` has not passed, or `:kind` is `deferral` and its `:expires` has not passed. A `debt` deviation cannot waive a check, because a check has no measured integer in A3. A5 may add that.
+. A lapsed deviation is not valid. The check reverts to its real state, and the gate fails if that is `failed` or `not_run`.
+. The envelope lists every waiver that the gate applied. A deviation that names a check that is not required is reported and has no effect.
+. The rule identifier namespace `check/` is reserved for A3. Rule identifiers in general are defined by A5 (sections 3 and 4): `check/<id>` is the `check` domain there.
+
+== 11. Cutover rules (A3 performs nothing)
+
+. `estate-gate` is added to a repo's ruleset only after it has reported once on that repo's default branch (the context-witness rule [M]). A ruleset that requires a name nothing has published is a phantom.
+. During the transition the old required contexts stay until `estate-gate` is witnessed. The old names are then removed, and they are added to `never_required_contexts` so that the applier cannot re-derive them.
+. After the cutover the only required status context of a repo is `estate-gate`. A required list with any other entry is a ruleset defect. The one exception is a context that an app owns and that the owner has ruled to keep (the design spec's bypass and context rulings [R]). Such a context is listed by name in the applier's kept-context list, next to `never_required_contexts`. A context in neither list is obsolete and is removed.
+. A repo that cannot satisfy `estate-gate` is reported `UNSATISFIABLE` with the failing check, and is never fixed by a bypass. Doctrine 5 forbids the bypass [R: plan P4].
+. A caller that has been generated from a chora whose `(generation)` is absent is `unstamped` (A2 section 8).
+
+== 12. Laws
+
+[cols="1,4"]
+|===
+| Law | Statement
+
+| G1 | Determinism. The verdict depends only on the inputs in section 7. Two publishers with equal inputs post equal verdicts.
+| G2 | Satisfiability. For every repo whose caller satisfies the rules of 4.2, `estate-gate` is published on every pull request head and every merge group head, whatever the changed paths. This is the plan's M1 for one name: required contexts are a subset of what a PR can produce.
+| G3 | No pass on absence. If a required check did not run, the verdict is `fail`.
+| G4 | No under-declaration. For every capability detected in the tree, the checks of that capability are required, whatever the repo declares.
+| G5 | Monotone waiver. A deviation only moves a check to `waived`. It never adds a check to the required set and never changes another check's state.
+| G6 | One name. After the cutover, the set of required contexts of a repo is exactly `{estate-gate}` plus the contexts in the kept-context list (section 11).
+|===
+
+== 13. Acceptance tests
+
+Every test is new work unless stated. A fixture is valid unless marked `-bad`.
+
+=== 13.1 Name and ruleset
+
+[cols="1,4,3"]
+|===
+| Id | Test | Fixture
+
+| G01 | A ruleset's required status contexts are exactly `["estate-gate"]` plus the kept-context list after cutover. A context in neither list fails. | `ruleset-one`, `ruleset-kept-app`, `ruleset-two-bad`
+| G02 | The `estate-gate` entry has no `integration_id`. | `ruleset-bound-bad`
+| G03 | `estate-gate` is not in `never_required_contexts`, and every old component name is. | `never-required`
+| G04 | A ruleset that requires `estate-gate` on a repo where it has never reported is reported `phantom`. | `phantom-bad`
+|===
+
+=== 13.2 Caller
+
+[cols="1,4,3"]
+|===
+| Id | Test | Fixture
+
+| G10 | The caller file is `.github/workflows/estate-gate.yml` with a job id `gate`. | `caller`, `caller-renamed-bad`
+| G11 | The `uses:` reference ends in a 40-hex SHA. | `caller-tag-bad`
+| G12 | The triggers include `pull_request` and no `paths` or `paths-ignore`. | `caller-paths-bad`
+| G13 | `permissions` is exactly `contents: read`, `statuses: write` and `id-token: write`. | `caller-perms-bad`, `caller-no-idtoken-bad`
+| G14 | The caller has no `with:` and no `secrets:` block. | `caller-with-bad`
+| G15 | The caller equals the template except for the pin and the `<default-branch>` value, which equals the repo's default branch. | `caller-drift-bad`, `caller-master-ok`
+| G16 | Satisfiability (G2): on a fixture PR that touches only one `.md` file, `estate-gate` is still posted. | `pr-docs-only`
+| G17 | On a fork PR, the publisher posts `estate-gate` on the PR head from the uploaded envelope. An envelope whose subject commit differs from the run's head SHA gives `failure`. | `fork-pr-published`, `fork-wrong-head-bad`
+|===
+
+=== 13.3 Check table
+
+[cols="1,4,3"]
+|===
+| Id | Test | Fixture
+
+| G20 | `estate-gate_praxis.deed` parses as `praxis-deed` and carries one `(checks)` clause. | `table`
+| G21 | Every `:when` is `baseline` or a root term of kind `capability`. | `table-unknown-when-bad`
+| G22 | Every `:id` exists in the `proven-cicd` catalogue, or the row is reported `no-home`. | `table-no-home`
+| G23 | `(:id, :when)` is unique. | `table-dup-bad`
+| G24 | An `owned` or `either` row without `:timeout` uses 900 seconds (5.4); a `github` row with `:timeout` is rejected. | `table-no-timeout-default`, `table-github-timeout-bad`
+| G25 | A row with `:obligation advisory` never changes a verdict. | `advisory-fail`
+| G26 | Every `:rule` equals `check/<id>`. | `table-rule-bad`
+|===
+
+=== 13.4 Applicability and verdict
+
+[cols="1,4,3"]
+|===
+| Id | Test | Fixture
+
+| G30 | Detected-and-declared: the checks run once. | `rust-both`
+| G31 | Detected and not declared (G4): the checks are required and the profile drift is reported. | `rust-undeclared`
+| G32 | Declared and not detected: the aggregate's probe returns `not_applicable` or runs the check. | `rust-declared-only`
+| G33 | A check cannot mark itself `not_applicable`. | `self-na-bad`
+| G34 | A required check that exits 2 gives `not_run` and verdict `fail` (G3). | `exit2`
+| G35 | A required check that exits 1 gives `failed`; every other required check still runs. | `exit1-continue`
+| G36 | Equal inputs give an equal verdict from 2 publishers (G1). | `two-publishers`
+| G37 | A capability that is not a root term is reported and does not fail the gate. | `unknown-detected`
+|===
+
+=== 13.5 Owned compute
+
+[cols="1,4,3"]
+|===
+| Id | Test | Fixture
+
+| G40 | An input within the timeout gives `pending`, then `passed`. | `owned-late-ok`
+| G41 | No input by the timeout gives `not_run` and `failure`. | `owned-timeout`
+| G42 | An input with a bad ed25519 signature is `not_run`. | `owned-badsig`
+| G43 | An input whose public key is not in the publisher list is `not_run`. | `owned-unknown-key`
+| G44 | An input for a different head SHA is ignored. | `owned-wrong-sha`
+| G45 | `either`: a GitHub `failed` and an owned `passed` for one head give `failed`. | `either-disagree`
+| G46 | A late input after `failure` does not change the posted status. | `owned-after`
+| G47 | A verified envelope for check A posted under `estate-input/<B>` is `not_run` for B. | `owned-wrong-check`
+|===
+
+=== 13.6 Waivers
+
+[cols="1,4,3"]
+|===
+| Id | Test | Fixture
+
+| G50 | A valid `exemption` for `check/<id>` gives `waived` and the gate passes (G5). | `waiver-ok`
+| G51 | A lapsed `deferral` gives the check's real state. | `waiver-lapsed`
+| G52 | A deviation with no `:authority` is not valid. | `waiver-no-auth-bad`
+| G56 | A deviation whose `:authority` resolves only in the candidate change (not in the trusted baseline) is not valid. | `waiver-self-auth-bad`
+| G53 | A `debt` deviation does not waive a check. | `waiver-debt-bad`
+| G54 | A repo-level deviation for a rule that an estate declares is rejected (A2 7.4). | `waiver-higher-bad`
+| G55 | A waiver for a check that is not required has no effect and is reported. | `waiver-unused`
+|===
+
+=== 13.7 Trust
+
+[cols="1,4,3"]
+|===
+| Id | Test | Fixture
+
+| G60 | A merged head whose `estate-gate` status has a creator not in the publisher list is reported `forged-or-unverified`. | `merged-forged`
+| G61 | A merged head whose envelope is missing is reported. | `merged-no-envelope`
+| G62 | A recomputed verdict that differs from the posted status is reported. | `merged-mismatch`
+| G63 | An unsigned envelope from the Actions aggregate is reported `unsigned`, and is not an error until A4 F3 is in place. | `merged-unsigned`
+|===
+
+== 14. Decisions approved on 2026-11-10 [O]
+
+The owner approved E1 to E11 as recommended. The text of this document is the recommendation in each case.
+
+[cols="1,4,1"]
+|===
+| Id | Decision | State
+
+| E1 | The publisher list (ed25519 public keys) lives in the federation root as `(publishers ...)`. A1 amended (v0.3.2): a new optional root clause. | Approved
+| E2 | The suite coordinate in the caller is `hyperpolymath/proven-cicd`. The other 2 names are historical. | Approved
+| E3 | New root capability terms `ada`, `bun` and `desktop-host`, to cover the `gates.json` profiles that A2 has no term for. | Approved
+| E4 | `governance` and `hypatia-scan` get a home in `proven-cicd` (or the table names `standards` as their home until A6). | Approved
+| E5 | `codeql` is `advisory` in the first table until the owner rules on the `gates.json` contradiction. | Approved
+| E6 | Caller file `estate-gate.yml`, job id `gate`, both frozen. | Approved
+| E7 | Default owned-compute timeout 900 seconds. | Approved
+| E8 | Fork pull requests are published through a `workflow_run` publisher, as in `fork-governance`. | Approved
+| E9 | The envelope format and its storage are decided in A4. A3 fixes the fields only. | Approved
+| E10 | The reserved rule namespace `check/` for waivers. | Approved
+| E11 | The `proven-cicd` stubs and advisory checks are not required until the owner rules. A3 does not widen the required set. | Approved
+|===
+
+Open after approval: A3 as a whole is not ratified. No file, ruleset or workflow is changed in any repo until the owner approves.
+
+== 15. Evidence base
+
+Paths and file names in this specification name files as they are at the commits listed below. A6 moves some of them (for example `1-formats/deed`). After a move, the old path resolves through its `POINTER.adoc` and the destination repo holds the file.
+
+Shallow clones, read only, 2026-11-10 [M]. Commits for the repos of A1 are listed in A1 section 12, and for `launch-scaffolder` in A2 section 13.
+
+[cols="3,2,2"]
+|===
+| Repo | Commit | Commit date
+
+| hyperpolymath/proven-cicd | 03e858b | 2026-11-07
+| hyperpolymath/continuation-mesh | 1e4289b | 2026-11-08
+| metadatastician/standards (`config/rulesets`, workflows, audits) | be39f90 | 2026-11-10
+|===
+
+I did not read: `hypatia` (the scan itself), `cicd-squabbler` (the satisfiability engine), `gitbot-fleet`, the live GitHub rulesets of any repo (I read the canonical JSON in `standards`, not live state), the `proven-cicd` actions' internals, or `rsr-template-repo`. I did not run any workflow, script or the estate validators beyond `deed_lint.js` on the sample table. The statements about GitHub status semantics (140-character description, no publisher binding, `merge_group` behaviour) come from my knowledge of the API and are marked [I].
+
+== 16. Out of scope
+
+A4 (the office and farm boundary, the envelope format and storage, the Actions signing key, the post-merge observer). A5 (the deviation store beyond the clause, canon rule identifiers, `debt` waivers). A6 (where `governance-reusable` and the other reusable workflows live after the `standards` carve-out). Widening the required set. Any change to a ruleset, a workflow or a caller in any repo. The trope format. Any `.a2ml` file: A3 creates none.

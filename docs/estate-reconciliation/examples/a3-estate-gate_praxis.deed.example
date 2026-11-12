@@ -1,0 +1,15 @@
+;; SPDX-FileCopyrightText: © 2026 Jonathan D.A. Jewell
+;; SPDX-License-Identifier: CC-BY-SA-4.0
+(praxis-deed
+  :schema-version "1.0.0"
+  :canonical-name "estate-gate"
+  :beholding-chora #uuid"47e1501b-26b4-5bbd-8a3f-1afa81c69dbe"
+
+  (checks
+    (check :id "secret-scan"  :when baseline :obligation required :runs-on github :rule "check/secret-scan")
+    (check :id "spdx-license" :when baseline :obligation advisory :runs-on github :rule "check/spdx-license")
+    (check :id "rust-ci"      :when rust     :obligation required :runs-on either :timeout 900
+           :detect ("Cargo.toml" "*/Cargo.toml") :rule "check/rust-ci")
+    (check :id "creusot"      :when formal-proofs :obligation advisory :runs-on owned :timeout 1800
+           :detect ("verification/proofs/**") :rule "check/creusot")
+    (check :id "badges"       :when baseline :obligation advisory :runs-on github :rule "check/badges")))

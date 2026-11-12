@@ -1,0 +1,43 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+= Estate Reconciliation: specifications A1 to A6
+:toc:
+
+Stage A of the Estate Reconciliation Plan. Six draft specifications. None is ratified as a whole, and nothing in them has been performed in any repo.
+
+== The set
+
+[cols="1,3,1,3"]
+|===
+| Spec | File | Version | Subject and approved decisions
+
+| A1 | link:../../2-protocols/chora/CHORA-SPEC.adoc[2-protocols/chora/CHORA-SPEC.adoc] | 0.3.8 | The chora at three levels (forge, estate, repo), the generated index, acceptance tests. Decisions C1 to C10 and rulings U1 to U4.
+| A2 | link:A2-profile-generation-deviations.adoc[A2-profile-generation-deviations.adoc] | 0.2.3 | The `(profile)`, `(generation)` and `(deviations)` clauses, and the pack laws. Decisions D1 to D9.
+| A3 | link:A3-estate-gate.adoc[A3-estate-gate.adoc] | 0.2.2 | The single required check `estate-gate`, the caller contract, the check table, the verdict function. Decisions E1 to E11.
+| A4 | link:A4-office-farm.adoc[A4-office-farm.adoc] | 0.2.3 | The office and farm boundary, the signed intake envelope, work orders, the executor path. Decisions F1 to F15.
+| A5 | link:A5-rules-and-ignore-files.adoc[A5-rules-and-ignore-files.adoc] | 0.2.2 | Rule identifiers, the rule registry, deviation validity, the generated ignore files. Decisions G1 to G14.
+| A6 | link:A6-standards-carve-out.adoc[A6-standards-carve-out.adoc] | 0.2.3 | The change-rate metric, the ordered carve-out rules and the mechanism of a move for this repository. Decisions H1 to H12.
+|===
+
+"Approved" means the owner approved the decision as written on 2026-11-10 (U1 on 2026-11-11, U2 to U4 on 2026-11-12). It does not mean the specification is ratified.
+
+== Reading order
+
+A1 first. A2 to A6 each build on the ones before them and name the version they build on in their status line. A6 is the specification that moves files out of this repository.
+
+== Conventions
+
+* Evidence tags: `[M]` measured by the author on the date and commit stated in the evidence section; `[R]` estate record, not recounted; `[I]` inferred; `[O]` owner ruling.
+* Identifiers. Every decision, law and test id is local to its specification. Outside it, write the spec first (`A3 G4`). A test runner reports a test as `<spec>/<id>` (`A3/G10`).
+* Paths in a specification name files as they are at the commits listed in its evidence section. A6 moves some of them.
+* The specifications create no `.a2ml` file.
+* References tagged `[R: plan ...]` cite the Estate Reconciliation Plan, which is not kept in this repository. They are records of what the plan says, not links.
+
+== Examples
+
+`examples/` holds the sample deeds and files that the specifications quote. They carry an `.example` suffix so that CI and tooling do not read them as live files. See `examples/README.adoc` for how to lint one.
+
+`A6-entry-rates.tsv` is the per-entry change-rate table that A6 describes. It is an output measured at commit `be39f90` and is not regenerated here.
+
+== Status of A6 numbers
+
+A6's figures were measured at `be39f90`. This repository has moved on since. The rates are a baseline for the first move and are to be recomputed by the A6 checker.

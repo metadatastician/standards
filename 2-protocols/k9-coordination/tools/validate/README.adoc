@@ -31,7 +31,10 @@ A file passes when:
   `deno.lock` and `pnpm-lock.yaml`). That covers rules 1–10 and 12 of the
   spec's "Validation Rules";
 * its `metadata` section carries exactly one `schema: k9-coordination`
-  (rule 11).
+  (rule 11);
+* no line is longer than 998 octets, not counting its CR and LF (rule 14,
+  the constraint stated in the grammar's header; owner ruling I4,
+  2026-11-12). This is checked first, on the raw bytes.
 
 Rule 13 is a default and has nothing to check. Resolving `project.deed_ref`
 to an existing deed is the generator's duty (README "Usage"), not
@@ -46,9 +49,11 @@ validation, and is not done here.
   with CRLF line ends, and reports which of them are also v1.1 files;
 . rejects every `fixtures/invalid/*.k9`, for the reason its `# expect:`
   line names;
-. rejects six mutants of the root file: a `---` separator, a tab, a
+. rejects seven mutants of the root file: a `---` separator, a tab, a
   quoted boolean, a lower-case magic line, a blank line inside a section,
-  and the wrong schema;
+  the wrong schema, and a project name that makes a 999-octet line
+  (`fixtures/valid/line-998-octets.k9` and
+  `fixtures/invalid/line-999-octets.k9` pin both sides of the limit);
 . re-checks, on the committed v1.1 and v1.2 grammars, the side condition
   of the proof below: every rule v1.1 defines other than `body` is
   unchanged in v1.2, and v1.2's `body` only gains optional elements;
@@ -61,8 +66,11 @@ validation, and is not done here.
 `believe_me` or `assert_*`) proves three claims made in the grammar
 changelogs, for the RFC 5234 meaning of a grammar:
 
-`v11FilesAreV12Files`:: every v1.1 file is a v1.2 file, given the side
-condition above.
+`v11FilesAreV12Files`:: every string the v1.1 grammar derives, the v1.2
+grammar derives, given the side condition above. This is about the ABNF
+productions only. The 998-octet line limit (rule 14) is a whole-file
+constraint outside the grammar and outside the proof, so a v1.1 file with a
+longer line is not a conforming v1.2 file.
 `deedFilenameEquiv`:: the right-recursive `deed-filename` written on
 2026-11-09 denotes the same strings as `1*deed-char %s".deed"`.
 `altSwap`:: reordering the alternatives of `date` keeps its language.

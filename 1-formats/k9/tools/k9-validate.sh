@@ -292,6 +292,16 @@ check_l0() {
     err K9-E003 L0 "file contains CR; K9 files are LF-only"
   fi
 
+  # K9-E006 — no line longer than 998 octets, not counting the line end
+  # (owner ruling I4, 2026-11-12). It is the RFC 5322 §2.1.1 bound and makes
+  # the registered "8bit" encoding label exact. Octets, not characters, hence
+  # LC_ALL=C; a CR before the LF is the line end (and K9-E003's business).
+  local long
+  long="$(LC_ALL=C awk '{ sub(/\r$/, "") } length($0) > 998 { print NR ":" length($0); exit }' "$f")"
+  if [ -n "$long" ]; then
+    err K9-E006 L0 "line ${long%%:*} is ${long#*:} octets; the limit is 998"
+  fi
+
   # K9-E001 — the magic line. §3.1: exactly the three octets 0x4B 0x39 0x21
   # and nothing else on the line. `K9`, `k9!` and `K9! ` are all rejected: a
   # magic number with a tolerance is not a magic number.
@@ -993,7 +1003,7 @@ EOF
       fi
     done
   done
-  t "the contract and all 27 fixtures avoid Nickel's reserved words" 0 "$kw_hits"
+  t "the contract and all 29 fixtures avoid Nickel's reserved words" 0 "$kw_hits"
 
   echo "== K9-N002: a contract that does not typecheck judges nothing =="
   # N002 fired four times during #1058 — `Record`, then `Any`, then twice more

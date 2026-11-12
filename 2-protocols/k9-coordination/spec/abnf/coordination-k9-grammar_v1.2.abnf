@@ -11,8 +11,20 @@
 ;
 ; Requires RFC 7405 (%s"..." case-sensitive string literals).
 ;
+; LINE-LENGTH CONSTRAINT (normative; owner ruling I4, 2026-11-12):
+;   No line of a k9-file is longer than 998 octets, not counting the
+;   line-end (CR and LF) that closes it. A file with a longer line does
+;   not conform even if it matches k9-file below. ABNF has no compact
+;   way to bound a line, so the constraint is stated here and enforced
+;   by the validator (spec "Validation Rules", rule 14). It is the
+;   RFC 5322 Section 2.1.1 bound and makes the registered "8bit"
+;   encoding label exact. The rules below are unchanged by it.
+;
 ; CHANGELOG (v1.1.1 -> v1.2.0), owner ruling 2026-10-13:
-;   - Two optional sections, additive: every v1.1.1 file is a v1.2.0 file.
+;   - Two optional sections, additive: every string the v1.1.1 grammar
+;     derives, the v1.2.0 grammar derives. Since 2026-11-12 the
+;     998-octet line constraint above also applies, so a v1.1.1 file
+;     with a longer line is not a conforming v1.2.0 file.
 ;     build_commands (after project): the commands an agent may run,
 ;     each with its purpose. innervation (after architecture): the
 ;     signals the repo emits (afferent), responds to (efferent) and the

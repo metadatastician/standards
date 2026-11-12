@@ -177,7 +177,7 @@ git clone https://github.com/metadatastician/standards.git
 - **K9-SVC Specification:** https://github.com/metadatastician/standards/blob/main/1-formats/k9/SPEC.adoc
 - **K9 User Guide:** https://github.com/metadatastician/standards/blob/main/1-formats/k9/GUIDE.adoc
 - **Security Documentation:** https://github.com/metadatastician/standards/blob/main/1-formats/k9/docs/SECURITY-FAQ.adoc
-- **IANA Media Type:** `application/vnd.k9` (application drafted, not yet filed; see https://github.com/metadatastician/standards/blob/main/1-formats/k9/IANA-MEDIA-TYPE-APPLICATION.adoc)
+- **IANA Media Type:** `application/vnd.metadatastician.k9` (application drafted, not yet filed; see https://github.com/metadatastician/standards/blob/main/1-formats/k9/IANA-MEDIA-TYPE-APPLICATION.adoc)
 
 == Contributing
 
