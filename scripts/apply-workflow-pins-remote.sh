@@ -225,8 +225,17 @@ squabbler_state() {
   local dir="$1" t="$2" repair="$3" f cls blockers=""
   shopt -s nullglob
   for f in "$dir"/*.yml "$dir"/*.yaml; do
-    case "$(basename "$f")" in *[Ss]quabbl*) shopt -u nullglob; echo PRESENT; return 0 ;; esac
-    if grep -qiE 'cicd-squabbler|squabble[[:space:]]+chains' "$f"; then shopt -u nullglob; echo PRESENT; return 0; fi
+    # PRESENT only when a non-comment line runs the gate: a `uses:` of
+    # cicd-squabbler (reusable or action), `squabble chains`, or the template's
+    # local action (.github/actions/squabble/). A file name or a comment that
+    # mentions the squabbler is not a gate.
+    # Inline comments are stripped first, and `squabble chains` or the local
+    # action count only in command position (start of a run: value or after
+    # ; && ||), so `echo "squabble chains"` is not a gate either.
+    if grep -vE '^[[:space:]]*#' "$f" | sed -E 's/[[:space:]]+#.*$//' \
+         | grep -qiE "[\"']?uses[\"']?:[[:space:]]*[\"']?([^[:space:]]*cicd-squabbler|\./\.github/actions/squabble)|(^[[:space:]]*(-[[:space:]]+)?(run:[[:space:]]*)?|[;&|][[:space:]]*)(bash[[:space:]]+|sh[[:space:]]+)?(\./)?(squabble[[:space:]]+chains|\.github/actions/squabble/)"; then
+      shopt -u nullglob; echo PRESENT; return 0
+    fi
     for cls in $(classify_file "$f" "$t"); do
       case "$cls" in
         TRACKING) blockers="${blockers},TRACKING" ;;
@@ -427,7 +436,20 @@ self_test() {
   rm "$d/sq/ill.yml"; printf 'name: x\njobs:\n  a:\n    steps:\n      - run: squabble chains .\n' > "$d/sq/gate.yml"
   [ "$(squabbler_state "$d/sq" "$t" 0)" = PRESENT ] || { echo "  FAIL an existing squabble workflow must count as PRESENT" >&2; ok_sq=0; }
   rm "$d/sq/gate.yml"; printf 'on: push\n' > "$d/sq/squabble.yml"
-  [ "$(squabbler_state "$d/sq" "$t" 0)" = PRESENT ] || { echo "  FAIL a squabble*.yml file must count as PRESENT" >&2; ok_sq=0; }
+  [ "$(squabbler_state "$d/sq" "$t" 0)" = MISSING ] || { echo "  FAIL a squabble*.yml file that runs no gate must not count as PRESENT" >&2; ok_sq=0; }
+  printf '# see cicd-squabbler and squabble chains\non: push\n' > "$d/sq/squabble.yml"
+  [ "$(squabbler_state "$d/sq" "$t" 0)" = MISSING ] || { echo "  FAIL a comment naming the squabbler must not count as PRESENT" >&2; ok_sq=0; }
+  printf 'jobs:\n  s:\n    steps:\n      - run: bash .github/actions/squabble/run.sh\n' > "$d/sq/squabble.yml"
+  [ "$(squabbler_state "$d/sq" "$t" 0)" = PRESENT ] || { echo "  FAIL the template local squabble action must count as PRESENT" >&2; ok_sq=0; }
+  printf 'jobs:\n  s:\n    steps:\n      - run: echo "squabble chains ."\n' > "$d/sq/squabble.yml"
+  [ "$(squabbler_state "$d/sq" "$t" 0)" = MISSING ] || { echo "  FAIL squabble chains inside an echo argument must not count as PRESENT" >&2; ok_sq=0; }
+  printf 'jobs:\n  s:\n    steps:\n      - run: echo ready # squabble chains\n' > "$d/sq/squabble.yml"
+  [ "$(squabbler_state "$d/sq" "$t" 0)" = MISSING ] || { echo "  FAIL squabble chains in an inline comment must not count as PRESENT" >&2; ok_sq=0; }
+  printf 'jobs:\n  s:\n    steps:\n      - run: |\n          squabble chains . --follow 1\n' > "$d/sq/squabble.yml"
+  [ "$(squabbler_state "$d/sq" "$t" 0)" = PRESENT ] || { echo "  FAIL squabble chains run in a block must count as PRESENT" >&2; ok_sq=0; }
+  printf 'jobs:\n  s:\n    uses: hyperpolymath/cicd-squabbler/.github/workflows/x.yml@abc\n' > "$d/sq/squabble.yml"
+  [ "$(squabbler_state "$d/sq" "$t" 0)" = PRESENT ] || { echo "  FAIL a uses: of cicd-squabbler must count as PRESENT" >&2; ok_sq=0; }
+  rm "$d/sq/squabble.yml"
   write_squabbler_caller "$d/sqc.yml" "$t"
   sq=$(classify_file "$d/sqc.yml" "$t" | sort | tr '\n' ',')
   if [ "$sq" != "FRESH," ] \
@@ -494,6 +516,11 @@ validate_target() {
 
 # sha_is_commit <sha> — is this a real commit in standards?
 # This is what separates BEHIND from DEAD-REF.
+# target_has_squabbler <sha> - the squabbler reusable exists in standards at <sha>.
+target_has_squabbler() {
+  git -C "$STANDARDS_ROOT" cat-file -e "${1}:.github/workflows/cicd-squabbler-reusable.yml" 2>/dev/null
+}
+
 sha_is_commit() {
   gh api "repos/${STANDARDS_REPO}/commits/$1" --jq '.sha' >/dev/null 2>&1
 }
@@ -724,7 +751,7 @@ main() {
       --limit) LIMIT="$2"; shift ;;
       --ensure-squabbler) ENSURE_SQUABBLER=1 ;;
       --self-test) self_test; exit $? ;;
-      -h|--help) sed -n '2,60p' "$0"; exit 0 ;;
+      -h|--help) sed -n '2,/^set -uo pipefail$/p' "$0" | sed '$d'; exit 0 ;;
       *) log "unknown option: $1"; exit 2 ;;
     esac
     shift
@@ -743,6 +770,13 @@ main() {
   TARGET_SHA=$(resolve_target)
   [ -n "$TARGET_SHA" ] || { log "FATAL: could not resolve a target SHA."; exit 1; }
   validate_target "$TARGET_SHA" || exit 1
+  # --to may name an older commit that predates the squabbler reusable; a
+  # caller pinned there could never start (and with no lock, no relock would
+  # catch it). validate_target has fetched the target into this checkout.
+  if [ "$ENSURE_SQUABBLER" -eq 1 ] && ! target_has_squabbler "$TARGET_SHA"; then
+    log "FATAL: --ensure-squabbler, but ${TARGET_SHA} has no .github/workflows/cicd-squabbler-reusable.yml; refusing to write callers to it."
+    exit 1
+  fi
   # The relock reads the target's reusables and lock from this checkout; a
   # shallow CI checkout may hold a different commit, so fetch it if needed.
   if [ "$DO_FIX" -eq 1 ] && ! git -C "$STANDARDS_ROOT" cat-file -e "${TARGET_SHA}^{commit}" 2>/dev/null; then
@@ -805,6 +839,9 @@ main() {
     # The squabbler gate rides with the re-pin (see ENSURE-SQUABBLER above).
     if [ "$ENSURE_SQUABBLER" -eq 1 ]; then
       local sqst; sqst=$(squabbler_state "$rdir" "$TARGET_SHA" "$REPAIR_ILLEGAL")
+      # A file of that name that does not run the gate is the repo's own
+      # workflow: never overwrite it.
+      [ "$sqst" = MISSING ] && [ -e "${rdir}/${SQUABBLER_FILE}" ] && sqst="DEFERRED:NAME-TAKEN"
       if [ "$sqst" = MISSING ]; then
         local isfork
         isfork=$(gh api "repos/${repo}" --jq '.fork' 2>/dev/null || echo unknown)

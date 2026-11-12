@@ -219,9 +219,13 @@ done
 # refuse — fail the way gh does on a non-2xx response: message on stderr, rc 1.
 refuse() { echo "gh: $2 (HTTP $1)" >&2; exit 1; }
 if [ "$gql" = 1 ]; then
-  # Every repository holds one workflow, pinned FRESH at $TARGET.
-  jq -n --arg sha "$TARGET" '{data: {repository: {object: {entries: [{name: "ci.yml", type: "blob",
-    object: {text: ("jobs:\n  a:\n    uses: hyperpolymath/standards/.github/workflows/x.yml@" + $sha + "\n")}}]}}}}'
+  # Every repository holds one workflow, pinned FRESH at $TARGET. If
+  # $GH_FIX/own_squabbler exists, each repository also holds a
+  # cicd-squabbler.yml with that text (a workflow of the repo's own).
+  extra="[]"
+  [ -f "$GH_FIX/own_squabbler" ] && extra=$(jq -Rs '[{name: "cicd-squabbler.yml", type: "blob", object: {text: .}}]' "$GH_FIX/own_squabbler")
+  jq -n --arg sha "$TARGET" --argjson extra "$extra" '{data: {repository: {object: {entries: ([{name: "ci.yml", type: "blob",
+    object: {text: ("jobs:\n  a:\n    uses: hyperpolymath/standards/.github/workflows/x.yml@" + $sha + "\n")}}] + $extra)}}}}'
   exit 0
 fi
 p="${path%%\?*}"
@@ -427,7 +431,7 @@ case_main_squabbler() {
   : > "$d/calls.log"
   # shellcheck disable=SC2016  # $1 is expanded by the inner shell
   env PATH="$LSTUB:$PATH" GH_FIX="$d" GH_TOKEN=ghs_app GITHUB_TOKEN= TARGET="$T" \
-    bash -c 'source "$1"; validate_target() { return 0; }; shift; main "$@"' _ "$1" \
+    bash -c 'source "$1"; validate_target() { return 0; }; target_has_squabbler() { return 0; }; shift; main "$@"' _ "$1" \
       --to "$T" --owners hyperpolymath,metadatastician --ensure-squabbler > "$d/out" 2> "$d/err"
   echo $? > "$d/rc"
   if [ "$(cat "$d/rc")" = 0 ] \
@@ -466,6 +470,36 @@ case_public_fail "$APPLIER"
 case_main_app "$APPLIER"
 case_main_fail "$APPLIER"
 case_main_squabbler "$APPLIER"
+
+# A repository whose own cicd-squabbler.yml runs no gate is never overwritten:
+# it is reported SQUABBLER-DEFERRED:NAME-TAKEN.
+d=$(new_case owned)
+printf 'name: mine\njobs:\n  lint:\n    runs-on: x\n    steps:\n      - run: echo lint\n' > "$d/own_squabbler"
+: > "$d/calls.log"
+# shellcheck disable=SC2016  # $1 is expanded by the inner shell
+env PATH="$LSTUB:$PATH" GH_FIX="$d" GH_TOKEN=ghs_app GITHUB_TOKEN= TARGET="$T" \
+  bash -c 'source "$1"; validate_target() { return 0; }; target_has_squabbler() { return 0; }; shift; main "$@"' _ "$APPLIER" \
+    --to "$T" --owners hyperpolymath --ensure-squabbler > "$d/out" 2> "$d/err"
+if grep -qF "$(printf 'hyperpolymath/pub-a\tcicd-squabbler.yml\tSQUABBLER-DEFERRED:NAME-TAKEN')" "$d/out"; then
+  pass "main: an own cicd-squabbler.yml without the gate is NAME-TAKEN, never overwritten"
+else
+  fail "main: an own cicd-squabbler.yml was not reported NAME-TAKEN"; sed 's/^/    /' "$d/out" >&2
+fi
+
+# --ensure-squabbler against a target with no squabbler reusable stops the
+# run before any census or write (a caller pinned there could never start).
+d=$(new_case nosq)
+: > "$d/calls.log"
+# shellcheck disable=SC2016  # $1 is expanded by the inner shell
+env PATH="$LSTUB:$PATH" GH_FIX="$d" GH_TOKEN=ghs_app GITHUB_TOKEN= TARGET="$T" \
+  bash -c 'source "$1"; validate_target() { return 0; }; target_has_squabbler() { return 1; }; shift; main "$@"' _ "$APPLIER" \
+    --to "$T" --owners hyperpolymath --ensure-squabbler > "$d/out" 2> "$d/err"
+rc_nosq=$?
+if [ "$rc_nosq" = 1 ] && ! grep -q '^REPO' "$d/out" && grep -q 'has no .github/workflows/cicd-squabbler-reusable.yml' "$d/err"; then
+  pass "main: --ensure-squabbler refuses a target with no squabbler reusable"
+else
+  fail "main: a target with no squabbler reusable was not refused (rc=$rc_nosq)"
+fi
 
 # --- 5. a reachable target is refused when its own lock fails lock-selfcheck --
 # GitHub validates each caller against the TARGET's actions.lock, so a target
