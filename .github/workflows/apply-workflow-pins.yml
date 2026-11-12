@@ -39,8 +39,12 @@ on:
         description: 'Comma-separated owners to walk'
         default: 'hyperpolymath,metadatastician,catachresis-colloquium'
       limit:
-        description: 'Stop after N repos (0 = no limit); use for smoke runs'
+        description: 'Stop after N repos (0 = no limit). In fix mode N counts PRs attempted, not repos walked'
         default: '0'
+      ensure_squabbler:
+        description: 'Also add the CICD Squabbler gate where a repo has none (same PR as the re-pin)'
+        type: boolean
+        default: false
 
 concurrency:
   group: apply-workflow-pins
@@ -162,6 +166,7 @@ jobs:
           REPAIR: ${{ inputs.repair_illegal || false }}
           OWNERS: ${{ inputs.owners || 'hyperpolymath,metadatastician,catachresis-colloquium' }}
           LIMIT: ${{ inputs.limit || '0' }}
+          ENSURE_SQUABBLER: ${{ inputs.ensure_squabbler || false }}
         run: |
           set -euo pipefail
           # One applier run per owner, each with that owner's token. LIMIT
@@ -173,6 +178,7 @@ jobs:
             args=(--owners "$owner" --limit "$LIMIT" --out "census-${owner}.tsv")
             [ "$MODE" = "fix" ] && args+=(--fix)
             [ "$REPAIR" = "true" ] && args+=(--repair-illegal)
+            [ "$ENSURE_SQUABBLER" = "true" ] && args+=(--ensure-squabbler)
             echo "::group::applier: ${owner}"
             GH_TOKEN="${!var:-$FALLBACK_TOKEN}" bash scripts/apply-workflow-pins-remote.sh "${args[@]}" || rc=$?
             echo "::endgroup::"

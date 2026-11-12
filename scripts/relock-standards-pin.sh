@@ -97,7 +97,23 @@ done
 [ -z "$stale" ] || refuse "workflows still pin other standards commits:$stale"
 
 oldrefs=$(grep -oE "'(hyperpolymath|metadatastician)/standards@[0-9a-f]{40}'" "$L" | tr -d "'" | LC_ALL=C sort -u | grep -vx "${COORD}@${TARGET}" || true)
-if [ -z "$oldrefs" ]; then echo "relock-standards-pin: lock already keyed to standards@${TARGET:0:12}"; exit 0; fi
+# A NEW caller: a workflow that pins standards in full at TARGET and has no
+# entry in the lock at all (the applier's --ensure-squabbler writes one). It
+# gets an entry naming the pin, and the TARGET record is rebuilt so its nested
+# `uses:` covers the new reusable's actions too. A workflow that HAS an entry
+# is never rewritten here; the final check still compares it with its pins.
+newwf=""
+for w in "${wfs[@]}"; do
+  standards_pins "$w" | grep -q "@${TARGET}\$" || continue
+  grep -qxF "    '.github/workflows/${w##*/}':" "$L" && continue
+  # An EMPTY entry (`[]`) for a workflow that calls a remote reusable is what
+  # gh actions-lock <= v0.1.6 wrote, being blind to job-level `uses:`. It
+  # claims the workflow uses nothing, which is false, so it is filled like a
+  # missing entry. Measured: hyperpolymath/nexia-list (governance, mirror,
+  # secret-scanner), refusing this shape left such repos unfixable.
+  newwf="$newwf ${w##*/}"
+done
+if [ -z "$oldrefs" ] && [ -z "$newwf" ]; then echo "relock-standards-pin: lock already keyed to standards@${TARGET:0:12}"; exit 0; fi
 [ -n "$full" ] || refuse "lock names standards commits but no workflow pins standards@${TARGET:0:12} in full"
 
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
@@ -135,9 +151,18 @@ for p in $full; do
 done
 grep -Ev '^(hyperpolymath|metadatastician)/standards@' "$tmp/uses" | LC_ALL=C sort -u > "$tmp/uses.s" || true
 
-# owner_id / repo_id come from an OLD record; without one the lock was already dangling.
+# owner_id / repo_id come from an OLD record; without one the lock was already
+# dangling. With no OLD record (only a new caller to add), the TARGET record's
+# own ids serve, and failing that the canonical owner's known ids, which the
+# transfer check below asserts anyway.
 ids=""
 for o in $oldrefs; do ids=$(rec_body "$o" "$L" | grep -E '^        (owner_id|repo_id):' || true); [ -n "$ids" ] && break; done
+if [ -z "$ids" ] && [ -z "$oldrefs" ]; then
+  ids=$(rec_body "${COORD}@${TARGET}" "$L" | grep -E '^        (owner_id|repo_id):' || true)
+  if [ -z "$ids" ] && [ "$COORD" = "metadatastician/standards" ]; then
+    ids=$(printf '        owner_id: 297579217\n        repo_id: 1116521501')
+  fi
+fi
 [ -n "$ids" ] || refuse "no standards@OLD dependency record to take owner_id/repo_id from"
 if [ "$COORD" = "metadatastician/standards" ]; then
   # A transfer keeps the repository ID but changes the owner account ID.
@@ -155,6 +180,17 @@ for o in $oldrefs; do
   awk -v k="    ${q}${o}${q}:" '$0==k{s=1;next} s&&/^    [^ ]/{s=0} !s' "$tmp/lock" > "$tmp/l" && mv "$tmp/l" "$tmp/lock"
 done
 awk -v k="    ${q}${COORD}@$TARGET${q}:" '$0==k{s=1;next} s&&/^    [^ ]/{s=0} !s' "$tmp/lock" > "$tmp/l" && mv "$tmp/l" "$tmp/lock"
+# Entries for new callers go into `workflows:`, which is then kept in C-locale
+# key order, as gh actions-lock writes it (same tag-sort-strip as below).
+if [ -n "$newwf" ]; then
+  wl=$(grep -n '^workflows:$' "$tmp/lock" | cut -d: -f1); n=$(grep -n '^dependencies:$' "$tmp/lock" | cut -d: -f1)
+  [ -n "$wl" ] && [ -n "$n" ] && [ "$wl" -lt "$n" ] || refuse "lock has no workflows: section before dependencies:"
+  { sed -n "$((wl+1)),$((n-1))p" "$tmp/lock" | grep -vxF -f <(for w in $newwf; do printf "    '.github/workflows/%s': []\n" "$w"; done)
+    for w in $newwf; do printf "    '.github/workflows/%s':\n        - '%s@%s'\n" "$w" "$COORD" "$TARGET"; done
+  } | awk -v q="$q" 'index($0, "    " q) == 1 { key = $0 } { printf "%s\t%08d\t%s\n", key, NR, $0 }' \
+    | LC_ALL=C sort -t "$(printf '\t')" -k1,1 -k2,2n | cut -f3- > "$tmp/wsec"
+  { head -n "$wl" "$tmp/lock"; cat "$tmp/wsec"; tail -n +"$n" "$tmp/lock"; } > "$tmp/l" && mv "$tmp/l" "$tmp/lock"
+fi
 { printf "    '%s@%s':\n        ref: '%s'\n        commit: 'sha1-%s'\n" "$COORD" "$TARGET" "$TARGET" "$TARGET"
   printf '%s\n' "$ids"
   if [ -s "$tmp/uses.s" ]; then echo "        uses:"; sed "s|.*|            - '&'|" "$tmp/uses.s"; fi
@@ -197,6 +233,39 @@ while read -r u; do
   [ -n "$r" ] || refuse "no record for $u in this lock or in standards' own lock at ${TARGET:0:12}"
   printf '%s\n' "$r" >> "$tmp/lock"
 done < "$tmp/uses.s"
+
+# Poisoned copies anywhere in the lock. The runner refuses a leaf whose `ref:`
+# repeats its own commit SHA ("invalid lockfile pin"), and consumers keep such
+# copies after standards repairs its own record (standards#1458: 31 of 40
+# sampled callers failed at Set up job this way). Every such record that
+# standards' lock at TARGET holds with the SAME commit and ids and a symbolic
+# ref is repaired, whether or not the new pin needs it. One standards does not
+# know is left as it is and reported: no tag can be invented here, and
+# refusing would also block the pin fix the rest of the repo needs.
+unrepaired=""
+while read -r key; do
+  sha=${key##*@}
+  rec=$(rec_body "$key" "$tmp/lock")
+  printf '%s\n' "$rec" | grep -qxF "        ref: '$sha'" || continue
+  printf '%s\n' "$rec" | grep -qx '        uses:' && continue
+  skey=$(lock_key "$key" "$tmp/slock")
+  repaired=""; [ -z "$skey" ] || repaired=$(rec_body "$skey" "$tmp/slock")
+  symbolic=$(printf '%s\n' "$repaired" | sed -n "s/^        ref: '\([^']*\)'$/\1/p")
+  local_identity=$(printf '%s\n' "$rec" | grep -E '^        (commit|owner_id|repo_id):' || true)
+  source_identity=$(printf '%s\n' "$repaired" | grep -E '^        (commit|owner_id|repo_id):' || true)
+  if [[ -n "$symbolic" && ! "$symbolic" =~ ^[0-9a-fA-F]{40}$ && "$local_identity" == "$source_identity" \
+        && "$(printf '%s\n' "$source_identity" | wc -l)" -eq 3 ]]; then
+    awk -v k="    '$key':" -v replacement="        ref: '$symbolic'" '
+      $0 == k { selected = 1; print; next }
+      /^    [^ ]/ { selected = 0 }
+      selected && /^        ref:/ { print replacement; next }
+      { print }' "$tmp/lock" > "$tmp/repaired.lock" && mv "$tmp/repaired.lock" "$tmp/lock"
+  else
+    unrepaired="$unrepaired $key"
+  fi
+done < <(n=$(grep -n '^dependencies:$' "$tmp/lock" | cut -d: -f1); tail -n +"$((n+1))" "$tmp/lock" \
+          | grep -oE "^    '[^']+@[0-9a-f]{40}':\$" | sed -E "s/^    '|':\$//g")
+[ -z "$unrepaired" ] || echo "relock-standards-pin: SELF-SHA-LEAF left (standards has no symbolic ref for the same commit):$unrepaired" >&2
 
 # Prune candidates nothing references any more (to a fixed point).
 # deps_line FILE — print the one-based line number of each exact dependencies:
@@ -243,4 +312,4 @@ for w in "${wfs[@]}"; do
 done
 
 cat "$tmp/out" > "$L"
-echo "relock-standards-pin: $L keyed to ${COORD}@${TARGET:0:12} (from $(echo $oldrefs | sed 's/\([0-9a-f]\{12\}\)[0-9a-f]*/\1/g'))"
+echo "relock-standards-pin: $L keyed to ${COORD}@${TARGET:0:12} (from: $(echo ${oldrefs:-none} | sed 's/\([0-9a-f]\{12\}\)[0-9a-f]*/\1/g'); new caller entries: ${newwf:- none})"
