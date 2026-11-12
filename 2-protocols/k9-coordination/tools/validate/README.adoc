@@ -66,8 +66,11 @@ validation, and is not done here.
 `believe_me` or `assert_*`) proves three claims made in the grammar
 changelogs, for the RFC 5234 meaning of a grammar:
 
-`v11FilesAreV12Files`:: every v1.1 file is a v1.2 file, given the side
-condition above.
+`v11FilesAreV12Files`:: every string the v1.1 grammar derives, the v1.2
+grammar derives, given the side condition above. This is about the ABNF
+productions only. The 998-octet line limit (rule 14) is a whole-file
+constraint outside the grammar and outside the proof, so a v1.1 file with a
+longer line is not a conforming v1.2 file.
 `deedFilenameEquiv`:: the right-recursive `deed-filename` written on
 2026-11-09 denotes the same strings as `1*deed-char %s".deed"`.
 `altSwap`:: reordering the alternatives of `date` keeps its language.

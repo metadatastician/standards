@@ -20,8 +20,11 @@
 // condition of `v11FilesAreV12Files` in proofs/GrammarExtension.idr: every
 // rule v1.1 defines other than `body`, v1.2 defines identically, and the
 // `body` lists the proof transcribes are the committed ones. With the proof,
-// that makes every v1.1 file a v1.2 file (RFC 5234 semantics; that apg-js
-// agrees with those semantics on this grammar is tested here, not proved).
+// that makes every string the v1.1 grammar derives one the v1.2 grammar
+// derives (RFC 5234 semantics; that apg-js agrees with those semantics on
+// this grammar is tested here, not proved). The proof and the check cover
+// the ABNF productions only: rule 14's line limit is outside both, so a v1.1
+// file with a line over 998 octets is not a conforming v1.2 file.
 // Exit 0 pass, 1 finding, 2 cannot run.
 import { readFileSync, readdirSync } from "node:fs";
 import { basename, join, resolve } from "node:path";

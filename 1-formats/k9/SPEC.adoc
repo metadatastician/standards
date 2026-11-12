@@ -40,7 +40,7 @@ Specification v1.0.0] — *this document is the format overview; conformance is
 specified there*
 |Contract file |link:spec/contract/k9_contract.ncl[`spec/contract/k9_contract.ncl`]
 |Canonical validator |link:tools/k9-validate.sh[`tools/k9-validate.sh`]
-|Conformance suite |link:tools/fixtures/[`tools/fixtures/`] (6 positive, 21 negative)
+|Conformance suite |link:tools/fixtures/[`tools/fixtures/`] (7 positive, 22 negative)
 |===
 
 [IMPORTANT]

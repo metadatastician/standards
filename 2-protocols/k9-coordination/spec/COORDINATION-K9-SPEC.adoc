@@ -27,10 +27,12 @@ NOTE: *Line-length limit, 2026-11-12.* Owner ruling I4 caps every line at
 998 octets (rule 14), so that the registered `8bit` encoding label is
 exact. The version stays 1.2.0: no file in this repository came near the
 limit, and the media type is not yet filed. A 1.1.1 file with a longer line
-is not a 1.2.0 file.
+is not a 1.2.0 file, so the inclusion below holds for the grammars, not for
+every conforming 1.1.1 file.
 
-NOTE: *Changes in 1.2.0.* Two optional sections, additive, so every 1.1.1
-file is a 1.2.0 file: `build_commands` (the commands an agent may run, each
+NOTE: *Changes in 1.2.0.* Two optional sections, additive, so every file the
+1.1.1 grammar accepts, the 1.2.0 grammar accepts (subject, since 2026-11-12,
+to the line-length limit above): `build_commands` (the commands an agent may run, each
 with its purpose) and `innervation` (the signals a repository emits and
 responds to, and the local guards it enforces).
 

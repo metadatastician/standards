@@ -959,7 +959,7 @@ hidden; review is the control, as it is for `.machine_readable/inline-python-all
 1-formats/k9/tools/fixtures/
 ├── valid/     7 positive controls
 └── invalid/   22 negative controls
-               (19 assertable without a toolchain, 2 needing Nickel)
+               (20 assertable without a toolchain, 2 needing Nickel)
 ----
 
 === The negative controls are the point
@@ -983,7 +983,7 @@ while the rule under test does nothing.
 
 === Three rules cannot have a fixture
 
-Twenty of the twenty-three rules are controlled by a file in `invalid/`. The
+Twenty-one of the twenty-four rules are controlled by a file in `invalid/`. The
 other three cannot be, and a suite that simply omitted them would be silently
 narrower than the contract it claims to cover. Each is instead asserted in
 `--self-test` *to fire*:
