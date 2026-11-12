@@ -115,20 +115,36 @@ for w in "${wfs[@]}"; do
 done
 # A new caller's entry is written with its standards edge only, so a workflow
 # that ALSO uses other actions would get an incomplete entry, which the sync
-# gate rejects. Such a workflow is refused, not half-locked.
+# gate rejects. Such a workflow is refused, not half-locked. "Other actions"
+# includes a local composite action (`uses: ./…`), whose own dependencies the
+# sync gate attributes to the calling workflow, and a quoted `"uses":` key.
 for w in $newwf; do
-  other=$(grep -vE '^[[:space:]]*#' "$WF/$w" | grep -oE "uses:[[:space:]]*['\"]?[A-Za-z0-9_.-]+/[A-Za-z0-9_./-]+@[^[:space:]'\"]+" \
+  other=$(grep -vE '^[[:space:]]*#' "$WF/$w" \
+          | grep -oE "['\"]?uses['\"]?:[[:space:]]*['\"]?(\./[^[:space:]'\"]+|[A-Za-z0-9_.-]+/[A-Za-z0-9_./-]+@[^[:space:]'\"]+)" \
           | grep -vE '(hyperpolymath|metadatastician)/standards/\.github/workflows/' | head -1 || true)
-  [ -z "$other" ] || refuse "new caller ${w} also uses other actions (${other#uses:}); its lock entry cannot be built from the standards pin alone"
+  [ -z "$other" ] || refuse "new caller ${w} also uses other actions (${other}); its lock entry cannot be built from the standards pin alone"
 done
+# Job-level reusable-workflow edges (owner/repo@ref, owner/repo lower-cased):
+# their records legitimately carry ref == SHA, with or without nested uses:,
+# so the poisoned-leaf scan and repair never touch them.
+edge_keys=$(grep -hvE '^[[:space:]]*#' "${wfs[@]}" 2>/dev/null \
+            | grep -oE '[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/\.github/workflows/[A-Za-z0-9._-]+\.ya?ml@[^[:space:]'"'"'"]+' \
+            | sed -E 's#^([^/]+/[^/]+)/\.github/workflows/[^@]+@#\1@#' \
+            | awk '{ i = index($0, "@"); print tolower(substr($0, 1, i - 1)) substr($0, i) }' | sort -u || true)
+# is_edge KEY: true when KEY names a job-level reusable-workflow edge.
+is_edge() { printf '%s\n' "$edge_keys" | grep -qxF "$(printf '%s\n' "$1" | awk '{ i = index($0, "@"); print tolower(substr($0, 1, i - 1)) substr($0, i) }')"; }
 # An already-keyed lock still goes through the rebuild when it holds a
-# poisoned leaf (a record with no nested uses: whose ref repeats its own SHA),
-# so the repair below reaches it. Otherwise it is left exactly as it is.
-poisoned=$(awk -F"'" 'function flush() { if (k != "" && r == s && !u) print k; k = "" }
+# poisoned leaf (a record with no nested uses: whose ref repeats its own SHA,
+# and which is not a reusable-workflow edge), so the repair below reaches it.
+# Otherwise it is left exactly as it is.
+poisoned=""
+for k in $(awk -F"'" 'function flush() { if (k != "" && r == s && !u) print k; k = "" }
                      /^    \x27[^ ]+@[0-9a-f]+\x27:$/ { flush(); k = $2; split(k, a, "@"); s = a[2]; if (length(s) != 40) k = ""; r = ""; u = 0; next }
                      /^    \x27/ || /^[a-z]/ { flush(); next }
                      /^        ref:/ { r = $2 } /^        uses:$/ { u = 1 }
-                     END { flush() }' "$L" | head -1)
+                     END { flush() }' "$L"); do
+  is_edge "$k" || { poisoned="$k"; break; }
+done
 if [ -z "$oldrefs" ] && [ -z "$newwf" ] && { [ -z "$poisoned" ] || [ -z "$full" ]; }; then
   [ -z "$poisoned" ] || echo "relock-standards-pin: SELF-SHA-LEAF left (no full standards pin to rebuild from): $poisoned" >&2
   echo "relock-standards-pin: lock already keyed to standards@${TARGET:0:12}"; exit 0
@@ -267,6 +283,7 @@ while read -r key; do
   rec=$(rec_body "$key" "$tmp/lock")
   printf '%s\n' "$rec" | grep -qxF "        ref: '$sha'" || continue
   printf '%s\n' "$rec" | grep -qx '        uses:' && continue
+  is_edge "$key" && continue
   skey=$(lock_key "$key" "$tmp/slock")
   repaired=""; [ -z "$skey" ] || repaired=$(rec_body "$skey" "$tmp/slock")
   symbolic=$(printf '%s\n' "$repaired" | sed -n "s/^        ref: '\([^']*\)'$/\1/p")

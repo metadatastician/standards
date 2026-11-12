@@ -510,4 +510,29 @@ grep -q "old/sub@" "$D/actions.lock" && fail "pruned-leaf: old/sub not pruned"
 grep -q 'old/sub@' "$T/pruned-log" && fail "a pruned leaf was reported as left"
 echo "  PASS a poisoned leaf that the prune removes is not reported"
 
+# Case I: a reusable-workflow edge whose record has ref == SHA and NO nested
+# uses: (a reusable with no external actions) is valid, not a poisoned leaf.
+D=$(consumer edge-no-uses)
+bash "$RELOCK" --to "$NEW" --standards "$S" "$D" >/dev/null
+awk -v k="    'hyperpolymath/standards@$NEW':" '$0==k{f=1;print;next} f&&/^    [^ ]/{f=0} f&&(/^        uses:$/||/^            - /){next} {print}' "$D/actions.lock" > "$T/nouses" && cp "$T/nouses" "$D/actions.lock"
+grep -A5 -xF "    'hyperpolymath/standards@$NEW':" "$D/actions.lock" | grep -q 'uses:' && fail "edge fixture still has uses:"
+cp "$D/actions.lock" "$T/edge-before"
+bash "$RELOCK" --to "$NEW" --standards "$S" "$D" >"$T/edge-log" 2>&1 || fail "an edge record without uses: refused the relock"
+grep -q 'SELF-SHA-LEAF' "$T/edge-log" && fail "a reusable edge was reported as a poisoned leaf"
+cmp -s "$D/actions.lock" "$T/edge-before" || fail "an edge record without uses: changed the lock"
+echo "  PASS a reusable edge with ref == SHA and no nested uses: is not a poisoned leaf"
+
+# Case J and K: a new caller that uses a local composite action, or writes the
+# key quoted, is refused (its other dependencies cannot be recorded here).
+for body in '      - uses: ./.github/actions/build' "      - \"uses\": actions/checkout@1111111111111111111111111111111111111111"; do
+  D=$(consumer new-caller-other)
+  bash "$RELOCK" --to "$NEW" --standards "$S" "$D" >/dev/null
+  printf 'on: push\njobs:\n  sq:\n    uses: hyperpolymath/standards/.github/workflows/x-reusable.yml@%s\n  b:\n    runs-on: x\n    steps:\n%s\n' "$NEW" "$body" > "$D/other.yml"
+  cp "$D/actions.lock" "$T/other-before"
+  if bash "$RELOCK" --to "$NEW" --standards "$S" "$D" >"$T/other-log" 2>&1; then fail "a new caller with [$body] was accepted"; fi
+  cmp -s "$D/actions.lock" "$T/other-before" || fail "refusal changed the lock [$body]"
+  grep -q 'also uses other actions' "$T/other-log" || fail "refusal reason missing [$body]"
+done
+echo "  PASS a new caller with a local composite action or a quoted uses: key is refused unchanged"
+
 echo "PASS: relock-standards-pin.sh"
