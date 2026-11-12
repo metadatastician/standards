@@ -11,13 +11,13 @@
 ; A CLAUSE PROFILE, not a new grammar. Every anchor-clause below is also a
 ; `clause` of deed.abnf v1.3.0, so a deed carrying one still passes deed_lint
 ; unchanged. This profile narrows that clause. Rules it borrows (string,
-; boolean, uuid, symbol, token-sep, DQUOTE, DIGIT, ALPHA) are deed.abnf's,
-; unchanged. Requires RFC 7405 (%s"..." case-sensitive string literals).
+; boolean, symbol, token-sep, DQUOTE, DIGIT, ALPHA, hex-lc, uuid-variant)
+; are deed.abnf's, unchanged. Requires RFC 7405 (%s"..." case-sensitive string literals).
 ;
 ; What the anchor is: the repo's semantic authority and golden path — what a
 ; downstream or satellite repo may extend but not redefine, and how to bring
 ; the repo back on track when it drifts. What it is NOT: identity. The repo's
-; one id is the chora deed's :repo-uuid (A1, rulings R4, U1 to U4, V1). The
+; one id is the chora deed's :repo-uuid (A1, rulings R4, U1 to U4, V8). The
 ; anchor carries no id of its own, no clade (a finding aid, A1 §11) and no
 ; lifecycle status (the chora's (status …) clause).
 ;
@@ -51,11 +51,14 @@ purpose-field   = %s":purpose" token-sep str-list1
 
 metadata-clause = "(" %s"metadata" 1*(token-sep metadata-member) [token-sep] ")"
 metadata-member = ( %s":version" token-sep string )
-                  ; SEMANTIC: three-segment MAJOR.MINOR.PATCH (ultraplan Q5).
+                  ; SEMANTIC: three-segment MAJOR.MINOR.PATCH. The version of
+                  ; this anchor's content (the legacy `version`), not of the
+                  ; format: the format major is :schema's "/1" (ultraplan Q5).
                 / ( %s":last-updated" token-sep string )
-                  ; SEMANTIC: YYYY-MM-DD, or a mint placeholder {{NAME}} in the
-                  ; template's own deed (repo-init fills it; a minted deed has
-                  ; none — the template's placeholder gate).
+                  ; SEMANTIC: a real calendar date YYYY-MM-DD (2026-02-31 is
+                  ; refused), or a mint placeholder {{NAME}} in the template's
+                  ; own deed only (deed_lint --anchor --template). repo-init
+                  ; fills it; in any other deed a placeholder is an error.
                 ; SEMANTIC: each member at most once.
 
 subject-clause  = "(" %s"identity" 1*(token-sep subject-member) [token-sep] ")"
@@ -93,7 +96,9 @@ satellite-member = ( %s":must-pin-upstream" / %s":must-declare-authority"
 sem-files-clause = "(" %s"semantic-authority-files"
                    1*(token-sep keyword token-sep string) [token-sep] ")"
                 ; Open keys; each value is a repo-relative path. SEMANTIC: no
-                ; key twice.
+                ; key twice; each value non-empty, with no leading "/", no
+                ; drive letter, no "\" and no empty, "." or ".." segment, so
+                ; no reader resolves an authority file outside the repo.
 
 ssg-clause      = "(" %s"ssg" 1*(token-sep ssg-member) [token-sep] ")"
 ssg-member      = ( %s":engine" token-sep string )
@@ -105,12 +110,19 @@ ssg-member      = ( %s":engine" token-sep string )
 
 parents-clause  = "(" %s"parents" 1*(token-sep parent-clause) [token-sep] ")"
 parent-clause   = "(" %s"parent" 1*(token-sep parent-member) [token-sep] ")"
-parent-member   = ( %s":uuid" token-sep uuid )
+parent-member   = ( %s":uuid" token-sep chora-uuid8 )
                 / ( %s":relation" token-sep symbol )
                 ; A parent is named by its chora id, the opaque #uuid literal
                 ; of A1 (never a reverse-DNS name, a path or a clade). SEMANTIC:
                 ; :uuid exactly once and :relation at most once per parent; no
-                ; uuid twice across (parents …); never the deed's own :repo-uuid.
+                ; uuid twice across (parents …); never the deed's own :repo-uuid,
+                ; which a legacy #u8 or #u5 :repo-uuid is compared by the id it
+                ; names (A1 rule V8).
+
+chora-uuid8     = %s"#uuid" DQUOTE 8hex-lc "-" 4hex-lc "-" "8" 3hex-lc "-"
+                  uuid-variant 3hex-lc "-" 12hex-lc DQUOTE
+                ; deed.abnf's uuid narrowed to version 8: A1 rule V8 puts the
+                ; profile C UUIDv8 in deeds; the UUIDv5 stays in the registry.
 
 str-list        = "(" [token-sep] [string *(token-sep string)] [token-sep] ")"
 str-list1       = "(" [token-sep] string *(token-sep string) [token-sep] ")"

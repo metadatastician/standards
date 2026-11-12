@@ -174,6 +174,15 @@ for (const name of ANCHOR_GRAMMAR_REJECTS) {
   if (e === null) fail("anchor invalid fixture has no (anchor …) clause", name);
   else if (grammarAccepts(grammar, "anchor-clause", e)) fail("anchor.abnf accepts a fixture it must refuse", name);
 }
+// A version 5 parent id (A1 rule V8) is refused by anchor.abnf itself. Built at
+// run time, not committed: the repo carries no version 5 UUID literal
+// (scripts/check-uuid-v8.sh --strict).
+{
+  const v5 = `(anchor :schema "hyperpolymath.anchor/1" :authority "a" (parents (parent :uuid #uuid"00000000-0000-${"5"}000-8000-0000000000b1")))`;
+  const v8 = v5.replace("-5000-", "-8000-");
+  if (grammarAccepts(grammar, "anchor-clause", v5)) fail("anchor.abnf accepts a version 5 parent id", v5);
+  if (!grammarAccepts(grammar, "anchor-clause", v8)) fail("anchor.abnf refuses a version 8 parent id", v8);
+}
 
 // 2. Mutation differential over the committed deeds and the valid fixtures
 //    (or the given seeds).

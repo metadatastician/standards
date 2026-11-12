@@ -4,7 +4,7 @@ import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { validate, LintError, SELF_TEST_CASES, checkEgress, EgressError, checkAnchor, AnchorError, readMustfileChecks, MustfileError, readProofReceipt, ProofReceiptError } from "./deed_lint.js";
+import { validate, LintError, SELF_TEST_CASES, checkEgress, EgressError, checkAnchor, AnchorError, profileCOfBody, readMustfileChecks, MustfileError, readProofReceipt, ProofReceiptError } from "./deed_lint.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const LINT = join(HERE, "deed_lint.js");
@@ -521,11 +521,13 @@ const anchorDeeds = (sub) => readdirSync(join(FIX_ANCHOR, sub)).filter((n) => n.
 // fixture that starts failing for a different reason is caught.
 const ANCHOR_WHY = {
   "clade-in-anchor_chora.deed": "has no field :clade",
-  "date-bad_chora.deed": "is not YYYY-MM-DD",
+  "date-bad_chora.deed": "is not a real YYYY-MM-DD date",
+  "date-impossible_chora.deed": "is not a real YYYY-MM-DD date",
   "empty-authority_chora.deed": ":authority must not be empty",
   "empty-subclause_chora.deed": "(anchor (ssg …)) is empty",
   "id-in-anchor_chora.deed": "has no field :id",
   "metadata-unknown_chora.deed": "has no field :owner",
+  "mint-token-minted_chora.deed": "unfilled repo-init token",
   "missing-authority_chora.deed": "is missing :authority",
   "missing-schema_chora.deed": "is missing :schema",
   "nested-anchor_chora.deed": "only at the top level",
@@ -534,6 +536,8 @@ const ANCHOR_WHY = {
   "parent-no-uuid_chora.deed": "is missing :uuid",
   "parent-relation-string_chora.deed": ":relation must be a symbol",
   "parent-self_chora.deed": "the deed's own :repo-uuid",
+  "parent-self-u5_chora.deed": "the deed's own :repo-uuid",
+  "parent-self-u8_chora.deed": "the deed's own :repo-uuid",
   "parent-string_chora.deed": "got string",
   "parents-stray_chora.deed": "takes (parent …) clauses only",
   "praxis-head_praxis.deed": "belongs in a repo-deed",
@@ -543,7 +547,9 @@ const ANCHOR_WHY = {
   "repeated-field_chora.deed": "repeats :authority",
   "satellite-string_chora.deed": "must be #t or #f",
   "schema-symbol_chora.deed": ":schema must be a string",
+  "sem-files-absolute_chora.deed": "is not a repo-relative path",
   "sem-files-boolean_chora.deed": ":spec must be a string",
+  "sem-files-escape_chora.deed": "is not a repo-relative path",
   "status-in-anchor_chora.deed": "has no clause (status …)",
   "sub-nested-clause_chora.deed": "takes fields only",
   "two-anchors_chora.deed": "at most one (anchor …)",
@@ -555,7 +561,7 @@ describe("anchor fixtures", () => {
   for (const n of anchorDeeds("valid")) {
     test(`valid/${n} passes`, () => {
       const f = join(FIX_ANCHOR, "valid", n);
-      expect(() => checkAnchor(readFileSync(f, "utf8"), f)).not.toThrow();
+      expect(() => checkAnchor(readFileSync(f, "utf8"), f, { template: n.startsWith("template-") })).not.toThrow();
     });
   }
   test("every invalid fixture has a stated reason, and every reason a fixture", () => {
@@ -592,9 +598,36 @@ describe("checkAnchor result", () => {
       parents: ["00000000-0000-8000-8000-0000000000b1", "00000000-0000-8000-8000-0000000000b2"],
     });
   });
-  test("the template's own clause, mint tokens included, passes", () => {
+  test("the template's own clause, mint tokens included, passes in template mode", () => {
     const f = join(FIX_ANCHOR, "valid", "template-a55669e_chora.deed");
-    expect(checkAnchor(readFileSync(f, "utf8"), f).authority).toBe("upstream-canonical");
+    expect(checkAnchor(readFileSync(f, "utf8"), f, { template: true }).authority).toBe("upstream-canonical");
+  });
+  test("the same clause outside template mode fails on its first token", () => {
+    const f = join(FIX_ANCHOR, "valid", "template-a55669e_chora.deed");
+    expect(() => checkAnchor(readFileSync(f, "utf8"), f)).toThrow(/unfilled repo-init token/);
+  });
+  test("a version 5 parent id is refused (A1 rule V8)", () => {
+    // Built at run time: the repo carries no version 5 UUID literal (check-uuid-v8.sh --strict).
+    const v5 = "00000000-0000-" + "5" + "000-8000-0000000000b1";
+    const src = `;; SPDX-License-Identifier: CC-BY-SA-4.0
+(repo-deed :schema-version "1.0.0" :canonical-name "x" :repo-uuid #uuid"00000000-0000-8000-8000-0000000000a7" :beholding-chora #uuid"00000000-0000-8000-8000-00000000e57a"
+  (identity :primary-forge github :owner "o")
+  (anchor :schema "hyperpolymath.anchor/1" :authority "a" (parents (parent :uuid #uuid"${v5}"))))
+`;
+    expect(() => validate(src)).not.toThrow();
+    expect(() => checkAnchor(src)).toThrow(/not a version 8 chora id/);
+  });
+  test("profile C of a #u8 body matches scripts/uuid-v8.js", () => {
+    expect(profileCOfBody("gv-clade-index:github.com/hyperpolymath/standards")).toBe("b32d6be4-73ba-873e-9d61-e57f43c75cd1");
+  });
+  test("leap days: 2028-02-29 is a date, 2026-02-29 is not", () => {
+    const deed = (d) => `;; SPDX-License-Identifier: CC-BY-SA-4.0
+(repo-deed :schema-version "1.0.0" :canonical-name "x" :repo-uuid #uuid"00000000-0000-8000-8000-0000000000a7" :beholding-chora #uuid"00000000-0000-8000-8000-00000000e57a"
+  (identity :primary-forge github :owner "o")
+  (anchor :schema "hyperpolymath.anchor/1" :authority "a" (metadata :last-updated "${d}")))
+`;
+    expect(() => checkAnchor(deed("2028-02-29"))).not.toThrow();
+    expect(() => checkAnchor(deed("2026-02-29"))).toThrow(/not a real/);
   });
 });
 
