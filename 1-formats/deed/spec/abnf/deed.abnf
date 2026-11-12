@@ -27,7 +27,7 @@
 ;     enforced; see the SEMANTIC note on `deed` below.
 ;   Additive for every deed with lines of 998 octets or fewer: every such
 ;   v1.2.1 deed is a v1.3.0 deed.
-;   Errata, Errata, 2026-11-12 (review of #1473): uuid-variant writes "a" and "b"
+;   Errata, 2026-11-12 (review of #1473): uuid-variant writes "a" and "b"
 ;   as %s"a" / %s"b". A quoted ABNF string is case-insensitive, so the
 ;   first text admitted "A" and "B" there, which uuid-hex and the gate
 ;   refuse. No lowercase deed changes verdict.
