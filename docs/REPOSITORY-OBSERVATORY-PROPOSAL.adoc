@@ -5,6 +5,11 @@
 :revdate: 2026-10-29
 :status: proposal
 
+[NOTE]
+====
+Display is now normative in link:../3-practice/fork-governance/SPEC.adoc[fork-governance SPEC v1.4 §2] (blocks, order, folding, what is public). Where this proposal and SPEC §2 differ, SPEC §2 governs. The departures it records: the farm line is always present with a state word only (owner ruling 2026-11-12), and the dependencies block also carries an estate map of upstream and downstream repositories.
+====
+
 == Purpose and boundaries
 
 Provide one comprehensible, evidence-grounded account of a pull request and its

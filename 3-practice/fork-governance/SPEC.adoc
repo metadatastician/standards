@@ -1,16 +1,23 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 // SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
-= Fork governance — specification v1.3
+= Fork governance — specification v1.4
 :toc: left
 :toclevels: 4
-:revdate: 2026-11-09
-:revnumber: 1.3
+:revdate: 2026-11-12
+:revnumber: 1.4
 :status: normative
 
-This document is normative for the *comment*: its markers, its order, its
-states, and the rules the posting job obeys. It does not restate how a lane
-computes its verdict; that is link:LANES.adoc[LANES] and, for the grids
-themselves, link:../../docs/VERDICT-GRID-SPEC.adoc[VERDICT-GRID-SPEC].
+This document is normative for the *comment*: its markers, its blocks, their
+order, what each may show in public, how they fold, their states, and the rules
+the posting job obeys. It is the one layout specification for the pull-request
+comment; link:../../docs/REPOSITORY-OBSERVATORY-PROPOSAL.adoc[the Observatory
+proposal] defers to it for display. It does not restate how a lane computes its
+verdict; that is link:LANES.adoc[LANES] and, for the grids themselves,
+link:../../docs/VERDICT-GRID-SPEC.adoc[VERDICT-GRID-SPEC].
+
+Version 1.4 records the owner's layout rulings of 2026-11-12: a summary card,
+a farm line, a tests block, a fork block, a two-part dependencies block with an
+estate map, and one folding rule for every section (§2).
 
 == 1. Terms
 
@@ -22,6 +29,15 @@ three: DEED syntax, K9-DEED conformance, Hypatia verdict grid.
 
 *Summary*:: The three-row table at the top of the comment. It is a projection
 of the lane verdicts, never an independent judgement.
+
+*Summary card*:: The summary table plus the card facts beneath it (§2.3): the
+always-visible top of the comment.
+
+*Block*:: A section of the comment that is not a lane: farm, tests, fork,
+dependencies, and the external reviewer coverage. A block reports evidence
+that another producer owns. It has a state (§2.7) and is shown in the summary
+card, but it never sets a lane state or the overall badge (§3.2): the comment
+must not become a second gate.
 
 *Posting engine*:: `fork-governance-reusable.yml`. The only component that
 writes to a pull request, except on a pull request from a fork (§4.1).
@@ -55,17 +71,35 @@ The body MUST contain, in this order:
   the comment was rendered by. The posting engine never writes it, and a
   scraper that reads by position skips this one line on fork comments;
 . the heading `# Fork governance`;
-. the summary table;
+. the summary card (§2.3): the summary table, then the card facts;
 . the scope note;
+. the block marker `<!-- fork-governance:block farm -->` and the farm line
+  (§2.9). Always present;
 . the lane marker `<!-- fork-governance:lane k9-deed -->` and the heading
-  `## K9-DEED conformance`, then the k9-deed grid or its orange placeholder;
+  `## K9-DEED conformance`, then the k9-deed grid or its orange placeholder.
+  Always present;
+. the block marker `<!-- fork-governance:block tests -->`, the heading
+  `## Tests`, then the tests block (§2.10). Always present;
+. on a fork only (§2.11): the block marker `<!-- fork-governance:block fork -->`,
+  the heading `## Fork`, then the fork block;
 . the lane marker `<!-- fork-governance:lane hypatia -->` and the heading
-  `## Hypatia verdict grid`, then the Hypatia grid or its orange placeholder.
+  `## Hypatia verdict grid`, then the Hypatia grid with the fleet's rows, or
+  its orange placeholder. Always present;
+. the block marker `<!-- fork-governance:block dependencies -->`, the heading
+  `## Dependencies`, then the estate sub-block and the packages sub-block
+  (§2.12). Always present;
+. the block marker `<!-- fork-governance:block reviewers -->` and the external
+  reviewer coverage (§2.6).
 
-Order is part of the contract because the sections are read positionally by
-humans and by scrapers, and because an order that varies between runs makes
-two verdicts on the same PR look like two different verdicts.
-`scripts/tests/fork-governance-render-test.sh` asserts it.
+Order is part of the contract because the sections are read by humans and by
+scrapers, and because an order that varies between runs makes two verdicts on
+the same PR look like two different verdicts.
+`scripts/tests/fork-governance-render-test.sh` asserts it. Scrapers MUST find a
+section by its marker, never by its position: v1.4 inserted blocks between the
+lanes (§8).
+
+The fork block is the only conditional section, and its absence is never
+silent: the summary card states whether the repository is a fork (§2.3).
 
 The lane *name* is `K9-DEED conformance` in the summary row and in the section
 heading. It is not `K9 conformance`; the rename is normative.
@@ -80,6 +114,25 @@ heading. It is not `K9 conformance`; the rename is normative.
 | `Status` (suffix) | `· advisory in grid scope: <glyph> <word> (<n> critical, <n> high, not grading)` | Optional, on the Hypatia row only. Present when the grid has advisory rows, even when those rows have zero graded findings (§3.2). Counts include only graded findings in the grid's declared scope; standing/excluded findings remain visible in the grid. Absent — not `none` — only when there are no advisory rows.
 | `Run` | `[run N](url)` or `same run` | The first row carries the link; the rest say `same run` because they share one run.
 |===
+
+==== 2.3.1 Card facts
+
+Under the table, one line per fact, in this order. Each names its state with
+the block vocabulary (§2.7), so the card alone answers "is anything not
+green?" without opening a block:
+
+[cols="1,4",options="header"]
+|===
+| Fact | Content
+| `Subject` | repository (display name; the forge's repository ID where it exposes one), head commit (12 hex), base commit, PR number. A display name is not an identity.
+| `Farm` | the farm state word (§2.9).
+| `Tests` | `<glyph> <word>` of the tests block (§2.10).
+| `Fork` | `yes — fork of <owner>/<repo>` with the fork block's `<glyph> <word>`, or `no (forge fork flag false)`. Never blank.
+| `Dependencies` | `<glyph> <word>` for each sub-block: `estate <…> · packages <…>` (§2.12).
+| `Reviewers` | the external reviewer coverage word (§2.6).
+|===
+
+The lane states stay in the table; the facts never restate them.
 
 === 2.4 Embedded grids
 
@@ -103,7 +156,7 @@ never itself exhibit.
 
 === 2.6 External reviewer coverage (advisory)
 
-After the Hypatia grid, the posting engine reports a snapshot of external
+Last in the comment (§2.2), the posting engine reports a snapshot of external
 reviewer coverage for the PR head observed while collecting evidence. This
 is not a fourth lane and MUST NOT alter any lane state or overall badge.
 A completed review on a different commit, a pending/dismissed review,
@@ -127,6 +180,150 @@ selects an older renderer. A failed helper fetch leaves coverage indeterminate.
 The implementation reserves 2,048 bytes for the fork publisher notice and
 stamp, and uses a conservative byte count. Lane text cannot suppress the
 advisory by mentioning its title; the posting engine appends its own section.
+
+=== 2.7 Block states
+
+A block uses the lane state words (§3) with the same glyphs, and the same
+rule for missing evidence: a block whose producer did not run, failed, or does
+not exist yet is orange `indeterminate` *with the reason*, in the block and in
+its card fact. A block is never green by absence of evidence, and never
+dropped (§2.5 applies to blocks as it does to lanes). `grey` (`not applicable`)
+is a statement about the repository with a reason, never a stand-in for
+"not yet built".
+
+A block's state does not feed the lane states or the overall badge (§3.2). It
+is evidence other checks own: a failing test suite fails its own required
+check, and the comment reports it.
+
+=== 2.8 Folding
+
+One rule for every section. Folding is presentation; it is never a privacy
+control (§2.13).
+
+. Always visible, never inside a `<details>`: the heading, the summary card,
+  the scope note, the farm line, and every lane and block heading with its
+  state.
+. Every section body (a lane's embedded grid, a block's content) sits in one
+  `<details>` whose `<summary>` repeats the section's `<glyph> <word>`. The
+  `<details>` carries `open` exactly when the state is neither green nor grey.
+  A green or not-applicable section is folded; anything a reader must act on
+  or must distrust is open.
+. Inside a section, rows fold as the grid already specifies (VERDICT-GRID-SPEC
+  §Anatomy, one `<details>` per row with anything to show). A row's `open`
+  follows the same rule as its section.
+. The lane markers and the grids' own markers and baseline comments stay
+  outside any `<details>` they would otherwise be hidden by, in the order of
+  §2.2, so that a marker lookup never depends on rendering.
+
+=== 2.9 Farm (always present)
+
+One line: `**Farm:** <glyph> <word>`, with exactly one of these words:
+
+[cols="1,1,3",options="header"]
+|===
+| Word | Glyph | Meaning
+| `connected` | 🟢 | The farm's evidence for this repository is current and the repository is connected.
+| `not connected` | 🔴 | The evidence says the repository is not connected.
+| `indeterminate` | 🟠 | No current evidence, the producer failed, or the producer does not exist yet.
+|===
+
+Nothing else may appear: no reason, host, URL, issue, identity, count or
+timestamp. The reason for `not connected` or `indeterminate` lives in the
+owner-only view (§2.13), which the line may link to only once that view
+enforces authentication.
+
+*Departure recorded.* The Observatory proposal made public farm status opt-in
+per repository (default deny). The owner ruled on 2026-11-12 that the line is
+always present with the state word only. The state word is the whole of what
+is public; the detail stays private by default, as the proposal intended.
+
+=== 2.10 Tests (always present)
+
+The test-suite entry point and its result for the head commit: the command or
+workflow that runs the suite, and `passed`, `failed`, or `not run`, with counts
+where the runner reports them (passed, failed, skipped). A repository with no
+suite says `no suite found` (orange: an untested repository is not a green
+one). Failing tests are listed first, at most 20, with a count of the rest.
+
+The block reports the suite; it does not run it. Its producer is the
+repository's own test job result for the head.
+
+=== 2.11 Fork (forks only)
+
+Present exactly when the forge reports the repository as a fork (its fork flag
+and parent fields). A name, a template origin, a remote URL or a workflow called
+`fork-governance` never makes a repository a fork. For a non-fork the card's
+`Fork` fact says so (§2.3.1) and the block is omitted.
+
+The block shows: the parent (`owner/repo`), the compared branches, ahead and
+behind counts when the forge can compare them, the last upstream sync it can
+observe, and the inherited-language paths the fork declares (LANES, Lane 3). An
+unavailable comparison is `indeterminate` with its reason, never zero
+divergence.
+
+=== 2.12 Dependencies (always present)
+
+Two sub-blocks, in this order. Each has its own state in the card.
+
+==== Estate: upstream and downstream
+
+The repositories this one depends on (upstream) and the repositories that
+depend on it (downstream), drawn as a line map, then listed as text.
+
+Sources, and nothing else:
+
+* *Upstream*: the repository's own deed, `(ecosystem)` clause: `:chain` and
+  each `(related … :relationship …)`. The deed is the authority for what a
+  repository says it depends on.
+* *Downstream and every station's state*: the estate register. Cadastra
+  observes (what exists and in what state, as found by running the scan);
+  reposystem models (the typed graph, imported from cadastra's register and the
+  deeds). The block reads reposystem's `estate-json` export. Neither the
+  posting engine nor the renderer computes the graph.
+
+Rules:
+
+. A line is drawn only for an observed or declared, typed relationship. Its
+  style names the relation: reposystem's `uses`, `provides`, `extends`,
+  `replaces`, `refers-to`, plus `fork-of` and `mirror-of` kept distinct (a
+  forge fork and a mirror are different facts). Nothing is inferred from names.
+. Each station shows `<name> · <glyph> <word> · checked <date>`: the state of
+  that repository's default branch as cadastra last observed it, and when. A
+  station with no observation is orange `?`, never green.
+. The map is a Mermaid `flowchart LR` with this repository in the middle,
+  upstream to its left and downstream to its right, at most 12 stations per
+  side, with a count of the rest. It is immediately followed by a plain list of
+  the same edges (`upstream: standards · standard-source · 🟢 clean ·
+  checked 2026-11-12`), so the content survives a client that does not
+  render Mermaid and is read in order by a screen reader. The list, not the
+  drawing, is the record.
+. Until reposystem exports a downstream index and distinct fork and mirror
+  relations, the sub-block shows upstream from the deed and says `downstream:
+  indeterminate (estate register not yet wired)`.
+
+==== Packages
+
+Direct and transitive package dependencies, grouped by: known vulnerability,
+suspected or confirmed compromise, archived or unmaintained, and unresolvable,
+each with the dependency path, resolved version, evidence source, check time
+and whether the repository can fix it locally. These classes are distinct and
+not interchangeable (Observatory, Dependency investigations). A missing
+advisory feed is `indeterminate`, never zero vulnerabilities.
+
+=== 2.13 What is public
+
+The comment is public on a public repository and copied into notifications.
+It carries only what is safe for that audience:
+
+* lane and block states, counts, file paths and finding text that the producers
+  already publish for this repository;
+* for the farm, the state word alone (§2.9);
+* no private URL, host, secret, identity, issue title or farm detail, by
+  default and in every block.
+
+Hiding with `<details>`, CSS or a client filter is not a privacy control. What
+must not be public is not rendered; the owner-only view (an authenticated
+front door, owned by cadastra once it exists) is where detail lives.
 
 == 3. State derivation
 
@@ -186,7 +383,11 @@ Each row therefore carries three disjoint counts, and only the first grades:
 
 A finding with no path is graded: absence of a location is not evidence of
 absence of a defect, and the alternative lets a reporter escape the gate by
-omitting a field.
+omitting a field. The duty this puts on producers: a repository-level finding
+MUST carry the path it is about (for a missing file, the path where the file is
+expected; for a repository property, the file that sets it). Then a change that
+does not touch that path reports it as standing, as it should, instead of every
+pull request inheriting it.
 
 The scope is part of the report and of the embedded baseline blob. A delta is
 comparable only when the previous revision was produced under the same scope —
@@ -202,8 +403,12 @@ The identity line states it, so the reader never has to infer it:
 A reporter is *gating* or *advisory*. The lane state is the worst **gating**
 row; an advisory row cannot set it, regardless of severity.
 
-Hypatia is gating. Every other reporter is advisory unless
-`.gitbot-fleet/enrolment.json` sets `reporters.<id>.gating` to a boolean. A
+Hypatia and pons are gating (owner ruling 2026-11-12: pons gates). panic-attack
+is advisory, and so is every fleet member, unless
+`.gitbot-fleet/enrolment.json` sets `reporters.<id>.gating` to a boolean, which
+overrides the default either way. When the pons row moves to its fleet
+adapter (gitbot-fleet `docs/migrations/scanner-cutover-ponsbot-panicbot.adoc`),
+the enrolment sets `"gating": true` for `ponsbot`; `panicbot` stays advisory. A
 grid with no gating row at all falls back to grading every row — never green by
 absence of evidence.
 
@@ -378,7 +583,14 @@ loudly rather than exiting 0 with nothing to show.
 * Adding a lane is a MINOR change: a new row, a new section, in the documented
   order. Removing or renaming a lane is MAJOR and requires a migration that
   edits or deletes existing comments.
-* Consumers must tolerate additional sections after the two documented ones.
+* Consumers must find sections by marker and tolerate sections they do not
+  know. v1.4 inserted the farm, tests and fork blocks between and around the
+  lanes and appended the dependencies and reviewer blocks: a consumer that read
+  the lanes by position breaks, one that reads by marker does not. Adding a
+  block is a MINOR change; its marker is a public interface like a lane's.
+* A block whose producer does not exist yet ships rendering `indeterminate`
+  with that reason (§2.7). It is never held back until the producer exists,
+  because a section that appears only when it has good news is not a report.
 * Scope and gating (§3.0, §3.1) are a MINOR change to the grid schema, and the
   renderer declares it (`schema: 2`). A consumer that reads `state` cannot
   tell why it changed — diff-scoping and advisory-splitting both only ever make
