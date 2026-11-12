@@ -19,9 +19,15 @@
 #   * a rename from one A2ML path to another (for example into 9-archive/):
 #     a move adds no fact;
 #   * editing or deleting an existing A2ML file (deleting content is allowed).
-# Rename detection is git's default (50% similarity). A move that also
-# rewrites most of the file is seen as a deletion plus an addition and fails;
-# move first, edit in a second commit.
+# Rename detection is git's default (50% similarity), applied to the change
+# as a whole: the gate compares two snapshots, so commit boundaries inside a
+# PR do not count. A move that also rewrites most of the file is seen as a
+# deletion plus an addition and fails; land the move in its own PR first, then
+# edit the file in a second PR.
+#
+# The change is measured from the merge base of BASE and HEAD, as a pull
+# request diff is, so an A2ML file that the base branch deleted or moved after
+# the PR branched is not mistaken for one the PR added.
 #
 # Usage: check-no-new-a2ml.sh BASE [HEAD] [ROOT]
 #        HEAD defaults to HEAD, ROOT to the current directory.
@@ -41,6 +47,21 @@ for ref in "$BASE" "$HEAD_REF"; do
   git -C "$ROOT" rev-parse --verify --quiet "$ref^{commit}" >/dev/null \
     || { echo "ERROR: cannot resolve $ref (fetch-depth too shallow?)" >&2; exit 2; }
 done
+
+# The fork point. BASE..HEAD alone would report as added every A2ML file the
+# base deleted since the PR branched.
+MERGE_BASE="$(git -C "$ROOT" merge-base "$BASE" "$HEAD_REF")" \
+  || { echo "ERROR: no merge base between $BASE and $HEAD_REF (fetch-depth too shallow?)" >&2; exit 2; }
+
+# Collect the diff first and check its status: read from a process
+# substitution, a failing git diff would look like an empty, passing change.
+DIFF_OUT="$(mktemp)"
+trap 'rm -f "$DIFF_OUT"' EXIT
+if ! git -C "$ROOT" diff --no-ext-diff --name-status -z -M -C --diff-filter=ACR \
+     "$MERGE_BASE" "$HEAD_REF" > "$DIFF_OUT"; then
+  echo "ERROR: git diff $MERGE_BASE $HEAD_REF failed; the change cannot be judged" >&2
+  exit 2
+fi
 
 is_a2ml() { [[ "$1" =~ $A2ML_RE ]]; }
 
@@ -65,10 +86,10 @@ while IFS= read -r -d '' status; do
       IFS= read -r -d '' _path
       ;;
   esac
-done < <(git -C "$ROOT" diff --no-ext-diff --name-status -z -M -C --diff-filter=ACR "$BASE" "$HEAD_REF")
+done < "$DIFF_OUT"
 
 if [ "${#added[@]}" -eq 0 ]; then
-  echo "no-new-a2ml: OK (no A2ML file added between ${BASE:0:12} and ${HEAD_REF})"
+  echo "no-new-a2ml: OK (no A2ML file added between merge base ${MERGE_BASE:0:12} and ${HEAD_REF})"
   exit 0
 fi
 

@@ -75,6 +75,25 @@ assert "an unusual name is reported unquoted" 1 "file=with space.a2ml::" bash "$
 base twocommits; printf 'x\n' > "$d/A.a2ml"; change; g rm -q A.a2ml; change
 assert "an A2ML file added then removed within the range passes" 0 "no-new-a2ml: OK" bash "$GATE" HEAD~2 HEAD "$d"
 
+echo "=== measured from the merge base ==="
+# The base branch deletes the legacy file after the PR branched. Diffed BASE
+# to HEAD, the PR branch's untouched copy would read as an addition.
+base basedel; g branch -q pr; g rm -q .machine_readable/LEGACY.a2ml; change
+g checkout -q pr; printf 'x\n' > "$d/README.adoc"; change
+assert "a file the base deleted after branching is not the PR's addition" 0 "no-new-a2ml: OK" bash "$GATE" "$(g rev-parse master 2>/dev/null || g rev-parse main)" HEAD "$d"
+base basedel2; g branch -q pr; g rm -q .machine_readable/LEGACY.a2ml; change
+g checkout -q pr; printf 'x\n' > "$d/NEW.a2ml"; change
+assert "a real addition on a branch behind its base still fails" 1 "file=NEW.a2ml::" bash "$GATE" "$(g rev-parse master 2>/dev/null || g rev-parse main)" HEAD "$d"
+base unrelated; g checkout -q --orphan other; g rm -rqf . ; printf 'x\n' > "$d/x.txt"; g add -A && g commit -qm orphan
+assert "BASE and HEAD with no merge base is a setup error" 2 "no merge base" bash "$GATE" "$(g rev-parse master 2>/dev/null || g rev-parse main)" HEAD "$d"
+
+echo "=== fails closed when git diff cannot run ==="
+# Remove the HEAD tree object: the commits still resolve, but the diff cannot
+# read the tree. The gate must not read that as an empty, passing change.
+base broken; printf 'x\n' > "$d/README.adoc"; change
+tree=$(g rev-parse HEAD^{tree}); rm -f "$d/.git/objects/${tree:0:2}/${tree:2}"
+assert "an unreadable tree is a setup error, never OK" 2 "cannot be judged" bash "$GATE" HEAD~1 HEAD "$d"
+
 echo "=== setup errors ==="
 base noref
 assert "an unresolvable BASE is a setup error" 2 "cannot resolve" bash "$GATE" deadbeef HEAD "$d"
