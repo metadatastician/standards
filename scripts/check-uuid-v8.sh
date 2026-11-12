@@ -74,20 +74,43 @@ acceptable() {
   esac
 }
 
+# Exit 0 when a version:variant pair is acceptable inside a deed opaque literal,
+# #uuid"<8-4-4-4-12 lowercase hex>" (deed.abnf v1.3.0, owner ruling U4). The
+# literal is a typed form: deed.abnf and deed_lint.js accept versions 5 and 8
+# there, with an RFC 9562 variant, so this checker accepts exactly that, in
+# both modes. A bare v5 UUID outside the literal is still rejected.
+acceptable_opaque() {
+  case "$1" in
+    5:8|5:9|5:a|5:b|8:8|8:9|8:a|8:b) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 status=0
 while IFS= read -r file; do
   [ -f "$file" ] || continue
   # Ignore the checkers themselves and retired A2ML files (D320); scan source
-  # and data files, not binaries.
+  # and data files, not binaries. The deed linter's rejection fixtures
+  # (1-formats/deed/tools/fixtures/invalid/) carry malformed literals on
+  # purpose: each one exists to prove deed_lint.js refuses it.
   case "$file" in
     */.git/*|*/check-uuid-v7.sh|*/check-uuid-v8.sh|*.a2ml|*.a2ml.in) continue ;;
+    */1-formats/deed/tools/fixtures/invalid/*|1-formats/deed/tools/fixtures/invalid/*) continue ;;
   esac
   if grep -IEni -- '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' "$file" >/dev/null 2>&1; then
-    # Every UUID on a line is checked, not only the last one (grep -o).
-    while IFS= read -r uuid; do
-      [ -n "$uuid" ] || continue
+    # Every UUID on a line is checked, not only the last one (grep -o). Each
+    # match keeps a directly preceding #uuid" so the opaque deed literal can be
+    # told apart from a bare UUID.
+    while IFS= read -r token; do
+      [ -n "$token" ] || continue
+      uuid=${token##*\"}
       version=$(printf '%s' "$uuid" | cut -d- -f3 | cut -c1)
       variant=$(printf '%s' "$uuid" | cut -d- -f4 | cut -c1 | tr 'A-F' 'a-f')
+      # The opaque literal is lowercase in the grammar (#uuid, lowercase hex);
+      # any other spelling is checked as a bare UUID.
+      if printf '%s' "$token" | grep -qE '^#uuid"[0-9a-f-]{36}$'; then
+        acceptable_opaque "$version:$variant" && continue
+      fi
       if ! acceptable "$version:$variant"; then
         if [ "$strict" -eq 1 ]; then
           printf '%s: non-v8 UUID literal (%s)\n' "$file" "$uuid" >&2
@@ -97,7 +120,7 @@ while IFS= read -r file; do
         status=1
       fi
     done <<EOF
-$(scannable_text "$file" | grep -oEi -- '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' || true)
+$(scannable_text "$file" | grep -oEi -- '(#uuid")?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' || true)
 EOF
   fi
 done <<EOF

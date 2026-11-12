@@ -122,5 +122,45 @@ fresh; printf 'name = "P"\nuuid = "%s"\n\n[extras]\nAqua = "%s"\nTest = "%s"\n' 
   "$V8_8" "$V5" "$V5" > "$WORK/t/Project.toml.in"
 expect 0 "registry UUIDs in a Project.toml.in [extras] pass under --strict" --strict
 
+# The deed opaque literal #uuid"…" (deed.abnf v1.3.0, owner ruling U4) is a
+# typed form: deed_lint.js accepts versions 5 and 8 there, so the checker
+# does too, in both modes. Everything outside the literal is unchanged.
+echo "deed opaque literal #uuid\"…\""
+V5_C="$(uuid 886313e1 3b8a 5372 cb90 0c9aee199e5d)"   # version 5, NON-RFC variant c
+V5_UP="$(uuid 886313E1 3B8A 5372 9B90 0C9AEE199E5D)"  # version 5, upper-case hex
+OPQ='#uuid"'
+fresh; printf '(repo-deed :repo-uuid %s%s")\n' "$OPQ" "$V5" > "$WORK/t/r_chora.deed"
+expect 0 "a v5 in an opaque literal is accepted (default)"
+expect 0 "a v5 in an opaque literal is accepted under --strict" --strict
+fresh; printf '(repo-deed :repo-uuid %s%s")\n' "$OPQ" "$V8_8" > "$WORK/t/r_chora.deed"
+expect 0 "a v8 in an opaque literal is accepted under --strict" --strict
+fresh; printf '(repo-deed :repo-uuid %s%s")\n' "$OPQ" "$V4" > "$WORK/t/r_chora.deed"
+expect 1 "a v4 in an opaque literal is rejected" --strict
+names "($V4)" "the opaque rejection names the UUID"
+fresh; printf '(repo-deed :repo-uuid %s%s")\n' "$OPQ" "$V7_8" > "$WORK/t/r_chora.deed"
+expect 1 "a v7 in an opaque literal is rejected under --strict" --strict
+fresh; printf '(repo-deed :repo-uuid %s%s")\n' "$OPQ" "$V5_C" > "$WORK/t/r_chora.deed"
+expect 1 "a v5 with a non-RFC variant in an opaque literal is rejected" --strict
+fresh; printf '(repo-deed :repo-uuid %s%s")\n' "$OPQ" "$V5_UP" > "$WORK/t/r_chora.deed"
+expect 1 "an upper-case v5 in an opaque literal is checked as bare and rejected" --strict
+fresh; printf '(repo-deed :repo-uuid #UUID"%s")\n' "$V5" > "$WORK/t/r_chora.deed"
+expect 1 "a v5 after #UUID (wrong case) is checked as bare and rejected" --strict
+fresh; printf '(repo-deed :repo-uuid #uuid "%s")\n' "$V5" > "$WORK/t/r_chora.deed"
+expect 1 "a v5 after #uuid with a space is checked as bare and rejected" --strict
+fresh; printf 'the id is %s\n' "$V5" > "$WORK/t/notes.adoc"
+expect 1 "a bare v5 in prose is still rejected under --strict" --strict
+fresh; printf '%s%s" and bare %s\n' "$OPQ" "$V5" "$V5" > "$WORK/t/mixed.adoc"
+expect 1 "a bare v5 on the same line as an opaque v5 is still rejected" --strict
+
+echo "deed linter rejection fixtures"
+fresh; mkdir -p "$WORK/t/1-formats/deed/tools/fixtures/invalid"
+printf '(repo-deed :repo-uuid %s%s")\n' "$OPQ" "$V4" > "$WORK/t/1-formats/deed/tools/fixtures/invalid/inuuid-v4_chora.deed"
+expect 0 "a v4 in the deed linter's invalid fixtures is ignored" --strict
+fresh; mkdir -p "$WORK/t/1-formats/deed/tools/fixtures/valid"
+printf '(repo-deed :repo-uuid %s%s")\n' "$OPQ" "$V4" > "$WORK/t/1-formats/deed/tools/fixtures/valid/x_chora.deed"
+expect 1 "a v4 in the deed linter's VALID fixtures is still rejected" --strict
+fresh; mkdir -p "$WORK/t/other/fixtures/invalid"; printf '%s\n' "$V4" > "$WORK/t/other/fixtures/invalid/x.json"
+expect 1 "a v4 in some other fixtures/invalid/ directory is still rejected" --strict
+
 echo "PASS=$pass FAIL=$fail"
 [ "$fail" -eq 0 ]
