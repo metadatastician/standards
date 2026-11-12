@@ -100,7 +100,7 @@ A registry is a `praxis-deed` named `<domain>_rules_praxis.deed` with a `(rule-d
 (praxis-deed
   :schema-version "1.0.0"
   :canonical-name "hypatia-rules"
-  :beholding-chora #uuid"47e1501b-26b4-5bbd-8a3f-1afa81c69dbe"
+  :beholding-chora #uuid"0889b37b-defb-831f-973c-e119500db00e"
   (rule-domain :name "hypatia" :owner "hyperpolymath/hypatia")
   (rules
     (rule-def
