@@ -7,7 +7,15 @@ v0.3.3, 2026-11-09
 :toclevels: 3
 :sectnums:
 :icons: font
-:status: DRAFT — for owner review. v0.3.3 records all sixteen owner rulings of 2026-10-20 (<<owner-model>>, <<decisions>>), measures progress against them on 2026-11-04 (<<progress>>), and records the proof review of 2026-11-09 (<<proof-review>>). Measured sections are facts with commands. Sections marked PROPOSED are design, not rulings, and are written to be reviewed by a second, unanchored reader.
+:status: SUPERSEDED by A7 (docs/estate-reconciliation/A7-contractiles-descriptiles-anchor.adoc) for contractiles, descriptiles and the anchor; its rulings Q1 to Q16 stand and A7 cites them by number. Kept as the record. Was: DRAFT — for owner review. v0.3.3 records all sixteen owner rulings of 2026-10-20 (<<owner-model>>, <<decisions>>), measures progress against them on 2026-11-04 (<<progress>>), and records the proof review of 2026-11-09 (<<proof-review>>). Measured sections are facts with commands. Sections marked PROPOSED are design, not rulings, and are written to be reviewed by a second, unanchored reader.
+
+[IMPORTANT]
+====
+*Superseded by A7.* `docs/estate-reconciliation/A7-contractiles-descriptiles-anchor.adoc`
+replaces this plan for contractiles, descriptiles and the anchor. The owner
+rulings Q1 to Q16 below stay in force; A7 cites them by number and rehomes the
+open steps of <<progress>> in its migration order. Read A7 for what to do next.
+====
 
 [.lead]
 The owner found the template with what looked like only an Adjustfile in its
