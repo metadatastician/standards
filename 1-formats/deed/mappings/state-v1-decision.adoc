@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 = Decision spec — `STATE.a2ml` v1 → deed era (family 3)
 Campaign: standards#837 · Frame: link:README.adoc[mappings/README] ·
-Status: **DECISION REQUIRED (owner)** — options + recommendation only;
-no STATE translation is executable until ruled
+Status: **RULED: option B** (owner, 2026-11-10). Extract the state,
+archive the journal (§2 B). Maturity goes to its own clause, as ruled
+2026-10-02 (§3).
 
 Unlike families 1/2/4, STATE v1 is not a clean table-mapping problem:
 the file mixes three epistemically different things, and the owner already
@@ -67,10 +68,10 @@ re-appearing.
   **Ruled 2026-10-02 (owner):** not the status field. Maturity is a clause
   of its own, `(maturity :level … :since …)`, declared in
   link:../vocabulary/maturity.adoc[vocabulary/maturity.adoc]. Option B's
-  translation therefore writes maturity there. Only this row is ruled; the
-  choice between A, B and C stays open.
+  translation therefore writes maturity there.
+  **Ruled 2026-11-10 (owner):** option B. A and C are not taken.
 
-== 4. What is executable NOW without a ruling
+== 4. What was executable before the ruling
 
 * A dry-run extractor that classifies every estate STATE file into
   state/journal/duplicate buckets and emits the proposed per-repo diff
@@ -78,7 +79,7 @@ re-appearing.
   It turns the ruling from an abstract choice into a reviewable artefact:
   the owner can see exactly what B would do to, say, `rsr-template-repo`.
 
-== 5. Acceptance (once ruled)
+== 5. Acceptance (option B, ruled 2026-11-10)
 
 * Zero `STATE.a2ml` v1 files remain in any live `.machine_readable/` tree
   (archive surface excluded, tombstoned).
