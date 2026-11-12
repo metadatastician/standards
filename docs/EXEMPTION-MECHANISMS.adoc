@@ -3,7 +3,7 @@
 // doctrine-coverage: on
 :toc:
 
-Five exemption layers exist in the estate. Each addresses a
+Six exemption layers exist in the estate. Each addresses a
 different question and lives in a different file. Mixing them up is the
 single most common cause of "I added an ignore file but CI still fails"
 confusion.
@@ -26,6 +26,10 @@ Are you looking at a workflow file that is NOT at the repository root
 (a vendored stub, satellite or scaffolding skeleton)?
   -> it never executes and is out of census scope. See "Layer 5" below.
      Do NOT re-pin it; do NOT hide it from the census either.
+
+Is a SonarCloud rule reporting something an estate ruling already
+handles (for example S7637 on a lock-pinned workflow)?
+  -> that is a server-side project setting. See "Layer 6" below.
 
 Are you trying to record that a shortfall EXISTS, is tolerated for now,
 and must never grow?
@@ -413,6 +417,88 @@ exemption is narrow and evidence-backed, not doubly justified.
 * It is *not* a licence to let the copies drift arbitrarily. They are the seed
   of future repositories; a skeleton that seeds a broken repository is a
   defect deferred, not avoided. See the promotion warning above.
+
+== Layer 6: SonarCloud rule exception for lock-pinned workflows
+
+Layers 1 to 5 live in files in a repository. Layer 6 lives on the scanner
+server. It answers the question *"does a SonarCloud rule disagree with an
+estate ruling?"*
+
+=== The ruling
+
+*Owner ruling 2026-11-12. Basis: owner direct answer (selector).* SonarCloud
+rule `githubactions:S7637` ("External GitHub Actions and workflows should be
+pinned to a commit hash") is accepted, not acted on, for repositories whose
+workflows are lock-pinned. A repository is lock-pinned when it carries
+`.github/workflows/actions.lock`.
+
+The scope the owner chose was "Lock-pinned projects only". S7637 stays active
+on every other project, and on every file outside `.github/workflows/`.
+
+*Reason.* Ruling R2 (see `config/README.adoc`) puts the tag in the workflow
+YAML and the commit SHA in `actions.lock`. GitHub enforces the lock when the
+run starts, so the action is pinned to a commit. S7637 reads only the YAML, so
+it reports every lock-pinned `uses:` line as unpinned. Inline SHAs in the YAML
+would satisfy S7637, but they would contradict R2 and break the
+Dependabot plus `gh actions-lock` flow.
+
+=== How it is applied
+
+The `hyperpolymath` SonarCloud organisation runs Automatic Analysis. Automatic
+Analysis does not read `sonar-project.properties`, and the plan does not let
+the organisation assign a custom quality profile to a project. So the
+exception is a per-project server setting:
+
+[source]
+----
+key:          sonar.issue.ignore.multicriteria
+ruleKey:      githubactions:S7637
+resourceKey:  .github/workflows/**
+----
+
+The setting keeps every entry the project already had and adds this one. To
+add it to one project (the session proxy, or a token with project admin,
+supplies the credential):
+
+[source,bash]
+----
+curl -sS -X POST https://sonarcloud.io/api/settings/set \
+  --data-urlencode "component=<sonar-project-key>" \
+  --data-urlencode "key=sonar.issue.ignore.multicriteria" \
+  --data-urlencode 'fieldValues={"resourceKey":".github/workflows/**","ruleKey":"githubactions:S7637"}'
+----
+
+[WARNING]
+====
+`api/settings/set` replaces the whole multicriteria list. Read the current
+list with `api/settings/values` first, and send every existing entry again
+with the new one. The command above is correct only for a project that has no
+entries yet.
+====
+
+=== The population
+
+Applied 2026-11-12 to *286 SonarCloud projects, which map to 270
+repositories*, out of 772 projects in the organisation. The 286 are every
+project whose repository carried `.github/workflows/actions.lock` on that
+date. A read-back after the change showed the entry on 286 of 286. One control
+project with no `actions.lock` was read back too, and it does not carry the
+entry.
+
+=== Known gaps
+
+* *New repositories.* A repository that is minted or adopts `actions.lock`
+  after 2026-11-12 does not get the setting. Nothing adds it automatically.
+  Add it with the command above when the repository gets its lock.
+* *Lock removal.* The setting does not follow the lock. If a repository
+  deletes `actions.lock`, its exception stays, and S7637 stays silent on
+  workflows that are then unpinned. Remove the entry from the project when a
+  lock is removed.
+* *Visibility.* The setting is on the server only. No file in a repository
+  shows it, and no estate gate checks it. This section is the record. A census
+  is a read of `api/settings/values` for each project, compared with the list
+  of repositories that carry `actions.lock`.
+
 
 == Cross-references
 
