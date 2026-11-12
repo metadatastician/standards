@@ -122,5 +122,48 @@ fresh; printf 'name = "P"\nuuid = "%s"\n\n[extras]\nAqua = "%s"\nTest = "%s"\n' 
   "$V8_8" "$V5" "$V5" > "$WORK/t/Project.toml.in"
 expect 0 "registry UUIDs in a Project.toml.in [extras] pass under --strict" --strict
 
+echo "deed opaque literal #uuid\"…\" (deed.abnf v1.3.0, ruling U4)"
+LOWER_V8_B="$(printf '%s' "$V8_B" | tr 'A-F' 'a-f')"
+V5_C="$(uuid 886313e1 3b8a 5372 cb90 0c9aee199e5d)"   # version 5, NON-RFC variant c
+for mode in "" --strict; do
+  fresh; printf '(repo-deed :repo-uuid #uuid"%s")\n' "$V5" > "$WORK/t/a_chora.deed"
+  expect 0 "a v5 inside #uuid\"…\" is accepted ${mode:-(default)}" $mode
+  fresh; printf '(repo-deed :repo-uuid #uuid"%s")\n' "$LOWER_V8_B" > "$WORK/t/a_chora.deed"
+  expect 0 "a v8 inside #uuid\"…\" is accepted ${mode:-(default)}" $mode
+  fresh; printf 'The id is `#uuid"%s"`.\n' "$V5" > "$WORK/t/notes.adoc"
+  expect 0 "a v5 typed as #uuid\"…\" in prose is accepted ${mode:-(default)}" $mode
+  fresh; printf '(repo-deed :repo-uuid #uuid"%s")\n' "$V4" > "$WORK/t/a_chora.deed"
+  expect 1 "a v4 inside #uuid\"…\" is rejected ${mode:-(default)}" $mode
+  names "#uuid literal is not v5 or v8 with variant 10 ($V4)" "the typed rejection names the v4 ${mode:-(default)}"
+  fresh; printf '(repo-deed :repo-uuid #uuid"%s")\n' "$V7_8" > "$WORK/t/a_chora.deed"
+  expect 1 "a v7 inside #uuid\"…\" is rejected, even in default mode ${mode:-(default)}" $mode
+  fresh; printf '(repo-deed :repo-uuid #uuid"%s")\n' "$V5_C" > "$WORK/t/a_chora.deed"
+  expect 1 "a v5 with a non-RFC variant inside #uuid\"…\" is rejected ${mode:-(default)}" $mode
+  fresh; printf '(repo-deed :repo-uuid #uuid"%s")\n' "$V8_B" > "$WORK/t/a_chora.deed"
+  expect 0 "an upper-case #uuid body is not typed but a v8 still passes the plain scan ${mode:-(default)}" $mode
+  fresh; printf '(repo-deed :repo-uuid #uuid"%s")\n' "$(printf '%s' "$V5" | tr 'a-f' 'A-F')" > "$WORK/t/a_chora.deed"
+  expect 1 "an upper-case v5 in #uuid\"…\" is not typed, so it is rejected ${mode:-(default)}" $mode
+  fresh; printf '{"name": "%s"}\n' "$V5" > "$WORK/t/a.json"
+  expect 1 "a bare v5 outside #uuid\"…\" is still rejected ${mode:-(default)}" $mode
+  fresh; printf '(x #uuid"%s" "%s")\n' "$V5" "$V5" > "$WORK/t/a_chora.deed"
+  expect 1 "a bare v5 beside a typed one on the same line is rejected ${mode:-(default)}" $mode
+  fresh; printf '(x #uuid "%s")\n' "$V5" > "$WORK/t/a_chora.deed"
+  expect 1 "#uuid with a space before the string does not type it ${mode:-(default)}" $mode
+done
+
+echo "named exemptions"
+fresh; mkdir -p "$WORK/t/1-formats/deed/tools/fixtures/invalid"
+printf '(repo-deed :repo-uuid #uuid"%s")\n' "$V4" > "$WORK/t/1-formats/deed/tools/fixtures/invalid/inuuid-v4_chora.deed"
+expect 0 "deed_lint's inuuid-* negative controls are exempt" --strict
+fresh; mkdir -p "$WORK/t/1-formats/deed/tools/fixtures/invalid"
+printf '(repo-deed :repo-uuid #uuid"%s")\n' "$V4" > "$WORK/t/1-formats/deed/tools/fixtures/invalid/other_chora.deed"
+expect 1 "another invalid fixture is not exempt" --strict
+fresh; mkdir -p "$WORK/t/docs/estate-reconciliation/examples"
+printf '{"subject":[{"name":"%s"}]}\n' "$V5" > "$WORK/t/docs/estate-reconciliation/examples/a4-statement.json.example"
+expect 0 "the A4 in-toto statement example is exempt" --strict
+fresh; mkdir -p "$WORK/t/docs/estate-reconciliation/examples"
+printf '{"subject":[{"name":"%s"}]}\n' "$V5" > "$WORK/t/docs/estate-reconciliation/examples/a4-envelope.json.example"
+expect 1 "a sibling example file is not exempt" --strict
+
 echo "PASS=$pass FAIL=$fail"
 [ "$fail" -eq 0 ]
