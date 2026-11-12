@@ -1,0 +1,134 @@
+; SPDX-FileCopyrightText: © 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+; SPDX-License-Identifier: MPL-2.0
+; SPDX-License-Identifier: CC-BY-SA-4.0
+;
+; DEED clause profile: (anchor …), v1.0.0 — DRAFT
+; Prose and rationale: docs/estate-reconciliation/A7-contractiles-descriptiles-anchor.adoc
+; (section "The (anchor …) clause"). Ruling: Q11 of 2026-10-20 (ultraplan
+; docs/ULTRAPLAN-DEED-K9-CONTRACTILES-2026-10-19.adoc): the anchor is a clause
+; of the chora deed; there is no ANCHOR.deed and no grammar change.
+;
+; A CLAUSE PROFILE, not a new grammar. Every anchor-clause below is also a
+; `clause` of deed.abnf v1.3.0, so a deed carrying one still passes deed_lint
+; unchanged. This profile narrows that clause. Rules it borrows (string,
+; boolean, symbol, token-sep, DQUOTE, DIGIT, ALPHA, hex-lc, str-char, escape)
+; are deed.abnf's, unchanged. Requires RFC 7405 (%s"..." case-sensitive string literals).
+;
+; What the anchor is: the repo's semantic authority and golden path — what a
+; downstream or satellite repo may extend but not redefine, and how to bring
+; the repo back on track when it drifts. What it is NOT: identity. The repo's
+; one id is the chora deed's :repo-uuid (A1, rulings R4, U1 to U4, V8). The
+; anchor carries no id of its own, no clade (a finding aid, A1 §11) and no
+; lifecycle status (the chora's (status …) clause).
+;
+; Where it appears: at most one (anchor …) clause, at the top level of a
+; repo-deed (<repo>_chora.deed). SEMANTIC: a validator MUST reject an
+; (anchor …) clause nested inside any other clause, or in any other head.
+
+anchor-clause   = "(" %s"anchor" 1*(token-sep anchor-member) [token-sep] ")"
+                ; SEMANTIC (validator-enforced, not expressible in ABNF):
+                ; :schema and :authority each appear EXACTLY once; every other
+                ; member at most once; no member outside this list.
+anchor-member   = schema-field / authority-field / repo-field / purpose-field
+                / metadata-clause / subject-clause / sem-authority-clause
+                / impl-policy-clause / golden-path-clause / satellite-clause
+                / sem-files-clause / ssg-clause / parents-clause
+
+schema-field    = %s":schema" token-sep DQUOTE %s"hyperpolymath.anchor/1" DQUOTE
+                ; The profile version this clause is written against. A reader
+                ; refuses another major (A7 law, after ultraplan Q5).
+
+authority-field = %s":authority" token-sep DQUOTE 1*( str-char / escape ) DQUOTE
+                ; Non-empty; deed.abnf's four escapes are allowed, as in any
+                ; string. The vocabulary is not closed in v1.0.0 (A7 open
+                ; question J7); the template writes "upstream-canonical".
+
+repo-field      = %s":repo" token-sep string
+                ; INFORMATIVE ONLY, kept so the template's clause stays valid.
+                ; It never identifies the repo and no check resolves it; the
+                ; chora's :repo-uuid does that.
+
+purpose-field   = %s":purpose" token-sep str-list1
+
+metadata-clause = "(" %s"metadata" 1*(token-sep metadata-member) [token-sep] ")"
+metadata-member = ( %s":version" token-sep string )
+                  ; SEMANTIC: three-segment MAJOR.MINOR.PATCH. The version of
+                  ; this anchor's content (the legacy `version`), not of the
+                  ; format: the format major is :schema's "/1" (ultraplan Q5).
+                / ( %s":last-updated" token-sep string )
+                  ; SEMANTIC: a real calendar date YYYY-MM-DD (2026-02-31 is
+                  ; refused), or a mint placeholder {{NAME}} in the template's
+                  ; own deed only (deed_lint --anchor --template). repo-init
+                  ; fills it; in any other deed a placeholder is an error.
+                ; SEMANTIC: each member at most once.
+
+subject-clause  = "(" %s"identity" 1*(token-sep subject-member) [token-sep] ")"
+                ; Named (identity …) for compatibility with the template. Inside
+                ; (anchor …) it describes the SUBJECT of the authority (what the
+                ; project is), not the repo's identity. A7 J8 proposes renaming
+                ; it (subject …) in v2.0.0.
+subject-member  = ( %s":project" / %s":kind" / %s":one-sentence" / %s":domain" )
+                  token-sep string
+                ; SEMANTIC: each member at most once.
+
+sem-authority-clause = "(" %s"semantic-authority"
+                       1*(token-sep sem-authority-member) [token-sep] ")"
+sem-authority-member = ( %s":policy" token-sep string )
+                     / ( %s":owns" token-sep str-list1 )
+
+impl-policy-clause = "(" %s"implementation-policy"
+                     1*(token-sep impl-policy-member) [token-sep] ")"
+impl-policy-member = ( %s":allowed" / %s":forbidden" ) token-sep str-list
+                ; Informative. The estate language policy is a contractile
+                ; (Mustfile), never restated here as a rule (DESCRIPTILE-SPEC
+                ; §contamination): a runner does not read these lists.
+
+golden-path-clause = "(" %s"golden-path" 1*(token-sep golden-path-member)
+                     [token-sep] ")"
+golden-path-member = ( %s":smoke-test-command" / %s":success-criteria" )
+                     token-sep str-list1
+
+satellite-clause = "(" %s"satellite-policy" 1*(token-sep satellite-member)
+                   [token-sep] ")"
+satellite-member = ( %s":must-pin-upstream" / %s":must-declare-authority"
+                   / %s":must-have-anchor" / %s":must-have-golden-path" )
+                   token-sep boolean
+
+sem-files-clause = "(" %s"semantic-authority-files"
+                   1*(token-sep keyword token-sep string) [token-sep] ")"
+                ; Open keys; each value is a repo-relative path. SEMANTIC: no
+                ; key twice; each value non-empty, with no leading "/", no
+                ; drive letter, no "\" and no empty, "." or ".." segment, so
+                ; no reader resolves an authority file outside the repo.
+
+ssg-clause      = "(" %s"ssg" 1*(token-sep ssg-member) [token-sep] ")"
+ssg-member      = ( %s":engine" token-sep string )
+                / ( %s":output-dir" token-sep string )
+                / ( %s":boj-trigger" token-sep boolean )
+                / ( %s":cartridge" token-sep string )
+                ; The site-build configuration that standards' legacy
+                ; ANCHOR.a2ml carries (A7 migration table).
+
+parents-clause  = "(" %s"parents" 1*(token-sep parent-clause) [token-sep] ")"
+parent-clause   = "(" %s"parent" 1*(token-sep parent-member) [token-sep] ")"
+parent-member   = ( %s":uuid" token-sep chora-uuid8 )
+                / ( %s":relation" token-sep symbol )
+                ; A parent is named by its chora id, the opaque #uuid literal
+                ; of A1 (never a reverse-DNS name, a path or a clade). SEMANTIC:
+                ; :uuid exactly once and :relation at most once per parent; no
+                ; uuid twice across (parents …); never the deed's own :repo-uuid,
+                ; which a legacy #u8 or #u5 :repo-uuid is compared by the id it
+                ; names (A1 rule V8).
+
+chora-uuid8     = %s"#uuid" DQUOTE 8hex-lc "-" 4hex-lc "-" "8" 3hex-lc "-"
+                  lc-variant 3hex-lc "-" 12hex-lc DQUOTE
+                ; deed.abnf's uuid narrowed to version 8: A1 rule V8 puts the
+                ; profile C UUIDv8 in deeds; the UUIDv5 stays in the registry.
+lc-variant      = "8" / "9" / %x61 / %x62
+                ; RFC 9562 variant 10, lowercase only. deed.abnf's uuid-variant
+                ; writes "a" / "b", which ABNF matches case-insensitively; the
+                ; code points keep this profile as strict as deed_lint.
+
+str-list        = "(" [token-sep] [string *(token-sep string)] [token-sep] ")"
+str-list1       = "(" [token-sep] string *(token-sep string) [token-sep] ")"
+                ; str-list1 is non-empty.

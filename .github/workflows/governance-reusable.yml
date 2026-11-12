@@ -196,6 +196,65 @@ jobs:
           chmod +x .standards-uuid/scripts/check-uuid-v8.sh
           .standards-uuid/scripts/check-uuid-v8.sh --strict .
 
+  # A2ML is retired (D99, D269c, D312, D313). This job fails a pull request
+  # that ADDS an A2ML file; files already at the base are never judged, so a
+  # caller with legacy A2ML needs no baseline. A move from one A2ML path to
+  # another passes; renaming any other file to *.a2ml fails (owner ruling of
+  # 2026-11-12, standards A7 Part 1a). It runs here so that every caller of
+  # this reusable gets it when its pin moves, with no per-repo workflow.
+  no-new-a2ml:
+    name: No new A2ML
+    runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    # The check compares the PR base with the PR head. On push there is no
+    # base to compare to.
+    if: ${{ github.event_name == 'pull_request' }}
+    steps:
+      - name: Checkout caller repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Full history: the base commit must be resolvable.
+          fetch-depth: 0
+          persist-credentials: false
+
+      # `job.workflow_sha` names the standards commit for this job's helper
+      # checkouts and is documented as unavailable on GitHub Enterprise Server,
+      # where it resolves EMPTY — and `ref: ''` is not a failure, it is a silent
+      # checkout of standards' DEFAULT BRANCH. Assert it, so that failure names
+      # itself instead of quietly changing which tooling judged the caller.
+      - name: Assert this reusable's own commit resolved
+        env:
+          SELF_WORKFLOW_SHA: ${{ job.workflow_sha }}
+        run: |
+          if ! printf '%s' "$SELF_WORKFLOW_SHA" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "::error::job.workflow_sha resolved to '${SELF_WORKFLOW_SHA:-<empty>}', not a 40-hex commit, so the standards helper checkout below would follow the default branch. The job workflow-identity properties are unavailable on GitHub Enterprise Server."
+            exit 1
+          fi
+          echo "Standards helper source: $SELF_WORKFLOW_SHA"
+      - name: Checkout the no-new-A2ML gate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: metadatastician/standards
+          ref: ${{ job.workflow_sha }}
+          path: .standards-no-new-a2ml
+          sparse-checkout: scripts/check-no-new-a2ml.sh
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Reject added A2ML files
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          # Stage the script outside the scanned tree, so the helper checkout
+          # is never read as part of the caller's change.
+          cp .standards-no-new-a2ml/scripts/check-no-new-a2ml.sh "$RUNNER_TEMP/"
+          rm -rf .standards-no-new-a2ml
+          bash "$RUNNER_TEMP/check-no-new-a2ml.sh" "$BASE_SHA" "$HEAD_SHA" .
+
   allowlist-preflight:
     name: Allowlist Preflight
     runs-on: ${{ inputs.runs-on }}

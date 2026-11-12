@@ -1,0 +1,14 @@
+;; SPDX-License-Identifier: CC-BY-SA-4.0
+(repo-deed :schema-version "1.0.0" :canonical-name "x" :repo-uuid #uuid"00000000-0000-8000-8000-0000000000a7" :beholding-chora #uuid"00000000-0000-8000-8000-00000000e57a"
+  (identity :primary-forge github :owner "o")
+  ; The shape a translated legacy anchor takes (A7 migration table): no id,
+  ; no clade and no status of its own; the parent named by its chora id.
+  (anchor
+    :schema "hyperpolymath.anchor/1"
+    :authority "upstream-canonical"
+    (metadata :version "1.0.0" :last-updated "2026-11-12")
+    (ssg :engine "casket" :output-dir "public" :boj-trigger #t :cartridge "ssg-mcp")
+    (parents (parent :uuid #uuid"00000000-0000-8000-8000-0000000000b1" :relation hub) (parent :uuid #uuid"00000000-0000-8000-8000-0000000000b2"))
+    (implementation-policy :allowed () :forbidden ())
+    (semantic-authority-files :language-spec "SPEC.adoc")
+    (golden-path :smoke-test-command ("just test") :success-criteria ("Core tests pass"))))

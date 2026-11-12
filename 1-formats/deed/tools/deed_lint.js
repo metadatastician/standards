@@ -29,12 +29,17 @@ Usage: deed_lint.js FILE...     exit 0 iff all files conform
        deed_lint.js --self-test
        deed_lint.js --egress FILE...           (egress …) clause profile (ADR-009)
        deed_lint.js --egress-fixtures DIR      DIR/valid pass the profile, DIR/invalid fail it
+       deed_lint.js --anchor [--template] FILE...
+                                              (anchor …) clause profile (DRAFT, A7; ruling Q11);
+                                              --template: the template's own deed, which keeps {{TOKEN}}s
+       deed_lint.js --anchor-fixtures DIR      DIR/valid pass the profile, DIR/invalid fail it (both required)
        deed_lint.js --ast-json FILE           emit the validated AST as JSON (integer lexemes stay strings)
        deed_lint.js --mustfile-json FILE      validate the Mustfile check profile and emit records
        deed_lint.js --proof-receipt-json FILE validate a proof receipt (PROOF-POLICY §8.5), derive
                                               each claim's PWG, refuse a recorded grade that differs
 `;
 
+import { createHash } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 
@@ -271,8 +276,9 @@ function lexHashForm(lx) {
     const start = lx.i;
     lexString(lx);
     // uuid-hex has no escapes: check the raw body between the quotes.
-    checkOpaqueUuid(lx.t.slice(start + 1, lx.i - 1), line);
-    return ["uuid", null];
+    const body = lx.t.slice(start + 1, lx.i - 1);
+    checkOpaqueUuid(body, line);
+    return ["uuid", body];
   }
   const two = lx.t.slice(lx.i, lx.i + 3);
   if (two.startsWith("#u5")) {
@@ -280,8 +286,8 @@ function lexHashForm(lx) {
     if (lx.peek() !== '"') {
       throw new LintError('uuid5 must be followed immediately by a string: #u5"name"', lx.line());
     }
-    lexString(lx);
-    return ["uuid5", null];
+    const name = lexString(lx)[1];
+    return ["uuid5", name]; // the name is kept: a clause profile may derive the id it names
   }
   if (two.startsWith("#u8")) {
     const line = lx.line();
@@ -289,8 +295,10 @@ function lexHashForm(lx) {
     if (lx.peek() !== '"') {
       throw new LintError('uuid8 must be followed immediately by a string: #u8"domain:name"', line);
     }
-    checkUuid8Body(lexString(lx)[1], line);
-    return ["uuid8", null];
+    const body = lexString(lx)[1];
+    checkUuid8Body(body, line);
+    // The preimage is kept: a clause profile derives its id to compare, e.g. (anchor (parents …)).
+    return ["uuid8", body];
   }
   if (two.slice(0, 2) === "#t" || two.slice(0, 2) === "#f") {
     // A token-sep or a paren ends the boolean. A comment is a token-sep
@@ -1038,6 +1046,283 @@ function egressFiles(files) {
   return bad ? 1 : 0;
 }
 
+// ─── (anchor …) clause profile ─────────────────────────────────────────
+// spec/abnf/clauses/anchor.abnf v1.0.0 (DRAFT; prose: docs/estate-
+// reconciliation/A7-contractiles-descriptiles-anchor.adoc; ruling Q11). Checks
+// only what the profile adds to the grammar; a deed with no (anchor …) clause
+// passes. In this file for the same reason as the egress profile.
+
+/** A profile violation, named by field (the AST carries no positions). */
+export class AnchorError extends LintError {
+  constructor(msg) {
+    super(msg, null);
+    this.name = "AnchorError";
+  }
+
+  toString() {
+    return this.msg;
+  }
+}
+
+export const ANCHOR_SCHEMA = "hyperpolymath.anchor/1";
+const SEMVER = /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/;
+const DATE = /^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/;
+// The template's own deed keeps repo-init's tokens; a minted deed has none.
+const MINT_TOKEN = /^\{\{[A-Z][A-Z0-9_]*\}\}$/;
+const MINT_TOKEN_ANY = /\{\{[A-Z][A-Z0-9_]*\}\}/;
+
+/** A YYYY-MM-DD string naming a day that exists (2026-02-31 does not). */
+function isCalendarDate(s) {
+  if (!DATE.test(s)) return false;
+  const [y, m, d] = s.split("-").map(Number);
+  const t = new Date(0);
+  t.setUTCFullYear(y, m - 1, d); // not Date.UTC: it maps years 0 to 99 onto 1900 to 1999
+  return t.getUTCFullYear() === y && t.getUTCMonth() === m - 1 && t.getUTCDate() === d;
+}
+
+/** A path inside the repo: relative, POSIX, no empty, "." or ".." segment. */
+function isRepoRelative(p) {
+  if (p === "" || p.startsWith("/") || p.includes("\\") || /^[A-Za-z]:/.test(p)) return false;
+  return p.split("/").every((seg) => seg !== "" && seg !== "." && seg !== "..");
+}
+
+/** ADR-008 profile C: the UUIDv8 a `#u8"domain:name"` literal names (scripts/uuid-v8.js). */
+export function profileCOfBody(body) {
+  const b = createHash("sha256").update(body, "utf8").digest().subarray(0, 16);
+  b[6] = (b[6] & 0x0f) | 0x80; // version 8
+  b[8] = (b[8] & 0x3f) | 0x80; // variant 10
+  const h = Buffer.from(b).toString("hex");
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
+
+// Top-level members: field name -> kind, and the clauses allowed.
+const ANCHOR_FIELDS = { schema: "string", authority: "string", repo: "string", purpose: "str-list1" };
+const ANCHOR_CLAUSES = new Set([
+  "metadata", "identity", "semantic-authority", "implementation-policy", "golden-path",
+  "satellite-policy", "semantic-authority-files", "ssg", "parents",
+]);
+// Fixed-member sub-clauses: clause -> {field: kind}. Every member at most once.
+const ANCHOR_SUB = {
+  metadata: { version: "semver", "last-updated": "date" },
+  identity: { project: "string", kind: "string", "one-sentence": "string", domain: "string" },
+  "semantic-authority": { policy: "string", owns: "str-list1" },
+  "implementation-policy": { allowed: "str-list", forbidden: "str-list" },
+  "golden-path": { "smoke-test-command": "str-list1", "success-criteria": "str-list1" },
+  "satellite-policy": {
+    "must-pin-upstream": "boolean", "must-declare-authority": "boolean",
+    "must-have-anchor": "boolean", "must-have-golden-path": "boolean",
+  },
+  ssg: { engine: "string", "output-dir": "string", "boj-trigger": "boolean", cartridge: "string" },
+};
+
+/** Check value v of field `where` against kind; throws AnchorError. */
+function anchorValue(v, kind, where, opts = {}) {
+  const strings = () => {
+    if (v[0] !== "list") throw new AnchorError(`${where} must be a list of strings`);
+    for (const x of v[1]) if (x[0] !== "string") throw new AnchorError(`${where} items must be strings, got ${x[0]}`);
+    return v[1];
+  };
+  switch (kind) {
+    case "string":
+      if (v[0] !== "string") throw new AnchorError(`${where} must be a string, got ${v[0]}`);
+      return;
+    case "boolean":
+      if (v[0] !== "boolean") throw new AnchorError(`${where} must be #t or #f, got ${v[0]}`);
+      return;
+    case "str-list":
+      strings();
+      return;
+    case "str-list1":
+      if (strings().length === 0) throw new AnchorError(`${where} must not be empty`);
+      return;
+    case "semver":
+      anchorValue(v, "string", where);
+      if (!SEMVER.test(v[1])) throw new AnchorError(`${where} ${JSON.stringify(v[1])} is not MAJOR.MINOR.PATCH`);
+      return;
+    case "date":
+      anchorValue(v, "string", where);
+      if (MINT_TOKEN.test(v[1])) {
+        if (!opts.template) {
+          throw new AnchorError(`${where} ${JSON.stringify(v[1])} is an unfilled repo-init token; only the template's own deed (--template) keeps one`);
+        }
+        return;
+      }
+      if (!isCalendarDate(v[1])) throw new AnchorError(`${where} ${JSON.stringify(v[1])} is not a real YYYY-MM-DD date`);
+      return;
+    case "repo-path":
+      anchorValue(v, "string", where);
+      if (!isRepoRelative(v[1])) {
+        throw new AnchorError(`${where} ${JSON.stringify(v[1])} is not a repo-relative path (non-empty, no leading "/", no "\\", no "." or ".." segment)`);
+      }
+      return;
+    default:
+      throw new Error(`anchor profile: unknown kind ${kind}`);
+  }
+}
+
+/** Fields only, each known and at most once; returns Map name -> value. */
+function anchorFields(items, allowed, where, opts = {}) {
+  const seen = new Map();
+  for (const it of items) {
+    if (it[0] !== "field") throw new AnchorError(`${where} takes fields only, not a nested (${it[1]} …)`);
+    if (allowed && !Object.hasOwn(allowed, it[1])) throw new AnchorError(`${where} has no field :${it[1]}`);
+    if (seen.has(it[1])) throw new AnchorError(`${where} repeats :${it[1]}`);
+    seen.set(it[1], it[2]);
+    if (allowed) anchorValue(it[2], allowed[it[1]], `${where} :${it[1]}`, opts);
+  }
+  if (seen.size === 0) throw new AnchorError(`${where} is empty`);
+  return seen;
+}
+
+/**
+ * Check the (anchor …) clause of deed source text. Returns a summary
+ * {authority, members, parents} (null when the deed has no anchor clause);
+ * throws LintError on a grammar or profile violation. opts.template marks the
+ * template's own deed, the one deed that may keep repo-init's {{TOKEN}}s.
+ */
+export function checkAnchor(text, filename = null, opts = {}) {
+  const [head, items] = validate(text, filename);
+  const isAnchor = (it) => it[0] === "clause" && it[1] === "anchor";
+  const nested = (list) => list.some((it) => it[0] === "clause" && it[2].some((c) => isAnchor(c) || nested([c])));
+  if (nested(items)) {
+    throw new AnchorError("(anchor …) may appear only at the top level of a repo deed, not inside another clause");
+  }
+  const clauses = items.filter(isAnchor);
+  if (clauses.length === 0) return null;
+  if (head !== "repo-deed") throw new AnchorError(`(anchor …) belongs in a repo-deed, not a ${head}`);
+  if (clauses.length > 1) throw new AnchorError("a repo deed carries at most one (anchor …) clause");
+
+  // An unfilled repo-init placeholder anywhere in the clause marks an unminted
+  // deed. Only the template's own deed (--template) keeps them.
+  if (!opts.template) {
+    const strs = (v) => (v[0] === "string" ? [v[1]] : v[0] === "list" ? v[1].flatMap(strs) : []);
+    const walk = (list) => {
+      for (const it of list) {
+        if (it[0] === "clause") walk(it[2]);
+        else for (const str of strs(it[2])) {
+          if (MINT_TOKEN_ANY.test(str)) {
+            throw new AnchorError(`(anchor …) :${it[1]} ${JSON.stringify(str)} holds an unfilled repo-init token; only the template's own deed (--template) keeps one`);
+          }
+        }
+      }
+    };
+    walk(clauses[0][2]);
+  }
+
+  // A1: a deed carries one id. With two, a parent could match the one not compared.
+  const owns = items.filter((it) => it[0] === "field" && it[1] === "repo-uuid");
+  if (owns.length > 1) throw new AnchorError(`a repo deed carries one :repo-uuid; this one has ${owns.length}`);
+  const own = owns[0];
+  // The deed's own id as an opaque body, so a parent can be compared with it.
+  // A legacy literal names the same id: #u8"domain:name" is its profile C id,
+  // and #u5"github.com/o/x" is the birth path whose deed id is the profile C id
+  // of "gv-clade-index:github.com/o/x" (A1 rule V8).
+  const ownUuid = !own ? null
+    : own[2][0] === "uuid" ? own[2][1]
+    : own[2][0] === "uuid8" ? profileCOfBody(own[2][1])
+    : own[2][0] === "uuid5" ? profileCOfBody(`gv-clade-index:${own[2][1]}`)
+    : null;
+  const seen = new Set();
+  const parents = [];
+  for (const it of clauses[0][2]) {
+    const key = (it[0] === "field" ? ":" : "(") + it[1];
+    if (seen.has(key)) throw new AnchorError(`(anchor …) repeats ${key}${it[0] === "clause" ? " …)" : ""}`);
+    seen.add(key);
+    if (it[0] === "field") {
+      if (!Object.hasOwn(ANCHOR_FIELDS, it[1])) throw new AnchorError(`(anchor …) has no field :${it[1]}`);
+      anchorValue(it[2], ANCHOR_FIELDS[it[1]], `(anchor …) :${it[1]}`);
+      continue;
+    }
+    if (!ANCHOR_CLAUSES.has(it[1])) throw new AnchorError(`(anchor …) has no clause (${it[1]} …)`);
+    const where = `(anchor (${it[1]} …))`;
+    if (Object.hasOwn(ANCHOR_SUB, it[1])) {
+      anchorFields(it[2], ANCHOR_SUB[it[1]], where, opts);
+    } else if (it[1] === "semantic-authority-files") {
+      for (const [k, v] of anchorFields(it[2], null, where)) anchorValue(v, "repo-path", `${where} :${k}`);
+    } else {
+      // (parents (parent :uuid #uuid"…" [:relation sym]) …)
+      if (it[2].length === 0) throw new AnchorError(`${where} is empty`);
+      for (const p of it[2]) {
+        if (p[0] !== "clause" || p[1] !== "parent") throw new AnchorError(`${where} takes (parent …) clauses only`);
+        const f = anchorFields(p[2], null, `${where} (parent …)`);
+        for (const k of f.keys()) if (k !== "uuid" && k !== "relation") throw new AnchorError(`(parent …) has no field :${k}`);
+        const u = f.get("uuid");
+        if (!u) throw new AnchorError("(parent …) is missing :uuid");
+        if (u[0] !== "uuid") {
+          throw new AnchorError(`(parent …) :uuid must be an opaque #uuid"…" chora id, got ${u[0]}`);
+        }
+        // A1 rule V8: a chora id in a deed is version 8; version 5 stays in the registry.
+        if (u[1][14] !== "8") throw new AnchorError(`(parent …) :uuid ${u[1]} is version ${u[1][14]}, not a version 8 chora id (A1 rule V8)`);
+        if (f.has("relation") && f.get("relation")[0] !== "symbol") throw new AnchorError("(parent …) :relation must be a symbol");
+        if (parents.includes(u[1])) throw new AnchorError(`(parent …) names ${u[1]} twice`);
+        if (u[1] === ownUuid) throw new AnchorError("(parent …) names the deed's own :repo-uuid");
+        parents.push(u[1]);
+      }
+    }
+  }
+  for (const k of [":schema", ":authority"]) if (!seen.has(k)) throw new AnchorError(`(anchor …) is missing ${k}`);
+  const field = (n) => clauses[0][2].find((it) => it[0] === "field" && it[1] === n)[2][1];
+  if (field("schema") !== ANCHOR_SCHEMA) {
+    throw new AnchorError(`(anchor …) :schema must be ${JSON.stringify(ANCHOR_SCHEMA)}, got ${JSON.stringify(field("schema"))}`);
+  }
+  if (field("authority") === "") throw new AnchorError("(anchor …) :authority must not be empty");
+  return { authority: field("authority"), members: [...seen].sort(), parents };
+}
+
+/**
+ * valid/ must pass a clause profile; invalid/ must fail it. Returns exit code.
+ * Both halves must exist and hold fixtures: a missing or empty half is a
+ * setup error (2), never a pass. A fixture named template-* is the template's
+ * own deed and is checked with {template: true}.
+ */
+function profileFixtures(d, check) {
+  let bad = 0;
+  for (const [sub, expect] of [["valid", true], ["invalid", false]]) {
+    let names;
+    try {
+      names = readdirSync(join(d, sub)).filter((n) => n.endsWith(".deed")).sort();
+    } catch (e) {
+      console.log(`ERROR ${join(d, sub)}: cannot read the fixture directory (${e.code || e.message})`);
+      return 2;
+    }
+    if (names.length === 0) {
+      console.log(`ERROR ${join(d, sub)}: no .deed fixtures; a corpus needs both valid/ and invalid/ cases`);
+      return 2;
+    }
+    for (const n of names) {
+      const f = join(d, sub, n);
+      let got = true;
+      let err = "";
+      try {
+        check(readFileSync(f, "utf8"), f, { template: n.startsWith("template-") });
+      } catch (e) {
+        if (!(e instanceof LintError)) throw e;
+        got = false;
+        err = e.message;
+      }
+      if (got !== expect) bad += 1;
+      console.log(`${got === expect ? "PASS " : "FAIL "}${f}` + (got === expect ? "" : `  (unexpected: ${err || "valid"})`));
+    }
+  }
+  return bad ? 1 : 0;
+}
+
+/** --anchor FILE...: profile-check each file; returns exit code. */
+function anchorFiles(files, opts = {}) {
+  let bad = 0;
+  for (const f of files) {
+    try {
+      const a = checkAnchor(readFileSync(f, "utf8"), f, opts);
+      console.log(`OK   ${f} (${a === null ? "no anchor clause" : `anchor, authority ${JSON.stringify(a.authority)}`})`);
+    } catch (e) {
+      if (!(e instanceof LintError)) throw e;
+      bad += 1;
+      console.log(`FAIL ${f}: ${e instanceof AnchorError ? e.message : e.toString()}`);
+    }
+  }
+  return bad ? 1 : 0;
+}
+
 function tryValidate(src, filename) {
   try {
     validate(src, filename);
@@ -1145,6 +1430,24 @@ function main(argv) {
     const rc = egressFixtures(d);
     console.log("EGRESS FIXTURES " + (rc === 0 ? "OK" : "FAILED"));
     return rc;
+  }
+  if (argv.includes("--anchor-fixtures")) {
+    const d = argv[argv.indexOf("--anchor-fixtures") + 1];
+    if (d === undefined) {
+      console.log("--anchor-fixtures requires a DIR argument");
+      return 2;
+    }
+    const rc = profileFixtures(d, checkAnchor);
+    console.log("ANCHOR FIXTURES " + (rc === 0 ? "OK" : rc === 2 ? "NOT CHECKED" : "FAILED"));
+    return rc;
+  }
+  if (argv.includes("--anchor")) {
+    const files = argv.filter((a) => !a.startsWith("-"));
+    if (files.length === 0) {
+      console.log(DOC);
+      return 2;
+    }
+    return anchorFiles(files, { template: argv.includes("--template") });
   }
   if (argv.includes("--egress")) {
     const files = argv.filter((a) => !a.startsWith("-"));

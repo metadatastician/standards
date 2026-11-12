@@ -76,6 +76,12 @@ jobs:
       - name: fixture corpus (valid must pass, invalid must fail)
         if: github.repository_id == 1116521501
         run: bun "$T/deed_lint.js" --fixtures "$T/fixtures"
+      # The (anchor …) clause profile is a DRAFT (A7), so it gates only its own
+      # fixtures here. It joins the caller-wide lint below once the owner
+      # ratifies the profile.
+      - name: anchor clause profile fixtures (DRAFT, A7)
+        if: github.repository_id == 1116521501
+        run: bun "$T/deed_lint.js" --anchor-fixtures "$T/fixtures/anchor"
       - name: grammar-vs-gate differential (deed.abnf through apg-js, against deed_lint.js)
         # Mutates every committed deed and valid fixture with a seeded generator
         # and fails when the gate and the normative grammar disagree, other than

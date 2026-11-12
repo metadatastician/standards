@@ -1,0 +1,51 @@
+;; SPDX-License-Identifier: CC-BY-SA-4.0
+(repo-deed :schema-version "1.0.0" :canonical-name "x" :repo-uuid #uuid"00000000-0000-8000-8000-0000000000a7" :beholding-chora #uuid"00000000-0000-8000-8000-00000000e57a"
+  (identity :primary-forge github :owner "o")
+  ; The (anchor …) clause of rsr-template-repo_chora.deed at a55669e, verbatim,
+  ; mint tokens included: the template's own deed must pass the profile.
+  (anchor
+    :schema "hyperpolymath.anchor/1"
+    :repo "{{OWNER}}/{{REPO}}"
+    :authority "upstream-canonical"
+    :purpose (
+      "Define canonical semantics and policy boundaries for this repository."
+      "Declare what downstream/satellite repos can extend but not redefine."
+      "Provide a stable golden path and invariant contract for release readiness."
+      )
+    (metadata
+      :version "1.0.0"
+      :last-updated "{{CURRENT_DATE}}")
+    (identity
+      :project "{{PROJECT_NAME}}"
+      ; language | library | service | tool
+      :kind "{{PROJECT_KIND}}"
+      :one-sentence "{{PROJECT_PURPOSE}}"
+      :domain "{{PROJECT_DOMAIN}}")
+    (semantic-authority
+      :policy "canonical"
+      :owns (
+        "Project semantics and specification"
+        "Invariant definitions and contractiles"
+        "Reference implementation behavior"
+        ))
+    (implementation-policy
+      :allowed ("Rust" "Idris2" "Zig" "Scheme" "Shell" "Just" "AsciiDoc" "Markdown")
+      :forbidden ("Node.js" "npm"))
+    (golden-path
+      :smoke-test-command ("just test" "just quality")
+      :success-criteria (
+        "Core tests pass"
+        "Quality gates pass"
+        "No unresolved critical security findings"
+        ))
+    (satellite-policy
+      :must-pin-upstream #t
+      :must-declare-authority #t
+      :must-have-anchor #t
+      :must-have-golden-path #t)
+    (semantic-authority-files
+      :language-spec "SPECIFICATION.md"
+      :formal-proofs "docs/proofs/PROOFS.adoc"
+      :type-theory "docs/theory/THEORY.adoc"
+      :algorithms "docs/theory/ALGORITHMS.adoc"))
+)
