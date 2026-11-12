@@ -271,8 +271,9 @@ function lexHashForm(lx) {
     const start = lx.i;
     lexString(lx);
     // uuid-hex has no escapes: check the raw body between the quotes.
-    checkOpaqueUuid(lx.t.slice(start + 1, lx.i - 1), line);
-    return ["uuid", null];
+    const body = lx.t.slice(start + 1, lx.i - 1);
+    checkOpaqueUuid(body, line);
+    return ["uuid", body];
   }
   const two = lx.t.slice(lx.i, lx.i + 3);
   if (two.startsWith("#u5")) {
