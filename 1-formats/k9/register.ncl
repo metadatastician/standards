@@ -11,7 +11,7 @@ let OS = [| 'Linux, 'Minix, 'MacOS |] in
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- SPDX-License-Identifier: MPL-2.0 -->
 <mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
-  <mime-type type="application/vnd.k9">
+  <mime-type type="application/vnd.metadatastician.k9">
     <comment>K9 Self-Validating Component</comment>
     <comment xml:lang="en">K9 Self-Validating Component (Alpha Breed)</comment>
     <magic priority="50">
@@ -50,7 +50,7 @@ let OS = [| 'Linux, 'Minix, 'MacOS |] in
           <string>k9.ncl</string>
         </array>
         <key>public.mime-type</key>
-        <string>application/vnd.k9</string>
+        <string>application/vnd.metadatastician.k9</string>
       </dict>
     </dict>
   </array>
@@ -96,7 +96,7 @@ User-only:
 
 Verification:
   file --mime-type example.k9
-  # Should output: application/vnd.k9
+  # Should output: application/vnd.metadatastician.k9
 
 Manual registration:
   Linux: Copy k9.xml to /usr/share/mime/packages/ then run update-mime-database

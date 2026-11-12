@@ -28,7 +28,7 @@ let Architecture = [| 'Linux, 'Minix, 'MacOS, 'Android, 'PC, 'ASIC, 'Unknown |] 
   Metadata = {
     name | String,
     version | String | default = "1.0.0",
-    breed | String | default = "application/vnd.k9",
+    breed | String | default = "application/vnd.metadatastician.k9",
     magic_number | String | default = "K9!",
     description | String | optional,
   },

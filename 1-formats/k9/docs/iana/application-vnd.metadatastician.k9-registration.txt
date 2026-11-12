@@ -1,24 +1,42 @@
-IANA Media Type Registration: application/vnd.k9
-=========================================================
+IANA Media Type Registration: application/vnd.metadatastician.k9
+================================================================
 SPDX-License-Identifier: CC-BY-SA-4.0
 
-This file is the canonical registration document for application/vnd.k9.
-It lives beside the specification it registers; there is no second copy.
+This file is the canonical registration document for
+application/vnd.metadatastician.k9.  It lives beside the specification
+it registers; there is no second copy.
 
 NOTE: Earlier drafts used "application/vnd.k9+nickel" but the +nickel
 structured syntax suffix is not registered with IANA.  Per RFC 6838
 Section 4.2.8, unregistered suffixes SHOULD NOT be used.  This
-registration uses "application/vnd.k9" as the base type.
+registration uses a base type with no suffix, now
+"application/vnd.metadatastician.k9" (owner ruling I1, 2026-11-12).
 
-STATUS: NOT FILED; ready to file together with its companion
-application/vnd.k9.coordination (see "Interoperability considerations").
+FILING ORDER (owner ruling, 2026-11-12).  The three registrations are
+filed one at a time, in this order:
 
-Prepared: 2026-11-11 (Revision 5)
-Prepared By: Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+  1. application/vnd.metadatastician.k9.coordination
+  2. application/vnd.metadatastician.k9
+  3. application/vnd.metadatastician.deed
+
+Precondition: none is filed while its specification is marked DRAFT,
+and none is filed before the one ahead of it.  The deed registration is
+also filed only after draft A2 (deviations) is ratified.
+
+This registration is number 2.  Its specification, the K9 Component
+Contract Specification v1.0.0, is marked Normative.  It is filed after
+application/vnd.metadatastician.k9.coordination.
+
+STATUS: NOT FILED.
+
+Prepared: 2026-11-12 (Revision 6)
+Prepared By: Jonathan D.A. Jewell <jonathan@metadatastician.art>
 
 Every link below is pinned to commit e2a03dc913e1029c6ef90ad0a9432838d197ee49
 of metadatastician/standards, so that it keeps resolving to the text that
-this registration describes.
+this registration describes.  That commit predates the 2026-11-12
+rulings (subtype names, line limit), so before filing, every link is
+re-pinned to a commit that carries them.
 
 ---
 
@@ -26,7 +44,7 @@ Type name:
   application
 
 Subtype name:
-  vnd.k9
+  vnd.metadatastician.k9
 
 Required parameters:
   N/A
@@ -56,10 +74,10 @@ Encoding considerations:
   the magic line would make it four octets and byte-sniffers would
   then disagree with validators.
 
-  The grammar of the body is Nickel's, and Nickel sets no limit on
-  line length.  A document with a line longer than 998 octets is
-  conforming, and for such a document the 8bit label does not hold
-  (see the IANA form notes on encoding).
+  No line is longer than 998 octets, not counting the LF that ends it
+  (rule K9-E006).  Nickel itself sets no limit; this is a K9 envelope
+  rule, so a file with a longer line does not conform and the 8bit
+  label is exact.
 
   After the magic line and an SPDX comment header, the body is a
   single Nickel term.  The magic line itself is NOT Nickel: a reader
@@ -104,10 +122,10 @@ Security considerations:
   and no container format, and no binary payload block.
 
   Misclassification is a security risk.  The magic "K9!" is shared with
-  application/vnd.k9.coordination.  A reader that applies the component
-  contract to a coordination file, or the reverse, reports wrong
-  results.  Readers MUST classify by the rule given under "Magic
-  number(s)" before validating.
+  application/vnd.metadatastician.k9.coordination.  A reader that
+  applies the component contract to a coordination file, or the
+  reverse, reports wrong results.  Readers MUST classify by the rule
+  given under "Magic number(s)" before validating.
 
 Interoperability considerations:
   K9 targets multi-architecture permanence (Linux, Minix, macOS,
@@ -123,17 +141,17 @@ Interoperability considerations:
   body syntax is Nickel (https://nickel-lang.org), which is normative
   by reference; K9 defines no grammar of its own beyond the envelope.
 
-  Companion type: application/vnd.k9.coordination.  The k9-coordination
-  dialect (coordination.k9) shares the "K9!" magic but has a YAML-like
-  body with its own ABNF grammar, never executes anything, and is
-  versioned separately, so it is registered as its own subtype rather
-  than as a parameter of this one (owner ruling, 2026-10-13).
-  Parameters are routinely dropped by file-type detectors, which would
-  label coordination files as Nickel components.  Files carrying the
-  magic MUST be classified by their first significant line before
-  validation (K9 Component Contract Specification,
-  "K9-E005 - the discriminator"); a coordination file is never
-  application/vnd.k9 content.
+  Companion type: application/vnd.metadatastician.k9.coordination. The
+  k9-coordination dialect (coordination.k9) shares the "K9!" magic but
+  has a YAML-like body with its own ABNF grammar, never executes
+  anything, and is versioned separately, so it is registered as its own
+  subtype rather than as a parameter of this one (owner ruling,
+  2026-10-13).  Parameters are routinely dropped by file-type detectors,
+  which would label coordination files as Nickel components.  Files
+  carrying the magic MUST be classified by their first significant line
+  before validation (K9 Component Contract Specification, "K9-E005 - the
+  discriminator"); a coordination file is never
+  application/vnd.metadatastician.k9 content.
 
 Published specification:
   K9 Component Contract Specification v1.0.0 (normative):
@@ -184,8 +202,9 @@ Additional information:
                     (K9-E003), so for this type the magic line is
                     exactly four octets: 0x4B 0x39 0x21 0x0A.
 
-                    The same three octets begin application/vnd.k9.
-                    coordination files, whose magic line may end in
+                    The same three octets begin
+                    application/vnd.metadatastician.k9.coordination
+                    files, whose magic line may end in
                     LF or CR+LF.  The magic alone does not identify the
                     type.  The rule that tells the two apart is
                     K9-E005 (K9 Component Contract Specification).
@@ -194,31 +213,30 @@ Additional information:
 
                       - "{", "[", "(", "let ", a string literal, or an
                         "identifier =" binding: a Nickel term, so
-                        application/vnd.k9.
+                        application/vnd.metadatastician.k9.
                       - a bare "key:" line (no "="): a coordination
-                        file, so application/vnd.k9.coordination.
+                        file, so
+                        application/vnd.metadatastician.k9.coordination.
                       - "---": routed to the coordination type and
                         rejected by its grammar, so it is never
-                        application/vnd.k9.
+                        application/vnd.metadatastician.k9.
                       - anything else: unclaimed.  It is a defect and
                         is neither type.
-  File extension(s):  .k9.ncl  (".k9" is application/vnd.k9.coordination)
+  File extension(s):  .k9.ncl  (".k9" is
+                       application/vnd.metadatastician.k9.coordination)
   Macintosh file type code(s):  N/A
   Object Identifier(s) or OID(s):  N/A
 
 Person & email address to contact for further information:
   Jonathan D.A. Jewell
-  j.d.a.jewell@open.ac.uk
-  The Open University
-  Milton Keynes, MK7 6AA, United Kingdom
+  jonathan@metadatastician.art
 
 Intended usage:
   COMMON
 
 Author/Change controller:
-  Jonathan D.A. Jewell
-  The Open University
-  j.d.a.jewell@open.ac.uk
+  Jonathan D.A. Jewell, in person (no institution)
+  jonathan@metadatastician.art
 
 Provisional registration: No (Vendor-tree registration.)
 
@@ -286,3 +304,15 @@ Change Log:
             Encoding considerations.  Every form field is filled, with
             N/A where it does not apply.  Not yet reviewed or filed by
             the owner.
+2026-11-12: Revision 6 -- applies the owner rulings of 2026-11-12.
+            I1: the subtype takes the producer prefix, so it is now
+            application/vnd.metadatastician.k9.  I2: the change
+            controller is Jonathan D.A. Jewell in person, with no
+            institution; the contact address is
+            jonathan@metadatastician.art.  I4: no line is longer than
+            998 octets, so the "8bit" label is exact; the sentences
+            saying it did not hold for long lines are removed.
+            The limit is the new envelope rule K9-E006.  Records the
+            filing order (this type second) and its precondition: no
+            type is filed while its specification is DRAFT.  The file
+            is renamed to match the subtype.  Not yet filed.

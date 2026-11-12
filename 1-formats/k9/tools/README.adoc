@@ -11,8 +11,8 @@ Prose: link:../spec/K9-CONTRACT-SPEC.adoc[`spec/K9-CONTRACT-SPEC.adoc`]
 |===
 |`k9-validate.sh` |The canonical validator. The only place K9 rules are
 *executed*; the contract file is where they are *stated*.
-|`fixtures/valid/` |6 positive controls.
-|`fixtures/invalid/` |21 negative controls. The load-bearing half.
+|`fixtures/valid/` |7 positive controls.
+|`fixtures/invalid/` |22 negative controls. The load-bearing half.
 |===
 
 The local gate (`.githooks/validate-k9.sh`) and the CI gate
@@ -99,8 +99,8 @@ A fixture that trips an unrelated earlier check still gets rejected, and a
 runner that only checked rejection would report that as a pass while the rule
 under test does nothing.
 
-Coverage, measured: *20 of the 23* rules in the contract have a negative
-control in `fixtures/invalid/` that names them. All 23 are exercised — the
+Coverage, measured: *21 of the 24* rules in the contract have a negative
+control in `fixtures/invalid/` that names them. All 24 are exercised — the
 other three cannot have a fixture, and each is instead asserted in
 `--self-test` *to fire*, not merely described:
 

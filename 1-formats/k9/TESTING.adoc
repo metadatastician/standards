@@ -91,7 +91,7 @@ just setup-mime
 
 # Verify
 xdg-mime query filetype https://github.com/hyperpolymath/k9-ecosystem/blob/main/examples/hello.k9
-# Expected: application/vnd.k9
+# Expected: application/vnd.metadatastician.k9
 
 file https://github.com/hyperpolymath/k9-ecosystem/blob/main/examples/hello.k9
 # Expected: K9 Self-Validating Component

@@ -6,7 +6,7 @@
 *SUPERSEDED (2026-09-01) — historical record only.*
 
 This document registers `application/vnd.k9+nickel`. That form was withdrawn:
-the current application registers *`application/vnd.k9`*, without a
+the current application registers *`application/vnd.metadatastician.k9`*, without a
 structured-syntax suffix. Structured-syntax suffixes are intended for widely
 registered base syntaxes, and `+nickel` is not one.
 

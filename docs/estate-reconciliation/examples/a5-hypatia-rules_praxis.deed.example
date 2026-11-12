@@ -1,0 +1,26 @@
+;; SPDX-FileCopyrightText: © 2026 Jonathan D.A. Jewell
+;; SPDX-License-Identifier: CC-BY-SA-4.0
+(praxis-deed
+  :schema-version "1.0.0"
+  :canonical-name "hypatia-rules"
+  :beholding-chora #uuid"47e1501b-26b4-5bbd-8a3f-1afa81c69dbe"
+
+  (rule-domain :name "hypatia" :owner "hyperpolymath/hypatia")
+
+  (rules
+    (rule-def
+      :id "hypatia/code_safety/js_exec_sync"
+      :text "Do not run a command string through a shell."
+      :class gate
+      :severity high
+      :excusable-at repo
+      :scope-form exact-paths
+      :status active)
+    (rule-def
+      :id "hypatia/research_extensions/RE001"
+      :text "A job that holds a token must monitor or declare its egress."
+      :class gate
+      :severity high
+      :excusable-at repo
+      :scope-form exact-paths
+      :status active)))

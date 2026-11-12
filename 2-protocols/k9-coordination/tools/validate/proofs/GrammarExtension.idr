@@ -9,7 +9,11 @@
 |||
 |||   1. v1.1 -> v1.2 (`v11FilesAreV12Files`). When two grammars agree on
 |||      every rule except `body`, and v1.2's `body` is v1.1's with optional
-|||      elements inserted, every v1.1 file is a v1.2 file. The general
+|||      elements inserted, every string the v1.1 grammar derives, the
+|||      v1.2 grammar derives. (ABNF productions only: the 998-octet line
+|||      limit of spec rule 14 is a whole-file constraint not modelled
+|||      here, so a v1.1 file with a longer line is not a conforming v1.2
+|||      file.) The general
 |||      lemma is `extend`; `bodyInterleave` is the concrete `body` step.
 |||      That the committed grammars agree on every other rule is the side
 |||      condition `validate.js --self-test` re-checks on every run
@@ -217,7 +221,8 @@ bodyInterleave =
   Keep $ Keep $ Keep $ Keep $ Add $ Keep $ Keep $ Keep $ Keep $ Add $
   Keep $ Keep $ Keep $ Keep $ Done
 
-||| Every v1.1 file is a v1.2 file, given the side condition validate.js
+||| Every string the v1.1 grammar derives from `k9-file`, the v1.2 grammar
+||| derives (ABNF productions only; see the header), given the side condition validate.js
 ||| checks on the committed grammars: every rule v1.1 defines other than
 ||| `body`, v1.2 defines identically.
 export
