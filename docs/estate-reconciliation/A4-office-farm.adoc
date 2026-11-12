@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 = A4: Office and Farm (the boundary, the intake envelope, work orders, the move of the scripts)
 :version: 0.2.3-draft
-:status: DRAFT v0.2.3. Decisions F1 to F15 approved by the owner on 2026-11-10. Not yet ratified as a whole. Builds on A1 v0.3.8, A2 v0.2.3 and A3 v0.2.2. Consistency pass applied 2026-11-10. Nothing here is committed, pushed or filed.
+:status: DRAFT v0.2.3. Decisions F1 to F15 approved by the owner on 2026-11-10. Not yet ratified as a whole. Builds on A1 v0.3.8, A2 v0.2.3 and A3 v0.2.2. Consistency pass applied 2026-11-10. Proposed in standards#1474; bot-review fixes applied 2026-11-12.
 :toc:
 
 Specification A4 of the Estate Reconciliation Plan. The office decides and the farm executes (R2). A4 defines the line between them, the one envelope in which every finding and every verdict enters the office, the work order that leaves it, and the rules for moving the farm's label and merge scripts.
@@ -32,7 +32,7 @@ Identifiers. Every decision, law and test id in this specification is local to i
 * One envelope for findings, check verdicts, gate verdicts and outcomes: a SARIF 2.1.0 body inside an in-toto Statement, signed in a DSSE envelope [O]. It resolves A3 E9.
 * A work order is a deed clause profile `(work-order ...)` in a `praxis-deed`. A k9 contract can be generated from it later [O].
 * The ledger holds fingerprints, not findings. A finding reaches a repo as one change or none: at most one open order per repo and fix class.
-* The actuator is off by default. It is armed only after 4 preconditions (section 8.3). No order class may use a ruleset bypass.
+* The actuator is in `dry-run` by default. It moves to `canary` and then to `armed` only after the preconditions of section 8.3. No order class may use a ruleset bypass.
 * The move of the farm's label and merge scripts is governed by rules (section 9). A4 does not move any script.
 
 == 2. Findings that shape the design
@@ -93,8 +93,8 @@ An order class maps to exactly one credential role. A role has the least privile
 
 | `reader` | sensing, rescan | Read-only. May exist today.
 | `labeler` | `label` classes (when the move of the scripts adds them) | Issues and pull request labels only.
-| `pr-author` | every `fix-*` class at tier `review` | Opens a draft PR from a branch. Cannot merge.
-| `applier` | `apply-ruleset`, `repin-caller` | The estate App credential. [R: does not exist; owner action O11.]
+| `pr-author` | every `fix-*` class at tier `review`, and `repin-caller` | Opens a draft PR from a branch. Cannot merge. `repin-caller` only opens the reviewed PR of A3 4.2 rule 6.
+| `applier` | `apply-ruleset` | The estate App credential. [R: does not exist; owner action O11.]
 | `merger` | `merge` classes (not defined by A4) | Needs an owner ruling before it is created. Cannot bypass a ruleset.
 |===
 
@@ -126,7 +126,9 @@ DSSE envelope        payloadType "application/vnd.in-toto+json"; signatures[]
 
 * The Statement is `https://in-toto.io/Statement/v1`. Its `subject` is one entry: `name` is the repo UUID (A1 `:repo-uuid` value as a string) and `digest` is `{"gitCommit": "<40 hex>"}` [I: in-toto accepts `gitCommit` as a digest key].
 * The signed payload is the Statement canonicalised with JCS (RFC 8785) [I]. The estate routes I-JSON/JCS data through `kyq` [M], so the same canonical form serves the signature and the data route.
-* A signature has a `keyid` and an ed25519 signature [I: DSSE]. The `keyid` is a publisher id in the federation root's `(publishers)` clause (A3 E1). A signature whose `keyid` is not listed is not valid.
+* A signature has one of 2 forms, matching the 2 publisher forms of section 12.
+** *ed25519.* The signature has a `keyid` and an ed25519 signature [I: DSSE]. The `keyid` is a publisher id in the federation root's `(publishers)` clause (A3 E1) whose entry carries `:ed25519`. A signature whose `keyid` is not listed is not valid.
+** *OIDC.* The signature is a Sigstore bundle over the same DSSE payload [I: GitHub artifact attestations]. It is valid only when: the bundle verifies; the certificate's OIDC issuer equals the `:oidc-issuer` of a listed publisher; the certificate's workflow identity (the reusable workflow path and ref) equals that publisher's `:workflow` at the 40-hex SHA that A3 pins; and the certificate's source commit equals the Statement's subject commit. A workflow at any other path or SHA is not that publisher. A4 does not fix the issuer value; the owner records it in the root.
 
 Samples: `docs/estate-reconciliation/examples/a4-statement.json.example` and `docs/estate-reconciliation/examples/a4-envelope.json.example` parse as JSON [M]. I did not check them against the in-toto or DSSE schemas [I].
 
@@ -181,7 +183,7 @@ The status posted to GitHub (A3 section 3.3) has `target_url` pointing to the DS
 
 === 5.6 Validity rules
 
-An envelope is *valid* when: the DSSE signature verifies for a listed publisher; the payload parses as the Statement; the subject digest names a commit that exists in the repo; the predicate matches its type; and the SARIF log, if present, parses as 2.1.0. A valid envelope is not a *true* one. It says the publisher signed these bytes. Truth is checked by the observer (section 10).
+An envelope is *valid* when: the DSSE signature verifies for a listed publisher, by the rule of 5.2 for that publisher's form (ed25519 or OIDC, never one for the other); the payload parses as the Statement; the subject digest names a commit that exists in the repo; the predicate matches its type; and the SARIF log, if present, parses as 2.1.0. A valid envelope is not a *true* one. It says the publisher signed these bytes. Truth is checked by the observer (section 10).
 
 === 5.7 Storage
 
@@ -212,7 +214,7 @@ The ledger is JSON Lines, I-JSON, in the office repo, one file per repo UUID: `l
 | `accepted_by` | The deviation `:id` (A2), when `state` is `accepted`.
 |===
 
-States: `open` is a finding that nothing is acting on. `ordered` has an open work order. `fixed` means a later rescan on a later commit no longer reports it. `accepted` means a valid deviation covers it (A2 section 7). `lapsed` means the deviation that accepted it expired. The state is derived by the office from observed rescans and from the deviations at the head. It is never set by a sensor or by a repo's own statement (the self-assertion rule [M]).
+States: `open` is a finding that nothing is acting on. `ordered` has an open work order. `fixed` means a later rescan on a later commit, whose `scope` (5.3) covered the finding's `path`, no longer reports it. A rescan whose scope did not cover the path leaves the state unchanged. `accepted` means a valid deviation covers it (A2 section 7). `lapsed` means the deviation that accepted it expired. The state is derived by the office from observed rescans and from the deviations at the head. It is never set by a sensor or by a repo's own statement (the self-assertion rule [M]).
 
 === 6.2 Fingerprint
 
@@ -259,7 +261,7 @@ A work order is a `praxis-deed` named `<order-id>_praxis.deed` with a `(work-ord
     (escalate :when "any-test-failure" :to owner)))
 ----
 
-The sample is `docs/estate-reconciliation/examples/a4-wo-0001_praxis.deed.example`. It lints clean under `deed_lint.js` once `#uuid` is replaced by `#u5` in a copy, because the current linter does not know the opaque literal (A1 section 7.1) [M]. The linter checks syntax only [I].
+The sample is `docs/estate-reconciliation/examples/a4-wo-0001_praxis.deed.example`. It lints clean under `deed_lint.js` as written: `deed.abnf` v1.3.0 and its linter accept the opaque literal since #1473 [M: linted 2026-11-12]. The linter checks syntax only [I].
 
 === 7.2 Fields
 
@@ -332,7 +334,7 @@ Each stage can refuse. A refusal is an `outcome` with the stage name and a reaso
 
 === 8.2 Actuator states
 
-The actuator has 3 states: `off`, `dry-run` and `armed`. The default is `dry-run` [R: plan P7]. `off` and `dry-run` write nothing to a repo. A `dry-run` produces the action list and records it in the outcome.
+The actuator has 4 states: `off`, `dry-run`, `canary` and `armed`. The default is `dry-run` [R: plan P7]. `off` and `dry-run` write nothing to a repo. A `dry-run` produces the action list and records it in the outcome. `canary` writes only to the canary repos that the owner names when authorising it, and refuses every other repo. `armed` may write to any repo the class applies to.
 
 === 8.3 Preconditions for `armed`
 
@@ -341,9 +343,11 @@ The actuator MAY be armed for a class only when all 4 hold:
 . The evaluator exists and has evaluated the order (Wave 1 [M]: "nothing leaves exit 78 until the evaluator exists").
 . The Kin gate is on the path between the evaluator and the executor, and a refusal test shows it refusing (the ultraplan records that its safety processes are called by no dispatch path today [M]).
 . The credential for the class's role exists and is held by the farm. For `applier` this is O11 [R].
-. A canary repo has passed a `dry-run` and an armed run of the class with the outcome verified by a rescan.
+. A canary repo has passed a `dry-run` and a `canary` run of the class with the outcome verified by a rescan.
 
-Arming is an owner action, per class. An armed state is recorded in the office, and the farm refuses to run a class that is not marked armed there.
+The move from `dry-run` to `canary` is a separate owner authorisation per class. It needs preconditions 1 to 3 and names the canary repos. It is the only way to run the first write.
+
+Arming is an owner action, per class. The `canary` and `armed` states are recorded in the office. The farm refuses a write for a class that is not marked `armed` there, except a write to a named canary repo of a class marked `canary`.
 
 === 8.4 Outcome
 
@@ -388,7 +392,7 @@ The per-script table (name, class, split plan, parity result) is a private worki
 
 A3 section 9.3 requires an observer that verifies every merged head. It is `cadastra`, in a verify mode, run by the farm on a schedule [I: `cadastra` is the estate's observer [M]; the mode does not exist].
 
-For each merged head the observer: reads the `estate-gate` status and its `target_url`; fetches the envelope; checks validity (5.6); recomputes the verdict from the recorded inputs; compares it with the posted status; and checks the status creator against the publisher list. It emits a `finding-set` with rule `gate/forged-or-unverified`, `gate/unsigned`, `gate/mismatch` or `gate/no-envelope`. That finding enters the ledger like any other. The observer writes no status and changes no repo.
+For each merged head the observer: reads the `estate-gate` status and its `target_url`; fetches the envelope; checks validity (5.6, by the signature form of its publisher); recomputes the verdict from the recorded inputs; compares it with the posted status; and checks the status creator against the publisher list. It emits a `finding-set` with rule `gate/forged-or-unverified`, `gate/unsigned`, `gate/mismatch` or `gate/no-envelope`. That finding enters the ledger like any other. The observer writes no status and changes no repo.
 
 == 11. Relation to the other specifications
 
@@ -447,6 +451,9 @@ Every test is new work. A fixture is valid unless marked `-bad`.
 | E08 | The report-back envelope, the panic-attack and pons envelopes and the baton map to a valid envelope by section 5.4. | `map-*`
 | E09 | The payload is JCS-canonical: re-canonicalising it gives the same bytes. | `env-noncanonical-bad`
 | E10 | `predicateType` is one of the 4 defined URNs. | `env-bad-type-bad`
+| E12 | An OIDC-signed envelope from the listed issuer and the pinned workflow path and SHA verifies. | `env-oidc-ok`
+| E13 | An OIDC-signed envelope from the listed issuer but a different workflow path or SHA fails. | `env-oidc-other-workflow-bad`
+| E14 | An ed25519 signature checked against an OIDC publisher entry, or the reverse, fails. | `env-form-mismatch-bad`
 | E11 | An envelope stored in an estate repo's tree is reported. | `env-committed-bad`
 |===
 
@@ -461,6 +468,7 @@ Every test is new work. A fixture is valid unless marked `-bad`.
 | I03 | The same fingerprint from 2 sensors gives one record with 2 sensors. | `fp-corroborated`
 | I04 | No ledger line carries a finding body or a secret. | `ledger-body-bad`
 | I05 | `fixed` is set only by a later rescan on a later commit. | `fixed-no-rescan-bad`
+| I09 | A finding in `a/` followed by a `ran` rescan whose scope is only `b/` stays unresolved. | `fixed-out-of-scope-bad`
 | I06 | `accepted` requires a valid deviation (A2); on its expiry the record goes `lapsed`. | `accepted-expired`
 | I07 | A sensor cannot set a state. | `sensor-state-bad`
 | I08 | At most one open order per `(repo, class)`. | `two-orders-bad`
@@ -492,7 +500,7 @@ Every test is new work. A fixture is valid unless marked `-bad`.
 | X01 | A stage refusal produces an `outcome` naming the stage, and no retry without a new order. | `refuse-kin`
 | X02 | A `dry-run` and an armed run on one snapshot give equal action lists. | `dry-vs-armed`
 | X03 | An actuator in `off` or `dry-run` writes nothing to any repo. | `dryrun-writes-bad`
-| X04 | Arming a class without all 4 preconditions is rejected. | `arm-no-canary-bad`
+| X04 | Arming a class without all 4 preconditions is rejected. Authorising `canary` without preconditions 1 to 3 is rejected. A `canary` class writes to a named canary repo and is refused for any other repo. | `arm-no-canary-bad`, `canary-ok`, `canary-other-repo-bad`
 | X05 | The default actuator state is `dry-run`. | `default-state`
 | X06 | No class, role or executor path uses a bypass, `--admin`, a force push, or a merge with `estate-gate` not `success`. | `exec-bypass-bad`
 | X07 | The Kin gate sits between the evaluator and the executor on the path, and refuses a fixture the evaluator admitted. | `kin-refuses`

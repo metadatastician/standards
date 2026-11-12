@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 = A5: Rule Identifiers, the Deviation Store and the Generated Ignore Files
 :version: 0.2.2-draft
-:status: DRAFT v0.2.2. Decisions G1 to G14 approved by the owner on 2026-11-10. Not yet ratified as a whole. Builds on A1 v0.3.8, A2 v0.2.3, A3 v0.2.2 and A4 v0.2.3. Consistency pass applied 2026-11-10. Nothing here is committed, pushed or filed.
+:status: DRAFT v0.2.2. Decisions G1 to G14 approved by the owner on 2026-11-10. Not yet ratified as a whole. Builds on A1 v0.3.8, A2 v0.2.3, A3 v0.2.2 and A4 v0.2.3. Consistency pass applied 2026-11-10. Proposed in standards#1474; bot-review fixes applied 2026-11-12.
 :toc:
 
 Specification A5 of the Estate Reconciliation Plan. A2 defined the `(deviations)` clause. A5 gives every rule a stable identifier, says how a deviation is checked against the rule it excuses, and defines how the tool-native exemption files are generated from deviations. The plan's rule is: each rule has one identifier and one text, an exception is one record, and the ignore files of each tool are generated from those records [R: plan section 9].
@@ -113,7 +113,7 @@ A registry is a `praxis-deed` named `<domain>_rules_praxis.deed` with a `(rule-d
       :status active)))
 ----
 
-The sample is `docs/estate-reconciliation/examples/a5-hypatia-rules_praxis.deed.example` (and `docs/estate-reconciliation/examples/a5-mytool_chora.deed.example` for the scope forms). It lints clean under `deed_lint.js` once `#uuid` is replaced by `#u5` in a copy, because the current linter does not know the opaque literal (A1 section 7.1) [M]. The linter checks syntax only [I].
+The sample is `docs/estate-reconciliation/examples/a5-hypatia-rules_praxis.deed.example` (and `docs/estate-reconciliation/examples/a5-mytool_chora.deed.example` for the repo-level scope forms; the root-level `:origins` form is in `docs/estate-reconciliation/examples/a1-federation-root-syntax_chora.deed.example`). It lints clean under `deed_lint.js` as written: `deed.abnf` v1.3.0 and its linter accept the opaque literal since #1473 [M: linted 2026-11-12]. The linter checks syntax only [I].
 
 === 4.2 Fields of `rule-def`
 
@@ -126,7 +126,7 @@ The sample is `docs/estate-reconciliation/examples/a5-hypatia-rules_praxis.deed.
 | `:class` | 1, symbol | `gate` (blocks a merge when it fires), `advisory` (reports only), `policy` (a ban or requirement stated for people and tools), `invariant` (a chora invariant; A1).
 | `:severity` | 0..1, symbol | `critical`, `high`, `medium` or `minor` (A4 section 5.3).
 | `:excusable-at` | 1, symbol | `repo`, `estate` or `root`: the lowest level at which a deviation for this rule may be recorded.
-| `:scope-form` | 1, symbol | `exact-paths`, `globs`, `fingerprints`, `repos` or `origins`: the form of scope a deviation may use for this rule (4.3).
+| `:scope-form` | 1, symbol or list of symbols | `exact-paths`, `globs`, `fingerprints`, `repos` or `origins`: the forms of scope a deviation may use for this rule (4.3). A list allows each form in it; `exact-paths` and `globs` are not listed together. A rule with several axes, such as `bot/write`, lists them all: `:scope-form (origins repos exact-paths)`.
 | `:status` | 1, symbol | `active` or `retired`.
 | `:supersedes` | 0..1, list of STRING | Older ids replaced by this one.
 | `:superseded-by` | 0..1, STRING | The id that replaces this one.
@@ -163,7 +163,7 @@ A2 gave `(scope)` the fields `:paths` and `:repos`. A5 adds `:fingerprints` and 
 | `:paths` | repo, estate, root | List of repo-relative paths. With `:scope-form exact-paths`: no glob character. With `globs`: the glob syntax of 5.3.
 | `:repos` | estate, root | List of repo UUIDs (A1). An estate or root deviation applies to these repos only.
 | `:fingerprints` | repo | List of STRING scanner fingerprints. Allowed only for rules with `:scope-form fingerprints`. A fingerprint is opaque to A5.
-| `:origins` | root | List of STRING remote-origin patterns. Allowed only for rules with `:scope-form origins` (today `bot/write`).
+| `:origins` | root | List of STRING remote-origin patterns. Allowed only for rules whose `:scope-form` includes `origins` (today `bot/write`).
 |===
 
 A scope has at most one of `:fingerprints` and `:origins`, and may combine either with nothing else. `(scope)` with no field still means the whole scope of the level (A2).
@@ -174,7 +174,7 @@ A path is repo-relative with no leading `./` or `/`, no `..`, and no backslash. 
 
 === 5.4 Where a deviation lives (G12)
 
-A deviation lives at the lowest level that can hold it. A fact about one repo is in that repo's chora. An estate or root deviation with `:repos` is allowed only for a repo that has no chora yet (the plan counts 8 of 15 measured repos in that state [R]); once the repo has a chora the deviation moves there. This keeps one home per fact. It makes the `lock-allow.txt` list of 163 repos [M] a set of 163 one-line deviations, each in its own repo, and not one estate list.
+A deviation lives at the lowest level that can hold it. A fact about one repo is in that repo's chora. An estate or root deviation with `:repos` is allowed only for a repo that has no chora yet (the plan counts 8 of 15 measured repos in that state [R]); once the repo has a chora the deviation moves there, if the rule's `:excusable-at` is `repo`. A deviation for a rule with `:excusable-at estate` or `root` stays at that level with its `:repos`, because the repo cannot hold it (4.3). This keeps one home per fact. It makes the `lock-allow.txt` list of 163 repos [M] a set of 163 one-line deviations, each in its own repo, and not one estate list.
 
 === 5.5 Ratchet (replaces the commit trailer)
 
@@ -184,7 +184,7 @@ For a base and a head version of the deviations at any level:
 . A deviation present in both may lose scope freely. It may not gain scope (a larger `:paths` or `:repos` set, or a wider glob) without a new `:authority` value.
 . A `debt` deviation's `:ceiling` may fall and may not rise (A2 V10).
 . A deviation that is removed is debt reduction and always passes.
-. A deviation whose `:authority` is `"legacy"` (A2 section 7.6) may not be added in head.
+. A deviation whose `:authority` is `"legacy"` (A2 section 7.6) may not be added in head, except by an import PR of section 10. Such a PR touches one repo, adds only deviations, maps each of them from an entry of a legacy file that exists at the base commit, and leaves that file in place. Its deviations are reported `unratified`, and the equivalence test of section 10 still gates the cutover.
 
 The estate's `Ratchet-exception:` commit trailer is not read as authority. In the compatibility period (A2 section 10) the legacy ledgers keep their trailer check. A deviation with a valid `:authority` is the replacement.
 
@@ -214,12 +214,12 @@ Each adapter states the tool, the file, the rule domains it serves, the form, th
 | File | Serves | Rendered from | Cannot represent, or note
 
 | `.hypatia-baseline.json` | `hypatia/*` | One entry per deviation and path: `rule_module` and `type` from the rule id, `file` from the path, `severity` from the registry, `expires_at` from `:expires` or `:review-by`, `note` from `:reason`, `tracking_issue` from `:tracking`. JCS canonical, one line, members sorted [M: format doc, J-1]. | A `file_pattern` entry is rendered only for a rule with `:scope-form globs`.
-| `.hypatia-ignore` | `hypatia/*` | Lines `<rule_module>/<rule_type>:<exact-path>`. The adapter always writes the exact path, the stricter form that both the scanner (substring) and the gate (whole line) accept [M]. | A directory fragment is never written.
+| `.hypatia-ignore` | `hypatia/*` | Lines `<rule_module>/<rule_type>:<exact-path>`, which the gate matches as a whole line [M]. | The scanner matches a line as a substring [M], so a line for `tools/report.mjs` also suppresses `tools/report.mjs.bak`. An exact-path deviation is therefore `unrepresentable` for the scanner until it matches whole paths; `.hypatia-baseline.json` carries the deviation meanwhile. The controls (6.5) include an outside path that contains the permitted path. A directory fragment is never written.
 | `.gitleaksignore` | `secret/*` | One line per fingerprint in `(scope :fingerprints)`. | A path scope for a secret rule is `unrepresentable`: gitleaks needs a fingerprint.
 | `config/gitleaks/estate-baseline.toml` | `secret/*` at estate level | Estate-level deviations. TOML. | Its home follows A6.
 | `.cicd-hygiene-allow` | `check/code-hygiene` | One path per line, with the `:reason` as a comment above it. | Comments allowed.
-| `.ponsignore` | `pons/*` scope-class rules | `exemption` deviations whose registry class is a scope: one path prefix per line, with the reason. | The file says it must not hide a finding class; the adapter rejects a scope naming a whole rule domain.
-| `.governance-allowlist` | `lang/*` | One exact path per line. | Rejects a glob (`exact-paths`).
+| `.ponsignore` | `pons/*` | `exemption` deviations for a `pons/*` rule with a `:paths` scope: one path prefix per line, with the reason. | The file says it must not hide a finding class; the adapter rejects a scope naming a whole rule domain.
+| `.governance-allowlist` | `lang/*` | One line per deviation and path: `<token>:<exact-path>`, the whole line that the gate matches with `grep -qxF` [M]. `<token>` is the gate's own rule token for the language, which I take to be the `<name>` of `lang/<name>` (3.3) [I: to confirm against the gate's token list]; the adapter keeps a table from rule id to token and fails on a rule id with no token. | Rejects a glob (`exact-paths`).
 | `root-allow.txt` | `rsr/root-shape` | Not an exception list. It is derived from the profile and the gate table (policy formula in finding 13) plus the deviations for `rsr/root-shape`. | Depends on A2's profile and A3's table.
 | `lock-allow.txt`, `pipeline-allow.txt`, `required-contexts-allow.txt`, `inline-python-allow.txt`, `a2ml-legacy-allow.txt`, `.github/no-js-baseline.txt` | The gate each ledger serves | Estate-level shrink-only ledgers of repos or paths. After section 5.4 they are views over repo-level `debt` deviations, counted by the ratchet of 5.5. | Retired as files when the gates read deviations (stage 2).
 | `bot_exclusion_registry.a2ml` | `bot/write` | No generator. | The format is retired (G7).
@@ -325,12 +325,14 @@ Every test is new work unless stated. A fixture is valid unless marked `-bad`.
 | S06 | `:fingerprints` for a rule whose form is not `fingerprints` is rejected. | `dev-fp-bad`
 | S07 | `:origins` is allowed only at root and only for `origins` rules. | `dev-origins-bad`
 | S08 | A path with `..`, a leading `/` or a backslash is rejected. | `dev-path-bad`
-| S09 | An estate-level `:repos` deviation for a repo that has a chora is reported `move-to-repo`. | `dev-estate-has-chora`
+| S09 | An estate-level `:repos` deviation for a repo that has a chora is reported `move-to-repo` when its rule has `:excusable-at repo`, and is kept when the rule needs `estate` or `root`. | `dev-estate-has-chora`, `dev-estate-root-rule-kept`
 | S10 | Ratchet: a deviation added in head without `:authority` is rejected. | `ratchet-no-auth-bad`
 | S11 | Ratchet: scope widened in head without a new `:authority` is rejected. | `ratchet-widen-bad`
 | S12 | Ratchet: `:ceiling` raised is rejected (A2 V10). | `ratchet-ceiling-bad`
 | S13 | Ratchet: a removed deviation passes. | `ratchet-remove`
 | S14 | A `Ratchet-exception:` trailer does not satisfy S10 for a deviation. | `ratchet-trailer-bad`
+| S15 | Ratchet: an import PR that adds `:authority "legacy"` deviations mapped from a legacy file at base passes; the same deviation added by any other PR is rejected. | `ratchet-import-ok`, `ratchet-legacy-bad`
+| S16 | A rule with `:scope-form (origins repos exact-paths)` accepts a deviation using any one of those forms and rejects `:fingerprints`. | `dev-multiform`
 |===
 
 === 11.3 Generated files

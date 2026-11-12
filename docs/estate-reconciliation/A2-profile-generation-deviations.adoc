@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 = A2: Profile, Generation and Deviations (chora clauses and pack laws)
 :version: 0.2.3-draft
-:status: DRAFT v0.2.3 (scope fields extended by A5 G5). Decisions D1 to D9 approved by the owner on 2026-11-10. Not yet ratified as a whole. Builds on A1 v0.3.8. Consistency pass applied 2026-11-10. Nothing here is committed, pushed or filed.
+:status: DRAFT v0.2.3 (scope fields extended by A5 G5). Decisions D1 to D9 approved by the owner on 2026-11-10. Not yet ratified as a whole. Builds on A1 v0.3.8. Consistency pass applied 2026-11-10. Proposed in standards#1474; bot-review fixes applied 2026-11-12.
 :toc:
 
 Specification A2 of the Estate Reconciliation Plan. It defines three clauses of the chora, the files a generator may own, and the laws that a generator must keep.
@@ -124,10 +124,11 @@ The RSR gate table, the presets and the `carrier` and `canon` path lists stay in
   :generated-on "2026-11-10"
   (source :repo "hyperpolymath/rsr-template-repo"
           :commit "<40 hex>" :tree "<40 hex>" :branch "main")
+  (generator :repo "<owner/name>" :version "0.1.0" :commit "<40 hex>")
   (canon :version "2.1.5"
          :criteria-sha256 "<64 hex>" :gates-sha256 "<64 hex>")
   (packs
-    (pack :name "rust-cli" :version "0.1.0"))
+    (pack :name "rust-cli" :version "0.1.0" :sha256 "<64 hex>"))
   (answers :mint-date "2026-11-10" :license MPL-2.0)
   :extra-branches ())
 ----
@@ -139,8 +140,9 @@ The RSR gate table, the presets and the `carrier` and `canon` path lists stay in
 | `:scheme` | 1, symbol | As in `(profile)`. The two MUST be equal.
 | `:generated-on` | 1, STRING | `YYYY-MM-DD` of the mint.
 | `(source :repo :commit)` | 1 | The spine the repo was generated from. `:repo` is `owner/name`. `:commit` is 40 lowercase hex. `:tree` (40 hex) and `:branch` are optional.
+| `(generator :repo :version :commit)` | 1 | The engine that rendered the tree. `:repo` is `owner/name`, `:version` is semver and `:commit` is 40 lowercase hex. The commit, not the version, pins the code (law L7).
 | `(canon ...)` | 0..1 | The scheme's canon pin. Fields as in `canon.adoc`: `:version` (semver), `:criteria-sha256`, `:gates-sha256` (64 lowercase hex), optional `:lockstep-since` and `:proposed-by`. A value of the wrong shape is a failure and never a pass. `"" = ""` is not lockstep.
-| `(packs (pack ...))` | 0..1 | Each `pack` has `:name` STRING (unique) and `:version` STRING (semver). It records which packs the generator applied.
+| `(packs (pack ...))` | 0..1 | Each `pack` has `:name` STRING (unique), `:version` STRING (semver) and `:sha256` (64 lowercase hex): the digest of the pack's content as applied, its manifest and templates, in a canonical order the generator defines. It records which packs the generator applied. The digest, not the version, pins the content (law L7).
 | `(answers ...)` | 0..1 | The answers that the mint recorded. Any fields. A replay uses them.
 | `:extra-branches` | 0..1, list of STRING | Branches beyond the default that the repo declares.
 |===
@@ -195,7 +197,7 @@ Checks 2 and 3 apply in `lax` and `strict` mode. Check 4 needs forge access and 
     (scope)))
 ----
 
-Sample file: `docs/estate-reconciliation/examples/a2-mytool_chora.deed.example`. It lints clean under `deed_lint.js` once `#uuid` is replaced by `#u5` in a copy, because the current linter does not know the opaque literal (A1 section 7.1) [M]. The linter does not check the semantic rules below [I].
+Sample file: `docs/estate-reconciliation/examples/a2-mytool_chora.deed.example`. It lints clean under `deed_lint.js` as written: `deed.abnf` v1.3.0 and its linter accept the opaque literal since #1473 [M: linted 2026-11-12]. The linter does not check the semantic rules below [I].
 
 === 7.2 Fields
 
@@ -295,7 +297,7 @@ Other derived values in 7.5 are not index states. They are findings and belong t
 | Kind | Ownership
 
 | `engine` | Identical estate-wide. The generator overwrites it on every realign.
-| `generated` | Rendered from a template and the repo's deed. The generator re-renders it on realign while it carries its generated marker.
+| `generated` | Rendered from a template and the `(generation)` stamp only (law L7). A value a template needs is recorded in `(answers)`. The generator re-renders it on realign while it carries its generated marker.
 | `minted` | Created when missing. Replaced only while it is still a stub. Once filled, the repo owns it.
 | `merged` | A file that the repo and the pack both write. The generator edits only the regions it owns and keeps the rest.
 | `inserted` | A block inside a file that belongs to the repo. The generator edits only the marked block.
@@ -303,10 +305,10 @@ Other derived values in 7.5 are not index states. They are findings and belong t
 
 === 9.2 Operations
 
-* `mint(spine, packs, answers)` creates a tree.
+* `mint(spine, packs, answers)` creates a tree in 2 phases. The render phase renders every pack into memory and writes nothing. The write phase runs only when the render phase found no conflict (law L8).
 * `check(tree)` reads the tree's `(generation)`, computes `expected`, and reports differences. It writes nothing.
 * `realign(tree)` brings engine, generated and eligible merged, minted and inserted regions to `expected`.
-* `expected(tree) = mint(source @ commit, packs, answers)`, all taken from `(generation)`.
+* `expected(tree) = mint(source @ commit, packs @ sha256, answers)`, run by the generator at its `:commit`, all taken from `(generation)`.
 
 === 9.3 Pack manifest
 
@@ -338,8 +340,8 @@ Let `T = mint(s, P, a)`, where `s` is a spine, `P` a set of packs and `a` answer
 | L4 | `realign` changes only: `engine` files; `generated` files that carry the marker; the owned regions of `merged` files; the marked block of `inserted` files; `minted` files that are still stubs. It never changes a `minted` file that has been filled, an unmarked file, or a product file. | plan M2; provisioning standard section 1 [M]
 | L5 | `mint(s, {p, q}, a) = mint(s, {q, p}, a)`, byte for byte. Packs commute. | plan M3
 | L6 | Let `A` be the actual tree and `E` the expected tree. The set of differing paths splits into: declared deviations (those covered by a `(deviation)` scope), product files, and drift. `check` reports drift by name. A deviation only subtracts from drift; it never adds a file to `E`. | plan M2 (lens)
-| L7 | `expected` depends only on `(generation)`: the same stamp and the same spine commit give the same tree. | check-mint-drift.sh replay [M]
-| L8 | If 2 packs in `P` declare the same path with different kinds or different content, `mint` stops before writing anything and reports `PACK-CONFLICT` with both pack names and the path. The conflict is detectable from the manifests alone. | plan M3
+| L7 | `expected` depends only on `(generation)`: the same stamp, which pins the spine commit, the generator commit and every pack digest, gives the same tree. | check-mint-drift.sh replay [M]
+| L8 | If 2 packs in `P` declare the same path with different kinds or different content, `mint` stops before writing anything and reports `PACK-CONFLICT` with both pack names and the path. A conflict of kind is detectable from the manifests alone. A conflict of content is found by the render phase (9.2), which writes nothing. | plan M3
 |===
 
 === 9.5 Reference implementation status
@@ -412,6 +414,7 @@ The cutover date is not set. The owner sets it later. Until then the existing re
 | G07 | A `(canon)` comment-only copy (`; (canon ...)`) is not read. | `commented-canon`
 | G08 | Legacy `(provenance)` maps to `(source)` with the fields in section 10. | `legacy-provenance`
 | G09 | A repo that carries both a legacy and a new clause for one fact is invalid. | `both-spellings-bad`
+| G10 | `(generator)` has a 40-hex `:commit`, and every `pack` has a 64-hex `:sha256`. | `generator-missing-bad`, `pack-no-digest-bad`
 |===
 
 === 11.3 `(deviations)`
@@ -430,7 +433,7 @@ The cutover date is not set. The owner sets it later. Until then the existing re
 | V08 | A repo-level deviation whose `:rule` equals a higher level's invariant `:id` is rejected. | `repo-excuses-estate-bad`
 | V09 | An estate-level deviation that lists a repo that does not behold that estate is rejected. | `foreign-repo-bad`
 | V10 | Ratchet: given base and head versions of a deed, `:ceiling` of a debt that exists in both is not higher in head. | `ceiling-raised-bad`
-| V11 | Ratchet: a head deed that adds a deviation with `:authority "legacy"` is rejected. Only a legacy mapping that already existed in base is accepted. | `new-legacy-bad`
+| V11 | Ratchet: a head deed that adds a deviation with `:authority "legacy"` is rejected. Only a legacy mapping that already existed in base is accepted, and the import PR that A5 section 5.5 allows. | `new-legacy-bad`
 | V12 | Derived values (`lapsed`, `ceiling-breached`, `drift`) are never fields of the file. A deed that carries them is rejected. | `derived-in-file-bad`
 | V13 | Observation after `:expires` reports `lapsed`. Observation before does not. | `lapsed`
 | V14 | Legacy mapping (7.6): a `(variant (paths))` reads as a deviation with `:authority "legacy"` and reports `unratified`. | `legacy-variant`
@@ -450,8 +453,8 @@ Run with any engine through a harness: the harness supplies a spine fixture, 2 p
 | L04 | A filled `minted` file and a product file are byte-equal after `realign`. An engine file edited by hand is restored. A stub `minted` file is replaced. | `ownership-tree`
 | L05 | `mint` with `{p, q}` and `{q, p}` give byte-equal trees. | `packs-pq`
 | L06 | Differing paths split into declared, product and drift. A declared scope never removes a missing expected file from the report as drift unless it names that path. | `deviation-tree`
-| L07 | Two mints from one stamp are byte-equal. | `stamp-replay`
-| L08 | Two packs that declare one path with different kinds stop `mint` with `PACK-CONFLICT` and write no file. | `packs-conflict-bad`
+| L07 | Two mints from one stamp are byte-equal. A changed pack under the same `:version` changes `:sha256`, so the old stamp no longer replays it. | `stamp-replay`, `pack-changed-same-version`
+| L08 | Two packs that declare one path with different kinds, or with one kind and different rendered bytes, stop `mint` with `PACK-CONFLICT` and write no file. | `packs-conflict-bad`, `packs-content-conflict-bad`
 | L09 | An `(emits)` clause lists a path once per pack and uses only the 5 kinds. | `emits-dup-bad`, `emits-kind-bad`
 |===
 

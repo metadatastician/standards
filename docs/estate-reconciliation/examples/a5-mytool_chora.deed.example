@@ -27,13 +27,5 @@
       :authority "owner ruling 2026-09-30"
       :evidence audited
       :review-by "2027-09-30"
-      (scope :fingerprints ("55ad53331e530d44b2ada3fb2ca80a024625dbac:examples/stamp_example.py:generic-api-key:237")))
-    (deviation
-      :id "D-003"
-      :kind exemption
-      :rule "bot/write"
-      :reason "Vendored upstream toolchain clone; bots must not write."
-      :authority "owner/standards#99"
-      :evidence measured
-      :review-by "2027-06-01"
-      (scope :origins ("github.com/upstream/*")))))
+      (scope :fingerprints ("55ad53331e530d44b2ada3fb2ca80a024625dbac:examples/stamp_example.py:generic-api-key:237")))))
+;; An :origins deviation lives only at the root (A5 5.2); see a1-federation-root-syntax_chora.deed.example.

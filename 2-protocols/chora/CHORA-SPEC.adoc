@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 = A1: The Chora (forge, estate, repo)
 :version: 0.3.8-draft
-:status: DRAFT v0.3.8 (adds the invariant `:id` from A2 D1, the root `(publishers)` clause from A3 E1 and its OIDC form from A4 F3). Rulings U1 to U4 recorded; decisions C1 to C8 approved by the owner on 2026-11-10, and C9 and C10 on 2026-11-12. Not yet ratified as a whole. Consistency pass applied 2026-11-10. Nothing here is committed, pushed or filed.
+:status: DRAFT v0.3.8 (adds the invariant `:id` from A2 D1, the root `(publishers)` clause from A3 E1 and its OIDC form from A4 F3). Rulings U1 to U4 recorded; decisions C1 to C8 approved by the owner on 2026-11-10, and C9 and C10 on 2026-11-12. Not yet ratified as a whole. Consistency pass applied 2026-11-10. Proposed in standards#1474; bot-review fixes applied 2026-11-12.
 :toc:
 
 Specification A1 of the Estate Reconciliation Plan. It replaces the draft
@@ -207,7 +207,7 @@ Semantic rule (validator): the version digit (the first digit of the third group
 * `#u5"..."` and `#u8"..."` stay legal values for reading. In an identity field (`:repo-uuid`, `:estate-uuid`, `:forge-uuid`, `:beholding-chora`, and the `:uuid`, `:estate`, `:base`, `:forge` and `:repo` fields of clauses) they are deprecated: a validator reports `deprecated-identity-literal` as a warning. The owner sets the cutover date. No date is set (U4 [O]).
 * Semantic rule (validator, not ABNF): a `forge-deed` has exactly 1 `:kind` field, whose value is `federation` or `platform`. The stem `federation` is legal only for `:kind federation`, and exactly 1 such file exists per federation.
 
-Every v1.2.1 deed stays valid. The `deed_lint.js` head whitelist, filename dispatch and value parser need the same additions. The current linter rejects `#uuid`, so I checked the samples by replacing `#uuid` with `#u5` in a temporary copy and linting that: everything else in them parses [M]. I could not check the forge head or the literal itself, because the linter rejects both today [I].
+Every v1.2.1 deed stays valid. The `deed_lint.js` head whitelist, filename dispatch and value parser need the same additions. `deed.abnf` v1.3.0 (#1473, merged 2026-11-12) adopted the opaque literal with versions 5 and 8, and its linter accepts the samples as written [M]. The forge head is not in v1.3.0 and the linter does not dispatch it, so the forge samples are checked only in the adapted form noted beside them [M].
 
 === 7.2 Deed spec identity table
 
@@ -230,7 +230,7 @@ The ABNF requires only `:schema-version` on every form. All other requirements i
 
 `ATLAS.deed` (head `estate-atlas-deed`) is the output of an index generator [O]. It is a deterministic function of: the federation root, the estate chora of each estate in the root's `(estates)` clause, every platform chora, and every repo chora found under each estate's `(hosting)` namespaces. Nobody edits it. It lives in `git-logistics-office` (the plan's default; not ruled).
 
-How the generator finds repo choras is not part of A1. It can enumerate repos in a namespace on the platform. `cadastra` supplies observed fields. That belongs to Stage B step 1 [R].
+How the generator finds repo choras is not part of A1. It can enumerate repos in a namespace on the platform. The enumerated repo list of each namespace is an input of the function: the generator records the sha256 of the sorted list as `:enumeration-sha256` in `(generation ...)`, and "the same inputs" includes that list. Two runs that observed different repo sets therefore have different inputs, and a replay uses the recorded list. `cadastra` supplies observed fields. That belongs to Stage B step 1 [R].
 
 === 8.2 Record
 
@@ -241,7 +241,8 @@ How the generator finds repo choras is not part of A1. It can enumerate repos in
   :beholding-chora <root-uuid>
   :registry-version "<generation counter>"      ; integer as string
   (generation :tool "<name>" :tool-version "<semver>"
-              :root-hash "sha256:<64 hex>" :vocabulary-version "<semver>")
+              :root-hash "sha256:<64 hex>" :vocabulary-version "<semver>"
+              :enumeration-sha256 "<64 hex>")
   (estate :uuid <estate-uuid> :name "<owner>" :state <state>
           :chora-hash "sha256:<64 hex>"
     (repo :uuid <repo-uuid> :name "<owner>/<name>" :state <state>
@@ -251,7 +252,7 @@ How the generator finds repo choras is not part of A1. It can enumerate repos in
     (repo :name "<owner>/<name>" :state absent)))
 ----
 
-A full sample is in `docs/estate-reconciliation/examples/a1-ATLAS.deed.example`. It lints clean once `#uuid` is replaced by `#u5` in a copy, because the current linter does not know the opaque literal (A1 section 7.1) [M].
+A full sample is in `docs/estate-reconciliation/examples/a1-ATLAS.deed.example`. It lints clean as written: `deed.abnf` v1.3.0 and its linter accept the opaque literal since #1473 [M: linted 2026-11-12].
 
 States, for an estate or repo record:
 
@@ -259,7 +260,7 @@ States, for an estate or repo record:
 |===
 | State | Condition
 
-| `resolved` | The chora parses, its UUID checks (section 9), and `:beholding-chora` resolves to a chora that lists it.
+| `resolved` | The chora parses, its UUID checks (section 9), and `:beholding-chora` resolves to an estate chora in the federation. For an estate chora, the reference resolves to the root and the root's `(estates)` clause lists it. A repo needs no reverse listing, because no clause lists an estate's primary repos.
 | `absent` | The repo exists in a namespace and has no chora. It has no UUID in the record. [R: the plan counts 8 of 15 measured repos in this state.]
 | `unresolved` | `:beholding-chora` matches no estate chora in the federation.
 | `legacy` | `:beholding-chora` is the old literal `#u5"estate/chora"` (section 9, item 6). Allowed in `lax` only.
@@ -271,8 +272,8 @@ States, for an estate or repo record:
 === 8.3 Hashes and determinism
 
 * `:chora-hash` and `:root-hash` are sha256 over the file bytes after normalising CRLF to LF. Comments and whitespace are part of the bytes. A whitespace edit therefore changes the hash. A canonical form that ignores them is deferred to A2 (decision C5).
-* Two runs on the same inputs produce the same bytes outside the `(generation ...)` clause. The records are ordered by UUID, then by name.
-* `:registry-version` increases by 1 on any run whose output differs outside `(generation ...)`.
+* Two runs on the same inputs produce the same bytes outside the `(generation ...)` clause and outside `:registry-version`. The records are ordered by UUID, then by name.
+* `:registry-version` increases by 1 on any run whose output differs from the previous run's output outside `(generation ...)` and outside `:registry-version`. Both outputs are compared under that same exclusion.
 
 == 9. Identity values
 
@@ -450,8 +451,8 @@ Each test is a check that a validator can run. `deed_lint.js` already implements
 | T42 | Every repo record has a state from the closed list in 8.2. | `unknown-state-bad`
 | T43 | A repo with no chora appears with `:state absent` and no `:uuid`. | `absent-repo`
 | T44 | `:chora-hash` and `:root-hash` equal the sha256 of the normalised bytes. | `hash-wrong-bad`
-| T45 | Generating twice from the same inputs gives the same bytes outside `(generation ...)`. | all
-| T46 | `:registry-version` increases when the output changes and stays when it does not. | 2 runs
+| T45 | Generating twice from the same inputs, including the same recorded enumeration, gives the same bytes outside `(generation ...)` and `:registry-version`. | all
+| T46 | `:registry-version` increases when the output changes outside `(generation ...)` and `:registry-version`, and stays when it does not. | 2 runs
 | T47 | The index is the only place a clade appears as `(finding-aid)`. No identity field is derived from a clade. | `clade-as-identity-bad`
 | T48 | Hand edit: the index differs from a fresh generation. This reports an error in CI. | `hand-edited-bad`
 |===

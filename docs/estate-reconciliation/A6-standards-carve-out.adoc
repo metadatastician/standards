@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 = A6: The Carve-out Map for standards (by change rate)
 :version: 0.2.3-draft
-:status: DRAFT v0.2.3. Decisions H1 to H12 approved by the owner on 2026-11-10. Not yet ratified as a whole. Builds on A1 v0.3.8, A2 v0.2.3, A3 v0.2.2, A4 v0.2.3 and A5 v0.2.2. Consistency pass applied 2026-11-10. Nothing here is committed, pushed or filed.
+:status: DRAFT v0.2.3. Decisions H1 to H12 approved by the owner on 2026-11-10. Not yet ratified as a whole. Builds on A1 v0.3.8, A2 v0.2.3, A3 v0.2.2, A4 v0.2.3 and A5 v0.2.2. Consistency pass applied 2026-11-10. Proposed in standards#1474; bot-review fixes applied 2026-11-12.
 :toc:
 
 Specification A6 of the Estate Reconciliation Plan. R3 rules that `standards` is carved out by change rate (campaign #479). A6 defines the metric, the ordered rules that give every file one destination, the mechanism of a move, and the tests. It moves no file.
@@ -25,7 +25,7 @@ Identifiers. Every decision, law and test id in this specification is local to i
 * The metric is the number of commits that touch a unit in the last 90 days, in 4 bands: hot (20 or more), warm (5 to 19), cool (at least 1 in 180 days) and cold (none in 180 days) [O]. The unit is a `standards-map.toml` entry, with `mixed` entries split by subdirectory.
 * Every one of the 3,146 tracked files already falls under a map entry [M]. A6 does not add a map. It adds a rate and a destination to the one that exists.
 * Hot machinery goes to the homes that A3 to A5 name: checks and reusable workflows to `proven-cicd`; ruleset, settings and apply tooling to `git-logistics-office`; rules to `hypatia` (held, see H11); deed and k9 specifications to their own repos [O]. The operations diary goes to `metadatastician-governance` [O].
-* A first-pass set of 10 ordered rules assigns 1,441 files to a destination outside `standards` and keeps 1,514 files as canon and as the repo's own working files. The 1,191 archive files stay (section 6.1).
+* A first-pass set of 10 ordered rules assigns 441 files to a destination outside `standards` and keeps 1,514 files as canon and as the repo's own working files. The 1,191 archive files stay (section 6.1).
 * The first pass does not make `standards` quiet. 75% of the commits of the last 90 days still touch a file that stays [M]. The activity that stays is mainly the repo's own working files, not the canon (section 5).
 * Only 2 of the 70 canonical entries move: `1-formats/deed` and `2-protocols/k9-coordination`, both already ruled in the plan [M].
 * A move is one rule group per PR: a signed squash-import into the destination with a link back to the `standards` commit, a pointer left behind, the map and `canon.lock` updated in the same commit. No sweep, no bulk move.
@@ -96,7 +96,7 @@ Each tracked file takes the destination of the first rule that matches it. The l
 | CR0 | everything else | stays in `standards` | 1,514
 |===
 
-Totals [M]: 1,441 files leave; 1,514 stay as live files; 1,191 stay as archive. The repo tracks 223 `.a2ml` files. The rules send 149 to stay, 63 to the archive, 10 to `hypatia` (rule CR4) and 1 to `metadatastician-governance`. The estate rule is that no `.a2ml` file is created or extended in any repo [M: `standards/.claude/CLAUDE.md`]. A copy of an `.a2ml` file into another repo is a new file there, so those 11 are held until the owner rules (H11).
+Totals [M]: 441 files leave (88 + 114 + 20 + 11 + 19 + 87 + 30 + 11 + 61, before the held files of H11 and the exceptions of section 5 reduce it); 1,514 stay as live files; 1,191 stay as archive. The repo tracks 223 `.a2ml` files. The rules send 149 to stay, 63 to the archive, 10 to `hypatia` (rule CR4) and 1 to `metadatastician-governance`. The estate rule is that no `.a2ml` file is created or extended in any repo [M: `standards/.claude/CLAUDE.md`]. A copy of an `.a2ml` file into another repo is a new file there, so those 11 are held until the owner rules (H11).
 
 === 4.2 Things the rules deliberately keep
 
@@ -145,12 +145,12 @@ The archive stays and is not edited. A move never touches a licence file, an SPD
 
 A move is one rule group (or one map entry) per pull request, with these steps in order:
 
-. *Plan.* The generated table (7.2) lists the exact files of the group, their destination and their inbound references (links, `uses:`, `canon.lock`, map rows).
+. *Plan.* The generated table (7.2) lists the exact files of the group, their destination and their inbound references (links, `uses:`, `canon.lock`, map rows, and scripts that read a file by path).
 . *Import.* The destination repo receives the files as one signed squash-import commit. The message links to the `standards` commit that the files came from, and a tag or link back to that SHA is recorded [R: #1234 triage]. History stays in `standards`. No file is rewritten and no history is rewritten.
-. *Pointer.* In `standards`, each moved directory keeps one `POINTER.adoc` naming the destination, the import commit and the date [M: `k9-svc` precedent]. A moved single file leaves no pointer when nothing links to it (checked by the link-rot guard).
+. *Pointer.* In `standards`, each moved directory keeps one `POINTER.adoc` naming the destination, the import commit and the date [M: `k9-svc` precedent]. The pointer resolves only the directory path, not the files below it. A moved single file leaves no pointer only when the inbound-reference list shows no link, `uses:`, map row or script that reads it by path. A script that reads a moved file by path (for example the scripts that read `deed.abnf`) is changed in the same PR or the file stays.
 . *Map.* `standards-map.toml`: the entry's `target` becomes `-> <repo>`, and the entry stays until the files are removed; the Gate D bidirectional check keeps passing.
 . *Lock.* If the group contains a hash-pinned artefact, `canon.lock` is bumped in the same commit [M: Gate A assertion 2]. The groups of section 4.1 contain none, because the pinned artefacts stay (H6).
-. *Remove.* A second commit in `standards` removes the files after the destination has run for one cycle with the files in place and its own gates green.
+. *Remove.* A second commit in `standards` removes the files after the destination has run for one cycle with the files in place and its own gates green. Every moved source file is frozen from the import to the removal. Before removal each file is compared with its imported revision; a file that changed in `standards` after the import is not removed, and is re-imported first.
 . *Verify.* Byte equality of source and destination files; the link-rot guard reports no new BROKEN line; Gate D, Gate A and the canon lockstep pass.
 
 === 6.3 Callers that pin `standards`
@@ -173,7 +173,7 @@ Each group has a revert: a revert of the import commit in the destination and of
 
 === 7.1 Entry rates
 
-`docs/estate-reconciliation/A6-entry-rates.tsv` lists the 135 entries with files, `rate90`, `rate180`, band and destination counts [M]. It is an output. The checker (section 8) regenerates it, and a hand edit is reported.
+`docs/estate-reconciliation/A6-entry-rates.tsv` lists, with files, `rate90`, `rate180`, band and destination counts [M], the 134 entries that are not `mixed` and the 17 units of the `mixed` entry `docs`, split by subdirectory as H4 requires (kind `mixed-unit`; the files directly in `docs/` are one unit). The split rows reproduce the `docs` rates of section 2 and the 58 `docs` files that CR9 moves. It is an output. The checker (section 8) regenerates it, and a hand edit is reported.
 
 === 7.2 Per-file table
 
@@ -189,7 +189,7 @@ A generated table lists every tracked file with its map entry, its rule, its des
 | CL2 | Bidirectional map. Every file belongs to a map entry and every map entry owns a file or is marked empty. Gate D keeps passing after every move.
 | CL3 | Byte equality. A file in the destination after a move is byte-equal to its source at the import commit.
 | CL4 | Pinned artefacts. A move of a hash-pinned artefact bumps `canon.lock` in the same commit. A move that leaves `canon.lock` stale fails Gate A.
-| CL5 | No dangling reference. After a move, no link, `uses:` or map row names a path that no longer resolves, except through its `POINTER.adoc`.
+| CL5 | No dangling reference. After a move, no link, `uses:`, map row or script names a path that no longer resolves. A `POINTER.adoc` resolves its directory path only, never a file below it.
 | CL6 | Frozen archive. The archive is byte-equal before and after every move.
 | CL7 | No licence edit. A move changes no licence file, SPDX header or licence text.
 | CL8 | Reproducible metric. The rate and band of every unit are recomputable from `git log` and the map at a given commit, with no other input.
@@ -206,7 +206,7 @@ Every test is new work unless stated. Gate A, Gate D and the link-rot guard alre
 | Id | Test | Fixture
 
 | C01 | Every tracked file matches exactly one rule of 4.1 (CL1). | `rules-total`, `rules-overlap-bad`
-| C02 | The rules, applied to the checkout, give the file counts of section 4.1. | `rules-counts`
+| C02 | The rules, applied to the tree at `be39f90`, give the file counts of section 4.1. On a later checkout the counts are recomputed and reported, and only CL1 (C01) is enforced. | `rules-counts@be39f90`, `rules-counts-current`
 | C03 | The metric recomputes: `rate90` and `rate180` per entry equal those from `git log` on the same commit (CL8). | `metric-recompute`
 | C04 | A commit counts once for a unit, however many files it changes. | `metric-once`
 | C05 | A file deleted before `T` does not count for its old unit. | `metric-deleted`
@@ -215,7 +215,7 @@ Every test is new work unless stated. Gate A, Gate D and the link-rot guard alre
 | C08 | Gate D passes after a move, and the entry exists or is marked empty (CL2). | `gate-d`
 | C09 | Imported files are byte-equal to their sources at the import commit (CL3). | `byte-equal`, `byte-diff-bad`
 | C10 | Gate A fails when a hash-pinned artefact moved and `canon.lock` is not bumped (CL4). | `lock-stale-bad`
-| C11 | The link-rot guard reports no new BROKEN line after a move (CL5). | `link-rot-bad`
+| C11 | The link-rot guard reports no new BROKEN line after a move, and no script reads a removed file by path (CL5). | `link-rot-bad`, `script-path-bad`
 | C12 | Each moved directory has a `POINTER.adoc` naming the destination, the import commit and the date. | `pointer-missing-bad`
 | C13 | A moved reusable workflow still resolves at the SHA that existing callers pin. | `pinned-caller`
 | C14 | The archive is byte-equal before and after (CL6). | `archive-bytes`

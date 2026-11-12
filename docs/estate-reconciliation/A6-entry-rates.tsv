@@ -1,7 +1,23 @@
 path	kind	district	canonical	files	rate90	rate180	band	destinations
 .github	machinery	5-machine	False	99	236	408	hot	standards:80; proven-cicd:19
 scripts	machinery	5-machine	False	245	228	285	hot	standards:117; proven-cicd:87; git-logistics-office:30; metadatastician-governance:11
-docs	mixed	6-telemetry	False	448	140	185	hot	standards:390; metadatastician-governance:58
+docs (files directly in docs/)	mixed-unit	6-telemetry	False	50	95	115	hot	standards:44; metadatastician-governance:6
+docs/ULTRAPLAN-ECHIDNA-ENGINEERING-ROUTE-2026-11-05	mixed-unit	6-telemetry	False	5	1	1	cool	standards:5
+docs/UX-standards	mixed-unit	6-telemetry	False	30	5	14	warm	standards:30
+docs/accessibility	mixed-unit	6-telemetry	False	1	0	2	cool	standards:1
+docs/affirmations	mixed-unit	6-telemetry	False	2	2	2	cool	standards:2
+docs/archive	mixed-unit	6-telemetry	False	12	4	5	cool	metadatastician-governance:12
+docs/audits	mixed-unit	6-telemetry	False	24	16	25	warm	metadatastician-governance:24
+docs/compliance	mixed-unit	6-telemetry	False	2	2	4	cool	standards:2
+docs/decisions	mixed-unit	6-telemetry	False	15	24	33	hot	standards:15
+docs/handover	mixed-unit	6-telemetry	False	1	1	1	cool	standards:1
+docs/migrations	mixed-unit	6-telemetry	False	2	2	6	cool	standards:2
+docs/proofs	mixed-unit	6-telemetry	False	283	4	4	cool	standards:283
+docs/reorg	mixed-unit	6-telemetry	False	12	17	19	warm	metadatastician-governance:12
+docs/reports	mixed-unit	6-telemetry	False	1	1	1	cool	metadatastician-governance:1
+docs/superpowers	mixed-unit	6-telemetry	False	1	1	1	cool	metadatastician-governance:1
+docs/triage	mixed-unit	6-telemetry	False	2	2	2	cool	metadatastician-governance:2
+docs/wikis	mixed-unit	6-telemetry	False	5	10	12	warm	standards:5
 .machine_readable	index	5-machine	True	100	69	89	hot	standards:100
 1-formats/deed	format-grammar	1-formats	True	88	49	49	hot	deed-ecosystem:88
 1-formats	district	1-formats	False	297	34	34	hot	standards:227; k9-ecosystem:70

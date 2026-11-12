@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 = A3: The Single Gate (one required check, the caller contract, the check table)
 :version: 0.2.2-draft
-:status: DRAFT v0.2.2. Decisions E1 to E11 approved by the owner on 2026-11-10. Not yet ratified as a whole. Builds on A1 v0.3.8 and A2 v0.2.3. Consistency pass applied 2026-11-10. Nothing here is committed, pushed or filed.
+:status: DRAFT v0.2.2. Decisions E1 to E11 approved by the owner on 2026-11-10. Not yet ratified as a whole. Builds on A1 v0.3.8 and A2 v0.2.3. Consistency pass applied 2026-11-10. Proposed in standards#1474; bot-review fixes applied 2026-11-12.
 :toc:
 
 Specification A3 of the Estate Reconciliation Plan. It defines the one required status check of a repo, the one caller workflow, the table from profile to checks, and the rules by which a verdict is computed.
@@ -98,27 +98,28 @@ Each repo carries exactly one caller: `.github/workflows/estate-gate.yml`, job i
 name: Estate gate
 on:
   pull_request:
-    branches: ["main"]
+    branches: ["<default-branch>"]
   merge_group:
   push:
-    branches: ["main"]
+    branches: ["<default-branch>"]
 permissions:
   contents: read
   statuses: write
+  id-token: write
 jobs:
   gate:
     uses: hyperpolymath/proven-cicd/.github/workflows/estate-gate.yml@<40-hex commit>
 ----
 
-The sample parses as YAML [M]. I did not run it on GitHub [I].
+The generator fills `<default-branch>` with the repo's default branch, for example `main` or `master` (rule 1 of 4.2). The sample parses as YAML once the two placeholders are filled [M]. I did not run it on GitHub [I].
 
 === 4.2 Rules
 
-. The caller has no `with:` inputs and no `secrets:` other than what the reusable names. All per-repo facts come from the repo chora. A caller that differs from the template in anything but the 40-hex pin is a deviation of kind `exemption` for rule `generation/drift`, or it is drift.
+. The caller has no `with:` inputs and no `secrets:` other than what the reusable names. All per-repo facts come from the repo chora. The template has 2 generated values: the 40-hex pin and `<default-branch>`, which the generator takes from the repo's default branch on the platform. A caller that differs from the template in anything else is a deviation of kind `exemption` for rule `generation/drift`, or it is drift.
 . The reference is `<owner>/<repo>/.github/workflows/estate-gate.yml@<full 40-hex SHA>`. A branch or tag reference is invalid, because it startup-fails under `sha_pinning_required` [M: audit header]. The caller is de-onboarded from `actions.lock`, as the existing audit caller is.
 . The triggers include `pull_request` on the default branch, and no `paths` or `paths-ignore` filter. A path-filtered caller does not run on every PR, so `estate-gate` would never report on some heads and the PR would wait forever (finding 5).
 . `merge_group` is present so that a merge queue can satisfy the gate [I].
-. `permissions` is `contents: read` and `statuses: write`. No other permission is granted to the caller.
+. `permissions` is `contents: read`, `statuses: write` and `id-token: write`. `id-token: write` lets the reusable aggregate request the OIDC token for the attestation of section 9.1 (A4 F3). A called reusable workflow cannot raise the permissions of its caller, so the caller must grant it [I: GitHub reusable-workflow permission rules]. No other permission is granted to the caller.
 . The pin is advanced by a reviewed PR. The existing weekly tracker `track-estate-audit.yml` does this for the audit [M]. A3 does not define a new tracker.
 . The caller is a generated file. A2's `(generation)` records the pack that produced it. Law L4 (A2) applies: realign may overwrite it, because it is an `engine` file.
 
@@ -145,7 +146,7 @@ The table is a `praxis-deed` named `estate-gate_praxis.deed` that `proven-cicd` 
            :detect ("Cargo.toml" "*/Cargo.toml") :rule "check/rust-ci")))
 ----
 
-The sample in `docs/estate-reconciliation/examples/a3-estate-gate_praxis.deed.example` (the caller sample is `docs/estate-reconciliation/examples/a3-estate-gate.yml.example`) lints clean under `deed_lint.js` once `#uuid` is replaced by `#u5` in a copy, because the current linter does not know the opaque literal (A1 section 7.1) [M]. The linter checks syntax only [I].
+The sample in `docs/estate-reconciliation/examples/a3-estate-gate_praxis.deed.example` (the caller sample is `docs/estate-reconciliation/examples/a3-estate-gate.yml.example`) lints clean under `deed_lint.js` as written: `deed.abnf` v1.3.0 and its linter accept the opaque literal since #1473 [M: linted 2026-11-12]. The linter checks syntax only [I].
 
 [cols="2,1,4"]
 |===
@@ -155,7 +156,7 @@ The sample in `docs/estate-reconciliation/examples/a3-estate-gate_praxis.deed.ex
 | `:when` | 1, symbol | `baseline`, or an A2 capability name (a root term of kind `capability`).
 | `:obligation` | 1, symbol | `required` or `advisory`. An advisory check never fails the gate and never counts toward a required obligation [M: same rule in the mother contract].
 | `:runs-on` | 1, symbol | `github`, `owned` or `either`.
-| `:timeout` | 0..1, INTEGER | Seconds an owned-compute input may take (section 8). Required when `:runs-on` is `owned` or `either`. Default in 5.4.
+| `:timeout` | 0..1, INTEGER | Seconds an owned-compute input may take (section 8). Applies when `:runs-on` is `owned` or `either`. When such a row omits it, the default of 5.4 applies. A row with `:runs-on github` has none.
 | `:detect` | 0..1, list of STRING | Repo-relative globs. A non-empty match means the capability is detected (section 6). A row with `:when baseline` has none.
 | `:rule` | 1, STRING | `check/<id>`. The rule identifier that a deviation names (section 10).
 |===
@@ -250,7 +251,7 @@ R1 allows estate scans on owned compute, through the farm and `continuation-mesh
 . The node posts a commit status on the head commit with context `estate-input/<id>`, state `success` or `failure`, and `target_url` to the signed baton envelope. These contexts are never required.
 . The aggregate looks for the input. While none has arrived and the row's `:timeout` has not passed, the check is `pending` and the gate status is `pending`.
 . After the timeout the check is `not_run` and the gate fails [O]. A late input that arrives after the gate failed does not change that status. A re-run of the aggregate on the same head may pick it up.
-. An input counts only if its envelope verifies (section 9.1). An input with no envelope, a bad signature or a head SHA that differs is `not_run`.
+. An input counts only if its envelope verifies (section 9.1) and the signed `check` of its `check-verdict` predicate (A4 5.5) equals `<id>`. An input with no envelope, a bad signature, a check id that differs or a head SHA that differs is `not_run`. The status context alone never binds an envelope to a check.
 . `either` means the check may run on GitHub or on owned compute. A result from GitHub and one from owned compute for one head are both read. If they disagree, `failed` wins.
 
 The routing of a check to a node (capability matching) is the mesh's concern [M: `docs/ci-check-baton.adoc`]. A3 states only the input contract.
@@ -280,7 +281,7 @@ Detection after merge is weaker than a bound context. A forged `success` merges 
 == 10. Deviations and waivers (A2)
 
 . A required check is waived by a deviation (A2 section 7) whose `:rule` is `check/<id>`. The deviation may sit at the repo, estate or root level. A2 7.4 applies: a repo-level deviation may not name a rule that a higher level declares.
-. A waiver is valid when: `:authority` is present; `:evidence` is present; `:kind` is `exemption` and its `:review-by` or `:expires` has not passed, or `:kind` is `deferral` and its `:expires` has not passed. A `debt` deviation cannot waive a check, because a check has no measured integer in A3. A5 may add that.
+. A waiver is valid when: `:authority` is present and names a ruling or issue that the trusted baseline records, outside the candidate change (the base commit of the PR, or the federation root's ruling register, not the head) [I: A5 names the store]; a deviation in the head cannot supply its own authority; `:evidence` is present; `:kind` is `exemption` and its `:review-by` or `:expires` has not passed, or `:kind` is `deferral` and its `:expires` has not passed. A `debt` deviation cannot waive a check, because a check has no measured integer in A3. A5 may add that.
 . A lapsed deviation is not valid. The check reverts to its real state, and the gate fails if that is `failed` or `not_run`.
 . The envelope lists every waiver that the gate applied. A deviation that names a check that is not required is reported and has no effect.
 . The rule identifier namespace `check/` is reserved for A3. Rule identifiers in general are defined by A5 (sections 3 and 4): `check/<id>` is the `check` domain there.
@@ -289,7 +290,7 @@ Detection after merge is weaker than a bound context. A forged `success` merges 
 
 . `estate-gate` is added to a repo's ruleset only after it has reported once on that repo's default branch (the context-witness rule [M]). A ruleset that requires a name nothing has published is a phantom.
 . During the transition the old required contexts stay until `estate-gate` is witnessed. The old names are then removed, and they are added to `never_required_contexts` so that the applier cannot re-derive them.
-. After the cutover the only required status context of a repo is `estate-gate`. A required list with any other entry is a ruleset defect. This does not apply to a context that an app owns and that the owner has ruled to keep (the design spec's bypass and context rulings [R]).
+. After the cutover the only required status context of a repo is `estate-gate`. A required list with any other entry is a ruleset defect. The one exception is a context that an app owns and that the owner has ruled to keep (the design spec's bypass and context rulings [R]). Such a context is listed by name in the applier's kept-context list, next to `never_required_contexts`. A context in neither list is obsolete and is removed.
 . A repo that cannot satisfy `estate-gate` is reported `UNSATISFIABLE` with the failing check, and is never fixed by a bypass. Doctrine 5 forbids the bypass [R: plan P4].
 . A caller that has been generated from a chora whose `(generation)` is absent is `unstamped` (A2 section 8).
 
@@ -304,7 +305,7 @@ Detection after merge is weaker than a bound context. A forged `success` merges 
 | G3 | No pass on absence. If a required check did not run, the verdict is `fail`.
 | G4 | No under-declaration. For every capability detected in the tree, the checks of that capability are required, whatever the repo declares.
 | G5 | Monotone waiver. A deviation only moves a check to `waived`. It never adds a check to the required set and never changes another check's state.
-| G6 | One name. After the cutover, the set of required contexts of a repo is exactly `{estate-gate}`.
+| G6 | One name. After the cutover, the set of required contexts of a repo is exactly `{estate-gate}` plus the contexts in the kept-context list (section 11).
 |===
 
 == 13. Acceptance tests
@@ -317,7 +318,7 @@ Every test is new work unless stated. A fixture is valid unless marked `-bad`.
 |===
 | Id | Test | Fixture
 
-| G01 | A ruleset's required status contexts are exactly `["estate-gate"]` after cutover. | `ruleset-one`, `ruleset-two-bad`
+| G01 | A ruleset's required status contexts are exactly `["estate-gate"]` plus the kept-context list after cutover. A context in neither list fails. | `ruleset-one`, `ruleset-kept-app`, `ruleset-two-bad`
 | G02 | The `estate-gate` entry has no `integration_id`. | `ruleset-bound-bad`
 | G03 | `estate-gate` is not in `never_required_contexts`, and every old component name is. | `never-required`
 | G04 | A ruleset that requires `estate-gate` on a repo where it has never reported is reported `phantom`. | `phantom-bad`
@@ -332,9 +333,9 @@ Every test is new work unless stated. A fixture is valid unless marked `-bad`.
 | G10 | The caller file is `.github/workflows/estate-gate.yml` with a job id `gate`. | `caller`, `caller-renamed-bad`
 | G11 | The `uses:` reference ends in a 40-hex SHA. | `caller-tag-bad`
 | G12 | The triggers include `pull_request` and no `paths` or `paths-ignore`. | `caller-paths-bad`
-| G13 | `permissions` is exactly `contents: read` and `statuses: write`. | `caller-perms-bad`
+| G13 | `permissions` is exactly `contents: read`, `statuses: write` and `id-token: write`. | `caller-perms-bad`, `caller-no-idtoken-bad`
 | G14 | The caller has no `with:` and no `secrets:` block. | `caller-with-bad`
-| G15 | The caller equals the template except for the pin. | `caller-drift-bad`
+| G15 | The caller equals the template except for the pin and the `<default-branch>` value, which equals the repo's default branch. | `caller-drift-bad`, `caller-master-ok`
 | G16 | Satisfiability (G2): on a fixture PR that touches only one `.md` file, `estate-gate` is still posted. | `pr-docs-only`
 |===
 
@@ -348,7 +349,7 @@ Every test is new work unless stated. A fixture is valid unless marked `-bad`.
 | G21 | Every `:when` is `baseline` or a root term of kind `capability`. | `table-unknown-when-bad`
 | G22 | Every `:id` exists in the `proven-cicd` catalogue, or the row is reported `no-home`. | `table-no-home`
 | G23 | `(:id, :when)` is unique. | `table-dup-bad`
-| G24 | `:timeout` is present for `owned` and `either` rows. | `table-no-timeout-bad`
+| G24 | An `owned` or `either` row without `:timeout` uses 900 seconds (5.4); a `github` row with `:timeout` is rejected. | `table-no-timeout-default`, `table-github-timeout-bad`
 | G25 | A row with `:obligation advisory` never changes a verdict. | `advisory-fail`
 | G26 | Every `:rule` equals `check/<id>`. | `table-rule-bad`
 |===
@@ -382,6 +383,7 @@ Every test is new work unless stated. A fixture is valid unless marked `-bad`.
 | G44 | An input for a different head SHA is ignored. | `owned-wrong-sha`
 | G45 | `either`: a GitHub `failed` and an owned `passed` for one head give `failed`. | `either-disagree`
 | G46 | A late input after `failure` does not change the posted status. | `owned-after`
+| G47 | A verified envelope for check A posted under `estate-input/<B>` is `not_run` for B. | `owned-wrong-check`
 |===
 
 === 13.6 Waivers
@@ -393,6 +395,7 @@ Every test is new work unless stated. A fixture is valid unless marked `-bad`.
 | G50 | A valid `exemption` for `check/<id>` gives `waived` and the gate passes (G5). | `waiver-ok`
 | G51 | A lapsed `deferral` gives the check's real state. | `waiver-lapsed`
 | G52 | A deviation with no `:authority` is not valid. | `waiver-no-auth-bad`
+| G56 | A deviation whose `:authority` resolves only in the candidate change (not in the trusted baseline) is not valid. | `waiver-self-auth-bad`
 | G53 | A `debt` deviation does not waive a check. | `waiver-debt-bad`
 | G54 | A repo-level deviation for a rule that an estate declares is rejected (A2 7.4). | `waiver-higher-bad`
 | G55 | A waiver for a check that is not required has no effect and is reported. | `waiver-unused`

@@ -23,12 +23,16 @@
             :commit "0123456789abcdef0123456789abcdef01234567"
             :tree "89abcdef0123456789abcdef0123456789abcdef"
             :branch "main")
+    (generator :repo "hyperpolymath/launch-scaffolder" :version "0.1.0"
+               :commit "fedcba9876543210fedcba9876543210fedcba98")
     (canon :version "2.1.5"
            :criteria-sha256 "6a5aa8857bd0d0d58ef48827938ca17c251b6b854dacf59d306388d61694d82a"
            :gates-sha256 "5c510bba025be718deebb12d0333bfe7db2da43c66578b728b1a334df65290b1")
     (packs
-      (pack :name "rust-cli" :version "0.1.0")
-      (pack :name "governance-tier" :version "0.1.0"))
+      (pack :name "rust-cli" :version "0.1.0"
+            :sha256 "1111111111111111111111111111111111111111111111111111111111111111")
+      (pack :name "governance-tier" :version "0.1.0"
+            :sha256 "2222222222222222222222222222222222222222222222222222222222222222"))
     (answers :mint-date "2026-11-10" :license MPL-2.0)
     :extra-branches ())
 
