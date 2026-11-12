@@ -11,7 +11,7 @@
 ; A CLAUSE PROFILE, not a new grammar. Every anchor-clause below is also a
 ; `clause` of deed.abnf v1.3.0, so a deed carrying one still passes deed_lint
 ; unchanged. This profile narrows that clause. Rules it borrows (string,
-; boolean, symbol, token-sep, DQUOTE, DIGIT, ALPHA, hex-lc)
+; boolean, symbol, token-sep, DQUOTE, DIGIT, ALPHA, hex-lc, str-char, escape)
 ; are deed.abnf's, unchanged. Requires RFC 7405 (%s"..." case-sensitive string literals).
 ;
 ; What the anchor is: the repo's semantic authority and golden path — what a
@@ -38,8 +38,9 @@ schema-field    = %s":schema" token-sep DQUOTE %s"hyperpolymath.anchor/1" DQUOTE
                 ; The profile version this clause is written against. A reader
                 ; refuses another major (A7 law, after ultraplan Q5).
 
-authority-field = %s":authority" token-sep DQUOTE 1*str-char DQUOTE
-                ; Non-empty. The vocabulary is not closed in v1.0.0 (A7 open
+authority-field = %s":authority" token-sep DQUOTE 1*( str-char / escape ) DQUOTE
+                ; Non-empty; deed.abnf's four escapes are allowed, as in any
+                ; string. The vocabulary is not closed in v1.0.0 (A7 open
                 ; question J7); the template writes "upstream-canonical".
 
 repo-field      = %s":repo" token-sep string

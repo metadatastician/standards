@@ -1069,6 +1069,7 @@ const SEMVER = /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/;
 const DATE = /^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/;
 // The template's own deed keeps repo-init's tokens; a minted deed has none.
 const MINT_TOKEN = /^\{\{[A-Z][A-Z0-9_]*\}\}$/;
+const MINT_TOKEN_ANY = /\{\{[A-Z][A-Z0-9_]*\}\}/;
 
 /** A YYYY-MM-DD string naming a day that exists (2026-02-31 does not). */
 function isCalendarDate(s) {
@@ -1191,7 +1192,27 @@ export function checkAnchor(text, filename = null, opts = {}) {
   if (head !== "repo-deed") throw new AnchorError(`(anchor …) belongs in a repo-deed, not a ${head}`);
   if (clauses.length > 1) throw new AnchorError("a repo deed carries at most one (anchor …) clause");
 
-  const own = items.find((it) => it[0] === "field" && it[1] === "repo-uuid");
+  // An unfilled repo-init placeholder anywhere in the clause marks an unminted
+  // deed. Only the template's own deed (--template) keeps them.
+  if (!opts.template) {
+    const strs = (v) => (v[0] === "string" ? [v[1]] : v[0] === "list" ? v[1].flatMap(strs) : []);
+    const walk = (list) => {
+      for (const it of list) {
+        if (it[0] === "clause") walk(it[2]);
+        else for (const str of strs(it[2])) {
+          if (MINT_TOKEN_ANY.test(str)) {
+            throw new AnchorError(`(anchor …) :${it[1]} ${JSON.stringify(str)} holds an unfilled repo-init token; only the template's own deed (--template) keeps one`);
+          }
+        }
+      }
+    };
+    walk(clauses[0][2]);
+  }
+
+  // A1: a deed carries one id. With two, a parent could match the one not compared.
+  const owns = items.filter((it) => it[0] === "field" && it[1] === "repo-uuid");
+  if (owns.length > 1) throw new AnchorError(`a repo deed carries one :repo-uuid; this one has ${owns.length}`);
+  const own = owns[0];
   // The deed's own id as an opaque body, so a parent can be compared with it.
   // A legacy literal names the same id: #u8"domain:name" is its profile C id,
   // and #u5"github.com/o/x" is the birth path whose deed id is the profile C id
