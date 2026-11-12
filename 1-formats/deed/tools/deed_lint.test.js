@@ -75,8 +75,6 @@ const RULE = {
   "inu8-no-colon_chora.deed": /has no ":"/,
   "inu8-no-string_chora.deed": /uuid8 must be followed immediately by a string/,
   "inuuid-uppercase_chora.deed": /uuid literal body .* must be 8-4-4-4-12 lowercase hex/,
-  "inuuid-v4_chora.deed": /has version 4; only 5 and 8 are legal/,
-  "inuuid-variant_chora.deed": /has variant nibble c/,
   "inuuid-short_chora.deed": /must be 8-4-4-4-12 lowercase hex/,
   "inuuid-no-string_chora.deed": /uuid literal must be followed immediately by a string/,
   "inline-999_chora.deed": /line is 999 octets; a deed line is at most 998 octets/,
@@ -223,9 +221,16 @@ describe("extra rules", () => {
       expect(verdict(HDR + `(repo-deed :schema-version "1" :a #uuid"b32d6be4-73ba-873e-${v}d61-e57f43c75cd1")\n`)).toBeNull();
     }
   });
+  // Bad UUIDs are assembled here, not committed as fixtures: check-uuid-v8.sh
+  // scans the tree, and a literal non-v8 value would turn that gate red.
+  test("uuid (v1.3.0): every variant nibble other than 8, 9, a, b is refused", () => {
+    for (const v of "01234567cdef") {
+      expect(verdict(HDR + `(repo-deed :schema-version "1" :a #uuid"b32d6be4-73ba-873e-${v}d61-e57f43c75cd1")\n`)).toMatch(new RegExp(`has variant nibble ${v}`));
+    }
+  });
   test("uuid (v1.3.0): versions other than 5 and 8 are refused", () => {
     for (const v of "0123467") {
-      expect(verdict(HDR + `(repo-deed :schema-version "1" :a #uuid"b32d6be4-73ba-${v}73e-9d61-e57f43c75cd1")\n`)).toMatch(/only 5 and 8/);
+      expect(verdict(HDR + `(repo-deed :schema-version "1" :a #uuid"b32d6be4-73ba-${v}73e-9d61-e57f43c75cd1")\n`)).toMatch(new RegExp(`has version ${v}; only 5 and 8 are legal`));
     }
   });
   test("uuid (v1.3.0): an escape, braces or a trailing character is refused", () => {
