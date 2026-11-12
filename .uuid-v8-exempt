@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: MPL-2.0
+# Files scripts/check-uuid-v8.sh does not scan in this repository. Exact paths
+# only, one per line, relative to the repository root. Keep each entry's reason.
+#
+# deed_lint negative controls: they must hold the malformed #uuid literals
+# they test (a v4, and a non-RFC variant).
+1-formats/deed/tools/fixtures/invalid/inuuid-v4_chora.deed
+1-formats/deed/tools/fixtures/invalid/inuuid-variant_chora.deed
+1-formats/deed/tools/fixtures/invalid/inuuid-uppercase_chora.deed
+1-formats/deed/tools/fixtures/invalid/inuuid-no-string_chora.deed

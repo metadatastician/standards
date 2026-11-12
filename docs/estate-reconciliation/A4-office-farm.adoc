@@ -125,6 +125,7 @@ DSSE envelope        payloadType "application/vnd.in-toto+json"; signatures[]
 ----
 
 * The Statement is `https://in-toto.io/Statement/v1`. Its `subject` is one entry: `name` is the repo UUID (A1 `:repo-uuid` value as a string) and `digest` is `{"gitCommit": "<40 hex>"}` [I: in-toto accepts `gitCommit` as a digest key].
+** *Resolved by rule V8 (A1 section 9.1).* The repo UUID is the profile C UUIDv8 of the birth path, so the subject `name` is a version 8 value that the estate UUID gate (`scripts/check-uuid-v8.sh`) accepts without typing. `examples/a4-statement.json.example` is therefore not in `.uuid-v8-exempt` [M].
 * The signed payload is the Statement canonicalised with JCS (RFC 8785) [I]. The estate routes I-JSON/JCS data through `kyq` [M], so the same canonical form serves the signature and the data route.
 * A signature has one of 2 forms, matching the 2 publisher forms of section 12.
 ** *ed25519.* The signature has a `keyid` and an ed25519 signature [I: DSSE]. The `keyid` is a publisher id in the federation root's `(publishers)` clause (A3 E1) whose entry carries `:ed25519`. A signature whose `keyid` is not listed is not valid.
