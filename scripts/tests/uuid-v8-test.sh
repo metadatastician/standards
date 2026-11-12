@@ -162,5 +162,14 @@ expect 1 "a v4 in the deed linter's VALID fixtures is still rejected" --strict
 fresh; mkdir -p "$WORK/t/other/fixtures/invalid"; printf '%s\n' "$V4" > "$WORK/t/other/fixtures/invalid/x.json"
 expect 1 "a v4 in some other fixtures/invalid/ directory is still rejected" --strict
 
+echo "the A4 in-toto Statement example (one named external-format file)"
+A4DIR="$WORK/t/docs/estate-reconciliation/examples"
+fresh; mkdir -p "$A4DIR"; printf '{"subject":[{"name":"%s"}]}\n' "$V5" > "$A4DIR/a4-statement.json.example"
+expect 0 "a bare v5 in docs/estate-reconciliation/examples/a4-statement.json.example is ignored" --strict
+fresh; mkdir -p "$A4DIR"; printf '{"subject":[{"name":"%s"}]}\n' "$V5" > "$A4DIR/a4-envelope.json.example"
+expect 1 "a bare v5 in a sibling .json.example is still rejected" --strict
+fresh; mkdir -p "$WORK/t/other"; printf '{"subject":[{"name":"%s"}]}\n' "$V5" > "$WORK/t/other/a4-statement.json.example"
+expect 1 "a file of the same name elsewhere is still rejected" --strict
+
 echo "PASS=$pass FAIL=$fail"
 [ "$fail" -eq 0 ]

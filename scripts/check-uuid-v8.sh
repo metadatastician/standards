@@ -93,9 +93,16 @@ while IFS= read -r file; do
   # and data files, not binaries. The deed linter's rejection fixtures
   # (1-formats/deed/tools/fixtures/invalid/) carry malformed literals on
   # purpose: each one exists to prove deed_lint.js refuses it.
+  #
+  # One named external-format file: the A4 in-toto Statement example. Its
+  # subject `name` is the example repo's id, the UUIDv5 of its birth path
+  # (owner ruling U2), and in-toto JSON has no #uuid literal to type it with.
+  # The same id appears typed as #uuid"…" in the example deeds next to it.
+  # Exempt by exact path only; any other file holding a bare v5 still fails.
   case "$file" in
     */.git/*|*/check-uuid-v7.sh|*/check-uuid-v8.sh|*.a2ml|*.a2ml.in) continue ;;
     */1-formats/deed/tools/fixtures/invalid/*|1-formats/deed/tools/fixtures/invalid/*) continue ;;
+    */docs/estate-reconciliation/examples/a4-statement.json.example|docs/estate-reconciliation/examples/a4-statement.json.example) continue ;;
   esac
   if grep -IEni -- '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' "$file" >/dev/null 2>&1; then
     # Every UUID on a line is checked, not only the last one (grep -o). Each
