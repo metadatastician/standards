@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 = A3: The Single Gate (one required check, the caller contract, the check table)
 :version: 0.2.2-draft
-:status: DRAFT v0.2.2. Decisions E1 to E11 approved by the owner on 2026-11-10. Not yet ratified as a whole. Builds on A1 v0.3.8 and A2 v0.2.3. Consistency pass applied 2026-11-10. Proposed in standards#1474; bot-review fixes applied 2026-11-12.
+:status: DRAFT v0.2.2. Decisions E1 to E11 approved by the owner on 2026-11-10. Not yet ratified as a whole. Builds on A1 v0.3.9 and A2 v0.2.3. Consistency pass applied 2026-11-10. Proposed in standards#1474; bot-review fixes applied 2026-11-12.
 :toc:
 
 Specification A3 of the Estate Reconciliation Plan. It defines the one required status check of a repo, the one caller workflow, the table from profile to checks, and the rules by which a verdict is computed.
@@ -160,7 +160,7 @@ The table is a `praxis-deed` named `estate-gate_praxis.deed` that `proven-cicd` 
 (praxis-deed
   :schema-version "1.0.0"
   :canonical-name "estate-gate"
-  :beholding-chora #uuid"47e1501b-26b4-5bbd-8a3f-1afa81c69dbe"
+  :beholding-chora #uuid"0889b37b-defb-831f-973c-e119500db00e"
   (checks
     (check :id "secret-scan" :when baseline :obligation required
            :runs-on github :rule "check/secret-scan")
