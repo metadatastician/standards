@@ -166,6 +166,10 @@ LEDGERS=(
   # still waiting for kyX or an owner ruling. Every entry leaves when its file
   # is archived or translated; nothing joins it.
   ".machine_readable/a2ml-legacy-allow.txt"
+  # Files scripts/check-uuid-v8.sh does not scan here (exact paths only). It
+  # starts with the deed_lint negative controls and the A4 in-toto example;
+  # every later addition needs a declared exception.
+  ".uuid-v8-exempt"
 )
 
 echo "Exemption ratchet — comparing against ${BASE_REF}"
