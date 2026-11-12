@@ -541,6 +541,7 @@ const ANCHOR_WHY = {
   "nested-anchor_chora.deed": "only at the top level",
   "parent-duplicate_chora.deed": "twice",
   "parent-legacy-literal_chora.deed": "got uuid8",
+  "parent-no-own-id_chora.deed": "needs the deed's own :repo-uuid",
   "parent-no-uuid_chora.deed": "is missing :uuid",
   "parent-relation-string_chora.deed": ":relation must be a symbol",
   "parent-self_chora.deed": "the deed's own :repo-uuid",
@@ -592,6 +593,16 @@ describe("anchor fixtures", () => {
       expect(err.message).toContain(ANCHOR_WHY[n]);
     });
   }
+});
+
+describe("--anchor FILE... batch", () => {
+  test("an unreadable path fails that file and the batch goes on", () => {
+    const ok = join(FIX_ANCHOR, "valid", "minimal_chora.deed");
+    const r = cli("--anchor", "/nonexistent/missing_chora.deed", ok);
+    expect(r.code).toBe(1);
+    expect(r.out).toContain("FAIL /nonexistent/missing_chora.deed: cannot read the file (ENOENT)");
+    expect(r.out).toContain(`OK   ${ok}`);
+  });
 });
 
 describe("checkAnchor result", () => {
