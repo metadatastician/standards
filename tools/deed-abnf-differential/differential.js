@@ -124,7 +124,7 @@ function clauseText(t, name) {
     } else if (c === ";") {
       while (k < t.length && t[k] !== "\n") k++;
     } else if (c === "(") {
-      if (start < 0 && t.startsWith(open, k) && /[\s)]/.test(t[k + open.length] ?? "")) start = k;
+      if (start < 0 && t.startsWith(open, k) && /[\s);]/.test(t[k + open.length] ?? "")) start = k;
       if (start >= 0) depth++;
     } else if (c === ")" && start >= 0 && --depth === 0) {
       return t.slice(start, k + 1);
@@ -164,6 +164,10 @@ for (const [dir, clause] of [["valid", null], ["egress/valid", "egress"], ["anch
       const e = clauseText(text, clause);
       // A deed without the clause is valid; a clause it has must parse.
       if (e !== null && !grammarAccepts(grammar, `${clause}-clause`, e)) fail(`${clause} fixture rejected by ${clause}.abnf`, `${dir}/${name}`);
+      // Only a fixture named no-<clause>_… may lack the clause. Any other that
+      // yields none means clauseText missed it, and the grammar check was
+      // silently skipped.
+      if (e === null && !name.startsWith(`no-${clause}`)) fail(`${clause} fixture has no extractable (${clause} …) clause`, `${dir}/${name}`);
     }
   }
 }

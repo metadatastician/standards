@@ -1242,6 +1242,11 @@ export function checkAnchor(text, filename = null, opts = {}) {
     } else {
       // (parents (parent :uuid #uuid"…" [:relation sym]) …)
       if (it[2].length === 0) throw new AnchorError(`${where} is empty`);
+      // "A parent never names the deed itself" needs an id to compare with:
+      // with none, every parent would pass that check unexamined.
+      if (ownUuid === null) {
+        throw new AnchorError(`${where} needs the deed's own :repo-uuid (#uuid, #u8 or #u5) to check that no parent names the deed itself`);
+      }
       for (const p of it[2]) {
         if (p[0] !== "clause" || p[1] !== "parent") throw new AnchorError(`${where} takes (parent …) clauses only`);
         const f = anchorFields(p[2], null, `${where} (parent …)`);
@@ -1311,8 +1316,17 @@ function profileFixtures(d, check) {
 function anchorFiles(files, opts = {}) {
   let bad = 0;
   for (const f of files) {
+    let text;
     try {
-      const a = checkAnchor(readFileSync(f, "utf8"), f, opts);
+      text = readFileSync(f, "utf8");
+    } catch (e) {
+      // One unreadable path is that file's failure, not the end of the batch.
+      bad += 1;
+      console.log(`FAIL ${f}: cannot read the file (${e.code || e.message})`);
+      continue;
+    }
+    try {
+      const a = checkAnchor(text, f, opts);
       console.log(`OK   ${f} (${a === null ? "no anchor clause" : `anchor, authority ${JSON.stringify(a.authority)}`})`);
     } catch (e) {
       if (!(e instanceof LintError)) throw e;
