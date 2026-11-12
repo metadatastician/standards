@@ -126,6 +126,33 @@ Its fixtures live in `fixtures/egress/`, not `fixtures/invalid/`, because
 every invalid one is a grammatical deed: `deed_lint.test.js` asserts that
 each passes `deed_lint` and fails only the profile.
 
+== `deed_lint.js --anchor` — the `(anchor …)` clause profile (DRAFT)
+
+Checks what `spec/abnf/clauses/anchor.abnf` adds to the grammar, on a file
+that `deed_lint.js` already accepts: the member set of `(anchor …)` and of
+each sub-clause, `:schema "hyperpolymath.anchor/1"` and a non-empty
+`:authority` exactly once, value types, a three-segment `:version`, a
+`:last-updated` that is a real calendar date, repo-relative
+`(semantic-authority-files …)` paths, parents named only by an opaque
+version 8 `#uuid` chora id (A1 rule V8), no parent twice and never the deed
+itself (a legacy `#u8` or `#u5` `:repo-uuid` is compared by the profile C id
+it names), and the clause only at the top level of a repo deed. A deed with
+no `(anchor …)` clause passes. Prose: `docs/estate-reconciliation/A7-contractiles-descriptiles-anchor.adoc`,
+proposed in standards#1489; ruling Q11 of the 2026-10-19 ultraplan.
+
+    bun deed_lint.js --anchor FILE.deed...
+    bun deed_lint.js --anchor --template rsr-template-repo_chora.deed
+    bun deed_lint.js --anchor-fixtures fixtures/anchor/
+
+`--template` marks the template's own deed, the one deed that may keep
+repo-init's `{{TOKEN}}` placeholders; in any other deed a placeholder is an
+error. In the fixture corpus, a file named `template-*` is checked in that
+mode. `--anchor-fixtures` needs both `valid/` and `invalid/`, each with at
+least one fixture: a missing or empty half exits 2, never OK.
+
+The profile is a draft. CI gates only its own fixtures until the owner
+ratifies A7; it does not yet run over a caller's committed deeds.
+
 == `a2ml_to_deed.py` — the translator
 
 Implements ONE authoritative mapping: the specs in `../mappings/`. It is
