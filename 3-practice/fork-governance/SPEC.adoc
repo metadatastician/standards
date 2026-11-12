@@ -15,9 +15,13 @@ proposal] defers to it for display. It does not restate how a lane computes its
 verdict; that is link:LANES.adoc[LANES] and, for the grids themselves,
 link:../../docs/VERDICT-GRID-SPEC.adoc[VERDICT-GRID-SPEC].
 
-Version 1.4 records the owner's layout rulings of 2026-11-12: a summary card,
-a farm line, a tests block, a fork block, a two-part dependencies block with an
-estate map, and one folding rule for every section (§2).
+Version 1.4 records the owner's layout rulings of 2026-11-12. Read top to
+bottom, the comment answers, in order: what matters here (summary card); is the
+farm alive and in touch (farm); is this repository still what it says it is
+(K9-DEED); does it pass its tests (tests); what did the scanners and the fleet
+find (Hypatia); what do we manage, who follows whom and are we in sync (fork
+governance, with the line map); and is anything we depend on, or that depends
+on us, unwell (dependencies). One folding rule applies to every section (§2.8).
 
 == 1. Terms
 
@@ -33,8 +37,8 @@ of the lane verdicts, never an independent judgement.
 *Summary card*:: The summary table plus the card facts beneath it (§2.3): the
 always-visible top of the comment.
 
-*Block*:: A section of the comment that is not a lane: farm, tests, fork,
-dependencies, and the external reviewer coverage. A block reports evidence
+*Block*:: A section of the comment that is not a lane: farm, tests, fork
+governance, dependencies, and the external reviewer coverage. A block reports evidence
 that another producer owns. It has a state (§2.7) and is shown in the summary
 card, but it never sets a lane state or the overall badge (§3.2): the comment
 must not become a second gate.
@@ -80,14 +84,14 @@ The body MUST contain, in this order:
   Always present;
 . the block marker `<!-- fork-governance:block tests -->`, the heading
   `## Tests`, then the tests block (§2.10). Always present;
-. on a fork only (§2.11): the block marker `<!-- fork-governance:block fork -->`,
-  the heading `## Fork`, then the fork block;
 . the lane marker `<!-- fork-governance:lane hypatia -->` and the heading
   `## Hypatia verdict grid`, then the Hypatia grid with the fleet's rows, or
   its orange placeholder. Always present;
+. the block marker `<!-- fork-governance:block lineage -->`, the heading
+  `## Fork governance`, then the lineage block with the line map (§2.11).
+  Always present;
 . the block marker `<!-- fork-governance:block dependencies -->`, the heading
-  `## Dependencies`, then the estate sub-block and the packages sub-block
-  (§2.12). Always present;
+  `## Dependencies`, then the dependency walk (§2.12). Always present;
 . the block marker `<!-- fork-governance:block reviewers -->` and the external
   reviewer coverage (§2.6).
 
@@ -98,11 +102,18 @@ the same PR look like two different verdicts.
 section by its marker, never by its position: v1.4 inserted blocks between the
 lanes (§8).
 
-The fork block is the only conditional section, and its absence is never
-silent: the summary card states whether the repository is a fork (§2.3).
+Every section is always present; none is conditional on good news or on the
+repository's shape.
 
 The lane *name* is `K9-DEED conformance` in the summary row and in the section
 heading. It is not `K9 conformance`; the rename is normative.
+
+The K9-DEED section is the identity-stability check: the descriptiles (the
+deed's account of what the repository *is*) still parse, and the K9 runner can
+still enforce the contractiles (what it *must* hold). A failure here is the
+gravest state in the comment, because it means the repository's own
+self-description says that its contracts are broken. Its summary line names
+which side failed: the deed (description) or the contracts (enforcement).
 
 === 2.3 Summary table
 
@@ -117,18 +128,18 @@ heading. It is not `K9 conformance`; the rename is normative.
 
 ==== 2.3.1 Card facts
 
-Under the table, one line per fact, in this order. Each names its state with
-the block vocabulary (§2.7), so the card alone answers "is anything not
-green?" without opening a block:
+Under the table, one line per fact, in this order. The card is highlights
+only: each fact is a state and at most a few words, so the card alone answers
+"is anything not green?" without opening a section:
 
 [cols="1,4",options="header"]
 |===
 | Fact | Content
 | `Subject` | repository (display name; the forge's repository ID where it exposes one), head commit (12 hex), base commit, PR number. A display name is not an identity.
-| `Farm` | the farm state word (§2.9).
+| `Farm` | the three farm answers (§2.9).
 | `Tests` | `<glyph> <word>` of the tests block (§2.10).
-| `Fork` | `yes — fork of <owner>/<repo>` with the fork block's `<glyph> <word>`, or `no (forge fork flag false)`. Never blank.
-| `Dependencies` | `<glyph> <word>` for each sub-block: `estate <…> · packages <…>` (§2.12).
+| `Fork governance` | `<glyph> <word>`, then `fork of <owner>/<repo>` or `not a fork`, and the sync state (§2.11). Never blank.
+| `Dependencies` | `<glyph> <word>` and the count of non-green entries by class (§2.12).
 | `Reviewers` | the external reviewer coverage word (§2.6).
 |===
 
@@ -217,20 +228,27 @@ control (§2.13).
 
 === 2.9 Farm (always present)
 
-One line: `**Farm:** <glyph> <word>`, with exactly one of these words:
+The farm is the private farm this repository reports to
+(`.git-private-farm`). Its line gives three answers and nothing else:
 
-[cols="1,1,3",options="header"]
+`**Farm:** <glyph> alive · <glyph> working · <glyph> in touch`
+
+[cols="1,3",options="header"]
 |===
-| Word | Glyph | Meaning
-| `connected` | 🟢 | The farm's evidence for this repository is current and the repository is connected.
-| `not connected` | 🔴 | The evidence says the repository is not connected.
-| `indeterminate` | 🟠 | No current evidence, the producer failed, or the producer does not exist yet.
+| Answer | Question
+| `alive` | Is the farm's agent running? ("yes, I am working")
+| `working` | Is the farm doing its job for this repository? ("yes, it is working")
+| `in touch` | Are the farm and this repository connected and current? ("yes, we are in touch")
 |===
+
+Each answer is 🟢 yes, 🔴 no, or 🟠 indeterminate (no current evidence, the
+producer failed, or the producer does not exist yet). The line is green only
+when all three are yes.
 
 Nothing else may appear: no reason, host, URL, issue, identity, count or
-timestamp. The reason for `not connected` or `indeterminate` lives in the
-owner-only view (§2.13), which the line may link to only once that view
-enforces authentication.
+timestamp. The reason for any answer that is not yes lives in the owner-only
+view (§2.13), which the line may link to only once that view enforces
+authentication.
 
 *Departure recorded.* The Observatory proposal made public farm status opt-in
 per repository (default deny). The owner ruled on 2026-11-12 that the line is
@@ -248,34 +266,47 @@ one). Failing tests are listed first, at most 20, with a count of the rest.
 The block reports the suite; it does not run it. Its producer is the
 repository's own test job result for the head.
 
-=== 2.11 Fork (forks only)
+=== 2.11 Fork governance (always present)
 
-Present exactly when the forge reports the repository as a fork (its fork flag
-and parent fields). A name, a template origin, a remote URL or a workflow called
-`fork-governance` never makes a repository a fork. For a non-fork the card's
-`Fork` fact says so (§2.3.1) and the block is omitted.
+What this repository is in its lineage: what is under our management and what
+is not, whom we follow and who follows us, and whether each pairing is in sync.
+Sometimes we are the terminus of a line, sometimes a station in the middle; we
+may be subject to another repository's changes, or others may be subject to
+ours. Divergence can be alarming or intended (it may be why the fork exists),
+so the block reports it and does not judge it.
 
-The block shows: the parent (`owner/repo`), the compared branches, ahead and
-behind counts when the forge can compare them, the last upstream sync it can
-observe, and the inherited-language paths the fork declares (LANES, Lane 3). An
+The block shows:
+
+* *Management*: for this repository and each station on the map, `ours`
+  (under our management) or `theirs`, from the estate register.
+* *Upstream* (what we follow): for a forge fork, the parent from the forge's
+  fork flag and parent fields; plus any declared upstream. Compared branches,
+  ahead and behind counts when the forge can compare them, the last sync it can
+  observe, and the inherited-language paths a fork declares (LANES, Lane 3).
+* *Downstream* (what follows us): forks of this repository and repositories
+  that declare it as their upstream, each with the same sync facts.
+* *The line map* (below).
+
+A name, a template origin, a remote URL or a workflow called `fork-governance`
+never makes a repository a fork. A repository with no fork and no declared
+lineage says `not a fork · no declared lineage` (grey, with that reason). An
 unavailable comparison is `indeterminate` with its reason, never zero
 divergence.
 
-=== 2.12 Dependencies (always present)
+==== The line map
 
-Two sub-blocks, in this order. Each has its own state in the card.
-
-==== Estate: upstream and downstream
-
-The repositories this one depends on (upstream) and the repositories that
-depend on it (downstream), drawn as a line map, then listed as text.
+A London-Underground-style map of the lineage: stations are repositories,
+lines are typed relationships, and this repository is highlighted wherever it
+sits (terminus or interchange).
 
 Sources, and nothing else:
 
-* *Upstream*: the repository's own deed, `(ecosystem)` clause: `:chain` and
-  each `(related … :relationship …)`. The deed is the authority for what a
-  repository says it depends on.
-* *Downstream and every station's state*: the estate register. Cadastra
+* *Declared lineage*: the repository's own deed, `(ecosystem)` clause: `:chain`
+  and each `(related … :relationship …)`. The deed is the authority for what a
+  repository says about itself.
+* *Forge facts*: fork flags and parent fields; the forge's compare endpoint for
+  ahead and behind counts.
+* *Everything else, and every station's state*: the estate register. Cadastra
   observes (what exists and in what state, as found by running the scan);
   reposystem models (the typed graph, imported from cadastra's register and the
   deeds). The block reads reposystem's `estate-json` export. Neither the
@@ -284,31 +315,61 @@ Sources, and nothing else:
 Rules:
 
 . A line is drawn only for an observed or declared, typed relationship. Its
-  style names the relation: reposystem's `uses`, `provides`, `extends`,
-  `replaces`, `refers-to`, plus `fork-of` and `mirror-of` kept distinct (a
-  forge fork and a mirror are different facts). Nothing is inferred from names.
-. Each station shows `<name> · <glyph> <word> · checked <date>`: the state of
-  that repository's default branch as cadastra last observed it, and when. A
-  station with no observation is orange `?`, never green.
-. The map is a Mermaid `flowchart LR` with this repository in the middle,
-  upstream to its left and downstream to its right, at most 12 stations per
-  side, with a count of the rest. It is immediately followed by a plain list of
-  the same edges (`upstream: standards · standard-source · 🟢 clean ·
-  checked 2026-11-12`), so the content survives a client that does not
-  render Mermaid and is read in order by a screen reader. The list, not the
-  drawing, is the record.
+  style names the relation: `fork-of`, `mirror-of`, `upstream-of`,
+  `template-of`, and reposystem's `uses`, `provides`, `extends`, `replaces`,
+  `refers-to`. A forge fork and a mirror are different facts. Nothing is
+  inferred from names.
+. Each station shows `<name> · <glyph> <word> · ours|theirs · checked <date>`:
+  the state of that repository's default branch as cadastra last observed it,
+  and when. A station with no observation is orange `?`, never green.
+. The map is a Mermaid `flowchart LR` with what we follow to the left of this
+  repository and what follows us to the right, at most 12 stations per side,
+  with a count of the rest. It is immediately followed by a plain list of the
+  same edges (`upstream: standards · standard-source · ours · 🟢 clean ·
+  checked 2026-11-12`), so the content survives a client that does not render
+  Mermaid and is read in order by a screen reader. The list, not the drawing,
+  is the record.
 . Until reposystem exports a downstream index and distinct fork and mirror
-  relations, the sub-block shows upstream from the deed and says `downstream:
-  indeterminate (estate register not yet wired)`.
+  relations, the map shows what the deed and the forge state and says
+  `downstream: indeterminate (estate register not yet wired)`.
 
-==== Packages
+=== 2.12 Dependencies (always present)
 
-Direct and transitive package dependencies, grouped by: known vulnerability,
-suspected or confirmed compromise, archived or unmaintained, and unresolvable,
-each with the dependency path, resolved version, evidence source, check time
-and whether the repository can fix it locally. These classes are distinct and
-not interchangeable (Observatory, Dependency investigations). A missing
-advisory feed is `indeterminate`, never zero vulnerabilities.
+A dependency walk, in both directions: what this repository depends on
+(packages, direct and transitive, and estate repositories it uses), and what
+depends on it. It is a diagnostic, like a medical one: comprehensive, short,
+and pointing elsewhere for detail. It does not explain why an upstream is in
+the state it is in; it says that it is, and where to read about it.
+
+Each entry has exactly one class, worst first:
+
+[cols="1,1,3",options="header"]
+|===
+| Class | Glyph | Meaning
+| `compromised` | 🟣 | Identified as maliciously altered or under active attack (suspected or confirmed, and says which).
+| `vulnerable` | 🔴 | A known CVE or a serious security advisory applies to the resolved version.
+| `gone` | 🔴 | Deleted, yanked or unresolvable.
+| `incompatible` | 🟡 | Declared or observed incompatible with something this repository also uses.
+| `unmaintained` | 🟡 | Archived, or its maintainers have said they will not maintain it.
+| `fine` | 🟢 | None of the above, as of the last check.
+| `unknown` | 🟠 | No current evidence, or the source failed.
+|===
+
+Rules:
+
+. Every entry that is not `fine` carries one marker. `!` means a known, new
+  state: the source has announced it. `?` means not certain: the evidence is
+  partial and the entry says what is known. The marker is never omitted.
+. A non-green entry is a link to the source's announcement (the advisory, the
+  archive notice, the registry's yank record), and it carries a one-line
+  summary as the link's title, which a reader sees by hovering. The comment
+  itself carries no more than that line: whoever needs detail follows the link,
+  or asks someone (or an AI) to read it.
+. An entry that is also a station on the line map (§2.11) names it, so the
+  reader can see where it sits.
+. Green entries are counted, not listed, unless the section is opened.
+. A missing advisory feed is `unknown`, never zero vulnerabilities. A class is
+  never inferred from a repository's name, age or activity alone.
 
 === 2.13 What is public
 
@@ -317,7 +378,7 @@ It carries only what is safe for that audience:
 
 * lane and block states, counts, file paths and finding text that the producers
   already publish for this repository;
-* for the farm, the state word alone (§2.9);
+* for the farm, the three answers alone (§2.9);
 * no private URL, host, secret, identity, issue title or farm detail, by
   default and in every block.
 
@@ -584,8 +645,8 @@ loudly rather than exiting 0 with nothing to show.
   order. Removing or renaming a lane is MAJOR and requires a migration that
   edits or deletes existing comments.
 * Consumers must find sections by marker and tolerate sections they do not
-  know. v1.4 inserted the farm, tests and fork blocks between and around the
-  lanes and appended the dependencies and reviewer blocks: a consumer that read
+  know. v1.4 inserted the farm and tests blocks between the lanes and the fork
+  governance, dependencies and reviewer blocks after them: a consumer that read
   the lanes by position breaks, one that reads by marker does not. Adding a
   block is a MINOR change; its marker is a public interface like a lane's.
 * A block whose producer does not exist yet ships rendering `indeterminate`
