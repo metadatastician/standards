@@ -251,7 +251,7 @@ Scope, assumptions and boundaries stay on each contractile clause in `_base.ncl`
 
 * A signature authorises `'Hunt` only when an L3 verifier, wired through `K9_SIG_VERIFIER` with a trusted-key policy, has verified it. `'Present_Unverified` never authorises it (`K9-CONTRACT-SPEC` §10.4).
 * Execution needs all five preconditions: `signature`, `policy`, `sandbox`, `dry_run` and `capability_grant`. A missing one refuses the run and is named.
-* While no verifier runs in CI, probes stay refused and the clauses they would witness are blocking unresolved verdicts. They never run on an unverified signature.
+* While no verifier runs in CI, probes stay refused and the clauses they would witness are blocking unresolved verdicts, whatever the clause's verb: a refused probe is missing evidence, not a reported violation. They never run on an unverified signature.
 
 == 9. The K9 envelope ABNF [O: Q10]
 
@@ -398,7 +398,7 @@ Fixtures are valid unless marked `-bad`. `[done]` marks tests that exist and pas
 | YC05 | The clause carries no verdict field (YL2). | `verdict-field-bad`
 | YC06 | A deviation against `contractile/<verb>/<id>` resolves, by A5 §5, to an `active` `rule-def` in the generated `contractile` registry, and that entry names a clause id in the verb's declaration. A registry out of date with the declarations fails its regeneration check. | `deviation-unknown-clause-bad`
 | YC07 | A `must` clause and a `trust` clause with no witness each end in a blocking unresolved verdict that stops the run; a planted violation of each stops it and names both settlements (amend the contractile, fix the cause). A violated clause of each other verb is reported and does not stop the run. | `must-unwitnessed-bad`, `trust-unwitnessed-bad`, `must-violated-bad`, `trust-violated-bad`, `intend-violated` (one per non-blocking verb)
-| YC08 | The `'Hunt` component is refused when unsigned, when tampered, and when its signature is only `'Present_Unverified`, with `signature` named among the unmet preconditions. | `hunt-unsigned-bad`, `hunt-tampered-bad`, `hunt-unverified-bad`
+| YC08 | The `'Hunt` component is refused when unsigned, when tampered, when its signature is only `'Present_Unverified`, and when it carries a cryptographically valid signature from a key outside the trusted-key policy, with `signature` named among the unmet preconditions each time. For each of the six verbs, a clause whose only witness is a refused probe ends in a blocking unresolved verdict, never "deferred". | `hunt-unsigned-bad`, `hunt-tampered-bad`, `hunt-unverified-bad`, `hunt-untrusted-key-bad`; `<verb>-probe-refused-bad` for each of the six verbs
 | YC09 | For each of `signature`, `policy`, `sandbox`, `dry_run` and `capability_grant`, a case that withholds only that evidence is refused and names it; a case that supplies all five is permitted. | five `hunt-no-<precondition>-bad`, one `hunt-all-five`
 |===
 
