@@ -214,8 +214,8 @@ describe("extra rules", () => {
   test("uuid5 stays legal alongside uuid8 (v1.1.0 is additive)", () => {
     expect(verdict(HDR + '(repo-deed :schema-version "1" :a #u5"estate/chora" :b #u8"d:n")\n')).toBeNull();
   });
-  test("uuid (v1.3.0): v5 and v8 are legal, in a field, a list and a clause", () => {
-    expect(verdict(HDR + '(repo-deed :schema-version "1" :a #uuid"d9e987dc-bb7b-51aa-839b-3d8bbfe774c3")\n')).toBeNull();
+  test("uuid (v1.3.0): v8 is legal, in a field, a list and a clause", () => {
+    expect(verdict(HDR + '(repo-deed :schema-version "1" :a #uuid"0889b37b-defb-831f-973c-e119500db00e")\n')).toBeNull();
     expect(verdict(HDR + '(repo-deed :schema-version "1" (c :ids (#uuid"b32d6be4-73ba-873e-9d61-e57f43c75cd1")))\n')).toBeNull();
   });
   test("uuid (v1.3.0): every variant nibble 8, 9, a, b is legal", () => {

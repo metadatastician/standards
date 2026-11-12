@@ -1,8 +1,8 @@
 ;; SPDX-License-Identifier: CC-BY-SA-4.0
-;; deed.abnf v1.3.0: the opaque #uuid literal, version 8 and version 5.
+;; deed.abnf v1.3.0: the opaque #uuid literal (version 8 ids, A1 rule V8).
 (repo-deed
   :schema-version "1.0.0"
   :canonical-name "uuid-opaque"
   :repo-uuid #uuid"b32d6be4-73ba-873e-9d61-e57f43c75cd1"
-  :beholding-chora #uuid"d9e987dc-bb7b-51aa-839b-3d8bbfe774c3"
+  :beholding-chora #uuid"0889b37b-defb-831f-973c-e119500db00e"
   (identity :aliases (#uuid"1e207a32-dd26-8c8a-b8d9-5f77f88dbd58" #u8"gv-clade-index:github.com/o/uuid-opaque")))
