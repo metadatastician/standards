@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 = DEED conformance lane — tools
-Campaign: standards#837 · Grammar: link:../spec/abnf/deed.abnf[spec/abnf/deed.abnf (v1.2.1, normative)]
+Campaign: standards#837 · Grammar: link:../spec/abnf/deed.abnf[spec/abnf/deed.abnf (v1.3.0, normative)]
 
 == The lane's one property
 

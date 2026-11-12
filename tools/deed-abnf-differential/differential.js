@@ -32,8 +32,9 @@ const FIXTURES = join(ROOT, "1-formats/deed/tools/fixtures");
 
 // The gate's checks that are semantic, not grammatical (deed_lint.js
 // validate): one STRING :schema-version, a non-empty SPDX payload, the
-// ADR-008 profile-C shape of a #u8 body, and no bare true/false/yes/no symbol
-// where a boolean is meant (booleans are #t/#f).
+// ADR-008 profile-C shape of a #u8 body, no bare true/false/yes/no symbol
+// where a boolean is meant (booleans are #t/#f), and the 998-octet line cap
+// of v1.3.0. The #uuid literal is grammar, not a semantic check.
 const SEMANTIC = [
   /form must carry exactly one :schema-version/,
   /:schema-version must be a STRING value/,
@@ -41,6 +42,7 @@ const SEMANTIC = [
   /uuid8 body .* has no ":"/,
   /uuid8 domain .* must be non-empty printable ASCII/,
   /boolean meaning must use #t\/#f/,
+  /a deed line is at most 998 octets/,
 ];
 
 function args(argv) {
@@ -161,7 +163,7 @@ const rnd = (k) => {
 };
 // Edits aimed at the grammar's boundaries: separators and line-ends,
 // comments, quoting, brackets, # forms, control and non-ASCII characters.
-const ALPHABET = [" ", "  ", "\n", "\r", "\r\n", "\t", ";", ";c\n", "'", '"', "(", ")", ":", "#", "#t", "#u8", "#u5",
+const ALPHABET = [" ", "  ", "\n", "\r", "\r\n", "\t", ";", ";c\n", "'", '"', "(", ")", ":", "#", "#t", "#u8", "#u5", "#uuid", "-4", "-8",
   "x", "Z", "7", "-", "_", ".", "\\", "\\n", "\\r", "\x7f", "\x01", "é", "©", "\u0085", "", "", ""];
 const variants = [...texts];
 for (let k = 0; k < opts.cases; k++) {

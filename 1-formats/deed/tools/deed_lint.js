@@ -1,18 +1,20 @@
 #!/usr/bin/env bun
 // SPDX-License-Identifier: MPL-2.0
 // Port of deed_lint.py to plain JavaScript (bun, zero dependencies).
-const DOC = String.raw`deed-lint — conformance validator for the DEED grammar (deed.abnf v1.2.1).
+const DOC = String.raw`deed-lint — conformance validator for the DEED grammar (deed.abnf v1.3.0).
 
 Stdlib-only. Implements the normative grammar faithfully:
   * header = 1* spdx-line                 (";;" SP "SPDX-" …)
   * form   = "(" doc-head 1*(sep (field/clause)) [sep] ")"
   * doc-head ∈ {estate-deed, repo-deed, estate-atlas-deed, praxis-deed}
   * field  = keyword sep value            clause = "(" symbol *(sep (field/clause)) [sep] ")"
-  * value  = string / symbol / integer / boolean / uuid5 / uuid8 / quoted / list
+  * value  = string / symbol / integer / boolean / uuid5 / uuid8 / uuid / quoted / list
   * boolean = #t | #f  (lowercase ONLY; true/false/1/0 are parse errors)
   * uuid5 = %s"#u5" string                (body is the RFC 4122 §4.3 NAME input)
   * uuid8 = %s"#u8" string                (body is the ADR-008 profile C preimage
                                           domain ":" name; domain = 1*%x21-7E minus ":")
+  * uuid  = %s"#uuid" DQUOTE uuid-hex DQUOTE  (opaque id, lowercase 8-4-4-4-12 hex,
+                                          version 5 or 8, variant 10)
   * escapes exactly {" \\ \n \t}      (\r, \uXXXX and all others INVALID)
   * sep    = 1*(SP / line-end / comment)  (HTAB is INVALID — K9-consistent)
   * symbol = ALPHA *(ALPHA/DIGIT/./"*"//"<"/">"/"="/"!"/"?"/"+"/"-"/"_")
@@ -20,6 +22,7 @@ Stdlib-only. Implements the normative grammar faithfully:
 Semantic checks (validator-enforced, per grammar):
   * :schema-version STRING exactly once at form top level
   * entire input consumed
+  * no line longer than 998 octets, line-end excluded (v1.3.0)
   * filename↔doc-head dispatch (estate-first side condition, stem≠"estate")
 
 Usage: deed_lint.js FILE...     exit 0 iff all files conform
@@ -231,8 +234,46 @@ function checkUuid8Body(body, line) {
   }
 }
 
-/** #-forms: #u5"name" (uuid5), #u8"domain:name" (uuid8) or #t / #f (boolean); anything else is a parse error. */
+/**
+ * Enforce uuid-hex (deed.abnf v1.3.0): 8-4-4-4-12 lowercase hex, version
+ * nibble 5 or 8, variant nibble 8, 9, a or b. All of it is grammar, not a
+ * semantic check, so the messages stay out of the differential's list.
+ */
+function checkOpaqueUuid(body, line) {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(body)) {
+    throw new LintError(
+      `uuid literal body ${pyRepr(body)} must be 8-4-4-4-12 lowercase hex`,
+      line,
+    );
+  }
+  if (body[14] !== "5" && body[14] !== "8") {
+    throw new LintError(
+      `uuid literal ${pyRepr(body)} has version ${body[14]}; only 5 and 8 are legal`,
+      line,
+    );
+  }
+  if (!"89ab".includes(body[19])) {
+    throw new LintError(
+      `uuid literal ${pyRepr(body)} has variant nibble ${body[19]}; it must be 8, 9, a or b (variant 10)`,
+      line,
+    );
+  }
+}
+
+/** #-forms: #u5"name" (uuid5), #u8"domain:name" (uuid8), #uuid"<id>" (uuid) or #t / #f (boolean); anything else is a parse error. */
 function lexHashForm(lx) {
+  if (lx.t.startsWith("#uuid", lx.i)) {
+    const line = lx.line();
+    lx.i += 5;
+    if (lx.peek() !== '"') {
+      throw new LintError('uuid literal must be followed immediately by a string: #uuid"<id>"', line);
+    }
+    const start = lx.i;
+    lexString(lx);
+    // uuid-hex has no escapes: check the raw body between the quotes.
+    checkOpaqueUuid(lx.t.slice(start + 1, lx.i - 1), line);
+    return ["uuid", null];
+  }
   const two = lx.t.slice(lx.i, lx.i + 3);
   if (two.startsWith("#u5")) {
     lx.i += 3;
@@ -266,7 +307,7 @@ function lexHashForm(lx) {
     // The lexeme is the two characters; `two` also holds the one after it.
     return ["boolean", two.slice(0, 2)];
   }
-  throw new LintError('unrecognised #-form: only #t, #f, #u5"…", #u8"…" are legal', lx.line());
+  throw new LintError('unrecognised #-form: only #t, #f, #u5"…", #u8"…", #uuid"…" are legal', lx.line());
 }
 
 /**
@@ -311,7 +352,7 @@ function lexIntegerToken(lx) {
   return v;
 }
 
-/** value = string / symbol / integer / boolean / uuid5 / uuid8 / quoted / list */
+/** value = string / symbol / integer / boolean / uuid5 / uuid8 / uuid / quoted / list */
 function lexValue(lx) {
   const c = lx.peek();
   if (c === '"') return lexString(lx);
@@ -442,6 +483,26 @@ function parseHeader(lx) {
   return count;
 }
 
+/** Longest line deed.abnf v1.3.0 allows, in octets, line-end excluded (RFC 2045 §2.8). */
+export const MAX_LINE_OCTETS = 998;
+
+/** Reject any line longer than MAX_LINE_OCTETS UTF-8 bytes before its CRLF or LF. */
+function checkLineLength(text) {
+  const enc = new TextEncoder();
+  const lines = text.split("\n");
+  for (let k = 0; k < lines.length; k++) {
+    const body = lines[k].endsWith("\r") ? lines[k].slice(0, -1) : lines[k];
+    if (body.length * 3 <= MAX_LINE_OCTETS) continue;
+    const octets = enc.encode(body).length;
+    if (octets > MAX_LINE_OCTETS) {
+      throw new LintError(
+        `line is ${octets} octets; a deed line is at most ${MAX_LINE_OCTETS} octets, line-end excluded`,
+        k + 1,
+      );
+    }
+  }
+}
+
 /** Validate DEED source text. Returns [head, items] on success; throws LintError. */
 export function validate(text, filename = null) {
   const tab = text.indexOf("\t");
@@ -450,6 +511,7 @@ export function validate(text, filename = null) {
     for (let k = 0; k < tab; k++) if (text[k] === "\n") ln++;
     throw new LintError("HTAB (tab) is an invalid separator anywhere in a deed (K9-consistent)", ln);
   }
+  checkLineLength(text);
   const lx = new Lexer(text);
   parseHeader(lx);
   lx.skipSep();
@@ -520,7 +582,7 @@ export function readMustfileChecks(text, filename = null) {
   const topLevelFields = new Map([
     ["schema-version", new Set(["string"])],
     ["canonical-name", new Set(["string"])],
-    ["beholding-chora", new Set(["uuid5", "uuid8"])],
+    ["beholding-chora", new Set(["uuid5", "uuid8", "uuid"])],
   ]);
   const seenTopLevel = new Set();
   const severities = new Set(["critical", "high", "medium", "low"]);
@@ -638,7 +700,7 @@ export function readProofReceipt(text, filename = null) {
   const top = fieldsOf("the receipt", items, {
     "schema-version": { types: ["string"], required: true },
     "canonical-name": { types: ["string"], required: true },
-    "beholding-chora": { types: ["uuid5", "uuid8"] },
+    "beholding-chora": { types: ["uuid5", "uuid8", "uuid"] },
     profile: { types: ["symbol"], required: true, oneOf: ["proof-receipt"] },
     repository: { types: ["string"], required: true },
     "source-commit": { types: ["string"], required: true },
