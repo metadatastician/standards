@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 = A5: Rule Identifiers, the Deviation Store and the Generated Ignore Files
 :version: 0.2.2-draft
-:status: DRAFT v0.2.2. Decisions G1 to G14 approved by the owner on 2026-11-10. Not yet ratified as a whole. Builds on A1 v0.3.8, A2 v0.2.3, A3 v0.2.2 and A4 v0.2.3. Consistency pass applied 2026-11-10. Proposed in standards#1474; bot-review fixes applied 2026-11-12.
+:status: DRAFT v0.2.2. Decisions G1 to G14 approved by the owner on 2026-11-10. Not yet ratified as a whole. Builds on A1 v0.3.9, A2 v0.2.3, A3 v0.2.2 and A4 v0.2.3. Consistency pass applied 2026-11-10. Proposed in standards#1474; bot-review fixes applied 2026-11-12.
 :toc:
 
 Specification A5 of the Estate Reconciliation Plan. A2 defined the `(deviations)` clause. A5 gives every rule a stable identifier, says how a deviation is checked against the rule it excuses, and defines how the tool-native exemption files are generated from deviations. The plan's rule is: each rule has one identifier and one text, an exception is one record, and the ignore files of each tool are generated from those records [R: plan section 9].
@@ -100,7 +100,7 @@ A registry is a `praxis-deed` named `<domain>_rules_praxis.deed` with a `(rule-d
 (praxis-deed
   :schema-version "1.0.0"
   :canonical-name "hypatia-rules"
-  :beholding-chora #uuid"47e1501b-26b4-5bbd-8a3f-1afa81c69dbe"
+  :beholding-chora #uuid"0889b37b-defb-831f-973c-e119500db00e"
   (rule-domain :name "hypatia" :owner "hyperpolymath/hypatia")
   (rules
     (rule-def
