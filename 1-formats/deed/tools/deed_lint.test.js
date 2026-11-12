@@ -74,6 +74,12 @@ const RULE = {
   "inu8-empty-domain_chora.deed": /uuid8 domain '' must be non-empty/,
   "inu8-no-colon_chora.deed": /has no ":"/,
   "inu8-no-string_chora.deed": /uuid8 must be followed immediately by a string/,
+  "inuuid-uppercase_chora.deed": /uuid literal body .* must be 8-4-4-4-12 lowercase hex/,
+  "inuuid-v4_chora.deed": /has version 4; only 5 and 8 are legal/,
+  "inuuid-variant_chora.deed": /has variant nibble c/,
+  "inuuid-short_chora.deed": /must be 8-4-4-4-12 lowercase hex/,
+  "inuuid-no-string_chora.deed": /uuid literal must be followed immediately by a string/,
+  "inline-999_chora.deed": /line is 999 octets; a deed line is at most 998 octets/,
 };
 
 describe("fixtures/valid", () => {
@@ -208,6 +214,40 @@ describe("extra rules", () => {
   test("uuid5 stays legal alongside uuid8 (v1.1.0 is additive)", () => {
     expect(verdict(HDR + '(repo-deed :schema-version "1" :a #u5"estate/chora" :b #u8"d:n")\n')).toBeNull();
   });
+  test("uuid (v1.3.0): v5 and v8 are legal, in a field, a list and a clause", () => {
+    expect(verdict(HDR + '(repo-deed :schema-version "1" :a #uuid"d9e987dc-bb7b-51aa-839b-3d8bbfe774c3")\n')).toBeNull();
+    expect(verdict(HDR + '(repo-deed :schema-version "1" (c :ids (#uuid"b32d6be4-73ba-873e-9d61-e57f43c75cd1")))\n')).toBeNull();
+  });
+  test("uuid (v1.3.0): every variant nibble 8, 9, a, b is legal", () => {
+    for (const v of "89ab") {
+      expect(verdict(HDR + `(repo-deed :schema-version "1" :a #uuid"b32d6be4-73ba-873e-${v}d61-e57f43c75cd1")\n`)).toBeNull();
+    }
+  });
+  test("uuid (v1.3.0): versions other than 5 and 8 are refused", () => {
+    for (const v of "0123467") {
+      expect(verdict(HDR + `(repo-deed :schema-version "1" :a #uuid"b32d6be4-73ba-${v}73e-9d61-e57f43c75cd1")\n`)).toMatch(/only 5 and 8/);
+    }
+  });
+  test("uuid (v1.3.0): an escape, braces or a trailing character is refused", () => {
+    expect(verdict(HDR + '(repo-deed :schema-version "1" :a #uuid"b32d6be4-73ba-873e-9d61-e57f43c75cd1\\n")\n')).toMatch(/lowercase hex/);
+    expect(verdict(HDR + '(repo-deed :schema-version "1" :a #uuid"{b32d6be4-73ba-873e-9d61-e57f43c75cd1}")\n')).toMatch(/lowercase hex/);
+    expect(verdict(HDR + '(repo-deed :schema-version "1" :a #uuidx"b32d6be4-73ba-873e-9d61-e57f43c75cd1")\n')).toMatch(/followed immediately by a string/);
+  });
+  test("line length (v1.3.0): 998 octets pass, 999 fail, counted in UTF-8 bytes", () => {
+    const pad = (n) => "x".repeat(n);
+    const line = (body) => `(repo-deed :schema-version "1" :n "${body}")`;
+    const base = line("").length;
+    expect(verdict(HDR + line(pad(998 - base)) + "\n")).toBeNull();
+    expect(verdict(HDR + line(pad(998 - base)) + "\r\n")).toBeNull();
+    expect(verdict(HDR + line(pad(999 - base)) + "\n")).toMatch(/line is 999 octets/);
+    // "é" is 2 octets: 1 character fewer, same octet count.
+    expect(verdict(HDR + line("é" + pad(997 - base)) + "\n")).toMatch(/line is 999 octets/);
+    // The last line counts too, with no line-end.
+    expect(verdict(HDR + line(pad(999 - base)))).toMatch(/line is 999 octets/);
+  });
+  test("line length (v1.3.0): a long comment or header line is refused too", () => {
+    expect(verdict(HDR + ";" + "c".repeat(998) + "\n" + '(repo-deed :schema-version "1")\n')).toMatch(/at most 998 octets/);
+  });
   test("error carries line number", () => {
     const e = (() => { try { validate(HDR + "(chora-deed)\n"); } catch (x) { return x; } })();
     expect(e.line).toBe(2);
@@ -307,7 +347,7 @@ describe("proof-receipt profile (PROOF-POLICY §8.5)", () => {
     expect(() => read(doc(ok, { repo: "just-a-name" }))).toThrow(/OWNER\/REPO/);
     expect(() => read(doc(ok, { extra: ':grade "3"' }))).toThrow(/unknown field :grade/);
     expect(() => read(doc(""))).toThrow(/at least one \(claim/);
-    expect(() => read(doc(ok + " " + ok))).toThrow(/duplicate claim id/);
+    expect(() => read(doc(ok + "\n" + ok))).toThrow(/duplicate claim id/);
     expect(() => read(doc(claim("PWG-3", none)))).toThrow(/no agda leg/);
     expect(() => read(doc(claim("PWG-3", agda() + " " + agda())))).toThrow(/two agda legs/);
     expect(() => read(doc(claim("PWG-3", agda({ receipts: rcpt() + " " + rcpt() }) + " " + none)))).toThrow(/more than one current receipt/);

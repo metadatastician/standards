@@ -2,7 +2,7 @@
 ; SPDX-License-Identifier: MPL-2.0
 ; SPDX-License-Identifier: CC-BY-SA-4.0
 ;
-; DEED grammar, v1.2.1
+; DEED grammar, v1.3.0
 ; Normative for parsing. Prose and rationale: ../DEED-GRAMMAR-SPEC.adoc
 ;
 ; NOTICE (standards#837): OWNER RULING 2026-09-19 — the grammar files have
@@ -16,6 +16,17 @@
 ; NOTE: there is no "key = value" production and no "[section]" production.
 ; The only bracket is "(". A file using "=" as a field separator is not a deed.
 ; ("=" MAY appear INSIDE a symbol, e.g., a comparison operator.)
+;
+; CHANGELOG (v1.2.1 → v1.3.0, owner rulings U4 and I4, 2026-11-12):
+;   - Added uuid (#uuid"<8-4-4-4-12 lowercase hex>"), an opaque UUID literal.
+;     It carries an id minted elsewhere (the registry) as a value, not a
+;     preimage to hash, so a repo move or rename never changes the deed. Only
+;     versions 5 and 8 and variant 10 are legal: v4 (random) stays excluded.
+;   - A line is at most 998 octets, line-end excluded, so the 8bit encoding
+;     label of the deed media type is exact (RFC 2045 §2.8). Validator-
+;     enforced; see the SEMANTIC note on `deed` below.
+;   Additive for every deed with lines of 998 octets or fewer: every such
+;   v1.2.1 deed is a v1.3.0 deed.
 ;
 ; CHANGELOG (v1.2.0 → v1.2.1, owner ruling 2026-10-27):
 ;   - list: a token-sep MAY come before the first value. deed_lint and the
@@ -48,6 +59,9 @@ deed          = header [token-sep] form [token-sep]
                 ; that the entire input is consumed by this production.
                 ; Trailing non-whitespace content after the closing ")"
                 ; is a parse error.
+                ; SEMANTIC (validator-enforced, v1.3.0): no line is longer
+                ; than 998 octets, counted in UTF-8 bytes before its
+                ; line-end (CRLF or LF). The last line counts the same way.
 
 header        = 1*spdx-line
 spdx-line     = ";;" SP %s"SPDX-" 1*text-char line-end
@@ -99,7 +113,7 @@ field         = keyword token-sep value
 clause        = "(" symbol *(token-sep (field / clause)) [token-sep] ")"
 
 keyword       = ":" symbol
-value         = string / symbol / integer / boolean / uuid5 / uuid8 / quoted / list
+value         = string / symbol / integer / boolean / uuid5 / uuid8 / uuid / quoted / list
 list          = "(" [token-sep] [value *(token-sep value)] [token-sep] ")"
                 ; A separator MAY open the list, so a multi-line list can
                 ; start on the line after "(", as the estate template writes.
@@ -165,6 +179,24 @@ uuid8         = %s"#u8" string
                 ; (%x21-7E) — ADR-008 forbids ":" in a domain, so the first
                 ; ":" always ends it. The name after it is unconstrained.
                 ; Example: #u8"gv-clade-index:github.com/hyperpolymath/standards"
+
+uuid          = %s"#uuid" DQUOTE uuid-hex DQUOTE
+                ; OPAQUE UUID (v1.3.0, owner ruling U4). The body IS the
+                ; identifier, in RFC 9562 form, lowercase. Nothing is hashed:
+                ; a reader cannot recompute it, and the deed does not record
+                ; what it was derived from. An id minted once by the registry
+                ; is written this way, so a move or rename of the repo never
+                ; changes the deed.
+                ; Example: #uuid"b32d6be4-73ba-873e-9d61-e57f43c75cd1"
+uuid-hex      = 8hex-lc "-" 4hex-lc "-" uuid-version 3hex-lc "-"
+                uuid-variant 3hex-lc "-" 12hex-lc
+uuid-version  = "5" / "8"
+                ; Name-based only, as for uuid5 and uuid8: v4 (random) and
+                ; every other version are a parse error.
+uuid-variant  = "8" / "9" / "a" / "b"
+                ; RFC 9562 variant 10.
+hex-lc        = DIGIT / %x61-66
+                ; Lowercase only: "A" to "F" are a parse error.
 
 token-sep     = 1*(SP / line-end / comment)
                 ; Tabs (HTAB) are INVALID separators (consistent with K9).
