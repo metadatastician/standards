@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 = Decision spec — `0-AI-MANIFEST.a2ml` → deed era (family 7)
 Campaign: standards#837 · Frame: link:README.adoc[mappings/README] ·
-Status: **DECISION REQUIRED (owner)** — raised by the first live
+Status: **RULED: option A** (owner, 2026-11-10): `(manifest …)` clauses on
+the repo deed (§2 A). Ruling asks 2 and 3 (§6) stay open. Raised by the first live
 conformance finding of the wave (marid, verified 2026-09-19): a
 *renamed-not-translated* `0-AI-MANIFEST.deed` carrying INI content already
 exists in the wild. Renames are not translations; this spec exists so the
@@ -58,7 +59,7 @@ grammar's provisional-note forbids. Recorded and rejected; not asked for.
 | `[project] name` | `(manifest :project "Marid")` | verbatim STRING — cross-checked against deed `:canonical-name` (P-6 analogue; mismatch fails closed: catches a manifest read into the wrong repo)
 | `[project] purpose` | `(manifest :purpose "…")` | verbatim STRING
 | `[ai-allocation] agents[]` | one clause per entry: `(agent :name CLAUDE :role "…")` | `name` → SYMBOL (agent identities ARE identifiers — estate greps depend on the literal symbol; closed seen-set extended by ruling, never silently), `role` → STRING verbatim
-| `[policy] rules[]` | `(policy (rules ("rule text" "rule text")))` | list of STRINGs — order is semantic here, and *list order is preserved by the grammar* (a list is a value, unlike clause order); no invented rule-ids
+| `[policy] rules[]` | `(policy :rules ("rule text" "rule text"))` | list of STRINGs — order is semantic here, and *list order is preserved by the grammar* (a list is a value, unlike clause order); no invented rule-ids
 | `[work-allocation]` items[] | `(work :agent GEMINI :task "…")` per entry | agent → SYMBOL (same identity table as `:name`s above; agent in items[] but not in agents[] fails closed — allocation without a declared identity), task → STRING
 |===
 
@@ -82,7 +83,7 @@ grammar's provisional-note forbids. Recorded and rejected; not asked for.
    owner-information dependency (same hunt as #646's, now with a deed-era
    destination).
 
-== 5. Acceptance (once ruled)
+== 5. Acceptance (option A, ruled 2026-11-10)
 
 * Zero `0-AI-MANIFEST.deed` files containing `=` as a field separator
   exist estate-wide (the in-the-wild rename class: zero).
@@ -94,7 +95,8 @@ grammar's provisional-note forbids. Recorded and rejected; not asked for.
 == 6. Ruling asks
 
 . Option A confirm (or an alternative home — with reasons, so the next
-  family spec inherits the principle).
+  family spec inherits the principle). **Ruled 2026-11-10 (owner):
+  option A.**
 . Whether the agent *seen-set* is closed-and-ruled (CLAUDE/CHATGPT/
 GEMINI/VIBE) or open-with-review — translator default without an answer:
   open + flag-any-unknown (fails captured, not blocked).
