@@ -92,8 +92,9 @@ the epistemic identity record.
 | `0-AI-MANIFEST.a2ml`
 | Legacy, pending migration
 | A2ML is retired (owner rulings D308, D313). Existing copies are legacy;
-  never create a new one. Its deed-era home is an
-  open owner decision (`1-formats/deed/mappings/ai-manifest-decision.adoc`).
+  never create a new one. Its deed-era home is
+  `(manifest …)` clauses on the repo deed (option A, ruled 2026-11-10;
+  `1-formats/deed/mappings/ai-manifest-decision.adoc`).
 |===
 
 The discovery flow is:

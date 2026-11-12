@@ -107,7 +107,7 @@ implementation do and do not establish.
 | open
 | -
 | none
-| Not modelled. `OverlayDeclaration` has no `modifies-base` or `switchable` field, and nothing models files or a manifest. The checklist still names `0-AI-MANIFEST.a2ml`, a retired format. Its successor is `0-AI-MANIFEST.deed`, mapping to the repo deed (`deed.abnf`), and how its content translates awaits an owner decision (`1-formats/deed/mappings/ai-manifest-decision.adoc`), so where a non-modification declaration would go is unresolved. The checklist's other items are the §2.1, §2.3, §2.4 and §4.3 rows.
+| Not modelled. `OverlayDeclaration` has no `modifies-base` or `switchable` field, and nothing models files or a manifest. The checklist still names `0-AI-MANIFEST.a2ml`, a retired format. Its successor is `0-AI-MANIFEST.deed`, mapping to the repo deed (`deed.abnf`), and its content translates to `(manifest …)` clauses on the repo deed (option A, ruled 2026-11-10, `1-formats/deed/mappings/ai-manifest-decision.adoc`). Where a non-modification declaration would go within that is still unresolved. The checklist's other items are the §2.1, §2.3, §2.4 and §4.3 rows.
 
 | Overlay composition and chaining (spec §6): overlays do not depend on each other unless declared, avoid namespace collisions, keep each `activate.sh` independently sourceable, and every chain link satisfies the core invariants
 | open
