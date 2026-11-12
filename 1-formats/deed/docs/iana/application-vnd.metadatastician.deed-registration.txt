@@ -110,15 +110,15 @@ Security considerations:
       to a policy that would otherwise apply to the repository.  The
       construct is the deviations clause of draft A2 (section 7 of
       docs/estate-reconciliation/A2-profile-generation-deviations.adoc,
-      proposed in metadatastician/standards#1474).  A deviation is
+      added in metadatastician/standards#1474).  A deviation is
       narrow, named, justified, expiring and countable, and it needs an
       authority.  A processor MAY honour a deviation only when it can
       verify that authority; otherwise, and once the deviation has
       expired, it MUST NOT honour it.  A deviation is a claim like any
       other in a deed (see (a)): it lets a document ask for a different
       policy, so it is security-relevant to every processor.  Draft A2
-      is not yet ratified, and the construct is not in
-      DEED-GRAMMAR-SPEC.adoc v0.2.4 or deed.abnf v1.2.1.  This
+      is a DRAFT, not yet ratified, and the construct is not in
+      DEED-GRAMMAR-SPEC.adoc v0.2.5 or deed.abnf v1.3.0.  This
       registration is filed only after A2 is ratified (owner ruling
       I3, 2026-11-12).
 

@@ -154,9 +154,8 @@ the CR and LF that end it. A document with a longer line is not a
 conforming deed. The bound is the one RFC 5322 Section 2.1.1 sets, and it
 makes the `8bit` encoding label of the media type registration exact
 (link:../docs/iana/application-vnd.metadatastician.deed-registration.txt[registration draft];
-owner ruling I4, 2026-11-12). The constraint is added to `deed.abnf` in
-its v1.3.0 draft (metadatastician/standards#1473); this prose states it
-until that lands.
+owner ruling I4, 2026-11-12). `deed.abnf` v1.3.0 states the same
+constraint beside its `deed-file` rule (metadatastician/standards#1473).
 
 Keywords, document heads, booleans, UUID prefixes, filename dispatch
 literals, and string-escape letters are *case-sensitive*. `repo-deed` is
