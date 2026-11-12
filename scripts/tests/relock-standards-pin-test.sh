@@ -410,4 +410,67 @@ cmp -s "$D/actions.lock" "$T/identity-transfer-before" || fail "wrong identity m
 grep -q 'repository ID mismatch' "$T/identity-transfer-log" || fail "wrong identity not diagnosed"
 echo "  PASS wrong transferred repository identity refused"
 
+# NEW CALLER (the applier's --ensure-squabbler): a workflow that pins standards
+# at TARGET and has no lock entry gets one, in key order, and the record is
+# rebuilt. Case A: the lock is already keyed to TARGET (a FRESH repo).
+D=$(consumer new-caller-fresh)
+bash "$RELOCK" --to "$NEW" --standards "$S" "$D" >/dev/null
+printf 'on: push\njobs:\n  sq:\n    uses: hyperpolymath/standards/.github/workflows/x-reusable.yml@%s\n' "$NEW" > "$D/a-new.yml"
+bash "$RELOCK" --to "$NEW" --standards "$S" "$D" >/dev/null 2>&1 || fail "a new caller in a FRESH lock was refused"
+grep -A1 -xF "    '.github/workflows/a-new.yml':" "$D/actions.lock" | grep -qxF "        - 'hyperpolymath/standards@$NEW'" || fail "new caller: no entry naming its pin"
+[ "$(awk '/^workflows:$/{f=1;next} /^dependencies:$/{f=0} f && /^    \x27/' "$D/actions.lock" | LC_ALL=C sort -c 2>&1; echo $?)" = 0 ] || fail "new caller: workflows not in C-locale key order"
+cp "$D/actions.lock" "$T/nc-once"; bash "$RELOCK" --to "$NEW" --standards "$S" "$D" >/dev/null
+cmp -s "$T/nc-once" "$D/actions.lock" || fail "new caller: second run changed the lock"
+if command -v gawk >/dev/null 2>&1; then
+  sed -i '/unrelated\/orphan/,/repo_id: 41/d' "$D/actions.lock"
+  bash "$SYNC" "$D" >/dev/null 2>&1 || fail "check-lock-sync.sh rejects the lock with a new caller"
+fi
+echo "  PASS new caller added to a FRESH lock (entry, key order, idempotent; sync gate where gawk is present)"
+
+# Case B: the new caller arrives in the same run as the re-key from OLD.
+D=$(consumer new-caller-with-rekey)
+printf 'on: push\njobs:\n  sq:\n    uses: hyperpolymath/standards/.github/workflows/x-reusable.yml@%s\n' "$NEW" > "$D/z-new.yml"
+bash "$RELOCK" --to "$NEW" --standards "$S" "$D" >/dev/null 2>&1 || fail "a new caller with a re-key was refused"
+grep -q "$OLD" "$D/actions.lock" && fail "new caller with re-key: OLD survived"
+grep -A1 -xF "    '.github/workflows/z-new.yml':" "$D/actions.lock" | grep -qxF "        - 'hyperpolymath/standards@$NEW'" || fail "new caller with re-key: no entry"
+echo "  PASS new caller added in the same run as the re-key"
+
+# Case C: a lock with no standards record at all. The canonical owner's ids
+# are known; the former owner's are not, so that case is refused unchanged.
+D=$(consumer new-caller-no-record)
+rm "$D/caller.yml"
+sed -i "/'.github\/workflows\/caller.yml':/,+1d; /'hyperpolymath\/standards@/,/repo_id: 1116521501/d; /^        uses:\$/,\$d" "$D/actions.lock"
+cp "$D/actions.lock" "$T/norec"
+printf 'on: push\njobs:\n  sq:\n    uses: metadatastician/standards/.github/workflows/x-reusable.yml@%s\n' "$NEW" > "$D/sq.yml"
+bash "$RELOCK" --to "$NEW" --standards "$S" "$D" >/dev/null 2>&1 || fail "a new canonical caller in a lock with no standards record was refused"
+grep -A4 -xF "    'metadatastician/standards@$NEW':" "$D/actions.lock" | grep -qx '        repo_id: 1116521501' || fail "no-record: canonical ids not used"
+cp "$T/norec" "$D/actions.lock"
+sed -i 's#metadatastician/standards/#hyperpolymath/standards/#' "$D/sq.yml"
+if bash "$RELOCK" --to "$NEW" --standards "$S" "$D" >"$T/norec-log" 2>&1; then fail "former-owner new caller with no record accepted"; fi
+cmp -s "$D/actions.lock" "$T/norec" || fail "no-record refusal changed the lock"
+grep -q 'owner_id/repo_id' "$T/norec-log" || fail "no-record refusal reason missing"
+echo "  PASS new caller with no standards record (canonical ids used; former owner refused unchanged)"
+
+# Case D: a BLIND entry (`[]`, written by gh actions-lock <= v0.1.6, which
+# cannot see job-level `uses:`) for a workflow that calls the reusable is
+# filled, not refused.
+D=$(consumer blind-entry)
+bash "$RELOCK" --to "$NEW" --standards "$S" "$D" >/dev/null
+awk -v k="    '.github/workflows/caller.yml':" '$0==k{print "    \x27.github/workflows/caller.yml\x27: []"; getline; next} {print}' "$D/actions.lock" > "$T/blind" && cp "$T/blind" "$D/actions.lock"
+grep -qxF "    '.github/workflows/caller.yml': []" "$D/actions.lock" || fail "blind fixture not built"
+bash "$RELOCK" --to "$NEW" --standards "$S" "$D" >/dev/null 2>&1 || fail "a blind [] entry was refused"
+grep -A1 -xF "    '.github/workflows/caller.yml':" "$D/actions.lock" | grep -qxF "        - 'hyperpolymath/standards@$NEW'" || fail "blind entry not filled"
+grep -qF "caller.yml': []" "$D/actions.lock" && fail "blind [] entry left beside the filled one"
+echo "  PASS a blind [] entry for a reusable caller is filled"
+
+# Case E: a self-SHA leaf standards cannot repair is REPORTED, never refused:
+# the pin fix still lands and the record is left exactly as it was.
+D=$(consumer unrepairable-leaf)
+sed -i "s/ref: 'v4'/ref: '4444444444444444444444444444444444444444'/" "$D/actions.lock"
+bash "$RELOCK" --to "$NEW" --standards "$S" "$D" >/dev/null 2>"$T/leaf-log" || fail "an unrepairable leaf refused the relock"
+grep -q 'SELF-SHA-LEAF left.*unrelated/orphan@4444444444444444444444444444444444444444' "$T/leaf-log" || fail "unrepairable leaf not reported"
+grep -q "ref: '4444444444444444444444444444444444444444'" "$D/actions.lock" || fail "unrepairable leaf was changed"
+grep -q "$OLD" "$D/actions.lock" && fail "unrepairable leaf blocked the re-key"
+echo "  PASS an unrepairable self-SHA leaf is reported and left; the re-key still lands"
+
 echo "PASS: relock-standards-pin.sh"

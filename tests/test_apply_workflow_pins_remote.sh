@@ -225,6 +225,14 @@ if [ "$gql" = 1 ]; then
   exit 0
 fi
 p="${path%%\?*}"
+# repos/<owner>/<name> (exactly three segments): the repository itself, for
+# --ensure-squabbler's fork test. fork_<name> in $GH_FIX makes it a fork.
+if [[ "$p" =~ ^repos/[^/]+/[^/]+$ ]]; then
+  f=false; [ -f "$GH_FIX/fork_${p##*/}" ] && f=true
+  j="{\"fork\": $f}"
+  if [ -n "$jqx" ]; then printf '%s' "$j" | jq -r "$jqx"; else printf '%s' "$j"; fi
+  exit 0
+fi
 case "$p" in
   users/*/repos|orgs/*/repos)
     kind="${p%%/*}"; o="${p#*/}"; o="${o%/repos}"
@@ -409,6 +417,30 @@ case_main_fail() {
   fi
 }
 
+# case_main_squabbler <applier>, end to end, audit mode, --ensure-squabbler:
+# a repo whose only standards pins are MOVED (one fix run clears them) reports
+# SQUABBLER-MISSING, a fork reports SQUABBLER-FORK, and audit mode writes no
+# caller file and opens nothing.
+case_main_squabbler() {
+  local d; d=$(new_case mainsq)
+  touch "$d/fork_pub-c"
+  : > "$d/calls.log"
+  # shellcheck disable=SC2016  # $1 is expanded by the inner shell
+  env PATH="$LSTUB:$PATH" GH_FIX="$d" GH_TOKEN=ghs_app GITHUB_TOKEN= TARGET="$T" \
+    bash -c 'source "$1"; validate_target() { return 0; }; shift; main "$@"' _ "$1" \
+      --to "$T" --owners hyperpolymath,metadatastician --ensure-squabbler > "$d/out" 2> "$d/err"
+  echo $? > "$d/rc"
+  if [ "$(cat "$d/rc")" = 0 ] \
+     && grep -qF "$(printf 'hyperpolymath/pub-a\tcicd-squabbler.yml\tSQUABBLER-MISSING')" "$d/out" \
+     && grep -qF "$(printf 'metadatastician/pub-c\tcicd-squabbler.yml\tSQUABBLER-FORK')" "$d/out" \
+     && ! grep -q 'graphql\|pulls\|git/refs' <(grep -v '^api graphql -f query=query' "$d/calls.log" | grep -v 'HEAD:.github/workflows'); then
+    pass "main: --ensure-squabbler reports MISSING for a repo, FORK for a fork, and writes nothing in audit"
+  else
+    fail "main: --ensure-squabbler census wrong (rc=$(cat "$d/rc"))"
+    sed 's/^/    /' "$d/out" >&2
+  fi
+}
+
 # Planted positives: the stub must be able to say no, or every fail-closed case
 # above could pass because nothing ever failed.
 d=$(new_case planted)
@@ -433,6 +465,7 @@ case_inst_fail "$APPLIER"
 case_public_fail "$APPLIER"
 case_main_app "$APPLIER"
 case_main_fail "$APPLIER"
+case_main_squabbler "$APPLIER"
 
 # --- 5. a reachable target is refused when its own lock fails lock-selfcheck --
 # GitHub validates each caller against the TARGET's actions.lock, so a target
@@ -493,6 +526,7 @@ list_mutant no_dedupe 's@^  sort -u "\$all"$@  cat "$all"@' case_app
 list_mutant owner_filter_dropped "s@'index\\(tolower\\(\\\$0\\), o\\) == 1'@'1'@" case_owner_filter
 list_mutant inst_failure_swallowed 's@\|\| \{ log "FATAL: an App installation token[^}]*\}@|| true@' case_inst_fail
 list_mutant public_failure_swallowed 's@^      log "FATAL: could not list the repositories of.*$@      :@' case_public_fail
+list_mutant fork_not_checked 's@^          true\) sqst=FORK ;;$@          true) sqst=MISSING ;;@' case_main_squabbler
 }
 
 echo

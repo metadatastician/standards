@@ -68,8 +68,26 @@
 #     --owners <a,b>      owners to walk (default: hyperpolymath,metadatastician,catachresis-colloquium)
 #     --only <repo>       restrict to one repo (for testing)
 #     --out <file>        write the TSV census here (default: stdout)
-#     --limit <n>         stop after n repos (for smoke runs)
+#     --limit <n>         stop after n repos (for smoke runs). In --fix mode n
+#                         counts repos the run tries to LAND a PR in, not repos
+#                         walked: a canary of 5 that walks 5 already-FRESH repos
+#                         and opens nothing tests nothing.
+#     --ensure-squabbler  also add the CICD Squabbler gate (a thin caller of
+#                         standards' cicd-squabbler-reusable.yml at the target)
+#                         where a repo has none, in the SAME PR as the re-pin
 #     --self-test         run the pure-function controls and exit
+#
+# ENSURE-SQUABBLER (why it rides with the re-pin, never ahead of it):
+#   The squabbler's `chains` job FAILS on a dead upstream. Added to a repo that
+#   still calls a dead standards pin (a bad-lock SHA, or the former owner), it
+#   would add one more red check to every such repo. So it is added only when,
+#   after this run's rewrite, every standards pin in the repo is at the target:
+#   a repo with a TRACKING ref, or an ILLEGAL ref this run will not repair, is
+#   reported SQUABBLER-DEFERRED and left without it. Forks are third-party code
+#   and are never given one (SQUABBLER-FORK). A repo that already has a
+#   squabbler workflow is SQUABBLER-PRESENT. The new file is relocked with the
+#   pins (relock-standards-pin.sh adds its lock entry), so it lands whole or
+#   not at all.
 
 set -uo pipefail
 
@@ -88,6 +106,8 @@ OWNERS="hyperpolymath,metadatastician,catachresis-colloquium"
 ONLY_REPO=""
 OUT_FILE=""
 LIMIT=0
+ENSURE_SQUABBLER=0
+SQUABBLER_FILE="cicd-squabbler.yml"
 BRANCH_NAME="chore/re-point-standards-workflow-pins"
 # The standards checkout this script runs from: the relock reads reusables and
 # standards' own actions.lock AT THE TARGET from it.
@@ -195,6 +215,73 @@ rewrite_illegal() {
   sed -E -i \
     "s#(uses:[[:space:]]*)['\"]?\\\$/\.github/workflows/([A-Za-z0-9._-]+\.ya?ml)['\"]?#\1${STANDARDS_REPO}/.github/workflows/\2@${target}#g" \
     "$f"
+}
+
+# squabbler_state <dir> <target_sha> <repair_illegal 0|1>, PRESENT, MISSING,
+# or DEFERRED:<class,...>. Pure: reads the workflow files in <dir> only. Read
+# after this run's rewrite, BEHIND and MOVED are gone; in audit mode they are
+# still there but the same fix run would clear them, so they do not defer.
+squabbler_state() {
+  local dir="$1" t="$2" repair="$3" f cls blockers=""
+  shopt -s nullglob
+  for f in "$dir"/*.yml "$dir"/*.yaml; do
+    case "$(basename "$f")" in *[Ss]quabbl*) shopt -u nullglob; echo PRESENT; return 0 ;; esac
+    if grep -qiE 'cicd-squabbler|squabble[[:space:]]+chains' "$f"; then shopt -u nullglob; echo PRESENT; return 0; fi
+    for cls in $(classify_file "$f" "$t"); do
+      case "$cls" in
+        TRACKING) blockers="${blockers},TRACKING" ;;
+        ILLEGAL) [ "$repair" -eq 1 ] || blockers="${blockers},ILLEGAL" ;;
+      esac
+    done
+  done
+  shopt -u nullglob
+  if [ -n "$blockers" ]; then
+    echo "DEFERRED:$(printf '%s' "${blockers#,}" | tr ',' '\n' | sort -u | paste -sd, -)"
+  else
+    echo MISSING
+  fi
+}
+
+# write_squabbler_caller <file> <target_sha>, the estate caller of the CICD
+# Squabbler gate, pinned like every other standards reusable. Mirrors
+# standards' own cicd-squabbler.yml (grants, the one optional credential,
+# never `secrets: inherit`) minus its weekly schedule: hundreds of callers on
+# one cron would all start in the same minute.
+write_squabbler_caller() {
+  cat > "$1" <<EOF
+# SPDX-License-Identifier: MPL-2.0
+# CICD Squabbler gate (doctrine 5: squabble, don't bypass). Added by the
+# standards pin applier (scripts/apply-workflow-pins-remote.sh
+# --ensure-squabbler); the applier keeps this pin current. \`chains\` blocks a
+# dependency cycle or a dead upstream; \`fight\` reports and runs only with
+# the optional Administration-read credential.
+name: CICD Squabbler
+
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+concurrency:
+  group: \${{ github.workflow }}-\${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  squabble:
+    permissions:
+      contents: read
+      pull-requests: read
+      attestations: read
+    uses: ${STANDARDS_REPO}/.github/workflows/cicd-squabbler-reusable.yml@$2
+    with:
+      pr-number: \${{ github.event.pull_request.number && format('{0}', github.event.pull_request.number) || '' }}
+    secrets:
+      ADMINISTRATION_READ_TOKEN: \${{ secrets.HYPATIA_SCAN_PAT }}
+EOF
 }
 
 # ---------------------------------------------------------------------------
@@ -328,6 +415,30 @@ self_test() {
   # The relock is what keeps a fix-mode PR from desyncing actions.lock; a
   # missing relock must stop the run, not silently land pins without locks.
   # Its own known-answer suite is scripts/tests/relock-standards-pin-test.sh.
+  echo "control: squabbler_state and write_squabbler_caller"
+  local sq ok_sq=1; mkdir -p "$d/sq"
+  cp "$d/fresh.yml" "$d/sq/"; cp "$d/behind.yml" "$d/sq/"; cp "$d/moved-fresh.yml" "$d/sq/"
+  [ "$(squabbler_state "$d/sq" "$t" 0)" = MISSING ] || { echo "  FAIL BEHIND/MOVED must not defer (one run clears them)" >&2; ok_sq=0; }
+  cp "$d/tracking.yml" "$d/sq/"
+  [ "$(squabbler_state "$d/sq" "$t" 0)" = "DEFERRED:TRACKING" ] || { echo "  FAIL a TRACKING ref must defer" >&2; ok_sq=0; }
+  rm "$d/sq/tracking.yml"; printf 'jobs:\n  a:\n    uses: ../../.github/workflows/x.yml\n' > "$d/sq/ill.yml"
+  [ "$(squabbler_state "$d/sq" "$t" 0)" = "DEFERRED:ILLEGAL" ] || { echo "  FAIL an unrepaired ILLEGAL ref must defer" >&2; ok_sq=0; }
+  [ "$(squabbler_state "$d/sq" "$t" 1)" = MISSING ] || { echo "  FAIL an ILLEGAL ref this run repairs must not defer" >&2; ok_sq=0; }
+  rm "$d/sq/ill.yml"; printf 'name: x\njobs:\n  a:\n    steps:\n      - run: squabble chains .\n' > "$d/sq/gate.yml"
+  [ "$(squabbler_state "$d/sq" "$t" 0)" = PRESENT ] || { echo "  FAIL an existing squabble workflow must count as PRESENT" >&2; ok_sq=0; }
+  rm "$d/sq/gate.yml"; printf 'on: push\n' > "$d/sq/squabble.yml"
+  [ "$(squabbler_state "$d/sq" "$t" 0)" = PRESENT ] || { echo "  FAIL a squabble*.yml file must count as PRESENT" >&2; ok_sq=0; }
+  write_squabbler_caller "$d/sqc.yml" "$t"
+  sq=$(classify_file "$d/sqc.yml" "$t" | sort | tr '\n' ',')
+  if [ "$sq" != "FRESH," ] \
+     || ! grep -qE "^    uses: ${STANDARDS_REPO}/\.github/workflows/cicd-squabbler-reusable\.yml@$t\$" "$d/sqc.yml" \
+     || grep -q 'secrets: inherit' "$d/sqc.yml" || grep -q 'schedule:' "$d/sqc.yml" \
+     || ! grep -qF '${{ secrets.HYPATIA_SCAN_PAT }}' "$d/sqc.yml"; then
+    echo "  FAIL the squabbler caller is not a FRESH canonical pin with only the named credential:" >&2
+    sed 's/^/      /' "$d/sqc.yml" >&2; ok_sq=0
+  fi
+  [ "$ok_sq" -eq 1 ] && echo "  PASS state is PRESENT/MISSING/DEFERRED as specified; caller is FRESH, canonical, no inherit, no cron" || rc=1
+
   echo "control: the lock relock is present"
   if [ -f "$RELOCK" ] && bash -n "$RELOCK"; then
     echo "  PASS $(basename "$RELOCK") present and parses"
@@ -529,9 +640,27 @@ land_pr() {
     head_oid="$base_sha"; created=1
   fi
 
-  local msg_head="chore(ci): re-point standards reusable-workflow pins to ${TARGET_SHA:0:12}"
-  local msg_body
-  msg_body=$(printf 'Opened by the standards pin applier (scripts/apply-workflow-pins-remote.sh).\n\nRe-points this repository'"'"'s pinned references to metadatastician/standards reusable\nworkflows at %s, which is proven reachable from standards main.\n\nCo-Authored-By: Claude Opus 5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01HfgwLCdKNd5iZVo6VTiSim' "$TARGET_SHA")
+  # The message names what THIS change does and the run that made it. It used
+  # to end with one fixed claude.ai session link, so every PR the App opened
+  # pointed at a conversation that had nothing to do with it.
+  local f pins=0 sq=0 msg_head msg_body run_line=""
+  for f in "$@"; do
+    case "$f" in "$SQUABBLER_FILE") sq=1 ;; actions.lock) ;; *) pins=1 ;; esac
+  done
+  if [ "$sq" -eq 1 ] && [ "$pins" -eq 1 ]; then
+    msg_head="chore(ci): re-point standards pins to ${TARGET_SHA:0:12}; add the CICD Squabbler gate"
+  elif [ "$sq" -eq 1 ]; then
+    msg_head="chore(ci): add the CICD Squabbler gate (standards ${TARGET_SHA:0:12})"
+  else
+    msg_head="chore(ci): re-point standards reusable-workflow pins to ${TARGET_SHA:0:12}"
+  fi
+  [ -n "${GITHUB_RUN_ID:-}" ] && run_line=$(printf '\n\nRun: %s/%s/actions/runs/%s' \
+    "${GITHUB_SERVER_URL:-https://github.com}" "${GITHUB_REPOSITORY:-$STANDARDS_REPO}" "$GITHUB_RUN_ID")
+  msg_body="Opened by the standards pin applier (scripts/apply-workflow-pins-remote.sh)."
+  [ "$pins" -eq 1 ] && msg_body=$(printf '%s\n\nRe-points this repository'"'"'s pinned references to %s reusable\nworkflows at %s, which is proven reachable from standards main and passes\nlock-selfcheck.sh.' "$msg_body" "$STANDARDS_REPO" "$TARGET_SHA")
+  [ "$sq" -eq 1 ] && msg_body=$(printf '%s\n\nAdds .github/workflows/%s, the CICD Squabbler gate, pinned to the same\ncommit. Its chains job fails on a dependency cycle or a dead upstream.' "$msg_body" "$SQUABBLER_FILE")
+  printf '%s\n' "$@" | grep -qx actions.lock && msg_body=$(printf '%s\n\nactions.lock is relocked in the same commit (scripts/relock-standards-pin.sh),\nso no workflow starts with a lock that does not match its pins.' "$msg_body")
+  msg_body="${msg_body}${run_line}"
 
   # The request body goes in whole via --input. `-F input=<json>` sends the
   # JSON as a STRING, which GitHub rejects as an invalid CreateCommitOnBranchInput
@@ -547,8 +676,7 @@ land_pr() {
   fi
 
   pr=$(gh pr create --repo "$repo" --head "$BRANCH_NAME" --base "$base_branch" \
-        --title "$msg_head" \
-        --body "$(printf '%s\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nhttps://claude.ai/code/session_01HfgwLCdKNd5iZVo6VTiSim' "$msg_body")" \
+        --title "$msg_head" --body "$msg_body" \
         2>/dev/null) || { log "  land: PR already open or creation failed for ${repo}"; return 1; }
   echo "$pr"
 }
@@ -594,6 +722,7 @@ main() {
       --only) ONLY_REPO="$2"; shift ;;
       --out) OUT_FILE="$2"; shift ;;
       --limit) LIMIT="$2"; shift ;;
+      --ensure-squabbler) ENSURE_SQUABBLER=1 ;;
       --self-test) self_test; exit $? ;;
       -h|--help) sed -n '2,60p' "$0"; exit 0 ;;
       *) log "unknown option: $1"; exit 2 ;;
@@ -636,10 +765,11 @@ main() {
   fi
   [ -n "$repos" ] || { log "FATAL: enumerated zero repositories for ${OWNERS} (rate limit or auth?). Refusing to report an empty census."; exit 1; }
 
-  local repo
+  local repo walked=0
   for repo in $repos; do
+    # Audit: n counts repos walked. Fix: n counts repos a PR is attempted in.
     [ "$LIMIT" -gt 0 ] && [ "$n" -ge "$LIMIT" ] && break
-    n=$((n+1))
+    walked=$((walked+1)); [ "$DO_FIX" -eq 1 ] || n=$((n+1))
     local rdir="${WORKDIR}/$(echo "$repo" | tr '/' '_')"
     if ! fetch_workflows "$repo" "$rdir"; then
       log "  FETCH-FAILED ${repo}: workflows could not be read; NOT classified"
@@ -670,7 +800,27 @@ main() {
       fi
     done
     shopt -u nullglob
-    [ "$found" -eq 0 ] && continue
+    [ "$found" -eq 0 ] && [ "$ENSURE_SQUABBLER" -eq 0 ] && continue
+
+    # The squabbler gate rides with the re-pin (see ENSURE-SQUABBLER above).
+    if [ "$ENSURE_SQUABBLER" -eq 1 ]; then
+      local sqst; sqst=$(squabbler_state "$rdir" "$TARGET_SHA" "$REPAIR_ILLEGAL")
+      if [ "$sqst" = MISSING ]; then
+        local isfork
+        isfork=$(gh api "repos/${repo}" --jq '.fork' 2>/dev/null || echo unknown)
+        case "$isfork" in
+          false)
+            if [ "$DO_FIX" -eq 1 ]; then
+              write_squabbler_caller "${rdir}/${SQUABBLER_FILE}" "$TARGET_SHA"
+              changed+=("$SQUABBLER_FILE"); sqst=ADDED
+            fi ;;
+          true) sqst=FORK ;;
+          *) sqst="DEFERRED:FORK-UNKNOWN" ;;
+        esac
+      fi
+      printf '%s\t%s\tSQUABBLER-%s\t-\n' "$repo" "$SQUABBLER_FILE" "$sqst" >> "$tsv"
+    fi
+    [ "$found" -eq 0 ] && [ "${#changed[@]}" -eq 0 ] && continue
 
     # The lock must follow the pins. Re-pointing `uses:` alone leaves
     # actions.lock keyed to the old standards commit: check-lock-sync.sh
@@ -681,15 +831,26 @@ main() {
     # a repo whose lock cannot follow is reported and NOT landed.
     if [ "$DO_FIX" -eq 1 ] && [ "${#changed[@]}" -gt 0 ] && [ -f "$rdir/actions.lock" ]; then
       local lock_before; lock_before=$(cat "$rdir/actions.lock")
-      if ! bash "$RELOCK" --to "$TARGET_SHA" --standards "$STANDARDS_ROOT" "$rdir" >&2; then
+      local relog relock_rc=0
+      relog=$(bash "$RELOCK" --to "$TARGET_SHA" --standards "$STANDARDS_ROOT" "$rdir" 2>&1) || relock_rc=$?
+      log "$relog"
+      if [ "$relock_rc" -ne 0 ]; then
         log "  LOCK-REFUSED ${repo}: actions.lock cannot follow the new pins; NOT landed"
-        printf '%s\t-\tLOCK-REFUSED\t-\n' "$repo" >> "$tsv"
+        printf '%s\t-\tLOCK-REFUSED\t%s\n' "$repo" "$(printf '%s' "$relog" | grep -m1 -o 'REFUSED ([^)]*)' | tr '\t' ' ')" >> "$tsv"
         continue
+      fi
+      # Leaves standards cannot repair stay as they were; the census names them,
+      # because the workflows that use them still fail at startup until a lock
+      # regeneration gives them a tag.
+      if printf '%s' "$relog" | grep -q 'SELF-SHA-LEAF left'; then
+        printf '%s\tactions.lock\tLEAF-UNREPAIRED\t%s\n' "$repo" \
+          "$(printf '%s' "$relog" | sed -n 's/.*SELF-SHA-LEAF left[^:]*://p' | head -1 | sed 's/^ *//')" >> "$tsv"
       fi
       [ "$lock_before" != "$(cat "$rdir/actions.lock")" ] && changed+=("actions.lock")
     fi
 
     if [ "$DO_FIX" -eq 1 ] && [ "${#changed[@]}" -gt 0 ]; then
+      n=$((n+1))
       local url
       if url=$(land_pr "$repo" "$rdir" "${changed[@]}"); then
         log "  OPENED ${repo}: ${url}"
@@ -700,7 +861,7 @@ main() {
     fi
   done
 
-  log "== walked ${n} repo(s) =="
+  log "== walked ${walked} repo(s); ${n} counted against --limit ${LIMIT} =="
   # Counts are reported at LANDED, never at PR-open: 545 merged/week means
   # throughput is fine; 249 PRs open and unmerged is an abandoned campaign.
   log "== summary by status =="
