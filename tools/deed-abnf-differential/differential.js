@@ -204,9 +204,15 @@ const rnd = (k) => {
 };
 // Edits aimed at the grammar's boundaries: separators and line-ends,
 // comments, quoting, brackets, # forms, control and non-ASCII characters.
-const ALPHABET = [" ", "  ", "\n", "\r", "\r\n", "\t", ";", ";c\n", "'", '"', "(", ")", ":", "#", "#t", "#u8", "#u5", "#uuid", "-4", "-8",
+const ALPHABET = [" ", "  ", "\n", "\r", "\r\n", "\t", ";", ";c\n", "'", '"', "(", ")", ":", "#", "#t", "#u8", "#u5", "#uuid", "-4", "-8", "-A", "-B",
   "x", "Z", "7", "-", "_", ".", "\\", "\\n", "\\r", "\x7f", "\x01", "é", "©", "\u0085", "", "", ""];
 const variants = [...texts];
+// Directed probes. ABNF quoted strings are case-insensitive (RFC 5234 2.3),
+// so a letter in #uuid that must be lowercase needs %s. Random edits rarely
+// land on the variant nibble, so probe it directly.
+for (const v of "AB") {
+  variants.push(`;; SPDX-License-Identifier: CC-BY-SA-4.0\n(repo-deed :schema-version "1.0.0" :repo-uuid #uuid"b32d6be4-73ba-873e-${v}d61-e57f43c75cd1")\n`);
+}
 for (let k = 0; k < opts.cases; k++) {
   let t = texts[rnd(texts.length)];
   const edits = 1 + rnd(opts.edits);
