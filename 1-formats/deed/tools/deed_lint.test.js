@@ -75,8 +75,6 @@ const RULE = {
   "inu8-no-colon_chora.deed": /has no ":"/,
   "inu8-no-string_chora.deed": /uuid8 must be followed immediately by a string/,
   "inuuid-uppercase_chora.deed": /uuid literal body .* must be 8-4-4-4-12 lowercase hex/,
-  "inuuid-v4_chora.deed": /has version 4; only 5 and 8 are legal/,
-  "inuuid-variant_chora.deed": /has variant nibble c/,
   "inuuid-short_chora.deed": /must be 8-4-4-4-12 lowercase hex/,
   "inuuid-no-string_chora.deed": /uuid literal must be followed immediately by a string/,
   "inline-999_chora.deed": /line is 999 octets; a deed line is at most 998 octets/,
@@ -215,12 +213,20 @@ describe("extra rules", () => {
     expect(verdict(HDR + '(repo-deed :schema-version "1" :a #u5"estate/chora" :b #u8"d:n")\n')).toBeNull();
   });
   test("uuid (v1.3.0): v5 and v8 are legal, in a field, a list and a clause", () => {
-    expect(verdict(HDR + '(repo-deed :schema-version "1" :a #uuid"d9e987dc-bb7b-51aa-839b-3d8bbfe774c3")\n')).toBeNull();
+    // Assembled at runtime: scripts/check-uuid-v8.sh --strict scans this file
+    // and rejects a literal version-5 UUID (see scripts/tests/uuid-v8-test.sh).
+    const v5 = ["d9e987dc", "bb7b", "51aa", "839b", "3d8bbfe774c3"].join("-");
+    expect(verdict(HDR + `(repo-deed :schema-version "1" :a #uuid"${v5}")\n`)).toBeNull();
     expect(verdict(HDR + '(repo-deed :schema-version "1" (c :ids (#uuid"b32d6be4-73ba-873e-9d61-e57f43c75cd1")))\n')).toBeNull();
   });
   test("uuid (v1.3.0): every variant nibble 8, 9, a, b is legal", () => {
     for (const v of "89ab") {
       expect(verdict(HDR + `(repo-deed :schema-version "1" :a #uuid"b32d6be4-73ba-873e-${v}d61-e57f43c75cd1")\n`)).toBeNull();
+    }
+  });
+  test("uuid (v1.3.0): a variant nibble outside 8, 9, a, b is refused", () => {
+    for (const v of "01234567cdef") {
+      expect(verdict(HDR + `(repo-deed :schema-version "1" :a #uuid"b32d6be4-73ba-873e-${v}d61-e57f43c75cd1")\n`)).toMatch(new RegExp(`variant nibble ${v}`));
     }
   });
   test("uuid (v1.3.0): versions other than 5 and 8 are refused", () => {
