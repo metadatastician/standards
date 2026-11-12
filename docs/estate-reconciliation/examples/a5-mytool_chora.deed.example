@@ -3,7 +3,7 @@
 (repo-deed
   :schema-version "1.0.0"
   :canonical-name "mytool"
-  :repo-uuid #uuid"3f76e427-3bff-53b5-be46-3a1aa5c2cb43"
+  :repo-uuid #uuid"806d4d6f-f107-8b36-939b-f89ba6279377"
   :beholding-chora #uuid"47e1501b-26b4-5bbd-8a3f-1afa81c69dbe"
 
   (identity :primary-forge github :owner "hyperpolymath" :name "mytool")

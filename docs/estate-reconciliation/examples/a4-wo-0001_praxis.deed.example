@@ -8,7 +8,7 @@
   (work-order
     :id "wo-0001"
     :class "fix-unpinned-actions"
-    :repo #uuid"3f76e427-3bff-53b5-be46-3a1aa5c2cb43"
+    :repo #uuid"806d4d6f-f107-8b36-939b-f89ba6279377"
     :base "0123456789abcdef0123456789abcdef01234567"
     :tier review
     :trigger dispatch

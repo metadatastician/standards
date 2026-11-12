@@ -64,6 +64,20 @@ scannable_text() {
   esac
 }
 
+# Remove deed opaque literals that carry a version 5 id: #uuid"<v5>".
+#
+# Owner rulings U2 and U3 (2026-11-12, 2-protocols/chora/CHORA-SPEC.adoc
+# section 9.1) make a repository's id the UUIDv5 of its birth path, and U4
+# writes it as the opaque deed literal #uuid"…" (deed.abnf v1.3.0). That
+# literal is the explicit type that ADR-008's "preserve and type explicitly"
+# rule asks for, so a v5 value inside it is accepted in both modes. The match
+# follows the grammar exactly: lowercase hex, version 5, variant 10. A bare
+# v5, an upper-case one, or any other version inside #uuid"…" is still
+# checked as usual. v8 inside #uuid"…" needs no exception.
+drop_typed_opaque_v5() {
+  sed -E 's/#uuid"[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}"//g'
+}
+
 # Exit 0 when a version:variant pair is acceptable in the current mode.
 # Keep this POSIX so it can run in every estate checkout.
 acceptable() {
@@ -97,7 +111,7 @@ while IFS= read -r file; do
         status=1
       fi
     done <<EOF
-$(scannable_text "$file" | grep -oEi -- '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' || true)
+$(scannable_text "$file" | drop_typed_opaque_v5 | grep -oEi -- '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' || true)
 EOF
   fi
 done <<EOF

@@ -248,7 +248,7 @@ A work order is a `praxis-deed` named `<order-id>_praxis.deed` with a `(work-ord
   (work-order
     :id "wo-0001"
     :class "fix-unpinned-actions"
-    :repo #uuid"3f76e427-3bff-53b5-be46-3a1aa5c2cb43"
+    :repo #uuid"806d4d6f-f107-8b36-939b-f89ba6279377"
     :base "<40 hex>"
     :tier review
     :trigger dispatch

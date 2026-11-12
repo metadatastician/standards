@@ -122,5 +122,29 @@ fresh; printf 'name = "P"\nuuid = "%s"\n\n[extras]\nAqua = "%s"\nTest = "%s"\n' 
   "$V8_8" "$V5" "$V5" > "$WORK/t/Project.toml.in"
 expect 0 "registry UUIDs in a Project.toml.in [extras] pass under --strict" --strict
 
+echo "deed opaque #uuid literal (owner rulings U2-U4)"
+V5_UC="$(uuid 886313E1 3B8A 5372 9B90 0C9AEE199E5D)"  # version 5, upper case
+V5_C="$(uuid 886313e1 3b8a 5372 cb90 0c9aee199e5d)"   # version 5, NON-RFC variant c
+fresh; printf '(repo-deed :repo-uuid #uuid"%s")\n' "$V5" > "$WORK/t/a_chora.deed"
+expect 0 "a v5 inside #uuid\"...\" is accepted"
+expect 0 "a v5 inside #uuid\"...\" is accepted under --strict" --strict
+fresh; printf 'see #uuid"%s" in the deed\n' "$V5" > "$WORK/t/notes.adoc"
+expect 0 "a v5 inside #uuid\"...\" in prose is accepted under --strict" --strict
+fresh; printf 'id = "%s"\n' "$V5" > "$WORK/t/a.json"
+expect 1 "a bare v5 is still rejected under --strict" --strict
+fresh; printf 'x = #uuid"%s"\n' "$V5_UC" > "$WORK/t/a_chora.deed"
+expect 1 "an upper-case v5 inside #uuid\"...\" is rejected (the grammar is lowercase)" --strict
+fresh; printf 'x = #uuid"%s"\n' "$V5_C" > "$WORK/t/a_chora.deed"
+expect 1 "a v5 with a non-RFC variant inside #uuid\"...\" is rejected" --strict
+fresh; printf 'x #uuid"%s"\n' "$V4" > "$WORK/t/a_chora.deed"
+expect 1 "a v4 inside #uuid\"...\" is rejected"
+fresh; printf 'x #uuid"%s"\n' "$V7_8" > "$WORK/t/a_chora.deed"
+expect 1 "a v7 inside #uuid\"...\" is rejected under --strict" --strict
+fresh; printf 'x #u5"%s"\n' "$V5" > "$WORK/t/a_chora.deed"
+expect 1 "a v5 hex written as #u5\"...\" is not the opaque literal and is rejected" --strict
+fresh; printf '(a #uuid"%s" :b "%s")\n' "$V5" "$V4" > "$WORK/t/a_chora.deed"
+expect 1 "a bare v4 after a typed v5 on the same line is still rejected" --strict
+names "($V4)" "the same-line rejection names the v4"
+
 echo "PASS=$pass FAIL=$fail"
 [ "$fail" -eq 0 ]
