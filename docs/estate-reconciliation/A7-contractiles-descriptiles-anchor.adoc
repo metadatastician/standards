@@ -298,7 +298,7 @@ Measured with `grep` over `scripts/`, `.github/workflows/` and the repos named, 
 | `rsr-template-repo` `scripts/deed-field.sh --uuid` (re-derives a v5 id from a `#u5` name) | `extract-facts.sh`, the coaptation loop | It reads the opaque `#uuid` body as the id and never re-derives it (U1, V1; J11). | every minted repo
 |===
 
-Not load-bearing, and no replacement needed: `check-launcher-standard-currency.sh` names the retired `launcher-standard.a2ml` only to refuse it. `registry-readiness.sh` lists `0-AI-MANIFEST.a2ml` as a legacy pointer and loses the line in step M4.
+Not load-bearing, and no replacement needed: `check-launcher-standard-currency.sh` names the retired A2ML spelling of the launcher standard only to refuse it. `registry-readiness.sh` lists `0-AI-MANIFEST.a2ml` as a legacy pointer and loses the line in step M4.
 
 == 11. Migration order: one repository at a time, never a sweep
 
