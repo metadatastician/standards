@@ -23,6 +23,12 @@ Every example in this document parses under that ABNF. Read them closely:
 `alternatives_rejected:` items are quoted strings. Blank lines appear
 between sections, never inside one.
 
+NOTE: *Line-length limit, 2026-11-12.* Owner ruling I4 caps every line at
+998 octets (rule 14), so that the registered `8bit` encoding label is
+exact. The version stays 1.2.0: no file in this repository came near the
+limit, and the media type is not yet filed. A 1.1.1 file with a longer line
+is not a 1.2.0 file.
+
 NOTE: *Changes in 1.2.0.* Two optional sections, additive, so every 1.1.1
 file is a 1.2.0 file: `build_commands` (the commands an agent may run, each
 with its purpose) and `innervation` (the signals a repository emits and
@@ -43,7 +49,8 @@ section, and a `---` separator is still invalid.
 | Location | Repository root
 | K9 Level | Kennel (pure data, no execution)
 | Magic Number | `K9!` (mandatory first line)
-| Media Type | `application/vnd.k9.coordination` (link:../docs/iana/application-vnd.k9.coordination-registration.txt[registration draft]; distinct from `application/vnd.k9`, which is K9 SVC components)
+| Media Type | `application/vnd.metadatastician.k9.coordination` (link:../docs/iana/application-vnd.metadatastician.k9.coordination-registration.txt[registration draft], not yet filed; distinct from `application/vnd.metadatastician.k9`, which is K9 SVC components)
+| Line length | At most 998 octets per line, not counting the line end (rule 14)
 | SPDX | `PMPL-1.0-or-later` (or project license)
 |===
 
@@ -272,7 +279,7 @@ coordination:
 == Validation Rules
 
 The ABNF is normative; these rules summarise it (1–10) and add the schema
-rules a grammar cannot express (11–13).
+rules a grammar cannot express (11–14).
 
 1. File MUST start with `K9!` on line 1, with no leading whitespace or BOM.
 2. One or more `# SPDX-` header lines MUST immediately follow the magic line.
@@ -294,6 +301,11 @@ rules a grammar cannot express (11–13).
 12. Each invariant MUST have `id`, `rule` and `reason`; each protected
     entry MUST have `path` and `reason`.
 13. Severity defaults to `critical` if omitted.
+14. No line is longer than 998 octets, not counting its CR and LF. This
+    is the RFC 5322 Section 2.1.1 bound, and it makes the registered
+    `8bit` encoding label exact (RFC 2045 Section 2.8). The grammar states
+    it in its header as a constraint on the whole file; ABNF cannot express
+    it compactly. Owner ruling I4, 2026-11-12.
 
 == Generator Behaviour
 

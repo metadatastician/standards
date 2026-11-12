@@ -1,7 +1,7 @@
 = DEED Grammar Specification
 :version: 0.2.4
 :status: DRAFT
-:media-type: application/vnd.deed
+:media-type: application/vnd.metadatastician.deed
 :toc:
 :toclevels: 3
 
@@ -40,6 +40,12 @@ Compatible with:
 [cols="1,1,3"]
 |===
 | Version | Date | Changes
+
+| 0.2.4 (editorial)
+| 2026-11-12
+| Owner rulings of 2026-11-12, no grammar change: the media type is
+  `application/vnd.metadatastician.deed` (I1), and the lexical rules state
+  the 998-octet line limit (I4) that `deed.abnf` v1.3.0 adds.
 
 | 0.2.4
 | 2026-10-27
@@ -140,6 +146,15 @@ campaign itself.
 
 A deed is a sequence of UTF-8 bytes with *no leading BOM* (U+FEFF is
 INVALID). Parsers MUST be deterministic given identical input bytes.
+
+*Line length.* No line of a deed is longer than 998 octets, not counting
+the CR and LF that end it. A document with a longer line is not a
+conforming deed. The bound is the one RFC 5322 Section 2.1.1 sets, and it
+makes the `8bit` encoding label of the media type registration exact
+(link:../docs/iana/application-vnd.metadatastician.deed-registration.txt[registration draft];
+owner ruling I4, 2026-11-12). The constraint is added to `deed.abnf` in
+its v1.3.0 draft (metadatastician/standards#1473); this prose states it
+until that lands.
 
 Keywords, document heads, booleans, UUID prefixes, filename dispatch
 literals, and string-escape letters are *case-sensitive*. `repo-deed` is

@@ -31,7 +31,7 @@ word `must` appears in both and means different things; never conflate them.
 
 [cols="1,2"]
 |===
-|Standard ID |`application/vnd.k9`
+|Standard ID |`application/vnd.metadatastician.k9`
 |Version |1.0.0
 |Stability |Stable
 |Magic Number |`K9!` (`\x4B\x39\x21`)
@@ -475,14 +475,14 @@ conformance by link:tools/k9-validate.sh[`tools/k9-validate.sh`].
 
 [source,xml]
 ----
-<mime-type type="application/vnd.k9">
+<mime-type type="application/vnd.metadatastician.k9">
   <comment>K9 Self-Validating Component</comment>
   <magic priority="50">
     <match value="K9!" type="string" offset="0"/>
   </magic>
   <glob pattern="*.k9.ncl"/>
 </mime-type>
-<mime-type type="application/vnd.k9.coordination">
+<mime-type type="application/vnd.metadatastician.k9.coordination">
   <comment>K9 Coordination File</comment>
   <magic priority="60">
     <match value="K9!" type="string" offset="0">
@@ -511,11 +511,11 @@ link:spec/K9-CONTRACT-SPEC.adoc[the contract specification].
 <key>UTTypeIdentifier</key>
 <string>org.k9-svc.component</string>
 <key>public.mime-type</key>
-<string>application/vnd.k9</string>
+<string>application/vnd.metadatastician.k9</string>
 ----
 
 The coordination type gets its own UTI, `org.k9-svc.coordination`, with
-`public.mime-type` `application/vnd.k9.coordination`.
+`public.mime-type` `application/vnd.metadatastician.k9.coordination`.
 
 === Minix
 
@@ -523,7 +523,7 @@ Static mapping in `/etc/mime.types`:
 
 [source]
 ----
-application/vnd.k9.coordination    k9
+application/vnd.metadatastician.k9.coordination    k9
 ----
 
 `/etc/mime.types` keys on a file's last extension only, so it cannot express

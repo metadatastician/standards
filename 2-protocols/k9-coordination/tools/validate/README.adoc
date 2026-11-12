@@ -31,7 +31,10 @@ A file passes when:
   `deno.lock` and `pnpm-lock.yaml`). That covers rules 1–10 and 12 of the
   spec's "Validation Rules";
 * its `metadata` section carries exactly one `schema: k9-coordination`
-  (rule 11).
+  (rule 11);
+* no line is longer than 998 octets, not counting its CR and LF (rule 14,
+  the constraint stated in the grammar's header; owner ruling I4,
+  2026-11-12). This is checked first, on the raw bytes.
 
 Rule 13 is a default and has nothing to check. Resolving `project.deed_ref`
 to an existing deed is the generator's duty (README "Usage"), not
@@ -46,9 +49,11 @@ validation, and is not done here.
   with CRLF line ends, and reports which of them are also v1.1 files;
 . rejects every `fixtures/invalid/*.k9`, for the reason its `# expect:`
   line names;
-. rejects six mutants of the root file: a `---` separator, a tab, a
+. rejects seven mutants of the root file: a `---` separator, a tab, a
   quoted boolean, a lower-case magic line, a blank line inside a section,
-  and the wrong schema;
+  the wrong schema, and a project name that makes a 999-octet line
+  (`fixtures/valid/line-998-octets.k9` and
+  `fixtures/invalid/line-999-octets.k9` pin both sides of the limit);
 . re-checks, on the committed v1.1 and v1.2 grammars, the side condition
   of the proof below: every rule v1.1 defines other than `body` is
   unchanged in v1.2, and v1.2's `body` only gains optional elements;

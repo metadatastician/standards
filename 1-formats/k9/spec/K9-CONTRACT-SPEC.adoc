@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 // SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
 = K9 Component Contract Specification
-:subtitle: The normative Nickel contract for `application/vnd.k9`
+:subtitle: The normative Nickel contract for `application/vnd.metadatastician.k9`
 :author: hyperpolymath
 :revnumber: 1.0.0
 :revdate: 2026-10-03
@@ -10,7 +10,7 @@
 :icons: font
 :source-highlighter: rouge
 :sectnums:
-:standard-id: application/vnd.k9
+:standard-id: application/vnd.metadatastician.k9
 :contract-file: contract/k9_contract.ncl
 
 :sectnums!:
@@ -39,14 +39,14 @@ that file disagree, *this prose wins and the file is a bug*.
 
 [cols="1,3"]
 |===
-|Standard ID |`application/vnd.k9`
+|Standard ID |`application/vnd.metadatastician.k9`
 |Document |K9 Component Contract Specification
 |Version |1.0.0
 |Stability |Normative
 |Schema major |`1`
 |Contract file |link:{contract-file}[`spec/contract/k9_contract.ncl`]
 |Canonical validator |link:../tools/k9-validate.sh[`tools/k9-validate.sh`]
-|Conformance suite |link:../tools/fixtures/[`tools/fixtures/`] (6 positive, 21 negative)
+|Conformance suite |link:../tools/fixtures/[`tools/fixtures/`] (7 positive, 22 negative)
 |Ruling |D173 (standards#1058, 2026-09-30)
 |Supersedes |the prose-only contract description in link:../SPEC.adoc[`SPEC.adoc`] §L2 and §The Active Pedigree
 |===
@@ -172,6 +172,15 @@ A K9 file MUST be UTF-8 text with no NUL octet (K9-E002) and MUST use LF line
 endings (K9-E003). A CR inside the magic line makes it four octets, which is
 precisely the disagreement K9-E001 forbids a reader to paper over.
 
+=== K9-E006 — line length
+
+No line of a K9 file may be longer than 998 octets, not counting the LF that
+ends it. The bound is the one RFC 5322 Section 2.1.1 sets, and it is what makes
+the registered `8bit` encoding label exact (RFC 2045 Section 2.8): without
+it, a conforming file could contain a line that `8bit` does not describe.
+Nickel itself sets no limit, so this is a K9 envelope rule, checked on raw
+octets before the body is read. Owner ruling I4, 2026-11-12.
+
 === K9-E005 — reading the body
 
 After the magic line and the comment header, the first significant line
@@ -234,9 +243,9 @@ have been given the same scent. Naming it here is what lets a reader route it
 instead of misreporting it as a broken component.
 
 The difference carries through to the media types. A component is
-`application/vnd.k9`; a coordination file is its own subtype,
-`application/vnd.k9.coordination` (owner ruling, 2026-10-13). It is not a
-parameter of `vnd.k9`, because file-type detectors drop parameters and would
+`application/vnd.metadatastician.k9`; a coordination file is its own subtype,
+`application/vnd.metadatastician.k9.coordination` (owner ruling, 2026-10-13). It is not a
+parameter of `vnd.metadatastician.k9`, because file-type detectors drop parameters and would
 then label coordination files as Nickel components.
 
 === Extension reservation
@@ -948,8 +957,8 @@ hidden; review is the control, as it is for `.machine_readable/inline-python-all
 [source]
 ----
 1-formats/k9/tools/fixtures/
-├── valid/     6 positive controls
-└── invalid/   21 negative controls
+├── valid/     7 positive controls
+└── invalid/   22 negative controls
                (19 assertable without a toolchain, 2 needing Nickel)
 ----
 
@@ -1007,7 +1016,7 @@ the seam cannot be left open.
 # built-in assertions: the mirrors, the arithmetic, the extractor, the strip
 1-formats/k9/tools/k9-validate.sh --self-test
 
-# the corpus: 6 positive + 21 negative
+# the corpus: 7 positive + 22 negative
 1-formats/k9/tools/k9-validate.sh --fixtures 1-formats/k9/tools/fixtures
 
 # with Nickel on PATH, every format layer must actually run
@@ -1122,6 +1131,7 @@ violations, and this specification makes no claim about them.
 |K9-E003 |L0 |error |LF line endings only.
 |K9-E004 |L0 |error |SPDX identifier in the first five lines.
 |K9-E005 |L0 |error |The body belongs to a known dialect.
+|K9-E006 |L0 |error |No line longer than 998 octets, excluding the LF.
 |K9-S001 |L1 |error |Top-level `pedigree` present.
 |K9-S002 |L1 |error |`schema_version` is a dot-triple of this major.
 |K9-S003 |L1 |error |`component_type` present and not a placeholder.
@@ -1179,7 +1189,7 @@ to infer a grammar from prose.
 * RFC 2119 — Key words for use in RFCs to Indicate Requirement Levels
 * RFC 8017 / RFC 8032 — Ed25519
 * link:../SPEC.adoc[K9 SVC Specification]
-* link:../IANA-MEDIA-TYPE-APPLICATION.adoc[`application/vnd.k9` media type]
+* link:../IANA-MEDIA-TYPE-APPLICATION.adoc[`application/vnd.metadatastician.k9` media type]
 * link:../../../2-protocols/k9-coordination/spec/abnf/coordination-k9-grammar_v1.2.abnf[K9 Coordination File Grammar v1.2.0]
 * standards#1058 (grammar artifacts), ruling D173; standards#837, #856, #752, #49, #64
 

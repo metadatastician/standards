@@ -162,7 +162,7 @@ let component_pedigree = {
   metadata = {
     name = "example-config",
     version = "1.0.0",
-    breed = "application/vnd.k9",
+    breed = "application/vnd.metadatastician.k9",
     magic_number = "K9!",
   },
   security = {

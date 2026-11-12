@@ -12,7 +12,9 @@
 // spec/abnf/coordination-k9-grammar_v1.2.abnf (through apg-js), and meets the
 // schema rule the grammar cannot express (COORDINATION-K9-SPEC "Validation
 // Rules", rule 11): `metadata` carries exactly one `schema: k9-coordination`.
-// Rules 1-10 and 12 are the grammar's.
+// Rules 1-10 and 12 are the grammar's. Before either, every line must be at
+// most 998 octets, not counting its CR and LF (rule 14; the constraint the
+// grammar states in its header, owner ruling I4, 2026-11-12).
 //
 // --self-test also re-checks, on the committed grammar files, the side
 // condition of `v11FilesAreV12Files` in proofs/GrammarExtension.idr: every
@@ -57,6 +59,29 @@ function grammarError(grammar, bytes) {
   return Buffer.from(bytes.subarray(0, r.maxMatched)).toString("utf8").split("\n").length;
 }
 
+/** Longest line the format admits, in octets, excluding the line end. RFC
+ * 5322 Section 2.1.1 sets the same bound; it is what makes the registered
+ * "8bit" encoding label exact (RFC 2045 Section 2.8). */
+export const MAX_LINE_OCTETS = 998;
+
+/** Rule 14: return null when no line exceeds MAX_LINE_OCTETS, else a reason
+ * naming the first line that does. Lines end at LF; a CR before the LF is part
+ * of the line end, not of the line. */
+function lineLengthError(bytes) {
+  let start = 0, line = 1;
+  for (let i = 0; i <= bytes.length; i++) {
+    if (i < bytes.length && bytes[i] !== 0x0a) continue;
+    let end = i;
+    if (end > start && bytes[end - 1] === 0x0d && i < bytes.length) end--;
+    if (end - start > MAX_LINE_OCTETS) {
+      return `line ${line} is ${end - start} octets, over the ${MAX_LINE_OCTETS}-octet line limit (rule 14)`;
+    }
+    start = i + 1;
+    line++;
+  }
+  return null;
+}
+
 /** Rule 11: the metadata section carries exactly one `schema: k9-coordination`.
  * Called only on text the grammar accepted, so the section shape is known. */
 function schemaError(text) {
@@ -76,6 +101,8 @@ function schemaError(text) {
 
 /** Validate one file's bytes; return null when it conforms, else a reason. */
 export function check(grammar, bytes) {
+  const long = lineLengthError(bytes);
+  if (long !== null) return long;
   const line = grammarError(grammar, bytes);
   if (line !== null) return `does not parse as k9-file under the v1.2 grammar (stops at line ${line})`;
   return schemaError(Buffer.from(bytes).toString("utf8"));
@@ -179,6 +206,7 @@ function selfTest() {
     "a lower-case magic line": root.replace(/^K9!/, "k9!"),
     "a blank line inside a section": root.replace("\n  schema_version:", "\n\n  schema_version:"),
     "the wrong schema": root.replace("schema: k9-coordination", "schema: k9"),
+    "a project name that makes a 999-octet line": root.replace(/\n  name: "standards"/, `\n  name: "${"x".repeat(989)}"`),
   };
   for (const [label, text] of Object.entries(mutants)) {
     ok(text !== root && check(g, Buffer.from(text)) !== null, `rejects the root file with ${label}`);
