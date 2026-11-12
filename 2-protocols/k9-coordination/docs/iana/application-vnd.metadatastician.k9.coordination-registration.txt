@@ -30,14 +30,14 @@ Stable, so it is first, and nothing ahead of it blocks it.
 
 STATUS: NOT FILED.
 
-Prepared: 2026-11-12 (Revision 3)
+Prepared: 2026-11-12 (Revision 4)
 Prepared By: Jonathan D.A. Jewell <jonathan@metadatastician.art>
 
-Every link below is pinned to commit e2a03dc913e1029c6ef90ad0a9432838d197ee49
+Every link below is pinned to commit e880a2d0c2832f4965dac528f454438083577c5c
 of metadatastician/standards, so that it keeps resolving to the text that
-this registration describes.  That commit predates the 2026-11-12
-rulings (subtype names, line limit), so before filing, every link is
-re-pinned to a commit that carries them.
+this registration describes.  It is the merge of
+metadatastician/standards#1476, which carries the 2026-11-12 rulings
+(subtype names, line limit).
 
 ---
 
@@ -124,10 +124,10 @@ Interoperability considerations:
 
 Published specification:
   K9 Coordination File Specification v1.2.0:
-  https://github.com/metadatastician/standards/blob/e2a03dc913e1029c6ef90ad0a9432838d197ee49/2-protocols/k9-coordination/spec/COORDINATION-K9-SPEC.adoc
+  https://github.com/metadatastician/standards/blob/e880a2d0c2832f4965dac528f454438083577c5c/2-protocols/k9-coordination/spec/COORDINATION-K9-SPEC.adoc
 
   Formal grammar (ABNF, normative for parsing):
-  https://github.com/metadatastician/standards/blob/e2a03dc913e1029c6ef90ad0a9432838d197ee49/2-protocols/k9-coordination/spec/abnf/coordination-k9-grammar_v1.2.abnf
+  https://github.com/metadatastician/standards/blob/e880a2d0c2832f4965dac528f454438083577c5c/2-protocols/k9-coordination/spec/abnf/coordination-k9-grammar_v1.2.abnf
 
 Applications which use this media type:
   - The k9-coordination generator, which emits per-tool AI-agent
@@ -137,7 +137,7 @@ Applications which use this media type:
     to the coordination grammar
 
   Reference implementation:
-  https://github.com/metadatastician/standards/tree/e2a03dc913e1029c6ef90ad0a9432838d197ee49/2-protocols/k9-coordination
+  https://github.com/metadatastician/standards/tree/e880a2d0c2832f4965dac528f454438083577c5c/2-protocols/k9-coordination
 
 Fragment identifier considerations:
   None defined.  Processors encountering a fragment SHOULD treat it as
@@ -207,10 +207,10 @@ References:
     https://www.rfc-editor.org/rfc/rfc3629.html
 
 [3] K9 Coordination File Specification v1.2.0
-    https://github.com/metadatastician/standards/blob/e2a03dc913e1029c6ef90ad0a9432838d197ee49/2-protocols/k9-coordination/spec/COORDINATION-K9-SPEC.adoc
+    https://github.com/metadatastician/standards/blob/e880a2d0c2832f4965dac528f454438083577c5c/2-protocols/k9-coordination/spec/COORDINATION-K9-SPEC.adoc
 
 [4] application/vnd.metadatastician.k9 registration (companion type)
-    https://github.com/metadatastician/standards/blob/e2a03dc913e1029c6ef90ad0a9432838d197ee49/1-formats/k9/docs/iana/application-vnd.k9-registration.txt
+    https://github.com/metadatastician/standards/blob/e880a2d0c2832f4965dac528f454438083577c5c/1-formats/k9/docs/iana/application-vnd.metadatastician.k9-registration.txt
 
 ---
 
@@ -248,3 +248,8 @@ Change Log:
             match the subtype; the pinned link to the companion
             registration keeps that file's name at the pinned commit.
             Not yet filed.
+2026-11-12: Revision 4 -- every link is re-pinned to commit
+            e880a2d, the merge of metadatastician/standards#1476, which
+            carries Revision 3.  The link to the companion
+            registration now uses its new file name.  Not yet
+            filed.

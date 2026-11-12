@@ -2,7 +2,7 @@
 
 ____
 Prepared for submission to IANA per RFC 6838 (Vendor Tree) Submission
-URL: https://www.iana.org/form/media-types Revision 6 – 2026-11-12
+URL: https://www.iana.org/form/media-types Revision 7 – 2026-11-12
 ____
 
 '''''
@@ -73,7 +73,8 @@ conventional indicator that the K9 file uses Nickel syntax.
 === Technical Parameters
 
 All published-specification links in this file are pinned to commit
-`e2a03dc913e1029c6ef90ad0a9432838d197ee49` of `metadatastician/standards`.
+`e880a2d0c2832f4965dac528f454438083577c5c` of `metadatastician/standards`, the merge of
+metadatastician/standards#1476, which carries Revision 6.
 
 ==== Required Parameters
 
@@ -270,11 +271,11 @@ Component Contract Specification, K9-E005); a coordination file is never
 === Published Specification
 
 * *K9 Component Contract Specification v1.0.0 (normative):*
-https://github.com/metadatastician/standards/blob/e2a03dc913e1029c6ef90ad0a9432838d197ee49/1-formats/k9/spec/K9-CONTRACT-SPEC.adoc
+https://github.com/metadatastician/standards/blob/e880a2d0c2832f4965dac528f454438083577c5c/1-formats/k9/spec/K9-CONTRACT-SPEC.adoc
 * *Machine-readable contract:*
-https://github.com/metadatastician/standards/blob/e2a03dc913e1029c6ef90ad0a9432838d197ee49/1-formats/k9/spec/contract/k9_contract.ncl
+https://github.com/metadatastician/standards/blob/e880a2d0c2832f4965dac528f454438083577c5c/1-formats/k9/spec/contract/k9_contract.ncl
 * *K9 SVC Specification v1.0.0 (format overview, informative):*
-https://github.com/metadatastician/standards/blob/e2a03dc913e1029c6ef90ad0a9432838d197ee49/1-formats/k9/SPEC.adoc
+https://github.com/metadatastician/standards/blob/e880a2d0c2832f4965dac528f454438083577c5c/1-formats/k9/SPEC.adoc
 * *Nickel configuration language:* https://nickel-lang.org/
 * *Just command runner:* https://just.systems/
 
@@ -293,7 +294,7 @@ K9 SVC files are used by:
 * The Contractile CLI system (must/trust/dust/intend/k9)
 
 Reference implementation:
-https://github.com/metadatastician/standards/blob/e2a03dc913e1029c6ef90ad0a9432838d197ee49/1-formats/k9/tools/k9-validate.sh
+https://github.com/metadatastician/standards/blob/e880a2d0c2832f4965dac528f454438083577c5c/1-formats/k9/tools/k9-validate.sh
 
 '''''
 
@@ -397,9 +398,9 @@ https://www.rfc-editor.org/rfc/rfc6838.html
 . RFC 8032 – Edwards-Curve Digital Signature Algorithm (EdDSA)
 https://www.rfc-editor.org/rfc/rfc8032.html
 . K9 Component Contract Specification v1.0.0
-https://github.com/metadatastician/standards/blob/e2a03dc913e1029c6ef90ad0a9432838d197ee49/1-formats/k9/spec/K9-CONTRACT-SPEC.adoc
+https://github.com/metadatastician/standards/blob/e880a2d0c2832f4965dac528f454438083577c5c/1-formats/k9/spec/K9-CONTRACT-SPEC.adoc
 . K9 SVC Specification v1.0.0 (overview)
-https://github.com/metadatastician/standards/blob/e2a03dc913e1029c6ef90ad0a9432838d197ee49/1-formats/k9/SPEC.adoc
+https://github.com/metadatastician/standards/blob/e880a2d0c2832f4965dac528f454438083577c5c/1-formats/k9/SPEC.adoc
 . Nickel Configuration Language https://nickel-lang.org/
 . Just Command Runner https://just.systems/
 
@@ -420,7 +421,7 @@ https://github.com/metadatastician/standards/blob/e2a03dc913e1029c6ef90ad0a94328
 * [x] Owner decision: change controller is the owner in person, no institution; contact jonathan@metadatastician.art (ruling I2; Revision 6)
 * [x] Owner decision: 998-octet line limit, so `8bit` is exact (ruling I4, rule K9-E006; Revision 6)
 * [x] Owner decision: filing order is k9.coordination, then k9, then deed, none while its specification is DRAFT (Revision 6)
-* [ ] Re-pin the published-specification links to a commit that carries Revision 6
+* [x] Re-pin the published-specification links to a commit that carries Revision 6 (Revision 7, `e880a2d`)
 * [ ] File application/vnd.metadatastician.k9.coordination first
 * [ ] Submit via IANA web form at https://www.iana.org/form/media-types
 * [ ] Monitor IANA email for review feedback
@@ -443,6 +444,6 @@ independent media types - Community consensus on suffix semantics
 
 '''''
 
-_Prepared: 2026-01-30_ _Revised: 2026-11-12 (Revision 6)_ _Status: Draft
+_Prepared: 2026-01-30_ _Revised: 2026-11-12 (Revision 7)_ _Status: Draft
 – not filed; second in the filing order, after
 application/vnd.metadatastician.k9.coordination_
