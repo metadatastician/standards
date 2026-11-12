@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 = A1: The Chora (forge, estate, repo)
-:version: 0.3.8-draft
-:status: DRAFT v0.3.8 (adds the invariant `:id` from A2 D1, the root `(publishers)` clause from A3 E1 and its OIDC form from A4 F3). Rulings U1 to U4 recorded; decisions C1 to C8 approved by the owner on 2026-11-10, and C9 and C10 on 2026-11-12. Not yet ratified as a whole. Consistency pass applied 2026-11-10. Proposed in standards#1474; bot-review fixes applied 2026-11-12.
+:version: 0.3.9-draft
+:status: DRAFT v0.3.9 (deed ids are profile C UUIDv8 of the birth path, rule V8; adds the invariant `:id` from A2 D1, the root `(publishers)` clause from A3 E1 and its OIDC form from A4 F3). Rulings U1 to U4 recorded; decisions C1 to C8 approved by the owner on 2026-11-10, and C9 and C10 on 2026-11-12. Not yet ratified as a whole. Consistency pass applied 2026-11-10. Proposed in standards#1474; bot-review fixes applied 2026-11-12.
 :toc:
 
 Specification A1 of the Estate Reconciliation Plan. It replaces the draft
@@ -169,7 +169,7 @@ The root has no `:beholding-chora`. It is the top of the hierarchy. There is exa
 | Element | Kind | Rule
 
 | `:schema-version`, `:canonical-name` | fields | As in the draft.
-| `:repo-uuid` | field | An opaque `#uuid` literal: the UUIDv5 of the repo's birth path, minted once and never changed (section 9; rulings U1 to U4).
+| `:repo-uuid` | field | An opaque `#uuid` literal: the profile C UUIDv8 of the repo's birth path, minted once and never changed (section 9; rulings U1 to U4 and V8).
 | `:beholding-chora` | field | The `:estate-uuid` of 1 estate chora. Exactly 1 value.
 | `(identity :primary-forge <symbol> :owner "<s>" :name "<s>")` | clause | Required, once. It reuses the clause that `rsr-template-repo_chora.deed` carries today [M].
 | `(co-estates (co-estate :estate <uuid> :role <symbol>))` | clause | Optional, once. Each `:estate` is an `:estate-uuid` and is not the beholding estate. `:role` is a symbol; A1 fixes none.
@@ -203,7 +203,7 @@ uuid-lit  = %s"#uuid" DQUOTE 8hexl "-" 4hexl "-" 4hexl "-" 4hexl "-" 12hexl DQUO
 hexl      = DIGIT / %x61-66        ; lowercase a to f only
 ----
 +
-Semantic rule (validator): the version digit (the first digit of the third group) is `5` or `8`, and the variant digit (the first digit of the fourth group) is `8`, `9`, `a` or `b` (the RFC 4122 variant). Versions 5 and 8 only (C10 [O]): they are the name-based versions that the registry mints today (`uuid` and `uuid_v8`). Version 4 (random) and version 7 (time-ordered) are excluded, because an identity is minted from a birth path and must be reproducible from the registry archive.
+Semantic rule (validator): the version digit (the first digit of the third group) is `5` or `8`, and the variant digit (the first digit of the fourth group) is `8`, `9`, `a` or `b` (the RFC 4122 variant). Versions 5 and 8 only (C10 [O]): they are the name-based versions that the registry mints today (`uuid` and `uuid_v8`), and `deed.abnf` v1.3.0 admits both [M]. Version 4 (random) and version 7 (time-ordered) are excluded, because an identity is minted from a birth path and must be reproducible from the registry archive. In an identity field the value is version 8 (section 9, rule V8 [O]); a version 5 value there is reported `v5-identity`, a warning in `lax` and an error in `strict`.
 * `#u5"..."` and `#u8"..."` stay legal values for reading. In an identity field (`:repo-uuid`, `:estate-uuid`, `:forge-uuid`, `:beholding-chora`, and the `:uuid`, `:estate`, `:base`, `:forge` and `:repo` fields of clauses) they are deprecated: a validator reports `deprecated-identity-literal` as a warning. The owner sets the cutover date. No date is set (U4 [O]).
 * Semantic rule (validator, not ABNF): a `forge-deed` has exactly 1 `:kind` field, whose value is `federation` or `platform`. The stem `federation` is legal only for `:kind federation`, and exactly 1 such file exists per federation.
 
@@ -277,11 +277,11 @@ States, for an estate or repo record:
 
 == 9. Identity values
 
-. *Minting* [O: U2, U3]. A repo's id is minted once, from its birth path: the UUIDv5, in the URL namespace, of `github.com/<birth owner>/<name>`. The registry archive (`gv-clade-index` `worker/data/archive.json`) holds it as generation 1 [I: reported to the drafting session; I did not read `archive.json`]. I checked the recipe by computing it for 4 paths, and each result equals the id the registry gives for that path [M].
+. *Minting* [O: U2, U3, V8]. A repo's id is minted once, from its birth path `github.com/<birth owner>/<name>`. The registry mints 2 ids from that path: `uuid`, the UUIDv5 in the URL namespace, and `uuid_v8`, the ADR-008 profile C UUIDv8 of `gv-clade-index:github.com/<birth owner>/<name>` (first 16 bytes of SHA-256, version 8, variant 10) [M: `gv-clade-index` ADR 0008]. A deed carries `uuid_v8` (rule V8). The registry archive (`gv-clade-index` `worker/data/archive.json`) holds both as generation 1 [I: I did not read `archive.json`]. I checked the profile C recipe against the oracle in `tools/uuid-v8` and against the `standards` deed after #1475: both give `b32d6be4-73ba-873e-9d61-e57f43c75cd1` for `github.com/hyperpolymath/standards` [M].
 . *Carried opaquely* [O: U4]. A deed carries the id as an opaque literal, `#uuid"<8-4-4-4-12 lowercase hex>"` (section 7.1). A validator never re-derives it from the current owner and name, so a transfer, rename or move does not change it [O: U1]. The birth path appears in no deed. It stays only in the registry archive, which is not served.
 . *No `:minted-name`.* The registry archive record (birth path, generation 1) replaces the `:minted-name` field that this section used to define. `:minted-name` is withdrawn, and a deed that carries it is reported. Because no retired name has to appear in a deed, decisions C4 and C6 no longer pull against each other.
 . *Checking.* A validator checks the literal's shape, version and variant (section 7.1). Where it can read the registry archive, it checks that `:repo-uuid` equals the generation-1 id of the repo's archive record (T33). An id cannot be checked from the deed alone, and no check may claim otherwise.
-. *Ids that are not repos.* Estate, platform and federation ids are also minted once and carried opaquely. Their preimages are `chora:estate/<host>/<owner>`, `chora:platform/<host>` and `chora:federation/<name>`, minted as UUIDv5 in the URL namespace. This recipe is my proposal (C9 [O]); the owner has ruled only on repo ids.
+. *Ids that are not repos.* Estate, platform and federation ids are also minted once and carried opaquely. Their preimages are `chora:estate/<host>/<owner>`, `chora:platform/<host>` and `chora:federation/<name>`, minted as profile C UUIDv8: the preimage is already `domain:name` with domain `chora`, as `#u8` bodies are (C9 [O], amended to version 8 by rule V8). The domain `chora` is registered in `docs/decisions/ADR-008-profile-c-domains.json`, with `metadatastician/git-logistics-office` as the minting repo [O: owner choice, 2026-11-12]; `scripts/check-uuid-v8-domains.sh chora` passes [M].
 . Legacy value. `#u5"estate/chora"` is a legacy beholding value. A validator in `lax` mode accepts it and the index marks the repo `legacy`. In `strict` mode it is an error. Migration is a Stage B step. It is not a sweep and A1 does not perform it.
 . A UUID proves reproducibility from the registry archive, not authenticity. This keeps the spec's own statement that `enforce-uuid-provenance` is not an unfalsifiability guarantee [M: DEED-GRAMMAR-SPEC].
 
@@ -289,13 +289,15 @@ States, for an estate or repo record:
 
 *U1 [O].* Owner ruling, 2026-11-11: "Go with immutable." A UUID is immutable. A transfer, rename or move does not change it, and the repo chora keeps its original UUID after a transfer. This confirms decision C4 and the plan's M5. The ruling was first relayed to the drafting session, and the owner then confirmed it there on 2026-11-11.
 
-*U2 [O].* Owner ruling, 2026-11-12 ("go with A"): the 18 repos reminted under ADR 0007 get their birth ids back. A repo's id is the UUIDv5 of its birth path, the id that the registry archive holds as generation 1. The new locations stay.
+*U2 [O].* Owner ruling, 2026-11-12 ("go with A"): the 18 repos reminted under ADR 0007 get their birth ids back. A repo's id is the UUIDv5 of its birth path, the id that the registry archive holds as generation 1. The new locations stay. Rule V8 below keeps the birth path and makes the deed carry the UUIDv8 of it.
 
-*U3 [O].* Owner ruling, 2026-11-12: the id of `standards` is `#uuid"d9e987dc-bb7b-51aa-839b-3d8bbfe774c3"`, the UUIDv5 of `github.com/hyperpolymath/standards` [M: computed]. The older value in its own files, a v7 beginning `01a0eaa4` (in full in `.machine_readable/CLADE.a2ml` before `f85b6c11`), is not its id.
+*U3 [O].* Owner ruling, 2026-11-12: the id of `standards` is the id of its birth path `github.com/hyperpolymath/standards`. As first stated, U3 named the UUIDv5 of that path (`d9e987dc…`) [M: computed]; under rule V8 the deed carries its UUIDv8, `b32d6be4-73ba-873e-9d61-e57f43c75cd1`, which #1475 wrote to `standards_chora.deed` [M]. The older value `01a0eaa4…` in its own files is not its id.
 
 *U4 [O].* Owner ruling, 2026-11-12 ("opaque ids"): deeds carry an opaque id value. The birth path stays only in the registry archive, which is not served. Section 7.1 gives the literal, and section 9 the rules.
 
-U2, U3 and U4 were relayed to the drafting session first, and the owner then confirmed them there on 2026-11-12. ADR 0007 of `gv-clade-index` is rejected by U1 and U2 and has to be superseded in that repo. A1 records this and edits no repo.
+*V8 [O].* Owner ruling, 2026-11-12 (#1475, and approval of this change): a deed carries the profile C UUIDv8 of the birth path, the registry's `uuid_v8`. The UUIDv5 of the same path stays the registry's `uuid` and appears in no deed. This reconciles U2 and U3 with ADR-008 (D305, D320), which makes every estate UUID version 8, and with the strict check `scripts/check-uuid-v8.sh` [M]. Values quoted from history in this section are shortened to their first 8 hex digits, so that no full version 5 value stands in the repo.
+
+U2, U3 and U4 were relayed to the drafting session first, and the owner then confirmed them there on 2026-11-12. ADR 0007 of `gv-clade-index` is rejected by U1 and U2. It has since been superseded there by ADR 0008 (K-a). A1 records this and edits no repo.
 
 The following existing estate state conflicts with U1 to U4:
 
@@ -303,11 +305,11 @@ The following existing estate state conflicts with U1 to U4:
 |===
 | Id | Conflict | Evidence
 
-| K-a | `gv-clade-index` ADR 0007, "Remint identity when a repository moves", dated 2026-11-10, status Proposed. It says a move mints a new id from the new forge path and that only the latest id is in use. It cites an owner ruling of 2026-11-10 for this, and says it supersedes one rule of ADR 0006 ("`uuid` is immortal"). The registry check `scripts/check-registry.sh` fails when an id does not re-derive from the current `github` field, per the ADR's own context section. U1 and U2 reject the ADR, so it must be superseded in `gv-clade-index`, and the registry check must stop re-deriving ids from the current path. A1 does not edit that repo. | [M] `docs/decisions/0007-remint-identity-on-move.adoc` at commit a51cdea. I did not read `scripts/check-registry.sh`.
-| K-b | Remint commits. `standards` #1454 (`f85b6c11`, 2026-11-10), "remint identity for the move to metadatastician/standards", changed the `:repo-uuid` literal in `standards_chora.deed` and `0-AI-MANIFEST.deed` from the path `github.com/hyperpolymath/standards` to `github.com/metadatastician/standards`. It changed `uuid` in `.machine_readable/CLADE.a2ml` from the v7 beginning `01a0eaa4` to the v5 beginning `e5a3bf06` (both in full in `git show f85b6c11`) (the UUIDv5 of the new path [M: computed]), and edited 9 other files. Under U3 the id is `#uuid"d9e987dc-bb7b-51aa-839b-3d8bbfe774c3"`, which is neither value. Under U4 the deeds carry `#uuid"d9e987dc-bb7b-51aa-839b-3d8bbfe774c3"`. | [M] `git show --stat f85b6c11` in `standards` history (on `origin/main`).
+| K-a | Resolved by `gv-clade-index` ADR 0008 (2026-11-12, Accepted), which supersedes ADR 0007 in full and makes the registry check re-derive both ids from the birth path [M]. As drafted: `gv-clade-index` ADR 0007, "Remint identity when a repository moves", dated 2026-11-10, status Proposed. It says a move mints a new id from the new forge path and that only the latest id is in use. It cites an owner ruling of 2026-11-10 for this, and says it supersedes one rule of ADR 0006 ("`uuid` is immortal"). The registry check `scripts/check-registry.sh` fails when an id does not re-derive from the current `github` field, per the ADR's own context section. U1 and U2 rejected the ADR; ADR 0008 then superseded it and moved the registry check to the birth path, as noted above. A1 did not edit that repo. | [M] `docs/decisions/0007-remint-identity-on-move.adoc` at commit a51cdea. I did not read `scripts/check-registry.sh`.
+| K-b | Remint commits. `standards` #1454 (`f85b6c11`, 2026-11-10), "remint identity for the move to metadatastician/standards", changed the `:repo-uuid` literal in `standards_chora.deed` and `0-AI-MANIFEST.deed` from the path `github.com/hyperpolymath/standards` to `github.com/metadatastician/standards`. It changed `uuid` in `.machine_readable/CLADE.a2ml` from `01a0eaa4…` to `e5a3bf06…` (the UUIDv5 of the new path [M: computed]), and edited 9 other files. Under U3 and V8 the deeds carry `#uuid"b32d6be4-73ba-873e-9d61-e57f43c75cd1"`, which neither value is. Resolved by #1475 for `standards_chora.deed`, `0-AI-MANIFEST.deed` and the CLADE file [M]. | [M] `git show --stat f85b6c11` in `standards` history (on `origin/main`).
 | K-c | About 387 comment-only edits in 226 repos that tell readers that a UUID follows the GitHub path. | [I] Reported to the drafting session. I did not measure it.
 | K-d | The remint in the 18 repos covered by U2. Each gets its birth id back, and its new location stays. | [I] The count is reported to the drafting session. I did not measure it. The ADR names 5 repos that moved to `catachresis-colloquium` on 2026-11-10 [M].
-| K-e | `burble`, the 19th correction. GitHub redirects `hyperpolymath/burble` to `metadatastician/burble`, so its birth path is `hyperpolymath/burble` and its id under U2 is `#uuid"0a37e17d-8ee5-5c30-9daf-571315a88a84"`. Burble's own CLADE file holds that id. The registry has always held the v5 beginning `34331e3d`, the id of its current path, so the registry never recorded the move. Recorded, not decided here. | [M] Both ids computed from their paths. [I] The redirect, the CLADE value and the registry value are reported to the drafting session; I did not read them.
+| K-e | `burble`, the 19th correction. GitHub redirects `hyperpolymath/burble` to `metadatastician/burble`, so its birth path is `hyperpolymath/burble`. Its UUIDv5 under U2 is `0a37e17d…` and its deed id under V8 is `1e207a32-dd26-8c8a-b8d9-5f77f88dbd58` [M: computed]. Burble's own CLADE file holds the UUIDv5. The registry has always held `34331e3d…`, the UUIDv5 of its current path, so the registry never recorded the move. Recorded, not decided here. | [M] Both ids computed from their paths. [I] The redirect, the CLADE value and the registry value are reported to the drafting session; I did not read them.
 |===
 
 Handling, as reported to the drafting session and not decided in this specification: A1 starts no revert and no restore. The comment edits stay until the `CLADE.a2ml` files are retired. The remint in the moved repos is reviewed one repo at a time, later, by the owner.
@@ -365,11 +367,12 @@ The owner approved C1 to C8 as recommended. The text of this document is the rec
 | C7 | A co-estate edge is confirmed by the co-estate's `(co-repos)` clause (section 6). The form was not stated before approval, so this is my recommendation and was approved with the rest. | Approved
 | C8 | Non-root estate chora in the `.github` repo of the org (plan default). Existence of those repos is not verified [I]. | Approved
 | U1 | A UUID is immutable. A transfer, rename or move does not change it. Owner ruling of 2026-11-11, confirmed in this session. Section 9.1. | Approved
-| U2 | The 18 repos reminted under ADR 0007 get their birth ids back. A repo's id is the UUIDv5 of its birth path. The new locations stay. Owner ruling of 2026-11-12, confirmed in this session. Section 9.1. | Approved
-| U3 | The id of `standards` is `#uuid"d9e987dc-bb7b-51aa-839b-3d8bbfe774c3"`. Owner ruling of 2026-11-12, confirmed in this session. | Approved
+| U2 | The 18 repos reminted under ADR 0007 get their birth ids back. A repo's id is minted from its birth path (first stated as the UUIDv5; the deed carries the UUIDv8 under V8). The new locations stay. Owner ruling of 2026-11-12, confirmed in this session. Section 9.1. | Approved
+| U3 | The id of `standards` is the id of its birth path: in a deed, `b32d6be4-73ba-873e-9d61-e57f43c75cd1` (V8; first stated as the UUIDv5 `d9e987dc…`). Owner ruling of 2026-11-12, confirmed in this session. | Approved
+| V8 | A deed carries the profile C UUIDv8 of the birth path; the UUIDv5 stays in the registry only. Owner ruling of 2026-11-12 (#1475 and the approval of this change). Section 9.1. | Approved
 | U4 | Deeds carry an opaque id value. The birth path stays only in the registry archive. Owner ruling of 2026-11-12, confirmed in this session. Sections 7.1 and 9. | Approved
-| C9 | Estate, platform and federation ids are minted once as UUIDv5 (URL namespace) of `chora:estate/<host>/<owner>`, `chora:platform/<host>`, `chora:federation/<name>`, and carried opaquely. | Approved
-| C10 | The opaque literal admits UUID versions 5 and 8 only. | Approved
+| C9 | Estate, platform and federation ids are minted once from `chora:estate/<host>/<owner>`, `chora:platform/<host>`, `chora:federation/<name>`, and carried opaquely. Amended by V8: minted as profile C UUIDv8 of those preimages (first approved as UUIDv5). | Approved; amended 2026-11-12
+| C10 | The opaque literal admits UUID versions 5 and 8 only. Amended by V8: an identity field carries version 8; version 5 there is `v5-identity`. | Approved; amended 2026-11-12
 |===
 
 Open after approval: A1 as a whole is not ratified. No file is created in any repo until the owner approves a commit.
@@ -434,7 +437,7 @@ Each test is a check that a validator can run. `deed_lint.js` already implements
 |===
 | Id | Test | Fixture
 
-| T30 | Every identity field carries `#uuid"<8-4-4-4-12 lowercase hex>"` with version digit `5` or `8` and an RFC 4122 variant digit. `#u5` or `#u8` in an identity field is reported `deprecated-identity-literal` (a warning; no cutover date is set). | `uuid-shape-bad`, `uuid-v4-bad`, `uuid-u8-deprecated`
+| T30 | Every identity field carries `#uuid"<8-4-4-4-12 lowercase hex>"` with version digit `8` and an RFC 4122 variant digit; version `5` is `v5-identity` (warning in `lax`, error in `strict`). `#u5` or `#u8` in an identity field is reported `deprecated-identity-literal` (a warning; no cutover date is set). | `uuid-shape-bad`, `uuid-v4-bad`, `uuid-v5-identity`, `uuid-u8-deprecated`
 | T31 | A transferred repo keeps its `:repo-uuid` unchanged. Its location history is in the registry archive and not in the deed. A deed that carries `:minted-name` or a birth path in an identity field is reported. | `transferred`, `minted-name-bad`
 | T32 | `#u5"estate/chora"` is accepted in `lax` with state `legacy`, and rejected in `strict`. | `legacy-beholding`
 | T33 | Where the registry archive is readable, `:repo-uuid` equals the generation-1 id of the repo's archive record. Any other value is reported, unless the owner has ruled the change. | `uuid-not-birth-bad`, `uuid-birth-ok`

@@ -3,7 +3,7 @@
 (estate-deed
   :schema-version "1.0.0"
   :canonical-name "hyperpolymath-federation"
-  :forge-uuid #uuid"99fef1e9-e3a7-599b-ac66-1a4ae305f867"
+  :forge-uuid #uuid"977ef226-dd92-8cb9-8724-caf6fa251784"
   :kind federation
   :vocabulary-version "0.1.0"
   (vocabulary
@@ -12,7 +12,7 @@
   (invariants
     (rule :id "chora/vocabulary-at-root" :priority 10 :text "Vocabulary is declared here and nowhere else."))
   (estates
-    (estate :name "hyperpolymath" :uuid #uuid"47e1501b-26b4-5bbd-8a3f-1afa81c69dbe"))
+    (estate :name "hyperpolymath" :uuid #uuid"0889b37b-defb-831f-973c-e119500db00e"))
   ;; A root-level deviation (A5 5.2: :origins is allowed only at the root).
   (deviations
     (deviation
