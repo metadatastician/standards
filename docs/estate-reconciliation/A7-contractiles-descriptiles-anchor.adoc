@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 = A7: Contractiles, Descriptiles and Anchor (clause modules, attestation, migration)
 :version: 0.1.0-draft
-:status: DRAFT v0.1.0. Proposals J1 to J12 await the owner. Builds on A1 v0.3.8 and A2 v0.2.3. Supersedes, for its subject, docs/ULTRAPLAN-DEED-K9-CONTRACTILES-2026-10-19.adoc v0.3.3. Not ratified.
+:status: DRAFT v0.1.0. Proposals J1 to J13 await the owner. Builds on A1 v0.3.9 and A2 v0.2.3. Proposes (J1) to supersede, for its subject, docs/ULTRAPLAN-DEED-K9-CONTRACTILES-2026-10-19.adoc v0.3.3. Not ratified.
 :toc:
 
 Specification A7 of the Estate Reconciliation Plan. It defines how the contract between a repository's policy (the contractiles) and its reality (the descriptiles) is written in the chora deed. It also defines the anchor and the K9 envelope grammar, and the order in which the estate leaves A2ML behind.
@@ -18,7 +18,7 @@ Specification A7 of the Estate Reconciliation Plan. It defines how the contract 
 | [O] | Owner ruling. Rulings Q1 to Q16 are of 2026-10-20. The others are named where cited.
 |===
 
-Identifiers are local to this specification, as in A1 to A6. Decisions are `J1` to `J12`. Test ids use the two-letter prefixes `YN`, `YP`, `YA`, `YD`, `YC`, `YK` and `YR`, which no other specification in the set uses [M].
+Identifiers are local to this specification, as in A1 to A6. Decisions are `J1` to `J13`. Test ids use the two-letter prefixes `YN`, `YP`, `YA`, `YD`, `YC`, `YK` and `YR`, which no other specification in the set uses [M].
 
 == 1. Summary
 
@@ -60,7 +60,7 @@ Identifiers are local to this specification, as in A1 to A6. Decisions are `J1` 
 
 === 2.2 Later rulings
 
-* *R4, U1 to U4, V1* (A1, 2026-11-10 to 2026-11-12). Identity is the chora at three levels. The clade is an outward finding aid only. A deed carries one id, the ADR-008 v8 id of the repo's birth path, as the opaque `#uuid"…"` literal. [M] `standards_chora.deed` carries `#uuid"b32d6be4-73ba-873e-9d61-e57f43c75cd1"`, which equals `uuid-v8.js c gv-clade-index github.com/hyperpolymath/standards`.
+* *R4, U1 to U4, V8* (A1, 2026-11-10 to 2026-11-12). Identity is the chora at three levels. The clade is an outward finding aid only. A deed carries one id, the ADR-008 v8 id of the repo's birth path, as the opaque `#uuid"…"` literal. [M] `standards_chora.deed` carries `#uuid"b32d6be4-73ba-873e-9d61-e57f43c75cd1"`, which equals `uuid-v8.js c gv-clade-index github.com/hyperpolymath/standards`.
 * *A2ML is retired* (D99, D269c, D312, D313). Never create or restore an `.a2ml` file. Deleting content from one is allowed.
 * *Part 1a, 2026-11-12.* The check that refuses an added A2ML file runs as a job of `governance-reusable.yml`. A rename counts as an addition only when the old path is not A2ML.
 
@@ -72,10 +72,10 @@ A7 introduces no new mechanism where A1 or A2 already has one.
 |===
 | Need | A7 uses | Instead of
 
-| Naming a repo (a parent, a related repo, the subject of a deed) | A1's chora id: `:repo-uuid`, carried as `#uuid"…"` (A1 §7.1, §9; V1) | The anchor's reverse-DNS `id`, a clade code, a prefixed name, or `owner/name`
+| Naming a repo (a parent, a related repo, the subject of a deed) | A1's chora id: `:repo-uuid`, carried as `#uuid"…"` (A1 §7.1, §9; V8) | The anchor's reverse-DNS `id`, a clade code, a prefixed name, or `owner/name`
 | A shortfall the repo knows of and accepts: a contractile clause it does not yet meet, or a legacy reader it still feeds | A2 `(deviations (deviation …))`, with `:kind` `exemption`, `debt` or `deferral` and an authority (A2 §7) | A per-verb waiver file, the Debtfile ledger, or a `:state failing` field
 | Whether a repo meets its contract | Derived by the runner from receipts, never stated in the deed (A2 §7.5) | A verdict field in `(contractiles …)`
-| Rule ids for a deviation against a contractile clause | A5's form `domain "/" name`, with domain `contractile` and name `<verb>/<clause-id>` | A new id scheme
+| Rule ids for a deviation against a contractile clause | A5's form `domain "/" name`, with domain `contractile` and name `<verb>/<clause-id>`, resolved through an A5 registry like every other domain (J13) | A new id scheme, or a resolution path that bypasses A5
 | The evidence label on a descriptile fact | A2 D2's set: the 6 constitution labels plus `measured` | Numeric scores (rejected in the ultraplan's review)
 |===
 
@@ -93,7 +93,7 @@ A7 introduces no new mechanism where A1 or A2 already has one.
 . [M] The ledger now lists 167 live A2ML files, and 63 more sit under `9-archive/` (`check-a2ml-archived.sh`, standards `e880a2d`). The ultraplan counted 171 entries.
 . [M] *Producers.* `gv-clade-index` `sync/deploy-clade-a2ml.sh` writes `.machine_readable/CLADE.a2ml` into every sibling clone and commits and pushes. It is run by hand; no workflow calls it. `gv-clade-index` `contractiles/must/clade-hygiene.a2ml` still requires every repo to carry `CLADE.a2ml`.
 . [M] *Template.* `just validate-rsr` (`build/just/validate.just`) failed unless `(clade :primary :primary-name)` held one of 12 code/name pairs. `repo-init` wrote `:primary UNASSIGNED` and `:prefixed-name "UNASSIGNED-<repo>"` (`build/templates/identity.deed.in`). The arrival-pack generator already tells agents there are no `.a2ml` files. It still presented the clade as what "registers" the repo.
-. [M] *The template's id is not yet V1's.* The template deed carries `:repo-uuid #u5"github.com/hyperpolymath/rsr-template-repo"`. `repo-init` rewrites that name literal at mint, and `scripts/deed-field.sh --uuid` re-derives a v5 id from it, which U1 forbids.
+. [M] *The template's id is not yet V8's.* The template deed carries `:repo-uuid #u5"github.com/hyperpolymath/rsr-template-repo"`. `repo-init` rewrites that name literal at mint, and `scripts/deed-field.sh --uuid` re-derives a v5 id from it, which U1 forbids.
 . [M] *An interim Mustfile path exists.* `scripts/run-mustfile.sh` accepts a Mustfile written as a `praxis-deed`, checked by `deed_lint.js --mustfile-json`. Q13 puts the declaration in `must.k9.ncl`, so the praxis form is an interim.
 . [M] The opaque `#uuid` literal was parsed to a null value in `deed_lint.js`'s AST, so no clause profile could compare ids. Part 3 keeps the body.
 
@@ -144,7 +144,7 @@ Every member except `:schema` and `:authority` is optional, and every member app
 
 * At most one `(anchor …)`, at the top level of a `repo-deed` only.
 * `:schema` and `:authority` exactly once. Any other member at most once.
-* `(metadata :version)` has three segments (Q5). `:last-updated` is `YYYY-MM-DD`, or a mint token `{{NAME}}` that `repo-init` fills.
+* `:schema` carries the format major, so Q5's "wrong major refused" applies there: v1.0.0 accepts only `"hyperpolymath.anchor/1"`, and a minor revision of the profile adds no new spelling. `(metadata :version)` is the version of this anchor's content (the legacy `version` field, 6.4), not of the format: it has three segments and is not compared with the schema major. `:last-updated` is `YYYY-MM-DD`, or a mint token `{{NAME}}` that `repo-init` fills.
 * `(parent :uuid)` is exactly once per parent, appears only once across `(parents …)`, and never equals the deed's own `:repo-uuid`.
 
 === 6.4 Translating a legacy anchor
@@ -254,7 +254,12 @@ Scope, assumptions and boundaries stay on each contractile clause in `_base.ncl`
 File: `1-formats/k9/spec/abnf/k9-envelope.abnf`. It grammars the envelope that `K9-CONTRACT-SPEC` §File envelope states in prose, and leaves the body to Nickel, which stays normative by reference.
 
 ----
-k9-file        = magic-line header *line
+k9-file        = magic-line header *skip-line dialect-line *line
+                 ; K9-E005: the first significant line picks the dialect;
+                 ; text that starts neither dialect matches no production
+skip-line      = blank-line / *WSP comment-line           ; L0 skips indented comments too
+blank-line     = *WSP LF
+dialect-line   = ( component-start / coordination-start ) *line-char LF   ; no leading space, as in L0
 magic-line     = %s"K9!" LF                                  ; K9-E001: exact, no BOM, no CR
 header         = 1*4comment-line                             ; SPDX within the first five lines
 comment-line   = "#" *line-char LF
@@ -267,10 +272,12 @@ license-char   = ALPHA / DIGIT / "." / "-" / "+" / "(" / ")" / SP
 ; K9-E006 SEMANTIC: no line longer than 998 octets, LF excluded.
 ; K9-E005 dialect, decided by the first significant line after the header:
 component-start    = "{" / "[" / "(" / %s"let " / DQUOTE / identifier *SP "="
-coordination-start = key ":"                                 ; routed to coordination-k9-grammar_v1.2.abnf
+coordination-start = key ":" / "---"                         ; routed to coordination-k9-grammar_v1.2.abnf, which rejects "---" (D318)
+identifier         = ( ALPHA / "_" ) *( ALPHA / DIGIT / "_" / "." / DQUOTE / "-" )   ; L0: [A-Za-z_][A-Za-z0-9_."-]*
+key                = ( ALPHA / "_" ) *( ALPHA / DIGIT / "_" / "." / "-" )            ; L0: [A-Za-z_][A-Za-z0-9_.-]*
 ----
 
-The `UTF8-n` rules are `deed.abnf`'s, unchanged. The step also amends the section of `K9-CONTRACT-SPEC` that explains why there is no `k9.abnf` (ultraplan P1.5), so that the section says the envelope has a grammar and the body does not.
+The `UTF8-n` rules are `deed.abnf`'s, unchanged. `identifier` and `key` are defined here, not imported: ABNF has no import, and the module must compile on its own for the differential. The two rules copy the character classes of `k9-validate.sh` L0 (lines 347 to 354 at the evidence commit), so that the grammar and L0 claim the same first lines. YK2 has one fixture for each dialect and one for unclaimed text, such as a first line `protocol` with no `:` or `=`, which matches no production and is K9-E005 in both. The step also amends the section of `K9-CONTRACT-SPEC` that explains why there is no `k9.abnf` (ultraplan P1.5), so that the section says the envelope has a grammar and the body does not.
 
 The grammar must be `k9-validate.sh` L0's oracle, not a second description. Every envelope fixture under `1-formats/k9/tools/fixtures` gets the same verdict from the ABNF (through apg-js, as the deed differential does) and from L0 (test YK2).
 
@@ -295,7 +302,7 @@ Measured with `grep` over `scripts/`, `.github/workflows/` and the repos named, 
 | The contractile CLI (`*file.a2ml`; `adjust` reads `ADJUST.contractile`; there is no `bust`) [R: ultraplan] | hyperpolymath/contractiles | `<verb>.k9.ncl#declaration` for policy, the verb descriptile clause for reality, and `(contractiles …)` for discovery. A2ML is read only behind `--legacy` [O: Q8; ultraplan P2.1]. | estate-wide
 | Hypatia `HYP-S005` (`STATE.a2ml` glob) [R: ultraplan] | hyperpolymath/hypatia | `(status …)` and `(maturity …)` (J3). | estate-wide
 | `gv-clade-index` `contractiles/must/clade-hygiene.a2ml` (requires `CLADE.a2ml` in every repo) | the registry's own contractile | Retired. The registry checks `(identity)` and `:repo-uuid` in the chora deed, and reads `(clade …)` when present, as a finding aid. | gv-clade-index
-| `rsr-template-repo` `scripts/deed-field.sh --uuid` (re-derives a v5 id from a `#u5` name) | `extract-facts.sh`, the coaptation loop | It reads the opaque `#uuid` body as the id and never re-derives it (U1, V1; J11). | every minted repo
+| `rsr-template-repo` `scripts/deed-field.sh --uuid` (re-derives a v5 id from a `#u5` name) | `extract-facts.sh`, the coaptation loop | It reads the opaque `#uuid` body as the id and never re-derives it (U1, V8; J11). | every minted repo
 |===
 
 Not load-bearing, and no replacement needed: `check-launcher-standard-currency.sh` names the retired A2ML spelling of the launcher standard only to refuse it. `registry-readiness.sh` lists `0-AI-MANIFEST.a2ml` as a legacy pointer and loses the line in step M4.
@@ -306,7 +313,7 @@ Each step is one draft PR per repository, made only after the owner approves it.
 
 . *M1, the gate.* Land Part 1a (#1488). Callers get it through the existing pin propagation. From then on, a repo can lose A2ML but cannot gain any.
 . *M2, the generators.* `gv-clade-index` (1b), then `rsr-template-repo` (1c). The template also gets `#uuid` minting (J11), the `(contractiles …)` clause and the six verb descriptiles, so every new repo is born on the new forms [ultraplan P0.3, P3 "generator first"].
-. *M3, the clause modules*, one PR each, in this order: `anchor` (done in Part 3), `common`, `contractiles`, the six verb descriptiles, `ecosystem`, `status`/`maturity`, `meta`, `agentic`, `neurosym`, `playbook`. Each lands with its linter profile, fixtures and differential entry, then joins the caller-wide lint in `deed-conformance.yml` once ratified.
+. *M3, the clause modules*, one PR each, in this order (the `contractiles` module lands with the generated `contractile` registry of J13): `anchor` (done in Part 3), `common`, `contractiles`, the six verb descriptiles, `ecosystem`, `status`/`maturity`, `meta`, `agentic`, `neurosym`, `playbook`. Each lands with its linter profile, fixtures and differential entry, then joins the caller-wide lint in `deed-conformance.yml` once ratified.
 . *M4, standards converts itself.* In this order: add `(contractiles …)`; rewire the must gate and verb discovery (section 10, rows 1 and 2); translate `ANCHOR.a2ml` by 6.4; move the four all-caps `.contractile` files field by field into the verb descriptiles [O: Q12]; move the Debtfile into `(deviations)` (J9); make `0-AI-MANIFEST.deed` pointer-only [O: Q15]; then delete each A2ML file in the same PR that removes its last reader, which shrinks the ledger.
 . *M5, the shared readers*, each with a new-input-first fallback: readme-derive, the debt ratchet, the RSR profile checker. Then hypatia (rules and `HYP-S005`) and the contractile CLI, each in its own repo.
 . *M6, pilot.* Three repos of different shapes: one panoply-class, one deed-clean, one with live A2ML gates [R: ultraplan P3].
@@ -385,7 +392,7 @@ Fixtures are valid unless marked `-bad`. `[done]` marks tests that exist and pas
 | YC03 | Every verb in `(contractiles …)` has its descriptile clause. | `no-descriptile-bad`
 | YC04 | A written `:contractiles_required` equals the derived set. | `required-drift-bad`
 | YC05 | The clause carries no verdict field (YL2). | `verdict-field-bad`
-| YC06 | A deviation against `contractile/<verb>/<id>` resolves to a clause id in that verb's declaration. | `deviation-unknown-clause-bad`
+| YC06 | A deviation against `contractile/<verb>/<id>` resolves, by A5 §5, to an `active` `rule-def` in the generated `contractile` registry, and that entry names a clause id in the verb's declaration. A registry out of date with the declarations fails its regeneration check. | `deviation-unknown-clause-bad`
 |===
 
 === 12.6 The K9 envelope
@@ -425,7 +432,7 @@ None is approved. Each is the recommendation, with the reason.
 |===
 | Id | Proposal | Why
 
-| J1 | A7 supersedes the ultraplan for contractiles, descriptiles and the anchor. The ultraplan keeps Q1 to Q16 and its history, and its open steps are rehomed in section 11. | One plan in force instead of two.
+| J1 | A7 supersedes the ultraplan for contractiles, descriptiles and the anchor. Until this is approved the ultraplan stays in force and A7 is a proposal against it. The ultraplan keeps Q1 to Q16 and its history, and its open steps are rehomed in section 11. | One plan in force instead of two.
 | J2 | One ABNF module per deed clause under `clauses/`, plus `clauses/common.abnf` for shared rules. | It follows the egress pattern and keeps one grammar per clause.
 | J3 | STATE is the existing `(status)` and `(maturity)` clauses, with the journal in `docs/status/ROADMAP.adoc`. There is no `(state …)` clause. | The template already does this, and a second home would drift.
 | J4 | Affirmation members are required on descriptile clauses in strict mode only. | Adoptable mid-migration.
@@ -435,8 +442,9 @@ None is approved. Each is the recommendation, with the reason.
 | J8 | Rename the anchor's nested `(identity …)` to `(subject …)` in anchor v2.0.0, keeping v1 readable. | The nested name collides with A1's identity.
 | J9 | The Debtfile becomes `(deviations :kind debt)`. The weekly job reports and stops rewriting a file. | A bot writing an A2ML file every week contradicts the retirement.
 | J10 | `:contractiles_required` is derived and stops being written after one release. | It has one declaration site.
-| J11 | The template mints `:repo-uuid #uuid"<ADR-008 v8 id of the birth path>"` (V1), and `deed-field.sh --uuid` reads it without re-deriving. | The template still writes a `#u5` name literal and re-derives from it.
-| J12 | Related repos and anchor parents are named by chora id in strict mode, and by name in lax mode. | A1 resolves by id, never by name.
+| J11 | The template mints `:repo-uuid #uuid"<ADR-008 v8 id of the birth path>"` (V8), and `deed-field.sh --uuid` reads it without re-deriving. | The template still writes a `#u5` name literal and re-derives from it.
+| J12 | Related repos keep `:name` and add the chora `:uuid`, which is required in strict mode only. Anchor parents are named by chora id in both modes; a legacy parent with no registered id is left out and the translation is reported incomplete (6.4): a warning in lax mode, an error in strict. | A1 resolves by id, never by name, and the anchor grammar has one parent shape.
+| J13 | `contractile` becomes an A5 rule domain (a G1 addition, so a root `rule-domain` term, per G2). Its registry, `contractile_rules_praxis.deed` in `standards`, is generated from the six verb declarations: one `rule-def` per clause, `:id "contractile/<verb>/<clause-id>"`, the clause text as `:text`. CI fails when regenerating changes it. | A5 resolves a deviation only against an active registry entry. Without a registry, every contractile deviation is `unknown-rule`. Generating the registry keeps the declaration the one source of the clause.
 |===
 
 == 15. Out of scope
