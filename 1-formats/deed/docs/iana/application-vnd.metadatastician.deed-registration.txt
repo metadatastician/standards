@@ -1,23 +1,44 @@
-IANA Media Type Registration: application/vnd.deed
-=========================================================
+IANA Media Type Registration: application/vnd.metadatastician.deed
+==================================================================
 SPDX-License-Identifier: CC-BY-SA-4.0
 
-This file is the canonical registration document for application/vnd.deed.
-It lives beside the specification it registers; there is no second copy.
+This file is the canonical registration document for
+application/vnd.metadatastician.deed.  It lives beside the specification
+it registers; there is no second copy.
 
 NOTE: No structured syntax suffix is used.  Per RFC 6838 Section 4.2.8,
 unregistered suffixes SHOULD NOT be used, and there is no registered
 suffix corresponding to the DEED s-expression surface.  This
-registration uses "application/vnd.deed" as the base type, matching the
+registration uses "application/vnd.metadatastician.deed" as the base
+type (producer prefix: owner ruling I1, 2026-11-12), matching the
 `:media-type:` attribute declared normatively in DEED-GRAMMAR-SPEC.adoc
-and following the same reasoning already applied to application/vnd.k9.
+and following the same reasoning already applied to
+application/vnd.metadatastician.k9.
 
-Submission Date: NOT YET SUBMITTED (Revision 3, prepared 2026-11-11)
-Submitted By: Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+FILING ORDER (owner ruling, 2026-11-12).  The three registrations are
+filed one at a time, in this order:
+
+  1. application/vnd.metadatastician.k9.coordination
+  2. application/vnd.metadatastician.k9
+  3. application/vnd.metadatastician.deed
+
+Precondition: none is filed while its specification is marked DRAFT,
+and none is filed before the one ahead of it.  The deed registration is
+also filed only after draft A2 (deviations) is ratified.
+
+This registration is number 3, the last.  It is blocked on three
+counts: DEED-GRAMMAR-SPEC.adoc is marked DRAFT, draft A2 is not
+ratified (Security considerations (d)), and the two k9 registrations
+ahead of it are not yet filed.
+
+Submission Date: NOT YET SUBMITTED (Revision 4, prepared 2026-11-12)
+Prepared By: Jonathan D.A. Jewell <jonathan@metadatastician.art>
 
 Every link below is pinned to commit e2a03dc913e1029c6ef90ad0a9432838d197ee49
 of metadatastician/standards, so that it keeps resolving to the text that
-this registration describes.
+this registration describes.  That commit predates the 2026-11-12
+rulings (subtype names, line limit), so before filing, every link is
+re-pinned to a commit that carries them.
 
 ---
 
@@ -25,7 +46,7 @@ Type name:
   application
 
 Subtype name:
-  vnd.deed
+  vnd.metadatastician.deed
 
 Required parameters:
   N/A
@@ -48,9 +69,10 @@ Encoding considerations:
   no opaque binary payload construct, so the encoding is 8bit rather
   than binary.
 
-  The grammar sets no limit on line length.  A document with a line
-  longer than 998 octets is conforming, and for such a document the
-  8bit label does not hold (see the IANA form notes on encoding).
+  No line is longer than 998 octets, not counting the CR and LF that
+  end it (owner ruling I4, 2026-11-12; DEED-GRAMMAR-SPEC.adoc,
+  lexical rules).  A document with a longer line does not conform, so
+  the 8bit label is exact.
 
   Line endings are LF (U+000A) by convention; parsers MUST accept
   CR+LF (U+000D U+000A) as well and normalise to LF internally.  A bare
@@ -84,17 +106,21 @@ Security considerations:
       stated public key, timestamp freshness, and public-key trust.
       Documents without attestation SHOULD be treated as unverified.
 
-  (d) Open item: an override mechanism is not yet in the grammar.  The
-      owner has designed a mechanism by which a deed could loosen a
-      policy (narrow, named, justified, expiring and countable), but it
-      appears nowhere in DEED-GRAMMAR-SPEC.adoc v0.2.4 or in deed.abnf
-      v1.2.1.  This registration therefore describes only what the
-      grammar admits today.  If an override construct is added, it will
-      be security-relevant to every processor that consumes a deed,
-      because it would let a document change the policy applied to it.
-      The registration would then need a change request (RFC 6838
-      Section 5.5) with new security text.  Until then, no processor
-      should honour any override-like field in a deed.
+  (d) Deviations.  A deed may declare a deviation: a named exception
+      to a policy that would otherwise apply to the repository.  The
+      construct is the deviations clause of draft A2 (section 7 of
+      docs/estate-reconciliation/A2-profile-generation-deviations.adoc,
+      added in metadatastician/standards#1474).  A deviation is
+      narrow, named, justified, expiring and countable, and it needs an
+      authority.  A processor MAY honour a deviation only when it can
+      verify that authority; otherwise, and once the deviation has
+      expired, it MUST NOT honour it.  A deviation is a claim like any
+      other in a deed (see (a)): it lets a document ask for a different
+      policy, so it is security-relevant to every processor.  Draft A2
+      is a DRAFT, not yet ratified, and the construct is not in
+      DEED-GRAMMAR-SPEC.adoc v0.2.5 or deed.abnf v1.3.0.  This
+      registration is filed only after A2 is ratified (owner ruling
+      I3, 2026-11-12).
 
   (e) The specification is a DRAFT and is not ratified.  Its security
       properties have not been independently reviewed.
@@ -145,7 +171,7 @@ Applications which use this media type:
   - Automated agents that visit a repository and read its declared
     identity, provenance and praxis before acting
   - Attestation and conformance tooling pairing DEED (which attests)
-    with application/vnd.k9 (which enforces)
+    with application/vnd.metadatastician.k9 (which enforces)
 
   Reference implementation:
   https://github.com/metadatastician/standards/tree/e2a03dc913e1029c6ef90ad0a9432838d197ee49/1-formats/deed
@@ -182,7 +208,8 @@ Additional information:
     head tokens "estate-deed", "repo-deed", "estate-atlas-deed" or
     "praxis-deed".  The absence of "=" as an assignment form is a
     reliable negative signal.  DEED does not use the "K9!" magic of
-    application/vnd.k9 and application/vnd.k9.coordination.
+    application/vnd.metadatastician.k9 and
+    application/vnd.metadatastician.k9.coordination.
 
   File extension(s):
     .deed
@@ -210,22 +237,20 @@ Other information and comments:
 
 Person & email address to contact for further information:
   Jonathan D.A. Jewell
-  j.d.a.jewell@open.ac.uk
-  The Open University
-  Milton Keynes, MK7 6AA, United Kingdom
+  jonathan@metadatastician.art
 
 Author/Change controller:
-  Jonathan D.A. Jewell
-  The Open University
-  j.d.a.jewell@open.ac.uk
+  Jonathan D.A. Jewell, in person (no institution)
+  jonathan@metadatastician.art
 
 Provisional registration: No
 
   This is a vendor-tree request.  RFC 6838 Section 5.2.1 provides
   provisional registration for standards-tree types only, and the IANA
-  form requires "No" here.  Because the specification is a DRAFT, the
-  registration can be updated later by a change request (RFC 6838
-  Section 5.5), which uses the same procedure as the original request.
+  form requires "No" here.  The registration is not filed while the
+  specification is a DRAFT.  After filing, it can be updated by a
+  change request (RFC 6838 Section 5.5), which uses the same procedure
+  as the original request.
   Registrations cannot be deleted, and a change request may be denied
   if it makes documents that were valid under the old definition
   invalid.  The subtype name, encoding and fragment semantics are
@@ -248,7 +273,8 @@ References:
 [4] DEED ABNF grammar (v1.2.1)
     https://github.com/metadatastician/standards/blob/e2a03dc913e1029c6ef90ad0a9432838d197ee49/1-formats/deed/spec/abnf/deed.abnf
 
-[5] application/vnd.k9 registration (companion enforcement format)
+[5] application/vnd.metadatastician.k9 registration (companion
+    enforcement format)
     https://github.com/metadatastician/standards/blob/e2a03dc913e1029c6ef90ad0a9432838d197ee49/1-formats/k9/docs/iana/application-vnd.k9-registration.txt
 
 ---
@@ -287,7 +313,37 @@ Change Log:
             with N/A where it does not apply.  Not yet reviewed or
             filed by the owner.
 
+2026-11-12: Revision 4 -- applies the owner rulings of 2026-11-12.
+            I1: the subtype takes the producer prefix, so it is now
+            application/vnd.metadatastician.deed.  I2: the change
+            controller is Jonathan D.A. Jewell in person, with no
+            institution; the contact address is
+            jonathan@metadatastician.art.  I3: the override open item
+            is draft A2's deviations clause; Security considerations
+            (d) is rewritten to say so, and this type is filed only
+            after A2 is ratified.  I4: no line is longer than 998
+            octets, so the "8bit" label is exact; the sentences saying
+            it did not hold for long lines are removed.  Records the
+            filing order (this type last) and its preconditions.  The
+            file is renamed to match the subtype; the pinned link to
+            the companion registration keeps that file's name at the
+            pinned commit.  Not yet filed.
+
 ---
+
+SETTLED BY OWNER RULING, 2026-11-12:
+
+  * I1, subtype: application/vnd.metadatastician.deed (producer
+    prefix), as for the two k9 types.
+  * I2, change controller: Jonathan D.A. Jewell in person, with no
+    institution.  Contact address: jonathan@metadatastician.art.
+  * I3, override: the open item below is draft A2's deviations clause.
+    This registration is filed only after A2 is ratified.
+  * I4, line length: at most 998 octets per line, excluding CR and LF.
+  * Filing order: k9.coordination, then k9, then deed; none while its
+    specification is marked DRAFT.  This supersedes "claim the name
+    now" below: the deed specification is a DRAFT, so the name is not
+    claimed until it is not.
 
 SETTLED BY OWNER RULING, 2026-09-14:
 
@@ -325,7 +381,8 @@ SETTLED BY OWNER RULING, 2026-09-14:
     than an agent-specific one, which matches what DEED actually became.
     The other two expansions are to be corrected wherever they appear.
 
-OPEN BEFORE SUBMISSION (owner action, not blocking this file):
+OPEN BEFORE SUBMISSION (owner action, not blocking this file).
+Item 1 is answered by ruling I3 above; its text is kept as the record:
 
   1. An override mechanism (@trust_override / @adjust_override, narrow +
      named + justified + expiring + countable, loosening only) has been
