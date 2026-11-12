@@ -27,6 +27,10 @@
 ;     enforced; see the SEMANTIC note on `deed` below.
 ;   Additive for every deed with lines of 998 octets or fewer: every such
 ;   v1.2.1 deed is a v1.3.0 deed.
+;   Errata, 2026-11-12 (review of #1473): uuid-variant writes "a" and "b"
+;   as %s"a" / %s"b". A quoted ABNF string is case-insensitive, so the
+;   first text admitted "A" and "B" there, which uuid-hex and the gate
+;   refuse. No lowercase deed changes verdict.
 ;
 ; CHANGELOG (v1.2.0 → v1.2.1, owner ruling 2026-10-27):
 ;   - list: a token-sep MAY come before the first value. deed_lint and the
@@ -193,8 +197,9 @@ uuid-hex      = 8hex-lc "-" 4hex-lc "-" uuid-version 3hex-lc "-"
 uuid-version  = "5" / "8"
                 ; Name-based only, as for uuid5 and uuid8: v4 (random) and
                 ; every other version are a parse error.
-uuid-variant  = "8" / "9" / "a" / "b"
-                ; RFC 9562 variant 10.
+uuid-variant  = "8" / "9" / %s"a" / %s"b"
+                ; RFC 9562 variant 10. %s: a quoted ABNF string is
+                ; case-insensitive (RFC 5234 2.3), and "A" or "B" is an error.
 hex-lc        = DIGIT / %x61-66
                 ; Lowercase only: "A" to "F" are a parse error.
 
