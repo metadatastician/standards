@@ -235,7 +235,7 @@ Module: `clauses/contractiles.abnf`. The entry clause is `(verb :name must …)`
 
 === 8.3 What the deed does not say (J6)
 
-The deed attests where each party is. The policy party is the component and runner named in `(contractiles …)`. The reality party is the verb's descriptile clause. The deed does not attest the verdict. The runner derives the verdict, writes a receipt and stops on a `must` or `trust` violation [O: Q3; ultraplan P2.1]. The contract is then settled by renegotiating the contractile or by fixing the cause.
+The deed attests where each party is. The policy party is the component and runner named in `(contractiles …)`. The reality party is the verb's descriptile clause. The deed does not attest the verdict. The runner derives the verdict, writes a receipt and stops on a `must` or `trust` violation. A `must` or `trust` clause with no witness is a *blocking unresolved* verdict and stops the run too; no clause is left "deferred". A violated `intend`, `adjust`, `dust` or `bust` clause is reported at its own authority and does not stop the run [O: Q3; ultraplan P2.1]. The contract is then settled by renegotiating the contractile or by fixing the cause.
 
 A shortfall the owner accepts for a time is an A2 deviation, never a field here:
 
@@ -247,7 +247,11 @@ A shortfall the owner accepts for a time is an A2 deviation, never a field here:
              :evidence measured :expires "2027-01-31" (scope)))
 ----
 
-Scope, assumptions and boundaries stay on each contractile clause in `_base.ncl` [O: Q6]. Probe execution stays in the one signed `'Hunt` component [O: Q9].
+Scope, assumptions and boundaries stay on each contractile clause in `_base.ncl` [O: Q6]. Probe execution stays in the one signed `'Hunt` component [O: Q9], under the conditions of ultraplan P0.1, which A7 carries forward unchanged:
+
+* A signature authorises `'Hunt` only when an L3 verifier, wired through `K9_SIG_VERIFIER` with a trusted-key policy, has verified it. `'Present_Unverified` never authorises it (`K9-CONTRACT-SPEC` §10.4).
+* Execution needs all five preconditions: `signature`, `policy`, `sandbox`, `dry_run` and `capability_grant`. A missing one refuses the run and is named.
+* While no verifier runs in CI, probes stay refused and the clauses they would witness are blocking unresolved verdicts. They never run on an unverified signature.
 
 == 9. The K9 envelope ABNF [O: Q10]
 
@@ -393,6 +397,9 @@ Fixtures are valid unless marked `-bad`. `[done]` marks tests that exist and pas
 | YC04 | A written `:contractiles_required` equals the derived set. | `required-drift-bad`
 | YC05 | The clause carries no verdict field (YL2). | `verdict-field-bad`
 | YC06 | A deviation against `contractile/<verb>/<id>` resolves, by A5 §5, to an `active` `rule-def` in the generated `contractile` registry, and that entry names a clause id in the verb's declaration. A registry out of date with the declarations fails its regeneration check. | `deviation-unknown-clause-bad`
+| YC07 | A `must` clause and a `trust` clause with no witness each end in a blocking unresolved verdict that stops the run; a planted violation of each stops it and names both settlements (amend the contractile, fix the cause). A violated clause of each other verb is reported and does not stop the run. | `must-unwitnessed-bad`, `trust-unwitnessed-bad`, `must-violated-bad`, `trust-violated-bad`, `intend-violated` (one per non-blocking verb)
+| YC08 | The `'Hunt` component is refused when unsigned, when tampered, and when its signature is only `'Present_Unverified`, with `signature` named among the unmet preconditions. | `hunt-unsigned-bad`, `hunt-tampered-bad`, `hunt-unverified-bad`
+| YC09 | For each of `signature`, `policy`, `sandbox`, `dry_run` and `capability_grant`, a case that withholds only that evidence is refused and names it; a case that supplies all five is permitted. | five `hunt-no-<precondition>-bad`, one `hunt-all-five`
 |===
 
 === 12.6 The K9 envelope
