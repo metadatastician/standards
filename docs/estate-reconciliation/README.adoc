@@ -10,7 +10,7 @@ Stage A of the Estate Reconciliation Plan. Seven draft specifications. None is r
 |===
 | Spec | File | Version | Subject and approved decisions
 
-| A1 | link:../../2-protocols/chora/CHORA-SPEC.adoc[2-protocols/chora/CHORA-SPEC.adoc] | 0.3.8 | The chora at three levels (forge, estate, repo), the generated index, acceptance tests. Decisions C1 to C10 and rulings U1 to U4.
+| A1 | link:../../2-protocols/chora/CHORA-SPEC.adoc[2-protocols/chora/CHORA-SPEC.adoc] | 0.3.9 | The chora at three levels (forge, estate, repo), the generated index, acceptance tests. Decisions C1 to C10 and rulings U1 to U4 and V8.
 | A2 | link:A2-profile-generation-deviations.adoc[A2-profile-generation-deviations.adoc] | 0.2.3 | The `(profile)`, `(generation)` and `(deviations)` clauses, and the pack laws. Decisions D1 to D9.
 | A3 | link:A3-estate-gate.adoc[A3-estate-gate.adoc] | 0.2.2 | The single required check `estate-gate`, the caller contract, the check table, the verdict function. Decisions E1 to E11.
 | A4 | link:A4-office-farm.adoc[A4-office-farm.adoc] | 0.2.3 | The office and farm boundary, the signed intake envelope, work orders, the executor path. Decisions F1 to F15.
@@ -19,7 +19,7 @@ Stage A of the Estate Reconciliation Plan. Seven draft specifications. None is r
 | A7 | link:A7-contractiles-descriptiles-anchor.adoc[A7-contractiles-descriptiles-anchor.adoc] | 0.1.0 | The clause modules (`(anchor …)` first), the descriptile clauses, the `(contractiles …)` attestation, the K9 envelope ABNF, the replacement for each load-bearing A2ML reader and the migration order. Proposals J1 to J12, none approved. Supersedes the 2026-10-19 ultraplan for its subject.
 |===
 
-"Approved" means the owner approved the decision as written on 2026-11-10 (U1 on 2026-11-11, U2 to U4 on 2026-11-12). It does not mean the specification is ratified.
+"Approved" means the owner approved the decision as written on 2026-11-10 (U1 on 2026-11-11, U2 to U4 and V8 on 2026-11-12; C9 and C10 amended by V8 the same day). It does not mean the specification is ratified.
 
 == Reading order
 

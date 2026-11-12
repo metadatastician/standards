@@ -8,8 +8,3 @@
 1-formats/deed/tools/fixtures/invalid/inuuid-variant_chora.deed
 1-formats/deed/tools/fixtures/invalid/inuuid-uppercase_chora.deed
 1-formats/deed/tools/fixtures/invalid/inuuid-no-string_chora.deed
-#
-# Draft A4 puts the bare repo UUID (a v5 under ruling U2) in an in-toto
-# subject name, where no literal can type it. That conflicts with ADR-008 and
-# is open for an owner ruling; this example is exempt until then.
-docs/estate-reconciliation/examples/a4-statement.json.example
