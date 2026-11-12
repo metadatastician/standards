@@ -182,5 +182,23 @@ expect 1 "a bare v5 in a sibling .json.example is still rejected" --strict
 fresh; mkdir -p "$WORK/t/other"; printf '{"subject":[{"name":"%s"}]}\n' "$V5" > "$WORK/t/other/a4-statement.json.example"
 expect 1 "a file of the same name elsewhere is still rejected" --strict
 
+# Exemptions are anchored to the scan root (Codex review, #1485): a nested
+# copy of an exempt path is scanned like any other file.
+echo "exemptions are anchored to the scan root"
+fresh; mkdir -p "$WORK/t/vendor/docs/estate-reconciliation/examples"
+printf '{"subject":[{"name":"%s"}]}\n' "$V4" > "$WORK/t/vendor/docs/estate-reconciliation/examples/a4-statement.json.example"
+expect 1 "a nested vendor/docs/estate-reconciliation/examples/a4-statement.json.example is scanned" --strict
+fresh; mkdir -p "$WORK/t/vendor/1-formats/deed/tools/fixtures/invalid"
+printf '%s\n' "$V4" > "$WORK/t/vendor/1-formats/deed/tools/fixtures/invalid/not-a-deed.txt"
+expect 1 "a nested vendor/1-formats/deed/tools/fixtures/invalid/ file is scanned" --strict
+fresh; mkdir -p "$WORK/t/1-formats/deed/tools/fixtures/invalid"
+printf '%s\n' "$V4" > "$WORK/t/1-formats/deed/tools/fixtures/invalid/x_chora.deed"
+got=0; "$SCRIPT" --strict "$WORK/t/" >"$WORK/out" 2>&1 || got=$?
+if [ "$got" = 0 ]; then pass=$((pass+1)); echo "  ok    a scan root given with a trailing slash still anchors the exemption"
+else fail=$((fail+1)); echo "  FAIL  a scan root given with a trailing slash still anchors the exemption (got $got)"; sed 's/^/        /' "$WORK/out"; fi
+got=0; (cd "$WORK/t" && "$SCRIPT" --strict .) >"$WORK/out" 2>&1 || got=$?
+if [ "$got" = 0 ]; then pass=$((pass+1)); echo "  ok    scanning . from the repository root anchors the exemption"
+else fail=$((fail+1)); echo "  FAIL  scanning . from the repository root anchors the exemption (got $got)"; sed 's/^/        /' "$WORK/out"; fi
+
 echo "PASS=$pass FAIL=$fail"
 [ "$fail" -eq 0 ]

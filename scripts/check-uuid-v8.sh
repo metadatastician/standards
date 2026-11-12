@@ -87,8 +87,14 @@ acceptable_opaque() {
 }
 
 status=0
+for root in "$@"; do
 while IFS= read -r file; do
   [ -f "$file" ] || continue
+  # The path relative to the scan root it was found under. The two named
+  # exemptions below match this exactly, so a nested copy of the same path
+  # (vendor/docs/..., vendor/1-formats/...) is still scanned.
+  rel=${file#"$root"}
+  rel=${rel#/}
   # Ignore the checkers themselves and retired A2ML files (D320); scan source
   # and data files, not binaries. The deed linter's rejection fixtures
   # (1-formats/deed/tools/fixtures/invalid/) carry malformed literals on
@@ -101,8 +107,10 @@ while IFS= read -r file; do
   # Exempt by exact path only; any other file holding a bare v5 still fails.
   case "$file" in
     */.git/*|*/check-uuid-v7.sh|*/check-uuid-v8.sh|*.a2ml|*.a2ml.in) continue ;;
-    */1-formats/deed/tools/fixtures/invalid/*|1-formats/deed/tools/fixtures/invalid/*) continue ;;
-    */docs/estate-reconciliation/examples/a4-statement.json.example|docs/estate-reconciliation/examples/a4-statement.json.example) continue ;;
+  esac
+  case "$rel" in
+    1-formats/deed/tools/fixtures/invalid/*) continue ;;
+    docs/estate-reconciliation/examples/a4-statement.json.example) continue ;;
   esac
   if grep -IEni -- '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' "$file" >/dev/null 2>&1; then
     # Every UUID on a line is checked, not only the last one (grep -o). Each
@@ -138,8 +146,9 @@ $(scannable_text "$file" | grep -oEi -- '(#uuid")?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-
 EOF
   fi
 done <<EOF
-$(find "$@" -type f -not -path '*/.git/*' -print 2>/dev/null)
+$(find "$root" -type f -not -path '*/.git/*' -print 2>/dev/null)
 EOF
+done
 
 if [ "$status" -ne 0 ]; then
   printf '%s\n' 'UUID check failed. Use ESTATE-UUID-V8 (docs/decisions/ADR-008-uuid-v8-estate-standard.adoc) and type external/legacy IDs explicitly.' >&2
