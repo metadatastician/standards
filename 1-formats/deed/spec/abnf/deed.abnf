@@ -26,11 +26,11 @@
 ;     label of the deed media type is exact (RFC 2045 §2.8). Validator-
 ;     enforced; see the SEMANTIC note on `deed` below.
 ;   Additive for every deed with lines of 998 octets or fewer: every such
-;   - Errata, 2026-11-12 (review of #1473): uuid-variant writes "a" and "b"
-;     as %s"a" / %s"b". A quoted ABNF string is case-insensitive, so the
-;     first text admitted "A" and "B" there, which uuid-hex and the gate
-;     refuse. No lowercase deed changes verdict.
 ;   v1.2.1 deed is a v1.3.0 deed.
+;   Errata, Errata, 2026-11-12 (review of #1473): uuid-variant writes "a" and "b"
+;   as %s"a" / %s"b". A quoted ABNF string is case-insensitive, so the
+;   first text admitted "A" and "B" there, which uuid-hex and the gate
+;   refuse. No lowercase deed changes verdict.
 ;
 ; CHANGELOG (v1.2.0 → v1.2.1, owner ruling 2026-10-27):
 ;   - list: a token-sep MAY come before the first value. deed_lint and the
