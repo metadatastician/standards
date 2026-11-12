@@ -9,9 +9,10 @@
 ;; The (rsr-profile) clause is .machine_readable/rsr-profile.a2ml, moved here
 ;; by the owner's decision of 2026-11-05 (see the comment on the clause).
 ;; META.a2ml and ECOSYSTEM.a2ml carry fields their mapping tables do not list
-;; (the translator refuses rather than guesses), STATE.a2ml is a decision
-;; still open (state-v1-decision.adoc), and the other .a2ml records wait for
-;; kyX (D313): all of those stay live and untranslated.
+;; (the translator refuses rather than guesses). STATE.a2ml is ruled (option B,
+;; 2026-11-10, state-v1-decision.adoc: extract the state, archive the journal)
+;; but not yet applied to this repository. The other .a2ml records wait for
+;; kyX (D313). All of those stay live and untranslated for now.
 (repo-deed
   :schema-version "1.0.0"
   :canonical-name "standards"
@@ -54,8 +55,9 @@
     :ended ""
     (history
       (entry :phase active :since "2026-03-16" :note "backfilled default — correct if the true phase differs"))
-    ; The STATE journal is not translated until state-v1-decision.adoc is
-    ; ruled; this pointer is a legacy source, not a revalidated readiness claim.
+    ; Under state-v1-decision.adoc option B (ruled 2026-11-10) the STATE
+    ; journal is archived, not translated; that is not yet done here. This
+    ; pointer is a legacy source, not a revalidated readiness claim.
     :evidence-source ".machine_readable/descriptiles/STATE.a2ml"
     :interaction-source "standards_chora.deed (agentic)"
     :evidence-status "Lifecycle fields above are the CLADE registry surface. The STATE pointer is legacy; A2ML is retired and must not be extended.")
