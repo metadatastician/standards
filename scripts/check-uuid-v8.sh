@@ -18,6 +18,10 @@
 # 2026-10-07). A2ML is dead and may not be hand-converted (D313); its
 # identifiers become v8 when kyX converts each file into deed, so checking
 # them here would only force edits to a format the estate is deleting.
+#
+# The deed linter's negative fixtures (1-formats/deed/tools/fixtures/invalid/)
+# hold malformed UUIDs on purpose: a v4 id or a bad variant is what each one
+# tests the linter rejects. They are not scanned. Valid fixtures still are.
 set -eu
 
 strict=0
@@ -81,6 +85,7 @@ while IFS= read -r file; do
   # and data files, not binaries.
   case "$file" in
     */.git/*|*/check-uuid-v7.sh|*/check-uuid-v8.sh|*.a2ml|*.a2ml.in) continue ;;
+    1-formats/deed/tools/fixtures/invalid/*|*/1-formats/deed/tools/fixtures/invalid/*) continue ;;
   esac
   if grep -IEni -- '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' "$file" >/dev/null 2>&1; then
     # Every UUID on a line is checked, not only the last one (grep -o).
