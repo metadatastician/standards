@@ -205,7 +205,7 @@ Every test is new work unless stated. Gate A, Gate D and the link-rot guard alre
 |===
 | Id | Test | Fixture
 
-| C01 | Every tracked file matches exactly one rule of 4.1 (CL1). | `rules-total`, `rules-overlap-bad`
+| C01 | First-match evaluation of the ordered rules of 4.1 gives every tracked file exactly one destination (CL1). Patterns may overlap; the first matching rule decides, and CR0 catches the rest. | `rules-total`, `rules-unassigned-bad`
 | C02 | The rules, applied to the tree at `be39f90`, give the file counts of section 4.1. On a later checkout the counts are recomputed and reported, and only CL1 (C01) is enforced. | `rules-counts@be39f90`, `rules-counts-current`
 | C03 | The metric recomputes: `rate90` and `rate180` per entry equal those from `git log` on the same commit (CL8). | `metric-recompute`
 | C04 | A commit counts once for a unit, however many files it changes. | `metric-once`

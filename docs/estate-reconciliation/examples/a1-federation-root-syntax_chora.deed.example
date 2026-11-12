@@ -3,7 +3,7 @@
 (estate-deed
   :schema-version "1.0.0"
   :canonical-name "hyperpolymath-federation"
-  :estate-uuid #uuid"99fef1e9-e3a7-599b-ac66-1a4ae305f867"
+  :forge-uuid #uuid"99fef1e9-e3a7-599b-ac66-1a4ae305f867"
   :kind federation
   :vocabulary-version "0.1.0"
   (vocabulary

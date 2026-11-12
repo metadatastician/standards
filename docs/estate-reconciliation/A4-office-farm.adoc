@@ -183,7 +183,7 @@ The status posted to GitHub (A3 section 3.3) has `target_url` pointing to the DS
 
 === 5.6 Validity rules
 
-An envelope is *valid* when: the DSSE signature verifies for a listed publisher, by the rule of 5.2 for that publisher's form (ed25519 or OIDC, never one for the other); the payload parses as the Statement; the subject digest names a commit that exists in the repo; the predicate matches its type; and the SARIF log, if present, parses as 2.1.0. A valid envelope is not a *true* one. It says the publisher signed these bytes. Truth is checked by the observer (section 10).
+An envelope is *valid* when: the DSSE signature verifies for a listed publisher, by the rule of 5.2 for that publisher's form (ed25519 or OIDC, never one for the other); the payload parses as the Statement; the subject has exactly one entry, whose `name` equals the `:repo-uuid` of the repo being checked; the subject digest names a commit that exists in that repo; the predicate matches its type; and the SARIF log, if present, parses as 2.1.0. A valid envelope is not a *true* one. It says the publisher signed these bytes. Truth is checked by the observer (section 10).
 
 === 5.7 Storage
 
@@ -219,11 +219,12 @@ States: `open` is a finding that nothing is acting on. `ordered` has an open wor
 === 6.2 Fingerprint
 
 ----
-fp = "sha256:" + hex(SHA-256( "estate-fp-v1" 0x00 rule 0x00 repo-uuid 0x00 path 0x00 anchor ))
+fp = "sha256:" + hex(SHA-256( "estate-fp-v1" 0x00 rule 0x00 repo-uuid 0x00 path 0x00 anchor 0x00 occurrence ))
 ----
 
 * `rule` is the `ruleId`. `repo-uuid` is the A1 `:repo-uuid` value. `path` is repo-relative.
 * `anchor` is the SHA-256 of the normalised text of the line at the location (whitespace collapsed, line ending stripped), or the empty string for a finding with no line. A finding that moves by an unrelated edit keeps its fingerprint. A finding whose line changes gets a new one, and the old one goes `fixed` at the next rescan.
+* `occurrence` is the decimal ordinal, from 1 in file order, of this finding among the findings in the file with the same `rule` and `anchor`. Two findings of one rule on 2 identical lines therefore get 2 fingerprints. An unrelated edit does not change the ordinal; inserting or deleting another line with the same text before it does.
 * A sensor that has no line text uses its own anchor field and records its recipe in `producer`. The recipe is part of the fingerprint's meaning, and a change to it is a change of `estate-fp-v1`.
 
 === 6.3 Deduplication and aggregation
@@ -451,10 +452,11 @@ Every test is new work. A fixture is valid unless marked `-bad`.
 | E08 | The report-back envelope, the panic-attack and pons envelopes and the baton map to a valid envelope by section 5.4. | `map-*`
 | E09 | The payload is JCS-canonical: re-canonicalising it gives the same bytes. | `env-noncanonical-bad`
 | E10 | `predicateType` is one of the 4 defined URNs. | `env-bad-type-bad`
+| E11 | An envelope stored in an estate repo's tree is reported. | `env-committed-bad`
 | E12 | An OIDC-signed envelope from the listed issuer and the pinned workflow path and SHA verifies. | `env-oidc-ok`
 | E13 | An OIDC-signed envelope from the listed issuer but a different workflow path or SHA fails. | `env-oidc-other-workflow-bad`
 | E14 | An ed25519 signature checked against an OIDC publisher entry, or the reverse, fails. | `env-form-mismatch-bad`
-| E11 | An envelope stored in an estate repo's tree is reported. | `env-committed-bad`
+| E15 | A valid envelope whose subject `name` is another repo's UUID is rejected for this repo, even when the commit exists in both. | `env-wrong-repo-bad`
 |===
 
 === 13.3 Ledger
@@ -469,6 +471,7 @@ Every test is new work. A fixture is valid unless marked `-bad`.
 | I04 | No ledger line carries a finding body or a secret. | `ledger-body-bad`
 | I05 | `fixed` is set only by a later rescan on a later commit. | `fixed-no-rescan-bad`
 | I09 | A finding in `a/` followed by a `ran` rescan whose scope is only `b/` stays unresolved. | `fixed-out-of-scope-bad`
+| I10 | One rule firing on 2 identical lines in one file gives 2 records; an unrelated line inserted above both keeps both fingerprints. | `fp-repeated`
 | I06 | `accepted` requires a valid deviation (A2); on its expiry the record goes `lapsed`. | `accepted-expired`
 | I07 | A sensor cannot set a state. | `sensor-state-bad`
 | I08 | At most one open order per `(repo, class)`. | `two-orders-bad`

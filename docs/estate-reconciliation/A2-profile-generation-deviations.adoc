@@ -262,7 +262,7 @@ Legacy forms map as follows. Each mapped record gets `:authority "legacy"` when 
 | Legacy | New form
 
 | `(variant (paths ...))` | `(deviation :kind exemption :rule "generation/drift" (scope :paths (...)))`, `:authority "legacy"`
-| `.hypatia-baseline.json` entry | `deviation`, `:kind debt` if it has `tracking_issue` or an expiry, else `exemption`
+| `.hypatia-baseline.json` entry | `deviation`, `:kind exemption`, `:expires` from `expires_at`, `:tracking` from `tracking_issue` (A5 section 7). It is not mapped to `debt`, because a baseline entry has no integer for `:ceiling`.
 | `.hypatia-ignore` line | `deviation`, `:kind exemption`, `:paths` from the line
 | `Debtfile.a2ml` entry | `deviation`, `:kind debt`, with `:ceiling` and `:probe`
 | `CLAUDE.md` exemption table row (count and unblock condition) | `deviation`, `:kind debt`
