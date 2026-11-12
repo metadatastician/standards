@@ -1,0 +1,23 @@
+;; SPDX-FileCopyrightText: © 2026 Jonathan D.A. Jewell
+;; SPDX-License-Identifier: CC-BY-SA-4.0
+(praxis-deed
+  :schema-version "1.0.0"
+  :canonical-name "wo-0001"
+  :beholding-chora #uuid"47e1501b-26b4-5bbd-8a3f-1afa81c69dbe"
+
+  (work-order
+    :id "wo-0001"
+    :class "fix-unpinned-actions"
+    :repo #uuid"3f76e427-3bff-53b5-be46-3a1aa5c2cb43"
+    :base "0123456789abcdef0123456789abcdef01234567"
+    :tier review
+    :trigger dispatch
+    :authority "owner/standards#1234"
+    :expires "2026-12-31"
+    (findings
+      (finding :fingerprint "sha256:1111111111111111111111111111111111111111111111111111111111111111"))
+    (limits :max-files 10 :max-lines 200)
+    (acceptance
+      (require :check "secret-scan" :state passed)
+      (require :rescan "fix-unpinned-actions" :findings 0))
+    (escalate :when "any-test-failure" :to owner)))
