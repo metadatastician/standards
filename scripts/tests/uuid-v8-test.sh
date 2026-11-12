@@ -151,6 +151,17 @@ fresh; printf 'the id is %s\n' "$V5" > "$WORK/t/notes.adoc"
 expect 1 "a bare v5 in prose is still rejected under --strict" --strict
 fresh; printf '%s%s" and bare %s\n' "$OPQ" "$V5" "$V5" > "$WORK/t/mixed.adoc"
 expect 1 "a bare v5 on the same line as an opaque v5 is still rejected" --strict
+# The literal's rule is final once a token IS the literal (Codex review, #1485).
+fresh; printf '(repo-deed :repo-uuid %s%s")\n' "$OPQ" "$V7_8" > "$WORK/t/r_chora.deed"
+expect 1 "a v7 in an opaque literal is rejected in the default (dual-accept) mode too"
+names "#uuid literal must be version 5 or 8" "the opaque rejection names the literal's rule"
+# The literal needs its closing quote (Codex review, #1485).
+fresh; printf 'see %s%s\n' "$OPQ" "$V5" > "$WORK/t/notes.adoc"
+expect 1 "a v5 after #uuid\" with no closing quote is checked as bare and rejected" --strict
+fresh; printf 'see %s%sxyz\n' "$OPQ" "$V5" > "$WORK/t/notes.adoc"
+expect 1 "a v5 after #uuid\" with trailing characters is checked as bare and rejected" --strict
+fresh; printf '"%s"\n' "$V5" > "$WORK/t/a.json"
+expect 1 "a quoted bare v5 (no #uuid prefix) is still rejected" --strict
 
 echo "deed linter rejection fixtures"
 fresh; mkdir -p "$WORK/t/1-formats/deed/tools/fixtures/invalid"

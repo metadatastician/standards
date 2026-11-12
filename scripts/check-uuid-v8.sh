@@ -106,17 +106,24 @@ while IFS= read -r file; do
   esac
   if grep -IEni -- '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' "$file" >/dev/null 2>&1; then
     # Every UUID on a line is checked, not only the last one (grep -o). Each
-    # match keeps a directly preceding #uuid" so the opaque deed literal can be
-    # told apart from a bare UUID.
+    # match keeps a directly preceding #uuid" and a directly following ", so
+    # the opaque deed literal can be told apart from a bare UUID.
     while IFS= read -r token; do
       [ -n "$token" ] || continue
-      uuid=${token##*\"}
+      uuid=${token%\"}
+      uuid=${uuid#*\"}
       version=$(printf '%s' "$uuid" | cut -d- -f3 | cut -c1)
       variant=$(printf '%s' "$uuid" | cut -d- -f4 | cut -c1 | tr 'A-F' 'a-f')
-      # The opaque literal is lowercase in the grammar (#uuid, lowercase hex);
-      # any other spelling is checked as a bare UUID.
-      if printf '%s' "$token" | grep -qE '^#uuid"[0-9a-f-]{36}$'; then
+      # The opaque literal is #uuid"<lowercase 8-4-4-4-12>", closed by its
+      # quote. Only that exact form is judged by the literal's own rule, and
+      # the literal's rule is final: a v7 inside it fails even in the default
+      # (dual-accept) mode. Any other spelling (#UUID", no closing quote,
+      # upper-case hex) is checked as a bare UUID.
+      if printf '%s' "$token" | grep -qE '^#uuid"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"$'; then
         acceptable_opaque "$version:$variant" && continue
+        printf '%s: #uuid literal must be version 5 or 8 with an RFC 9562 variant (%s)\n' "$file" "$uuid" >&2
+        status=1
+        continue
       fi
       if ! acceptable "$version:$variant"; then
         if [ "$strict" -eq 1 ]; then
@@ -127,7 +134,7 @@ while IFS= read -r file; do
         status=1
       fi
     done <<EOF
-$(scannable_text "$file" | grep -oEi -- '(#uuid")?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' || true)
+$(scannable_text "$file" | grep -oEi -- '(#uuid")?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"?' || true)
 EOF
   fi
 done <<EOF
