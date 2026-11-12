@@ -1,0 +1,422 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+= A5: Rule Identifiers, the Deviation Store and the Generated Ignore Files
+:version: 0.2.2-draft
+:status: DRAFT v0.2.2. Decisions G1 to G14 approved by the owner on 2026-11-10. Not yet ratified as a whole. Builds on A1 v0.3.8, A2 v0.2.3, A3 v0.2.2 and A4 v0.2.3. Consistency pass applied 2026-11-10. Proposed in standards#1474; bot-review fixes applied 2026-11-12.
+:toc:
+
+Specification A5 of the Estate Reconciliation Plan. A2 defined the `(deviations)` clause. A5 gives every rule a stable identifier, says how a deviation is checked against the rule it excuses, and defines how the tool-native exemption files are generated from deviations. The plan's rule is: each rule has one identifier and one text, an exception is one record, and the ignore files of each tool are generated from those records [R: plan section 9].
+
+== 0. How to read the evidence
+
+[cols="1,4"]
+|===
+| Tag | Meaning
+
+| [M] | Measured by me on 2026-11-10 in a shallow clone at the commit listed in section 13.
+| [R] | Estate record: a statement in an estate document or in the plan. I did not recount it.
+| [I] | Inferred by me, or taken from my knowledge of an external tool. Check before relying on it.
+| [O] | Owner ruling given in this session, 2026-11-10.
+|===
+
+Identifiers. Every decision, law and test id in this specification is local to it. Outside it, write the spec first (for example `A3 G4`). A test runner reports a test as `<spec>/<id>` (for example `A3/G10`).
+
+== 1. Summary
+
+* A rule identifier is a namespaced path, `<domain>/<name>`, for example `hypatia/code_safety/js_exec_sync` or `check/secret-scan`. Existing ids are mapped by adding the domain. Nothing is renamed at the source [O].
+* A rule is defined once, in a registry file. The registry carries the id, the text, the class, the severity, the lowest level at which a deviation may excuse the rule, and the form of scope it allows. Where the registry lives is decision G2 (the owner had no preference; I propose domains at the root, each registry with its owner).
+* A deviation is valid only against a rule that resolves in the registry. The registry's level field is what enforces A2 section 7.4.
+* Tool-native exemption files are generated from deviations. A generated file is never edited. CI fails when regenerating changes it. External tools get generated files first; estate tools read deviations directly later (G6; the owner had no preference).
+* No generator writes an `.a2ml` file. Two legacy files in that format (the bot exclusion registry and `Debtfile.a2ml`) change only when their readers change (section 7).
+* Every generated file is proven by a positive and a negative control against its tool. An exemption file that suppresses nothing is silent [M: the audit that the ratchet script cites].
+* One generated index lists every rule and one lists every deviation (section 9).
+* A5 imports no legacy file, generates no file in any repo and changes no tool.
+
+== 2. Findings that shape the design
+
+. [M] Exemption files exist in at least 16 kinds: `.hypatia-baseline.json`, `.hypatia-ignore`, `.gitleaksignore`, `config/gitleaks/estate-baseline.toml`, `.ponsignore`, `.governance-allowlist`, `lock-allow.txt`, `pipeline-allow.txt`, `required-contexts-allow.txt`, `inline-python-allow.txt`, `a2ml-legacy-allow.txt`, `bot_exclusion_registry.a2ml`, `.github/no-js-baseline.txt`, `root-allow.txt`, `.cicd-hygiene-allow` and `Debtfile.a2ml`. `standards` holds 13 of them (counted by testing each path). The other 3, `.hypatia-ignore`, `root-allow.txt` and `.cicd-hygiene-allow`, appear in `cadastra`, `git-logistics-office`, `hyperpolymath/hyperpolymath`, `proven-cicd` and `deed-ecosystem`.
+. [M] Sizes in `standards`: `.hypatia-baseline.json` 59 entries; `lock-allow.txt` 203 lines; `a2ml-legacy-allow.txt` 216; `required-contexts-allow.txt` 105; `pipeline-allow.txt` 77; `inline-python-allow.txt` 24; `.ponsignore` 17; `.gitleaksignore` 9; `.governance-allowlist` 7; `config/gitleaks/estate-baseline.toml` 225; `bot_exclusion_registry.a2ml` 414.
+. [M] The `standards` baseline has 59 entries, all with `note` and `expires_at`, 36 with `tracking_issue`, across 9 rule modules and 17 distinct `rule_module/type` pairs. On 2026-10-24 the same file had 63 entries with 23 undated, 7 of which said "Baseline permanently" (header of `check-baseline-expiry.sh`). The expiry is now enforced.
+. [M] The estate has at least 5 rule id schemes: Hypatia `rule_module/type`, `RE###` (73 mentions in `standards`), `PV-W##` and `PV-E##` provisioning codes (44 and 32 mentions), `HYP-##` (15), RSR criteria (264-line `rsr-criteria-v2.a2ml`, 11 numbered categories). A3 added `check/<id>`, A2 added `generation/drift`.
+. [M] Consumers match differently. The Hypatia scanner treats a `.hypatia-ignore` path as a substring. The governance gate matches the whole line `<rule>:<exact-repo-relative-path>` (`grep -qxF`). Listing each path in full is deliberate: "a newly added banned file still fails" (`docs/EXEMPTION-MECHANISMS.adoc`). Banned-language ledgers forbid `**` wildcards (`check-exemption-ratchet.sh`, rule 3).
+. [M] The estate separates a scope from a baseline. A scope says a part of the tree is not what the scanner is for; it never expires. A baseline entry is an argument about a specific finding and expires (`scripts/filter-sarif-by-scope.sh`, header). `.ponsignore` holds scopes, and says it "must never grow to hide a finding class".
+. [M] `check-exemption-ratchet.sh` makes ledgers shrink-only by line count against the base ref. Growth needs a commit trailer `Ratchet-exception: <path> — <why>`. A trailer is free text and carries no authority.
+. [M] `lock-allow.txt` is a list of repos, not paths: 163 repos without a lockfile, measured on 2026-09-22 across 368 repos (its seed provenance). A repo list is an estate-level fact about repos.
+. [M] `.gitleaksignore` holds exact historical fingerprints `commit:file:rule:line`. A fingerprint cannot be derived from a path scope.
+. [M] `bot_exclusion_registry.a2ml` is the estate-wide bot write denylist: fail-closed, with an environment kill switch, three axes (repos, vendored path globs, remote-origin patterns), read by every bot. It is an A2ML file, and A2ML is retired.
+. [M] `Debtfile.a2ml` holds a `probe` (a command printing one non-negative integer) and a `ceiling` that the runner lowers and never raises (`docs/DEBTFILE-SPEC.adoc`). A2's `debt` kind has the same two fields.
+. [M] The estate's own audit found "exemption files written in the wrong format (`hyperpolymath/proven`) that therefore suppressed nothing — nobody noticed for months" (`check-exemption-ratchet.sh` header).
+. [M] `root-allow.txt` is not an exception list. It lists the entries allowed at a repo root and the policy says it should be derived: `effective-allowlist(repo) = baseline union { M : gate(M) subset of profile.capabilities }` (`TEMPLATE-APPLICABILITY-POLICY.adoc`).
+. [M] Counts of active lines in the other repos I read: `git-logistics-office` `.hypatia-ignore` 14, `hyperpolymath/hyperpolymath` `.hypatia-ignore` 6, `cadastra` `.hypatia-ignore` 2, `proven-cicd` `.cicd-hygiene-allow` 4, `git-logistics-office` `.gitleaksignore` 4.
+. [M] The estate rule on licences: agents flag licence drift and do not edit licences or SPDX headers of existing content (`standards/.claude/CLAUDE.md`).
+
+== 3. Rule identifiers
+
+=== 3.1 Form [O]
+
+----
+rule-id  = domain "/" name
+domain   = lower-alpha *( lower-alpha / DIGIT / "-" )
+name     = segment *( "/" segment )
+segment  = 1*( ALPHA / DIGIT / "." / "_" / "-" )
+----
+
+* Identifiers are case-sensitive and have at most 200 characters.
+* A wildcard is not part of an identifier. `hypatia/code_safety/*` is not a rule. A deviation names one concrete id (law RL5).
+* A domain is a term of kind `rule-domain` in the federation root's vocabulary (decision G2). A new kind is a root vocabulary change.
+
+=== 3.2 Stability
+
+* An id is never reused and never deleted. A retired rule keeps its registry entry with `:status retired`.
+* A rename creates a new id. The new entry has `:supersedes ("<old id>")` and the old entry has `:superseded-by "<new id>"`. A deviation against a retired or superseded id is reported; it is not rewritten.
+* Domains and names are chosen by the registry's owner. A5 does not rename any id at its source tool.
+
+=== 3.3 Mapping of existing ids
+
+[cols="2,3,3"]
+|===
+| Existing | New id | Note
+
+| Hypatia `rule_module/type`, e.g. `code_safety/js_exec_sync` | `hypatia/<rule_module>/<type>` | 17 distinct pairs in the `standards` baseline [M].
+| `research_extensions/RE001` | `hypatia/research_extensions/RE001` | The egress spec calls it a Hypatia rule [M: `EGRESS-CLAUSE-SPEC.adoc`].
+| `PV-W35`, `PV-E##` | `provision/PV-W35` | Provisioning check codes [M: provisioning standard].
+| RSR criterion `4.3.1` | `rsr/4.3.1` | Numbered criteria of `rsr-criteria-v2.a2ml`.
+| A3 `check/<id>` | `check/<id>` | Unchanged. A3 reserved the namespace.
+| A3 gate findings | `gate/forged-or-unverified`, `gate/unsigned`, `gate/mismatch`, `gate/no-envelope` | A4 section 10.
+| `generation/drift` (A2) | `generation/drift` | Unchanged.
+| Language policy bans, e.g. typescript | `lang/typescript`, `lang/python`, ... | A2's samples used `banned-language/...`; A5 names the domain `lang` (G1).
+| `bot-write` | `bot/write` | A2 section 7.6 used the name `bot-write`.
+| `HYP-##` | unresolved | I could not tell from the files I read which tool owns the `HYP-` ids. The owner of that domain assigns one (G1).
+| Scanner secret rules (gitleaks rule names) | `secret/<rule name>` | e.g. `secret/generic-api-key`.
+| Pons rules | `pons/<rule id>` | A4 section 5.3 prefix.
+|===
+
+== 4. The rule registry
+
+=== 4.1 Form
+
+A registry is a `praxis-deed` named `<domain>_rules_praxis.deed` with a `(rule-domain)` clause and a `(rules)` clause. It reuses the head chosen in A2 to A4 and needs no grammar change.
+
+----
+(praxis-deed
+  :schema-version "1.0.0"
+  :canonical-name "hypatia-rules"
+  :beholding-chora #uuid"47e1501b-26b4-5bbd-8a3f-1afa81c69dbe"
+  (rule-domain :name "hypatia" :owner "hyperpolymath/hypatia")
+  (rules
+    (rule-def
+      :id "hypatia/code_safety/js_exec_sync"
+      :text "Do not run a command string through a shell."
+      :class gate
+      :severity high
+      :excusable-at repo
+      :scope-form exact-paths
+      :status active)))
+----
+
+The sample is `docs/estate-reconciliation/examples/a5-hypatia-rules_praxis.deed.example` (and `docs/estate-reconciliation/examples/a5-mytool_chora.deed.example` for the repo-level scope forms; the root-level `:origins` form is in `docs/estate-reconciliation/examples/a1-federation-root-syntax_chora.deed.example`). It lints clean under `deed_lint.js` as written: `deed.abnf` v1.3.0 and its linter accept the opaque literal since #1473 [M: linted 2026-11-12]. The linter checks syntax only [I].
+
+=== 4.2 Fields of `rule-def`
+
+[cols="2,1,4"]
+|===
+| Field | Cardinality | Rule
+
+| `:id` | 1 | A rule id (3.1) whose domain is the registry's `(rule-domain :name)`. Unique across all registries.
+| `:text` | 1, STRING | The one text of the rule. Nothing else restates it as an authority.
+| `:class` | 1, symbol | `gate` (blocks a merge when it fires), `advisory` (reports only), `policy` (a ban or requirement stated for people and tools), `invariant` (a chora invariant; A1).
+| `:severity` | 0..1, symbol | `critical`, `high`, `medium` or `minor` (A4 section 5.3).
+| `:excusable-at` | 1, symbol | `repo`, `estate` or `root`: the lowest level at which a deviation for this rule may be recorded.
+| `:scope-form` | 1, symbol or list of symbols | `exact-paths`, `globs`, `fingerprints`, `repos` or `origins`: the forms of scope a deviation may use for this rule (4.3). A list allows each form in it; `exact-paths` and `globs` are not listed together. A rule with several axes, such as `bot/write`, lists them all: `:scope-form (origins repos exact-paths)`.
+| `:status` | 1, symbol | `active` or `retired`.
+| `:supersedes` | 0..1, list of STRING | Older ids replaced by this one.
+| `:superseded-by` | 0..1, STRING | The id that replaces this one.
+| `:since` | 0..1, STRING | `YYYY-MM-DD`.
+|===
+
+`(rule-domain)` has `:name` (the domain) and `:owner` (`owner/name`, the repo whose code enforces the rules). The owner holds the registry file. A registry has exactly one `(rule-domain)`.
+
+=== 4.3 Excusable level and scope form
+
+* `:excusable-at repo` means any level at or above the repo may hold a deviation. `estate` means only an estate chora or the root may. `root` means only the root may. This is how A2 section 7.4 is enforced: A1 invariants and other higher rules are registered with `:excusable-at estate` or `root`, so a repo-level deviation cannot name them.
+* Default for a canon gate rule: `repo`, because gates are excused by repo-level baselines today [M]. Default for an A1 invariant: the level that declares it.
+* `:scope-form exact-paths` forbids a glob in `:paths`. It carries the estate's rule that a banned-language ledger lists every path so a new banned file still fails [M].
+* A deviation's scope uses only the form its rule allows. `fingerprints` and `origins` are new scope fields (section 5.2).
+
+=== 4.4 Where registries live (decision G2)
+
+The owner had no preference. I propose: the root vocabulary declares each domain as a term of kind `rule-domain`, and each domain's registry sits in the repo that owns the rules (Hypatia rules in `hypatia`, `check/` rules in `proven-cicd`, `rsr/` and `lang/` rules in `standards` (A6 H6 keeps the canon there)). One home per rule. No copy of a rule's text exists elsewhere. A generated rule index (section 9) lists every rule across domains. I did not read `hypatia`, so I cannot say how its rules are stored today [I].
+
+== 5. Deviation validity (extends A2 section 7)
+
+=== 5.1 Resolution
+
+A deviation is *resolved* when its `:rule` is the `:id` of an `active` registry entry and the deviation sits at a level allowed by `:excusable-at`. A deviation against a `retired` rule is reported `stale-rule`. A deviation against an unknown id is reported `unknown-rule`. In `strict` mode both are errors. In `lax` mode `unknown-rule` is a warning, so a legacy import that cannot yet name its rule is visible and not lost.
+
+=== 5.2 Scope forms (amends A2 7.2)
+
+A2 gave `(scope)` the fields `:paths` and `:repos`. A5 adds `:fingerprints` and `:origins`:
+
+[cols="2,2,4"]
+|===
+| Field | Allowed at | Rule
+
+| `:paths` | repo, estate, root | List of repo-relative paths. With `:scope-form exact-paths`: no glob character. With `globs`: the glob syntax of 5.3.
+| `:repos` | estate, root | List of repo UUIDs (A1). An estate or root deviation applies to these repos only.
+| `:fingerprints` | repo | List of STRING scanner fingerprints. Allowed only for rules with `:scope-form fingerprints`. A fingerprint is opaque to A5.
+| `:origins` | root | List of STRING remote-origin patterns. Allowed only for rules whose `:scope-form` includes `origins` (today `bot/write`).
+|===
+
+A scope has at most one of `:fingerprints` and `:origins`, and may combine either with nothing else. `(scope)` with no field still means the whole scope of the level (A2).
+
+=== 5.3 Path syntax
+
+A path is repo-relative with no leading `./` or `/`, no `..`, and no backslash. A glob uses `*` (not across `/`), `**` (across `/`) and `?`. A glob never matches the repo root alone. A path with a trailing `/` names a directory prefix. These forms are portable and lexical, as in the CI profile contract [M: `proven-cicd/profiles/README.adoc`].
+
+=== 5.4 Where a deviation lives (G12)
+
+A deviation lives at the lowest level that can hold it. A fact about one repo is in that repo's chora. An estate or root deviation with `:repos` is allowed only for a repo that has no chora yet (the plan counts 8 of 15 measured repos in that state [R]); once the repo has a chora the deviation moves there, if the rule's `:excusable-at` is `repo`. A deviation for a rule with `:excusable-at estate` or `root` stays at that level with its `:repos`, because the repo cannot hold it (4.3). This keeps one home per fact. It makes the `lock-allow.txt` list of 163 repos [M] a set of 163 one-line deviations, each in its own repo, and not one estate list.
+
+=== 5.5 Ratchet (replaces the commit trailer)
+
+For a base and a head version of the deviations at any level:
+
+. A deviation present in head and absent in base must be valid: `:authority`, `:evidence`, a rule that resolves, and the date or ceiling that its kind needs (A2).
+. A deviation present in both may lose scope freely. It may not gain scope (a larger `:paths` or `:repos` set, or a wider glob) without a new `:authority` value.
+. A `debt` deviation's `:ceiling` may fall and may not rise (A2 V10).
+. A deviation that is removed is debt reduction and always passes.
+. A deviation whose `:authority` is `"legacy"` (A2 section 7.6) may not be added in head, except by an import PR of section 10. Such a PR touches one repo, adds only deviations, maps each of them from an entry of a legacy file that exists at the base commit, and leaves that file in place. Its deviations are reported `unratified`, and the equivalence test of section 10 still gates the cutover.
+
+The estate's `Ratchet-exception:` commit trailer is not read as authority. In the compatibility period (A2 section 10) the legacy ledgers keep their trailer check. A deviation with a valid `:authority` is the replacement.
+
+== 6. Generated ignore files
+
+=== 6.1 Contract
+
+For a repo `R` and a tool `T` with a native exemption file `F(T)`:
+
+----
+F(T) = render_T( { d : d is a deviation applicable to R, rule(d) in domains(T), d is valid, d is not lapsed } )
+----
+
+* *Applicable* deviations are those at the repo's own chora, at its estate chora whose `:repos` names it (or has no `:repos`), and at the root (A2 7.4).
+* The generator reads deviations, the registry and a per-tool adapter. It never reads the old file.
+* The output is deterministic: entries are sorted by rule id, then path, then deviation `:id`. Equal inputs give equal bytes (law GEN1).
+* A generated file carries a header naming the generator, its version and the blob SHA of the chora, where the format allows a comment. A JSON file, which has no comment form, relies on the regenerate-and-compare check (law GEN3).
+* The generator never writes a licence file, an SPDX header or a licence text. The exemption files are not licence texts, and a deviation for a licence rule is recorded and flagged only [M: estate rule].
+* The generator writes no `.a2ml` file (G7).
+
+=== 6.2 Adapters
+
+Each adapter states the tool, the file, the rule domains it serves, the form, the matching semantics, and what it cannot represent. First population, from the files I read [M]:
+
+[cols="2,2,3,3"]
+|===
+| File | Serves | Rendered from | Cannot represent, or note
+
+| `.hypatia-baseline.json` | `hypatia/*` | One entry per deviation and path: `rule_module` and `type` from the rule id, `file` from the path, `severity` from the registry, `expires_at` from `:expires` or `:review-by`, `note` from `:reason`, `tracking_issue` from `:tracking`. JCS canonical, one line, members sorted [M: format doc, J-1]. | A `file_pattern` entry is rendered only for a rule with `:scope-form globs`.
+| `.hypatia-ignore` | `hypatia/*` | Lines `<rule_module>/<rule_type>:<exact-path>`, which the gate matches as a whole line [M]. | The scanner matches a line as a substring [M], so a line for `tools/report.mjs` also suppresses `tools/report.mjs.bak`. An exact-path deviation is therefore `unrepresentable` for the scanner until it matches whole paths; `.hypatia-baseline.json` carries the deviation meanwhile. The controls (6.5) include an outside path that contains the permitted path. A directory fragment is never written.
+| `.gitleaksignore` | `secret/*` | One line per fingerprint in `(scope :fingerprints)`. | A path scope for a secret rule is `unrepresentable`: gitleaks needs a fingerprint.
+| `config/gitleaks/estate-baseline.toml` | `secret/*` at estate level | Estate-level deviations. TOML. | Its home follows A6.
+| `.cicd-hygiene-allow` | `check/code-hygiene` | One path per line, with the `:reason` as a comment above it. | Comments allowed.
+| `.ponsignore` | `pons/*` | `exemption` deviations for a `pons/*` rule with a `:paths` scope: one path prefix per line, with the reason. | The file says it must not hide a finding class; the adapter rejects a scope naming a whole rule domain.
+| `.governance-allowlist` | `lang/*` | One line per deviation and path: `<token>:<exact-path>`, the whole line that the gate matches with `grep -qxF` [M]. `<token>` is the gate's own rule token for the language, which I take to be the `<name>` of `lang/<name>` (3.3) [I: to confirm against the gate's token list]; the adapter keeps a table from rule id to token and fails on a rule id with no token. | Rejects a glob (`exact-paths`).
+| `root-allow.txt` | `rsr/root-shape` | Not an exception list. It is derived from the profile and the gate table (policy formula in finding 13) plus the deviations for `rsr/root-shape`. | Depends on A2's profile and A3's table.
+| `lock-allow.txt`, `pipeline-allow.txt`, `required-contexts-allow.txt`, `inline-python-allow.txt`, `a2ml-legacy-allow.txt`, `.github/no-js-baseline.txt` | The gate each ledger serves | Estate-level shrink-only ledgers of repos or paths. After section 5.4 they are views over repo-level `debt` deviations, counted by the ratchet of 5.5. | Retired as files when the gates read deviations (stage 2).
+| `bot_exclusion_registry.a2ml` | `bot/write` | No generator. | The format is retired (G7).
+| `Debtfile.a2ml` | `debt` deviations | No generator. | The format is retired (G7).
+|===
+
+=== 6.3 Two stages (G6)
+
+* *Stage 1.* The generator writes the files above for the tools that read only their own file. CI runs the generator and fails on any difference. Nothing is hand-edited.
+* *Stage 2.* The estate tools (Hypatia, pons, `proven-cicd` checks, the gate of A3) read deviations directly, one tool at a time. A tool's file is then retired, and its adapter is deleted. External tools (gitleaks) keep their generated file.
+
+=== 6.4 The two retired formats (G7)
+
+A2 states that A2ML is retired and that no `.a2ml` file is created [M: `standards/.claude/CLAUDE.md`]. The bot exclusion registry and `Debtfile.a2ml` therefore have no generator. Their successors are the `bot/write` deviations at the root (scope `:origins`, `:repos`, `:paths`) and the `debt` deviations. Their readers change: every bot reads the root deviations, and the debt runner reads `:probe` and `:ceiling` from deviations. Until then the legacy files are read as a legacy source (A2 section 10) and are not edited by hand beyond what the owner directs. A5 does not change any reader.
+
+=== 6.5 Controls (G10)
+
+For each adapter, a test fixture provides one finding inside a deviation's scope and one outside it. The tool is run on both. The inside finding MUST be suppressed and the outside one MUST remain. An adapter without both controls is `unqualified`, and its generated file is reported advisory. This answers the audit finding of an exemption file that suppressed nothing [M].
+
+== 7. The exemption classes in A2's kinds
+
+[cols="2,3"]
+|===
+| Estate class [M] | A2 kind
+
+| Scope (`.ponsignore`, SARIF scope filter): never expires | `exemption` with `:review-by`, no `:expires`.
+| Baseline entry (`expires_at`, `note`, `tracking_issue`) | `exemption` with `:expires`. A `tracking_issue` becomes `:tracking`. An entry with a tracking issue and a planned fix is better recorded as `debt` or `deferral`; the importer does not decide that and keeps `exemption` unless the legacy entry says otherwise.
+| Shrink-only ledger (`lock-allow`, `pipeline-allow`, and so on) | `debt` with `:ceiling` and `:probe`.
+| Debtfile entry | `debt`.
+| Bot denylist | `exemption` of rule `bot/write`.
+| Secret fingerprint | `exemption` with `:fingerprints`.
+|===
+
+== 8. Laws
+
+[cols="1,4"]
+|===
+| Law | Statement
+
+| RL1 | Uniqueness. A rule id appears in exactly one registry entry. Two entries with one id are an error.
+| RL2 | Stability. A rule id is never deleted and never reused. A superseded id keeps a pointer.
+| RL3 | One text. A rule's text is the `:text` of its registry entry. No other file claims to define it.
+| RL4 | Level. A deviation sits at a level no lower than `:excusable-at`.
+| RL5 | Concrete ids. A deviation names exactly one concrete rule id. No wildcard.
+| RL6 | Scope form. A deviation's scope uses only the form its rule allows.
+| GEN1 | Determinism. Equal inputs give equal generated bytes.
+| GEN2 | Idempotence. Generating from a generated file's inputs twice gives the same file.
+| GEN3 | No hand edits. A generated file differs from a fresh generation exactly when someone edited it. CI fails on a difference.
+| GEN4 | No silent loss. Every applicable deviation for a tool appears in its file, or the generator reports `unrepresentable` with the reason. A deviation never disappears without a report.
+| GEN5 | No widening. The generator never writes a form that suppresses more than the deviation's scope (no directory fragment for an exact path, no wildcard rule).
+| GEN6 | Controls. A tool's adapter is qualified only when both the suppressed and the remaining controls pass.
+|===
+
+== 9. Generated indexes
+
+* *Rule index.* A generated file in the office lists every rule: id, domain, class, severity, `:excusable-at`, `:scope-form`, status and the repo and path of its registry entry. It carries no rule text; the text is in the registry (R3).
+* *Exceptions index.* A generated JSON Lines file in the office lists every deviation in the federation, one record per deviation: level, holder (repo UUID or estate), id, kind, rule, scope summary, authority, evidence, dates, ceiling, and the observer's derived state (`active`, `lapsed`, `ceiling-breached`, `unratified`, `stale-rule`, `unknown-rule`) with the observer's witness (A2 7.5). It is not part of `ATLAS.deed` (G9).
+* Both are outputs. Nobody edits them. They are generated with the same determinism law as the generated ignore files (GEN1, GEN3).
+* The deviation counts per repo can be read from the exceptions index. They are a view, not a fact stored in a chora.
+
+== 10. Importing legacy files (A5 does not do it)
+
+A later importer maps each legacy file kind to deviations by the table in section 7 and the mapping in A2 section 7.6. The importer rules, which A5 fixes so the later work has a test:
+
+. Read-only on the source file, one repo per PR, no sweep.
+. An entry with no authority in the source gets `:authority "legacy"`. It is reported `unratified`.
+. An entry whose rule cannot be named gets `:rule "unknown/<tool>"` and is reported `unknown-rule`.
+. Equivalence test: the generated file's set of suppressions equals the legacy file's set of suppressions on the repo's tree, as measured by the tool's own controls.
+. The legacy file is retired only after the equivalence test passes and a canary repo has run with the generated file.
+
+== 11. Acceptance tests
+
+Every test is new work unless stated. A fixture is valid unless marked `-bad`.
+
+=== 11.1 Rule identifiers and the registry
+
+[cols="1,4,3"]
+|===
+| Id | Test | Fixture
+
+| R01 | A rule id matches the grammar of 3.1 and has at most 200 characters. | `id-badchar-bad`
+| R02 | A wildcard in a rule id is rejected. | `id-wild-bad`
+| R03 | The domain of a rule id equals its registry's `(rule-domain :name)` and is a root `rule-domain` term. | `domain-unknown-bad`
+| R04 | Two registry entries with one id are an error. | `dup-id-bad`
+| R05 | A retired rule keeps its entry. Deleting it is an error against the base version. | `retired-deleted-bad`
+| R06 | A renamed rule has `:supersedes` and the old entry has `:superseded-by`, both resolving. | `rename-ok`, `rename-dangling-bad`
+| R07 | Every `rule-def` has `:id`, `:text`, `:class`, `:excusable-at`, `:scope-form` and `:status`. | `ruledef-missing-bad`
+| R08 | A `rule-def :text` appears in no other registry with a different id as its definition. | `text-copy-bad`
+| R09 | The existing 17 Hypatia pairs in the `standards` baseline map to `hypatia/<module>/<type>` without collision. | `map-hypatia`
+|===
+
+=== 11.2 Deviation validity
+
+[cols="1,4,3"]
+|===
+| Id | Test | Fixture
+
+| S01 | A deviation whose rule resolves in an active entry is valid. | `dev-ok`
+| S02 | An unknown rule is `unknown-rule`: a warning in `lax`, an error in `strict`. | `dev-unknown-rule`
+| S03 | A deviation against a retired rule is `stale-rule`. | `dev-stale`
+| S04 | A repo-level deviation for a rule with `:excusable-at estate` or `root` is rejected (A2 7.4). | `dev-level-bad`
+| S05 | A glob in `:paths` for a rule with `:scope-form exact-paths` is rejected. | `dev-glob-bad`
+| S06 | `:fingerprints` for a rule whose form is not `fingerprints` is rejected. | `dev-fp-bad`
+| S07 | `:origins` is allowed only at root and only for `origins` rules. | `dev-origins-bad`
+| S08 | A path with `..`, a leading `/` or a backslash is rejected. | `dev-path-bad`
+| S09 | An estate-level `:repos` deviation for a repo that has a chora is reported `move-to-repo` when its rule has `:excusable-at repo`, and is kept when the rule needs `estate` or `root`. | `dev-estate-has-chora`, `dev-estate-root-rule-kept`
+| S10 | Ratchet: a deviation added in head without `:authority` is rejected. | `ratchet-no-auth-bad`
+| S11 | Ratchet: scope widened in head without a new `:authority` is rejected. | `ratchet-widen-bad`
+| S12 | Ratchet: `:ceiling` raised is rejected (A2 V10). | `ratchet-ceiling-bad`
+| S13 | Ratchet: a removed deviation passes. | `ratchet-remove`
+| S14 | A `Ratchet-exception:` trailer does not satisfy S10 for a deviation. | `ratchet-trailer-bad`
+| S15 | Ratchet: an import PR that adds `:authority "legacy"` deviations mapped from a legacy file at base passes; the same deviation added by any other PR is rejected. | `ratchet-import-ok`, `ratchet-legacy-bad`
+| S16 | A rule with `:scope-form (origins repos exact-paths)` accepts a deviation using any one of those forms and rejects `:fingerprints`. | `dev-multiform`
+|===
+
+=== 11.3 Generated files
+
+[cols="1,4,3"]
+|===
+| Id | Test | Fixture
+
+| GF01 | Two generations from equal inputs are byte-equal (GEN1). | `gen-twice`
+| GF02 | Generation is idempotent (GEN2). | `gen-idem`
+| GF03 | A hand-added line in a generated file makes CI fail (GEN3). | `gen-handedit-bad`
+| GF04 | A deviation that cannot be rendered for a tool is reported `unrepresentable` with a reason (GEN4). | `gen-unrep`
+| GF05 | No generated line suppresses more than its scope: no directory fragment for an exact path, no rule wildcard (GEN5). | `gen-widen-bad`
+| GF06 | `.hypatia-baseline.json` is JCS canonical, one line, members sorted. | `gen-baseline`
+| GF07 | `.hypatia-ignore` lines are `<module>/<type>:<exact-path>`. | `gen-ignore`
+| GF08 | A secret deviation with a path scope is `unrepresentable` for `.gitleaksignore`. | `gen-gitleaks-path`
+| GF09 | A lapsed deviation does not appear in any generated file. | `gen-lapsed`
+| GF10 | No generator output contains a licence text or an SPDX header edit, and no `.a2ml` file is written. | `gen-licence-bad`, `gen-a2ml-bad`
+| GF11 | `root-allow.txt` equals baseline plus gated modules for the profile plus `rsr/root-shape` deviations. | `gen-rootallow`
+| GF12 | An adapter is `unqualified` until its inside and outside controls both pass (GEN6). | `adapter-nocontrol`
+| GF13 | For each adapter, the inside finding is suppressed and the outside finding remains when the real tool runs. | `control-*`
+|===
+
+=== 11.4 Indexes and import
+
+[cols="1,4,3"]
+|===
+| Id | Test | Fixture
+
+| X01 | The rule index lists every registry entry once and carries no rule text. | `rule-index`
+| X02 | The exceptions index has one record per deviation at every level, and its derived state carries a witness. | `exc-index`
+| X03 | Both indexes are byte-equal on two runs outside their generation clause (GEN1). | `index-twice`
+| X04 | The generated indexes differ from a hand-edited one. CI reports it. | `index-handedit-bad`
+| X05 | Importer: an entry with no authority gets `:authority "legacy"` and `unratified`. | `import-legacy`
+| X06 | Importer: an entry whose rule cannot be named gets `unknown/<tool>` and `unknown-rule`. | `import-unknown`
+| X07 | Importer equivalence: the generated file suppresses exactly what the legacy file suppressed. | `import-equiv`
+| X08 | Importer reads the source file only and writes one repo per PR. | `import-write-bad`
+|===
+
+== 12. Decisions approved on 2026-11-10 [O]
+
+The owner approved G1 to G14 as recommended. The text of this document is the recommendation in each case. G5 amends A2: `(scope)` gains `:fingerprints` and `:origins`.
+
+[cols="1,4,1"]
+|===
+| Id | Decision | State
+
+| G1 | The initial domains: `hypatia`, `rsr`, `check`, `provision`, `pons`, `gate`, `bot`, `lang`, `generation`, `secret`, and `carve` (added by A6 H9). `unknown` is a reserved placeholder for the importer and is never registered. `HYP-##` has no domain yet. | Approved
+| G2 | Domains are root vocabulary terms of kind `rule-domain`. Each registry sits with the repo that owns the rules. A generated rule index lists all rules. (The owner had no preference.) | Approved
+| G3 | The registry field `:excusable-at` carries A2 7.4. Default `repo` for canon gate rules. | Approved
+| G4 | The registry field `:scope-form` (`exact-paths`, `globs`, `fingerprints`, `repos`, `origins`). | Approved
+| G5 | A2 amendment: `(scope)` gains `:fingerprints` and `:origins`. | Approved
+| G6 | Two stages: generated files for external tools first; estate tools read deviations directly later. (The owner had no preference.) | Approved
+| G7 | No generator writes `.a2ml`. The bot registry and the Debtfile have no generator and change by reader change. | Approved
+| G8 | The ratchet is carried by deviation `:authority`. The commit trailer is read only in the compatibility period. | Approved
+| G9 | The exceptions index is JSON Lines in the office, and not part of `ATLAS.deed`. | Approved
+| G10 | Positive and negative controls per adapter, and `unqualified` adapters are advisory. | Approved
+| G11 | Generated files carry a header where the format allows a comment. JSON files rely on the regenerate-and-compare check. | Approved
+| G12 | A deviation lives at the lowest level that can hold it. Estate `:repos` only for repos with no chora. | Approved
+| G13 | No wildcard rule id. One deviation names one concrete rule. | Approved
+| G14 | `root-allow.txt` is derived from profile, gate table and deviations. It is not a deviation list. | Approved
+|===
+
+Open after approval: A5 as a whole is not ratified. No generator, registry, importer or file is created in any repo until the owner approves.
+
+== 13. Evidence base
+
+Paths and file names in this specification name files as they are at the commits listed below. A6 moves some of them (for example `1-formats/deed`). After a move, the old path resolves through its `POINTER.adoc` and the destination repo holds the file.
+
+Shallow clones, read only, 2026-11-10 [M]. Commits for the repos of A1 are in A1 section 12.
+
+[cols="3,2,2"]
+|===
+| Repo | Commit | Commit date
+
+| metadatastician/standards | be39f90 | 2026-11-10
+| metadatastician/cadastra | 738b209 | 2026-11-08
+| metadatastician/git-logistics-office | 15ba0ab | 2026-11-07
+| hyperpolymath/hyperpolymath | 1de5c08 | 2026-10-12
+| hyperpolymath/proven-cicd | 03e858b | 2026-11-07
+|===
+
+I counted files and lines with `git ls-files`, `wc` and a JSON parse of the baseline. I read the headers of the exemption ledgers, the baseline format document, the exemption mechanisms document, the Debtfile specification and the first part of `check-exemption-ratchet.sh`. I did not read: `hypatia` (`scanner_suppression.ex` and its rule modules), `pons-asinorum`, `gitbot-fleet`, `robot-repo-automaton`, gitleaks' own documentation, or any live repo setting. Statements about how a tool matches its file come from the estate's documents about it [M: those documents say it], and about gitleaks from my knowledge [I]. I did not run any generator, gate or tool; no generator exists. I ran `deed_lint.js` on 2 samples.
+
+== 14. Out of scope
+
+A6 (where `standards` rules, ledgers and canon files go). The writing of the generator, the adapters, the importer and the registries. Any change to a tool, a gate or a ledger in any repo. The home of `HYP-##` ids. The trope format. The private farm. Any `.a2ml` file: A5 creates none.

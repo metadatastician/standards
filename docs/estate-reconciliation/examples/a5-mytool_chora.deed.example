@@ -1,0 +1,31 @@
+;; SPDX-FileCopyrightText: © 2026 Jonathan D.A. Jewell
+;; SPDX-License-Identifier: CC-BY-SA-4.0
+(repo-deed
+  :schema-version "1.0.0"
+  :canonical-name "mytool"
+  :repo-uuid #uuid"3f76e427-3bff-53b5-be46-3a1aa5c2cb43"
+  :beholding-chora #uuid"47e1501b-26b4-5bbd-8a3f-1afa81c69dbe"
+
+  (identity :primary-forge github :owner "hyperpolymath" :name "mytool")
+
+  (deviations
+    (deviation
+      :id "D-001"
+      :kind exemption
+      :rule "hypatia/code_safety/js_exec_sync"
+      :reason "FALSE POSITIVE: the reporter uses spawnSync with an argument array and no shell."
+      :authority "owner/standards#1234"
+      :evidence tested
+      :expires "2027-04-30"
+      :tracking "owner/mytool#12"
+      (scope :paths ("tools/conformance-report.mjs")))
+    (deviation
+      :id "D-002"
+      :kind exemption
+      :rule "secret/generic-api-key"
+      :reason "Exact historical fingerprint; the token was revoked."
+      :authority "owner ruling 2026-09-30"
+      :evidence audited
+      :review-by "2027-09-30"
+      (scope :fingerprints ("55ad53331e530d44b2ada3fb2ca80a024625dbac:examples/stamp_example.py:generic-api-key:237")))))
+;; An :origins deviation lives only at the root (A5 5.2); see a1-federation-root-syntax_chora.deed.example.

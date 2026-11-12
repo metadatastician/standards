@@ -1,0 +1,277 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+= A6: The Carve-out Map for standards (by change rate)
+:version: 0.2.3-draft
+:status: DRAFT v0.2.3. Decisions H1 to H12 approved by the owner on 2026-11-10. Not yet ratified as a whole. Builds on A1 v0.3.8, A2 v0.2.3, A3 v0.2.2, A4 v0.2.3 and A5 v0.2.2. Consistency pass applied 2026-11-10. Proposed in standards#1474; bot-review fixes applied 2026-11-12.
+:toc:
+
+Specification A6 of the Estate Reconciliation Plan. R3 rules that `standards` is carved out by change rate (campaign #479). A6 defines the metric, the ordered rules that give every file one destination, the mechanism of a move, and the tests. It moves no file.
+
+== 0. How to read the evidence
+
+[cols="1,4"]
+|===
+| Tag | Meaning
+
+| [M] | Measured by me on 2026-11-10 in a clone of `metadatastician/standards` with its working tree and history at commit `be39f90` (1,456 commits, 2025-12-15 to 2026-11-10). `origin/main` was 4 commits ahead (`d73229d8`, including the identity remint #1454); I did not check those out and did not measure their effect, which touches a few files.
+| [R] | Estate record: a statement in an estate document or in the plan. I did not recount it.
+| [I] | Inferred by me. Check before relying on it.
+| [O] | Owner ruling given in this session, 2026-11-10.
+|===
+
+Identifiers. Every decision, law and test id in this specification is local to it. Outside it, write the spec first (for example `A3 G4`). A test runner reports a test as `<spec>/<id>` (for example `A3/G10`).
+
+== 1. Summary
+
+* The metric is the number of commits that touch a unit in the last 90 days, in 4 bands: hot (20 or more), warm (5 to 19), cool (at least 1 in 180 days) and cold (none in 180 days) [O]. The unit is a `standards-map.toml` entry, with `mixed` entries split by subdirectory.
+* Every one of the 3,146 tracked files already falls under a map entry [M]. A6 does not add a map. It adds a rate and a destination to the one that exists.
+* Hot machinery goes to the homes that A3 to A5 name: checks and reusable workflows to `proven-cicd`; ruleset, settings and apply tooling to `git-logistics-office`; rules to `hypatia` (held, see H11); deed and k9 specifications to their own repos [O]. The operations diary goes to `metadatastician-governance` [O].
+* A first-pass set of 10 ordered rules assigns 441 files to a destination outside `standards` and keeps 1,514 files as canon and as the repo's own working files. The 1,191 archive files stay (section 6.1).
+* The first pass does not make `standards` quiet. 75% of the commits of the last 90 days still touch a file that stays [M]. The activity that stays is mainly the repo's own working files, not the canon (section 5).
+* Only 2 of the 70 canonical entries move: `1-formats/deed` and `2-protocols/k9-coordination`, both already ruled in the plan [M].
+* A move is one rule group per PR: a signed squash-import into the destination with a link back to the `standards` commit, a pointer left behind, the map and `canon.lock` updated in the same commit. No sweep, no bulk move.
+
+== 2. Findings that shape the design
+
+. [M] `standards` has 3,146 tracked files: `9-archive` 1,191; `docs` 448 (283 of them `docs/proofs`); `1-formats` 453; `scripts` 245; `3-practice` 128; `.machine_readable` 100; `.github` 100 (19 reusable workflows and 81 other files); `2-protocols` 205; the rest in smaller areas.
+. [M] `standards-map.toml` has 136 entries and `entry_count = 136`. Each entry has `from`, `target`, `district`, `kind`, `lifecycle`, `canonical`, `canon_slot`, `gate`. The file is "BIDIRECTIONAL": an entry must exist for every path and a path must exist for every entry, checked by `scripts/check-standards-map.sh` (Gate D). 135 of the 136 entries own at least one file; one entry has none.
+. [M] `target` is the post-reorg path, `-> repo` for a split-out, or `DELETE`. In the file today every target is a path in this repo (79 equal the entry's own path and 57 add a note in parentheses such as "created 2026-10-24"). None names a `-> repo` split-out or `DELETE`, and the old carve-out mechanism (`REGISTRY.a2ml`, `HYP-S006`, `HYP-S009`) was retired on 2026-10-09 [M: `hypatia-rules/README.adoc`, `issue-triage-089-497.adoc`].
+. [R] Campaign #479 is `CLOSE-DONE` (D110) with its children standing alone: 6 of 9 closed, `#493`, `#495`, `#497` open. The first carve-out removed `a2ml/` (0 files left), `k9-svc/` (1 pointer file), `lol/` (0 tracked) [M: triage text]. A6 is the second, rate-driven carve-out and does not revive the retired registry mechanism.
+. [M] Of 135 entries with files, by commits in 90 days: hot 14 entries (1,330 files), warm 24 (1,477), cool 93 (331), cold 4 (8). The warm band includes the 1,135-file `9-archive/rhodium-standard-repositories` entry, with 6 commits.
+. [M] The hot entries: `.github` (236 commits in 90 days), `scripts` (228), `docs` (140), `.machine_readable` (69), `1-formats/deed` (49), `1-formats` district files (34), `.githooks` (33), `.hypatia-baseline.json` (29), `config` (26), `tests` (25), `.claude` (24), `README.adoc` (23), `Justfile` (22), `standards-map.toml` (21).
+. [M] `docs` is one `mixed` entry with very different parts. Its root files had 95 commits in 90 days, `docs/decisions` 24, `docs/reorg` 17, `docs/audits` 16, `docs/wikis` 10, and `docs/proofs` (283 files) only 4.
+. [M] `docs/` root holds both stable documents (`DEBTFILE-SPEC.adoc`, `SIGNING-POLICY.adoc`, `VERDICT-GRID-SPEC.adoc`, `CONTRACTILE-SPEC.adoc`) and dated narrative (`ULTRAPLAN-*`, `RECONCILIATION-2026-11-07.adoc`, `tech-debt-2026-05-26.adoc`).
+. [M] Authorship: 1,328 of 1,456 commits are by the owner, 46 by `dependabot[bot]`, 26 by `Claude`, and the rest by 3 other accounts. Bot-authored commits are under 5% of all commits.
+. [M] `canon.lock` is "the RELEASED identity of the Hyperpolymath canon". It pins `rsr-criteria-v2.a2ml` and the gate table `template-capability-gates.toml` by SHA-256. Its header says every move of a hash-pinned artefact is a path change, so "THE MOVE COMMIT MUST BUMP THIS FILE IN THE SAME COMMIT" (Gate A, assertion 2). `canon.lock` itself changed 15 times in 90 days; the gate table 10; the criteria 4; the applicability policy 5.
+. [M] Callers across the estate pin `standards` reusable workflows by full SHA. The `lock-allow.txt` census (2026-09-22) found 368 repos whose workflows call `governance-reusable.yml` (347 `hyperpolymath`, 21 `metadatastician`).
+. [R] The triage of issue #1234 records that carve-outs "land unsigned history that a zero-bypass floor refuses" and proposes a section in `docs/SIGNING-POLICY.adoc`: "squash-import as one signed commit with a tag or link back to the standards SHA" [M: `issue-triage-1049-1234.adoc`, lines 361 to 364; the section does not exist yet].
+. [M] A precedent for a pointer: `k9-svc/` keeps one `POINTER.adoc` after its eviction [R: triage text].
+. [M] `hyperpolymath/deed-ecosystem` exists, is public and has a `spec/` directory that holds only a `README.adoc`. `hyperpolymath/k9-ecosystem` exists and is public. I did not read it, and I did not find a repo named for `k9-coordination` [I: only a search by name].
+. [R] The plan: standards does 5 jobs on 1 branch (constitution, format specifications, shared CI code, operations diary, archive); 227 open issues; 390 files still name the old organisation (#1340).
+
+== 3. The metric
+
+=== 3.1 Definition [O]
+
+For a unit `U` and a date `T`:
+
+----
+rate90(U, T) = number of commits c with date(c) in (T - 90 days, T] such that c changes a file that is in U at T
+rate180(U, T) likewise over 180 days
+band(U, T) = hot if rate90 >= 20; warm if 5 <= rate90 <= 19; cool if rate90 < 5 and rate180 >= 1; cold if rate180 = 0
+----
+
+* A commit counts once for a unit, however many files of the unit it changes.
+* Only files that still exist at `T` count. A file that was deleted or moved out does not make its old unit look active.
+* Commits by bots are counted. They are under 5% [M] and a rule that depends on author names adds fragility.
+* History before 2025-12-15 does not exist in this clone [M]. A band for a unit younger than 180 days uses what exists.
+
+=== 3.2 Unit
+
+The unit is a map entry. A file belongs to the entry with the longest `from` prefix that matches it [M: the rule I used; no file is unmatched]. An entry with `kind = mixed` is split by its subdirectories into units before banding (decision H4). Today the one such entry is `docs`.
+
+=== 3.3 Why the unit is not a directory or a file
+
+A district entry such as `1-formats` contains children that have their own entries (`1-formats/deed/` is hot at 49 and the rest of the district only 34). A file-level rate is noisy for a single file that was touched once. The map entry is the unit the estate already maintains, gates and links, so the rate attaches to something that has an owner and a gate.
+
+== 4. The ordered rules
+
+=== 4.1 The rules
+
+Each tracked file takes the destination of the first rule that matches it. The last rule keeps it. This is a first pass and is provisional (decision H3). The counts are measured by applying the rules to the 3,146 tracked files.
+
+[cols="1,3,2,1"]
+|===
+| Rule | Matches | Destination | Files
+
+| CR1 | `9-archive/**` | stays in `standards`, frozen (H1) | 1,191
+| CR2a | `1-formats/deed/**` | `deed-ecosystem` | 88
+| CR2b | `1-formats/k9/**` and `2-protocols/k9-coordination/**` | `k9-ecosystem` (H2) | 114
+| CR3 | `config/**` (ruleset, settings, autolinks, gitleaks, canon JSON) | `git-logistics-office` | 20
+| CR4 | `hypatia-rules/**` | `hypatia`, held (H11): 10 of the 11 files are `.a2ml` | 11
+| CR5 | `.github/workflows/*-reusable.yml` | `proven-cicd` (resolves A3 E4) | 19
+| CR6 | `scripts/**/check-*`, `verify-*`, `filter-*`, `verdict-*` | `proven-cicd` (H5) | 87
+| CR7 | `scripts/**/apply-*`, `set-*`, `widen-*`, `propagate-*`, `relock-*`, `fix-*`, `remove-*` | `git-logistics-office` as order classes and farm leaves (A4 section 9) | 30
+| CR8 | `scripts/**/triage-*`, `estate-*` | `metadatastician-governance` | 11
+| CR9 | `docs/reorg/**`, `docs/triage/**`, `docs/audits/**`, `docs/superpowers/**`, `docs/reports/**`, `docs/archive/**`, `audits/**`, and `docs/*` files named `ULTRAPLAN*`, `RECONCILIATION*`, `tech-debt-*` or containing a date | `metadatastician-governance` [O] | 61
+| CR0 | everything else | stays in `standards` | 1,514
+|===
+
+Totals [M]: 441 files leave (88 + 114 + 20 + 11 + 19 + 87 + 30 + 11 + 61, before the held files of H11 and the exceptions of section 5 reduce it); 1,514 stay as live files; 1,191 stay as archive. The repo tracks 223 `.a2ml` files. The rules send 149 to stay, 63 to the archive, 10 to `hypatia` (rule CR4) and 1 to `metadatastician-governance`. The estate rule is that no `.a2ml` file is created or extended in any repo [M: `standards/.claude/CLAUDE.md`]. A copy of an `.a2ml` file into another repo is a new file there, so those 11 are held until the owner rules (H11).
+
+=== 4.2 Things the rules deliberately keep
+
+* The canon: `0-canon`, `2-protocols` except `k9-coordination`, `3-practice`, `4-readiness`, and the stable `*-SPEC.adoc`, `*-POLICY.adoc` and `docs/decisions` (rulings) [O: R3, plan "Rules and rulings: standards"]. These are 70 canonical entries; only 2 of them lose files to a rule, and the other 68 stay [M].
+* `canon.lock`, `rsr-criteria-v2.a2ml`, `template-capability-gates.toml`, `TEMPLATE-APPLICABILITY-POLICY.adoc` and the RSR presets. A2 D8 kept the gate table in `standards` until A6 decided. A6 decides: they stay, because `canon.lock` pins them and they change on canon releases (H6).
+* The repo's own working files: the 55 workflow files that are not reusable (the callers and the repo's own checks), `Justfile`, `.githooks`, `hooks`, `tests`, `.claude`, `.machine_readable`, `standards-map.toml`, root files. They stay by rule CR0. Section 5 says why this matters for the metric.
+* The 1,135-file `9-archive/rhodium-standard-repositories` is the "LAST COPY, do not delete" [R: `standards-map.toml`]. It stays.
+
+=== 4.3 Self-gate scripts (open item)
+
+CR6 moves check scripts by name. Some check scripts verify `standards` itself, for example the map gate (Gate D), the canon lockstep (Gate A), and the profile checker for the canon role. They belong to the repo's own gates and MUST stay. The rule CR6 therefore needs a per-script test: a script that the repo's own workflows or the map's `gate` field call by path, and that tests this repo's own tree, stays. I measured the 87 CR6 files by name only and did not classify them by subject [M: counts by pattern]. The per-script result is a generated table (section 7.2), and the owner rules on the doubtful ones (H5).
+
+== 5. What the first pass leaves, measured
+
+[cols="3,1,1,3"]
+|===
+| Area that stays in `standards` | Files | Commits in 90 days | Note
+
+| `.github` (callers, non-reusable) | 81 | 163 | After A3 one caller replaces the per-gate callers.
+| `scripts` (not moved by CR6, CR7, CR8) | 117 | 129 | Includes `scripts/tests`, tools for this repo, kyaml.
+| `docs` (stable documents and decisions) | 390 | 111 | 283 of the files are `docs/proofs`, with 4 commits.
+| root files and small root directories | 40 | 82 | `README.adoc`, `AGENTS.adoc`, `TOPOLOGY.adoc`, `EXPLAINME.adoc`, quickstarts.
+| `.machine_readable` | 100 | 69 | Baseline, ledgers, map renderings, gate table.
+| `3-practice` | 128 | 45 | Policy.
+| `.githooks`, `tests`, `.claude`, `Justfile`, `tools` | 19 + 9 + 1 + 1 + 28 | 33, 25, 24, 22, 13 | The repo's own working files.
+| `0-canon` | 27 | 22 | The criteria and the constitution.
+| `1-formats` (not deed, not k9) | 295 | 19 | Format profiles and sub-specs.
+| `2-protocols` (not k9-coordination) | 161 | 15 | Protocol specifications.
+| `4-readiness` | 56 | 3 | Readiness grades.
+|===
+
+* 533 commits in the last 90 days change at least one file that exists today. 400 of them (75%) change a file that stays. 398 change a file in `standards` proper and not only in its archive [M].
+* Of the commits that touch the canon (0-canon, 1-formats, 2-protocols, 3-practice, 4-readiness) or the stable documents, there are 160 in 90 days across about 1,100 files, which is under 2 commits a day [M]. The canon is already slow.
+* 340 commits touch the repo's own working files (callers, scripts, `.machine_readable`, root files, hooks, tests) [M].
+* [I] Three changes already specified reduce that second number without a move: A3 replaces the per-gate callers with 1 caller; A5 turns the hand-edited exemption ledgers and `.hypatia-baseline.json` into generated files and deviations in the repos concerned; A4 moves the actuator scripts. I did not measure how much they remove.
+
+A6 therefore reports two numbers and not one: the canon's rate and the working files' rate. A carve-out that moves only the hot machinery cannot make `standards` quiet, because most of its remaining activity is the cost of running its own gates (H7).
+
+== 6. Moves
+
+=== 6.1 What does not move
+
+The archive stays and is not edited. A move never touches a licence file, an SPDX header or a licence text: the import copies each file byte for byte, and a licence issue found during a move is flagged and left [M: estate rule, `standards/.claude/CLAUDE.md`].
+
+=== 6.2 The mechanism of one move
+
+A move is one rule group (or one map entry) per pull request, with these steps in order:
+
+. *Plan.* The generated table (7.2) lists the exact files of the group, their destination and their inbound references (links, `uses:`, `canon.lock`, map rows, and scripts that read a file by path).
+. *Import.* The destination repo receives the files as one signed squash-import commit. The message links to the `standards` commit that the files came from, and a tag or link back to that SHA is recorded [R: #1234 triage]. History stays in `standards`. No file is rewritten and no history is rewritten.
+. *Pointer.* In `standards`, each moved directory keeps one `POINTER.adoc` naming the destination, the import commit and the date [M: `k9-svc` precedent]. The pointer resolves only the directory path, not the files below it. A moved single file leaves no pointer only when the inbound-reference list shows no link, `uses:`, map row or script that reads it by path. A script that reads a moved file by path (for example the scripts that read `deed.abnf`) is changed in the same PR or the file stays.
+. *Map.* `standards-map.toml`: the entry's `target` becomes `-> <repo>`, and the entry stays until the files are removed; the Gate D bidirectional check keeps passing.
+. *Lock.* If the group contains a hash-pinned artefact, `canon.lock` is bumped in the same commit [M: Gate A assertion 2]. The groups of section 4.1 contain none, because the pinned artefacts stay (H6).
+. *Remove.* A second commit in `standards` removes the files after the destination has run for one cycle with the files in place and its own gates green. Every moved source file is frozen from the import to the removal. Before removal each file is compared with its imported revision; a file that changed in `standards` after the import is not removed, and is re-imported first.
+. *Verify.* Byte equality of source and destination files; the link-rot guard reports no new BROKEN line; Gate D, Gate A and the canon lockstep pass.
+
+=== 6.3 Callers that pin `standards`
+
+Callers pin a reusable workflow at a full SHA [M]. The old file stays at that SHA in `standards` history, so a pinned caller keeps working. New callers pin the `proven-cicd` copy (A3). A6 requires no re-pin of any caller and measures the residual by the staleness of pins, not by forcing them. The moved reusable workflows are not edited in `standards` after the import: the `standards` copy is frozen until the pointer replaces it.
+
+=== 6.4 Order of moves
+
+By risk, lowest first (H8):
+
+. `hypatia-rules` (CR4) is held: 11 files, 7 commits in 90 days, and 10 of them are `.a2ml` files that may not be created in another repo (H11). It moves once the owner rules, or once the rules are written as A5 registries.
+. `config` (CR3): 20 files, consumed by the ruleset applier; its home follows A4.
+. The diary (CR9): 61 files; narrative; links in and out.
+. Format specifications (CR2): `1-formats/deed` 88 files (49 commits), `k9` and `k9-coordination` 114 files. Highest value, because they are hot and canonical. Both have consumers in `.github` and `scripts` that read `deed.abnf` by path, so their moves need the inbound-reference list first [I: not measured].
+. Actuators (CR7), then self-gate review of CR6, then reusables and checks (CR5, CR6): the highest coupling, 368 repos call `governance-reusable.yml` [M].
+
+Each group has a revert: a revert of the import commit in the destination and of the pointer commit in `standards`. No group is moved while another group is open.
+
+== 7. Generated artefacts
+
+=== 7.1 Entry rates
+
+`docs/estate-reconciliation/A6-entry-rates.tsv` lists, with files, `rate90`, `rate180`, band and destination counts [M], the 134 entries that are not `mixed` and the 17 units of the `mixed` entry `docs`, split by subdirectory as H4 requires (kind `mixed-unit`; the files directly in `docs/` are one unit). The split rows reproduce the `docs` rates of section 2 and the 58 `docs` files that CR9 moves. It is an output. The checker (section 8) regenerates it, and a hand edit is reported.
+
+=== 7.2 Per-file table
+
+A generated table lists every tracked file with its map entry, its rule, its destination, its band and its inbound reference count. It is generated by one script from `standards-map.toml`, the ordered rules and `git log`. The per-script review of CR6 (4.3) is a column of this table, and the owner's rulings on doubtful files are recorded as `(deviation)` records of rule `carve/keep` or `carve/move` (A5 domain `carve`, decision H9). No hand edit of the table.
+
+== 8. Laws
+
+[cols="1,4"]
+|===
+| Law | Statement
+
+| CL1 | Total assignment. Every tracked file has exactly one destination. No file has none, no file has two.
+| CL2 | Bidirectional map. Every file belongs to a map entry and every map entry owns a file or is marked empty. Gate D keeps passing after every move.
+| CL3 | Byte equality. A file in the destination after a move is byte-equal to its source at the import commit.
+| CL4 | Pinned artefacts. A move of a hash-pinned artefact bumps `canon.lock` in the same commit. A move that leaves `canon.lock` stale fails Gate A.
+| CL5 | No dangling reference. After a move, no link, `uses:`, map row or script names a path that no longer resolves. A `POINTER.adoc` resolves its directory path only, never a file below it.
+| CL6 | Frozen archive. The archive is byte-equal before and after every move.
+| CL7 | No licence edit. A move changes no licence file, SPDX header or licence text.
+| CL8 | Reproducible metric. The rate and band of every unit are recomputable from `git log` and the map at a given commit, with no other input.
+| CL9 | Canon stays canon. Only entries ruled by the owner leave while `canonical = true`. Today only `1-formats/deed` and `2-protocols/k9-coordination`.
+| CL10 | One group at a time. No move starts while another group's PR is open.
+|===
+
+== 9. Acceptance tests
+
+Every test is new work unless stated. Gate A, Gate D and the link-rot guard already exist and are reused [M].
+
+[cols="1,4,3"]
+|===
+| Id | Test | Fixture
+
+| C01 | First-match evaluation of the ordered rules of 4.1 gives every tracked file exactly one destination (CL1). Patterns may overlap; the first matching rule decides, and CR0 catches the rest. | `rules-total`, `rules-unassigned-bad`
+| C02 | The rules, applied to the tree at `be39f90`, give the file counts of section 4.1. On a later checkout the counts are recomputed and reported, and only CL1 (C01) is enforced. | `rules-counts@be39f90`, `rules-counts-current`
+| C03 | The metric recomputes: `rate90` and `rate180` per entry equal those from `git log` on the same commit (CL8). | `metric-recompute`
+| C04 | A commit counts once for a unit, however many files it changes. | `metric-once`
+| C05 | A file deleted before `T` does not count for its old unit. | `metric-deleted`
+| C06 | A `mixed` entry is split by subdirectory before banding. | `metric-mixed`
+| C07 | The band thresholds are exactly 20, 5 and 1, and the boundaries land in the stated band. | `band-edges`
+| C08 | Gate D passes after a move, and the entry exists or is marked empty (CL2). | `gate-d`
+| C09 | Imported files are byte-equal to their sources at the import commit (CL3). | `byte-equal`, `byte-diff-bad`
+| C10 | Gate A fails when a hash-pinned artefact moved and `canon.lock` is not bumped (CL4). | `lock-stale-bad`
+| C11 | The link-rot guard reports no new BROKEN line after a move, and no script reads a removed file by path (CL5). | `link-rot-bad`, `script-path-bad`
+| C12 | Each moved directory has a `POINTER.adoc` naming the destination, the import commit and the date. | `pointer-missing-bad`
+| C13 | A moved reusable workflow still resolves at the SHA that existing callers pin. | `pinned-caller`
+| C14 | The archive is byte-equal before and after (CL6). | `archive-bytes`
+| C15 | No licence file, SPDX header or licence text differs after a move (CL7). | `licence-diff-bad`
+| C16 | The import is one signed commit with a link to the source SHA. | `import-unsigned-bad`
+| C17 | A `canonical = true` entry leaves only if it is in the owner's list of CL9. | `canon-leaves-bad`
+| C18 | A self-gate script (4.3) is not moved by CR6. | `selfgate-moved-bad`
+| C19 | No move starts while another group's PR is open (CL10). | `two-groups-bad`
+| C20 | No move adds an `.a2ml` file to any destination repo. | `a2ml-created-bad`
+| C21 | The residual report lists the canon's rate and the working files' rate separately. | `residual-split`
+| C22 | The per-file table and the entry-rates file are generated, and a hand edit is reported. | `table-handedit-bad`
+|===
+
+== 10. Decisions approved on 2026-11-10 [O]
+
+The owner approved H1 to H12 as recommended. The text of this document is the recommendation in each case. H11 is resolved as: the 11 `.a2ml` files stay in `standards` until Hypatia reads A5 registries; no one-time copies.
+
+[cols="1,4,1"]
+|===
+| Id | Decision | State
+
+| H1 | The archive (1,191 files) stays in `standards`, frozen. It is not moved by R3. | Approved
+| H2 | Format specifications go to `deed-ecosystem` (deed) and `k9-ecosystem` (k9 and k9-coordination). `deed-ecosystem` exists and its `spec/` holds a README only. I did not read `k9-ecosystem` and found no repo of the `k9-coordination` name; confirm the destination. | Approved
+| H3 | The 10 ordered rules of 4.1 are the first pass. Per-file exceptions are deviations of rule `carve/keep` or `carve/move`. | Approved
+| H4 | `mixed` entries are split by subdirectory before banding. Today only `docs`. | Approved
+| H5 | CR6 moves check scripts by name, except self-gate scripts that test this repo's own tree. The owner rules on the doubtful ones in the per-file table. | Approved
+| H6 | `canon.lock`, the criteria, the RSR gate table and presets, and the applicability policy stay in `standards` (resolves A2 D8). | Approved
+| H7 | A6 reports the canon's rate and the working files' rate separately. A carve-out that moves machinery cannot be judged by the repo's total commits. | Approved
+| H8 | The order of moves in 6.4. | Approved
+| H9 | A new A5 rule domain `carve` for per-file keep and move rulings. | Approved
+| H10 | The success measures are: files in `standards` (3,146 today); open issues (227 [R]); `rate90` of the canon (160 today); `rate90` of the working files (340 today). | Approved
+| H11 | The 11 `.a2ml` files that rules CR4 and CR9 would send to another repo (10 to `hypatia`, 1 to `metadatastician-governance`) are held. No move creates, extends or regenerates an `.a2ml` file. Approved as recommended: they stay in `standards` until Hypatia reads A5 registries. | Approved
+| H12 | The squash-import signing rule of the #1234 triage becomes a section of `docs/SIGNING-POLICY.adoc`. | Approved
+|===
+
+Open after approval: A6 as a whole is not ratified. No file is moved, no pointer, map row or lock is changed, and no repo is created until the owner approves.
+
+== 11. Evidence base
+
+Paths and file names in this specification name files as they are at the commits listed below. A6 moves some of them (for example `1-formats/deed`). After a move, the old path resolves through its `POINTER.adoc` and the destination repo holds the file.
+
+Measured on 2026-11-10 [M]:
+
+[cols="3,2,2"]
+|===
+| Repo | Commit | Commit date
+
+| metadatastician/standards, working tree and history (1,456 commits) | be39f90 | 2026-11-10
+| hyperpolymath/deed-ecosystem | 039cdf2 | 2026-11-08
+| metadatastician/metadatastician-governance | 57e4339 | 2026-11-09
+| metadatastician/git-logistics-office | 15ba0ab | 2026-11-07
+| hyperpolymath/proven-cicd | 03e858b | 2026-11-07
+|===
+
+I counted with `git ls-files`, `git log --name-only` over the whole history, a parse of `standards-map.toml`, and a script that applied the rules of 4.1. The history starts on 2025-12-15 in this clone, so the 11-month window is all there is. I did not measure inbound references to any path (links, `uses:`, scripts that read a file by path); that is the first step of each move. I did not read `hypatia`, `k9-ecosystem` or the callers' repos. I did not classify the 87 CR6 scripts by subject. I did not run any gate (Gate A, Gate D or the link-rot guard) and did not move any file. Statements about #479, #493, #495 and #1234 come from the estate's triage documents [R].
+
+== 12. Out of scope
+
+Any move of any file. The creation of any repo (D34(E) [O]). The content of the per-file table beyond its generator. The home of `HYP-##` ids (A5). The trope format. The private farm. Any `.a2ml` file: A6 creates none.

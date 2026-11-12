@@ -1,0 +1,587 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+= A4: Office and Farm (the boundary, the intake envelope, work orders, the move of the scripts)
+:version: 0.2.3-draft
+:status: DRAFT v0.2.3. Decisions F1 to F15 approved by the owner on 2026-11-10. Not yet ratified as a whole. Builds on A1 v0.3.8, A2 v0.2.3 and A3 v0.2.2. Consistency pass applied 2026-11-10. Proposed in standards#1474; bot-review fixes applied 2026-11-12.
+:toc:
+
+Specification A4 of the Estate Reconciliation Plan. The office decides and the farm executes (R2). A4 defines the line between them, the one envelope in which every finding and every verdict enters the office, the work order that leaves it, and the rules for moving the farm's label and merge scripts.
+
+[IMPORTANT]
+====
+This specification contains no content from the private farm audit and names no farm script. I cannot read the farm: its repository name begins with a dot, and the estate's own Wave 5 plan says agent sessions cannot attach such a repository [M: `docs/ULTRAPLAN-KAUTZ-LADDER-2026-10-19.adoc`]. Every fact about the farm below comes from the non-private parts of the plan, from R2, or from public standards documents. The per-script table is out of scope here and stays outside every repo (section 9).
+====
+
+== 0. How to read the evidence
+
+[cols="1,4"]
+|===
+| Tag | Meaning
+
+| [M] | Measured by me on 2026-11-10 in a shallow clone at the commit listed in section 15.
+| [R] | Estate record: a statement in an estate document or in the plan. I did not recount it.
+| [I] | Inferred by me, or taken from my knowledge of an external standard. Check before relying on it.
+| [O] | Owner ruling given in this session, 2026-11-10.
+|===
+
+Identifiers. Every decision, law and test id in this specification is local to it. Outside it, write the spec first (for example `A3 G4`). A test runner reports a test as `<spec>/<id>` (for example `A3/G10`).
+
+== 1. Summary
+
+* The office decides: desired state, repo lifecycle, the intake ledger, the generated index (A1) and the work orders. The farm hosts execution: credentials, runners, scheduling and the actuator switch. The farm decides nothing about what to change (R2 [O]).
+* One executor path: office work order, then evaluator, then Kin gate, then `robot-repo-automaton` running on the farm, then rescan, then outcome [O]. Fleet bots are sensors. A bot reports a SARIF row and a report-back, and writes nothing.
+* One envelope for findings, check verdicts, gate verdicts and outcomes: a SARIF 2.1.0 body inside an in-toto Statement, signed in a DSSE envelope [O]. It resolves A3 E9.
+* A work order is a deed clause profile `(work-order ...)` in a `praxis-deed`. A k9 contract can be generated from it later [O].
+* The ledger holds fingerprints, not findings. A finding reaches a repo as one change or none: at most one open order per repo and fix class.
+* The actuator is in `dry-run` by default. It moves to `canary` and then to `armed` only after the preconditions of section 8.3. No order class may use a ruleset bypass.
+* The move of the farm's label and merge scripts is governed by rules (section 9). A4 does not move any script.
+
+== 2. Findings that shape the design
+
+. [R] Plan P7: sensors work and actuators are off. The write paths of the fleet return exit 78 since 2026-09-26. The farm actuator defaults to dry-run. The credential for the pin applier does not exist (owner action O11). Seven tools emit SARIF and no tool ingests it. The drifted-repo count went 15, 124, 149, 163.
+. [M] Wave 5 of `ULTRAPLAN-KAUTZ-LADDER-2026-10-19.adoc` (`standards`): the farm becomes an office when it stops being a propagation engine. Work orders become data (authority, acceptance, escalation). One executor replaces `fleet-coordinator.sh`, `run-fleet.sh`, `dispatch-runner.sh` and a Rust CLI: office work order, Kin gate, `robot-repo-automaton`, rescan, outcome. "Thin bots": each bot reports a SARIF row and a report-back. The squabbler's remaining self-wins (required-context reconcile, reusable re-pin) become office work orders.
+. [M] The same document says: the k9 work-order contract and its evaluator are built in Wave 1 in `gitbot-fleet` (#264), and "nothing leaves exit 78 until the evaluator exists". Wave 5 moves the emission of work orders to the office and leaves their evaluation in the fleet. The Kin gate decides whether an execution may run; a rescan cannot undo a mutation that Kin would have refused. The Kin gate in `hypatia` (`lib/kin/gate.ex`) asks the coordinator for consensus, and the safety processes it would enforce are called by no dispatch path [M: ultraplan, quoting the code; I did not read `hypatia`].
+. [M] Ten idempotent fix scripts are named as the first work orders (`fix-workflow-timeout-minutes`, `fix-workflow-permissions`, `fix-unpinned-actions`, `fix-stale-template-placeholders`, `fix-tracked-package-lock`, `fix-gitattributes-eol`, `fix-dependabot-coverage`, `fix-http-to-https`, `fix-tmp-paths`, `fix-shell-quoting`), in `review` tier (draft PRs), rescan-verified, with the licence refusal gate untouched.
+. [M] Wave 4: `feedback-o-tron` is to accept SARIF 2.1.0, CSAF 2.0 / OpenVEX, in-toto attestation bundles and Groove `compliance.finding.new` signals, each becoming a draft with provenance. VeriSimDB is to be the store side. [R] VeriSimDB is not deployed (plan P10). The plan says to use flat files in git now.
+. [M] The report-back envelope in `docs/VERDICT-GRID-SPEC.adoc` is a JSON object with `reporter`, `title`, `status` (`ran`, `not_run`, `error`, `not_applicable`), `reason`, `ref` and `findings[]` (`rule_id`, `severity`, `file`, `line`, `message`). Envelopes are produced per run and never committed, because they are evidence about one commit. The status vocabulary equals A3's check states.
+. [M] `#636` charters `git-logistics-office` as the estate control plane: birth, enrollment, life and death of a repo. Owner ruling D34(E): no unattended repo creation, and a dispatch-only phase 1. The issue is KEEP-OPEN-BLOCKED on the owner minting the repo, on a census, and on the applier credential (O11).
+. [M] `git-logistics-office` today is an untouched copy of the RSR template: 547 files, 1 commit (2026-11-07). It has no office code [M: README is a template; `{{PROJECT_NAME}}` placeholder].
+. [M] `cadastra` describes itself as the estate's observer. It scans the repos of the `hyperpolymath` and `metadatastician` orgs, classifies them, and writes a CSV.
+. [M] The estate routes data formats by canon: `kyq` handles TOML, Dhall, KYAML and I-JSON/JCS (`git-logistics-office/CLAUDE.md`, quoting `3-practice/DATA-FORMAT-ROUTING.adoc`).
+. [M] `continuation-mesh` freezes a verdict in a `BAG-CHECK-BATON v2` envelope: an HMAC digest and a mandatory ed25519 signature, the key id and mode bound into the canonical string, fail-closed. It reports to GitHub as a commit status through a PAT (A3 finding 10).
+. [M] Doctrine 5 and the `standards` invariant of priority 50: never merge through a ruleset bypass to get past a required check. A bypass discards every required check in that ruleset.
+. [M] The estate rule on licences: agents flag licence drift and never edit it. The fleet's licence scripts carry refusal banners (`standards/.claude/CLAUDE.md`).
+
+== 3. The boundary
+
+=== 3.1 Who owns what
+
+[cols="2,2,3"]
+|===
+| Concern | Owner | Note
+
+| Desired state of a repo (profile, generation, deviations, ruleset, settings) | Office | Sources are the repo chora (A2) and the estate canon. The ruleset JSON and settings JSON are canon data. Their home after the `standards` carve-out is A6's.
+| Repo lifecycle: birth, enrolment, life, death | Office | Phase 1 is dispatch-only (section 7).
+| The generated index (A1 section 8) | Office | The generator runs on the farm. Its output is committed to the office.
+| The intake ledger | Office | Section 6.
+| Work orders | Office | Section 7.
+| Evaluation of an order | Fleet (evaluator) | Wave 1 [M]. Not built.
+| Admissibility of an execution | Kin gate | Wave 1 and 5 [M].
+| The executor program | `robot-repo-automaton` | The one executor [O].
+| Hosting the executor: credentials, runners, scheduling, the actuator switch | Farm [O] | The farm never chooses a target or a change.
+| Sensing | Fleet bots, `pons`, `panic-attack`, Hypatia, `cadastra` | They report. They do not write to repos.
+| Mirrors | Farm | A mirror is an execution of a decided state. The decision is in the repo chora `(forges)` and the platform choras (A1).
+| The post-merge verification of the gate (A3 section 9.3) | `cadastra` mode, run by the farm | Section 10.
+|===
+
+=== 3.2 The three rules of the line
+
+. *The farm holds secrets and the office holds none.* Credentials are named by role in an order. The farm resolves a role to a credential. An order, an envelope and a ledger entry never carry a secret.
+. *No script both decides and acts.* A component that picks targets or changes does not call an API with a write credential. A component that calls a write API takes its targets and its change from an order.
+. *Execution is replayable from the order.* Given the order and the base commit, a dry run produces the same action list as an armed run. The outcome records both.
+
+=== 3.3 What the farm may not do
+
+The farm may not: create a repo unattended (D34(E) [O]); use a ruleset bypass; edit a licence or an SPDX header of existing content (`standards` rule [M]); run an order whose class is not in the class table; run an order past its expiry; run an order while the actuator is not armed.
+
+== 4. Roles and credentials
+
+An order class maps to exactly one credential role. A role has the least privilege its class needs. The farm holds the credential for a role and the office names only the role.
+
+[cols="2,3,3"]
+|===
+| Role | Used by classes | Note
+
+| `reader` | sensing, rescan | Read-only. May exist today.
+| `labeler` | `label` classes (when the move of the scripts adds them) | Issues and pull request labels only.
+| `pr-author` | every `fix-*` class at tier `review`, and `repin-caller` | Opens a draft PR from a branch. Cannot merge. `repin-caller` only opens the reviewed PR of A3 4.2 rule 6.
+| `applier` | `apply-ruleset` | The estate App credential. [R: does not exist; owner action O11.]
+| `merger` | `merge` classes (not defined by A4) | Needs an owner ruling before it is created. Cannot bypass a ruleset.
+|===
+
+A4 creates no credential. Creating the applier is an owner action (O11).
+
+== 5. The envelope
+
+=== 5.1 One envelope for four things
+
+[cols="2,3"]
+|===
+| `predicateType` | Carries
+
+| `urn:estate:finding-set:v1` | The findings of one sensor run on one commit.
+| `urn:estate:check-verdict:v1` | The result of one A3 check on one commit (`passed`, `failed`, `not_run`, `not_applicable`).
+| `urn:estate:gate-verdict:v1` | The `estate-gate` verdict of A3: required set, states, waivers, pins.
+| `urn:estate:outcome:v1` | The outcome of one work order (section 8.4).
+|===
+
+The `urn:` type names are my choice (decision F1). In-toto requires a URI for `predicateType` [I].
+
+=== 5.2 Layers
+
+----
+DSSE envelope        payloadType "application/vnd.in-toto+json"; signatures[]
+  in-toto Statement  subject[] (the repo at a commit); predicateType; predicate
+    predicate        producer, status, and the body (SARIF 2.1.0 for a finding-set)
+----
+
+* The Statement is `https://in-toto.io/Statement/v1`. Its `subject` is one entry: `name` is the repo UUID (A1 `:repo-uuid` value as a string) and `digest` is `{"gitCommit": "<40 hex>"}` [I: in-toto accepts `gitCommit` as a digest key].
+* The signed payload is the Statement canonicalised with JCS (RFC 8785) [I]. The estate routes I-JSON/JCS data through `kyq` [M], so the same canonical form serves the signature and the data route.
+* A signature has one of 2 forms, matching the 2 publisher forms of section 12.
+** *ed25519.* The signature has a `keyid` and an ed25519 signature [I: DSSE]. The `keyid` is a publisher id in the federation root's `(publishers)` clause (A3 E1) whose entry carries `:ed25519`. A signature whose `keyid` is not listed is not valid.
+** *OIDC.* The signature is a Sigstore bundle over the same DSSE payload [I: GitHub artifact attestations]. It is valid only when: the bundle verifies; the certificate's OIDC issuer equals the `:oidc-issuer` of a listed publisher; the certificate's workflow identity (the reusable workflow path and ref) equals that publisher's `:workflow` at the 40-hex SHA that A3 pins; and the certificate's source commit equals the Statement's subject commit. A workflow at any other path or SHA is not that publisher. A4 does not fix the issuer value; the owner records it in the root.
+
+Samples: `docs/estate-reconciliation/examples/a4-statement.json.example` and `docs/estate-reconciliation/examples/a4-envelope.json.example` parse as JSON [M]. I did not check them against the in-toto or DSSE schemas [I].
+
+=== 5.3 `finding-set` predicate
+
+[cols="2,1,4"]
+|===
+| Field | Required | Rule
+
+| `producer` | yes | `{id, version}`: the sensor and its version or commit.
+| `status` | yes | `ran`, `not_run`, `error` or `not_applicable`. `reason` is required unless `ran` [M: same rule as the report-back envelope].
+| `scope` | yes | What was scanned: `{ref, paths}`. Paths are repo-relative with no `./`.
+| `sarif` | when `ran` | A SARIF 2.1.0 log with exactly one run for one tool. It is a log; a log of another version is rejected.
+|===
+
+A `finding-set` with `status` other than `ran` carries no `sarif` and is itself a datum: it states that nothing was checked. A consumer MUST NOT treat it as clean (the pass-on-absence defect [M: A3 finding 6]).
+
+Estate fields in each SARIF `result`:
+
+[cols="2,4"]
+|===
+| Where | Content
+
+| `ruleId` | The rule identifier. A5 section 3 fixes the form `<domain>/<name>`. A sensor's own id maps by A5 section 3.3 (for example `pons/<rule id>`).
+| `properties.estate.severity` | `critical`, `high`, `medium`, `minor` (the estate's four columns [M: verdict grid]). The producer's own severity stays in the SARIF `level` and in `properties.original`.
+| `properties.estate.evidenceClass` | The producer's evidence class (for `pons`, the tier and evidence class, so a heuristic is never read as a proof [M: verdict grid]).
+| `partialFingerprints["estateFingerprint/v1"]` | The ledger fingerprint (section 6.2).
+| `locations[0].physicalLocation.artifactLocation.uri` | Repo-relative path.
+|===
+
+=== 5.4 Mapping from the envelopes that exist
+
+A sensor that cannot emit SARIF directly is wrapped by an adapter. The adapter is specified here and is not built:
+
+[cols="2,3"]
+|===
+| Existing envelope | Mapping
+
+| Report-back envelope (fleet member) | `reporter` to `producer.id`; `status` and `reason` unchanged; `ref` to `producer.version`; each `findings[]` entry to a SARIF `result` (`rule_id` to `ruleId`; `severity` through the estate normalisation of the verdict grid; `file` and `line` to the location).
+| `panic-attack-findings.json` | `status`, `ref`, `reason` as above; each `report.weak_points[]` to a `result` (`category` to `ruleId`).
+| `pons-findings.json` | each `report.findings[]` to a `result` (`rule_id`, `tier`, `evidence`, `location`).
+| `hypatia.sarif` | already SARIF [M: verdict grid]. Wrapped without change, after its baseline and scope filtering is recorded in `scope`.
+| A3 owned-compute baton (`BAG-CHECK-BATON v2`) | `check_id` to the `check-verdict` check id; `verdict` and `exit_code` to the state; `node` to `producer.id`. The baton's HMAC digest stays node-internal [I: a GitHub runner cannot hold the key]. The ed25519 signature is re-expressed as the DSSE signature over the new payload by the node.
+|===
+
+=== 5.5 `check-verdict` and `gate-verdict` predicates
+
+* `check-verdict`: `check` (the A3 capability id), `state` (`passed`, `failed`, `not_run`, `not_applicable`), `exit_code`, `reason`, `producer`.
+* `gate-verdict`: the fields A3 section 3.4 lists: head SHA, pin and sha256 of the aggregate and of the check table, blob SHA of the repo chora, the required set with each state, the waivers applied, the publisher id and the time.
+
+The status posted to GitHub (A3 section 3.3) has `target_url` pointing to the DSSE envelope of the `gate-verdict`. Storage is in section 5.7.
+
+=== 5.6 Validity rules
+
+An envelope is *valid* when: the DSSE signature verifies for a listed publisher, by the rule of 5.2 for that publisher's form (ed25519 or OIDC, never one for the other); the payload parses as the Statement; the subject has exactly one entry, whose `name` equals the `:repo-uuid` of the repo being checked; the subject digest names a commit that exists in that repo; the predicate matches its type; and the SARIF log, if present, parses as 2.1.0. A valid envelope is not a *true* one. It says the publisher signed these bytes. Truth is checked by the observer (section 10).
+
+=== 5.7 Storage
+
+* An envelope is evidence about one commit and is never committed to the repo that it concerns [M: the verdict grid and the lane spec both say so].
+* A finding-set, check-verdict and outcome envelope is stored by the office in an envelope store outside git history of any estate repo. Until a store exists, the farm keeps them in a directory the office reads, addressed by sha256 of the envelope. The office repo holds the ledger (section 6), not the envelopes.
+* A gate-verdict envelope is reachable from the status `target_url`. The retention of envelopes is the owner's decision (decision F14). A3 requires that the envelope of a merged head be kept for as long as the observer may verify it.
+* VeriSimDB is the planned store [M: Wave 4] and is not deployed [R]. The store's API is behind the interface of this section so that it can replace the directory later.
+
+== 6. The ledger
+
+=== 6.1 What it holds
+
+The ledger holds one record per fingerprint. It does not hold findings or envelopes. A finding is evidence about one commit and ages out. The ledger tracks the state of a problem across commits.
+
+The ledger is JSON Lines, I-JSON, in the office repo, one file per repo UUID: `ledger/<repo-uuid-hash>.jsonl` [I: my layout]. One record per line:
+
+[cols="2,4"]
+|===
+| Field | Meaning
+
+| `fp` | The fingerprint (6.2).
+| `repo` | The repo UUID.
+| `rule` | The rule identifier.
+| `first_seen`, `last_seen` | Commit SHA and date.
+| `sensors` | Sorted list of producer ids that reported it. Its length is the corroboration count.
+| `state` | `open`, `ordered`, `fixed`, `accepted`, `lapsed`.
+| `order` | The open work order id, when `state` is `ordered`.
+| `accepted_by` | The deviation `:id` (A2), when `state` is `accepted`.
+|===
+
+States: `open` is a finding that nothing is acting on. `ordered` has an open work order. `fixed` means a later rescan on a later commit, whose `scope` (5.3) covered the finding's `path`, no longer reports it. A rescan whose scope did not cover the path leaves the state unchanged. `accepted` means a valid deviation covers it (A2 section 7). `lapsed` means the deviation that accepted it expired. The state is derived by the office from observed rescans and from the deviations at the head. It is never set by a sensor or by a repo's own statement (the self-assertion rule [M]).
+
+=== 6.2 Fingerprint
+
+----
+fp = "sha256:" + hex(SHA-256( "estate-fp-v1" 0x00 rule 0x00 repo-uuid 0x00 path 0x00 anchor 0x00 occurrence ))
+----
+
+* `rule` is the `ruleId`. `repo-uuid` is the A1 `:repo-uuid` value. `path` is repo-relative.
+* `anchor` is the SHA-256 of the normalised text of the line at the location (whitespace collapsed, line ending stripped), or the empty string for a finding with no line. A finding that moves by an unrelated edit keeps its fingerprint. A finding whose line changes gets a new one, and the old one goes `fixed` at the next rescan.
+* `occurrence` is the decimal ordinal, from 1 in file order, of this finding among the findings in the file with the same `rule` and `anchor`. Two findings of one rule on 2 identical lines therefore get 2 fingerprints. An unrelated edit does not change the ordinal; inserting or deleting another line with the same text before it does.
+* A sensor that has no line text uses its own anchor field and records its recipe in `producer`. The recipe is part of the fingerprint's meaning, and a change to it is a change of `estate-fp-v1`.
+
+=== 6.3 Deduplication and aggregation
+
+. The same fingerprint from two sensors is one record, with both in `sensors`. It is not two findings (the plan's "lose their duplicates" [R]).
+. At most one open work order exists for a pair `(repo, class)`. A new finding of that class on that repo joins the open order and does not create a second one.
+. A repo receives at most one change per fix class per cycle. Where several classes are ready for one repo, the office emits one order per class, and the executor MAY combine their branches into one draft PR only if the orders list each other as `:batch-with`. A4 does not define batching beyond that field.
+. A decision that applies to all repos (a dependency update, a rule change) is made once in the office, as one canonical decision, and fans out as per-repo orders [R: plan, "occurs once, in the 1 home"].
+
+== 7. Work orders
+
+=== 7.1 Form
+
+A work order is a `praxis-deed` named `<order-id>_praxis.deed` with a `(work-order)` clause profile. It uses the head that A2 chose for packs and A3 chose for the check table. It needs no grammar change.
+
+----
+(praxis-deed
+  :schema-version "1.0.0"
+  :canonical-name "wo-0001"
+  :beholding-chora #uuid"47e1501b-26b4-5bbd-8a3f-1afa81c69dbe"
+  (work-order
+    :id "wo-0001"
+    :class "fix-unpinned-actions"
+    :repo #uuid"3f76e427-3bff-53b5-be46-3a1aa5c2cb43"
+    :base "<40 hex>"
+    :tier review
+    :trigger dispatch
+    :authority "owner/standards#1234"
+    :expires "2026-12-31"
+    (findings (finding :fingerprint "sha256:..."))
+    (limits :max-files 10 :max-lines 200)
+    (acceptance
+      (require :check "secret-scan" :state passed)
+      (require :rescan "fix-unpinned-actions" :findings 0))
+    (escalate :when "any-test-failure" :to owner)))
+----
+
+The sample is `docs/estate-reconciliation/examples/a4-wo-0001_praxis.deed.example`. It lints clean under `deed_lint.js` as written: `deed.abnf` v1.3.0 and its linter accept the opaque literal since #1473 [M: linted 2026-11-12]. The linter checks syntax only [I].
+
+=== 7.2 Fields
+
+[cols="2,1,4"]
+|===
+| Field | Cardinality | Rule
+
+| `:id` | 1, STRING | Unique in the office. Equals `:canonical-name`.
+| `:class` | 1, STRING | A class in the class table (7.4).
+| `:repo` | 1, UUID | The repo UUID (A1). Never a name.
+| `:base` | 1, STRING | 40 lowercase hex: the commit the order was computed on. An executor refuses an order whose base is not an ancestor of the default branch head.
+| `:tier` | 1, symbol | `report` or `review` (7.3).
+| `:trigger` | 1, symbol | `dispatch` (a person or a labelled event starts it) or `schedule`. Lifecycle classes allow only `dispatch` (7.5).
+| `:authority` | 1, STRING | A ruling or an issue, as in A2. An order with no authority is not valid.
+| `:expires` | 1, STRING | `YYYY-MM-DD`. An executor refuses an expired order.
+| `(findings)` | 1 | One or more `finding :fingerprint`. Every fingerprint is in the ledger, in state `open` or `ordered`.
+| `(limits)` | 1 | `:max-files` and `:max-lines`, integers. An executor stops and escalates when a change exceeds them.
+| `(acceptance)` | 1 | One or more `require`. `:check` plus `:state` names an A3 check state that must hold on the result. `:rescan` plus `:findings N` requires the rescan of that class to report at most N.
+| `(escalate)` | 1 or more | `:when` STRING condition id, `:to` symbol (`owner`).
+| `:batch-with` | 0..1, list of STRING | Other order ids that may share one PR.
+|===
+
+An order contains no secret, no command and no free-form script. The steps are the executor's recipe for the class (7.4). This follows the rule that no executable policy hides in a string [M: same rule as the mother contract].
+
+=== 7.3 Tiers
+
+[cols="1,3"]
+|===
+| Tier | Meaning
+
+| `report` | The executor computes the change and writes no branch. The outcome records the diff.
+| `review` | The executor pushes a branch and opens a draft PR with the `pr-author` role. It does not merge [M: Wave 1, `review` tier].
+|===
+
+No `direct` tier exists. Adding one needs an owner ruling and a new role.
+
+=== 7.4 Class table
+
+Classes are data in the office. A class has: an id, the sensor rule ids it answers, the executor recipe (a `robot-repo-automaton` fixer or a leaf it calls), the credential role, the maximum tier, and a canary repo. The first population is provisional and reproduces what the estate already planned:
+
+[cols="2,2,2"]
+|===
+| Class | Max tier | Role
+
+| `fix-workflow-timeout-minutes`, `fix-workflow-permissions`, `fix-unpinned-actions`, `fix-stale-template-placeholders`, `fix-tracked-package-lock`, `fix-gitattributes-eol`, `fix-dependabot-coverage`, `fix-http-to-https`, `fix-tmp-paths`, `fix-shell-quoting` (the 10 [M]) | `review` | `pr-author`
+| `repin-caller` (A3 section 4.2, rule 6) | `review` | `pr-author`
+| `apply-ruleset` (A3 G01) | `report` until the applier exists | `applier`
+|===
+
+Classes for label and merge actions are added only by the move in section 9, each with an owner-approved tier. A class that edits a licence file, an SPDX header or a licence text is not allowed. The class table validator rejects it. [M: standards rule]
+
+=== 7.5 Lifecycle orders
+
+Birth, enrolment and retirement of a repo are classes whose only allowed `:trigger` is `dispatch`. No order creates a repo unattended [O: D34(E) as inherited]. Enrolment means: the repo has a chora (A1), its estate names it, and the next index run lists it. Retirement records the state in `(lineage)` and `(status)`. A4 does not define the creation procedure: that is #636's phase 1, which is blocked on the owner.
+
+== 8. The executor path
+
+=== 8.1 Stages
+
+----
+office: finding -> ledger -> order
+  evaluator      is the order admissible? (fleet; Wave 1; not built)
+  Kin gate       may this execution run? (Wave 1 and 5; wiring not verified)
+  executor       robot-repo-automaton, hosted on the farm, with the class's role
+  rescan         the sensors that raised the findings run again on the result
+  outcome        signed outcome envelope; ledger updated by the office
+----
+
+Each stage can refuse. A refusal is an `outcome` with the stage name and a reason. A refusal is not an error and is never retried without a new order.
+
+=== 8.2 Actuator states
+
+The actuator has 4 states: `off`, `dry-run`, `canary` and `armed`. The default is `dry-run` [R: plan P7]. `off` and `dry-run` write nothing to a repo. A `dry-run` produces the action list and records it in the outcome. `canary` writes only to the canary repos that the owner names when authorising it, and refuses every other repo. `armed` may write to any repo the class applies to.
+
+=== 8.3 Preconditions for `armed`
+
+The actuator MAY be armed for a class only when all 4 hold:
+
+. The evaluator exists and has evaluated the order (Wave 1 [M]: "nothing leaves exit 78 until the evaluator exists").
+. The Kin gate is on the path between the evaluator and the executor, and a refusal test shows it refusing (the ultraplan records that its safety processes are called by no dispatch path today [M]).
+. The credential for the class's role exists and is held by the farm. For `applier` this is O11 [R].
+. A canary repo has passed a `dry-run` and a `canary` run of the class with the outcome verified by a rescan.
+
+The move from `dry-run` to `canary` is a separate owner authorisation per class. It needs preconditions 1 to 3 and names the canary repos. It is the only way to run the first write.
+
+Arming is an owner action, per class. The `canary` and `armed` states are recorded in the office. The farm refuses a write for a class that is not marked `armed` there, except a write to a named canary repo of a class marked `canary`.
+
+=== 8.4 Outcome
+
+The `outcome` predicate carries: the order id; the executor and version; the actuator state; the action list (each action with the base and result commit, or a diff digest); the stage that ended the run; the rescan references; the resulting state of each ledger fingerprint; and the credential role used. It never carries a secret. The farm signs it. The office reads it and updates the ledger. The office never trusts an outcome's own claim that a finding is fixed: `fixed` is set from a later rescan (6.1).
+
+=== 8.4.1 No bypass
+
+No class, role or executor path may use a ruleset bypass, an `--admin` merge, a force push, or a merge of a PR whose required `estate-gate` is not `success`. A4 test X06 checks the class table and the role definitions for these.
+
+== 9. The move of the label and merge scripts
+
+R2 moves the farm's label and merge scripts to the office [R: plan, R2]. A4 gives the rules. It does not give the table.
+
+=== 9.1 Classification
+
+Every script gets exactly one class:
+
+[cols="1,4"]
+|===
+| Class | Rule
+
+| `D` (decide) | It chooses targets, labels, merge candidates or timing. It moves to the office as an order emitter or a policy over the ledger. It keeps no write credential.
+| `X` (execute) | It calls a write API with a credential. It stays in the farm as a leaf that the executor calls, with its targets and arguments taken from an order. It decides nothing.
+| `S` (split) | It does both. It is split into one `D` part and one `X` part before it moves. A script that cannot be split is `U`.
+| `M` (mirror) | It mirrors a decided state to a forge. It stays in the farm.
+| `U` (unclassified) | The owner decides. It does not move and does not run armed.
+|===
+
+=== 9.2 Procedure
+
+. One script at a time. One PR per script, in the office or the farm repo that it touches. No bulk move and no sweep [M: the estate's standing rule].
+. For each `D` or `S` script: write its order emitter and its class (7.4) in the office, with a tier no higher than the script's current effect. Merge scripts get no class above `review`; a merge class needs an owner ruling and the `merger` role.
+. Parity test: run the old script and the new emitter plus executor in `dry-run` on a fixed repo snapshot. The action lists MUST be equal as sets. A difference is reported and the script does not retire.
+. Retire the old script only after the parity test passes and the class is armed for a canary. Until then the old script stays and its actuator state is `dry-run` or `off`.
+. Record the move in the office's class table: the class, the old script's name, and the parity evidence.
+
+=== 9.3 The table is outside the repos
+
+The per-script table (name, class, split plan, parity result) is a private working document. It stays outside any repo, in a private page. It is kept by whoever can read the farm. The spec, the class table and every commit name a class and never an unmoved private script. This keeps the private audit out of repos [O].
+
+== 10. The observer
+
+A3 section 9.3 requires an observer that verifies every merged head. It is `cadastra`, in a verify mode, run by the farm on a schedule [I: `cadastra` is the estate's observer [M]; the mode does not exist].
+
+For each merged head the observer: reads the `estate-gate` status and its `target_url`; fetches the envelope; checks validity (5.6, by the signature form of its publisher); recomputes the verdict from the recorded inputs; compares it with the posted status; and checks the status creator against the publisher list. It emits a `finding-set` with rule `gate/forged-or-unverified`, `gate/unsigned`, `gate/mismatch` or `gate/no-envelope`. That finding enters the ledger like any other. The observer writes no status and changes no repo.
+
+== 11. Relation to the other specifications
+
+* A1: `(publishers)` in the root signs every envelope. The repo and estate UUIDs address every record.
+* A2: `(deviations)` is what moves a ledger record to `accepted`. `(generation)` pins the generator whose output the rescan reads.
+* A3: `check-verdict` and `gate-verdict` are the verdict forms of section 5. The Actions aggregate signs as section 12 (F3) says. Owned-compute inputs are `check-verdict` envelopes.
+* A5: owns the rule identifier namespace, the rule registries and the generated ignore files. A4 uses the ids of A5 section 3.
+* A6: owns the home of the ruleset and settings canon that the office applies.
+
+== 12. Signing in Actions
+
+A3 section 9.1 left the key of the Actions aggregate to A4. The options are:
+
+[cols="2,3"]
+|===
+| Option | Effect
+
+| OIDC-bound attestation (proposed, F3) | The aggregate signs through GitHub's workflow identity. A verifier checks that the signing identity is the pinned reusable workflow at the pinned SHA, and needs no secret in the repo [I: GitHub artifact attestations and Sigstore]. The publisher entry in the root gets a `:kind oidc` form that names the issuer and the workflow path.
+| Estate-wide signing secret | A secret available to every caller's Actions run. Any workflow in a repo could read it and sign anything. Rejected.
+| Unsigned | The observer reports `gate/unsigned` for every Actions-published head. Safe but noisy, and it leaves no way to tell a real aggregate from a forgery.
+|===
+
+A4 proposes the first (F3). It is an amendment to A1's `(publishers)`: an entry is either `(publisher :id :ed25519 ...)` or `(publisher :id :oidc-issuer ... :workflow ...)`. I did not test any attestation tooling [I].
+
+== 13. Acceptance tests
+
+Every test is new work. A fixture is valid unless marked `-bad`.
+
+=== 13.1 Boundary and roles
+
+[cols="1,4,3"]
+|===
+| Id | Test | Fixture
+
+| N01 | No order, envelope, ledger line or class table entry contains a secret pattern. | `secret-in-order-bad`
+| N02 | Every class names exactly one role, and the role exists in the role table. | `class-no-role-bad`
+| N03 | No role grants merge-with-bypass. | `role-bypass-bad`
+| N04 | A class that matches a licence file, an SPDX header or a licence text is rejected. | `class-licence-bad`
+| N05 | An executor given an order whose class is absent from the table refuses it. | `order-unknown-class-bad`
+| N06 | The farm refuses an order for a class not marked armed in the office. | `order-unarmed`
+|===
+
+=== 13.2 Envelope
+
+[cols="1,4,3"]
+|===
+| Id | Test | Fixture
+
+| E01 | A DSSE envelope with a listed publisher key verifies. | `env-ok`
+| E02 | A tampered payload fails. | `env-tampered-bad`
+| E03 | A `keyid` not in `(publishers)` fails. | `env-unknown-key-bad`
+| E04 | A Statement whose subject commit does not exist in the repo is rejected. | `env-no-commit-bad`
+| E05 | A `finding-set` with `status` other than `ran` carries a reason and no `sarif`. | `fs-notrun`, `fs-notrun-sarif-bad`
+| E06 | A `ran` `finding-set` has exactly one SARIF 2.1.0 run. | `fs-two-runs-bad`
+| E07 | A `not_run` envelope is never counted as clean by any consumer. | `consumer-notrun`
+| E08 | The report-back envelope, the panic-attack and pons envelopes and the baton map to a valid envelope by section 5.4. | `map-*`
+| E09 | The payload is JCS-canonical: re-canonicalising it gives the same bytes. | `env-noncanonical-bad`
+| E10 | `predicateType` is one of the 4 defined URNs. | `env-bad-type-bad`
+| E11 | An envelope stored in an estate repo's tree is reported. | `env-committed-bad`
+| E12 | An OIDC-signed envelope from the listed issuer and the pinned workflow path and SHA verifies. | `env-oidc-ok`
+| E13 | An OIDC-signed envelope from the listed issuer but a different workflow path or SHA fails. | `env-oidc-other-workflow-bad`
+| E14 | An ed25519 signature checked against an OIDC publisher entry, or the reverse, fails. | `env-form-mismatch-bad`
+| E15 | A valid envelope whose subject `name` is another repo's UUID is rejected for this repo, even when the commit exists in both. | `env-wrong-repo-bad`
+|===
+
+=== 13.3 Ledger
+
+[cols="1,4,3"]
+|===
+| Id | Test | Fixture
+
+| I01 | The fingerprint is stable when an unrelated line moves the finding. | `fp-moved`
+| I02 | The fingerprint changes when the line text changes. | `fp-edited`
+| I03 | The same fingerprint from 2 sensors gives one record with 2 sensors. | `fp-corroborated`
+| I04 | No ledger line carries a finding body or a secret. | `ledger-body-bad`
+| I05 | `fixed` is set only by a later rescan on a later commit. | `fixed-no-rescan-bad`
+| I09 | A finding in `a/` followed by a `ran` rescan whose scope is only `b/` stays unresolved. | `fixed-out-of-scope-bad`
+| I10 | One rule firing on 2 identical lines in one file gives 2 records; an unrelated line inserted above both keeps both fingerprints. | `fp-repeated`
+| I06 | `accepted` requires a valid deviation (A2); on its expiry the record goes `lapsed`. | `accepted-expired`
+| I07 | A sensor cannot set a state. | `sensor-state-bad`
+| I08 | At most one open order per `(repo, class)`. | `two-orders-bad`
+|===
+
+=== 13.4 Work orders
+
+[cols="1,4,3"]
+|===
+| Id | Test | Fixture
+
+| W01 | An order parses as `praxis-deed` with one `(work-order)` clause. | `wo`
+| W02 | An order has all required fields, an `:authority` and an `:expires`. | `wo-no-authority-bad`
+| W03 | `:repo` is a UUID, never a name. | `wo-name-bad`
+| W04 | `:tier` is `report` or `review`. `direct` is rejected. | `wo-direct-bad`
+| W05 | A lifecycle class with `:trigger schedule` is rejected (D34(E)). | `wo-lifecycle-schedule-bad`
+| W06 | Every `:fingerprint` exists in the ledger in state `open` or `ordered`. | `wo-orphan-fp-bad`
+| W07 | An expired order is refused by the executor. | `wo-expired`
+| W08 | An order whose `:base` is not an ancestor of the default head is refused. | `wo-stale-base`
+| W09 | An order contains no `command` or `script` field. | `wo-command-bad`
+|===
+
+=== 13.5 Executor path and arming
+
+[cols="1,4,3"]
+|===
+| Id | Test | Fixture
+
+| X01 | A stage refusal produces an `outcome` naming the stage, and no retry without a new order. | `refuse-kin`
+| X02 | A `dry-run` and an armed run on one snapshot give equal action lists. | `dry-vs-armed`
+| X03 | An actuator in `off` or `dry-run` writes nothing to any repo. | `dryrun-writes-bad`
+| X04 | Arming a class without all 4 preconditions is rejected. Authorising `canary` without preconditions 1 to 3 is rejected. A `canary` class writes to a named canary repo and is refused for any other repo. | `arm-no-canary-bad`, `canary-ok`, `canary-other-repo-bad`
+| X05 | The default actuator state is `dry-run`. | `default-state`
+| X06 | No class, role or executor path uses a bypass, `--admin`, a force push, or a merge with `estate-gate` not `success`. | `exec-bypass-bad`
+| X07 | The Kin gate sits between the evaluator and the executor on the path, and refuses a fixture the evaluator admitted. | `kin-refuses`
+| X08 | The rescan runs the sensors that raised the findings, and an outcome claiming `fixed` without a clean rescan is rejected. | `fixed-claim-bad`
+|===
+
+=== 13.6 Move of the scripts
+
+[cols="1,4,3"]
+|===
+| Id | Test | Fixture
+
+| M01 | Every moved script has exactly one class from D, X, S, M, U. | `move-unclassed-bad`
+| M02 | No script both decides and writes after the move. | `move-both-bad`
+| M03 | Parity: the old script and the new emitter plus executor in `dry-run` give equal action sets on a snapshot. | `move-parity`
+| M04 | A merge class above `review` without an owner ruling and the `merger` role is rejected. | `move-merge-bad`
+| M05 | A move touches one script per PR. | `move-bulk-bad`
+| M06 | No committed file names an unmoved private script. | `move-private-name-bad`
+|===
+
+=== 13.7 Observer
+
+[cols="1,4,3"]
+|===
+| Id | Test | Fixture
+
+| O01 | A merged head with a status creator not in the publisher list gives `gate/forged-or-unverified`. | `obs-forged`
+| O02 | A missing envelope gives `gate/no-envelope`. | `obs-no-env`
+| O03 | A recomputed verdict that differs from the status gives `gate/mismatch`. | `obs-mismatch`
+| O04 | An unsigned Actions envelope gives `gate/unsigned` until F3 is in place. | `obs-unsigned`
+| O05 | The observer writes no status and changes no repo. | `obs-writes-bad`
+|===
+
+== 14. Decisions approved on 2026-11-10 [O]
+
+The owner approved F1 to F15 as recommended. The text of this document is the recommendation in each case. F3 amends A1: a `(publishers)` entry is either an ed25519 key or an OIDC identity.
+
+[cols="1,4,1"]
+|===
+| Id | Decision | State
+
+| F1 | Predicate types are the URNs `urn:estate:finding-set:v1`, `check-verdict:v1`, `gate-verdict:v1` and `outcome:v1`. | Approved
+| F2 | The payload is JCS-canonical (RFC 8785) and the signature is ed25519 in a DSSE envelope, with `keyid` a publisher id from the root `(publishers)`. | Approved
+| F3 | The Actions aggregate signs through an OIDC-bound attestation. A1 `(publishers)` gains a `:kind oidc` entry form. The alternative is unsigned Actions envelopes, reported by the observer. | Approved
+| F4 | The ledger is JSON Lines in the office, one file per repo, with the fingerprint of 6.2. | Approved
+| F5 | Order tiers are `report` and `review` only. `direct` needs a ruling and a new role. | Approved
+| F6 | A work order is `<order-id>_praxis.deed` with a `(work-order)` clause profile. | Approved
+| F7 | The actuator default is `dry-run`. Arming needs the 4 preconditions of 8.3 and is an owner action per class. | Approved
+| F8 | The observer is a `cadastra` verify mode run by the farm. | Approved
+| F9 | Lifecycle orders are dispatch-only, as D34(E) is inherited. | Approved
+| F10 | The first class table is the 10 fix scripts plus `repin-caller` and `apply-ruleset`. Label and merge classes arrive with the move. | Approved
+| F11 | One credential role per class, from the role table of section 4. | Approved
+| F12 | Script classes D, X, S, M, U; one script per PR; a parity test; the table outside the repos. | Approved
+| F13 | One open order per `(repo, class)`. | Approved
+| F14 | The retention of envelopes. A4 requires only that a merged head's gate envelope is kept while it may be verified. | Approved
+| F15 | The envelope store is a directory the farm keeps until a store exists. VeriSimDB replaces it behind the same interface. | Approved
+|===
+
+Open after approval: A4 as a whole is not ratified. No credential, workflow, ruleset, script or repo is changed until the owner approves.
+
+== 15. Evidence base
+
+Paths and file names in this specification name files as they are at the commits listed below. A6 moves some of them (for example `1-formats/deed`). After a move, the old path resolves through its `POINTER.adoc` and the destination repo holds the file.
+
+Shallow clones, read only, 2026-11-10 [M]. Commits for A1 repos are in A1 section 12.
+
+[cols="3,2,2"]
+|===
+| Repo | Commit | Commit date
+
+| metadatastician/standards (`docs/ULTRAPLAN-KAUTZ-LADDER-2026-10-19.adoc`, `docs/VERDICT-GRID-SPEC.adoc`, `docs/reorg/2026-10-14-tidy/`) | be39f90 | 2026-11-10
+| metadatastician/git-logistics-office | 15ba0ab | 2026-11-07
+| metadatastician/cadastra | 738b209 | 2026-11-08
+| hyperpolymath/continuation-mesh | 1e4289b | 2026-11-08
+|===
+
+I did not read: the farm (not attachable, and its audit is private), `gitbot-fleet`, `robot-repo-automaton`, `hypatia` (the Kin gate source), `feedback-o-tron`, `recon-silly-ation`, `pons-asinorum`, `panic-attack`, `verisimdb`. Statements about them come from the ultraplan and the verdict grid spec [M: those documents say it], and from the plan [R]. I did not run any script, workflow or the estate validators beyond `deed_lint.js` on the work-order sample. The in-toto, DSSE, JCS, SARIF and Sigstore statements come from my knowledge of those standards and are marked [I].
+
+== 16. Out of scope
+
+A5 (rule identifier namespace, the deviation store, generated ignore files). A6 (where the ruleset canon lives). The creation of any credential (O11 is an owner action). The creation procedure of a repo (#636 phase 1). The building of the evaluator, the Kin gate wiring, the SARIF adapters, the index generator, the `cadastra` verify mode or any change to a farm script. The per-script table of the move. The trope format. Any `.a2ml` file: A4 creates none.

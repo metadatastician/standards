@@ -1,0 +1,12 @@
+;; SPDX-FileCopyrightText: © 2026 Jonathan D.A. Jewell
+;; SPDX-License-Identifier: CC-BY-SA-4.0
+(repo-deed
+  :schema-version "1.0.0"
+  :canonical-name "standards"
+  :repo-uuid #uuid"d9e987dc-bb7b-51aa-839b-3d8bbfe774c3"
+  :beholding-chora #uuid"47e1501b-26b4-5bbd-8a3f-1afa81c69dbe"
+
+  (identity :primary-forge github :owner "hyperpolymath" :name "standards")
+
+  (co-estates
+    (co-estate :estate #uuid"c52a42f7-df90-5f0c-a75b-5cf4de371ccd" :role co-author)))
