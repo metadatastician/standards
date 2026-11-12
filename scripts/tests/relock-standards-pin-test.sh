@@ -12,6 +12,12 @@ SYNC="$SCRIPT_DIR/../check-lock-sync.sh"
 T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
 # fail MESSAGE — report a failed assertion and stop the test.
 fail() { echo "FAIL: $*" >&2; exit 1; }
+# sync_tools_ok - check-lock-sync.sh needs gawk, jq and mikefarah yq v4; its
+# optional integration check runs only where all three are present.
+sync_tools_ok() {
+  command -v gawk >/dev/null 2>&1 && command -v jq >/dev/null 2>&1 \
+    && yq --version 2>/dev/null | grep -q "mikefarah.* v4"
+}
 
 # Synthetic standards: OLD's reusable uses checkout + old/dep; NEW's uses
 # checkout + acme/tool, and NEW's own lock records acme/tool.
@@ -125,7 +131,7 @@ grep -q "old/sub@" "$L" && fail "record kept alive only by a pruned record was n
 grep -q "unrelated/orphan@" "$L" || fail "an orphan the OLD record never named was pruned"
 grep -q "owner_id: 6759885" "$L" || fail "owner_id not carried over"
 [ "$(awk '/^dependencies:$/{f=1;next} f && /^    \x27/' "$L" | LC_ALL=C sort -c 2>&1; echo $?)" = 0 ] || fail "dependency records not in C-locale key order"
-if command -v gawk >/dev/null 2>&1; then
+if sync_tools_ok; then
   sed -i '/unrelated\/orphan/,/repo_id: 41/d' "$L"   # the gate checks closure, not unrelated orphans
   bash "$SYNC" "$D" >/dev/null 2>&1 || fail "check-lock-sync.sh rejects the relocked lock"
 fi
@@ -297,7 +303,7 @@ Y
   awk -v k="    'hyperpolymath/standards@$NEW':" '$0==k{f=1;next} f&&/^    [^ ]/{exit} f' "$L" | grep -q zeta/only \
     && fail "$length-hex pin: a reusable called only by the short pin fed the full record"
   grep -q "^    'zeta/only@7777777777777777777777777777777777777777':\$" "$L" || fail "$length-hex pin: its record's dependency was pruned"
-  if command -v gawk >/dev/null 2>&1; then
+  if sync_tools_ok; then
     sed -i '/unrelated\/orphan/,/repo_id: 41/d' "$L"
     bash "$SYNC" "$D" >/dev/null 2>&1 || fail "$length-hex pin: check-lock-sync.sh rejects the relocked lock"
   fi
@@ -357,7 +363,7 @@ bash "$RELOCK" --to "$NEW" --standards "$S" "$D" >"$T/source-case-log" 2>&1 || f
 L="$D/actions.lock"
 [ "$(acme_keys "$L")" = 1 ] || fail "source case variant: the record is keyed $(acme_keys "$L") times"
 grep -q "ref: 'v3'" "$L" || fail "source case variant: the copied record lost its ref"
-if command -v gawk >/dev/null 2>&1; then
+if sync_tools_ok; then
   sed -i '/unrelated\/orphan/,/repo_id: 41/d' "$L"
   bash "$SYNC" "$D" >/dev/null 2>&1 || fail "source case variant: check-lock-sync.sh rejects the relocked lock"
 fi
@@ -421,11 +427,11 @@ grep -A1 -xF "    '.github/workflows/a-new.yml':" "$D/actions.lock" | grep -qxF 
 [ "$(awk '/^workflows:$/{f=1;next} /^dependencies:$/{f=0} f && /^    \x27/' "$D/actions.lock" | LC_ALL=C sort -c 2>&1; echo $?)" = 0 ] || fail "new caller: workflows not in C-locale key order"
 cp "$D/actions.lock" "$T/nc-once"; bash "$RELOCK" --to "$NEW" --standards "$S" "$D" >/dev/null
 cmp -s "$T/nc-once" "$D/actions.lock" || fail "new caller: second run changed the lock"
-if command -v gawk >/dev/null 2>&1; then
+if sync_tools_ok; then
   sed -i '/unrelated\/orphan/,/repo_id: 41/d' "$D/actions.lock"
   bash "$SYNC" "$D" >/dev/null 2>&1 || fail "check-lock-sync.sh rejects the lock with a new caller"
 fi
-echo "  PASS new caller added to a FRESH lock (entry, key order, idempotent; sync gate where gawk is present)"
+echo "  PASS new caller added to a FRESH lock (entry, key order, idempotent; sync gate where its tools are present)"
 
 # Case B: the new caller arrives in the same run as the re-key from OLD.
 D=$(consumer new-caller-with-rekey)
@@ -472,5 +478,36 @@ grep -q 'SELF-SHA-LEAF left.*unrelated/orphan@4444444444444444444444444444444444
 grep -q "ref: '4444444444444444444444444444444444444444'" "$D/actions.lock" || fail "unrepairable leaf was changed"
 grep -q "$OLD" "$D/actions.lock" && fail "unrepairable leaf blocked the re-key"
 echo "  PASS an unrepairable self-SHA leaf is reported and left; the re-key still lands"
+
+# Case F: an already-keyed lock with a poisoned leaf standards can repair is
+# repaired on a rerun (it used to take the early "already keyed" exit).
+D=$(consumer keyed-poisoned)
+bash "$RELOCK" --to "$NEW" --standards "$S" "$D" >/dev/null
+sed -i "s/ref: 'v1'/ref: '1111111111111111111111111111111111111111'/" "$D/actions.lock"
+bash "$RELOCK" --to "$NEW" --standards "$S" "$D" >/dev/null 2>&1 || fail "already-keyed poisoned lock refused"
+grep -q "ref: '1111111111111111111111111111111111111111'" "$D/actions.lock" && fail "already-keyed poisoned leaf not repaired"
+grep -q "ref: 'v1'" "$D/actions.lock" || fail "already-keyed: symbolic ref not restored"
+cp "$D/actions.lock" "$T/kp-once"; bash "$RELOCK" --to "$NEW" --standards "$S" "$D" >/dev/null
+cmp -s "$T/kp-once" "$D/actions.lock" || fail "already-keyed repair is not idempotent"
+echo "  PASS an already-keyed lock with a poisoned leaf is repaired, then left alone"
+
+# Case G: a new caller that also uses other actions is refused, lock untouched.
+D=$(consumer new-caller-mixed)
+bash "$RELOCK" --to "$NEW" --standards "$S" "$D" >/dev/null
+printf 'on: push\njobs:\n  sq:\n    uses: hyperpolymath/standards/.github/workflows/x-reusable.yml@%s\n  b:\n    runs-on: x\n    steps:\n      - uses: actions/checkout@1111111111111111111111111111111111111111\n' "$NEW" > "$D/mixed.yml"
+cp "$D/actions.lock" "$T/mixed-nc-before"
+if bash "$RELOCK" --to "$NEW" --standards "$S" "$D" >"$T/mixed-nc-log" 2>&1; then fail "a new caller with other actions was accepted"; fi
+cmp -s "$D/actions.lock" "$T/mixed-nc-before" || fail "mixed new caller refusal changed the lock"
+grep -q 'also uses other actions' "$T/mixed-nc-log" || fail "mixed new caller refusal reason missing"
+echo "  PASS a new caller that also uses other actions is refused unchanged"
+
+# Case H: a poisoned leaf that only the OLD record kept alive is pruned, so it
+# is not reported as left.
+D=$(consumer pruned-leaf)
+sed -i "s/ref: 'v6'/ref: '6666666666666666666666666666666666666666'/" "$D/actions.lock"
+bash "$RELOCK" --to "$NEW" --standards "$S" "$D" >/dev/null 2>"$T/pruned-log" || fail "pruned-leaf relock refused"
+grep -q "old/sub@" "$D/actions.lock" && fail "pruned-leaf: old/sub not pruned"
+grep -q 'old/sub@' "$T/pruned-log" && fail "a pruned leaf was reported as left"
+echo "  PASS a poisoned leaf that the prune removes is not reported"
 
 echo "PASS: relock-standards-pin.sh"

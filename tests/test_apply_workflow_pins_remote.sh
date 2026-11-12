@@ -427,7 +427,7 @@ case_main_squabbler() {
   : > "$d/calls.log"
   # shellcheck disable=SC2016  # $1 is expanded by the inner shell
   env PATH="$LSTUB:$PATH" GH_FIX="$d" GH_TOKEN=ghs_app GITHUB_TOKEN= TARGET="$T" \
-    bash -c 'source "$1"; validate_target() { return 0; }; shift; main "$@"' _ "$1" \
+    bash -c 'source "$1"; validate_target() { return 0; }; target_has_squabbler() { return 0; }; shift; main "$@"' _ "$1" \
       --to "$T" --owners hyperpolymath,metadatastician --ensure-squabbler > "$d/out" 2> "$d/err"
   echo $? > "$d/rc"
   if [ "$(cat "$d/rc")" = 0 ] \
@@ -466,6 +466,21 @@ case_public_fail "$APPLIER"
 case_main_app "$APPLIER"
 case_main_fail "$APPLIER"
 case_main_squabbler "$APPLIER"
+
+# --ensure-squabbler against a target with no squabbler reusable stops the
+# run before any census or write (a caller pinned there could never start).
+d=$(new_case nosq)
+: > "$d/calls.log"
+# shellcheck disable=SC2016  # $1 is expanded by the inner shell
+env PATH="$LSTUB:$PATH" GH_FIX="$d" GH_TOKEN=ghs_app GITHUB_TOKEN= TARGET="$T" \
+  bash -c 'source "$1"; validate_target() { return 0; }; target_has_squabbler() { return 1; }; shift; main "$@"' _ "$APPLIER" \
+    --to "$T" --owners hyperpolymath --ensure-squabbler > "$d/out" 2> "$d/err"
+rc_nosq=$?
+if [ "$rc_nosq" = 1 ] && ! grep -q '^REPO' "$d/out" && grep -q 'has no .github/workflows/cicd-squabbler-reusable.yml' "$d/err"; then
+  pass "main: --ensure-squabbler refuses a target with no squabbler reusable"
+else
+  fail "main: a target with no squabbler reusable was not refused (rc=$rc_nosq)"
+fi
 
 # --- 5. a reachable target is refused when its own lock fails lock-selfcheck --
 # GitHub validates each caller against the TARGET's actions.lock, so a target

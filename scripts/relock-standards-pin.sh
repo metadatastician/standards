@@ -113,7 +113,26 @@ for w in "${wfs[@]}"; do
   # secret-scanner), refusing this shape left such repos unfixable.
   newwf="$newwf ${w##*/}"
 done
-if [ -z "$oldrefs" ] && [ -z "$newwf" ]; then echo "relock-standards-pin: lock already keyed to standards@${TARGET:0:12}"; exit 0; fi
+# A new caller's entry is written with its standards edge only, so a workflow
+# that ALSO uses other actions would get an incomplete entry, which the sync
+# gate rejects. Such a workflow is refused, not half-locked.
+for w in $newwf; do
+  other=$(grep -vE '^[[:space:]]*#' "$WF/$w" | grep -oE "uses:[[:space:]]*['\"]?[A-Za-z0-9_.-]+/[A-Za-z0-9_./-]+@[^[:space:]'\"]+" \
+          | grep -vE '(hyperpolymath|metadatastician)/standards/\.github/workflows/' | head -1 || true)
+  [ -z "$other" ] || refuse "new caller ${w} also uses other actions (${other#uses:}); its lock entry cannot be built from the standards pin alone"
+done
+# An already-keyed lock still goes through the rebuild when it holds a
+# poisoned leaf (a record with no nested uses: whose ref repeats its own SHA),
+# so the repair below reaches it. Otherwise it is left exactly as it is.
+poisoned=$(awk -F"'" 'function flush() { if (k != "" && r == s && !u) print k; k = "" }
+                     /^    \x27[^ ]+@[0-9a-f]+\x27:$/ { flush(); k = $2; split(k, a, "@"); s = a[2]; if (length(s) != 40) k = ""; r = ""; u = 0; next }
+                     /^    \x27/ || /^[a-z]/ { flush(); next }
+                     /^        ref:/ { r = $2 } /^        uses:$/ { u = 1 }
+                     END { flush() }' "$L" | head -1)
+if [ -z "$oldrefs" ] && [ -z "$newwf" ] && { [ -z "$poisoned" ] || [ -z "$full" ]; }; then
+  [ -z "$poisoned" ] || echo "relock-standards-pin: SELF-SHA-LEAF left (no full standards pin to rebuild from): $poisoned" >&2
+  echo "relock-standards-pin: lock already keyed to standards@${TARGET:0:12}"; exit 0
+fi
 [ -n "$full" ] || refuse "lock names standards commits but no workflow pins standards@${TARGET:0:12} in full"
 
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
@@ -265,7 +284,6 @@ while read -r key; do
   fi
 done < <(n=$(grep -n '^dependencies:$' "$tmp/lock" | cut -d: -f1); tail -n +"$((n+1))" "$tmp/lock" \
           | grep -oE "^    '[^']+@[0-9a-f]{40}':\$" | sed -E "s/^    '|':\$//g")
-[ -z "$unrepaired" ] || echo "relock-standards-pin: SELF-SHA-LEAF left (standards has no symbolic ref for the same commit):$unrepaired" >&2
 
 # Prune candidates nothing references any more (to a fixed point).
 # deps_line FILE — print the one-based line number of each exact dependencies:
@@ -311,5 +329,9 @@ for w in "${wfs[@]}"; do
   [ "$want" = "$have" ] || refuse "${w##*/}: lock entries [${have//$'\n'/ }] would not match its pins [${want//$'\n'/ }]"
 done
 
+# Report only leaves that survived the prune: one that only an OLD record kept
+# alive is gone from the result and needs no repair.
+left=""; for k in $unrepaired; do grep -qxF "    '$k':" "$tmp/out" && left="$left $k"; done
+[ -z "$left" ] || echo "relock-standards-pin: SELF-SHA-LEAF left (standards has no symbolic ref for the same commit):$left" >&2
 cat "$tmp/out" > "$L"
 echo "relock-standards-pin: $L keyed to ${COORD}@${TARGET:0:12} (from: $(echo ${oldrefs:-none} | sed 's/\([0-9a-f]\{12\}\)[0-9a-f]*/\1/g'); new caller entries: ${newwf:- none})"
