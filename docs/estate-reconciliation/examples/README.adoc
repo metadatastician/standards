@@ -1,0 +1,25 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+= Examples quoted by the Estate Reconciliation specifications
+
+These files are samples, not live deeds. Each has an `.example` suffix so that `deed-conformance` and other tooling skip it, and so that no tool finds a file named `estate_chora.deed` or `ATLAS.deed` here and takes it for the real one.
+
+To lint a deed sample, copy it to the name shown in its specification and run the validator:
+
+[source,sh]
+----
+cp docs/estate-reconciliation/examples/a2-mytool_chora.deed.example /tmp/mytool_chora.deed
+bun 1-formats/deed/tools/deed_lint.js /tmp/mytool_chora.deed
+----
+
+The samples carry identities as the opaque literal `#uuid"..."` that A1 proposes for `deed.abnf` v1.3.0 (ruling U4). The current linter does not know that literal, so to lint a sample today, also replace `#uuid` with `#u5` in the copy:
+
+[source,sh]
+----
+sed 's/#uuid"/#u5"/g' docs/estate-reconciliation/examples/a2-mytool_chora.deed.example > /tmp/mytool_chora.deed
+----
+
+All deed samples were checked this way with `deed_lint.js` on 2026-11-12 and passed. The ids in them are computed by the recipes in A1 section 9 and are illustrative, not registered. The linter checks syntax and the document head only. It does not check the semantic rules of A1 to A5.
+
+`a1-federation-root-syntax_chora.deed.example` shows the shape of the federation root under the head `estate-deed`, because the current linter does not accept the proposed `forge-deed` head (A1 section 7.1). Its real head and filename are `forge-deed` and `federation_forge.deed`, after the grammar change is approved.
+
+The JSON samples are illustrations and are not validated against the in-toto or DSSE schemas.

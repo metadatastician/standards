@@ -1,0 +1,499 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+= A2: Profile, Generation and Deviations (chora clauses and pack laws)
+:version: 0.2.3-draft
+:status: DRAFT v0.2.3 (scope fields extended by A5 G5). Decisions D1 to D9 approved by the owner on 2026-11-10. Not yet ratified as a whole. Builds on A1 v0.3.8. Consistency pass applied 2026-11-10. Nothing here is committed, pushed or filed.
+:toc:
+
+Specification A2 of the Estate Reconciliation Plan. It defines three clauses of the chora, the files a generator may own, and the laws that a generator must keep.
+
+== 0. How to read the evidence
+
+[cols="1,4"]
+|===
+| Tag | Meaning
+
+| [M] | Measured by me on 2026-11-10 in a shallow clone at the commit listed in section 13.
+| [R] | Estate record: a statement in an estate document or in the plan. I did not recount it.
+| [I] | Inferred by me. Check before relying on it.
+| [O] | Owner ruling given in this session, 2026-11-10.
+|===
+
+Identifiers. Every decision, law and test id in this specification is local to it. Outside it, write the spec first (for example `A3 G4`). A test runner reports a test as `<spec>/<id>` (for example `A3/G10`).
+
+== 1. Summary
+
+* A repo chora gains 3 clauses: `(profile)`, `(generation)` and `(deviations)`. `(deviations)` is also valid in an estate chora and in the federation root [O].
+* `(profile :scheme rsr ...)` replaces `(rsr-profile ...)`. The core knows `profile` and `scheme`; the RSR scheme owns the gate table and the presets [O].
+* `(generation)` is one stamp that replaces `(provenance)`, `(mint-answers)`, `(variant (paths))` and holds the canon pin [O].
+* `(deviations)` is one record with 3 kinds: `exemption`, `debt`, `deferral`. Every deviation has an authority. The expiry rule depends on the kind [O].
+* Capability names are terms of kind `capability` in the federation root's vocabulary. The gate table and the presets stay data of the scheme [O].
+* The pack laws (section 9) are stated over 5 file kinds and the chora clauses, and do not depend on an engine [O].
+* Legacy clauses are read in `lax` mode and rejected in `strict` mode after a cutover that the owner sets later. A2 migrates nothing [O].
+* The deed core stays small. A later trope format can add term kinds and a scheme without changing this core.
+
+== 2. Findings that shape the design
+
+. [M] The estate already reads a profile clause. `scripts/check-rsr-profile.sh` in `standards` resolves `(rsr-profile ...)` from the repo's single `*_chora.deed`, and falls back to `rsr-profile.a2ml` as a legacy source. Fields read: `preset`, `capabilities`, `add`, `remove`, `role`, and a `(notes ...)` sub-clause.
+. [M] The capability model is in `.machine_readable/template-capability-gates.toml`: 28 capabilities, 23 gated module rows, 13 baseline paths, 11 presets, 4 carrier paths (spine only), 12 canon paths (canon role only). The test is `carries(M) iff M in baseline or gate(M) is a subset of P`, where `P = (preset + capabilities + add) - remove`.
+. [M] The canon pin is the `(canon ...)` clause (`vocabulary/canon.adoc`): `:version`, `:criteria-sha256`, `:gates-sha256`, optional `:lockstep-since` and `:proposed-by`. Three readers share one function `deed_canon`. Zero or two clauses give no pin.
+. [M] A minted repo records how it was made in `(provenance)` (`:template-repo`, `:template-commit`, `:template-branch`, `:template-tree`, `:extra-branches`) and `(mint-answers)`. Its declared divergence is `(variant (paths ...))`. `scripts/check-mint-drift.sh` replays the mint from the pinned template commit and compares: `child == repo-init(template @ :template-commit, answers)` modulo the variant paths. `scripts/check-template-conformance.sh` checks 4 structural invariants (T1 to T4: provenance present, no self-parent, no unassigned pin, no undeclared branch).
+. [M] Exemptions live in 5 layers (`standards/docs/EXEMPTION-MECHANISMS.adoc`): the bot write denylist, the per-repo `.hypatia-baseline.json`, `.hypatia-ignore`, a per-PR layer marked "NOT YET IMPLEMENTED", and non-root workflow files out of census scope. The same document says exemption is not debt, and that debt lives in `Debtfile.a2ml` (monotone-decreasing integer). `CLAUDE.md` exemption tables carry a count and an unblock condition, which the document calls "debt wearing an exemption's clothing".
+. [M] The governance register (`metadatastician-governance/docs/governance/ADOPTION-AND-DEVIATIONS.adoc`) records each deviation with the fields Scope, Authority, Reason, Containment and Evidence status. The document says "six fields"; I found 5 headings, and not the sixth. The evidence statuses it names are draft, designed, assumed, tested, audited and proven. Its entries also use "Measured". Two of its three recorded deviations have no ruling as authority.
+. [M] `launch-scaffolder` (the engine named as the plan's default) classifies provisioning files as engine, generated, minted, merged or inserted (`PROVISIONING-STANDARD.adoc` section 1). Engine files are overwritten on realign. Minted files are replaced only while they are stubs. Once filled the repo owns them. `realign --check` exits 1 on any diff.
+. [M] `launch-scaffolder` tests mint-parse-realign-parse stability for launchers (`tests/round_trip.rs`). I found no test that realign leaves product files alone, and no composition test. It has no pack concept. Its `deed.rs` parses `uuid5` and has no `#u8` support, while A1 and `deed.abnf` v1.2.1 use `#u8`.
+. [M] The deed spec says a self-assertion is an input to an audit and never its conclusion, and that derived judgements are computed by an external observer (`DEED-GRAMMAR-SPEC.adoc`). Section 7 applies this to deviations.
+
+== 3. Relation to A1
+
+A2 changes A1 in 2 places. Both are approved (section 12) and are now in A1 v0.3.6.
+
+* A1 section 5 first gave an invariant `rule` the fields `:priority` and `:text`. A2 D1 added a required `:id` (string, unique in the whole federation), because a deviation must name the rule it excuses (section 7.4).
+* A1 section 5.4 lists `(forges)`, `(lineage)` and `(status)` as optional repo clauses and refers to this specification for `(profile)`, `(generation)` and `(deviations)`. A2 defines them, with the rules in section 4.
+
+New term kinds in the root vocabulary (A1 says a later format may declare kinds): `capability`, `file-kind` and `scheme`. A2 fixes these three and no others.
+
+== 4. Where the clauses appear
+
+[cols="2,2,2,2"]
+|===
+| Clause | Repo chora | Estate chora | Federation root
+
+| `(profile)` | Required (`strict`) | no | no
+| `(generation)` | Required if the repo was generated; otherwise absent | no | no
+| `(deviations)` | Optional | Optional | Optional
+|===
+
+* Absence of `(deviations)` means none are declared. It never means none exist (section 7.5).
+* A repo that was not generated has no `(generation)` clause. The index marks it `unstamped` (section 8).
+* Each clause appears at most once at the top level of its form. A second copy is an error, and a reader MUST NOT choose between them (same rule as `deed_canon` today [M]).
+* A clause nested in another clause is not read.
+
+== 5. `(profile)`
+
+=== 5.1 Shape
+
+----
+(profile
+  :scheme rsr
+  :preset rust-cli
+  :capabilities ()
+  :add (published-package)
+  :remove ()
+  :role spine
+  (rationale
+    (reason :capability abi :text "language-agnostic engine; no C-ABI seam")))
+----
+
+[cols="2,1,4"]
+|===
+| Field | Cardinality | Rule
+
+| `:scheme` | 1, symbol | Names the scheme that defines presets and gates. A1 vocabulary has a term of kind `scheme` for it. Today `rsr`.
+| `:preset` | 0..1, symbol | A preset name defined by the scheme.
+| `:capabilities` | 0..1, list of symbols | Capabilities declared directly.
+| `:add` | 0..1, list | Capabilities added to the preset.
+| `:remove` | 0..1, list | Capabilities removed after the union.
+| `:role` | 0..1, symbol | A role defined by the scheme (today `spine` and `canon`). A role gives access to the scheme's carrier or canon path list.
+| `(rationale (reason ...))` | 0..1 | Free explanation of non-obvious capabilities. `reason` fields: `:capability` symbol, `:text` STRING.
+|===
+
+At least one of `:preset` and `:capabilities` MUST be present.
+
+=== 5.2 Resolution
+
+----
+effective = ((preset capabilities) union capabilities union add) minus remove
+----
+
+* Every symbol in `:capabilities`, `:add`, `:remove` and every `:capability` of a `reason` MUST be a root vocabulary term of kind `capability`. An unknown name is an error in `strict` mode and a warning in `lax` mode.
+* `:preset` MUST be a preset that the scheme defines. The preset table is scheme data and is not in the root.
+* Which modules a capability set carries is scheme data: the gate table (`carries(M) iff M in baseline or gate(M) is a subset of effective`). The verdicts `OK`, `MISSING`, `VESTIGIAL` and `UNKNOWN` belong to the scheme's checker. They are not in this core [M: policy text].
+* The profile is a declaration. The verdict is computed by an observer from the tree (section 7.5).
+
+=== 5.3 What stays in the scheme
+
+The RSR gate table, the presets and the `carrier` and `canon` path lists stay in `standards`, in the canon, until the `standards` carve-out (A6) decides their home. A2 defines how a profile refers to them, and nothing more. Capability names move to the root vocabulary as terms. Today the model lists 28 [M]; the root term list is built from that list when the root is written (not part of A2).
+
+== 6. `(generation)`
+
+=== 6.1 Shape
+
+----
+(generation
+  :scheme rsr
+  :generated-on "2026-11-10"
+  (source :repo "hyperpolymath/rsr-template-repo"
+          :commit "<40 hex>" :tree "<40 hex>" :branch "main")
+  (canon :version "2.1.5"
+         :criteria-sha256 "<64 hex>" :gates-sha256 "<64 hex>")
+  (packs
+    (pack :name "rust-cli" :version "0.1.0"))
+  (answers :mint-date "2026-11-10" :license MPL-2.0)
+  :extra-branches ())
+----
+
+[cols="2,1,4"]
+|===
+| Element | Cardinality | Rule
+
+| `:scheme` | 1, symbol | As in `(profile)`. The two MUST be equal.
+| `:generated-on` | 1, STRING | `YYYY-MM-DD` of the mint.
+| `(source :repo :commit)` | 1 | The spine the repo was generated from. `:repo` is `owner/name`. `:commit` is 40 lowercase hex. `:tree` (40 hex) and `:branch` are optional.
+| `(canon ...)` | 0..1 | The scheme's canon pin. Fields as in `canon.adoc`: `:version` (semver), `:criteria-sha256`, `:gates-sha256` (64 lowercase hex), optional `:lockstep-since` and `:proposed-by`. A value of the wrong shape is a failure and never a pass. `"" = ""` is not lockstep.
+| `(packs (pack ...))` | 0..1 | Each `pack` has `:name` STRING (unique) and `:version` STRING (semver). It records which packs the generator applied.
+| `(answers ...)` | 0..1 | The answers that the mint recorded. Any fields. A replay uses them.
+| `:extra-branches` | 0..1, list of STRING | Branches beyond the default that the repo declares.
+|===
+
+=== 6.2 Meaning
+
+The stamp makes the expected tree a function of declared inputs: `expected = generate(source @ commit, packs, answers)`. A checker replays that function and compares it with the tree (law L7, section 9). The stamp holds no judgement about the repo. A repo that carries no stamp cannot be replayed.
+
+=== 6.3 Structural checks (from the estate's own T1 to T4 [M])
+
+. A generated repo carries `(generation)`.
+. `(source :repo)` is not the repo itself.
+. `:commit` is a 40-hex commit, never an unassigned placeholder.
+. The repo has no branch beyond `:extra-branches`.
+
+Checks 2 and 3 apply in `lax` and `strict` mode. Check 4 needs forge access and belongs to the observer, not to the file validator.
+
+== 7. `(deviations)`
+
+=== 7.1 Shape
+
+----
+(deviations
+  (deviation
+    :id "D-001"
+    :kind exemption
+    :rule "lang/typescript"
+    :reason "VS Code extension host requires TypeScript entry points."
+    :authority "owner ruling 2026-08-27"
+    :evidence measured
+    :review-by "2027-03-01"
+    (scope :paths ("editors/vscode/**")))
+  (deviation
+    :id "D-002"
+    :kind debt
+    :rule "lang/python"
+    :reason "Legacy converters are not yet rewritten."
+    :authority "owner/standards#309"
+    :evidence measured
+    :ceiling 176
+    :expires "2027-02-01"
+    :probe "scripts/count-banned-python.sh"
+    (scope :paths ("tools/**")))
+  (deviation
+    :id "D-003"
+    :kind deferral
+    :rule "provision/guix-pin"
+    :reason "Waits for the toolchain refresh."
+    :authority "owner/standards#1100"
+    :evidence assumed
+    :expires "2026-12-15"
+    (scope)))
+----
+
+Sample file: `docs/estate-reconciliation/examples/a2-mytool_chora.deed.example`. It lints clean under `deed_lint.js` once `#uuid` is replaced by `#u5` in a copy, because the current linter does not know the opaque literal (A1 section 7.1) [M]. The linter does not check the semantic rules below [I].
+
+=== 7.2 Fields
+
+[cols="2,2,4"]
+|===
+| Field | Required | Rule
+
+| `:id` | always | STRING, unique in the clause.
+| `:kind` | always | Symbol: `exemption`, `debt` or `deferral` [O].
+| `:rule` | always | STRING, a rule identifier that resolves (7.4).
+| `:reason` | always | STRING, non-empty.
+| `:authority` | always [O] | STRING: a ruling identifier or an issue reference (`owner/repo#N`). A bare "none" is not an authority. See 7.6 for legacy records.
+| `:evidence` | always | Symbol: `draft`, `designed`, `assumed`, `tested`, `audited`, `proven` or `measured` (the 6 from the governance register [M] plus `measured`, which its entries also use; see section 12, D2).
+| `(scope ...)` | always | Child clause. Fields `:paths` (list of repo-relative globs) and `:repos` (list of repo UUIDs). `(scope)` with no field means the whole scope of the level that holds the clause. At estate and root level `:repos` MAY name repos; at repo level `:repos` is not allowed. A5 G5 adds the optional fields `:fingerprints` (repo level; scanner fingerprints) and `:origins` (root level; remote-origin patterns), each allowed only for rules whose registry `:scope-form` permits it.
+| `:expires` | `debt` and `deferral` | STRING `YYYY-MM-DD`.
+| `:review-by` | `exemption`, when `:expires` is absent | STRING `YYYY-MM-DD`. An exemption has `:expires` or `:review-by`, or both [O].
+| `:ceiling` | `debt` | INTEGER, 0 or more. A later version of the deed MAY lower it and MUST NOT raise it (ratchet, 7.3).
+| `:probe` | `debt`, recommended | STRING: a repo-relative path or recipe that re-measures the integer.
+| `:tracking` | optional | STRING issue reference.
+| `:containment` | optional | STRING. What limits the harm while the deviation stands (a field of the governance register [M]).
+|===
+
+No field states whether the deviation is currently honoured. That is derived (7.5).
+
+=== 7.3 The 3 kinds
+
+[cols="1,3,3"]
+|===
+| Kind | Means | Ratchet
+
+| `exemption` | A finding that the owner decided not to act on. Permanent while the reason holds. | Adding or widening one needs an authority. A `:review-by` date forces a look. No ceiling.
+| `debt` | A shortfall that someone intends to fix. | `:ceiling` may only fall between versions. A raise is a validation error against the base version.
+| `deferral` | A decision postponed to a date. | `:expires` is mandatory. At expiry it becomes `lapsed` (7.5).
+|===
+
+The estate says exemption is not debt [M]. The two kinds keep their separate ratchets (`check-exemption-ratchet.sh` and `check-debt-ratchet.sh` exist in `standards` per the exemption document [M: named there; I did not open them]). `deferral` is new. The estate documents do not use the word [M: none found in the exemption document]; the owner chose to add it [O].
+
+=== 7.4 Levels and precedence
+
+. A deviation excuses a rule only at or above the level that declares the rule. A repo-level deviation MUST NOT name a rule that an estate chora or the root declares as an invariant. To excuse such a rule for a repo, the estate or root holds the deviation and names the repo in `(scope :repos ...)`. This keeps A1's meet: a lower level never relaxes a higher prohibition.
+. A `:rule` identifier resolves to one of: an invariant `:id` (A1 with section 3), or a rule identifier of the scheme's canon. The identifier form and the registry are defined by A5 (sections 3 and 4). For an id that no registry resolves yet, the validator checks only that the string is non-empty and that, for a repo-level deviation, it does not equal an invariant `:id` of a higher level.
+. A deviation at estate level applies to repos that behold that estate. At root level it applies to all estates. A narrower `(scope)` limits it.
+
+=== 7.5 Declared, observed and derived
+
+A repo states a deviation. It never states that the repo is conforming. The following are derived by an observer from observed state and are never fields of the deed [M: rule from the deed spec]:
+
+* `drift`: observed difference not covered by any declared deviation or by product files (section 9, L6).
+* `lapsed`: an `:expires` date before the observation date.
+* `ceiling-breached`: the probe's measured integer exceeds `:ceiling`.
+* `unratified`: an authority that does not resolve (section 7.6).
+* `stale-rule` and `unknown-rule`: a rule id that is retired or that no registry resolves (A5 section 5.1).
+
+An undeclared deviation is not a state a record can hold. It is drift.
+
+=== 7.6 Legacy records
+
+Legacy forms map as follows. Each mapped record gets `:authority "legacy"` when no authority exists in the source. A validator reports `unratified` for it in `lax` mode and an error in `strict` mode. This is what keeps today's unauthorised entries visible and not silently accepted (the governance register shows two such [M]).
+
+[cols="3,3"]
+|===
+| Legacy | New form
+
+| `(variant (paths ...))` | `(deviation :kind exemption :rule "generation/drift" (scope :paths (...)))`, `:authority "legacy"`
+| `.hypatia-baseline.json` entry | `deviation`, `:kind debt` if it has `tracking_issue` or an expiry, else `exemption`
+| `.hypatia-ignore` line | `deviation`, `:kind exemption`, `:paths` from the line
+| `Debtfile.a2ml` entry | `deviation`, `:kind debt`, with `:ceiling` and `:probe`
+| `CLAUDE.md` exemption table row (count and unblock condition) | `deviation`, `:kind debt`
+| Bot write denylist entry | Stays an estate-level exemption of rule `bot/write`, scope `:repos`, `:paths` or `:origins` (A5)
+|===
+
+A2 does not generate the old files from the new record. A5 does (A5 is the deviation record and the generated ignore files [R: plan section 11]). A2 migrates no file.
+
+== 8. Index states added
+
+A1 section 8.2 lists 7 repo states. A2 adds 2 observer outputs that the generator may copy into the index:
+
+[cols="1,4"]
+|===
+| State | Condition
+
+| `unstamped` | The repo has a chora and no `(generation)`.
+| `profile-missing` | The repo has a chora and no `(profile)`. An error in `strict` mode.
+|===
+
+Other derived values in 7.5 are not index states. They are findings and belong to the checker that computes them.
+
+== 9. Pack laws
+
+=== 9.1 Terms
+
+* A *spine* is the repo or archetype a generator starts from. A *pack* is a named, versioned set of files with a kind for each. A pack is declared by its manifest (9.3).
+* The *file kinds* are `engine`, `generated`, `minted`, `merged`, `inserted`, from the launch-scaffolder provisioning standard [M]. Any file that no pack declares is *product*. The root vocabulary carries the five kinds as terms of kind `file-kind`. `product` is a default, not a term.
+
+[cols="1,4"]
+|===
+| Kind | Ownership
+
+| `engine` | Identical estate-wide. The generator overwrites it on every realign.
+| `generated` | Rendered from a template and the repo's deed. The generator re-renders it on realign while it carries its generated marker.
+| `minted` | Created when missing. Replaced only while it is still a stub. Once filled, the repo owns it.
+| `merged` | A file that the repo and the pack both write. The generator edits only the regions it owns and keeps the rest.
+| `inserted` | A block inside a file that belongs to the repo. The generator edits only the marked block.
+|===
+
+=== 9.2 Operations
+
+* `mint(spine, packs, answers)` creates a tree.
+* `check(tree)` reads the tree's `(generation)`, computes `expected`, and reports differences. It writes nothing.
+* `realign(tree)` brings engine, generated and eligible merged, minted and inserted regions to `expected`.
+* `expected(tree) = mint(source @ commit, packs, answers)`, all taken from `(generation)`.
+
+=== 9.3 Pack manifest
+
+A pack is declared by a `praxis-deed` (a verb: what the pack emits). File: `<pack>_praxis.deed`. A2 proposes an `(emits)` clause profile for it, with no grammar change:
+
+----
+(praxis-deed
+  :schema-version "1.0.0"
+  :canonical-name "rust-cli"
+  :beholding-chora #uuid"47e1501b-26b4-5bbd-8a3f-1afa81c69dbe"
+  (emits
+    (file :path "Cargo.toml" :kind minted)
+    (file :path ".github/workflows/rust-ci.yml" :kind engine)))
+----
+
+Rules: `:path` is a repo-relative path or a glob. `:kind` is one of the 5 file kinds. Within one pack a path appears once. The deed spec lists the praxis fields beyond `:canonical-name` and `:beholding-chora` as an open v0.2 question [M], so this clause is a proposal (section 12, D3).
+
+=== 9.4 The laws
+
+Let `T = mint(s, P, a)`, where `s` is a spine, `P` a set of packs and `a` answers.
+
+[cols="1,4,2"]
+|===
+| Law | Statement | Source
+
+| L1 | `check(T)` reports no drift. A fresh mint is clean by construction. | plan M2; check-mint-drift.sh header [M]
+| L2 | `realign(realign(T')) = realign(T')` for every tree `T'`. Realign is idempotent. | plan M2; launcher realign [M]
+| L3 | `realign(T) = T`. Realign of a clean tree changes nothing. | follows from L1 and L2
+| L4 | `realign` changes only: `engine` files; `generated` files that carry the marker; the owned regions of `merged` files; the marked block of `inserted` files; `minted` files that are still stubs. It never changes a `minted` file that has been filled, an unmarked file, or a product file. | plan M2; provisioning standard section 1 [M]
+| L5 | `mint(s, {p, q}, a) = mint(s, {q, p}, a)`, byte for byte. Packs commute. | plan M3
+| L6 | Let `A` be the actual tree and `E` the expected tree. The set of differing paths splits into: declared deviations (those covered by a `(deviation)` scope), product files, and drift. `check` reports drift by name. A deviation only subtracts from drift; it never adds a file to `E`. | plan M2 (lens)
+| L7 | `expected` depends only on `(generation)`: the same stamp and the same spine commit give the same tree. | check-mint-drift.sh replay [M]
+| L8 | If 2 packs in `P` declare the same path with different kinds or different content, `mint` stops before writing anything and reports `PACK-CONFLICT` with both pack names and the path. The conflict is detectable from the manifests alone. | plan M3
+|===
+
+=== 9.5 Reference implementation status
+
+[cols="1,3"]
+|===
+| Law | `launch-scaffolder` today [M, commit b64e5cd]
+
+| L1 | `provision-set check` replays engine drift. `check-mint-drift.sh` (template) replays the full mint. No single test of L1 over a whole fresh mint found.
+| L2 | `realign` is described as idempotent in the README. Round-trip tests cover launchers (`mint_parse_realign_parse_is_stable_for_the_deed_form`). No test over a provisioning set found.
+| L3 | Follows from L1 and L2. Not tested.
+| L4 | Ownership rules are written in the module comment of `provisioning/mint.rs` and in the standard. No test that realign leaves product files alone found.
+| L5, L8 | No pack concept in the engine. Not implemented.
+| L6 | The drift split exists in the template's `check-mint-drift.sh` through `(variant (paths))`. Not in the engine.
+| L7 | Replay exists in the template script (needs `just`, `rustc`, `nickel`, `uuidgen` per its header).
+|===
+
+The engine also cannot read `#u8` identifiers, nor the opaque `#uuid` literal that A1 now uses for identity (A1 section 7.1, ruling U4). That blocks any use of the engine on A1 choras until `deed.rs` gains the `#uuid` literal. This is a Stage B work item and is not part of A2.
+
+== 10. Compatibility reading [O]
+
+Mode meanings follow the deed spec: `lax` reads structure, and `strict` also requires identity and rejects unknown clauses.
+
+[cols="2,2,2"]
+|===
+| Legacy clause | New form | Mode
+| `(rsr-profile ...)` | `(profile :scheme rsr ...)`, same field names | `lax` accepts and marks `legacy`. `strict` rejects after the cutover.
+| `(canon ...)` | `(generation (canon ...))` | same
+| `(provenance ...)` | `(generation (source ...) :extra-branches ...)`. `:template-repo` gives `:repo`, `:template-commit` gives `:commit`, `:template-tree` gives `:tree`, `:template-branch` gives `:branch`. | same
+| `(mint-answers ...)` | `(generation (answers ...))` | same
+| `(variant (paths ...))` | `(deviations ...)`, see 7.6 | same
+| `rsr-profile.a2ml`, `PROVENANCE.a2ml`, `Debtfile.a2ml` | Not read for new facts. A2 creates no `.a2ml` file. | A reader may still read them as a legacy source. A validator reports `legacy`.
+|===
+
+The cutover date is not set. The owner sets it later. Until then the existing readers (`check-rsr-profile.sh`, `check-canon-lockstep.sh`, `check-mint-drift.sh`, `repo-init`) need no change, and the new readers read both spellings. When both a legacy and a new clause exist for the same fact, the file is invalid.
+
+== 11. Acceptance tests
+
+`deed_lint.js` checks syntax only [M]. Every test below is new work unless stated. A fixture is valid unless marked `-bad`.
+
+=== 11.1 `(profile)`
+
+[cols="1,4,3"]
+|===
+| Id | Test | Fixture
+
+| P01 | Exactly one `(profile)` at the top level of a repo chora. Two are an error. | `two-profiles-bad`
+| P02 | `:scheme` is present and names a scheme term. | `no-scheme-bad`
+| P03 | At least one of `:preset` and `:capabilities` is present. | `empty-profile-bad`
+| P04 | Every capability name is a root term of kind `capability`. Unknown: error in `strict`, warning in `lax`. | `unknown-capability-bad`
+| P05 | Effective set equals `(preset union capabilities union add) minus remove`. | `profile-resolve`
+| P06 | `:remove` of a capability that is not in the union is reported as a warning. | `remove-absent`
+| P07 | A `reason :capability` names a capability in the root vocabulary. | `reason-unknown-bad`
+| P08 | A profile nested in another clause is not read. | `nested-profile`
+| P09 | `(rsr-profile ...)` is read as a profile with `legacy` in `lax` and rejected in `strict`. | `legacy-rsr-profile`
+|===
+
+=== 11.2 `(generation)`
+
+[cols="1,4,3"]
+|===
+| Id | Test | Fixture
+
+| G01 | `(source)` has `:repo` and a 40-hex `:commit`. | `commit-short-bad`, `commit-unassigned-bad`
+| G02 | `(source :repo)` is not the repo's own `owner/name`. | `self-parent-bad`
+| G03 | `(canon)` hashes are 64 lowercase hex. An empty or wrong-shape value fails. | `canon-empty-bad`
+| G04 | A second `(canon)` or `(generation)` gives no pin and an error. | `two-canon-bad`
+| G05 | `:scheme` in `(generation)` equals `:scheme` in `(profile)`. | `scheme-mismatch-bad`
+| G06 | Pack names are unique. Versions are semver. | `dup-pack-bad`
+| G07 | A `(canon)` comment-only copy (`; (canon ...)`) is not read. | `commented-canon`
+| G08 | Legacy `(provenance)` maps to `(source)` with the fields in section 10. | `legacy-provenance`
+| G09 | A repo that carries both a legacy and a new clause for one fact is invalid. | `both-spellings-bad`
+|===
+
+=== 11.3 `(deviations)`
+
+[cols="1,4,3"]
+|===
+| Id | Test | Fixture
+
+| V01 | Each deviation has `:id`, `:kind`, `:rule`, `:reason`, `:authority`, `:evidence` and `(scope)`. | `missing-authority-bad`
+| V02 | `:id` is unique in the clause. | `dup-id-bad`
+| V03 | `:kind` is one of the 3 symbols. | `unknown-kind-bad`
+| V04 | `debt` has `:ceiling` and `:expires`. `deferral` has `:expires`. `exemption` has `:expires` or `:review-by`. | `debt-no-ceiling-bad`, `exemption-no-date-bad`
+| V05 | `:evidence` is in the closed list. | `evidence-unknown-bad`
+| V06 | Dates are valid `YYYY-MM-DD`. | `date-bad`
+| V07 | A repo-level `(scope :repos ...)` is rejected. | `repo-scope-repos-bad`
+| V08 | A repo-level deviation whose `:rule` equals a higher level's invariant `:id` is rejected. | `repo-excuses-estate-bad`
+| V09 | An estate-level deviation that lists a repo that does not behold that estate is rejected. | `foreign-repo-bad`
+| V10 | Ratchet: given base and head versions of a deed, `:ceiling` of a debt that exists in both is not higher in head. | `ceiling-raised-bad`
+| V11 | Ratchet: a head deed that adds a deviation with `:authority "legacy"` is rejected. Only a legacy mapping that already existed in base is accepted. | `new-legacy-bad`
+| V12 | Derived values (`lapsed`, `ceiling-breached`, `drift`) are never fields of the file. A deed that carries them is rejected. | `derived-in-file-bad`
+| V13 | Observation after `:expires` reports `lapsed`. Observation before does not. | `lapsed`
+| V14 | Legacy mapping (7.6): a `(variant (paths))` reads as a deviation with `:authority "legacy"` and reports `unratified`. | `legacy-variant`
+|===
+
+=== 11.4 Pack laws
+
+Run with any engine through a harness: the harness supplies a spine fixture, 2 pack manifests and answers.
+
+[cols="1,4,3"]
+|===
+| Id | Test | Fixture
+
+| L01 | `check(mint(s, P, a))` has no drift. | `spine-min`
+| L02 | `realign` twice equals `realign` once, on a tree with injected drift. | `drifted-tree`
+| L03 | `realign` of a freshly minted tree leaves every byte unchanged. | `spine-min`
+| L04 | A filled `minted` file and a product file are byte-equal after `realign`. An engine file edited by hand is restored. A stub `minted` file is replaced. | `ownership-tree`
+| L05 | `mint` with `{p, q}` and `{q, p}` give byte-equal trees. | `packs-pq`
+| L06 | Differing paths split into declared, product and drift. A declared scope never removes a missing expected file from the report as drift unless it names that path. | `deviation-tree`
+| L07 | Two mints from one stamp are byte-equal. | `stamp-replay`
+| L08 | Two packs that declare one path with different kinds stop `mint` with `PACK-CONFLICT` and write no file. | `packs-conflict-bad`
+| L09 | An `(emits)` clause lists a path once per pack and uses only the 5 kinds. | `emits-dup-bad`, `emits-kind-bad`
+|===
+
+== 12. Decisions approved on 2026-11-10 [O]
+
+The owner approved D1 to D9 as recommended. The text of this document is the recommendation in each case. D1 amends A1; A1 section 5 is to be read with the `:id` field added.
+
+[cols="1,4,1"]
+|===
+| Id | Decision | State
+
+| D1 | Invariant `rule` gains a required `:id` (A1 amendment, section 3). | Approved
+| D2 | Evidence statuses: the 6 from the governance register plus `measured`. | Approved
+| D3 | A pack is declared by a `praxis-deed` with an `(emits)` clause profile (9.3). No grammar change. | Approved
+| D4 | `(profile)` is required in `strict`. `(generation)` is required only for generated repos. | Approved
+| D5 | `(variant (paths))` maps to an `exemption` with `:authority "legacy"` and rule `generation/drift` (7.6). | Approved
+| D6 | A legacy deviation record needs no authority in `lax` and fails in `strict`. The cutover date is the owner's, later. | Approved
+| D7 | `file-kind` terms in the root vocabulary are the 5 kinds. `product` is a default and has no term. | Approved
+| D8 | The RSR gate table, presets, carrier and canon path lists stay in `standards` until A6 decides their home. | Approved
+| D9 | Rule identifiers for canon rules are opaque to A2, and stable identifiers are defined by A5 and A6. | Approved
+|===
+
+Open after approval: A2 as a whole is not ratified. No file is created in any repo until the owner approves a commit.
+
+== 13. Evidence base
+
+Paths and file names in this specification name files as they are at the commits listed below. A6 moves some of them (for example `1-formats/deed`). After a move, the old path resolves through its `POINTER.adoc` and the destination repo holds the file.
+
+Shallow clones, read only, 2026-11-10 [M]. Commits for the 9 repos of A1 are listed in A1 section 12. A2 adds:
+
+[cols="3,2,2"]
+|===
+| Repo | Commit | Commit date
+
+| hyperpolymath/launch-scaffolder | b64e5cd | 2026-10-16
+| metadatastician/standards (re-read for A2) | be39f90 | 2026-11-10
+| metadatastician/git-logistics-office (template copy: `check-mint-drift.sh`, `check-template-conformance.sh`) | 15ba0ab | 2026-11-07
+| metadatastician/metadatastician-governance | 57e4339 | 2026-11-09
+|===
+
+I did not read `hypatia`, `gitbot-fleet`, `scaffoldia` or `rsr-template-repo` (not attached). I read the template's behaviour through the copy in `git-logistics-office`, which the plan describes as an untouched copy [R], so a difference from the live template is possible [I]. I did not run any script. I read `check-exemption-ratchet.sh` and `check-debt-ratchet.sh` only as names in a document.
+
+== 14. Out of scope
+
+The trope format. A3 (the single gate and the profile-to-checks table). A4 (office and farm). A5 (the generated ignore files, the rule identifiers and the deviation store beyond the clause). A6 (where the gate table lives). Any migration of existing repos. Any change to `launch-scaffolder`. Any `.a2ml` file: A2 creates none.

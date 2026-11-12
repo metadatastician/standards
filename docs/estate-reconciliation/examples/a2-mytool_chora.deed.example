@@ -1,0 +1,64 @@
+;; SPDX-FileCopyrightText: © 2026 Jonathan D.A. Jewell
+;; SPDX-License-Identifier: CC-BY-SA-4.0
+(repo-deed
+  :schema-version "1.0.0"
+  :canonical-name "mytool"
+  :repo-uuid #uuid"3f76e427-3bff-53b5-be46-3a1aa5c2cb43"
+  :beholding-chora #uuid"47e1501b-26b4-5bbd-8a3f-1afa81c69dbe"
+
+  (identity :primary-forge github :owner "hyperpolymath" :name "mytool")
+
+  (profile
+    :scheme rsr
+    :preset rust-cli
+    :add (published-package)
+    :remove ()
+    (rationale
+      (reason :capability abi :text "language-agnostic engine; no C-ABI seam")))
+
+  (generation
+    :scheme rsr
+    :generated-on "2026-11-10"
+    (source :repo "hyperpolymath/rsr-template-repo"
+            :commit "0123456789abcdef0123456789abcdef01234567"
+            :tree "89abcdef0123456789abcdef0123456789abcdef"
+            :branch "main")
+    (canon :version "2.1.5"
+           :criteria-sha256 "6a5aa8857bd0d0d58ef48827938ca17c251b6b854dacf59d306388d61694d82a"
+           :gates-sha256 "5c510bba025be718deebb12d0333bfe7db2da43c66578b728b1a334df65290b1")
+    (packs
+      (pack :name "rust-cli" :version "0.1.0")
+      (pack :name "governance-tier" :version "0.1.0"))
+    (answers :mint-date "2026-11-10" :license MPL-2.0)
+    :extra-branches ())
+
+  (deviations
+    (deviation
+      :id "D-001"
+      :kind exemption
+      :rule "lang/typescript"
+      :reason "VS Code extension host requires TypeScript entry points."
+      :authority "owner ruling 2026-08-27"
+      :evidence measured
+      :review-by "2027-03-01"
+      (scope :paths ("editors/vscode/**")))
+    (deviation
+      :id "D-002"
+      :kind debt
+      :rule "lang/python"
+      :reason "Legacy converters not yet rewritten."
+      :authority "owner/standards#309"
+      :evidence measured
+      :ceiling 176
+      :expires "2027-02-01"
+      :probe "scripts/count-banned-python.sh"
+      (scope :paths ("tools/**")))
+    (deviation
+      :id "D-003"
+      :kind deferral
+      :rule "provision/guix-pin"
+      :reason "Waits for the toolchain refresh."
+      :authority "owner/standards#1100"
+      :evidence assumed
+      :expires "2026-12-15"
+      (scope))))

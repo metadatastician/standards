@@ -1,0 +1,18 @@
+;; SPDX-FileCopyrightText: © 2026 Jonathan D.A. Jewell
+;; SPDX-License-Identifier: CC-BY-SA-4.0
+(estate-atlas-deed
+  :schema-version "1.0.0"
+  :canonical-name "hyperpolymath-federation-atlas"
+  :beholding-chora #uuid"99fef1e9-e3a7-599b-ac66-1a4ae305f867"
+  :registry-version "1"
+
+  (generation :tool "chora-index" :tool-version "0.1.0" :root-hash "sha256:0000000000000000000000000000000000000000000000000000000000000000" :vocabulary-version "0.1.0")
+
+  (estate :uuid #uuid"47e1501b-26b4-5bbd-8a3f-1afa81c69dbe" :name "hyperpolymath" :state resolved
+    :chora-hash "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+    (repo :uuid #uuid"d9e987dc-bb7b-51aa-839b-3d8bbfe774c3" :name "hyperpolymath/standards" :state resolved
+      :path "standards_chora.deed"
+      :chora-hash "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+      (co-estate :estate #uuid"c52a42f7-df90-5f0c-a75b-5cf4de371ccd")
+      (finding-aid :clade gv))
+    (repo :name "hyperpolymath/some-unclassified" :state absent)))

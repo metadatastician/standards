@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: MPL-2.0
+name: Estate gate
+on:
+  pull_request:
+    branches: ["main"]
+  merge_group:
+  push:
+    branches: ["main"]
+permissions:
+  contents: read
+  statuses: write
+jobs:
+  gate:
+    uses: hyperpolymath/proven-cicd/.github/workflows/estate-gate.yml@0123456789abcdef0123456789abcdef01234567
