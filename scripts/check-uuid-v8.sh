@@ -14,6 +14,25 @@
 # A literal scanner cannot tell profile T from profile C; ADR-008 puts the
 # profile in the field's declared type, which this script does not read.
 #
+# An identifier written as a deed opaque literal, #uuid"<id>" (deed.abnf
+# v1.3.0, owner ruling U4, 2026-11-12), is explicitly typed: it carries an id
+# minted elsewhere, which ruling U2 makes the UUIDv5 of a repository's birth
+# path. Inside that literal, version 5 or 8 with variant 10 is accepted in
+# both modes, exactly as deed.abnf's uuid-hex allows; the body must be lower
+# case, as the grammar requires. Every other version is still rejected there,
+# and a bare v5 anywhere else is still rejected. Anything that looks like the
+# literal but is not exactly it (an upper- or mixed-case body, or space before
+# the string) is rejected as malformed in both modes; it never falls through
+# to the bare-UUID policy, where a v7 would pass in dual-accept mode.
+#
+# Per-repository exemptions: a scan root may hold a file named .uuid-v8-exempt
+# listing paths, relative to that root, one per line (blank lines and lines
+# starting with # are ignored). A listed file is not scanned. Entries are exact
+# paths: a glob character is a usage error, so an exemption names each file
+# and is reviewed in the repository that adds it. The script itself exempts
+# nothing by path, so no caller of the reusable gate inherits another
+# repository's exemptions.
+#
 # Retired A2ML files (*.a2ml, *.a2ml.in) are not scanned (owner ruling D320,
 # 2026-10-07). A2ML is dead and may not be hand-converted (D313); its
 # identifiers become v8 when kyX converts each file into deed, so checking
@@ -35,6 +54,31 @@ for path in "$@"; do
     exit 2
   fi
 done
+
+# Collect the exempt files of every scan root, as the paths find will print.
+EXEMPT=''
+for root in "$@"; do
+  # find prints <root>/<path>, with <root> as given, minus a trailing slash.
+  root=${root%/}
+  list="$root/.uuid-v8-exempt"
+  [ -f "$list" ] || continue
+  while IFS= read -r entry || [ -n "$entry" ]; do
+    case "$entry" in
+      ''|'#'*) continue ;;
+      *'*'*|*'?'*|*'['*)
+        printf '%s: exemption %s is not an exact path (no globs)\n' "$list" "$entry" >&2
+        exit 2 ;;
+    esac
+    entry=${entry#./}
+    EXEMPT="$EXEMPT
+$root/$entry"
+  done < "$list"
+done
+
+# Exit 0 when a file is listed in a scan root's .uuid-v8-exempt.
+exempt() {
+  [ -n "$EXEMPT" ] && printf '%s\n' "$EXEMPT" | grep -qxF -- "$1"
+}
 
 # Print the text of a file that is subject to the UUID rule.
 #
@@ -74,6 +118,21 @@ acceptable() {
   esac
 }
 
+# The 8-4-4-4-12 shape, and the same shape inside a deed opaque literal.
+UUID_RE='[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+TYPED_RE='#uuid"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"'
+# Anything that looks like the literal: any case in the body, optional space.
+APPARENT_RE='#uuid[[:space:]]*"[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}"'
+
+# Exit 0 when a version:variant pair is legal inside #uuid"…" (deed.abnf
+# uuid-hex: version 5 or 8, variant 10). The mode does not change this.
+typed_acceptable() {
+  case "$1" in
+    5:8|5:9|5:a|5:b|8:8|8:9|8:a|8:b) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 status=0
 while IFS= read -r file; do
   [ -f "$file" ] || continue
@@ -82,8 +141,29 @@ while IFS= read -r file; do
   case "$file" in
     */.git/*|*/check-uuid-v7.sh|*/check-uuid-v8.sh|*.a2ml|*.a2ml.in) continue ;;
   esac
-  if grep -IEni -- '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' "$file" >/dev/null 2>&1; then
-    # Every UUID on a line is checked, not only the last one (grep -o).
+  if exempt "$file"; then continue; fi
+  if grep -IEni -- "$UUID_RE" "$file" >/dev/null 2>&1; then
+    # Typed literals first: each #uuid"<id>" must be exactly the literal, and
+    # version 5 or 8.
+    while IFS= read -r lit; do
+      [ -n "$lit" ] || continue
+      if ! printf '%s\n' "$lit" | grep -qxE -- "$TYPED_RE"; then
+        printf '%s: malformed #uuid literal, must be #uuid"<lower-case id>" (%s)\n' "$file" "$lit" >&2
+        status=1
+        continue
+      fi
+      uuid=${lit#'#uuid"'}; uuid=${uuid%'"'}
+      version=$(printf '%s' "$uuid" | cut -d- -f3 | cut -c1)
+      variant=$(printf '%s' "$uuid" | cut -d- -f4 | cut -c1)
+      if ! typed_acceptable "$version:$variant"; then
+        printf '%s: #uuid literal is not v5 or v8 with variant 10 (%s)\n' "$file" "$uuid" >&2
+        status=1
+      fi
+    done <<EOF
+$(scannable_text "$file" | grep -oE -- "$APPARENT_RE" || true)
+EOF
+    # Then every other UUID, with the typed literals removed. Every UUID on a
+    # line is checked, not only the last one (grep -o).
     while IFS= read -r uuid; do
       [ -n "$uuid" ] || continue
       version=$(printf '%s' "$uuid" | cut -d- -f3 | cut -c1)
@@ -97,7 +177,7 @@ while IFS= read -r file; do
         status=1
       fi
     done <<EOF
-$(scannable_text "$file" | grep -oEi -- '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' || true)
+$(scannable_text "$file" | sed -E "s/$APPARENT_RE//g" | grep -oEi -- "$UUID_RE" || true)
 EOF
   fi
 done <<EOF
