@@ -3,8 +3,8 @@
 # only, one per line, relative to the repository root. Keep each entry's reason.
 #
 # deed_lint negative controls: they must hold the malformed #uuid literals
-# they test (a v4, and a non-RFC variant).
-1-formats/deed/tools/fixtures/invalid/inuuid-v4_chora.deed
-1-formats/deed/tools/fixtures/invalid/inuuid-variant_chora.deed
+# they test (an upper-case body, and a #uuid with no string). The v4 and
+# non-RFC-variant cases are inline tests in deed_lint.test.js, with the UUID
+# assembled at runtime, so they need no entry.
 1-formats/deed/tools/fixtures/invalid/inuuid-uppercase_chora.deed
 1-formats/deed/tools/fixtures/invalid/inuuid-no-string_chora.deed
