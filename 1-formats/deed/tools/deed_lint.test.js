@@ -4,7 +4,7 @@ import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { validate, LintError, SELF_TEST_CASES, checkEgress, EgressError, readMustfileChecks, MustfileError, readProofReceipt, ProofReceiptError } from "./deed_lint.js";
+import { validate, LintError, SELF_TEST_CASES, checkEgress, EgressError, checkAnchor, AnchorError, readMustfileChecks, MustfileError, readProofReceipt, ProofReceiptError } from "./deed_lint.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const LINT = join(HERE, "deed_lint.js");
@@ -504,5 +504,118 @@ describe("CLI --egress", () => {
     const r = cli("--egress-fixtures", FIX_EGRESS);
     expect(r.code).toBe(0);
     expect(r.out).toContain("EGRESS FIXTURES OK");
+  });
+});
+
+// ─── (anchor …) clause profile (DRAFT, A7; ruling Q11) ─────────────────
+
+const FIX_ANCHOR = join(FIX, "anchor");
+const anchorDeeds = (sub) => readdirSync(join(FIX_ANCHOR, sub)).filter((n) => n.endsWith(".deed")).sort();
+
+// Each invalid fixture names the one rule it breaks; the message pins it, so a
+// fixture that starts failing for a different reason is caught.
+const ANCHOR_WHY = {
+  "clade-in-anchor_chora.deed": "has no field :clade",
+  "date-bad_chora.deed": "is not YYYY-MM-DD",
+  "empty-authority_chora.deed": ":authority must not be empty",
+  "empty-subclause_chora.deed": "(anchor (ssg …)) is empty",
+  "id-in-anchor_chora.deed": "has no field :id",
+  "metadata-unknown_chora.deed": "has no field :owner",
+  "missing-authority_chora.deed": "is missing :authority",
+  "missing-schema_chora.deed": "is missing :schema",
+  "nested-anchor_chora.deed": "only at the top level",
+  "parent-duplicate_chora.deed": "twice",
+  "parent-legacy-literal_chora.deed": "got uuid8",
+  "parent-no-uuid_chora.deed": "is missing :uuid",
+  "parent-relation-string_chora.deed": ":relation must be a symbol",
+  "parent-self_chora.deed": "the deed's own :repo-uuid",
+  "parent-string_chora.deed": "got string",
+  "parents-stray_chora.deed": "takes (parent …) clauses only",
+  "praxis-head_praxis.deed": "belongs in a repo-deed",
+  "purpose-empty_chora.deed": ":purpose must not be empty",
+  "purpose-symbols_chora.deed": "items must be strings",
+  "repeated-clause_chora.deed": "repeats (ssg …)",
+  "repeated-field_chora.deed": "repeats :authority",
+  "satellite-string_chora.deed": "must be #t or #f",
+  "schema-symbol_chora.deed": ":schema must be a string",
+  "sem-files-boolean_chora.deed": ":spec must be a string",
+  "status-in-anchor_chora.deed": "has no clause (status …)",
+  "sub-nested-clause_chora.deed": "takes fields only",
+  "two-anchors_chora.deed": "at most one (anchor …)",
+  "version-two-segment_chora.deed": "is not MAJOR.MINOR.PATCH",
+  "wrong-schema_chora.deed": '"hyperpolymath.anchor/1"',
+};
+
+describe("anchor fixtures", () => {
+  for (const n of anchorDeeds("valid")) {
+    test(`valid/${n} passes`, () => {
+      const f = join(FIX_ANCHOR, "valid", n);
+      expect(() => checkAnchor(readFileSync(f, "utf8"), f)).not.toThrow();
+    });
+  }
+  test("every invalid fixture has a stated reason, and every reason a fixture", () => {
+    expect(anchorDeeds("invalid")).toEqual(Object.keys(ANCHOR_WHY).sort());
+  });
+  for (const n of anchorDeeds("invalid")) {
+    // A grammatical deed that fails only the profile, for its own reason.
+    test(`invalid/${n} is a valid deed but fails the profile: ${ANCHOR_WHY[n]}`, () => {
+      const f = join(FIX_ANCHOR, "invalid", n);
+      const src = readFileSync(f, "utf8");
+      expect(() => validate(src, f)).not.toThrow();
+      let err = null;
+      try {
+        checkAnchor(src, f);
+      } catch (e) {
+        err = e;
+      }
+      expect(err).toBeInstanceOf(AnchorError);
+      expect(err.message).toContain(ANCHOR_WHY[n]);
+    });
+  }
+});
+
+describe("checkAnchor result", () => {
+  test("a deed without the clause has no anchor", () => {
+    const f = join(FIX_ANCHOR, "valid", "no-anchor_chora.deed");
+    expect(checkAnchor(readFileSync(f, "utf8"), f)).toBeNull();
+  });
+  test("returns the authority, the members and the parent ids", () => {
+    const f = join(FIX_ANCHOR, "valid", "translated_chora.deed");
+    expect(checkAnchor(readFileSync(f, "utf8"), f)).toEqual({
+      authority: "upstream-canonical",
+      members: ["(golden-path", "(implementation-policy", "(metadata", "(parents", "(semantic-authority-files", "(ssg", ":authority", ":schema"],
+      parents: ["00000000-0000-8000-8000-0000000000b1", "00000000-0000-8000-8000-0000000000b2"],
+    });
+  });
+  test("the template's own clause, mint tokens included, passes", () => {
+    const f = join(FIX_ANCHOR, "valid", "template-a55669e_chora.deed");
+    expect(checkAnchor(readFileSync(f, "utf8"), f).authority).toBe("upstream-canonical");
+  });
+});
+
+describe("CLI --anchor", () => {
+  test("reports a valid anchor and a deed without one", () => {
+    const a = join(FIX_ANCHOR, "valid", "minimal_chora.deed");
+    const b = join(FIX_ANCHOR, "valid", "no-anchor_chora.deed");
+    const r = cli("--anchor", a, b);
+    expect(r.code).toBe(0);
+    expect(r.out).toContain(`OK   ${a} (anchor, authority "upstream-canonical")`);
+    expect(r.out).toContain(`OK   ${b} (no anchor clause)`);
+  });
+  test("a profile violation exits nonzero and names the rule", () => {
+    const p = join(FIX_ANCHOR, "invalid", "clade-in-anchor_chora.deed");
+    const r = cli("--anchor", p);
+    expect(r.code).toBe(1);
+    expect(r.out).toContain(`FAIL ${p}: (anchor …) has no field :clade`);
+  });
+  test("--anchor-fixtures passes on the anchor corpus", () => {
+    const r = cli("--anchor-fixtures", FIX_ANCHOR);
+    expect(r.code).toBe(0);
+    expect(r.out).toContain("ANCHOR FIXTURES OK");
+  });
+  test("the opaque uuid literal keeps its body in --ast-json", () => {
+    const r = cli("--ast-json", join(FIX_ANCHOR, "valid", "minimal_chora.deed"));
+    const ast = JSON.parse(r.out);
+    expect(ast.items.find((it) => it[1] === "repo-uuid")[2]).toEqual(["uuid", "00000000-0000-8000-8000-0000000000a7"]);
   });
 });
