@@ -100,17 +100,20 @@ while IFS= read -r file; do
   # (1-formats/deed/tools/fixtures/invalid/) carry malformed literals on
   # purpose: each one exists to prove deed_lint.js refuses it.
   #
-  # One named external-format file: the A4 in-toto Statement example. Its
+  # One named external-format value: the A4 in-toto Statement example. Its
   # subject `name` is the example repo's id, the UUIDv5 of its birth path
-  # (owner ruling U2), and in-toto JSON has no #uuid literal to type it with.
-  # The same id appears typed as #uuid"…" in the example deeds next to it.
-  # Exempt by exact path only; any other file holding a bare v5 still fails.
+  # github.com/hyperpolymath/mytool (owner ruling U2), and in-toto JSON has
+  # no #uuid literal to type it with. The same id appears typed as #uuid"…"
+  # in the example deeds next to it. Only that one value, in that one file,
+  # is allowed; every other UUID in the file is still checked.
   case "$file" in
     */.git/*|*/check-uuid-v7.sh|*/check-uuid-v8.sh|*.a2ml|*.a2ml.in) continue ;;
   esac
+  allowed_bare=
   case "$rel" in
     1-formats/deed/tools/fixtures/invalid/*) continue ;;
-    docs/estate-reconciliation/examples/a4-statement.json.example) continue ;;
+    docs/estate-reconciliation/examples/a4-statement.json.example)
+      allowed_bare=3f76e427-3bff-53b5-be46-3a1aa5c2cb43 ;;
   esac
   if grep -IEni -- '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' "$file" >/dev/null 2>&1; then
     # Every UUID on a line is checked, not only the last one (grep -o). Each
@@ -120,6 +123,9 @@ while IFS= read -r file; do
       [ -n "$token" ] || continue
       uuid=${token%\"}
       uuid=${uuid#*\"}
+      if [ -n "$allowed_bare" ] && [ "$uuid" = "$allowed_bare" ]; then
+        continue
+      fi
       version=$(printf '%s' "$uuid" | cut -d- -f3 | cut -c1)
       variant=$(printf '%s' "$uuid" | cut -d- -f4 | cut -c1 | tr 'A-F' 'a-f')
       # The opaque literal is #uuid"<lowercase 8-4-4-4-12>", closed by its

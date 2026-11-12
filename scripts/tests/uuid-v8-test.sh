@@ -173,14 +173,20 @@ expect 1 "a v4 in the deed linter's VALID fixtures is still rejected" --strict
 fresh; mkdir -p "$WORK/t/other/fixtures/invalid"; printf '%s\n' "$V4" > "$WORK/t/other/fixtures/invalid/x.json"
 expect 1 "a v4 in some other fixtures/invalid/ directory is still rejected" --strict
 
-echo "the A4 in-toto Statement example (one named external-format file)"
+echo "the A4 in-toto Statement example (one named external-format value)"
 A4DIR="$WORK/t/docs/estate-reconciliation/examples"
+A4ID="$(uuid 3f76e427 3bff 53b5 be46 3a1aa5c2cb43)"   # UUIDv5 of github.com/hyperpolymath/mytool
+fresh; mkdir -p "$A4DIR"; printf '{"subject":[{"name":"%s"}]}\n' "$A4ID" > "$A4DIR/a4-statement.json.example"
+expect 0 "the approved v5 subject id in a4-statement.json.example is allowed" --strict
 fresh; mkdir -p "$A4DIR"; printf '{"subject":[{"name":"%s"}]}\n' "$V5" > "$A4DIR/a4-statement.json.example"
-expect 0 "a bare v5 in docs/estate-reconciliation/examples/a4-statement.json.example is ignored" --strict
-fresh; mkdir -p "$A4DIR"; printf '{"subject":[{"name":"%s"}]}\n' "$V5" > "$A4DIR/a4-envelope.json.example"
-expect 1 "a bare v5 in a sibling .json.example is still rejected" --strict
-fresh; mkdir -p "$WORK/t/other"; printf '{"subject":[{"name":"%s"}]}\n' "$V5" > "$WORK/t/other/a4-statement.json.example"
-expect 1 "a file of the same name elsewhere is still rejected" --strict
+expect 1 "a different v5 in a4-statement.json.example is rejected" --strict
+fresh; mkdir -p "$A4DIR"; printf '{"subject":[{"name":"%s"}],"x":"%s"}\n' "$A4ID" "$V4" > "$A4DIR/a4-statement.json.example"
+expect 1 "a v4 beside the approved id in a4-statement.json.example is rejected (Codex review, #1485)" --strict
+names "($V4)" "the rejection names the v4, not the approved id"
+fresh; mkdir -p "$A4DIR"; printf '{"subject":[{"name":"%s"}]}\n' "$A4ID" > "$A4DIR/a4-envelope.json.example"
+expect 1 "the approved id in a sibling .json.example is rejected" --strict
+fresh; mkdir -p "$WORK/t/other"; printf '{"subject":[{"name":"%s"}]}\n' "$A4ID" > "$WORK/t/other/a4-statement.json.example"
+expect 1 "the approved id in a same-named file elsewhere is rejected" --strict
 
 # Exemptions are anchored to the scan root (Codex review, #1485): a nested
 # copy of an exempt path is scanned like any other file.
