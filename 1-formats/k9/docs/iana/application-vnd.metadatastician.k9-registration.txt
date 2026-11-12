@@ -29,14 +29,14 @@ application/vnd.metadatastician.k9.coordination.
 
 STATUS: NOT FILED.
 
-Prepared: 2026-11-12 (Revision 6)
+Prepared: 2026-11-12 (Revision 7)
 Prepared By: Jonathan D.A. Jewell <jonathan@metadatastician.art>
 
-Every link below is pinned to commit e2a03dc913e1029c6ef90ad0a9432838d197ee49
+Every link below is pinned to commit e880a2d0c2832f4965dac528f454438083577c5c
 of metadatastician/standards, so that it keeps resolving to the text that
-this registration describes.  That commit predates the 2026-11-12
-rulings (subtype names, line limit), so before filing, every link is
-re-pinned to a commit that carries them.
+this registration describes.  It is the merge of
+metadatastician/standards#1476, which carries the 2026-11-12 rulings
+(subtype names, line limit).
 
 ---
 
@@ -155,13 +155,13 @@ Interoperability considerations:
 
 Published specification:
   K9 Component Contract Specification v1.0.0 (normative):
-  https://github.com/metadatastician/standards/blob/e2a03dc913e1029c6ef90ad0a9432838d197ee49/1-formats/k9/spec/K9-CONTRACT-SPEC.adoc
+  https://github.com/metadatastician/standards/blob/e880a2d0c2832f4965dac528f454438083577c5c/1-formats/k9/spec/K9-CONTRACT-SPEC.adoc
 
   Machine-readable contract:
-  https://github.com/metadatastician/standards/blob/e2a03dc913e1029c6ef90ad0a9432838d197ee49/1-formats/k9/spec/contract/k9_contract.ncl
+  https://github.com/metadatastician/standards/blob/e880a2d0c2832f4965dac528f454438083577c5c/1-formats/k9/spec/contract/k9_contract.ncl
 
   K9 SVC Specification v1.0.0 (format overview, informative):
-  https://github.com/metadatastician/standards/blob/e2a03dc913e1029c6ef90ad0a9432838d197ee49/1-formats/k9/SPEC.adoc
+  https://github.com/metadatastician/standards/blob/e880a2d0c2832f4965dac528f454438083577c5c/1-formats/k9/SPEC.adoc
 
   Nickel: https://nickel-lang.org/
   Just: https://just.systems/
@@ -176,7 +176,7 @@ Applications which use this media type:
   - The Contractile CLI system (must/trust/dust/intend/k9)
 
   Reference implementation:
-  https://github.com/metadatastician/standards/blob/e2a03dc913e1029c6ef90ad0a9432838d197ee49/1-formats/k9/tools/k9-validate.sh
+  https://github.com/metadatastician/standards/blob/e880a2d0c2832f4965dac528f454438083577c5c/1-formats/k9/tools/k9-validate.sh
 
 Fragment identifier considerations:
   Dot-separated paths into the component's data structure.
@@ -256,10 +256,10 @@ References:
     https://www.rfc-editor.org/rfc/rfc8032.html
 
 [3] K9 Component Contract Specification v1.0.0
-    https://github.com/metadatastician/standards/blob/e2a03dc913e1029c6ef90ad0a9432838d197ee49/1-formats/k9/spec/K9-CONTRACT-SPEC.adoc
+    https://github.com/metadatastician/standards/blob/e880a2d0c2832f4965dac528f454438083577c5c/1-formats/k9/spec/K9-CONTRACT-SPEC.adoc
 
 [3a] K9 SVC Specification v1.0.0 (overview)
-    https://github.com/metadatastician/standards/blob/e2a03dc913e1029c6ef90ad0a9432838d197ee49/1-formats/k9/SPEC.adoc
+    https://github.com/metadatastician/standards/blob/e880a2d0c2832f4965dac528f454438083577c5c/1-formats/k9/SPEC.adoc
 
 [4] Nickel Configuration Language
     https://nickel-lang.org
@@ -316,3 +316,6 @@ Change Log:
             filing order (this type second) and its precondition: no
             type is filed while its specification is DRAFT.  The file
             is renamed to match the subtype.  Not yet filed.
+2026-11-12: Revision 7 -- every link is re-pinned to commit
+            e880a2d, the merge of metadatastician/standards#1476, which
+            carries Revision 6.  Not yet filed.
