@@ -3,14 +3,14 @@
 (estate-deed
   :schema-version "1.0.0"
   :canonical-name "hyperpolymath"
-  :estate-uuid #uuid"47e1501b-26b4-5bbd-8a3f-1afa81c69dbe"
-  :beholding-chora #uuid"99fef1e9-e3a7-599b-ac66-1a4ae305f867"
+  :estate-uuid #uuid"0889b37b-defb-831f-973c-e119500db00e"
+  :beholding-chora #uuid"977ef226-dd92-8cb9-8724-caf6fa251784"
 
   (extends-vocabulary
-    :base #uuid"99fef1e9-e3a7-599b-ac66-1a4ae305f867"
+    :base #uuid"977ef226-dd92-8cb9-8724-caf6fa251784"
     :min "0.1.0")
 
   (invariants)
 
   (hosting
-    (namespace :forge #uuid"f8e888c3-8eff-5b67-9f5e-909bcfa3e63c" :owner "hyperpolymath" :role primary)))
+    (namespace :forge #uuid"e7085c0f-530a-89f1-b081-0e06d53160ea" :owner "hyperpolymath" :role primary)))
