@@ -40,7 +40,7 @@ Identifiers. Every decision, law and test id in this specification is local to i
 . [M] The only structured forge record is `gv-clade-index/verisim/schema/forge-identity.vcl` and `seed/forges.a2ml` (GitHub primary; GitLab, Bitbucket, Codeberg mirrors). Both are VeriSimDB and A2ML files, not deeds.
 . [M] `deed.abnf` v1.2.1 has 4 heads: `estate-deed`, `repo-deed`, `estate-atlas-deed`, `praxis-deed`. It has no forge head.
 . [M] The deed spec identity table gives `estate-deed` no required reference and gives `estate-atlas-deed` a required `:beholding-chora`. The fixture `ATLAS.deed` has no `:canonical-name` and no `:beholding-chora`. The fixture contradicts the table.
-. [M] `hyperpolymath/hyperpolymath/README.adoc` (lines 51 to 64) names 3 owners: hyperpolymath, metadatastician and invisible-door-studios. [O] invisible-door-studios was renamed catachresis-colloquium after an IP clash. The profile page is therefore stale. `stuff-of-awe` is visible and is not named there.
+. [M] `hyperpolymath/hyperpolymath/README.adoc` (lines 51 to 64) does not list the 4 estates in section 3.1 [O]. The profile page is therefore stale.
 . [R] The plan says 8 of 15 measured repos have no repo chora, and about 30 repos have only a fixture as `estate_chora.deed`.
 . [M] Repo UUIDs are derived from the repo name: `#u8"gv-clade-index:github.com/<owner>/<name>"`. A transfer or rename would change a re-derived UUID. Plan item M5 wants identity to survive a transfer without a sweep. These two cannot both hold unless the UUID is minted once and kept. Section 9 rules this, by owner rulings U1 to U4.
 
@@ -68,11 +68,11 @@ Identifiers. Every decision, law and test id in this specification is local to i
 
 | hyperpolymath | Federation root and estate chora live in `hyperpolymath/hyperpolymath` [O]. The repo exists [M].
 | metadatastician | Estate chora in its identity repo. The plan's default is the `.github` repo of that organisation. That default is not ruled. I did not read it [I].
-| catachresis-colloquium | Renamed from invisible-door-studios [O]. Same default as above.
+| catachresis-colloquium | Same default as above.
 | stuff-of-awe | Same default as above.
 |===
 
-A1 never writes the old name of catachresis-colloquium into a proposed deed, because the rename followed an IP clash. Whether to record it under `(lineage)` is the owner's decision (section 13, C6).
+A1 writes no former organisation name into a proposed deed or into `(lineage)` (section 13, C6).
 
 === 3.2 Platforms
 
