@@ -127,8 +127,9 @@ done
 # Job-level reusable-workflow edges (owner/repo@ref, owner/repo lower-cased):
 # their records legitimately carry ref == SHA, with or without nested uses:,
 # so the poisoned-leaf scan and repair never touch them.
-edge_keys=$(grep -hvE '^[[:space:]]*#' "${wfs[@]}" 2>/dev/null \
-            | grep -oE '[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/\.github/workflows/[A-Za-z0-9._-]+\.ya?ml@[^[:space:]'"'"'"]+' \
+edge_keys=$(grep -hvE '^[[:space:]]*#' "${wfs[@]}" 2>/dev/null | sed -E 's/[[:space:]]+#.*$//' \
+            | grep -oE "[\"']?uses[\"']?:[[:space:]]*[\"']?[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/\.github/workflows/[A-Za-z0-9._-]+\.ya?ml@[^[:space:]\"',}]+" \
+            | sed -E "s/^[\"']?uses[\"']?:[[:space:]]*[\"']?//" \
             | sed -E 's#^([^/]+/[^/]+)/\.github/workflows/[^@]+@#\1@#' \
             | awk '{ i = index($0, "@"); print tolower(substr($0, 1, i - 1)) substr($0, i) }' | sort -u || true)
 # is_edge KEY: true when KEY names a job-level reusable-workflow edge.

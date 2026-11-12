@@ -535,4 +535,13 @@ for body in '      - uses: ./.github/actions/build' "      - \"uses\": actions/c
 done
 echo "  PASS a new caller with a local composite action or a quoted uses: key is refused unchanged"
 
+# Case L: a run: string naming a reusable path is not an edge, so it cannot
+# exempt a poisoned leaf with the same key from the report.
+D=$(consumer text-not-edge)
+sed -i "s/ref: 'v4'/ref: '4444444444444444444444444444444444444444'/" "$D/actions.lock"
+printf '      - run: echo unrelated/orphan/.github/workflows/x.yml@4444444444444444444444444444444444444444\n' >> "$D/own.yml"
+bash "$RELOCK" --to "$NEW" --standards "$S" "$D" >/dev/null 2>"$T/text-log" || fail "text-not-edge relock refused"
+grep -q 'SELF-SHA-LEAF left.*unrelated/orphan@4444444444444444444444444444444444444444' "$T/text-log" || fail "a run: string exempted a poisoned leaf as an edge"
+echo "  PASS a run: string naming a reusable path does not exempt a poisoned leaf"
+
 echo "PASS: relock-standards-pin.sh"
