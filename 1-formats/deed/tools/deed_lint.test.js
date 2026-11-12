@@ -628,6 +628,21 @@ describe("checkAnchor result", () => {
 `;
     expect(() => checkAnchor(deed("2028-02-29"))).not.toThrow();
     expect(() => checkAnchor(deed("2026-02-29"))).toThrow(/not a real/);
+    // Years 0000 to 0099 are not shifted into the 1900s.
+    expect(() => checkAnchor(deed("0099-12-31"))).not.toThrow();
+    expect(() => checkAnchor(deed("0000-02-29"))).not.toThrow();
+    expect(() => checkAnchor(deed("0001-02-29"))).toThrow(/not a real/);
+  });
+  test("a field named after an Object.prototype property is an unknown field, not a crash", () => {
+    const deed = (inner) => `;; SPDX-License-Identifier: CC-BY-SA-4.0
+(repo-deed :schema-version "1.0.0" :canonical-name "x" :repo-uuid #uuid"00000000-0000-8000-8000-0000000000a7" :beholding-chora #uuid"00000000-0000-8000-8000-00000000e57a"
+  (identity :primary-forge github :owner "o")
+  (anchor :schema "hyperpolymath.anchor/1" :authority "a" ${inner}))
+`;
+    for (const name of ["constructor", "toString", "hasOwnProperty", "valueOf"]) {
+      expect(() => checkAnchor(deed(`(metadata :${name} "x")`))).toThrow(AnchorError);
+      expect(() => checkAnchor(deed(`:${name} "x"`))).toThrow(AnchorError);
+    }
   });
 });
 

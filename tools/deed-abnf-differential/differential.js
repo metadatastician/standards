@@ -182,6 +182,12 @@ for (const name of ANCHOR_GRAMMAR_REJECTS) {
   const v8 = v5.replace("-5000-", "-8000-");
   if (grammarAccepts(grammar, "anchor-clause", v5)) fail("anchor.abnf accepts a version 5 parent id", v5);
   if (!grammarAccepts(grammar, "anchor-clause", v8)) fail("anchor.abnf refuses a version 8 parent id", v8);
+  // ABNF quoted strings are case-insensitive: an uppercase variant nibble must
+  // still be refused, as deed_lint refuses it.
+  const upper = v8.replace("-8000-0000000000b1", "-A000-0000000000b1");
+  if (grammarAccepts(grammar, "anchor-clause", upper)) fail("anchor.abnf accepts an uppercase variant nibble", upper);
+  const lower = v8.replace("-8000-0000000000b1", "-a000-0000000000b1");
+  if (!grammarAccepts(grammar, "anchor-clause", lower)) fail("anchor.abnf refuses a lowercase variant nibble", lower);
 }
 
 // 2. Mutation differential over the committed deeds and the valid fixtures

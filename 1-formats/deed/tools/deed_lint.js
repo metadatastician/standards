@@ -1074,7 +1074,8 @@ const MINT_TOKEN = /^\{\{[A-Z][A-Z0-9_]*\}\}$/;
 function isCalendarDate(s) {
   if (!DATE.test(s)) return false;
   const [y, m, d] = s.split("-").map(Number);
-  const t = new Date(Date.UTC(y, m - 1, d));
+  const t = new Date(0);
+  t.setUTCFullYear(y, m - 1, d); // not Date.UTC: it maps years 0 to 99 onto 1900 to 1999
   return t.getUTCFullYear() === y && t.getUTCMonth() === m - 1 && t.getUTCDate() === d;
 }
 
@@ -1163,7 +1164,7 @@ function anchorFields(items, allowed, where, opts = {}) {
   const seen = new Map();
   for (const it of items) {
     if (it[0] !== "field") throw new AnchorError(`${where} takes fields only, not a nested (${it[1]} …)`);
-    if (allowed && !(it[1] in allowed)) throw new AnchorError(`${where} has no field :${it[1]}`);
+    if (allowed && !Object.hasOwn(allowed, it[1])) throw new AnchorError(`${where} has no field :${it[1]}`);
     if (seen.has(it[1])) throw new AnchorError(`${where} repeats :${it[1]}`);
     seen.set(it[1], it[2]);
     if (allowed) anchorValue(it[2], allowed[it[1]], `${where} :${it[1]}`, opts);
@@ -1207,13 +1208,13 @@ export function checkAnchor(text, filename = null, opts = {}) {
     if (seen.has(key)) throw new AnchorError(`(anchor …) repeats ${key}${it[0] === "clause" ? " …)" : ""}`);
     seen.add(key);
     if (it[0] === "field") {
-      if (!(it[1] in ANCHOR_FIELDS)) throw new AnchorError(`(anchor …) has no field :${it[1]}`);
+      if (!Object.hasOwn(ANCHOR_FIELDS, it[1])) throw new AnchorError(`(anchor …) has no field :${it[1]}`);
       anchorValue(it[2], ANCHOR_FIELDS[it[1]], `(anchor …) :${it[1]}`);
       continue;
     }
     if (!ANCHOR_CLAUSES.has(it[1])) throw new AnchorError(`(anchor …) has no clause (${it[1]} …)`);
     const where = `(anchor (${it[1]} …))`;
-    if (it[1] in ANCHOR_SUB) {
+    if (Object.hasOwn(ANCHOR_SUB, it[1])) {
       anchorFields(it[2], ANCHOR_SUB[it[1]], where, opts);
     } else if (it[1] === "semantic-authority-files") {
       for (const [k, v] of anchorFields(it[2], null, where)) anchorValue(v, "repo-path", `${where} :${k}`);
