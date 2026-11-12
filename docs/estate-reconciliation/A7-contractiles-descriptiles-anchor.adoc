@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 = A7: Contractiles, Descriptiles and Anchor (clause modules, attestation, migration)
 :version: 0.1.0-draft
-:status: DRAFT v0.1.0. Proposals J1 to J13 await the owner. Builds on A1 v0.3.9 and A2 v0.2.3. Proposes (J1) to supersede, for its subject, docs/ULTRAPLAN-DEED-K9-CONTRACTILES-2026-10-19.adoc v0.3.3. Not ratified.
+:status: DRAFT v0.1.0. Proposals J1 to J13 await the owner. Builds on A1 v0.3.9, A2 v0.2.3 and A5 v0.2.2. Proposes (J1) to supersede, for its subject, docs/ULTRAPLAN-DEED-K9-CONTRACTILES-2026-10-19.adoc v0.3.3. Not ratified.
 :toc:
 
 Specification A7 of the Estate Reconciliation Plan. It defines how the contract between a repository's policy (the contractiles) and its reality (the descriptiles) is written in the chora deed. It also defines the anchor and the K9 envelope grammar, and the order in which the estate leaves A2ML behind.
@@ -105,7 +105,7 @@ A7 introduces no new mechanism where A1 or A2 already has one.
 
 | 1a | The `no-new-a2ml` job ("No new A2ML") in `governance-reusable.yml` runs `scripts/check-no-new-a2ml.sh BASE HEAD`. It fails a pull request that adds an A2ML path, or renames a non-A2ML file to one. It never reads existing files, so it needs no baseline. | standards | draft PR #1488
 | 1b | `sync/deploy-clade-a2ml.sh` is deleted. Runbook Phase 1 is withdrawn, and `TOPOLOGY.adoc`, `REPO-ONBOARDING.adoc` and the `STATE.a2ml` next actions are cleaned (content deleted only). | gv-clade-index | patch prepared; not pushed (no session access)
-| 1c | `validate-rsr` checks the chora identity: `:repo-uuid` present and a valid opaque `#uuid` (v5 or v8), with the legacy `#u5`/`#u8` reported but not failed, plus `(identity :primary-forge)`. A declared clade must still be one of the 12 and agree with its name. `repo-init` writes no `(clade)` and no prefixed name. The arrival pack calls the clade a finding aid and reads a `#uuid` literal. | rsr-template-repo | patch prepared; not pushed (no session access)
+| 1c | `validate-rsr` checks the chora identity: `:repo-uuid` present and a valid opaque `#uuid`. The id is version 8 (V8). A version 5 id is reported `v5-identity`, a warning in lax mode and an error in strict, as A1 C10 and T30 require. The legacy `#u5`/`#u8` forms are reported but not failed, plus `(identity :primary-forge)`. A declared clade must still be one of the 12 and agree with its name. `repo-init` writes no `(clade)` and no prefixed name. The arrival pack calls the clade a finding aid and reads a `#uuid` literal. | rsr-template-repo | patch prepared; not pushed (no session access)
 | 1d | The load-bearing readers are listed with their replacements in section 10. Nothing is swept. | — | this document
 |===
 
@@ -187,7 +187,7 @@ affirmer      = %s"owner" / %s"agent" / symbol                ; symbol: the chec
 
 | META | `(meta …)` | O `(adr :id :status :date :ref)` repeated, where `:ref` is the path of the ADR document. O `(development-practices …)`. O `:design-rationale` string. | An ADR kept as a document is referenced, never restated.
 | ECOSYSTEM | `(ecosystem …)` | R `:project`, `:ecosystem`, `:position-type`, `:purpose`. O `:not` (list), `:pipeline-position`, `:chain`, `:coordination`. O `(related :name :relationship :notes [:uuid])` repeated. | `:project` equals the header `:canonical-name`. `:relationship` comes from a closed list: the template's 8 terms plus DESCRIPTILE-SPEC's 4 observed terms. `:uuid` is required in strict mode (J12).
-| STATE | `(status …)` and `(maturity …)`, the existing clauses (J3) | `(status :phase …)`, A1's lifecycle set. `(maturity :level …)`. | The journal (last and next action) stays in `docs/status/ROADMAP.adoc`. A7 adds no `(state …)` clause.
+| STATE | `(status …)` and `(maturity …)`, the existing clauses (J3) | `(status :phase …)`, with the template's phase values: A1 keeps `(status …)` as the template has it and defines no phase set of its own (A1 §5.4). `(maturity :level …)`. | The journal (last and next action) stays in `docs/status/ROADMAP.adoc`. A7 adds no `(state …)` clause.
 | AGENTIC | `(agentic …)` | O `(patterns …)`, `:tools` (list), `:project-specific` string, and `(bot-directives …)` as the template has it. | No model pin. No language allow or ban list (YL3: that is the Mustfile's).
 | NEUROSYM | `(neurosym …)` | R `(hypatia-config :scan-enabled :scan-depth :report-format)`. O `:rulesets` (list), `(neural-config …)`. | `(symbolic-rules)` is empty or absent. Rules live in the A5 registry, which this clause selects from.
 | PLAYBOOK | `(playbook …)` | O `(deployment :steps (…))`, `(incident-response :steps (…))`, `(release-process :steps (…))`, `(maintenance-operations :targets (…))`. | Steps are ordered by position in the list. Version propagation is generated, never a step (DESCRIPTILE-SPEC's measured anti-pattern).
@@ -349,7 +349,7 @@ Fixtures are valid unless marked `-bad`. `[done]` marks tests that exist and pas
 | YP01 | `gv-clade-index` has no script, workflow or recipe that writes into another repository's tree. | grep in that repo
 | YP02 | `just validate-rsr` passes on a deed with no `(clade …)` and no `:prefixed-name`. | template, clade removed
 | YP03 | `just validate-rsr` fails on a declared clade whose code and name disagree. | `clade-mismatch-bad`
-| YP04 | `just validate-rsr` fails on a `#uuid` id that is not lowercase v5 or v8. It reports and passes a legacy `#u5`/`#u8` id. | `uuid-v4-bad`, `legacy-u5`
+| YP04 | `just validate-rsr` fails on a `#uuid` id that is not lowercase v5 or v8. It reports a v5 id as `v5-identity` and fails it in strict mode (A1 C10, T30). It reports and passes a legacy `#u5`/`#u8` id. | `uuid-v4-bad`, `uuid-v5-identity`, `legacy-u5`
 | YP05 | A fresh mint carries no `(clade …)`, no prefixed name and no `UNASSIGNED` in `(identity)`. | `tests/e2e/template_instantiation_test.sh`
 | YP06 | The generated `CLAUDE.md` neither tells an agent to read or create an `.a2ml` file nor presents the clade as identity. | `just validate-claude-md` plus a grep
 |===
@@ -430,6 +430,7 @@ Fixtures are valid unless marked `-bad`. `[done]` marks tests that exist and pas
 * standards at `e880a2d` (`origin/main`, 2026-11-12). Part 1a is on branch `claude/no-new-a2ml-gate` and Part 3 on `claude/anchor-clause-abnf`.
 * `hyperpolymath/gv-clade-index` at `7393be2` and `hyperpolymath/rsr-template-repo` at `a55669e`: shallow public clones, read only.
 * Commands: `scripts/check-a2ml-archived.sh .`, `scripts/uuid-v8.js c gv-clade-index github.com/hyperpolymath/standards`, `grep -rnE '\.a2ml' scripts .github/workflows`, the template's `just validate-rsr`, `just validate-claude-md` and its e2e mint tests (with the template's pinned nickel 1.18.0 and just 1.56.0, both sha256-verified).
+* Paths under `1-formats/` name files as they are in `standards` today. A6 (CR2a, CR2b) moves `1-formats/deed` to `deed-ecosystem` and the K9 directories to `k9-ecosystem` after ratification; the clause modules, the envelope ABNF and the mapping spec move with them, and the old paths resolve through each directory's `POINTER.adoc` (A6 6.2).
 
 == 14. Decisions proposed for the owner
 
@@ -451,7 +452,7 @@ None is approved. Each is the recommendation, with the reason.
 | J10 | `:contractiles_required` is derived and stops being written after one release. | It has one declaration site.
 | J11 | The template mints `:repo-uuid #uuid"<ADR-008 v8 id of the birth path>"` (V8), and `deed-field.sh --uuid` reads it without re-deriving. | The template still writes a `#u5` name literal and re-derives from it.
 | J12 | Related repos keep `:name` and add the chora `:uuid`, which is required in strict mode only. Anchor parents are named by chora id in both modes; a legacy parent with no registered id is left out and the translation is reported incomplete (6.4): a warning in lax mode, an error in strict. | A1 resolves by id, never by name, and the anchor grammar has one parent shape.
-| J13 | `contractile` becomes an A5 rule domain (a G1 addition, so a root `rule-domain` term, per G2). Its registry, `contractile_rules_praxis.deed` in `standards`, is generated from the six verb declarations: one `rule-def` per clause, `:id "contractile/<verb>/<clause-id>"`, the clause text as `:text`. CI fails when regenerating changes it. | A5 resolves a deviation only against an active registry entry. Without a registry, every contractile deviation is `unknown-rule`. Generating the registry keeps the declaration the one source of the clause.
+| J13 | `contractile` becomes an A5 rule domain (a G1 addition, so a root `rule-domain` term, per G2). Its registry, `contractile_rules_praxis.deed` in `standards`, is generated from the six verb declarations: one `rule-def` per clause, `:id "contractile/<verb>/<clause-id>"`, the clause text as `:text`. Each entry also carries the fields A5 R07 requires: `:class gate` for a `must` or `trust` clause and `:class advisory` for the other verbs (8.3), `:excusable-at repo`, `:scope-form exact-paths` (a deviation names the clause with an empty `(scope)`, A5 5.2), and `:status active`. CI fails when regenerating changes it. | A5 resolves a deviation only against an active registry entry. Without a registry, every contractile deviation is `unknown-rule`. Generating the registry keeps the declaration the one source of the clause.
 |===
 
 == 15. Out of scope
