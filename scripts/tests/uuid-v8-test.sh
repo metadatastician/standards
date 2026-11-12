@@ -140,7 +140,12 @@ for mode in "" --strict; do
   fresh; printf '(repo-deed :repo-uuid #uuid"%s")\n' "$V5_C" > "$WORK/t/a_chora.deed"
   expect 1 "a v5 with a non-RFC variant inside #uuid\"…\" is rejected ${mode:-(default)}" $mode
   fresh; printf '(repo-deed :repo-uuid #uuid"%s")\n' "$V8_B" > "$WORK/t/a_chora.deed"
-  expect 0 "an upper-case #uuid body is not typed but a v8 still passes the plain scan ${mode:-(default)}" $mode
+  expect 1 "an upper-case v8 in #uuid\"…\" is malformed, not a plain v8 ${mode:-(default)}" $mode
+  names "malformed #uuid literal" "the upper-case rejection says malformed ${mode:-(default)}"
+  fresh; printf '(repo-deed :repo-uuid #uuid"%s")\n' "$(printf '%s' "$V7_8" | tr 'a-f' 'A-F')" > "$WORK/t/a_chora.deed"
+  expect 1 "an upper-case v7 in #uuid\"…\" does not fall through to dual-accept ${mode:-(default)}" $mode
+  fresh; printf '(x #uuid "%s")\n' "$V7_8" > "$WORK/t/a_chora.deed"
+  expect 1 "a v7 in #uuid with a space does not fall through to dual-accept ${mode:-(default)}" $mode
   fresh; printf '(repo-deed :repo-uuid #uuid"%s")\n' "$(printf '%s' "$V5" | tr 'a-f' 'A-F')" > "$WORK/t/a_chora.deed"
   expect 1 "an upper-case v5 in #uuid\"…\" is not typed, so it is rejected ${mode:-(default)}" $mode
   fresh; printf '{"name": "%s"}\n' "$V5" > "$WORK/t/a.json"
@@ -148,22 +153,33 @@ for mode in "" --strict; do
   fresh; printf '(x #uuid"%s" "%s")\n' "$V5" "$V5" > "$WORK/t/a_chora.deed"
   expect 1 "a bare v5 beside a typed one on the same line is rejected ${mode:-(default)}" $mode
   fresh; printf '(x #uuid "%s")\n' "$V5" > "$WORK/t/a_chora.deed"
-  expect 1 "#uuid with a space before the string does not type it ${mode:-(default)}" $mode
+  expect 1 "#uuid with a space before the string is malformed ${mode:-(default)}" $mode
 done
 
-echo "named exemptions"
-fresh; mkdir -p "$WORK/t/1-formats/deed/tools/fixtures/invalid"
-printf '(repo-deed :repo-uuid #uuid"%s")\n' "$V4" > "$WORK/t/1-formats/deed/tools/fixtures/invalid/inuuid-v4_chora.deed"
-expect 0 "deed_lint's inuuid-* negative controls are exempt" --strict
-fresh; mkdir -p "$WORK/t/1-formats/deed/tools/fixtures/invalid"
-printf '(repo-deed :repo-uuid #uuid"%s")\n' "$V4" > "$WORK/t/1-formats/deed/tools/fixtures/invalid/other_chora.deed"
-expect 1 "another invalid fixture is not exempt" --strict
-fresh; mkdir -p "$WORK/t/docs/estate-reconciliation/examples"
-printf '{"subject":[{"name":"%s"}]}\n' "$V5" > "$WORK/t/docs/estate-reconciliation/examples/a4-statement.json.example"
-expect 0 "the A4 in-toto statement example is exempt" --strict
-fresh; mkdir -p "$WORK/t/docs/estate-reconciliation/examples"
-printf '{"subject":[{"name":"%s"}]}\n' "$V5" > "$WORK/t/docs/estate-reconciliation/examples/a4-envelope.json.example"
-expect 1 "a sibling example file is not exempt" --strict
+echo "per-repository exemptions (.uuid-v8-exempt)"
+FIX=1-formats/deed/tools/fixtures/invalid
+fresh; mkdir -p "$WORK/t/$FIX"
+printf '(repo-deed :repo-uuid #uuid"%s")\n' "$V4" > "$WORK/t/$FIX/inuuid-v4_chora.deed"
+expect 1 "with no exemption file, nothing is exempt by path (the script names no paths)" --strict
+printf '# reason\n\n%s\n' "$FIX/inuuid-v4_chora.deed" > "$WORK/t/.uuid-v8-exempt"
+expect 0 "a file listed in .uuid-v8-exempt is not scanned" --strict
+printf '(repo-deed :repo-uuid #uuid"%s")\n' "$V4" > "$WORK/t/$FIX/inuuid-other_chora.deed"
+expect 1 "an unlisted sibling is still scanned" --strict
+fresh; mkdir -p "$WORK/t/$FIX"
+printf '(repo-deed :repo-uuid #uuid"%s")\n' "$V4" > "$WORK/t/$FIX/inuuid-v4_chora.deed"
+printf './%s\n' "$FIX/inuuid-v4_chora.deed" > "$WORK/t/.uuid-v8-exempt"
+expect 0 "an entry may start with ./" --strict
+printf '%s\n' "$FIX/inuuid-*" > "$WORK/t/.uuid-v8-exempt"
+expect 2 "a glob in .uuid-v8-exempt is a usage error" --strict
+names "is not an exact path (no globs)" "the glob error names the problem"
+fresh; mkdir -p "$WORK/t/sub"
+printf '%s\n' "$V4" > "$WORK/t/sub/a.json"
+printf 'a.json\n' > "$WORK/t/.uuid-v8-exempt"
+expect 1 "an entry is relative to the scan root, not a file name anywhere" --strict
+fresh; printf '%s\n' "$V4" > "$WORK/t/a.json"; printf 'a.json\n' > "$WORK/t/.uuid-v8-exempt"
+got=0; "$SCRIPT" --strict "$WORK/t/" >"$WORK/out" 2>&1 || got=$?
+if [ "$got" = 0 ]; then pass=$((pass+1)); echo "  ok    a scan root given with a trailing slash still matches"
+else fail=$((fail+1)); echo "  FAIL  a scan root given with a trailing slash still matches (got $got)"; sed 's/^/        /' "$WORK/out"; fi
 
 echo "PASS=$pass FAIL=$fail"
 [ "$fail" -eq 0 ]
