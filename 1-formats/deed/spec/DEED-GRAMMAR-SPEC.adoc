@@ -1,5 +1,5 @@
 = DEED Grammar Specification
-:version: 0.2.5
+:version: 0.2.6
 :status: DRAFT
 :media-type: application/vnd.metadatastician.deed
 :toc:
@@ -347,7 +347,7 @@ SUPERSEDED 2026-10-06 by owner ruling D308: `deed.abnf` v1.0.0 is
 authoritative, and it requires `:schema-version` exactly once in any
 position.
 
-== The four document forms
+== The document forms
 
 One extension, `.deed`. The form is selected by the filename stem, *before*
 parsing begins, not by a second extension. Dispatch literals are
@@ -447,7 +447,7 @@ RULED 2026-09-08 by the owner. The owner’s original text was not uniform:
 `:registry-version`, and `repo-deed` carried neither. The grammar
 normalises this:
 
-* `:schema-version` STRING is REQUIRED exactly once on all four heads
+* `:schema-version` STRING is REQUIRED exactly once on every head
   (any position; first by convention). It versions the *format*, so a
   consumer can refuse a file it cannot parse.
 * `:registry-version` STRING remains available on `estate-atlas-deed` as
@@ -836,7 +836,7 @@ consistent frontier" — is described by the repo itself as open. This spec
 must not depend on it. Use the vocabulary; do not claim the theorem.
 
 *Ruling proposed:* adopt choreography/endpoint-projection as the
-description of the estate/repo relation in the four document forms.
+description of the estate/repo relation in the document forms.
 Record K-CUT as an open dependency if any future rule is ever derived
 from commuting projection.
 

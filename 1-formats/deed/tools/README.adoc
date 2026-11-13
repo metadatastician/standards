@@ -26,7 +26,7 @@ authority.
 Enforced rules:
 
 * SPDX header required; one form; full input consumed
-* doc-head whitelist (`estate-deed / repo-deed / estate-atlas-deed / praxis-deed`)
+* doc-head whitelist (`estate-deed / repo-deed / estate-atlas-deed / praxis-deed`, and from v1.4.0 the J14 heads `contractile-deed / descriptile-deed / anchor-deed`)
 * `:schema-version` STRING exactly once (validator-level semantic, per grammar)
 * filename ↔ doc-head dispatch with the exact-stem-first side condition
   (`estate_chora.deed` can never be a repo-deed; stems may contain dots —
