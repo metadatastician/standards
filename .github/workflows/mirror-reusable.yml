@@ -85,12 +85,85 @@ permissions:
   contents: read
 
 jobs:
+  # Visibility guard (owner ruling 2026-11-13, standards CASE-038 / hypatia
+  # WF030 mirror_without_visibility_guard). Every forge job force-pushes main.
+  # Before this guard, a PRIVATE repository with <FORGE>_MIRROR_ENABLED=true was
+  # pushed to that forge whatever the forge copy's visibility, so private code
+  # could land in a public repository. The forges' visibility cannot be read
+  # from here with the deploy keys the callers pass, so the rule is:
+  #   * a public source mirrors as before;
+  #   * a private source (or one whose visibility cannot be read) mirrors to a
+  #     forge only when the repo variable <FORGE>_MIRROR_PRIVATE_CONFIRMED is
+  #     'true', set by a person after checking that the forge copy is private;
+  #   * every enabled forge that is refused is named in an error annotation and
+  #     in the summary, and this job fails, so the run is red, not silent.
+  # The R2 bundle is exempt: it is age-encrypted before it leaves the runner.
+  visibility-guard:
+    timeout-minutes: 5
+    runs-on: ${{ inputs.runs-on }}
+    permissions: {}
+    outputs:
+      public: ${{ steps.vis.outputs.public }}
+    steps:
+      - name: Read the source repository's visibility
+        id: vis
+        env:
+          SRC_PRIVATE: ${{ github.event.repository.private }}
+        run: |
+          set -euo pipefail
+          # Only an explicit "false" counts as public. An absent value (an event
+          # without a repository object) is treated as private: fail closed.
+          if [ "$SRC_PRIVATE" = "false" ]; then
+            echo "public=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "public=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "source private: '${SRC_PRIVATE:-<unknown>}'"
+      - name: Refuse unconfirmed forges for a private source
+        if: steps.vis.outputs.public != 'true'
+        env:
+          EN_GITLAB: ${{ vars.GITLAB_MIRROR_ENABLED }}
+          OK_GITLAB: ${{ vars.GITLAB_MIRROR_PRIVATE_CONFIRMED }}
+          EN_BITBUCKET: ${{ vars.BITBUCKET_MIRROR_ENABLED }}
+          OK_BITBUCKET: ${{ vars.BITBUCKET_MIRROR_PRIVATE_CONFIRMED }}
+          EN_CODEBERG: ${{ vars.CODEBERG_MIRROR_ENABLED }}
+          OK_CODEBERG: ${{ vars.CODEBERG_MIRROR_PRIVATE_CONFIRMED }}
+          EN_SOURCEHUT: ${{ vars.SOURCEHUT_MIRROR_ENABLED }}
+          OK_SOURCEHUT: ${{ vars.SOURCEHUT_MIRROR_PRIVATE_CONFIRMED }}
+          EN_DISROOT: ${{ vars.DISROOT_MIRROR_ENABLED }}
+          OK_DISROOT: ${{ vars.DISROOT_MIRROR_PRIVATE_CONFIRMED }}
+          EN_GITEA: ${{ vars.GITEA_MIRROR_ENABLED }}
+          OK_GITEA: ${{ vars.GITEA_MIRROR_PRIVATE_CONFIRMED }}
+          EN_RADICLE: ${{ vars.RADICLE_MIRROR_ENABLED }}
+          OK_RADICLE: ${{ vars.RADICLE_MIRROR_PRIVATE_CONFIRMED }}
+        run: |
+          set -euo pipefail
+          refused=0
+          for forge in GITLAB BITBUCKET CODEBERG SOURCEHUT DISROOT GITEA RADICLE; do
+            en_var="EN_${forge}"; ok_var="OK_${forge}"
+            [ "${!en_var:-}" = "true" ] || continue
+            if [ "${!ok_var:-}" != "true" ]; then
+              refused=$((refused + 1))
+              msg="Not mirroring this PRIVATE repository to ${forge}: ${forge}_MIRROR_ENABLED is true but ${forge}_MIRROR_PRIVATE_CONFIRMED is not. Check that the ${forge} copy is private, then set ${forge}_MIRROR_PRIVATE_CONFIRMED=true, or turn the mirror off."
+              echo "::error::$msg"
+              printf -- '- %s\n' "$msg" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
+          if [ "$refused" -gt 0 ]; then
+            echo "$refused forge mirror(s) refused by the visibility guard." >&2
+            exit 1
+          fi
+          echo "Private source: every enabled forge is confirmed private."
+
   mirror-gitlab:
     # Advisory mirror: verification still fails closed and skips the push.
     continue-on-error: true
     timeout-minutes: 20
     runs-on: ${{ inputs.runs-on }}
-    if: vars.GITLAB_MIRROR_ENABLED == 'true'
+    needs: visibility-guard
+    # Visibility guard (owner ruling 2026-11-13): a private source is pushed only
+    # to a forge confirmed private by vars.GITLAB_MIRROR_PRIVATE_CONFIRMED.
+    if: ${{ !cancelled() && vars.GITLAB_MIRROR_ENABLED == 'true' && (needs.visibility-guard.outputs.public == 'true' || vars.GITLAB_MIRROR_PRIVATE_CONFIRMED == 'true') }}
     # Map the secret to env so step `if:`s can gate on its presence: the
     # `secrets` context is NOT available in `if:` (using it is an
     # "Unrecognized named-value: 'secrets'" startup failure). `env` IS
@@ -150,7 +223,10 @@ jobs:
   mirror-bitbucket:
     timeout-minutes: 20
     runs-on: ${{ inputs.runs-on }}
-    if: vars.BITBUCKET_MIRROR_ENABLED == 'true'
+    needs: visibility-guard
+    # Visibility guard (owner ruling 2026-11-13): a private source is pushed only
+    # to a forge confirmed private by vars.BITBUCKET_MIRROR_PRIVATE_CONFIRMED.
+    if: ${{ !cancelled() && vars.BITBUCKET_MIRROR_ENABLED == 'true' && (needs.visibility-guard.outputs.public == 'true' || vars.BITBUCKET_MIRROR_PRIVATE_CONFIRMED == 'true') }}
     # See mirror-gitlab: the `secrets` context is not valid in step `if:`;
     # hoist to job-level `env` and gate steps on `env.BITBUCKET_KEY`.
     env:
@@ -202,7 +278,10 @@ jobs:
   mirror-codeberg:
     timeout-minutes: 20
     runs-on: ${{ inputs.runs-on }}
-    if: vars.CODEBERG_MIRROR_ENABLED == 'true'
+    needs: visibility-guard
+    # Visibility guard (owner ruling 2026-11-13): a private source is pushed only
+    # to a forge confirmed private by vars.CODEBERG_MIRROR_PRIVATE_CONFIRMED.
+    if: ${{ !cancelled() && vars.CODEBERG_MIRROR_ENABLED == 'true' && (needs.visibility-guard.outputs.public == 'true' || vars.CODEBERG_MIRROR_PRIVATE_CONFIRMED == 'true') }}
     # See mirror-gitlab: the `secrets` context is not valid in step `if:`;
     # hoist to job-level `env` and gate steps on `env.CODEBERG_KEY`.
     env:
@@ -254,7 +333,10 @@ jobs:
   mirror-sourcehut:
     timeout-minutes: 20
     runs-on: ${{ inputs.runs-on }}
-    if: vars.SOURCEHUT_MIRROR_ENABLED == 'true'
+    needs: visibility-guard
+    # Visibility guard (owner ruling 2026-11-13): a private source is pushed only
+    # to a forge confirmed private by vars.SOURCEHUT_MIRROR_PRIVATE_CONFIRMED.
+    if: ${{ !cancelled() && vars.SOURCEHUT_MIRROR_ENABLED == 'true' && (needs.visibility-guard.outputs.public == 'true' || vars.SOURCEHUT_MIRROR_PRIVATE_CONFIRMED == 'true') }}
     # See mirror-gitlab: the `secrets` context is not valid in step `if:`;
     # hoist to job-level `env` and gate steps on `env.SOURCEHUT_KEY`.
     env:
@@ -306,7 +388,10 @@ jobs:
   mirror-disroot:
     timeout-minutes: 20
     runs-on: ${{ inputs.runs-on }}
-    if: vars.DISROOT_MIRROR_ENABLED == 'true'
+    needs: visibility-guard
+    # Visibility guard (owner ruling 2026-11-13): a private source is pushed only
+    # to a forge confirmed private by vars.DISROOT_MIRROR_PRIVATE_CONFIRMED.
+    if: ${{ !cancelled() && vars.DISROOT_MIRROR_ENABLED == 'true' && (needs.visibility-guard.outputs.public == 'true' || vars.DISROOT_MIRROR_PRIVATE_CONFIRMED == 'true') }}
     # See mirror-gitlab: the `secrets` context is not valid in step `if:`;
     # hoist to job-level `env` and gate steps on `env.DISROOT_KEY`.
     env:
@@ -358,7 +443,10 @@ jobs:
   mirror-gitea:
     timeout-minutes: 20
     runs-on: ${{ inputs.runs-on }}
-    if: vars.GITEA_MIRROR_ENABLED == 'true'
+    needs: visibility-guard
+    # Visibility guard (owner ruling 2026-11-13): a private source is pushed only
+    # to a forge confirmed private by vars.GITEA_MIRROR_PRIVATE_CONFIRMED.
+    if: ${{ !cancelled() && vars.GITEA_MIRROR_ENABLED == 'true' && (needs.visibility-guard.outputs.public == 'true' || vars.GITEA_MIRROR_PRIVATE_CONFIRMED == 'true') }}
     # See mirror-gitlab: the `secrets` context is not valid in step `if:`;
     # hoist to job-level `env` and gate steps on `env.GITEA_KEY`. The host is
     # hoisted too: a missing vars.GITEA_HOST must SKIP with a notice, never
@@ -417,7 +505,10 @@ jobs:
   mirror-radicle:
     timeout-minutes: 20
     runs-on: ${{ inputs.runs-on }}
-    if: vars.RADICLE_MIRROR_ENABLED == 'true'
+    needs: visibility-guard
+    # Visibility guard (owner ruling 2026-11-13): a private source is pushed only
+    # to a forge confirmed private by vars.RADICLE_MIRROR_PRIVATE_CONFIRMED.
+    if: ${{ !cancelled() && vars.RADICLE_MIRROR_ENABLED == 'true' && (needs.visibility-guard.outputs.public == 'true' || vars.RADICLE_MIRROR_PRIVATE_CONFIRMED == 'true') }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
