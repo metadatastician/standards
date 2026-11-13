@@ -58,5 +58,22 @@ bash "$WORK/deedwarn.sh" > "$WORK/o" 2>&1; rc=$?
 : > "$WORK/deed-lint.log"; bash "$WORK/deedwarn.sh" > "$WORK/o" 2>&1
 grep -q 'did not run to completion' "$WORK/o" && ok "deed: an empty log says the check did not complete" || bad "deed: empty log message"
 
+# Escaping: a path with a comma and a colon must not break the property list.
+printf 'FAIL ./a,b:c_chora.deed: line 1: bad\n' > "$WORK/deed-lint.log"
+bash "$WORK/deedwarn.sh" > "$WORK/o" 2>&1
+grep -q '^::warning file=a%2Cb%3Ac_chora.deed::deed conformance (advisory): line 1: bad' "$WORK/o" \
+  && ok "deed: , and : in a path are escaped in the annotation property" || bad "deed path escaping: $(cat "$WORK/o")"
+
+# No error-severity annotation in advisory mode (the runner keeps ::error:: even under continue-on-error).
+for spec in "$K:validate:Enumerate the committed K9 files, the changed files and ledger growth" "$D:lint:lint every committed deed"; do
+  file="${spec%%:*}"; rest="${spec#*:}"; job="${rest%%:*}"; step="${rest#*:}"
+  body=$(rb 'puts YAML.load_file(ARGV[0])["jobs"][ARGV[1]]["steps"].find{|s| s["name"]==ARGV[2]}["run"]' "$file" "$job" "$step")
+  # every ::error:: line must be switched on ADVISORY via the ${sev} variable
+  bare=$(printf '%s\n' "$body" | grep -c '::error::' || true)
+  [ "$bare" = 0 ] && grep -q 'sev=error; \[ "\$ADVISORY" = "true" \] && sev=warning' <<<"$body" \
+    && ok "$(basename "$file"): '$step' downgrades its annotation to a warning under advisory" \
+    || bad "$(basename "$file"): '$step' still has a bare ::error:: ($bare)"
+done
+
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

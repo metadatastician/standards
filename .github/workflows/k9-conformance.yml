@@ -222,6 +222,7 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           LEDGER: .machine_readable/k9-contract-debt.txt
+          ADVISORY: ${{ inputs.advisory || false }}
         run: |
           set -euo pipefail
           # Tracked files only: an untracked file is not a committed contract.
@@ -285,7 +286,9 @@ jobs:
             echo "::notice::$LEDGER grew by $n entr(y/ies) under a declared Ratchet-exception"
             : > "$RUNNER_TEMP/ledger-growth"
           else
-            echo "::error::$LEDGER grew by $n entr(y/ies) with no Ratchet-exception naming it; the new entries exempt nothing"
+            # Advisory mode must not attach error-severity annotations.
+            sev=error; [ "$ADVISORY" = "true" ] && sev=warning
+            echo "::${sev}::$LEDGER grew by $n entr(y/ies) with no Ratchet-exception naming it; the new entries exempt nothing"
             sed 's/^/  + /' "$RUNNER_TEMP/ledger-growth"
           fi
 
