@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 = A3: The Single Gate (one required check, the caller contract, the check table)
-:version: 0.2.2-draft
-:status: DRAFT v0.2.2. Decisions E1 to E11 approved by the owner on 2026-11-10. Not yet ratified as a whole. Builds on A1 v0.3.9 and A2 v0.2.3. Consistency pass applied 2026-11-10. Proposed in standards#1474; bot-review fixes applied 2026-11-12.
+:version: 0.2.3-draft
+:status: DRAFT v0.2.3. Decisions E1 to E11 approved by the owner on 2026-11-10, and E12 on 2026-11-13 (contractiles become a required check, with A7 v0.2.0). Not yet ratified as a whole. Builds on A1 v0.3.9 and A2 v0.2.3. Consistency pass applied 2026-11-10. Proposed in standards#1474; bot-review fixes applied 2026-11-12.
 :toc:
 
 Specification A3 of the Estate Reconciliation Plan. It defines the one required status check of a repo, the one caller workflow, the table from profile to checks, and the rules by which a verdict is computed.
@@ -202,6 +202,7 @@ A3 does not widen the required set. The first table reproduces the checks requir
 | baseline | `secret-scan` | `proven-cicd` (enforcing) and `standards` `secret-scanner-reusable.yml` | 2 implementations today.
 | baseline | `hypatia-scan` | `standards` `hypatia-scan-reusable.yml` | Not in the catalogue. Needs a home (E4).
 | baseline | `codeql` | `standards` `codeql-reusable.yml` | `gates.json` lists it as base gate and as never required. Table lists it advisory until ruled (E5).
+| baseline | `contractiles` | `standards` `k9-contractile.yml` (job `K9-SVC contractile validation`, already a required context in `standards`) | Not in the catalogue. Needs a home (E4). Required by E12; what fails it is A7 section 8.4.
 | `rust` | `rust-ci` | `proven-cicd` (enforcing) and `standards` `rust-ci-reusable.yml` | 2 implementations today.
 | `elixir` | `elixir-ci` | `standards` `elixir-ci-reusable.yml` | Not in the catalogue.
 | `julia` | `julia-ci` | repo-local `julia-ci.yml` named in `gates.json` | No reusable found [I].
@@ -209,6 +210,8 @@ A3 does not widen the required set. The first table reproduces the checks requir
 | `formal-proofs` | `proofs` | repo-local `proofs.yml`, `abi-ffi-gate.yml`, `spark-theatre-gate.yml` named in `gates.json` | `proven-cicd` has `creusot`, `spark`, `kanren`, `idris2-abi`, `proof-runner`. Mapping needs a ruling.
 | none yet | `ada-ci`, `bun-ci`, `host` | repo-local files named in `gates.json` | The 28 capabilities of A2 have no `ada`, `bun` or `host` term (E3).
 |===
+
+The `contractiles` row is the one deliberate widening (E12, an owner ruling of 2026-11-13). It fails on a `Must` violation, on a violated clause marked `!`, on a Bust finding graded `X1`, and on a blocking unresolved verdict (A7 8.4). A violation the verb grades as a warning is reported in the gate comment and does not fail it.
 
 All other catalogue capabilities are `advisory` in the first table. Promoting one to `required` is an owner ruling and a table change. The enforcing checks of the original audit (14 of its 26 actions [M: README]) are not required by `gates.json` today (finding 7) and A3 does not require them.
 
@@ -376,6 +379,7 @@ Every test is new work unless stated. A fixture is valid unless marked `-bad`.
 | G24 | An `owned` or `either` row without `:timeout` uses 900 seconds (5.4); a `github` row with `:timeout` is rejected. | `table-no-timeout-default`, `table-github-timeout-bad`
 | G25 | A row with `:obligation advisory` never changes a verdict. | `advisory-fail`
 | G26 | Every `:rule` equals `check/<id>`. | `table-rule-bad`
+| G27 | The baseline row `contractiles` is `required`. A fixture with one violated `Must` clause, one with a violated `!` clause, one with an `X1` Bust finding and one with an unwitnessed `Must` clause each give `failed`; a fixture whose only finding is a warning-level `Adjust` violation gives `passed` with the finding reported. | `contractiles-must-bad`, `contractiles-bang-bad`, `contractiles-x1-bad`, `contractiles-unwitnessed-bad`, `contractiles-warn-ok`
 |===
 
 === 13.4 Applicability and verdict
@@ -437,9 +441,9 @@ Every test is new work unless stated. A fixture is valid unless marked `-bad`.
 | G63 | An unsigned envelope from the Actions aggregate is reported `unsigned`, and is not an error until A4 F3 is in place. | `merged-unsigned`
 |===
 
-== 14. Decisions approved on 2026-11-10 [O]
+== 14. Decisions approved on 2026-11-10 and 2026-11-13 [O]
 
-The owner approved E1 to E11 as recommended. The text of this document is the recommendation in each case.
+The owner approved E1 to E11 as recommended on 2026-11-10, and ruled E12 on 2026-11-13. The text of this document is the recommendation in each case.
 
 [cols="1,4,1"]
 |===
@@ -456,6 +460,7 @@ The owner approved E1 to E11 as recommended. The text of this document is the re
 | E9 | The envelope format and its storage are decided in A4. A3 fixes the fields only. | Approved
 | E10 | The reserved rule namespace `check/` for waivers. | Approved
 | E11 | The `proven-cicd` stubs and advisory checks are not required until the owner rules. A3 does not widen the required set. | Approved
+| E12 | A `baseline` check row `contractiles`, `:obligation required`, carries the contractiles runner into `estate-gate`. It fails as A7 8.4 says. Owner ruling of 2026-11-13; it amends E11 for this one check. | Approved 2026-11-13
 |===
 
 Open after approval: A3 as a whole is not ratified. No file, ruleset or workflow is changed in any repo until the owner approves.
@@ -479,4 +484,4 @@ I did not read: `hypatia` (the scan itself), `cicd-squabbler` (the satisfiabilit
 
 == 16. Out of scope
 
-A4 (the office and farm boundary, the envelope format and storage, the Actions signing key, the post-merge observer). A5 (the deviation store beyond the clause, canon rule identifiers, `debt` waivers). A6 (where `governance-reusable` and the other reusable workflows live after the `standards` carve-out). Widening the required set. Any change to a ruleset, a workflow or a caller in any repo. The trope format. Any `.a2ml` file: A3 creates none.
+A4 (the office and farm boundary, the envelope format and storage, the Actions signing key, the post-merge observer). A5 (the deviation store beyond the clause, canon rule identifiers, `debt` waivers). A6 (where `governance-reusable` and the other reusable workflows live after the `standards` carve-out). Widening the required set beyond E12. Any change to a ruleset, a workflow or a caller in any repo. The trope format. Any `.a2ml` file: A3 creates none.
