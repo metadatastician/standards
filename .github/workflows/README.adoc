@@ -49,9 +49,9 @@ These workflows *block* merges if they fail. They enforce critical estate-wide p
 |`codeql.yml` |CodeQL security analysis |rsr-template-repo |Yes
 |`codeql-reusable.yml` |Reusable CodeQL |standards |Yes
 |`governance.yml` |Quality and policy checks |rsr-template-repo |Yes
-|`governance-reusable.yml` |Reusable governance |standards |Yes
+|`governance-reusable.yml` |Reusable governance (DEPRECATED for new repos: use the template's inline `governance.yml`) |standards |Yes
 |`hypatia-scan.yml` |Security scanning with Hypatia |rsr-template-repo |Yes
-|`hypatia-scan-reusable.yml` |Reusable Hypatia scan |standards |Yes
+|`hypatia-scan-reusable.yml` |Reusable Hypatia scan (DEPRECATED for new repos: use the template's inline `hypatia-scan.yml`; still used by the fork-governance lane) |standards |Yes
 |`fork-governance.yml` |The one PR comment (DEED · K9-DEED conformance · Hypatia verdict grid) plus the PR-time scanner. This is the lane that publishes `Hypatia verdict grid / Hypatia Neurosymbolic Analysis`, so a ruleset requiring that context depends on this workflow running on every PR |standards |`fork-governance-reusable.yml`
 |`required-contexts.yml` |Asserts every context the branch ruleset requires is actually publishable on a pull request. A required check nothing can publish makes every PR undecidable; this gate catches that before the ruleset has to be bypassed |standards |No
 |`main-estate-audit.yml` |Estate audit checks |rsr-template-repo |Yes
@@ -61,7 +61,7 @@ These workflows *block* merges if they fail. They enforce critical estate-wide p
 |`estate-rules.yml` |Estate-wide conventions enforcement |rsr-template-repo |No
 |`guix-policy.yml` |Guix/Nix package policy |knot-rider (canonical) |No
 |`secret-scanner.yml` |Secrets detection |rsr-template-repo |Yes
-|`secret-scanner-reusable.yml` |Reusable secrets scanner |standards |Yes
+|`secret-scanner-reusable.yml` |Reusable secrets scanner (DEPRECATED for new repos: use the template's inline `secret-scanner.yml`) |standards |Yes
 |[line-through]*`runtime-policy.yml`* |*RETIRED:* removed from `rsr-template-repo`; `tests/workflows/governance_policy_test.sh` asserts the file and its lock record must not exist. Listed here only so the retirement is discoverable rather than looking like an omission |— |No
 |`static-analysis-gate.yml` |Static analysis gate |rsr-template-repo |No
 |`wellknown-enforcement.yml` |.well-known file enforcement |rsr-template-repo |No
@@ -350,6 +350,8 @@ Heavy jobs — full test suites, proof checkers, expensive builds — do not nee
 === For Reusable Workflows
 
 These should *call* the reusable workflow instead of copying:
+
+Note: `governance-reusable.yml`, `hypatia-scan-reusable.yml` and `secret-scanner-reusable.yml` are deprecated for new repositories. The rsr-template-repo template runs those three checks as inline jobs; new repositories should use the inline form. Existing callers pinned by SHA keep working.
 
 [source,yaml]
 ----

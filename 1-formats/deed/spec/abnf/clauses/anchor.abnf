@@ -12,7 +12,8 @@
 ; `clause` of deed.abnf v1.3.0, so a deed carrying one still passes deed_lint
 ; unchanged. This profile narrows that clause. Rules it borrows (string,
 ; boolean, symbol, token-sep, DQUOTE, DIGIT, ALPHA, hex-lc, str-char, escape)
-; are deed.abnf's, unchanged. Requires RFC 7405 (%s"..." case-sensitive string literals).
+; are deed.abnf's, unchanged; str-list, str-list1, chora-uuid8 and lc-variant
+; are common.abnf's. Requires RFC 7405 (%s"..." case-sensitive string literals).
 ;
 ; What the anchor is: the repo's semantic authority and golden path — what a
 ; downstream or satellite repo may extend but not redefine, and how to bring

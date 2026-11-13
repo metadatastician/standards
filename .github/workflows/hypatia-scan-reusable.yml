@@ -1,7 +1,7 @@
 # This workflow is managed by gh actions-lock.
 # SPDX-License-Identifier: MPL-2.0
 # This workflow is managed by gh actions-lock.
-# Hypatia Neurosymbolic CI/CD Security Scan — Reusable Workflow
+# Hypatia Neurosymbolic CI/CD Security Scan — Reusable Workflow (DEPRECATED for new repos, comment only: the template runs this scan inline)
 name: Hypatia Reusable Scan
 
 on:
@@ -148,10 +148,13 @@ jobs:
           persist-credentials: false
 
       - name: Setup Elixir for Hypatia scanner
+        # OTP 28.x (28.1 to 28.5.0.8) segfaults the Hypatia scanner and oracle
+        # in sweep_off_heap on some trees; OTP 27.3.4.19 is clean on all of them
+        # (rsr-template-repo#333 and #339; hyperpolymath/hypatia#1061).
         uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1.24.1
         with:
           elixir-version: '1.19.4'
-          otp-version: '28.5.0.8'
+          otp-version: '27.3.4.19'
 
       - name: Resolve Hypatia scanner commit
         id: hypatia-rev
@@ -213,7 +216,7 @@ jobs:
           # SD022, hypatia#545) never reached CI. No restore-keys on purpose —
           # a partial restore would repopulate ~/hypatia and the guards below
           # would then skip the rebuild, reintroducing the staleness.
-          key: hypatia-scanner-v4-${{ runner.os }}-otp28.5.0.8-${{ steps.hypatia-rev.outputs.sha }}
+          key: hypatia-scanner-v4-${{ runner.os }}-otp27.3.4.19-${{ steps.hypatia-rev.outputs.sha }}
 
       - name: Check out resolved Hypatia commit
         env:

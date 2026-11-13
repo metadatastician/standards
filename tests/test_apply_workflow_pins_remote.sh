@@ -15,6 +15,7 @@
 # Each mutant is therefore `bash -n`-checked BEFORE its redness is believed.
 
 set -uo pipefail
+unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR GIT_INDEX_FILE GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_PREFIX
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APPLIER="${SCRIPT_DIR}/../scripts/apply-workflow-pins-remote.sh"
@@ -203,12 +204,14 @@ cat > "$LSTUB/gh" <<'EOF'
 # $GH_FIX, and modelling which token kinds may call installation/repositories.
 echo "$*" >> "$GH_FIX/calls.log"
 [ "${1:-} ${2:-}" = "auth status" ] && exit 0
+[ "${1:-} ${2:-}" = "pr create" ] && { echo "https://github.com/stub/pull/1"; exit 0; }
 [ "${1:-}" = api ] || exit 64
 shift
-path="" jqx="" gql=0
+path="" jqx="" gql=0 inp=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --jq|-q)     jqx="$2"; shift ;;
+    --input)     inp=1 ;;
     -F|-f|-H)    shift ;;
     -*)          ;;
     graphql)     gql=1 ;;
@@ -219,11 +222,19 @@ done
 # refuse — fail the way gh does on a non-2xx response: message on stderr, rc 1.
 refuse() { echo "gh: $2 (HTTP $1)" >&2; exit 1; }
 if [ "$gql" = 1 ]; then
+  # A createCommitOnBranch request arrives on stdin (--input -): keep it for
+  # the test to inspect and answer with an oid.
+  if [ "$inp" = 1 ]; then
+    cat > "$GH_FIX/commit.json"
+    echo '{"data":{"createCommitOnBranch":{"commit":{"oid":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}}}}'; exit 0
+  fi
   # Every repository holds one workflow, pinned FRESH at $TARGET. If
   # $GH_FIX/own_squabbler exists, each repository also holds a
   # cicd-squabbler.yml with that text (a workflow of the repo's own).
   extra="[]"
   [ -f "$GH_FIX/own_squabbler" ] && extra=$(jq -Rs '[{name: "cicd-squabbler.yml", type: "blob", object: {text: .}}]' "$GH_FIX/own_squabbler")
+  # $GH_FIX/own_lock: each repository also holds that actions.lock.
+  [ -f "$GH_FIX/own_lock" ] && extra=$(printf '%s' "$extra" | jq --rawfile l "$GH_FIX/own_lock" '. + [{name: "actions.lock", type: "blob", object: {text: $l}}]')
   jq -n --arg sha "$TARGET" --argjson extra "$extra" '{data: {repository: {object: {entries: ([{name: "ci.yml", type: "blob",
     object: {text: ("jobs:\n  a:\n    uses: hyperpolymath/standards/.github/workflows/x.yml@" + $sha + "\n")}}] + $extra)}}}}'
   exit 0
@@ -233,11 +244,16 @@ p="${path%%\?*}"
 # --ensure-squabbler's fork test. fork_<name> in $GH_FIX makes it a fork.
 if [[ "$p" =~ ^repos/[^/]+/[^/]+$ ]]; then
   f=false; [ -f "$GH_FIX/fork_${p##*/}" ] && f=true
-  j="{\"fork\": $f}"
+  j="{\"fork\": $f, \"default_branch\": \"main\"}"
   if [ -n "$jqx" ]; then printf '%s' "$j" | jq -r "$jqx"; else printf '%s' "$j"; fi
   exit 0
 fi
 case "$p" in
+  repos/*/commits/*)
+    j='{"sha": "cccccccccccccccccccccccccccccccccccccccc"}'
+    if [ -n "$jqx" ]; then printf '%s' "$j" | jq -r "$jqx"; else printf '%s' "$j"; fi; exit 0 ;;
+  repos/*/git/ref/*) refuse 404 "Not Found" ;;
+  repos/*/git/refs) echo '{}'; exit 0 ;;
   users/*/repos|orgs/*/repos)
     kind="${p%%/*}"; o="${p#*/}"; o="${o%/repos}"
     [ -f "$GH_FIX/${kind}_fail_$o" ] && refuse 403 "API rate limit exceeded"
@@ -484,6 +500,72 @@ if grep -qF "$(printf 'hyperpolymath/pub-a\tcicd-squabbler.yml\tSQUABBLER-DEFERR
   pass "main: an own cicd-squabbler.yml without the gate is NAME-TAKEN, never overwritten"
 else
   fail "main: an own cicd-squabbler.yml was not reported NAME-TAKEN"; sed 's/^/    /' "$d/out" >&2
+fi
+
+# --ensure-squabbler in FIX mode, end to end: a non-fork repo with no gate gets
+# the caller committed (createCommitOnBranch payload captured by the stub) with
+# the canonical uses line pinned at the target, its lock entry written by the
+# real relock against a synthetic standards checkout, and a PR opened.
+d=$(new_case fixsq)
+SQS="$d/standards"; git init -q -b main "$SQS"; git -C "$SQS" config user.email t@t; git -C "$SQS" config user.name t
+mkdir -p "$SQS/.github/workflows"
+for r in x.yml cicd-squabbler-reusable.yml; do
+  printf 'on: { workflow_call: {} }\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@1111111111111111111111111111111111111111 # v1\n' > "$SQS/.github/workflows/$r"
+done
+cat > "$SQS/.github/workflows/actions.lock" <<'Y'
+version: 'v0.0.3'
+workflows:
+    '.github/workflows/cicd-squabbler-reusable.yml':
+        - 'actions/checkout@1111111111111111111111111111111111111111'
+    '.github/workflows/x.yml':
+        - 'actions/checkout@1111111111111111111111111111111111111111'
+dependencies:
+    'actions/checkout@1111111111111111111111111111111111111111':
+        ref: 'v1'
+        commit: 'sha1-1111111111111111111111111111111111111111'
+        owner_id: 10
+        repo_id: 11
+Y
+git -C "$SQS" add -A; git -C "$SQS" commit -q -m sq; SQT=$(git -C "$SQS" rev-parse HEAD)
+# The repository's ci.yml (served by the stub) calls x.yml at the target.
+cat > "$d/own_lock" <<Y
+version: 'v0.0.3'
+workflows:
+    '.github/workflows/ci.yml':
+        - 'hyperpolymath/standards@$SQT'
+dependencies:
+    'actions/checkout@1111111111111111111111111111111111111111':
+        ref: 'v1'
+        commit: 'sha1-1111111111111111111111111111111111111111'
+        owner_id: 10
+        repo_id: 11
+    'hyperpolymath/standards@$SQT':
+        ref: '$SQT'
+        commit: 'sha1-$SQT'
+        owner_id: 6759885
+        repo_id: 1116521501
+        uses:
+            - 'actions/checkout@1111111111111111111111111111111111111111'
+Y
+: > "$d/calls.log"
+# shellcheck disable=SC2016  # $1 and $2 are expanded by the inner shell
+env PATH="$LSTUB:$PATH" GH_FIX="$d" GH_TOKEN=ghs_app GITHUB_TOKEN= TARGET="$SQT" \
+  bash -c 'source "$1"; STANDARDS_ROOT="$2"; validate_target() { return 0; }; shift 2; main "$@"' _ "$APPLIER" "$SQS" \
+    --to "$SQT" --owners hyperpolymath --fix --ensure-squabbler > "$d/out" 2> "$d/err"
+rc_fixsq=$?
+sqcaller=$(jq -r '.variables.input.fileChanges.additions[] | select(.path == ".github/workflows/cicd-squabbler.yml") | .contents' "$d/commit.json" 2>/dev/null | base64 -d 2>/dev/null)
+sqlock=$(jq -r '.variables.input.fileChanges.additions[] | select(.path == ".github/workflows/actions.lock") | .contents' "$d/commit.json" 2>/dev/null | base64 -d 2>/dev/null)
+if [ "$rc_fixsq" = 0 ] \
+   && grep -qF "$(printf 'hyperpolymath/pub-a\tcicd-squabbler.yml\tSQUABBLER-ADDED')" "$d/out" \
+   && printf '%s\n' "$sqcaller" | grep -qxF "    uses: metadatastician/standards/.github/workflows/cicd-squabbler-reusable.yml@$SQT" \
+   && printf '%s\n' "$sqlock" | grep -qxF "    '.github/workflows/cicd-squabbler.yml':" \
+   && grep -q '^pr create ' "$d/calls.log" \
+   && grep -qF "$(printf 'hyperpolymath/pub-a\t-\tPR-OPENED')" "$d/out"; then
+  pass "main: --fix --ensure-squabbler commits the caller pinned at the target, writes its lock entry and opens the PR"
+else
+  fail "main: --fix --ensure-squabbler did not commit caller + lock entry (rc=$rc_fixsq)"
+  sed 's/^/    /' "$d/out" >&2; tail -5 "$d/err" | sed 's/^/    /' >&2
+  printf '%s\n' "$sqcaller" | sed 's/^/    caller: /' >&2
 fi
 
 # --ensure-squabbler against a target with no squabbler reusable stops the

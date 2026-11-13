@@ -3,20 +3,22 @@
 # SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
 #
 # check-a2ml-archived.sh — A2ML is retired (owner rulings D99, D269c, D312,
-# D313); no A2ML file may appear outside the archive or the legacy ledger.
+# D313); no A2ML file may appear anywhere except the legacy ledger.
 #
 # Every tracked A2ML file (*.a2ml, *.a2ml.in, *.a2ml.template,
-# *.a2ml.vN.template) must either sit under 9-archive/ or be named, by exact
-# path, in .machine_readable/a2ml-legacy-allow.txt. The check runs both ways:
+# *.a2ml.vN.template) must be named, by exact path, in
+# .machine_readable/a2ml-legacy-allow.txt. 9-archive/ is no exemption: the
+# owner ruled on 2026-11-13 that archived copies go too, and the removed ones
+# are recorded in 9-archive/A2ML-REMOVED.adoc. The check runs both ways:
 #
-#   * a file in neither place FAILS: a new or moved A2ML file is drift;
+#   * an unlisted file FAILS, archive included: a new or moved A2ML file is drift;
 #   * a ledger entry whose file is gone FAILS: the entry must leave in the
 #     same commit that archives, translates or deletes its file, so the
 #     ledger only shrinks (the exemption ratchet forbids it growing).
 #
 # Ledger entries are exact paths. A glob or a 9-archive/ path in the ledger
 # is a defect: a pattern would absorb files added later, and an archived
-# file needs no exemption.
+# file is removed, not ledgered.
 #
 # In a git work tree the set is the tracked files plus untracked files that
 # are not ignored, so a contributor sees a new file before committing it.
@@ -81,7 +83,7 @@ while IFS=$'\t' read -r lineno entry; do
       echo "::error file=$LEDGER_REL,line=$lineno::ledger entry '$entry' is a pattern; list exact paths only"
       fail=1; continue ;;
     9-archive/*)
-      echo "::error file=$LEDGER_REL,line=$lineno::ledger entry '$entry' is under 9-archive/, which needs no exemption"
+      echo "::error file=$LEDGER_REL,line=$lineno::ledger entry '$entry' is under 9-archive/: archived A2ML is removed, not ledgered"
       fail=1; continue ;;
   esac
   if [ -n "${listed[$entry]:-}" ]; then
@@ -116,20 +118,16 @@ fi
 
 declare -A present=()
 live=0
-archived=0
 while IFS= read -r -d '' f; do
   [ -n "$f" ] || continue
   # Skip only an entry deleted from the work tree. A dangling symlink fails
   # -e but is still a tracked A2ML path, so -L keeps it in the scan.
   [ -e "$ROOT/$f" ] || [ -L "$ROOT/$f" ] || continue
-  case "$f" in
-    9-archive/*) archived=$((archived + 1)); continue ;;
-  esac
   present[$f]=1
   if [ -n "${listed[$f]:-}" ]; then
     live=$((live + 1))
   else
-    echo "::error file=$f::A2ML file outside 9-archive/ and not in $LEDGER_REL. A2ML is retired: write a .deed or .k9.ncl instead, or archive it under 9-archive/a2ml/ at its original path"
+    echo "::error file=$f::A2ML file not in $LEDGER_REL. A2ML is retired, archive included: write a .deed or .k9.ncl instead, or record it in 9-archive/A2ML-REMOVED.adoc and delete it"
     fail=1
   fi
 done < <(list_files | grep -zE "$A2ML_RE" || true)
@@ -141,7 +139,7 @@ for entry in "${!listed[@]}"; do
   fi
 done
 
-echo "a2ml archive gate: $live live (ledgered), $archived archived under 9-archive/"
+echo "a2ml archive gate: $live live (ledgered)"
 if [ "$fail" -ne 0 ]; then
   echo "a2ml archive gate: FAIL"
   exit 1
