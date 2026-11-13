@@ -76,9 +76,7 @@ ALLOWLIST=(
                                      # document instructing anyone to use the retired name is still
                                      # a defect, and the check still reports it everywhere else.
   '9-archive/*'                      # frozen history (9-archive/MOVED.adoc indexes it). A record moved
-                                     # there keeps the names of its day; it is read, never updated. The
-                                     # retired A2ML corpus lands under 9-archive/a2ml/ with original paths,
-                                     # so docs/audits/* above no longer matches an archived audit on its own.
+                                     # there keeps the names of its day; it is read, never updated.
   '1-formats/deed/mappings/*'        # the .a2ml -> .deed conversion record; naming both is its job
   'dev-notes/*'                      # working notes, not compliance claims
   '*HANDOVER*'                       # handover documents record prior state
