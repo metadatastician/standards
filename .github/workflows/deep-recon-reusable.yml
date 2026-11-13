@@ -51,7 +51,7 @@ on:
         description: "panic-attack commit to install."
         required: false
         type: string
-        default: "b5530834a839734d1d181bfe6edb0d43d4233cf4"
+        default: "410a8f821ea8297833162565b50a298f787815da"
       runs-on:
         description: "Runner label."
         required: false
