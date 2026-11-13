@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 = A7: Contractiles, Descriptiles and Anchor (edicts, reality, course correction)
-:version: 0.2.3-draft
-:status: DRAFT v0.2.3. Owner rulings W1 to W10 of 2026-11-13 recorded (section 2.3; W10 amends W1); they supersede Q11, Q12 (in its form) and Q13 for this subject. J1 to J3, J5 to J8 and J10 to J12 approved 2026-11-13; J9 and J13 approved as amended; J4, J14 to J17 and J18 ruled 2026-11-13. W10 and J15 are synchronised with A1 v0.4.1 and A2 v0.2.4. J19 (the settings interface J4 calls for) is proposed and not yet ruled (14.2). Builds on A1 v0.4.1, A2 v0.2.4, A3 v0.2.3 and A5 v0.2.2. Supersedes, for its subject, docs/ULTRAPLAN-DEED-K9-CONTRACTILES-2026-10-19.adoc v0.3.3 (J1). Not ratified.
+:version: 0.2.4-draft
+:status: DRAFT v0.2.4. Owner rulings W1 to W10 of 2026-11-13 recorded (section 2.3; W10 amends W1); they supersede Q11, Q12 (in its form) and Q13 for this subject. J1 to J3, J5 to J8 and J10 to J12 approved 2026-11-13; J9 and J13 approved as amended; J4, J14 to J17 and J18 ruled 2026-11-13. W10 and J15 are synchronised with A1 v0.4.1 and A2 v0.2.4. J19 (the settings interface J4 calls for) is proposed and not yet ruled (14.2). v0.2.4 applies the A7 findings of the SysArch A1 to A7 consistency review that need no owner answer (14.3); R-01, R-02, R-06 and R-07 wait on the owner. Builds on A1 v0.4.1, A2 v0.2.4, A3 v0.2.3 and A5 v0.2.2. Supersedes, for its subject, docs/ULTRAPLAN-DEED-K9-CONTRACTILES-2026-10-19.adoc v0.3.3 (J1). Not ratified.
 :toc:
 
 Specification A7 of the Estate Reconciliation Plan. It defines how a repository's edicts (the contractiles) are checked against its identity (the chora) and its audited reality (the descriptiles), how an anchor corrects a project that has drifted, and the order in which the estate leaves A2ML behind.
@@ -62,7 +62,7 @@ Identifiers are local to this specification, as in A1 to A6. Rulings of 2026-11-
 
 === 2.2 Later rulings
 
-* *R4, U1 to U4, V8* (A1, 2026-11-10 to 2026-11-12). Identity is the chora at three levels. The clade is an outward finding aid only. A deed carries one id, the ADR-008 v8 id of the repo's birth path, as the opaque `#uuid"…"` literal. [M] `standards_chora.deed` carries `#uuid"b32d6be4-73ba-873e-9d61-e57f43c75cd1"`, which equals `uuid-v8.js c gv-clade-index github.com/hyperpolymath/standards`.
+* *R4, U1 to U4, V8* (A1, 2026-11-10 to 2026-11-12). Identity is the chora at three levels. The clade was an outward finding aid only; W10 amends that: clade placements are identity facts in the chora, never its id and never an edict. A deed carries one id, the ADR-008 v8 id of the repo's birth path, as the opaque `#uuid"…"` literal. [M] `standards_chora.deed` carries `#uuid"b32d6be4-73ba-873e-9d61-e57f43c75cd1"`, which equals `uuid-v8.js c gv-clade-index github.com/hyperpolymath/standards`.
 * *A2ML is retired* (D99, D269c, D312, D313). Never create or restore an `.a2ml` file. Deleting content from one is allowed.
 * *Part 1a, 2026-11-12.* The check that refuses an added A2ML file runs as a job of `governance-reusable.yml`. A rename counts as an addition only when the old path is not A2ML.
 
@@ -128,9 +128,9 @@ A7 introduces no new mechanism where A1 or A2 already has one.
 |===
 | Step | Change | Where | State
 
-| 1a | The `no-new-a2ml` job ("No new A2ML") in `governance-reusable.yml` runs `scripts/check-no-new-a2ml.sh BASE HEAD`. It fails a pull request that adds an A2ML path, or renames a non-A2ML file to one. It never reads existing files, so it needs no baseline. | standards | draft PR #1488
-| 1b | `sync/deploy-clade-a2ml.sh` is deleted. Runbook Phase 1 is withdrawn, and `TOPOLOGY.adoc`, `REPO-ONBOARDING.adoc` and the `STATE.a2ml` next actions are cleaned (content deleted only). | gv-clade-index | patch prepared; not pushed (no session access)
-| 1c | `validate-rsr` checks the chora identity: `:repo-uuid` present and a valid opaque `#uuid`. The id is version 8 (V8). A version 5 id is reported `v5-identity`, a warning in lax mode and an error in strict, as A1 C10 and T30 require. The legacy `#u5`/`#u8` forms are reported but not failed, plus `(identity :primary-forge)`. A declared clade must still be one of the 12 and agree with its name. `repo-init` writes no `(clade)` and no prefixed name. The arrival pack calls the clade a finding aid and reads a `#uuid` literal. | rsr-template-repo | patch prepared; not pushed (no session access)
+| 1a | The `no-new-a2ml` job ("No new A2ML") in `governance-reusable.yml` runs `scripts/check-no-new-a2ml.sh BASE HEAD`. It fails a pull request that adds an A2ML path, or renames a non-A2ML file to one. It never reads existing files, so it needs no baseline. | standards | draft PR #1488. The template's inline governance needs the same job, in whichever rollout home the owner chooses (SysArch R-09).
+| 1b | `sync/deploy-clade-a2ml.sh` is deleted. Runbook Phase 1 is withdrawn, and `TOPOLOGY.adoc`, `REPO-ONBOARDING.adoc` and the `STATE.a2ml` next actions are cleaned (content deleted only). | chora-registry (GitHub name `gv-clade-index` until the rename) | patch prepared; not pushed (no session access)
+| 1c | `validate-rsr` checks the chora identity: `:repo-uuid` present and a valid opaque `#uuid`. The id is version 8 (V8). A version 5 id is reported `v5-identity`, a warning in lax mode and an error in strict, as A1 C10 and T30 require. The legacy `#u5`/`#u8` forms are reported but not failed, plus `(identity :primary-forge)`. A declared clade placement is checked against the scheme chora-registry holds for it (YP07), not against a fixed list of codes (SysArch R-13). `repo-init` writes no `(clade)` and no prefixed name. The arrival pack calls the clade a finding aid and reads a `#uuid` literal. | rsr-template-repo | patch prepared; not pushed (no session access)
 | 1d | The load-bearing readers are listed with their replacements in section 10. Nothing is swept. | — | this document
 |===
 
@@ -267,6 +267,20 @@ Debt is not a descriptile of its own. It is held in `.machine_readable/descripti
 
 File: `.machine_readable/contractiles/<verb>/<Verb>file.deed`, head `contractile-deed` (J14), one per verb: `Intentfile.deed`, `Mustfile.deed`, `Trustfile.deed`, `Adjustfile.deed`, `Dustfile.deed`, `Bustfile.deed`. Beside it sits the verb's K9 runner, `<verb>/<verb>.k9.ncl`, with its Nickel body `<verb>/<verb>.ncl` and the shared `_base.ncl`.
 
+`<verb>`, `<Verb>` and `<VERB>` are not one word in three cases. The verb symbol `intend` takes the stem `Intent` and the descriptile name `INTENT`, so `Intendfile.deed` and `INTEND.deed` dispatch to nothing (deed.abnf `verb-cap`, `descriptile-name`). Every path in this specification follows this table (SysArch R-14):
+
+[cols="1,2,2"]
+|===
+| Verb symbol and directory `<verb>` | Edict `<Verb>file.deed` | Reality `<VERB>.deed`
+
+| `intend` | `Intentfile.deed` | `INTENT.deed`
+| `must` | `Mustfile.deed` | `MUST.deed`
+| `trust` | `Trustfile.deed` | `TRUST.deed`
+| `adjust` | `Adjustfile.deed` | `ADJUST.deed`
+| `dust` | `Dustfile.deed` | `DUST.deed`
+| `bust` | `Bustfile.deed` | `BUST.deed`
+|===
+
 Each rule is an edict with two halves [O: W2]:
 
 [source]
@@ -291,7 +305,7 @@ Each rule is an edict with two halves [O: W2]:
 * A rule *applies* when `applies-when` holds. It is *violated* when it applies and `requires` does not hold. It is *unresolved* when it applies and no fact witnesses it.
 * The same edict says nothing about a repo whose identity it does not select. Identity chooses which edicts apply; a repo does not list them.
 * A rule never restates a descriptile fact, and a descriptile never restates a rule (YL3). Scope, assumptions and boundaries stay on each clause in `_base.ncl` [O: Q6].
-* `!` after `:id` marks a blocking rule (8.4, J17).
+* `!` after `:id` marks a blocking rule (8.4, J17). `!` is not a deed token in `deed.abnf` v1.4.0, and a clause profile cannot add a token, so the sample above does not parse until `deed.abnf` v1.5.0 admits it (M3, before the edict form; SysArch R-03).
 
 The runner reads the chora, the verb's contractile deed and the verb's descriptile deed, and any open anchor (6.3). The interim `scripts/run-mustfile.sh` already reads a Mustfile written as a `praxis-deed`; it becomes the `Mustfile.deed` reader.
 
@@ -350,7 +364,7 @@ One exception is carried from ultraplan P0.1 unchanged (8.3): a rule whose only 
 
 Example of the `!` line in `Trustfile.deed`: a rule that refuses SHA-1 with nothing stronger carries `!` and blocks; a rule that notes a newer algorithm (Ed448, say) not yet adopted carries no `!` and warns.
 
-*The A3 check* (A3 E12). The baseline check `contractiles` is required. It fails on any blocking result above, on any violation of an open anchor (6.3), and on a Bust finding graded `X1` (8.5). Every warning is reported in the gate comment and does not fail it.
+*The A3 check* (A3 E12). The baseline check `contractiles` is required. It fails on any blocking result above, on any violation of an open anchor (6.3), and on a Bust finding graded `X1` (8.5). Every warning is reported in the estate-gate envelope (A3) and does not fail the check. Until a repo's M7 PR adds its `(contractiles …)` clause, the check is `not_applicable` for that repo, reported with that reason, never silently green and never failed (A3 §6; SysArch R-04). YC01 applies from that PR on. The open-anchor failure is defined here (6.3, YS03); A3 cites it.
 
 === 8.5 Bust grades [O: W8]
 
@@ -408,9 +422,9 @@ identifier         = ( ALPHA / "_" ) *( ALPHA / DIGIT / "_" / "." / DQUOTE / "-"
 key                = ( ALPHA / "_" ) *( ALPHA / DIGIT / "_" / "." / "-" )            ; L0: [A-Za-z_][A-Za-z0-9_.-]*
 ----
 
-The `UTF8-n` rules are `deed.abnf`'s, unchanged. `identifier` and `key` are defined here, not imported: ABNF has no import, and the module must compile on its own for the differential. The two rules copy the character classes of `k9-validate.sh` L0 (lines 347 to 354 at the evidence commit), so that the grammar and L0 claim the same first lines. YK2 has one fixture for each dialect and one for unclaimed text, such as a first line `protocol` with no `:` or `=`, which matches no production and is K9-E005 in both. The step also amends the section of `K9-CONTRACT-SPEC` that explains why there is no `k9.abnf` (ultraplan P1.5), so that the section says the envelope has a grammar and the body does not.
+The `UTF8-n` rules are `deed.abnf`'s, unchanged. `identifier` and `key` are defined here, not imported: ABNF has no import, and the module must compile on its own for the differential. The two rules copy the character classes of `k9-validate.sh` L0 (lines 347 to 354 at the evidence commit), so that the grammar and L0 claim the same first lines. YK02 has one fixture for each dialect and one for unclaimed text, such as a first line `protocol` with no `:` or `=`, which matches no production and is K9-E005 in both. The step also amends the section of `K9-CONTRACT-SPEC` that explains why there is no `k9.abnf` (ultraplan P1.5), so that the section says the envelope has a grammar and the body does not.
 
-The grammar must be `k9-validate.sh` L0's oracle, not a second description. Every envelope fixture under `1-formats/k9/tools/fixtures` gets the same verdict from the ABNF (through apg-js, as the deed differential does) and from L0 (test YK2).
+The grammar must be `k9-validate.sh` L0's oracle, not a second description. Every envelope fixture under `1-formats/k9/tools/fixtures` gets the same verdict from the ABNF (through apg-js, as the deed differential does) and from L0 (test YK02).
 
 == 10. Load-bearing A2ML readers and their replacements (Part 1d)
 
@@ -432,7 +446,8 @@ Measured with `grep` over `scripts/`, `.github/workflows/` and the repos named, 
 | `.machine_readable/anchors/ANCHOR.a2ml` | no script or workflow reader found [M] | `ANCHOR.deed` (section 6), translated by the table in 6.4. | standards
 | The contractile CLI (`*file.a2ml`; `adjust` reads `ADJUST.contractile`; there is no `bust`) [R: ultraplan] | hyperpolymath/contractiles | `<Verb>file.deed` for policy, the ALL-CAPS verb descriptile for reality, and `(contractiles …)` for discovery. A2ML is read only behind `--legacy` [O: Q8; ultraplan P2.1]. | estate-wide
 | Hypatia `HYP-S005` (`STATE.a2ml` glob) [R: ultraplan] | hyperpolymath/hypatia | `STATE.deed` (J3, J15). | estate-wide
-| `gv-clade-index` `contractiles/must/clade-hygiene.a2ml` (requires `CLADE.a2ml` in every repo) | the registry's own contractile | Retired. The registry checks `(identity)` and `:repo-uuid` in the chora deed, and reads `(clade …)` when present. A placement is an identity fact (W10), checked against the registry's own schemes: a stale placement, or one naming a category or scheme the registry no longer holds, is reported and the registry's placement is used (YP07). | gv-clade-index
+| `bot_exclusion_registry.a2ml` (the bot exclusion registry; A5 §7) | the gitbot-fleet bots | The root `bot/write` deviations (A5 §7, G7), scoped by `:origins`, `:repos` and `:paths`. Every bot reads them first and the legacy file only as a fallback, which is then deleted in the PR that removes its last reader (M5; SysArch R-18). | estate-wide
+| chora-registry `contractiles/must/clade-hygiene.a2ml` (requires `CLADE.a2ml` in every repo) | the registry's own contractile | Retired. The registry checks `(identity)` and `:repo-uuid` in the chora deed, and reads `(clade …)` when present. A placement is an identity fact (W10), checked against the registry's own schemes: a stale placement, or one naming a category or scheme the registry no longer holds, is reported and the registry's placement is used (YP07). | gv-clade-index
 | `rsr-template-repo` `scripts/deed-field.sh --uuid` (re-derives a v5 id from a `#u5` name) | `extract-facts.sh`, the coaptation loop | It reads the opaque `#uuid` body as the id and never re-derives it (U1, V8; J11). | every minted repo
 |===
 
@@ -443,8 +458,8 @@ Not load-bearing, and no replacement needed: `check-launcher-standard-currency.s
 Each step is one draft PR per repository, made only after the owner approves it. A step is done only when its acceptance test passes in that repository with the A2ML input absent.
 
 . *M1, the gate.* Land Part 1a (#1488). Callers get it through the existing pin propagation. From then on, a repo can lose A2ML but cannot gain any.
-. *M2, the generators.* `gv-clade-index` (1b), then `rsr-template-repo` (1c). The template also gets `#uuid` minting (J11), the `(contractiles …)` clause, the six `<Verb>file.deed` files and the thirteen ALL-CAPS descriptiles (`CLADE.deed` among them, in its minimum form `:in-use #f` until the repo organises its content), so every new repo is born on the new forms [ultraplan P0.3, P3 "generator first"]. Before that, a trial on the template with only `Mustfile.deed` and `STATE.deed` shows whether the runner finds a violation from identity (8.1); the design is looked at again with what broke before the other verbs follow.
-. *M3, the clause modules*, one PR each, in this order (the `contractiles` module lands with the generated `contractile` registry of J13): `common`, the three heads of J14, `contractiles`, the edict form, the six verb descriptiles, `anchor-deed` (from the Part 3 module, 6.5), `ecosystem`, `state`, `meta`, `agentic`, `neurosym`, `playbook`, `clade` (W10). Each lands with its linter profile, fixtures and differential entry, then joins the caller-wide lint in `deed-conformance.yml` once ratified.
+. *M2, the generators.* chora-registry (1b), then `rsr-template-repo` (1c). The template also gets `#uuid` minting (J11), the `(contractiles …)` clause, the six `<Verb>file.deed` files and the thirteen ALL-CAPS descriptiles (`CLADE.deed` among them, in its minimum form `:in-use #f` until the repo organises its content), so every new repo is born on the new forms [ultraplan P0.3, P3 "generator first"]. Before that, a trial on the template with only `Mustfile.deed` and `STATE.deed` shows whether the runner finds a violation from identity (8.1); the design is looked at again with what broke before the other verbs follow. *Each new-form file joins the template only once its M3 module has landed* (SysArch R-05): a file the grammar cannot yet check is not born. In particular `CLADE.deed` waits for the `clade` module, and the trial waits for the edict form and the `state` and verb-descriptile modules.
+. *M3, the clause modules*, one PR each, in this order (the `contractiles` module lands with the generated `contractile` registry of J13): `common`, the three heads of J14, `contractiles`, the `!` token (`deed.abnf` v1.5.0: `!` after a field value, restricted by a SEMANTIC side condition to a rule's `:id` in a `contractile-deed`, J17, SysArch R-03), the edict form, the six verb descriptiles, `anchor-deed` (from the Part 3 module, 6.5), `ecosystem`, `state`, `meta`, `agentic`, `neurosym`, `playbook`, `clade` (W10). Each lands with its linter profile, fixtures and differential entry, then joins the caller-wide lint in `deed-conformance.yml` once ratified.
 . *M4, standards converts itself.* In this order: add `(contractiles …)`; rewire the must gate and verb discovery (section 10, rows 1 and 2); translate `ANCHOR.a2ml` by 6.4; move the four all-caps `.contractile` files field by field into `INTENT.deed`, `MUST.deed`, `TRUST.deed` and `ADJUST.deed` [O: Q12, W3]; move the Debtfile into `debt_praxis.deed` (J9); make `0-AI-MANIFEST.deed` pointer-only [O: Q15]; then delete each A2ML file in the same PR that removes its last reader, which shrinks the ledger.
 . *M5, the shared readers*, each with a new-input-first fallback: readme-derive, the debt ratchet, the RSR profile checker. Then hypatia (rules and `HYP-S005`) and the contractile CLI, each in its own repo.
 . *M6, pilot.* Three repos of different shapes: one panoply-class, one deed-clean, one with live A2ML gates [R: ultraplan P3].
@@ -473,9 +488,9 @@ Fixtures are valid unless marked `-bad`. `[done]` marks tests that exist and pas
 |===
 | Id | Test | Fixture
 
-| YP01 | `gv-clade-index` has no script, workflow or recipe that writes into another repository's tree. | grep in that repo
+| YP01 | chora-registry has no script, workflow or recipe that writes into another repository's tree. | grep in that repo
 | YP02 | `just validate-rsr` passes on a deed with no `(clade …)` and no `:prefixed-name`. | template, clade removed
-| YP03 | `just validate-rsr` fails on a declared clade whose code and name disagree. | `clade-mismatch-bad`
+| YP03 | `just validate-rsr` fails on a declared clade placement whose category the registry's scheme does not hold, or whose code and name disagree in that scheme (YP07; SysArch R-13). | `clade-mismatch-bad`
 | YP04 | `just validate-rsr` fails on a `#uuid` id that is not lowercase v5 or v8. It reports a v5 id as `v5-identity` and fails it in strict mode (A1 C10, T30). It reports and passes a legacy `#u5`/`#u8` id. | `uuid-v4-bad`, `uuid-v5-identity`, `legacy-u5`
 | YP05 | A fresh mint carries no `(clade …)`, no prefixed name and no `UNASSIGNED` in `(identity)`. | `tests/e2e/template_instantiation_test.sh`
 | YP06 | The generated `CLAUDE.md` neither tells an agent to read or create an `.a2ml` file nor presents the clade as the repo's id or as an edict. Clade placements may appear as identity facts (W10). | `just validate-claude-md` plus a grep
@@ -530,6 +545,7 @@ These tests cover the semantic-authority clause module merged in #1490. Under W3
 | YC07 | The runner follows the table of 8.4 for every verb and every column: one fixture per cell, and each blocking result names both settlements (redeclare the contractile, fix the cause). | `must-violated-bad`, `must-unresolved-bad`, `trust-violated-warn`, `trust-bang-violated-bad`, `intend-violated`, `intend-bang-bad`, `dust-irreversible-undecided-bad`, and one per remaining cell
 | YC08 | The `'Hunt` component is refused when unsigned, when tampered, when its signature is only `'Present_Unverified`, and when it carries a cryptographically valid signature from a key outside the trusted-key policy, with `signature` named among the unmet preconditions each time. For each of the six verbs, a rule whose only witness is a refused probe ends in a blocking unresolved verdict, never "deferred". | `hunt-unsigned-bad`, `hunt-tampered-bad`, `hunt-unverified-bad`, `hunt-untrusted-key-bad`; `<verb>-probe-refused-bad` for each of the six verbs
 | YC09 | For each of `signature`, `policy`, `sandbox`, `dry_run` and `capability_grant`, a case that withholds only that evidence is refused and names it; a case that supplies all five is permitted. | five `hunt-no-<precondition>-bad`, one `hunt-all-five`
+| YC10 | Before a repo's M7 PR, a repo with no `(contractiles …)` clause gets the `contractiles` check as `not_applicable`, reported with that reason; from that PR on, a missing clause fails YC01 (8.4, A3 §6). | `pre-m7-not-applicable`, `post-m7-missing-bad`
 |===
 
 === 12.6 The K9 envelope
@@ -538,9 +554,9 @@ These tests cover the semantic-authority clause module merged in #1490. Under W3
 |===
 | Id | Test | Fixture
 
-| YK1 | The ABNF accepts every valid component and coordination envelope fixture. | `1-formats/k9/tools/fixtures`
-| YK2 | For every envelope fixture, the ABNF and `k9-validate.sh` L0 give the same verdict. One fixture per production fails both. | per production
-| YK3 | `K9-CONTRACT-SPEC` no longer says there is no K9 ABNF. It says the envelope has one and the body is Nickel. | text check
+| YK01 | The ABNF accepts every valid component and coordination envelope fixture. | `1-formats/k9/tools/fixtures`
+| YK02 | For every envelope fixture, the ABNF and `k9-validate.sh` L0 give the same verdict. One fixture per production fails both. | per production
+| YK03 | `K9-CONTRACT-SPEC` no longer says there is no K9 ABNF. It says the envelope has one and the body is Nickel. | text check
 |===
 
 === 12.7 Readers and migration
@@ -639,6 +655,30 @@ a| *Where the settings live, and what a relaxation records.*
 * A reader accepts an entry only when `:changed-by` is in `:may-change`, `:reported-to` is in `:report-to`, and the `:receipt` verifies with that channel as attesting this whole entry: its `:seq`, setting, value and authenticated actor. `:changed-by` alone is self-declared, and a receipt for one entry never verifies another. An entry that fails is reported, and the value stays as the last accepted entry left it.
 * Not decided here: how a channel issues its receipt. That belongs to the feedback-o-tron and heron interfaces.
 | The `AGENTIC.deed` clause as shown. Alternative: a separate `SETTINGS.deed`. That would be a fourteenth descriptile name and a change to J14.
+|===
+
+=== 14.3 The SysArch A1 to A7 consistency review (2026-11-13)
+
+The owner-requested review read A1 to A7 at `6038273`. Its A7 findings are handled as follows.
+
+[cols="1,4"]
+|===
+| Finding | In v0.2.4
+
+| R-03 | 8.1 and section 11: `!` needs `deed.abnf` v1.5.0, an M3 step before the edict form.
+| R-04 | 8.4 and YC10: `contractiles` is `not_applicable`, reported, until the repo's M7 PR. Agreed with A1 for A3 §6.
+| R-05 | Section 11, M2: a new-form file joins the template only once its M3 module has landed.
+| R-09 | Section 5, 1a: the template's inline governance needs the job too, in the rollout home the owner chooses.
+| R-13 | Section 5, 1c, and YP03: placements are checked against the registry's scheme, not a fixed list of twelve codes.
+| R-14 | 8.1: the verb, stem and descriptile-name table.
+| R-18 | Section 10: a row for `bot_exclusion_registry.a2ml`.
+| R-19 | 8.4: "gate comment" replaced by the A3 estate-gate envelope; the open-anchor failure is defined here and cited by A3.
+| R-20, R-31 | `clauses/anchor.abnf`'s header cites `deed.abnf` v1.4.0, calls a clade placement an identity fact (W10) and puts status in `STATE.deed` (J15). Section 2.2 records that W10 amends R4.
+| R-26 | Test ids `YK01` to `YK03`.
+| R-30 | `.claude/CLAUDE.md`, in standards#1530.
+| R-32 | Repository references read chora-registry, with the GitHub name until the rename. A reference to the domain of an existing id keeps `gv-clade-index` (V9).
+| R-01, R-02, R-06 | Held for the owner's answers to SysArch Q1, Q2 and Q4.
+| R-07 | Held: `:beholding-chora` names the estate id in repo and praxis deeds (A1 §7.2) and the repo's own id in the J14 heads. Choosing between a new key for the J14 heads and per-head rows in A1 §7.2 is put to the owner.
 |===
 
 == 15. Out of scope
