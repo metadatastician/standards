@@ -167,7 +167,7 @@ jobs:
           bash scripts/kyaml-format.sh --check \
             _shared/container/.gatekeeper.yaml
 
-      # A2ML is retired: every A2ML file sits under 9-archive/ or is named in
+      # A2ML is retired, archive included: every A2ML file is named in
       # the shrink-only legacy ledger (.machine_readable/a2ml-legacy-allow.txt).
       # The fixtures in scripts/tests/check-a2ml-archived-test.sh prove the
       # gate; this step holds the repository itself to it. --base compares
