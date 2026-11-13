@@ -536,9 +536,9 @@ commit. A receipt records:
 +
 * the checker and its version;
 * the invocation;
-* a digest of the inputs;
+* a digest of the inputs (`:inputs-sha256`, computed as §8.5.1 says);
 * the observed result;
-* the axioms reported (§8.4);
+* the axioms reported, each with its disposition (`(axioms …)`, §8.4);
 * for Agda, the prover's trusted base: each prover-supplied postulate the
 import cone reaches, by name, with its binding (§8.4);
 * the source repository and its full 40-character commit.
@@ -595,6 +595,10 @@ a comment-aware postulate scan of the import cone; and the recorded import
 cone itself (§1.1). A `PROVEN-WITH-AXIOMS` witness counts only if each
 axiom is admissible under disposition (c) of
 link:../docs/TRUSTED-BASE-REDUCTION-POLICY.adoc[`TRUSTED-BASE-REDUCTION-POLICY.adoc`].
+The receipt lists each reported axiom with its disposition (§8.5.1). A
+witness that reports an axiom with a disposition other than (c) does not
+count. The prover-supplied postulates of the next rule are its trusted
+base, not reported axioms, and are not listed there.
 A grade never hides axioms. A summary that shows the grade shows whether
 it rests on axioms.
 . *The prover's own modules are in the cone.* For Agda, the import cone is
@@ -664,7 +668,55 @@ prover-supplied postulates of §8.4, by name and binding;
 `transported`, `re-proved`, `waived` or `unavailable` for the others), its
 §5 `:token` and §2.2 `:state`;
 ** each leg holds its `(receipt :run … :commit … :checker … :invocation …
-:state …)` records, with a `:reason` on any that is not `current`.
+:inputs-sha256 … :state … (axioms …))` records, with a `:reason` on any that
+is not `current`;
+* zero or more `(echo …)` records (§8.5.2).
+
+Every `current` receipt carries `:inputs-sha256` and `(axioms …)`. A receipt
+that is kept but is not current may omit them, because it can predate them.
+
+`:inputs-sha256` is the digest of the files the checker run read from the
+repository. It is 64 lowercase hex digits, computed in the same way in every
+repository:
+
+. Take the leg's *input set* at the receipt's `:commit`:
+** Agda: each module of the `--dependency-graph` cone of the graded roots that
+is a file of the repository, and each `.agda-lib` and `libraries` file the run
+reads;
+** Rocq: each `.v` file the run compiles, and the `_CoqProject`, `dune` and
+`dune-project` files it reads;
+** Lean: each `.lean` file the build reads, and `lakefile.lean` or
+`lakefile.toml`, `lean-toolchain` and `lake-manifest.json`;
+** any other prover: the files of the repository that the run reads, as the
+gate lists them.
++
+Modules supplied with the prover are not in the input set. The `:checker`
+and the `(trusted-base …)` clause cover them.
+. Write the *manifest*: one line per file, sorted by path in bytewise (C
+locale) order. Each line is the SHA-256 of the file's bytes as 64 lowercase
+hex, two spaces, the path relative to the repository root with `/`
+separators, and one LF. The file's bytes are the git blob at the commit,
+before any checkout filter. A path with a newline or a backslash is refused.
+. The digest is the SHA-256 of the manifest bytes.
+
+The reference implementation is
+link:../scripts/proof-inputs-sha256.sh[`scripts/proof-inputs-sha256.sh`]
+(`COMMIT PATH…`), and `scripts/tests/proof-inputs-sha256-test.sh` tests it.
+On a clean checkout with no checkout filters, this shell line gives the same
+value:
+
+    printf '%s\n' PATH… | LC_ALL=C sort | xargs -d '\n' sha256sum -- | sha256sum
+
+`(axioms …)` lists each axiom the checker reported, as
+`(axiom :name "…" :disposition c)`. The name is the name the checker
+reports (`#print axioms` for Lean, `Print Assumptions` for Rocq, and for Agda
+each postulate that the scan of §8.4 finds outside the trusted base). The
+disposition is `c`, `b` or `debt`, as
+link:../docs/TRUSTED-BASE-REDUCTION-POLICY.adoc[`TRUSTED-BASE-REDUCTION-POLICY.adoc`]
+defines them. An empty `(axioms)` means that the checker reported none. A
+leg whose current receipt lists an axiom that is not disposition `c` does not
+count (§8.4).
+
 
 `:pwg` and `:foundation-diverse` are recorded *and* derived. The reader
 recomputes both from the legs and receipts under §8.2 and §8.3, and it
@@ -681,6 +733,96 @@ derivation, and `deed_lint.test.js` tests it. The worked example is
 `1-formats/deed/tools/fixtures/proof-receipt/example_praxis.deed`. A gate
 that writes receipts validates them with this reader. Mathesis reads
 receipts through it and catalogues the result as a census (§8.4).
+
+`echo_praxis.deed` in the same directory is a worked example of §8.5.2.
+
+==== 8.5.2 Echoes: receipts across a history rewrite
+
+Owner ruling 2026-11-13. A receipt is earned on a commit. A squash merge or a
+rebase rewrites commits, so the receipt can name a commit that the default
+branch does not contain: after a squash merge the receipt names a commit
+of the pull request, and the squash commit replaced it. An *echo* records
+that such a receipt still describes the commit on the default branch. Then
+the receipt is recorded, not earned again.
+
+The vocabulary is that of hyperpolymath/echo-types. Let `f` be the rewrite,
+from commits before the rewrite to commits on the default branch. For an
+image `y`, the echo is the fibre `Echo f y := Σ (x : A), (f x ≡ y)`. One
+`(echo …)` record is one element of that fibre: a *source* commit `x`, its
+*image* `y`, and a *witness* that `x` and `y` agree on what the receipt
+depends on. A squash of several commits gives several records with one
+image. That is the fibre over the image.
+
+    (echo :source "<40 hex>" :image "<40 hex>" :witness inputs-sha256
+          (inputs :prover agda :sha256 "<64 hex>") …)
+    (echo :source "<40 hex>" :image "<40 hex>" :witness tree-sha256
+          :tree-sha256 "<64 hex>")
+
+`:witness` is one of:
+
+* `inputs-sha256`: for each prover named in an `(inputs …)`, the inputs
+digest (§8.5.1) is the same at the source and at the image. It covers that
+prover's legs only.
+* `tree-sha256`: the digest of §8.5.1, taken over every file that git
+tracks at the commit, is the same at the source and at the image. The whole
+tree agrees, so the record covers every leg. `scripts/proof-inputs-sha256.sh
+COMMIT`, with no paths, computes it.
+
+Both witnesses are SHA-256. The commit names stay git object ids. They are
+identifiers, not security digests.
+
+The reader refuses a receipt in which:
+
+* `:source` or `:image` is not a full 40-character lowercase commit, or they
+are the same commit;
+* `:source` is the `:source-commit` (that commit is on the default branch,
+so it is an image, never a source);
+* one source has two records (`f` is a function);
+* the records form a cycle;
+* the witness fields do not match `:witness`, or a digest is not 64
+lowercase hex digits;
+* two different digests are stated for one commit and one prover, or for the
+tree of one commit, anywhere in the receipt (in an echo or in a receipt's
+`:inputs-sha256`);
+* a `tree-sha256` record joins two commits whose inputs digests for one
+prover differ.
+
+*Grading rule.* A current receipt whose `:commit` is the `:source-commit`
+describes that commit. A current receipt whose `:commit` is another commit
+describes the `:source-commit` only if a chain of echoes leads from its
+`:commit` to the `:source-commit`, and every link of the chain covers the
+receipt's leg: a `tree-sha256` link, or an `inputs-sha256` link whose digest
+for that leg's prover equals the receipt's `:inputs-sha256`. Chains are
+allowed. `PWG-1` needs every counted witness to have a current receipt that
+describes the `:source-commit`. A receipt that does not still counts toward
+`PWG-3`, `PWG-2i` and `PWG-2ii`.
+
+==== 8.5.3 What a gate with git must check
+
+The reader checks only what the text of a receipt shows. It cannot see git.
+The checks below need git, so they are duties of the gates that use
+receipts.
+
+The *home repository's gate* (the gate that writes or checks the receipt in
+the repository that owns the theorem) MUST, before it records or accepts a
+receipt that derives `PWG-1`:
+
+. check that the `:source-commit` is on the default branch (for example
+`git merge-base --is-ancestor <source-commit> origin/<default>`);
+. compute, with the §8.5.1 algorithm, the `:inputs-sha256` of each current
+receipt at its `:commit`, and check that it is equal to the recorded value;
+. for each echo link that a counted receipt's chain uses, compute the
+witness digest at the link's source and at its image, and check that both
+are equal to the recorded value. If the source is no longer reachable from a
+branch, fetch it by the reference that the forge keeps for the pull request
+(on GitHub, `refs/pull/<n>/head`).
+
+If a check fails, the gate fails, and the grade falls as §8.4 says.
+
+A *consumer* that catalogues grades, such as Mathesis, MUST do the same
+checks against the home repository before it catalogues a `PWG-1`. If it
+cannot do them, it catalogues the grade that the receipt supports without
+`PWG-1`, and it records why.
 
 === 8.6 Naming
 

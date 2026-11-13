@@ -45,6 +45,7 @@ Usage: deed_lint.js FILE...     exit 0 iff all files conform
        deed_lint.js --mustfile-json FILE      validate the Mustfile check profile and emit records
        deed_lint.js --proof-receipt-json FILE validate a proof receipt (PROOF-POLICY §8.5), derive
                                               each claim's PWG, refuse a recorded grade that differs
+                                              (receipts, axioms and echoes: §8.5.1 to §8.5.2)
 `;
 
 import { createHash } from "node:crypto";
@@ -709,7 +710,9 @@ export class ProofReceiptError extends LintError {
 
 // The closed vocabularies of standards/3-practice/PROOF-POLICY.adoc: §5 tokens
 // (canonical lowercase), §2.2 correspondence states, §8.2 grades, §8.4 receipt
-// states, §8.5 leg routes. A value outside them is refused, never coerced.
+// states, §8.5 leg routes, §8.5.2 echo witnesses, and the dispositions of
+// docs/TRUSTED-BASE-REDUCTION-POLICY.adoc that a reported axiom can have.
+// A value outside them is refused, never coerced.
 export const PROOF_RECEIPT_VOCABULARY = {
   pwg: ["PWG-3", "PWG-2i", "PWG-2ii", "PWG-1", "ungraded"],
   token: ["proven", "proven-with-postulates", "tested-only", "argued", "open"],
@@ -718,6 +721,8 @@ export const PROOF_RECEIPT_VOCABULARY = {
   route: ["source", "transported", "re-proved", "waived", "unavailable"],
   receiptState: ["current", "superseded", "regressed"],
   dttProvers: ["agda", "rocq", "lean"],
+  disposition: ["b", "c", "debt"],
+  echoWitness: ["inputs-sha256", "tree-sha256"],
 };
 
 /**
@@ -725,8 +730,15 @@ export const PROOF_RECEIPT_VOCABULARY = {
  * praxis-deed) into a plain record, and derive every claim's Proof Witness
  * Grade from its legs and their receipts (§8.2). A recorded :pwg that the
  * receipts do not support is refused: grades are derived, not asserted (§8.4).
- * The same holds for :foundation-diverse (§8.3). Layout-independent: nothing
- * here depends on physical lines.
+ * The same holds for :foundation-diverse (§8.3). Every current receipt carries
+ * its :inputs-sha256 (§8.5.1) and its (axioms …) (§8.4). Top-level (echo …)
+ * records (§8.5.2) let a receipt earned on a commit that a squash or rebase
+ * rewrote count toward PWG-1 for its image. The reader checks only what the
+ * text shows: the form of the records, that the rewrite is a function with no
+ * cycle, and that every digest stated for one commit agrees. Whether the image
+ * is on the default branch, and whether the digests really hold, is the duty of
+ * a gate that has git (§8.5.3). Layout-independent: nothing here depends on
+ * physical lines.
  */
 export function readProofReceipt(text, filename = null) {
   const [head, items] = validate(text, filename);
@@ -734,6 +746,7 @@ export function readProofReceipt(text, filename = null) {
   if (head !== "praxis-deed") fail("a proof receipt must be a praxis-deed");
   const V = PROOF_RECEIPT_VOCABULARY;
   const HEX40 = /^[0-9a-f]{40}$/;
+  const HEX64 = /^[0-9a-f]{64}$/;
 
   // Collect a clause's fields, refusing unknown, duplicate and mistyped ones.
   const fieldsOf = (where, members, spec, allowedClauses) => {
@@ -768,7 +781,7 @@ export function readProofReceipt(text, filename = null) {
     profile: { types: ["symbol"], required: true, oneOf: ["proof-receipt"] },
     repository: { types: ["string"], required: true },
     "source-commit": { types: ["string"], required: true },
-  }, ["trusted-base", "claim"]);
+  }, ["trusted-base", "claim", "echo"]);
   const repository = top.fields.get("repository");
   const sourceCommit = top.fields.get("source-commit");
   if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository)) fail(`:repository must be OWNER/REPO, got "${repository}"`);
@@ -794,6 +807,70 @@ export function readProofReceipt(text, filename = null) {
       trustedBase.push({ prover: f.get("prover"), module: f.get("module"), name: f.get("name"), binding: f.get("binding") });
     }
     if (trustedBase.length === 0) fail("(trusted-base …) lists no (primitive …); omit the clause instead");
+  }
+
+  // §8.5.2: the echoes of a history rewrite f (pre-rewrite commit to commit on
+  // the default branch). Each record is one source in the fibre over its image.
+  const echoes = [];
+  const echoOf = new Map();
+  for (const c of top.clauses.filter((c) => c[1] === "echo")) {
+    const e = fieldsOf("(echo …)", c[2], {
+      source: { types: ["string"], required: true },
+      image: { types: ["string"], required: true },
+      witness: { types: ["symbol"], required: true, oneOf: V.echoWitness },
+      "tree-sha256": { types: ["string"] },
+    }, ["inputs"]);
+    const source = e.fields.get("source"), image = e.fields.get("image"), witness = e.fields.get("witness");
+    const where = `(echo :source ${source})`;
+    if (!HEX40.test(source) || !HEX40.test(image)) fail(`${where}: :source and :image must be full 40-character lowercase commits`);
+    if (source === image) fail(`${where}: :source and :image are the same commit`);
+    if (source === sourceCommit) fail(`${where}: the :source-commit is on the default branch, so it is an image and never a source`);
+    if (echoOf.has(source)) fail(`${where}: a source has one image only (the rewrite is a function)`);
+    const inputs = {};
+    if (witness === "tree-sha256") {
+      if (!e.fields.has("tree-sha256")) fail(`${where}: :witness tree-sha256 needs :tree-sha256`);
+      if (!HEX64.test(e.fields.get("tree-sha256"))) fail(`${where}: :tree-sha256 must be 64 lowercase hex digits`);
+      if (e.clauses.length) fail(`${where}: :witness tree-sha256 carries no (inputs …)`);
+    } else {
+      if (e.fields.has("tree-sha256")) fail(`${where}: :witness inputs-sha256 carries no :tree-sha256`);
+      if (e.clauses.length === 0) fail(`${where}: :witness inputs-sha256 needs at least one (inputs :prover … :sha256 …)`);
+      for (const i of e.clauses) {
+        const f = fieldsOf(`(inputs …) of ${where}`, i[2], {
+          prover: { types: ["symbol"], required: true },
+          sha256: { types: ["string"], required: true },
+        }, []).fields;
+        if (!HEX64.test(f.get("sha256"))) fail(`${where}: an (inputs …) :sha256 must be 64 lowercase hex digits`);
+        if (f.get("prover") in inputs) fail(`${where}: two (inputs …) for ${f.get("prover")}`);
+        inputs[f.get("prover")] = f.get("sha256");
+      }
+    }
+    const rec = { source, image, witness, tree_sha256: e.fields.get("tree-sha256") ?? null, inputs };
+    echoOf.set(source, rec);
+    echoes.push(rec);
+  }
+  for (const e of echoes) {
+    const seen = new Set([e.source]);
+    for (let c = e.image; echoOf.has(c); c = echoOf.get(c).image) {
+      if (seen.has(c)) fail(`(echo :source ${e.source}): the echoes form a cycle`);
+      seen.add(c);
+    }
+  }
+  // Every digest stated for one commit must agree, wherever it is stated.
+  const inputsAt = new Map(); // "commit prover" -> digest
+  const treeAt = new Map(); // commit -> digest
+  const state = (map, key, value, what) => {
+    if (map.has(key) && map.get(key) !== value) fail(`two different ${what} are stated for ${key}`);
+    map.set(key, value);
+  };
+  for (const e of echoes) {
+    if (e.witness === "tree-sha256") {
+      state(treeAt, e.source, e.tree_sha256, "tree-sha256 digests");
+      state(treeAt, e.image, e.tree_sha256, "tree-sha256 digests");
+    }
+    for (const [p, d] of Object.entries(e.inputs)) {
+      state(inputsAt, `${e.source} ${p}`, d, "input digests");
+      state(inputsAt, `${e.image} ${p}`, d, "input digests");
+    }
   }
 
   const claims = [];
@@ -834,17 +911,42 @@ export function readProofReceipt(text, filename = null) {
       }
       if (!discharged && !lf.fields.has("reason")) fail(`${where}: a ${route} ${prover} leg needs :reason`);
       const receipts = lf.clauses.map((r) => {
-        const rf = fieldsOf(`a receipt of the ${prover} leg of ${where}`, r[2], {
+        const rw = `a receipt of the ${prover} leg of ${where}`;
+        const { fields: rf, clauses: rc } = fieldsOf(rw, r[2], {
           run: { types: ["string"], required: true },
           commit: { types: ["string"], required: true },
           checker: { types: ["string"], required: true },
           invocation: { types: ["string"], required: true },
+          "inputs-sha256": { types: ["string"] },
           state: { types: ["symbol"], required: true, oneOf: V.receiptState },
           reason: { types: ["string"] },
-        }, []).fields;
+        }, ["axioms"]);
         if (!HEX40.test(rf.get("commit"))) fail(`${where}: a receipt :commit must be the full 40-character commit`);
         if (rf.get("state") !== "current" && !rf.has("reason")) fail(`${where}: a ${rf.get("state")} receipt needs :reason`);
-        return Object.fromEntries(rf);
+        const isCurrent = rf.get("state") === "current";
+        // §8.5.1: the inputs digest, as the sorted manifest of §8.5.1 computes it.
+        if (rf.has("inputs-sha256")) {
+          if (!HEX64.test(rf.get("inputs-sha256"))) fail(`${rw}: :inputs-sha256 must be 64 lowercase hex digits`);
+          state(inputsAt, `${rf.get("commit")} ${prover}`, rf.get("inputs-sha256"), "input digests");
+        } else if (isCurrent) fail(`${rw} is current and is missing :inputs-sha256 (§8.5.1)`);
+        // §8.4: the axioms the checker reported, each with its disposition.
+        if (rc.length > 1) fail(`${rw} has more than one (axioms …)`);
+        if (rc.length === 0 && isCurrent) fail(`${rw} is current and is missing (axioms …) (§8.4; write (axioms) when none were reported)`);
+        let axioms = null;
+        if (rc.length === 1) {
+          axioms = [];
+          const names = new Set();
+          for (const a of fieldsOf(`(axioms …) of ${rw}`, rc[0][2], {}, ["axiom"]).clauses) {
+            const af = fieldsOf(`an (axiom …) of ${rw}`, a[2], {
+              name: { types: ["string"], required: true },
+              disposition: { types: ["symbol"], required: true, oneOf: V.disposition },
+            }, []).fields;
+            if (names.has(af.get("name"))) fail(`${rw}: axiom "${af.get("name")}" is listed twice`);
+            names.add(af.get("name"));
+            axioms.push({ name: af.get("name"), disposition: af.get("disposition") });
+          }
+        }
+        return { ...Object.fromEntries(rf), axioms };
       });
       if (receipts.filter((r) => r.state === "current").length > 1) fail(`${where}: the ${prover} leg has more than one current receipt`);
       legs.push({ prover, route, token: lf.fields.get("token") ?? null, state: lf.fields.get("state") ?? null,
@@ -854,8 +956,23 @@ export function readProofReceipt(text, filename = null) {
 
     // §8.2: derive the grade. A leg counts when its kernel accepted it, it is
     // tied to the Agda statement as §2.2 requires, and it has a current receipt.
-    const kernelOk = (l) => l.token === "proven" || l.token === "proven-with-postulates";
+    // §8.4: a witness counts only if each axiom it reports is admissible under
+    // disposition (c).
     const current = (l) => l.receipts.find((r) => r.state === "current");
+    const kernelOk = (l) => (l.token === "proven" || l.token === "proven-with-postulates")
+      && (!current(l) || current(l).axioms.every((a) => a.disposition === "c"));
+    // §8.5.2: a receipt describes the :source-commit when its :commit is that
+    // commit, or when a chain of echoes leads from its :commit to that commit and
+    // every link agrees on this leg's inputs (a tree-sha256 link agrees on all).
+    const describesSource = (l) => {
+      const r = current(l);
+      for (let c = r.commit; ; c = echoOf.get(c).image) {
+        if (c === sourceCommit) return true;
+        const e = echoOf.get(c);
+        if (!e) return false;
+        if (e.witness === "inputs-sha256" && e.inputs[l.prover] !== r["inputs-sha256"]) return false;
+      }
+    };
     const agda = legs.find((l) => l.prover === "agda");
     const canonical = (inv) => ["--safe", "--without-K"].every((f) => inv.split(/\s+/).includes(f))
       && (inv.split(/\s+/).includes("--cubical-compatible") || inv.split(/\s+/).includes("--cubical"));
@@ -866,7 +983,7 @@ export function readProofReceipt(text, filename = null) {
     if (agdaCounts) {
       pwg = ["PWG-3", "PWG-2i", "PWG-2ii"][recheck.length];
       const counted = [agda, ...recheck];
-      if (recheck.length === 2 && counted.every((l) => current(l).commit === sourceCommit)) pwg = "PWG-1";
+      if (recheck.length === 2 && counted.every(describesSource)) pwg = "PWG-1";
     }
     if (pwg !== cl.fields.get("pwg")) {
       fail(`${where} records :pwg ${cl.fields.get("pwg")}, but its legs and receipts support ${pwg} (PROOF-POLICY §8.2, §8.4)`);
@@ -879,7 +996,17 @@ export function readProofReceipt(text, filename = null) {
     claims.push({ id, pwg, foundation_diverse: diverse, legs });
   }
   if (claims.length === 0) fail("a proof receipt records at least one (claim …)");
-  return { repository, source_commit: sourceCommit, trusted_base: trustedBase, claims };
+  // A tree-sha256 link says the whole tree agrees, so every leg's inputs agree.
+  for (const e of echoes.filter((e) => e.witness === "tree-sha256")) {
+    for (const [key, d] of inputsAt) {
+      const [commit, p] = key.split(" ");
+      const other = commit === e.source ? e.image : commit === e.image ? e.source : null;
+      if (other && inputsAt.has(`${other} ${p}`) && inputsAt.get(`${other} ${p}`) !== d) {
+        fail(`(echo :source ${e.source}) states equal trees, but the ${p} input digests of its two commits differ`);
+      }
+    }
+  }
+  return { repository, source_commit: sourceCommit, trusted_base: trustedBase, echoes, claims };
 }
 
 const H = ";; SPDX-License-Identifier: CC-BY-SA-4.0\n";
