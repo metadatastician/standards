@@ -336,11 +336,13 @@ from their current code:
 * `prove-result`.
 
 `gv-clade-index` is registered as ruled in the D320 amendment.
-The domain string `gv-clade-index` is frozen (owner ruling, 2026-11-13). It
-stays the profile C domain of every repo chora id after the registry is
-renamed chora-registry. It is a namespace label recorded here, not the name of
-a live repository, and it is never renamed. Past and future ids are minted
-under it alike, so every id can be re-checked against the registry archive.
+*New ids only* (owner ruling V9, 2026-11-13). From V9 on, new repo
+chora ids are minted in the domain `chora-registry`, the registry's new name,
+preimage `chora-registry:github.com/<birth owner>/<name>`. An id minted before
+V9 keeps its `gv-clade-index` id for good and is re-checked under that domain:
+nothing is reminted (rule U1). So `gv-clade-index` stays registered, for
+existing ids only, and no new id is minted in it. `chora-registry` is
+registered here before any mint uses it.
 echidna has no content-id call site yet, so it registers none.
 `berrywiki-import` is left for berrywiki to register with its own name form.
 
