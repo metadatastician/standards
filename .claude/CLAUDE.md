@@ -24,7 +24,9 @@ pins, workflow `uses:`, registry rows). It applies above all to:
   BANNED below, outside the listed exemptions;
 * a proof that is not run at the strictest setting its policy names. For
   Agda theory proofs that is `agda --safe --without-K --cubical-compatible`
-  (`3-practice/PROOF-POLICY.adoc` §2.1). Weaker flags, `postulate` in a
+  (`3-practice/PROOF-POLICY.adoc` §2.1). The one exception is a proof that
+  genuinely needs full Cubical Agda or incompatible options and runs under an
+  explicit, separately reviewed proof profile (same section). Weaker flags, `postulate` in a
   load-bearing track, or a skipped proof are departures. Rust uses Creusot
   with Pearlite and Verus (§1.2), Ada uses SPARK, and APIs and ABIs use
   Idris2. Other provers follow that policy and
@@ -37,7 +39,10 @@ at a time.
 
 **A2ML is entirely gone.** No `.a2ml` file should exist anywhere. Each one
 still present is a departure: report it, and remove it when you can do so
-safely (translate first anything a reader still needs).
+safely (translate first anything a reader still needs). Files under
+`9-archive/` are frozen historical evidence (`scripts/check-a2ml-archived.sh`).
+Never delete them, and do not report each one again. Whether the archive
+keeps them is an open owner question.
 
 There are three layers. Never mix them.
 
