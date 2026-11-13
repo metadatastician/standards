@@ -181,7 +181,18 @@ jobs:
       - name: Renderer regression tests
         continue-on-error: ${{ inputs.advisory == true }}
         if: github.repository_id == 1116521501
-        run: bash scripts/tests/k9-grid-test.sh
+        env:
+          ADVISORY: ${{ inputs.advisory == true }}
+        run: |
+          # In advisory mode a failure is a warning, not a runner error annotation.
+          set +e
+          bash scripts/tests/k9-grid-test.sh
+          status=$?
+          if [ "$status" -ne 0 ] && [ "$ADVISORY" = "true" ]; then
+            echo "::warning::renderer regression tests exited with status $status (advisory; not enforced)"
+            exit 0
+          fi
+          exit "$status"
 
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         continue-on-error: ${{ inputs.advisory == true }}
@@ -196,9 +207,18 @@ jobs:
         # proofs/ directory, which echidna-verify.yml typechecks.
         if: github.repository_id == 1116521501
         working-directory: 2-protocols/k9-coordination/tools/validate
+        env:
+          ADVISORY: ${{ inputs.advisory == true }}
         run: |
-          bun install --frozen-lockfile
-          bun validate.js --self-test
+          # In advisory mode a failure is a warning, not a runner error annotation.
+          set +e
+          bun install --frozen-lockfile && bun validate.js --self-test
+          status=$?
+          if [ "$status" -ne 0 ] && [ "$ADVISORY" = "true" ]; then
+            echo "::warning::coordination.k9 validator self-test exited with status $status (advisory; not enforced)"
+            exit 0
+          fi
+          exit "$status"
 
       - name: Validator self-test
         continue-on-error: ${{ inputs.advisory == true }}

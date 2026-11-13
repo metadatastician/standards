@@ -107,5 +107,20 @@ cond=$(rb 'puts YAML.load_file(ARGV[0])["jobs"]["lint"]["steps"].find{|s| s["nam
 ids=$(rb 'puts YAML.load_file(ARGV[0])["jobs"]["lint"]["steps"].map{|s| s["id"]}.compact.sort.join(",")' "$D")
 [ "$ids" = "bun,canon,checkout,lint" ] && ok "deed: prerequisite steps carry the ids the condition reads" || bad "deed step ids: $ids"
 
+# Standards-only bun steps are skipped when the Bun setup failed (CodeRabbit on #1519).
+unguarded=$(rb 'puts YAML.load_file(ARGV[0])["jobs"]["lint"]["steps"].select{|s| s["if"].to_s.include?("1116521501") && s["run"].to_s =~ /(^|\s)bun(\s|$)/ && !s["if"].to_s.include?("steps.bun.outcome")}.map{|s| s["name"]}.join("|")' "$D")
+[ -z "$unguarded" ] && ok "deed: every standards-only step that calls bun is guarded by the Bun setup outcome" || bad "deed: unguarded bun steps: $unguarded"
+
+# The standards-only test steps turn a failure into a warning under advisory.
+for name in "Renderer regression tests" "coordination.k9 validator self-test"; do
+  # run the step's own logic with its command replaced by a failing one
+  printf '%s\n' '#!/usr/bin/env bash' 'exit 3' > "$WORK/bad.sh"
+  rb 'st=YAML.load_file(ARGV[0])["jobs"]["validate"]["steps"].find{|s| s["name"].to_s.start_with?(ARGV[1])}; r=st["run"].dup; r.sub!("bash scripts/tests/k9-grid-test.sh", "bash #{ARGV[2]}"); r.sub!("bun install --frozen-lockfile && bun validate.js --self-test", "bash #{ARGV[2]}"); puts r' "$K" "$name" "$WORK/bad.sh" > "$WORK/stepy.sh"
+  ADVISORY=true bash -e -o pipefail "$WORK/stepy.sh" > "$WORK/o" 2>&1; rc=$?
+  { [ $rc -eq 0 ] && grep -q '^::warning::.*advisory' "$WORK/o"; } && ok "k9: '$name' failure is a warning under advisory" || bad "k9 '$name' advisory: rc=$rc $(cat "$WORK/o")"
+  ADVISORY=false bash -e -o pipefail "$WORK/stepy.sh" > "$WORK/o" 2>&1; rc=$?
+  [ $rc -eq 3 ] && ok "k9: '$name' still fails (exit 3) without advisory" || bad "k9 '$name' enforcing: rc=$rc"
+done
+
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]
