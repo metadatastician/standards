@@ -83,12 +83,14 @@ central.
   stays in the registry archive (CHORA-SPEC §9; `1-formats/deed/README.adoc`).
   ADR 0007 in the registry, "remint identity on move", is superseded. Any
   text that still says a rename remints is a departure.
-* **The `"gv-clade-index"` domain string is an open owner question.** It is
-  the ADR-008 profile C *domain* under which new ids are minted and
-  archived ids are re-checked. Changing it would not alter any existing id,
-  because ids are carried opaquely and never re-derived. It would change
-  every future mint and every re-check against the archive. Do not change
-  that string anywhere until the owner rules on it.
+* **New ids only** (owner ruling V9, 2026-11-13). New repo ids are minted in
+  the ADR-008 profile C domain `"chora-registry"` (preimage
+  `chora-registry:github.com/<birth owner>/<name>`), registered in
+  `docs/decisions/ADR-008-profile-c-domains.json`. Ids minted before V9 keep
+  their `"gv-clade-index"` domain for good and are re-checked under it; none is
+  reminted (U1). So never rewrite an existing id or its domain, and do not
+  "update" `gv-clade-index` to chora-registry where it names the domain of an
+  existing id. References to the repository itself follow the rename.
 
 ## Fork governance (read before changing a workflow)
 
