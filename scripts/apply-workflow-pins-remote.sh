@@ -233,7 +233,7 @@ squabbler_state() {
     # action count only in command position (start of a run: value or after
     # ; && ||), so `echo "squabble chains"` is not a gate either.
     if grep -vE '^[[:space:]]*#' "$f" | sed -E 's/[[:space:]]+#.*$//' \
-         | grep -qiE "[\"']?uses[\"']?[[:space:]]*:[[:space:]]*[\"']?([^[:space:]]*cicd-squabbler|\./\.github/actions/squabble)|(^[[:space:]]*(-[[:space:]]+)?(run[[:space:]]*:[[:space:]]*)?|[;&|][[:space:]]*)(bash[[:space:]]+|sh[[:space:]]+)?(\./)?(squabble[[:space:]]+chains|\.github/actions/squabble/)"; then
+         | grep -qiE "^[[:space:]]*(-[[:space:]]+)?[\"']?uses[\"']?[[:space:]]*:[[:space:]]*[\"']?([^[:space:]]*cicd-squabbler|\./\.github/actions/squabble)|(^[[:space:]]*(-[[:space:]]+)?(run[[:space:]]*:[[:space:]]*)?|[;&|][[:space:]]*)(bash[[:space:]]+|sh[[:space:]]+)?(\./)?(squabble[[:space:]]+chains|\.github/actions/squabble/)"; then
       shopt -u nullglob; echo PRESENT; return 0
     fi
     for cls in $(classify_file "$f" "$t"); do
@@ -453,6 +453,8 @@ self_test() {
   [ "$(squabbler_state "$d/sq" "$t" 0)" = PRESENT ] || { echo "  FAIL a uses with whitespace before the colon must count as PRESENT" >&2; ok_sq=0; }
   printf 'jobs:\n  s:\n    steps:\n      - run : squabble chains .\n' > "$d/sq/squabble.yml"
   [ "$(squabbler_state "$d/sq" "$t" 0)" = PRESENT ] || { echo "  FAIL a run with whitespace before the colon must count as PRESENT" >&2; ok_sq=0; }
+  printf 'jobs:\n  s:\n    steps:\n      - run: echo "uses : org/cicd-squabbler@main"\n' > "$d/sq/squabble.yml"
+  [ "$(squabbler_state "$d/sq" "$t" 0)" = MISSING ] || { echo "  FAIL an echoed uses : line inside a run: value must not count as PRESENT" >&2; ok_sq=0; }
   rm "$d/sq/squabble.yml"
   write_squabbler_caller "$d/sqc.yml" "$t"
   sq=$(classify_file "$d/sqc.yml" "$t" | sort | tr '\n' ',')

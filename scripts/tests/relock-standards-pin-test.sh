@@ -566,4 +566,66 @@ grep -q 'SELF-SHA-LEAF' "$T/edgeu-log" && fail "an edge with nested uses: was re
 cmp -s "$D/actions.lock" "$T/edgeu-before" || fail "an edge record with nested uses: was changed"
 echo "  PASS a reusable edge with nested uses: and ref == SHA is left alone"
 
+# Cases M2 and O use a second standards commit (NEW2): its lock also holds a
+# composite 'example/composite@5555...' (symbolic ref v5) that its reusable does
+# NOT require directly, and its reusable calls 'other/repo/.github/workflows/y.yml@8888...'
+# as a job-level nested reusable.
+S2="$T/standards2"; git clone -q "$S" "$S2"; git -C "$S2" config user.email t@t; git -C "$S2" config user.name t
+cat >> "$S2/.github/workflows/x-reusable.yml" <<'Y'
+  n:
+    uses: other/repo/.github/workflows/y.yml@8888888888888888888888888888888888888888
+Y
+cat >> "$S2/.github/workflows/actions.lock" <<'Y'
+    'example/composite@5555555555555555555555555555555555555555':
+        ref: 'v5'
+        commit: 'sha1-5555555555555555555555555555555555555555'
+        owner_id: 50
+        repo_id: 51
+        uses:
+            - 'acme/tool@3333333333333333333333333333333333333333'
+    'other/repo@8888888888888888888888888888888888888888':
+        ref: '8888888888888888888888888888888888888888'
+        commit: 'sha1-8888888888888888888888888888888888888888'
+        owner_id: 80
+        repo_id: 81
+        uses:
+            - 'actions/checkout@1111111111111111111111111111111111111111'
+Y
+git -C "$S2" add -A; git -C "$S2" commit -q -m two; NEW2=$(git -C "$S2" rev-parse HEAD)
+consumer2() { # name: a consumer pinned at NEW2, standards S2
+  local sv_new=$NEW d; NEW=$NEW2; d=$(consumer "$1"); NEW=$sv_new
+  cat >> "$d/actions.lock" <<'Y'
+    'example/composite@5555555555555555555555555555555555555555':
+        ref: '5555555555555555555555555555555555555555'
+        commit: 'sha1-5555555555555555555555555555555555555555'
+        owner_id: 50
+        repo_id: 51
+        uses:
+            - 'acme/tool@3333333333333333333333333333333333333333'
+    'other/repo@8888888888888888888888888888888888888888':
+        ref: '8888888888888888888888888888888888888888'
+        commit: 'sha1-8888888888888888888888888888888888888888'
+        owner_id: 80
+        repo_id: 81
+        uses:
+            - 'actions/checkout@1111111111111111111111111111111111111111'
+Y
+  echo "$d"
+}
+
+# Case M2: a composite the target reusable does not require directly is still
+# repaired (the required-record loop never reaches it).
+D=$(consumer2 composite-unrequired)
+bash "$RELOCK" --to "$NEW2" --standards "$S2" "$D" >/dev/null 2>"$T/m2-log" || { cat "$T/m2-log" >&2; fail "M2 relock refused"; }
+rec=$(grep -A8 -xF "    'example/composite@5555555555555555555555555555555555555555':" "$D/actions.lock")
+printf '%s\n' "$rec" | grep -qxF "        ref: 'v5'" || fail "M2: unrequired composite not repaired to v5"
+printf '%s\n' "$rec" | grep -qx '        uses:' || fail "M2: repair dropped the nested uses:"
+echo "  PASS a composite record the reusable does not require (nested uses:) is repaired"
+
+# Case O: a record for a reusable that a standards reusable at TARGET calls
+# (job-level, nested) legitimately has ref == SHA: left alone, not reported.
+grep -qxF "        ref: '8888888888888888888888888888888888888888'" "$D/actions.lock" || fail "O: nested reusable record was changed"
+grep -q 'other/repo' "$T/m2-log" && fail "O: nested reusable record was reported"
+echo "  PASS a nested reusable called by a standards reusable is not treated as poisoned"
+
 echo "PASS: relock-standards-pin.sh"

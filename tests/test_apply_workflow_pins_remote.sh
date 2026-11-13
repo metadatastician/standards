@@ -15,6 +15,7 @@
 # Each mutant is therefore `bash -n`-checked BEFORE its redness is believed.
 
 set -uo pipefail
+unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR GIT_INDEX_FILE GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_PREFIX
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APPLIER="${SCRIPT_DIR}/../scripts/apply-workflow-pins-remote.sh"

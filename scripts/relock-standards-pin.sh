@@ -132,6 +132,18 @@ edge_keys=$(grep -hvE '^[[:space:]]*#' "${wfs[@]}" 2>/dev/null | sed -E 's/[[:sp
             | sed -E "s/^[\"']?uses[\"']?:[[:space:]]*[\"']?//" \
             | sed -E 's#^([^/]+/[^/]+)/\.github/workflows/[^@]+@#\1@#' \
             | awk '{ i = index($0, "@"); print tolower(substr($0, 1, i - 1)) substr($0, i) }' | sort -u || true)
+# A standards reusable at TARGET may itself call another reusable workflow; that
+# nested record also legitimately carries ref == SHA (check-reusable-closure.sh
+# 5b, PARENT). Add the job-level calls the called reusables make at TARGET.
+for p in $full; do
+  path=${p#${COORD}/}; path=${path%@*}
+  nested=$(git -C "$SROOT" show "${TARGET}:${path}" 2>/dev/null | sed -E 's/[[:space:]]+#.*$//' \
+            | grep -oE "[\"']?uses[\"']?:[[:space:]]*[\"']?[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/\.github/workflows/[A-Za-z0-9._-]+\.ya?ml@[^[:space:]\"',}]+" \
+            | sed -E "s/^[\"']?uses[\"']?:[[:space:]]*[\"']?//" \
+            | sed -E 's#^([^/]+/[^/]+)/\.github/workflows/[^@]+@#\1@#' \
+            | awk '{ i = index($0, "@"); print tolower(substr($0, 1, i - 1)) substr($0, i) }' || true)
+  [ -z "$nested" ] || edge_keys=$(printf '%s\n%s\n' "$edge_keys" "$nested" | sort -u)
+done
 # is_edge KEY: true when KEY names a job-level reusable-workflow edge.
 is_edge() { printf '%s\n' "$edge_keys" | grep -qxF "$(printf '%s\n' "$1" | awk '{ i = index($0, "@"); print tolower(substr($0, 1, i - 1)) substr($0, i) }')"; }
 # An already-keyed lock still goes through the rebuild when it holds a
@@ -241,7 +253,7 @@ while read -r u; do
   existing=""; [ -z "$key" ] || existing=$(rec_body "$key" "$tmp/lock")
   if [[ -n "$existing" ]]; then
     pin=${u##*@}
-    if [[ "$pin" =~ ^[0-9a-f]{40}$ ]] && printf '%s\n' "$existing" | grep -qxF "        ref: '$pin'"; then
+    if [[ "$pin" =~ ^[0-9a-f]{40}$ ]] && ! is_edge "$u" && printf '%s\n' "$existing" | grep -qxF "        ref: '$pin'"; then
       # A consumer can retain a poisoned copy after Standards repairs its own
       # record. Refresh only ref:, and only with identical commit and IDs.
       skey=$(lock_key "$u" "$tmp/slock")
