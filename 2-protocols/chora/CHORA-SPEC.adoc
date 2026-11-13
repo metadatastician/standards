@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 = A1: The Chora (forge, estate, repo)
 :version: 0.4.1-draft
-:status: DRAFT v0.4.1 (V9 restated 2026-11-13: the domain rename applies to new mints and archive re-checks only, existing ids are kept; owner ruling W10 of 2026-11-13 amends R4: clade placements are identity facts in the chora, chora-registry is authoritative for the schemes; owner ruling V9 of 2026-11-13 renames the v8 preimage domain from `gv-clade-index` to `chora-registry` for new mints; A7 J15 moves `(status)` to `STATE.deed`; earlier: deed ids are profile C UUIDv8 of the birth path, rule V8; adds the invariant `:id` from A2 D1, the root `(publishers)` clause from A3 E1 and its OIDC form from A4 F3). Rulings U1 to U4 recorded; decisions C1 to C8 approved by the owner on 2026-11-10, and C9 and C10 on 2026-11-12. Not yet ratified as a whole. Consistency pass applied 2026-11-10. Proposed in standards#1474; bot-review fixes applied 2026-11-12.
+:status: DRAFT v0.4.1 (V9 restated 2026-11-13: the domain rename applies to new mints only, existing ids are kept and re-checked under the domain the archive records for them; owner ruling W10 of 2026-11-13 amends R4: clade placements are identity facts in the chora, chora-registry is authoritative for the schemes; owner ruling V9 of 2026-11-13 renames the v8 preimage domain from `gv-clade-index` to `chora-registry` for new mints; A7 J15 moves `(status)` and `(maturity)` to `STATE.deed`; earlier: deed ids are profile C UUIDv8 of the birth path, rule V8; adds the invariant `:id` from A2 D1, the root `(publishers)` clause from A3 E1 and its OIDC form from A4 F3). Rulings U1 to U4 recorded; decisions C1 to C8 approved by the owner on 2026-11-10, and C9 and C10 on 2026-11-12. Not yet ratified as a whole. Consistency pass applied 2026-11-10. Proposed in standards#1474; bot-review fixes applied 2026-11-12.
 :toc:
 
 Specification A1 of the Estate Reconciliation Plan. It replaces the draft
@@ -174,7 +174,7 @@ The root has no `:beholding-chora`. It is the top of the hierarchy. There is exa
 | `(identity :primary-forge <symbol> :owner "<s>" :name "<s>")` | clause | Required, once. It reuses the clause that `rsr-template-repo_chora.deed` carries today [M].
 | `(co-estates (co-estate :estate <uuid> :role <symbol>))` | clause | Optional, once. Each `:estate` is an `:estate-uuid` and is not the beholding estate. `:role` is a symbol; A1 fixes none.
 | `(forges ...)`, `(lineage ...)` | clauses | Optional. They keep the shape in the template [M]. A1 adds nothing to them.
-| `(status ...)` | clause | Moves to `STATE.deed` (A7 J15, 2026-11-13). A `(status)` in the chora is read, with a warning, for one release, then refused in `strict` mode. Profile, canon version and deviations belong to A2.
+| `(status ...)` | clause | Moves to `STATE.deed`, with `(maturity ...)` (A7 J15, 2026-11-13). A `(status)` or `(maturity)` in the chora is read, with a warning, for one release, then refused in `strict` mode. Profile, canon version and deviations belong to A2.
 | `(profile)`, `(generation)`, `(deviations)` | clauses | Defined by A2 (sections 4 to 7 there). `(profile)` is required in `strict` mode. `(generation)` is required only for a generated repo. `(deviations)` is optional.
 | `(clade ...)` | clause | Optional. The repo's clade placements, as identity facts, checked against chora-registry (section 11, W10). Never an id, never an edict.
 |===
@@ -298,7 +298,7 @@ States, for an estate or repo record:
 
 *V8 [O].* Owner ruling, 2026-11-12 (#1475, and approval of this change): a deed carries the profile C UUIDv8 of the birth path, the registry's `uuid_v8`. The UUIDv5 of the same path stays the registry's `uuid` and appears in no deed. This reconciles U2 and U3 with ADR-008 (D305, D320), which makes every estate UUID version 8, and with the strict check `scripts/check-uuid-v8.sh` [M]. Values quoted from history in this section are shortened to their first 8 hex digits, so that no full version 5 value stands in the repo.
 
-*V9 [O].* Owner ruling, 2026-11-13, given in the A1 thread and restated the same day: `gv-clade-index` is renamed chora-registry, and the ADR-008 profile C domain follows it for every NEW mint and every re-check against the registry archive. Existing ids are not reissued: U1 holds without exception, and a deed keeps the opaque id it carries. The owner first stated the rename as applying "in every one"; asked whether that meant reissuing every existing id (which only changes the preimage text, breaks U1 once and needs one PR per repo), the owner chose new ids only. The rules:
+*V9 [O].* Owner ruling, 2026-11-13, given in the A1 thread and restated the same day: `gv-clade-index` is renamed chora-registry, and the ADR-008 profile C domain follows it for every NEW mint. A re-check against the registry archive uses the domain the archive records for that id, so an id minted before V9 is re-checked under `gv-clade-index`. Existing ids are not reissued: U1 holds without exception, and a deed keeps the opaque id it carries. The owner first stated the rename as applying "in every one"; asked whether that meant reissuing every existing id (which only changes the preimage text, breaks U1 once and needs one PR per repo), the owner chose new ids only. The rules:
 
 * An id minted after V9 is the profile C UUIDv8 of `chora-registry:github.com/<birth owner>/<name>`.
 * An id minted before V9 stays as it is: the profile C UUIDv8 of `gv-clade-index:github.com/<birth owner>/<name>`. For `standards` that is `b32d6be4-73ba-873e-9d61-e57f43c75cd1`, unchanged.
@@ -389,8 +389,8 @@ The owner approved C1 to C8 as recommended. The text of this document is the rec
 | C9 | Estate, platform and federation ids are minted once from `chora:estate/<host>/<owner>`, `chora:platform/<host>`, `chora:federation/<name>`, and carried opaquely. Amended by V8: minted as profile C UUIDv8 of those preimages (first approved as UUIDv5). | Approved; amended 2026-11-12
 | C10 | The opaque literal admits UUID versions 5 and 8 only. Amended by V8: an identity field carries version 8; version 5 there is `v5-identity`. | Approved; amended 2026-11-12
 | W10 | A repo's clade placements are identity facts in its chora, never its id and never an edict. chora-registry (renamed `gv-clade-index`) is authoritative for the schemes, and a chora copy is checked against it. Content organisation is `CLADE.deed` (A7). Owner ruling of 2026-11-13 in the A7 thread, confirmed in the A1 thread; amends R4. Section 11. | Approved 2026-11-13
-| V9 | New mints and archive re-checks use the profile C domain `chora-registry`; ids minted before V9 keep the `gv-clade-index` domain and are never reissued (U1 holds). Owner ruling of 2026-11-13, restated the same day. Section 9.1. | Approved 2026-11-13
-| J15 | `(status)` moves from the repo chora to `STATE.deed` (A7 J15). Section 5.4. | Approved 2026-11-13
+| V9 | New mints use the profile C domain `chora-registry`; archive re-checks use the domain recorded for each id; ids minted before V9 keep the `gv-clade-index` domain and are never reissued (U1 holds). Owner ruling of 2026-11-13, restated the same day. Section 9.1. | Approved 2026-11-13
+| J15 | `(status)` and `(maturity)` move from the repo chora to `STATE.deed` (A7 J15); a chora copy is read with a warning for one release, then refused in `strict`. Section 5.4. | Approved 2026-11-13
 |===
 
 Open after approval: A1 as a whole is not ratified. No file is created in any repo until the owner approves a commit.
