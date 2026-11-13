@@ -142,7 +142,10 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ github.repository }}
-          ref: ${{ github.ref }}
+          # github.sha, not github.ref: on pull_request github.ref is the named
+          # merge ref refs/pull/<n>/merge, which is gone once the PR merges or
+          # closes ("couldn't find remote ref"). See governance-reusable.yml.
+          ref: ${{ github.sha }}
       - name: Detect Cargo.toml
         id: detect
         run: |
@@ -168,7 +171,10 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ github.repository }}
-          ref: ${{ github.ref }}
+          # github.sha, not github.ref: on pull_request github.ref is the named
+          # merge ref refs/pull/<n>/merge, which is gone once the PR merges or
+          # closes ("couldn't find remote ref"). See governance-reusable.yml.
+          ref: ${{ github.sha }}
 
       - name: Install Rust toolchain
         # `toolchain:` is mandatory because the action is pinned by commit SHA:
@@ -221,7 +227,10 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ github.repository }}
-          ref: ${{ github.ref }}
+          # github.sha, not github.ref: on pull_request github.ref is the named
+          # merge ref refs/pull/<n>/merge, which is gone once the PR merges or
+          # closes ("couldn't find remote ref"). See governance-reusable.yml.
+          ref: ${{ github.sha }}
 
       - name: Install Rust toolchain
         # `toolchain:` mandatory under SHA pin — see Cargo check job above.
@@ -270,7 +279,10 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ github.repository }}
-          ref: ${{ github.ref }}
+          # github.sha, not github.ref: on pull_request github.ref is the named
+          # merge ref refs/pull/<n>/merge, which is gone once the PR merges or
+          # closes ("couldn't find remote ref"). See governance-reusable.yml.
+          ref: ${{ github.sha }}
 
       - name: Install Rust toolchain
         # `toolchain:` mandatory under SHA pin — see Cargo check job above.
@@ -306,7 +318,10 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ github.repository }}
-          ref: ${{ github.ref }}
+          # github.sha, not github.ref: on pull_request github.ref is the named
+          # merge ref refs/pull/<n>/merge, which is gone once the PR merges or
+          # closes ("couldn't find remote ref"). See governance-reusable.yml.
+          ref: ${{ github.sha }}
 
       - name: Install Rust toolchain
         # `toolchain:` mandatory under SHA pin — see Cargo check job above.
