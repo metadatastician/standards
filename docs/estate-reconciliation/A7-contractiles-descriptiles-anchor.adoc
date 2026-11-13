@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 = A7: Contractiles, Descriptiles and Anchor (edicts, reality, course correction)
-:version: 0.2.0-draft
-:status: DRAFT v0.2.0. Owner rulings W1 to W9 of 2026-11-13 recorded (section 2.3); they supersede Q11, Q12 (in its form) and Q13 for this subject. J1 to J3, J5 to J8 and J10 to J12 approved 2026-11-13; J9 and J13 approved as amended; J4 reopened. J14 to J18 proposed. Builds on A1 v0.3.9, A2 v0.2.3, A3 v0.2.3 and A5 v0.2.2. Supersedes, for its subject, docs/ULTRAPLAN-DEED-K9-CONTRACTILES-2026-10-19.adoc v0.3.3 (J1). Not ratified.
+:version: 0.2.1-draft
+:status: DRAFT v0.2.1. Owner rulings W1 to W9 of 2026-11-13 recorded (section 2.3); they supersede Q11, Q12 (in its form) and Q13 for this subject. J1 to J3, J5 to J8 and J10 to J12 approved 2026-11-13; J9 and J13 approved as amended; J4 reopened. J18 approved 2026-11-13 (A7 thread). J14 to J17 proposed. Builds on A1 v0.3.9, A2 v0.2.3, A3 v0.2.3 and A5 v0.2.2. Supersedes, for its subject, docs/ULTRAPLAN-DEED-K9-CONTRACTILES-2026-10-19.adoc v0.3.3 (J1). Not ratified.
 :toc:
 
 Specification A7 of the Estate Reconciliation Plan. It defines how a repository's edicts (the contractiles) are checked against its identity (the chora) and its audited reality (the descriptiles), how an anchor corrects a project that has drifted, and the order in which the estate leaves A2ML behind.
@@ -344,7 +344,7 @@ Probe execution stays in the one signed `'Hunt` component [O: Q9], under the con
 | `bust` | graded (8.5) | blocks | graded (8.5)
 |===
 
-One exception is carried from ultraplan P0.1 unchanged (8.3): a rule whose only witness is a refused `'Hunt` probe is blocking unresolved whatever its verb, `intend` included. Whether W7 relaxes this for `intend` is open (J18).
+One exception is carried from ultraplan P0.1 unchanged (8.3): a rule whose only witness is a refused `'Hunt` probe is blocking unresolved whatever its verb, `intend` included. W7 does not relax it: the owner kept P0.1 for every verb (J18, 2026-11-13).
 
 Example of the `!` line in `Trustfile.deed`: a rule that refuses SHA-1 with nothing stronger carries `!` and blocks; a rule that notes a newer algorithm (Ed448, say) not yet adopted carries no `!` and warns.
 
@@ -592,7 +592,7 @@ These tests cover the semantic-authority clause module merged in #1490. Under W3
 
 === 14.1 Ruled on 2026-11-13 [O]
 
-The owner ruled J1 to J13 on 2026-11-13. Where a ruling changed the proposal, the column says how. W1 to W9 (section 2.3) were given in the same session.
+The owner ruled J1 to J13 on 2026-11-13 in the A1 thread, and J18 the same day in the A7 thread. Where a ruling changed the proposal, the column says how. W1 to W9 (section 2.3) were given in the same session.
 
 [cols="1,4,2"]
 |===
@@ -611,6 +611,7 @@ The owner ruled J1 to J13 on 2026-11-13. Where a ruling changed the proposal, th
 | J11 | The template mints `:repo-uuid #uuid"<ADR-008 v8 id of the birth path>"` (V8), and `deed-field.sh --uuid` reads it without re-deriving. | Approved
 | J12 | Related repos keep `:name` and add the chora `:uuid`, required in strict mode only. Parents are named by chora id; a legacy parent with no registered id is left out and the translation reported incomplete (a warning in lax mode, an error in strict). | Approved
 | J13 | `contractile` becomes an A5 rule domain (a G1 addition, a root `rule-domain` term per G2). Its registry, `contractile_rules_praxis.deed` in `standards`, is generated from the six `<Verb>file.deed` files: one `rule-def` per rule, `:id "contractile/<verb>/<rule-id>"`, the rule text as `:text`. Each entry carries A5 R07's fields: `:class gate` for every `must` rule and for every rule marked `!`, `:class advisory` otherwise (8.4); `:excusable-at repo`; `:scope-form exact-paths` (a deviation names the rule with an empty `(scope)`, A5 5.2); `:status active`. A Bust rule's entry carries the estate floor of 8.5, which no deviation lowers. CI fails when regenerating changes the registry. | Approved as amended (class by verb and `!`, Bust floor)
+| J18 | Keep P0.1: a rule witnessed only by a refused `'Hunt` probe is blocking unresolved under every verb, `intend` included. A refused probe is missing evidence, and an unverified signature never looks like a pass. | Approved
 |===
 
 === 14.2 Proposed, not yet ruled
@@ -625,7 +626,6 @@ Each is the recommendation, with the reason.
 | J15 | `(status)` and `(maturity)` move from the chora deed to `STATE.deed`. The chora's `(status)` is read as a fallback for one release and then refused in strict mode. A1 §5.4 is amended to match. | W3 makes descriptiles files, and a second home would drift (J3).
 | J16 | Anchor drift `:distance` uses the Bust severity scale, 1 furthest and 5 close. The required fields are those of 6.3. | One scale for "how bad" across the set, and the constitution's fields are already required of an anchor.
 | J17 | `!` becomes a deed token, allowed only directly after a rule's `:id` value in a `contractile-deed`. | The owner asked for `!`; the deed grammar has no such token today.
-| J18 | Keep P0.1 as it stands: a rule witnessed only by a refused probe blocks, even under `intend`. | A refused probe is missing evidence, and an unverified signature must never look like a pass. The alternative is to let `intend` report it as advisory, as W7 does for its violations.
 |===
 
 == 15. Out of scope

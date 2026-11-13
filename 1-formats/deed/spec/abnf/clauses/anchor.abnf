@@ -125,9 +125,8 @@ chora-uuid8     = %s"#uuid" DQUOTE 8hex-lc "-" 4hex-lc "-" "8" 3hex-lc "-"
                 ; deed.abnf's uuid narrowed to version 8: A1 rule V8 puts the
                 ; profile C UUIDv8 in deeds; the UUIDv5 stays in the registry.
 lc-variant      = "8" / "9" / %x61 / %x62
-                ; RFC 9562 variant 10, lowercase only. deed.abnf's uuid-variant
-                ; writes "a" / "b", which ABNF matches case-insensitively; the
-                ; code points keep this profile as strict as deed_lint.
+                ; RFC 9562 variant 10, lowercase only, as deed.abnf's uuid-variant
+                ; (%s"a" / %s"b" since the #1482 errata) and deed_lint.
 
 str-list        = "(" [token-sep] [string *(token-sep string)] [token-sep] ")"
 str-list1       = "(" [token-sep] string *(token-sep string) [token-sep] ")"
