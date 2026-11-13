@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 = A2: Profile, Generation and Deviations (chora clauses and pack laws)
 :version: 0.2.4-draft
-:status: DRAFT v0.2.4 (A7 J15: `(status)` and `(maturity)` move to `STATE.deed`; earlier: scope fields extended by A5 G5). Decisions D1 to D9 approved by the owner on 2026-11-10. Not yet ratified as a whole. Builds on A1 v0.3.9. Consistency pass applied 2026-11-10. Proposed in standards#1474; bot-review fixes applied 2026-11-12.
+:status: DRAFT v0.2.4 (A7 J15: `(status)` and `(maturity)` move to `STATE.deed`; earlier: scope fields extended by A5 G5). Decisions D1 to D9 approved by the owner on 2026-11-10. Not yet ratified as a whole. Builds on A1 v0.4.0. Consistency pass applied 2026-11-10. Proposed in standards#1474; bot-review fixes applied 2026-11-12.
 :toc:
 
 Specification A2 of the Estate Reconciliation Plan. It defines three clauses of the chora, the files a generator may own, and the laws that a generator must keep.
@@ -48,7 +48,7 @@ Identifiers. Every decision, law and test id in this specification is local to i
 A2 changes A1 in 2 places. Both are approved (section 12) and are now in A1 v0.3.6.
 
 * A1 section 5 first gave an invariant `rule` the fields `:priority` and `:text`. A2 D1 added a required `:id` (string, unique in the whole federation), because a deviation must name the rule it excuses (section 7.4).
-* A1 section 5.4 lists `(forges)` and `(lineage)` as optional repo clauses. `(status)` and `(maturity)` move to the descriptile `STATE.deed` (A7 J15, A1 v0.4.0): a chora `(status)` is read with a warning for one release, then refused in `strict` mode. A1 5.4 refers to this specification for `(profile)`, `(generation)` and `(deviations)`. A2 defines them, with the rules in section 4.
+* A1 section 5.4 lists `(forges)` and `(lineage)` as optional repo clauses. `(status)` and `(maturity)` move to the descriptile `STATE.deed` (A7 J15, A1 v0.4.0): a chora `(status)` or `(maturity)` is read with a warning for one release, then refused in `strict` mode. A1 5.4 refers to this specification for `(profile)`, `(generation)` and `(deviations)`. A2 defines them, with the rules in section 4.
 
 New term kinds in the root vocabulary (A1 says a later format may declare kinds): `capability`, `file-kind` and `scheme`. A2 fixes these three and no others.
 
