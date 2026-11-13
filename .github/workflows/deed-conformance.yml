@@ -17,6 +17,7 @@ name: deed-conformance
 #       uses: metadatastician/standards/.github/workflows/deed-conformance.yml@<sha>
 #       with:
 #         require-files: true   # fail when the caller has no .deed at all
+#         advisory: false       # true: findings become ::warning:: and the job passes
 
 on:
   push:
@@ -39,6 +40,11 @@ on:
         type: boolean
         required: false
         default: false
+      advisory:
+        description: "Report findings as ::warning:: annotations and pass, instead of failing the job. Governance calls this reusable with it on, so no repository turns red at once; a repository opts into enforcement by calling with advisory: false (the default for direct callers)."
+        type: boolean
+        required: false
+        default: false
 
 permissions: {}
 
@@ -54,10 +60,12 @@ jobs:
       T: ${{ github.repository_id == 1116521501 && '1-formats/deed/tools' || '.deed-canon/1-formats/deed/tools' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        continue-on-error: ${{ inputs.advisory == true }}
         with:
           persist-credentials: false
       - name: checkout the deed linter at this workflow's commit
         if: github.repository_id != 1116521501
+        continue-on-error: ${{ inputs.advisory == true }}
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: metadatastician/standards
@@ -67,6 +75,7 @@ jobs:
           sparse-checkout: "1-formats/deed/tools\n"
           sparse-checkout-cone-mode: false
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        continue-on-error: ${{ inputs.advisory == true }}
         with:
           bun-version: "1.4.2"
       - name: validator self-test
@@ -105,6 +114,10 @@ jobs:
           cargo test --quiet --locked --manifest-path tools/uuid-v8/Cargo.toml
           bash scripts/tests/rust/uuid-v8-rs-test.sh
       - name: lint every committed deed
+        id: lint
+        # Advisory: a failing step does not fail the job; the next step turns
+        # the findings into annotations.
+        continue-on-error: ${{ inputs.advisory == true }}
         env:
           REQUIRE_FILES: ${{ inputs.require-files || false }}
         run: |
@@ -119,9 +132,25 @@ jobs:
             exit 0
           fi
           echo "linting $(wc -l < "$RUNNER_TEMP/deeds") file(s)"
-          xargs bun "$T/deed_lint.js" < "$RUNNER_TEMP/deeds"
+          xargs bun "$T/deed_lint.js" < "$RUNNER_TEMP/deeds" 2>&1 | tee -a "$RUNNER_TEMP/deed-lint.log"
           # The (egress …) clause profile (ADR-009). A deed without the clause
           # passes. Its invalid fixtures are grammatical deeds, so they are
           # excluded here rather than from the grammar lint above.
           grep -v '^\./1-formats/deed/tools/fixtures/egress/invalid/' "$RUNNER_TEMP/deeds" \
-            | xargs bun "$T/deed_lint.js" --egress
+            | xargs bun "$T/deed_lint.js" --egress 2>&1 | tee -a "$RUNNER_TEMP/deed-lint.log"
+      - name: Advisory findings as warnings
+        if: ${{ always() && inputs.advisory == true && steps.lint.outcome == 'failure' }}
+        run: |
+          # deed_lint prints `FAIL <path>: <message>`. Annotate each (capped,
+          # GitHub shows few), then say plainly that nothing was enforced.
+          n=$(grep -c '^FAIL ' "$RUNNER_TEMP/deed-lint.log" || true)
+          grep '^FAIL ' "$RUNNER_TEMP/deed-lint.log" | sort -u | head -n 30 | while IFS= read -r line; do
+            rest="${line#FAIL }"; path="${rest%%: *}"; msg="${rest#*: }"
+            msg="${msg//'%'/%25}"; msg="${msg//$'\r'/%0D}"
+            printf '::warning file=%s::deed conformance (advisory): %s\n' "${path#./}" "$msg"
+          done
+          if [ "${n:-0}" -eq 0 ]; then
+            echo "::warning::deed conformance (advisory): the check did not run to completion (no finding was recorded); see the step log. Not enforced."
+          else
+            echo "::warning::deed conformance (advisory): ${n} finding(s); not enforced. Fix them, then call deed-conformance.yml with advisory: false to enforce."
+          fi

@@ -31,7 +31,7 @@ name: k9-conformance
 # report.md, the validator logs) and the `verdict` output. The caller posts
 # report.md to its pull request and publishes badge.json itself: a reusable
 # cannot ask for more permissions than it is given, and this one asks for
-# `contents: read` plus `pull-requests: read` (to read the grid comment it
+# `contents: read` only. It used to ask for `pull-requests: read` as well, to read the grid comment it
 # posted last time, for the "since previous revision" column).
 #
 # Caller:
@@ -44,6 +44,7 @@ name: k9-conformance
 #       with:
 #         require-files: true          # fail when the caller has no K9 file at all
 #         fail-on-indeterminate: true  # orange fails the job too (default: only red fails)
+#         advisory: false              # true: every finding is a ::warning:: and the job passes
 #         grid-author: github-actions[bot]  # the account whose grid comment is the delta baseline
 
 on:
@@ -73,6 +74,11 @@ on:
         type: boolean
         required: false
         default: false
+      advisory:
+        description: "Findings become ::warning:: annotations and the job passes, whatever the verdict (the grid and its artifact are still produced). Governance calls this reusable with it on, so no repository turns red at once; a repository opts into enforcement by calling with advisory: false (the default for direct callers)."
+        type: boolean
+        required: false
+        default: false
       grid-author:
         description: "The account that posts the grid comment in the caller; only its comment is read as the previous revision's baseline, so a contributor's comment cannot pose as one."
         type: string
@@ -91,7 +97,6 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
-      pull-requests: read
     outputs:
       verdict: ${{ steps.grid.outputs.state }}
     env:
@@ -104,6 +109,7 @@ jobs:
       IJSON_JCS_REV: '0fdeea716fd558e9807362acf6f8202d56d8d88f'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        continue-on-error: ${{ inputs.advisory == true }}
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           # Full history: the changed-file list is the merge-base diff and the
@@ -113,6 +119,7 @@ jobs:
           persist-credentials: false
 
       - name: checkout the K9 validator, contract and renderer at this workflow's commit
+        continue-on-error: ${{ inputs.advisory == true }}
         if: github.repository_id != 1116521501
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -124,6 +131,7 @@ jobs:
           sparse-checkout-cone-mode: false
 
       - name: Record which standards commit supplies validator, contract and renderer
+        continue-on-error: ${{ inputs.advisory == true }}
         env:
           # The job context is not available to job-level env, so the canon
           # ref is recorded here. A caller gets this workflow's own commit.
@@ -140,6 +148,7 @@ jobs:
           fi
 
       - name: Install Nickel (pinned, sha256-verified; one version estate-wide)
+        continue-on-error: ${{ inputs.advisory == true }}
         run: |
           set -euo pipefail
           URL="https://github.com/tweag/nickel/releases/download/${NICKEL_VERSION}/nickel-x86_64-linux"
@@ -149,6 +158,7 @@ jobs:
           echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
 
       - name: Cache the ijson-jcs canonicaliser
+        continue-on-error: ${{ inputs.advisory == true }}
         id: jcs-cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -156,6 +166,7 @@ jobs:
           key: ijson-jcs-${{ env.IJSON_JCS_REV }}-${{ runner.os }}
 
       - name: Install ijson-jcs (3-practice/JSON-POLICY.adoc, D306)
+        continue-on-error: ${{ inputs.advisory == true }}
         if: steps.jcs-cache.outputs.cache-hit != 'true'
         run: |
           set -euo pipefail
@@ -166,14 +177,17 @@ jobs:
             || echo "::warning::ijson-jcs did not install; report.json falls back to jq -S -c"
 
       - name: Renderer regression tests
+        continue-on-error: ${{ inputs.advisory == true }}
         if: github.repository_id == 1116521501
         run: bash scripts/tests/k9-grid-test.sh
 
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        continue-on-error: ${{ inputs.advisory == true }}
         with:
           bun-version: "1.4.2"
 
       - name: coordination.k9 validator self-test (v1.2 ABNF through apg-js, fixtures, mutants, v1.1 -> v1.2 side condition)
+        continue-on-error: ${{ inputs.advisory == true }}
         # 2-protocols/k9-coordination/tools/validate (standards#1221). The
         # repository's own coordination.k9 is among the files it must accept,
         # and it re-checks the side condition of the Idris2 proof in its
@@ -185,6 +199,7 @@ jobs:
           bun validate.js --self-test
 
       - name: Validator self-test
+        continue-on-error: ${{ inputs.advisory == true }}
         run: |
           set +e
           bash "$CANON/1-formats/k9/tools/k9-validate.sh" --self-test > "$RUNNER_TEMP/selftest.log" 2>&1
@@ -192,6 +207,7 @@ jobs:
           tail -n 5 "$RUNNER_TEMP/selftest.log"
 
       - name: Contract typecheck
+        continue-on-error: ${{ inputs.advisory == true }}
         run: |
           set +e
           nickel typecheck "$CANON/1-formats/k9/spec/contract/k9_contract.ncl" > "$RUNNER_TEMP/typecheck.log" 2>&1
@@ -199,6 +215,7 @@ jobs:
           cat "$RUNNER_TEMP/typecheck.log"
 
       - name: Enumerate the committed K9 files, the changed files and ledger growth
+        continue-on-error: ${{ inputs.advisory == true }}
         env:
           # A pull request compares with its base; a push with the commit the
           # push replaced (all zeros when the ref is new: nothing to compare).
@@ -273,6 +290,7 @@ jobs:
           fi
 
       - name: Validate every committed K9 file (L0–L2, strict)
+        continue-on-error: ${{ inputs.advisory == true }}
         run: |
           set +e
           : > "$RUNNER_TEMP/results.jsonl"
@@ -289,6 +307,7 @@ jobs:
           echo "validator worst exit status: $worst"
 
       - name: Validate coordination.k9 files against the v1.2 ABNF (own grid category)
+        continue-on-error: ${{ inputs.advisory == true }}
         # A file the K9 validator routes to the coordination dialect is
         # checked by 2-protocols/k9-coordination/tools/validate at this
         # workflow's commit (apg-js on coordination-k9-grammar_v1.2.abnf, plus
@@ -327,6 +346,7 @@ jobs:
           echo "coordination.k9 files checked: $(wc -l < "$RUNNER_TEMP/coord-results.jsonl")"
 
       - name: Read the grid comment from the previous revision (delta column)
+        continue-on-error: ${{ inputs.advisory == true }}
         if: github.event_name == 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -359,6 +379,7 @@ jobs:
           [ -s "$RUNNER_TEMP/previous.md" ] && echo "previous grid found" || echo "no previous grid"
 
       - name: Render the verdict grid
+        continue-on-error: ${{ inputs.advisory == true }}
         id: grid
         env:
           REQUIRE_FILES: ${{ inputs.require-files || false }}
@@ -387,6 +408,7 @@ jobs:
           [ -f "$RUNNER_TEMP/corpus.log" ] && cp "$RUNNER_TEMP/corpus.log" "$RUNNER_TEMP/k9-grid/"
 
       - name: Archive the grid and its evidence
+        continue-on-error: ${{ inputs.advisory == true }}
         if: ${{ always() && steps.grid.outcome != 'skipped' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -396,12 +418,25 @@ jobs:
           retention-days: 90
 
       - name: Gate
+        continue-on-error: ${{ inputs.advisory == true }}
         env:
           STATE: ${{ steps.grid.outputs.state }}
           FAIL_ON_INDETERMINATE: ${{ inputs.fail-on-indeterminate || false }}
+          ADVISORY: ${{ inputs.advisory || false }}
         run: |
           set -euo pipefail
           echo "K9 verdict grid: $STATE"
+          if [ "$ADVISORY" = "true" ]; then
+            # Advisory: say what would have failed, never fail.
+            case "$STATE" in
+              red) echo "::warning::K9 conformance (advisory): the grid is red; not enforced. See the k9-grid artifact and the step summary." ;;
+              orange) echo "::warning::K9 conformance (advisory): indeterminate, evidence is missing; not enforced." ;;
+              yellow) echo "::notice::K9 conformance passes with ledgered debt or warnings" ;;
+              green|grey) ;;
+              *) echo "::warning::K9 conformance (advisory): no verdict was produced (an earlier step did not complete); not enforced." ;;
+            esac
+            exit 0
+          fi
           case "$STATE" in
             red) echo "::error::K9 conformance failed; see the k9-grid artifact and the step summary"; exit 1 ;;
             orange)
