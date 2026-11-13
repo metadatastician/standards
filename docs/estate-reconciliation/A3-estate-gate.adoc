@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 = A3: The Single Gate (one required check, the caller contract, the check table)
 :version: 0.2.3-draft
-:status: DRAFT v0.2.5 (the check table gains the append-only `contractiles-adopted` list, so a repo that deletes its clause after M7 is not `not_applicable`, A7 YC10; earlier: SysArch review R-04 and R-19: the `contractiles` row is `not_applicable`, reported, until a repo's A7 M7 PR; the open-anchor failure is cited from A7 YS03; warnings go in the verdict envelope). Decisions E1 to E11 approved by the owner on 2026-11-10, and E12 on 2026-11-13 (contractiles become a required check, with A7 v0.2.3). Not yet ratified as a whole. Builds on A1 v0.4.1 and A2 v0.2.4. Consistency pass applied 2026-11-10. Proposed in standards#1474; bot-review fixes applied 2026-11-12.
+:status: DRAFT v0.2.5 (the check table gains the append-only `contractiles-adopted` list, so a repo that deletes its clause after first adopting it is not `not_applicable`, A7 YC10; earlier: SysArch review R-04 and R-19: the `contractiles` row is `not_applicable`, reported, until a repo first adopts the clause (M4 for `standards`, M7 for a migrated repo, registration for a template-born repo); the open-anchor failure is cited from A7 YS03; warnings go in the verdict envelope). Decisions E1 to E11 approved by the owner on 2026-11-10, and E12 on 2026-11-13 (contractiles become a required check, with A7 v0.2.3). Not yet ratified as a whole. Builds on A1 v0.4.1 and A2 v0.2.4. Consistency pass applied 2026-11-10. Proposed in standards#1474; bot-review fixes applied 2026-11-12.
 :toc:
 
 Specification A3 of the Estate Reconciliation Plan. It defines the one required status check of a repo, the one caller workflow, the table from profile to checks, and the rules by which a verdict is computed.
@@ -171,7 +171,7 @@ The table is a `praxis-deed` named `estate-gate_praxis.deed` that `proven-cicd` 
     (repo :chora #uuid"806d4d6f-f107-8b36-939b-f89ba6279377")))
 ----
 
-The `(contractiles-adopted ...)` clause lists, by opaque chora id (`(repo :chora #uuid"...")`), every repo whose A7 M7 PR has landed its `(contractiles ...)` clause (A7 8.4, YC10). That M7 PR adds the entry. The list is append-only: an entry is never removed, and a change to the table that removes one fails its own check (test G64). It is a pinned input of the verdict, like the rest of the table.
+The `(contractiles-adopted ...)` clause lists, by opaque chora id (`(repo :chora #uuid"...")`), every repo that has adopted the `(contractiles ...)` clause (A7 8.4, YC10). The PR that first adds the clause adds the entry: M4 for `standards`, M7 for a migrated repo, and registration for a repo born from the template with the clause. The list is append-only: an entry is never removed, and a change to the table that removes one fails its own check (test G64). It is a pinned input of the verdict, like the rest of the table.
 
 The sample in `docs/estate-reconciliation/examples/a3-estate-gate_praxis.deed.example` (the caller sample is `docs/estate-reconciliation/examples/a3-estate-gate.yml.example`) lints clean under `deed_lint.js` as written: `deed.abnf` v1.3.0 and its linter accept the opaque literal since #1473 [M: linted 2026-11-12]. The linter checks syntax only [I].
 
@@ -215,7 +215,7 @@ A3 does not widen the required set. The first table reproduces the checks requir
 | none yet | `ada-ci`, `bun-ci`, `host` | repo-local files named in `gates.json` | The 28 capabilities of A2 have no `ada`, `bun` or `host` term (E3).
 |===
 
-The `contractiles` row is the one deliberate widening (E12, an owner ruling of 2026-11-13). It fails on a `Must` violation, on a violated clause marked `!`, on a Bust finding graded `X1`, on a blocking unresolved verdict (A7 8.4), and on an open anchor as A7 6.3 and YS03 define it. A violation the verb grades as a warning is reported in the verdict envelope (3.4) and does not fail it. Until a repo's A7 M7 PR lands its `(contractiles ...)` clause and adds the repo to the table's `contractiles-adopted` list (5.1), the probe finds no subject and the row is `not_applicable`, with that reason in the envelope. From then on, A7 YC01 applies, and deleting the clause does not make the row `not_applicable` again.
+The `contractiles` row is the one deliberate widening (E12, an owner ruling of 2026-11-13). It fails on a `Must` violation, on a violated clause marked `!`, on a Bust finding graded `X1`, on a blocking unresolved verdict (A7 8.4), and on an open anchor as A7 6.3 and YS03 define it. A violation the verb grades as a warning is reported in the verdict envelope (3.4) and does not fail it. Until a repo first adopts the `(contractiles ...)` clause and is added to the table's `contractiles-adopted` list (5.1), the probe finds no subject and the row is `not_applicable`, with that reason in the envelope. From then on, A7 YC01 applies, and deleting the clause does not make the row `not_applicable` again.
 
 All other catalogue capabilities are `advisory` in the first table. Promoting one to `required` is an owner ruling and a table change. The enforcing checks of the original audit (14 of its 26 actions [M: README]) are not required by `gates.json` today (finding 7) and A3 does not require them.
 
