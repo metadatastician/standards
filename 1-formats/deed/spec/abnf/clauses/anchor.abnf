@@ -12,7 +12,8 @@
 ; `clause` of deed.abnf v1.3.0, so a deed carrying one still passes deed_lint
 ; unchanged. This profile narrows that clause. Rules it borrows (string,
 ; boolean, symbol, token-sep, DQUOTE, DIGIT, ALPHA, hex-lc, str-char, escape)
-; are deed.abnf's, unchanged. Requires RFC 7405 (%s"..." case-sensitive string literals).
+; are deed.abnf's, unchanged; str-list, str-list1, chora-uuid8 and lc-variant
+; are common.abnf's. Requires RFC 7405 (%s"..." case-sensitive string literals).
 ;
 ; What the anchor is: the repo's semantic authority and golden path — what a
 ; downstream or satellite repo may extend but not redefine, and how to bring
@@ -120,15 +121,5 @@ parent-member   = ( %s":uuid" token-sep chora-uuid8 )
                 ; which a legacy #u8 or #u5 :repo-uuid is compared by the id it
                 ; names (A1 rule V8).
 
-chora-uuid8     = %s"#uuid" DQUOTE 8hex-lc "-" 4hex-lc "-" "8" 3hex-lc "-"
-                  lc-variant 3hex-lc "-" 12hex-lc DQUOTE
-                ; deed.abnf's uuid narrowed to version 8: A1 rule V8 puts the
-                ; profile C UUIDv8 in deeds; the UUIDv5 stays in the registry.
-lc-variant      = "8" / "9" / %x61 / %x62
-                ; RFC 9562 variant 10, lowercase only. deed.abnf's uuid-variant
-                ; writes "a" / "b", which ABNF matches case-insensitively; the
-                ; code points keep this profile as strict as deed_lint.
-
-str-list        = "(" [token-sep] [string *(token-sep string)] [token-sep] ")"
-str-list1       = "(" [token-sep] string *(token-sep string) [token-sep] ")"
-                ; str-list1 is non-empty.
+; chora-uuid8, lc-variant, str-list and str-list1 are common.abnf's (A7 M3:
+; the shared rules have one definition, borrowed by every clause module).
