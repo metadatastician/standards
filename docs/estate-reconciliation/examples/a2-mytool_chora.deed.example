@@ -3,6 +3,8 @@
 (repo-deed
   :schema-version "1.0.0"
   :canonical-name "mytool"
+  ; A pre-V9 id: the gv-clade-index mint of github.com/hyperpolymath/mytool.
+  ; Minted after V9 (domain chora-registry) it would be 591c928a-7154-8f26-b7b8-a985bc37dd50.
   :repo-uuid #uuid"806d4d6f-f107-8b36-939b-f89ba6279377"
   :beholding-chora #uuid"0889b37b-defb-831f-973c-e119500db00e"
 

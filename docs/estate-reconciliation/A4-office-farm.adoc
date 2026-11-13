@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 = A4: Office and Farm (the boundary, the intake envelope, work orders, the move of the scripts)
 :version: 0.2.3-draft
-:status: DRAFT v0.2.3. Decisions F1 to F15 approved by the owner on 2026-11-10. Not yet ratified as a whole. Builds on A1 v0.4.1, A2 v0.2.4 and A3 v0.2.4. Consistency pass applied 2026-11-10. Proposed in standards#1474; bot-review fixes applied 2026-11-12.
+:status: DRAFT v0.2.3. Decisions F1 to F15 approved by the owner on 2026-11-10. Not yet ratified as a whole. Builds on A1 v0.4.1, A2 v0.2.4 and A3 v0.2.8. Consistency pass applied 2026-11-10. Proposed in standards#1474; bot-review fixes applied 2026-11-12.
 :toc:
 
 Specification A4 of the Estate Reconciliation Plan. The office decides and the farm executes (R2). A4 defines the line between them, the one envelope in which every finding and every verdict enters the office, the work order that leaves it, and the rules for moving the farm's label and merge scripts.
@@ -471,11 +471,11 @@ Every test is new work. A fixture is valid unless marked `-bad`.
 | I03 | The same fingerprint from 2 sensors gives one record with 2 sensors. | `fp-corroborated`
 | I04 | No ledger line carries a finding body or a secret. | `ledger-body-bad`
 | I05 | `fixed` is set only by a later rescan on a later commit. | `fixed-no-rescan-bad`
-| I09 | A finding in `a/` followed by a `ran` rescan whose scope is only `b/` stays unresolved. | `fixed-out-of-scope-bad`
-| I10 | One rule firing on 2 identical lines in one file gives 2 records; an unrelated line inserted above both keeps both fingerprints. | `fp-repeated`
 | I06 | `accepted` requires a valid deviation (A2); on its expiry the record goes `lapsed`. | `accepted-expired`
 | I07 | A sensor cannot set a state. | `sensor-state-bad`
 | I08 | At most one open order per `(repo, class)`. | `two-orders-bad`
+| I09 | A finding in `a/` followed by a `ran` rescan whose scope is only `b/` stays unresolved. | `fixed-out-of-scope-bad`
+| I10 | One rule firing on 2 identical lines in one file gives 2 records; an unrelated line inserted above both keeps both fingerprints. | `fp-repeated`
 |===
 
 === 13.4 Work orders

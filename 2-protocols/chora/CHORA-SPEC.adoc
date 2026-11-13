@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 = A1: The Chora (forge, estate, repo)
 :version: 0.4.1-draft
-:status: DRAFT v0.4.1 (V9 restated 2026-11-13: the domain rename applies to new mints only, existing ids are kept and re-checked under the domain the archive records for them; owner ruling W10 of 2026-11-13 amends R4: clade placements are identity facts in the chora, chora-registry is authoritative for the schemes; owner ruling V9 of 2026-11-13 renames the v8 preimage domain from `gv-clade-index` to `chora-registry` for new mints; A7 J15 moves `(status)` and `(maturity)` to `STATE.deed`; earlier: deed ids are profile C UUIDv8 of the birth path, rule V8; adds the invariant `:id` from A2 D1, the root `(publishers)` clause from A3 E1 and its OIDC form from A4 F3). Rulings U1 to U4 recorded; decisions C1 to C8 approved by the owner on 2026-11-10, and C9 and C10 on 2026-11-12. Not yet ratified as a whole. Consistency pass applied 2026-11-10. Proposed in standards#1474; bot-review fixes applied 2026-11-12.
+:status: DRAFT v0.4.1 (V9 restated 2026-11-13: the domain rename applies to new mints only, existing ids are kept and re-checked under the domain the archive records for them; owner ruling A7 W10 of 2026-11-13 amends R4: clade placements are identity facts in the chora, chora-registry is authoritative for the schemes; owner ruling V9 of 2026-11-13 renames the v8 preimage domain from `gv-clade-index` to `chora-registry` for new mints; A7 J15 moves `(status)` and `(maturity)` to `STATE.deed`; earlier: deed ids are profile C UUIDv8 of the birth path, rule V8; adds the invariant `:id` from A2 D1, the root `(publishers)` clause from A3 E1 and its OIDC form from A4 F3). Rulings U1 to U4 recorded; decisions C1 to C8 approved by the owner on 2026-11-10, and C9 and C10 on 2026-11-12. Not yet ratified as a whole. Consistency pass applied 2026-11-10. Proposed in standards#1474; bot-review fixes applied 2026-11-12.
 :toc:
 
 Specification A1 of the Estate Reconciliation Plan. It replaces the draft
@@ -28,7 +28,7 @@ Identifiers. Every decision, law and test id in this specification is local to i
 * The federation root is the single declaration site of vocabulary. Estates extend it and never re-declare it [O].
 * A repo chora beholds exactly 1 estate chora, and may declare co-estates. The index is therefore a graph with 1 primary edge per repo [O].
 * The registry is the chora hierarchy. The index (`ATLAS.deed`) is generated from the beholding relation and is never hand-edited [O].
-* A repo's clade placements are identity facts in its chora: where the repo sits. They are never its id and never an edict. chora-registry (the renamed `gv-clade-index`) holds the estate-wide classification schemes and is authoritative [O: W10, amending R4].
+* A repo's clade placements are identity facts in its chora: where the repo sits. They are never its id and never an edict. chora-registry (the renamed `gv-clade-index`) holds the estate-wide classification schemes and is authoritative [O: A7 W10, amending R4].
 * The deed core stays small. A later trope format adds term kinds and no grammar [O].
 
 == 2. Findings that shape the design
@@ -38,7 +38,7 @@ Identifiers. Every decision, law and test id in this specification is local to i
 . [M] 48 files in `standards` (fixtures, `standards_chora.deed`, `0-AI-MANIFEST.deed` and others) carry `:beholding-chora #u5"estate/chora"`. That is one literal name shared by all repos, so today it does not tell estates apart.
 . [M] `standards` has no forge chora. Outside the archive, forge appears only as mirroring policy (`0-canon/rsr/RSR-SPEC-v2.adoc` line 216: GitHub canonical, GitLab mirror-only; `KNOWN-TENSIONS.adoc` line 17).
 . [M] The only structured forge record is `gv-clade-index/verisim/schema/forge-identity.vcl` and `seed/forges.a2ml` (GitHub primary; GitLab, Bitbucket, Codeberg mirrors). Both are VeriSimDB and A2ML files, not deeds.
-. [M] `deed.abnf` v1.2.1 has 4 heads: `estate-deed`, `repo-deed`, `estate-atlas-deed`, `praxis-deed`. It has no forge head.
+. [M] `deed.abnf` v1.2.1 has 4 heads: `estate-deed`, `repo-deed`, `estate-atlas-deed`, `praxis-deed`. It has no forge head. (v1.4.0 has 7 document heads: those 4, plus `contractile-deed`, `descriptile-deed` and `anchor-deed` from A7 J14; the forge head is still not in it.)
 . [M] The deed spec identity table gives `estate-deed` no required reference and gives `estate-atlas-deed` a required `:beholding-chora`. The fixture `ATLAS.deed` has no `:canonical-name` and no `:beholding-chora`. The fixture contradicts the table.
 . [M] `hyperpolymath/hyperpolymath/README.adoc` (lines 51 to 64) does not list the 4 estates in section 3.1 [O]. The profile page is therefore stale.
 . [R] The plan says 8 of 15 measured repos have no repo chora, and about 30 repos have only a fixture as `estate_chora.deed`.
@@ -119,7 +119,7 @@ Every deed carries `:schema-version` exactly once [grammar]. The ABNF is authori
 
 | `:schema-version` | field | STRING, once.
 | `:canonical-name` | field | STRING. Example: `"hyperpolymath-federation"`.
-| `:forge-uuid` | field | An opaque `#uuid` literal (section 9). Minted once from the preimage `chora:federation/<name>` (C9 [O]).
+| `:forge-uuid` | field | An opaque `#uuid` literal (section 9). Minted once from the preimage `chora:federation/<name>` (C9 [O]), where `<name>` is the name the federation was minted under, not its `:canonical-name`: `chora:federation/hyperpolymath` gives `977ef226-dd92-8cb9-8724-caf6fa251784`.
 | `:kind` | field | The symbol `federation`.
 | `:vocabulary-version` | field | STRING, semver.
 | `(vocabulary (term ...))` | clause | 1 or more `term`. `term` fields: `:name` STRING (unique), `:kind` symbol, `:gloss` STRING. A `:kind` is `type`, `trope`, `lattice`, `invariant` or any symbol that a later format declares. A1 fixes no other kind.
@@ -176,7 +176,7 @@ The root has no `:beholding-chora`. It is the top of the hierarchy. There is exa
 | `(forges ...)`, `(lineage ...)` | clauses | Optional. They keep the shape in the template [M]. A1 adds nothing to them.
 | `(status ...)` | clause | Moves to `STATE.deed`, with `(maturity ...)` (A7 J15, 2026-11-13). A `(status)` or `(maturity)` in the chora is read, with a warning, for one release, then refused in `strict` mode. Profile, canon version and deviations belong to A2.
 | `(profile)`, `(generation)`, `(deviations)` | clauses | Defined by A2 (sections 4 to 7 there). `(profile)` is required in `strict` mode. `(generation)` is required only for a generated repo. `(deviations)` is optional.
-| `(clade ...)` | clause | Optional. The repo's clade placements, as identity facts, checked against chora-registry (section 11, W10). Never an id, never an edict.
+| `(clade ...)` | clause | Optional. The repo's clade placements, as identity facts, checked against chora-registry (section 11, A7 W10). Never an id, never an edict.
 |===
 
 The existing recommendation `(provenance ...)` and `(project ...)` of the draft stays recommended and is not required.
@@ -199,12 +199,16 @@ The existing recommendation `(provenance ...)` and `(project ...)` of the draft 
 * New value: the opaque UUID literal (ruling U4 [O]).
 +
 ----
-value     =/ uuid-lit
-uuid-lit  = %s"#uuid" DQUOTE 8hexl "-" 4hexl "-" 4hexl "-" 4hexl "-" 12hexl DQUOTE
-hexl      = DIGIT / %x61-66        ; lowercase a to f only
+value         =/ uuid
+uuid          = %s"#uuid" DQUOTE uuid-hex DQUOTE
+uuid-hex      = 8hex-lc "-" 4hex-lc "-" uuid-version 3hex-lc "-"
+                uuid-variant 3hex-lc "-" 12hex-lc
+uuid-version  = "5" / "8"
+uuid-variant  = "8" / "9" / %s"a" / %s"b"
+hex-lc        = DIGIT / %x61-66   ; lowercase a to f only
 ----
 +
-Semantic rule (validator): the version digit (the first digit of the third group) is `5` or `8`, and the variant digit (the first digit of the fourth group) is `8`, `9`, `a` or `b` (the RFC 4122 variant). Versions 5 and 8 only (C10 [O]): they are the name-based versions that the registry mints today (`uuid` and `uuid_v8`), and `deed.abnf` v1.3.0 admits both [M]. Version 4 (random) and version 7 (time-ordered) are excluded, because an identity is minted from a birth path and must be reproducible from the registry archive. In an identity field the value is version 8 (section 9, rule V8 [O]); a version 5 value there is reported `v5-identity`, a warning in `lax` and an error in `strict`.
+As adopted in v1.3.0 the grammar names these `uuid`, `uuid-hex` and `hex-lc`, and checks the version and variant digits itself (the draft here had them as a validator rule). The rule: the version digit (the first digit of the third group) is `5` or `8`, and the variant digit (the first digit of the fourth group) is `8`, `9`, `a` or `b` (the RFC 4122 variant). Versions 5 and 8 only (C10 [O]): they are the name-based versions that the registry mints today (`uuid` and `uuid_v8`), and `deed.abnf` v1.3.0 admits both [M]. Version 4 (random) and version 7 (time-ordered) are excluded, because an identity is minted from a birth path and must be reproducible from the registry archive. In an identity field the value is version 8 (section 9, rule V8 [O]); a version 5 value there is reported `v5-identity`, a warning in `lax` and an error in `strict`.
 * `#u5"..."` and `#u8"..."` stay legal values for reading. In an identity field (`:repo-uuid`, `:estate-uuid`, `:forge-uuid`, `:beholding-chora`, and the `:uuid`, `:estate`, `:base`, `:forge` and `:repo` fields of clauses) they are deprecated: a validator reports `deprecated-identity-literal` as a warning. The owner sets the cutover date. No date is set (U4 [O]).
 * Semantic rule (validator, not ABNF): a `forge-deed` has exactly 1 `:kind` field, whose value is `federation` or `platform`. The stem `federation` is legal only for `:kind federation`, and exactly 1 such file exists per federation.
 
@@ -222,6 +226,8 @@ The table in `DEED-GRAMMAR-SPEC.adoc` (section on identity) changes in 3 rows:
 | `forge-deed` | not defined | `:canonical-name`, `:forge-uuid`, `:kind`; `:beholding-chora` required when `:kind platform`
 | `estate-atlas-deed` | `:canonical-name`; `:beholding-chora` | unchanged. The fixture `ATLAS.deed` is corrected.
 |===
+
+The three heads of A7 J14 (`contractile-deed`, `descriptile-deed`, `anchor-deed`) are defined by A7, not here. Under A7 J20 they name the repo they belong to with `:of-chora` (the repo's opaque v8 chora id) and carry no `:beholding-chora`. `:beholding-chora` keeps the one meaning this section gives it: the estate chora that a repo or praxis deed belongs to. A praxis deed, `debt_praxis.deed` included, keeps it.
 
 The ABNF requires only `:schema-version` on every form. All other requirements in this section are validator semantics, as they are today. Every identity field in the table takes the opaque `#uuid` literal (section 7.1, U4). The spec's description of `:repo-uuid` as UUID8 of a domain and a path is replaced by section 9.
 
@@ -336,8 +342,8 @@ Handling, as reported to the drafting session and not decided in this specificat
 
 Amended by owner ruling W10 of 2026-11-13 (given in the A7 thread; A7 2.3), which reverses R4's "the clade is an outward finding aid only".
 
-* *Placement is identity* [O: W10]. A repo's `(clade ...)` clause records where the repo sits in the estate's classification schemes. These are identity facts, like `(lineage)`. They are never the repo's id (that is `:repo-uuid`, section 9), and no edict hangs off them (A7 W1).
-* *The registry is authoritative* [O: W10]. chora-registry, the renamed `gv-clade-index`, holds the estate-wide classification schemes, which can be swapped (A7 2.3). A placement carried in a chora is a copy and is checked against the registry; on a disagreement the registry wins and the chora is reported.
+* *Placement is identity* [O: A7 W10]. A repo's `(clade ...)` clause records where the repo sits in the estate's classification schemes. These are identity facts, like `(lineage)`. They are never the repo's id (that is `:repo-uuid`, section 9), and no edict hangs off them (A7 W1).
+* *The registry is authoritative* [O: A7 W10]. chora-registry, the renamed `gv-clade-index`, holds the estate-wide classification schemes, which can be swapped (A7 2.3). A placement carried in a chora is a copy and is checked against the registry; on a disagreement the registry wins and the chora is reported.
 * *Content organisation is not identity.* How a repo organises its own content is `CLADE.deed`, a descriptile (A7 W10). It is not part of the chora.
 * *Nothing resolves identity through a clade.* No check MAY derive `:repo-uuid` or any other identity field from a clade. The index generator copies placements into `(finding-aid :clade ...)` (8.2) for outward discovery, and the `boj-server` cartridges and `proven-tests-and-benches` read the index, not the chora [O].
 * *New ids follow the rename* [O: V9]. New mints use the domain `chora-registry`; ids minted before V9 keep the `gv-clade-index` domain and are never reissued (section 9.1, V9).
@@ -474,7 +480,7 @@ Each test is a check that a validator can run. `deed_lint.js` already implements
 | T44 | `:chora-hash` and `:root-hash` equal the sha256 of the normalised bytes. | `hash-wrong-bad`
 | T45 | Generating twice from the same inputs, including the same recorded enumeration, gives the same bytes outside `(generation ...)` and `:registry-version`. | all
 | T46 | `:registry-version` increases when the output changes outside `(generation ...)` and `:registry-version`, and stays when it does not. | 2 runs
-| T47 | No identity field is derived from a clade. A `(clade ...)` placement in a chora that disagrees with chora-registry is reported, and the registry's placement is used (W10). | `clade-as-identity-bad`, `clade-registry-mismatch`
+| T47 | No identity field is derived from a clade. A `(clade ...)` placement in a chora that disagrees with chora-registry is reported, and the registry's placement is used (A7 W10). | `clade-as-identity-bad`, `clade-registry-mismatch`
 | T48 | Hand edit: the index differs from a fresh generation. This reports an error in CI. | `hand-edited-bad`
 |===
 
