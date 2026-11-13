@@ -191,7 +191,7 @@ The existing recommendation `(provenance ...)` and `(project ...)` of the draft 
 
 == 7. Grammar proposals (not edits to the ABNF)
 
-=== 7.1 `deed.abnf` v1.3.0, additive
+=== 7.1 `deed.abnf` v1.3.0, additive (current grammar v1.4.0, also additive)
 
 * New head: `forge-deed`.
 * New filename production: `forge-file = stem %s"_forge.deed"`, dispatching to `forge-deed`. It is tested after `estate-file` and does not overlap `repo-file` or `praxis-file`.
@@ -410,7 +410,7 @@ Each test is a check that a validator can run. `deed_lint.js` already implements
 | T03 | `:schema-version` appears exactly once, as a STRING. | `no-version-bad`, `two-version-bad`
 | T04 | `estate_chora.deed` is tested before `*_chora.deed` and parses as `estate-deed`. | `estate_chora.deed`
 | T05 | The doc head matches the file name: `_chora.deed` gives `repo-deed`, `ATLAS.deed` gives `estate-atlas-deed`. | `head-mismatch-bad`
-| T06 | (v1.3.0) `_forge.deed` gives `forge-deed`. `federation_forge.deed` has `:kind federation`. Any other stem has `:kind platform`. | `federation_forge.deed`, `kind-mismatch-bad`
+| T06 | (since v1.3.0) `_forge.deed` gives `forge-deed`. `federation_forge.deed` has `:kind federation`. Any other stem has `:kind platform`. | `federation_forge.deed`, `kind-mismatch-bad`
 | T07 | Exactly 1 `federation_forge.deed` per federation. | `two-roots-bad`
 |===
 
