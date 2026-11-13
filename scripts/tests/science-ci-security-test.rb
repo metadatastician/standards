@@ -25,7 +25,7 @@ def workflow(name)
 end
 
 workflow('mirror-reusable.yml')['jobs'].each do |name, job|
-  next if %w[mirror-radicle mirror-r2-bundle].include?(name)
+  next if %w[visibility-guard mirror-radicle mirror-r2-bundle].include?(name)
 
   verify = job['steps'].find { |step| step.fetch('name', '').start_with?('Verify ') }
   push = job['steps'].find { |step| step.fetch('run', '').include?('git push') }
@@ -236,3 +236,36 @@ Dir.mktmpdir('policy-startup-') do |tmp|
   end
 end
 puts 'PASS: empty workflows and retired policy fail; executable jobs with canonical policy pass'
+
+# Visibility guard (owner ruling 2026-11-13, CASE-038): a private source is
+# never force-pushed to a forge that is not confirmed private.
+mirror_jobs = workflow('mirror-reusable.yml')['jobs']
+guard = mirror_jobs.fetch('visibility-guard')
+mirror_jobs.each do |name, job|
+  next if %w[visibility-guard mirror-r2-bundle].include?(name)
+  forge = name.sub('mirror-', '').upcase
+  assert(job['needs'] == 'visibility-guard', "#{name}: does not wait for the visibility guard")
+  assert(job['if'].include?("needs.visibility-guard.outputs.public == 'true'") &&
+         job['if'].include?("vars.#{forge}_MIRROR_PRIVATE_CONFIRMED == 'true'"),
+         "#{name}: pushes a private source without the guard")
+  assert(guard['steps'][1]['env'].key?("EN_#{forge}"), "guard does not check #{forge}")
+end
+vis = guard['steps'][0]['run']
+refuse = guard['steps'][1]['run']
+Dir.mktmpdir('mirror-guard-') do |tmp|
+  [['false', 'true'], ['true', 'false'], ['', 'false']].each do |private, public|
+    out_file = File.join(tmp, 'out')
+    FileUtils.rm_f(out_file)
+    run!({ 'SRC_PRIVATE' => private, 'GITHUB_OUTPUT' => out_file }, 'bash', '-c', vis)
+    assert(File.read(out_file).include?("public=#{public}"), "guard: private=#{private.inspect} read as public=#{!public}")
+  end
+  summary = File.join(tmp, 'summary')
+  [[{ 'EN_GITLAB' => 'true' }, false],
+   [{ 'EN_GITLAB' => 'true', 'OK_GITLAB' => 'true' }, true],
+   [{ 'EN_CODEBERG' => 'true', 'EN_RADICLE' => 'true', 'OK_RADICLE' => 'true' }, false],
+   [{}, true]].each do |env, succeeds|
+    _out, _err, status = Open3.capture3(env.merge('GITHUB_STEP_SUMMARY' => summary), 'bash', '-c', refuse)
+    assert(status.success? == succeeds, "guard: #{env.inspect} should #{succeeds ? 'pass' : 'refuse'}")
+  end
+end
+puts 'PASS: every forge mirror waits for the visibility guard, which refuses private sources on unconfirmed forges'
