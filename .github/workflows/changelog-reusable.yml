@@ -78,10 +78,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ github.repository }}
-          # github.sha, not github.ref: on pull_request github.ref is the named
-          # merge ref refs/pull/<n>/merge, which is gone once the PR merges or
-          # closes ("couldn't find remote ref"). See governance-reusable.yml.
-          ref: ${{ github.sha }}
+          ref: ${{ github.sha }} # not github.ref: refs/pull/<n>/merge is gone once the PR closes
           fetch-depth: 1
           path: caller
 
@@ -118,10 +115,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ github.repository }}
-          # github.sha, not github.ref: on pull_request github.ref is the named
-          # merge ref refs/pull/<n>/merge, which is gone once the PR merges or
-          # closes ("couldn't find remote ref"). See governance-reusable.yml.
-          ref: ${{ github.sha }}
+          ref: ${{ github.sha }} # not github.ref: refs/pull/<n>/merge is gone once the PR closes
           fetch-depth: 0
           path: caller
 
