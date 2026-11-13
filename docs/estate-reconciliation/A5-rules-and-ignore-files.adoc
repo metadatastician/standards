@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 = A5: Rule Identifiers, the Deviation Store and the Generated Ignore Files
 :version: 0.2.2-draft
-:status: DRAFT v0.2.2. Decisions G1 to G14 approved by the owner on 2026-11-10. Not yet ratified as a whole. Builds on A1 v0.4.1, A2 v0.2.4, A3 v0.2.8 and A4 v0.2.3. Consistency pass applied 2026-11-10. Proposed in standards#1474; bot-review fixes applied 2026-11-12.
+:status: DRAFT v0.2.3 (`bot/write` takes `:scope-form (origins repos globs)`, so the bot denylist's vendored globs import as deviations). Decisions G1 to G14 approved by the owner on 2026-11-10. Not yet ratified as a whole. Builds on A1 v0.4.1, A2 v0.2.4, A3 v0.2.8 and A4 v0.2.3. Consistency pass applied 2026-11-10. Proposed in standards#1474; bot-review fixes applied 2026-11-12.
 :toc:
 
 Specification A5 of the Estate Reconciliation Plan. A2 defined the `(deviations)` clause. A5 gives every rule a stable identifier, says how a deviation is checked against the rule it excuses, and defines how the tool-native exemption files are generated from deviations. The plan's rule is: each rule has one identifier and one text, an exception is one record, and the ignore files of each tool are generated from those records [R: plan section 9].
@@ -126,7 +126,7 @@ The sample is `docs/estate-reconciliation/examples/a5-hypatia-rules_praxis.deed.
 | `:class` | 1, symbol | `gate` (blocks a merge when it fires), `advisory` (reports only), `policy` (a ban or requirement stated for people and tools), `invariant` (a chora invariant; A1).
 | `:severity` | 0..1, symbol | `critical`, `high`, `medium` or `minor` (A4 section 5.3).
 | `:excusable-at` | 1, symbol | `repo`, `estate` or `root`: the lowest level at which a deviation for this rule may be recorded.
-| `:scope-form` | 1, symbol or list of symbols | `exact-paths`, `globs`, `fingerprints`, `repos` or `origins`: the forms of scope a deviation may use for this rule (4.3). A list allows each form in it; `exact-paths` and `globs` are not listed together. A rule with several axes, such as `bot/write`, lists them all: `:scope-form (origins repos exact-paths)`.
+| `:scope-form` | 1, symbol or list of symbols | `exact-paths`, `globs`, `fingerprints`, `repos` or `origins`: the forms of scope a deviation may use for this rule (4.3). A list allows each form in it; `exact-paths` and `globs` are not listed together. A rule with several axes, such as `bot/write`, lists them all: `:scope-form (origins repos globs)`. `bot/write` takes `globs`, not `exact-paths`, because the bot denylist it replaces excludes vendored trees by glob (for example `**/vendor/**`; see the measured findings in section 2); an exact path is a glob with no wildcard, so nothing the denylist held is lost.
 | `:status` | 1, symbol | `active` or `retired`.
 | `:supersedes` | 0..1, list of STRING | Older ids replaced by this one.
 | `:superseded-by` | 0..1, STRING | The id that replaces this one.
@@ -332,7 +332,7 @@ Every test is new work unless stated. A fixture is valid unless marked `-bad`.
 | S13 | Ratchet: a removed deviation passes. | `ratchet-remove`
 | S14 | A `Ratchet-exception:` trailer does not satisfy S10 for a deviation. | `ratchet-trailer-bad`
 | S15 | Ratchet: an import PR that adds `:authority "legacy"` deviations mapped from a legacy file at base passes; the same deviation added by any other PR is rejected. | `ratchet-import-ok`, `ratchet-legacy-bad`
-| S16 | A rule with `:scope-form (origins repos exact-paths)` accepts a deviation using any one of those forms and rejects `:fingerprints`. | `dev-multiform`
+| S16 | A rule with `:scope-form (origins repos globs)` accepts a deviation using any one of those forms, including a glob such as `**/vendor/**` in `:paths`, and rejects `:fingerprints`. | `dev-multiform`, `dev-multiform-glob`
 |===
 
 === 11.3 Generated files
@@ -368,7 +368,7 @@ Every test is new work unless stated. A fixture is valid unless marked `-bad`.
 | X04 | The generated indexes differ from a hand-edited one. CI reports it. | `index-handedit-bad`
 | X05 | Importer: an entry with no authority gets `:authority "legacy"` and `unratified`. | `import-legacy`
 | X06 | Importer: an entry whose rule cannot be named gets `unknown/<tool>` and `unknown-rule`. | `import-unknown`
-| X07 | Importer equivalence: the generated file suppresses exactly what the legacy file suppressed. | `import-equiv`
+| X07 | Importer equivalence: the generated file suppresses exactly what the legacy file suppressed. For the bot denylist the `bot/write` deviations cover exactly its three axes, vendored path globs included. | `import-equiv`, `import-equiv-bot-globs`
 | X08 | Importer reads the source file only and writes one repo per PR. | `import-write-bad`
 |===
 
