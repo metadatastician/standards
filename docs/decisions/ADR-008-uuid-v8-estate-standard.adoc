@@ -362,6 +362,26 @@ its pin moved past the rename.
   still requires "UUID v7 conformance", delete `uuid-v7-conformance` and take
   it off the frozen list.
 
+== Amendment: the `chora-registry` domain (owner ruling V9, 2026-11-13)
+
+The registry `gv-clade-index` is being renamed chora-registry. The owner ruled
+(V9, CHORA-SPEC section 9.1) that only *new* repository ids follow the
+rename:
+
+* An id minted after V9 is the profile C UUIDv8 of
+  `chora-registry:github.com/<birth owner>/<name>`, from the repository's
+  birth path.
+* No existing id is reissued. Every deed keeps the opaque id it carries,
+  under ruling U1. The `gv-clade-index` entry stays in the register, because
+  ids minted before V9 are re-checked under it.
+* The registry archive records, for each id, the domain that minted it. A
+  re-check derives the id with that recorded domain.
+
+The register gains the entry `chora-registry`. Its minting repository is the
+registry, listed under its current GitHub name, `hyperpolymath/gv-clade-index`,
+until the GitHub rename lands. No id is minted in this domain before this
+entry is on `main`.
+
 == What this record does not do
 
 It does not migrate any repository (P3), change the deed grammar, or update
