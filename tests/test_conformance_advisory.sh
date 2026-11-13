@@ -86,5 +86,12 @@ bash -e -o pipefail "$WORK/deedwarn.sh" > "$WORK/o" 2>&1; rc=$?
 step_coe=$(rb 'puts YAML.load_file(ARGV[0])["jobs"]["lint"]["steps"].find{|s| s["name"]=="Advisory findings as warnings"}["continue-on-error"]' "$D")
 [ "$step_coe" = "true" ] && ok "deed: the annotation step cannot fail the advisory job" || bad "deed annotation step continue-on-error is '$step_coe'"
 
+# A large log must not trip SIGPIPE under pipefail: the cap of 30 annotations
+# is applied from a file, and the closing count still appears (Codex P2 on #1519).
+awk 'BEGIN{for(i=1;i<=200000;i++) printf "FAIL ./d%06d_chora.deed: line 1: a rather long message so the pipe fills quickly %d\n", i, i}' > "$WORK/deed-lint.log"
+bash -e -o pipefail "$WORK/deedwarn.sh" > "$WORK/o" 2>&1; rc=$?
+{ [ $rc -eq 0 ] && [ "$(grep -c '^::warning file=' "$WORK/o")" = 30 ] && grep -q '200000 finding(s)' "$WORK/o"; } \
+  && ok "deed: a huge FAIL log is capped at 30 annotations and still ends with the count (no SIGPIPE)" || bad "deed large log: rc=$rc $(tail -c 300 "$WORK/o")"
+
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

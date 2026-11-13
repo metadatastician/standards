@@ -153,7 +153,11 @@ jobs:
           log="$RUNNER_TEMP/deed-lint.log"
           [ -f "$log" ] || : > "$log"
           n=$( { grep -c '^FAIL ' "$log" || true; } | head -n 1)
-          { grep '^FAIL ' "$log" || true; } | sort -u | head -n 30 | while IFS= read -r line; do
+          # Sort to a file, then cap from the file: `sort | head` would give sort a
+          # SIGPIPE (141) once head has its 30 lines, which pipefail turns into a
+          # failed step before the closing count.
+          { grep '^FAIL ' "$log" || true; } | sort -u > "$RUNNER_TEMP/deed-fails.txt"
+          head -n 30 "$RUNNER_TEMP/deed-fails.txt" | while IFS= read -r line; do
             rest="${line#FAIL }"; path="${rest%%: *}"; msg="${rest#*: }"
             # Workflow-command escaping: the property needs % CR LF : , and
             # the data part needs % CR LF (toolkit escapeProperty / escapeData).
