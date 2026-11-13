@@ -19,7 +19,11 @@
 # minted elsewhere, which ruling U2 makes the UUIDv5 of a repository's birth
 # path. Inside that literal, version 5 or 8 with variant 10 is accepted in
 # both modes, exactly as deed.abnf's uuid-hex allows; the body must be lower
-# case, as the grammar requires. Every other version is still rejected there,
+# case, as the grammar requires. In an identity field (CHORA-SPEC 7.1: :repo-uuid,
+# :estate-uuid, :forge-uuid, :beholding-chora, and the clause fields :uuid,
+# :estate, :base, :forge and :repo) only version 8 is accepted, in both modes
+# (owner ruling, 2026-11-13; A1 V8, T30). A version 5 stays legal in #uuid
+# outside identity, as the registry alias. Every other version is still rejected there,
 # and a bare v5 anywhere else is still rejected. Anything that looks like the
 # literal but is not exactly it (an upper- or mixed-case body, or space before
 # the string) is rejected as malformed in both modes; it never falls through
@@ -123,6 +127,8 @@ UUID_RE='[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
 TYPED_RE='#uuid"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"'
 # Anything that looks like the literal: any case in the body, optional space.
 APPARENT_RE='#uuid[[:space:]]*"[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}"'
+# A #uuid literal written as the value of an identity field (CHORA-SPEC 7.1).
+IDENT_RE='(:repo-uuid|:estate-uuid|:forge-uuid|:beholding-chora|:uuid|:estate|:base|:forge|:repo)[[:space:]]+#uuid"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"'
 
 # Exit 0 when a version:variant pair is legal inside #uuid"…" (deed.abnf
 # uuid-hex: version 5 or 8, variant 10). The mode does not change this.
@@ -161,6 +167,19 @@ while IFS= read -r file; do
       fi
     done <<EOF
 $(scannable_text "$file" | grep -oE -- "$APPARENT_RE" || true)
+EOF
+    # An identity field carries version 8 only (owner ruling 2026-11-13).
+    while IFS= read -r pair; do
+      [ -n "$pair" ] || continue
+      key=${pair%%[[:space:]]*}
+      uuid=${pair#*#uuid\"}; uuid=${uuid%\"}
+      version=$(printf '%s' "$uuid" | cut -d- -f3 | cut -c1)
+      if [ "$version" != 8 ]; then
+        printf '%s: identity field %s must carry a v8 id, found v%s (%s)\n' "$file" "$key" "$version" "$uuid" >&2
+        status=1
+      fi
+    done <<EOF
+$(scannable_text "$file" | grep -oE -- "$IDENT_RE" || true)
 EOF
     # Then every other UUID, with the typed literals removed. Every UUID on a
     # line is checked, not only the last one (grep -o).
