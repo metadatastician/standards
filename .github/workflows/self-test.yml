@@ -91,6 +91,9 @@ jobs:
       - name: Reject former-owner workflow coordinates
         run: bash scripts/check-workflow-coordinates.sh
 
+      - name: Every setup-bun step names an exact bun-version (no API tag lookup)
+        run: bash scripts/check-setup-bun-pinned.sh
+
       # Every checkout of THIS repository from a shared workflow must name the
       # commit it came from. MEASURED 2026-10-31: three steps staged helpers
       # from the literal 317101e03b8f (2026-09-14) while main had moved 202
