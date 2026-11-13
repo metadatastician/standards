@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 = A7: Contractiles, Descriptiles and Anchor (edicts, reality, course correction)
-:version: 0.2.1-draft
-:status: DRAFT v0.2.2. Owner rulings W1 to W10 of 2026-11-13 recorded (section 2.3; W10 amends W1); they supersede Q11, Q12 (in its form) and Q13 for this subject. J1 to J3, J5 to J8 and J10 to J12 approved 2026-11-13; J9 and J13 approved as amended; J4, J14 to J17 and J18 ruled 2026-11-13. W10 and J15 are synchronised with A1 v0.4.1 and A2 v0.2.4. J19 (the settings interface J4 calls for) is proposed and not yet ruled (14.2). Builds on A1 v0.4.1, A2 v0.2.4, A3 v0.2.3 and A5 v0.2.2. Supersedes, for its subject, docs/ULTRAPLAN-DEED-K9-CONTRACTILES-2026-10-19.adoc v0.3.3 (J1). Not ratified.
+:version: 0.2.3-draft
+:status: DRAFT v0.2.3. Owner rulings W1 to W10 of 2026-11-13 recorded (section 2.3; W10 amends W1); they supersede Q11, Q12 (in its form) and Q13 for this subject. J1 to J3, J5 to J8 and J10 to J12 approved 2026-11-13; J9 and J13 approved as amended; J4, J14 to J17 and J18 ruled 2026-11-13. W10 and J15 are synchronised with A1 v0.4.1 and A2 v0.2.4. J19 (the settings interface J4 calls for) is proposed and not yet ruled (14.2). Builds on A1 v0.4.1, A2 v0.2.4, A3 v0.2.3 and A5 v0.2.2. Supersedes, for its subject, docs/ULTRAPLAN-DEED-K9-CONTRACTILES-2026-10-19.adoc v0.3.3 (J1). Not ratified.
 :toc:
 
 Specification A7 of the Estate Reconciliation Plan. It defines how a repository's edicts (the contractiles) are checked against its identity (the chora) and its audited reality (the descriptiles), how an anchor corrects a project that has drifted, and the order in which the estate leaves A2ML behind.
@@ -206,7 +206,7 @@ The legacy `ANCHOR.a2ml` described semantic authority and a golden path. Its fie
 
 === 7.1 Files, names and modules
 
-Descriptiles live in `.machine_readable/descriptiles/`. Each is a deed of head `descriptile-deed` (J14) whose `:beholding-chora` is the repo's chora id. The file name is the descriptile's name in capitals: `META.deed`, `STATE.deed`, `ECOSYSTEM.deed`, `AGENTIC.deed`, `NEUROSYM.deed`, `PLAYBOOK.deed`, and one per verb: `INTENT.deed`, `MUST.deed`, `TRUST.deed`, `ADJUST.deed`, `DUST.deed`, `BUST.deed`. The chora deed stays the one identity record (D312) and carries no descriptile content, except the per-bot `(bot-directives …)` clause, which D312 keeps in the chora deed.
+Descriptiles live in `.machine_readable/descriptiles/`. Each is a deed of head `descriptile-deed` (J14) whose `:beholding-chora` is the repo's chora id. The file name is the descriptile's name in capitals: `META.deed`, `STATE.deed`, `ECOSYSTEM.deed`, `AGENTIC.deed`, `NEUROSYM.deed`, `PLAYBOOK.deed`, `CLADE.deed` (the repo's own content organisation, W10), and one per verb: `INTENT.deed`, `MUST.deed`, `TRUST.deed`, `ADJUST.deed`, `DUST.deed`, `BUST.deed`. These thirteen names are the J14 descriptile set. The chora deed stays the one identity record (D312) and carries no descriptile content, except the per-bot `(bot-directives …)` clause, which D312 keeps in the chora deed.
 
 Case is a rule, not a style (YL4). A file in capitals says *this is how it is*. A Capitalised file (section 8) says *this is how it must be*.
 
@@ -479,7 +479,7 @@ Fixtures are valid unless marked `-bad`. `[done]` marks tests that exist and pas
 | YP04 | `just validate-rsr` fails on a `#uuid` id that is not lowercase v5 or v8. It reports a v5 id as `v5-identity` and fails it in strict mode (A1 C10, T30). It reports and passes a legacy `#u5`/`#u8` id. | `uuid-v4-bad`, `uuid-v5-identity`, `legacy-u5`
 | YP05 | A fresh mint carries no `(clade …)`, no prefixed name and no `UNASSIGNED` in `(identity)`. | `tests/e2e/template_instantiation_test.sh`
 | YP06 | The generated `CLAUDE.md` neither tells an agent to read or create an `.a2ml` file nor presents the clade as the repo's id or as an edict. Clade placements may appear as identity facts (W10). | `just validate-claude-md` plus a grep
-| YP07 | A `(clade …)` placement in a chora that chora-registry contradicts (a stale category, or a category or scheme the registry no longer holds) is reported, and the registry's placement is used (W10, A1 T47). It never changes the id. | `clade-registry-stale`, `clade-registry-removed-scheme`
+| YP07 | A `(clade …)` placement in a chora that chora-registry contradicts (a stale category, or a category or scheme the registry no longer holds) is reported, and the registry's placement is used (W10, A1 T47). Where the registry holds no placement for the repo in that scheme (the scheme or category was removed with no replacement), the chora placement is reported as orphaned and the repo is treated as unplaced in that scheme. It never changes the id. | `clade-registry-stale`, `clade-registry-removed-scheme`
 |===
 
 === 12.3 `(anchor …)` (Part 3)
@@ -511,7 +511,7 @@ These tests cover the semantic-authority clause module merged in #1490. Under W3
 | YD03 | `:evidence` is one of A2 D2's seven symbols. | `evidence-numeric-bad`
 | YD04 | No model pin in `AGENTIC.deed`, and no language list in any descriptile (YL3). | `agentic-model-pin-bad`, `agentic-lang-ban-bad`
 | YD05 | `NEUROSYM.deed` `(symbolic-rules …)` holds no rule definition. | `neurosym-rule-def-bad`
-| YD06 | Unless a repo setting has relaxed it (J4, through the interface J19 proposes), a descriptile has `:affirmed` and `:affirmed-by`, and `:expires`, if present, is in the future. A relaxation is accepted only when the settings name who may change it and the change was made by that party, and only when it is reported to the channel the settings name (J4). An unauthorised or unreported relaxation is refused. | `unaffirmed-bad`, `expired-bad`, `relaxed-unauthorised-bad`, `relaxed-unreported-bad`, `relaxed-authorised-reported`
+| YD06 | Unless a repo setting has relaxed it (J4, through the interface J19 proposes), a descriptile has `:affirmed` and `:affirmed-by`, and `:expires`, if present, is in the future. A relaxation is accepted only when the settings name who may change it and the change was made by that party, and only when it is reported to the channel the settings name (J4). An unauthorised or unreported relaxation is refused. | `unaffirmed-bad`, `expired-bad`, `relaxed-unauthorised-bad`, `relaxed-unreported-bad`; `relaxed-authorised-reported` is pending until J19 is ruled, and until then any relaxation is refused
 | YD07 | `ECOSYSTEM.deed` `:project` equals the chora's `:canonical-name`. `:relationship` is in the closed list. `(related :uuid)` is required in strict mode. | `ecosystem-project-bad`, `relationship-unknown-bad`
 |===
 
@@ -634,9 +634,9 @@ J4 rules that affirmation can be relaxed in settings, by named parties, with a r
 a| *Where the settings live, and what a relaxation records.*
 
 * The settings are a `(settings …)` clause in `AGENTIC.deed`, the descriptile that answers "may I act now". The chora deed carries none, because it is identity, not configuration (D312).
-* `(affirmation :required #t|#f :may-change (<party> …) :report-to (<channel> …))`. `:required #t` is the default and may be omitted. A party is `owner`, `agent` or the symbol of a named role. A channel is a symbol: `feedback-o-tron`, `heron`, or a log named in the repo.
-* Each change is kept as `(relaxation :setting affirmation.required :value #f :changed-by <party> :changed-on "YYYY-MM-DD" :reported-to <channel> :receipt "<id the channel returned>")`. An entry is never deleted.
-* A reader accepts a relaxation only when `:changed-by` is in `:may-change` and `:reported-to` is in `:report-to`, and only when a `:receipt` is present. YD06's `relaxed-unauthorised-bad` and `relaxed-unreported-bad` test exactly these.
+* `(affirmation :may-change (<party> …) :report-to (<channel> …))`. The clause names who may change the setting and where a change is reported; it never holds the value. The value starts as required and changes only through change records, so a clause alone can never relax affirmation. A party is `owner`, `agent` or the symbol of a named role. A channel is a symbol: `feedback-o-tron`, `heron`, or a log named in the repo.
+* Each change is kept as `(relaxation :seq <n> :setting affirmation.required :value <#t or #f> :changed-by <party> :changed-on "YYYY-MM-DD" :reported-to <channel> :receipt "<id the channel returned>")`. `:seq` is an integer, starting at 1 and rising by one with each entry, and it orders the entries; the entry with the highest `:seq` gives the current value. An entry is never deleted, so restoring strictness (`:value #t`) is recorded the same way.
+* A reader accepts an entry only when `:changed-by` is in `:may-change`, `:reported-to` is in `:report-to`, and the `:receipt` verifies with that channel as attesting this whole entry: its `:seq`, setting, value and authenticated actor. `:changed-by` alone is self-declared, and a receipt for one entry never verifies another. An entry that fails is reported, and the value stays as the last accepted entry left it.
 * Not decided here: how a channel issues its receipt. That belongs to the feedback-o-tron and heron interfaces.
 | The `AGENTIC.deed` clause as shown. Alternative: a separate `SETTINGS.deed`. That would be a fourteenth descriptile name and a change to J14.
 |===
