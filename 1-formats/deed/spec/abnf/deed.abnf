@@ -2,7 +2,7 @@
 ; SPDX-License-Identifier: MPL-2.0
 ; SPDX-License-Identifier: CC-BY-SA-4.0
 ;
-; DEED grammar, v1.3.0
+; DEED grammar, v1.4.0
 ; Normative for parsing. Prose and rationale: ../DEED-GRAMMAR-SPEC.adoc
 ;
 ; NOTICE (standards#837): OWNER RULING 2026-09-19 — the grammar files have
@@ -16,6 +16,16 @@
 ; NOTE: there is no "key = value" production and no "[section]" production.
 ; The only bracket is "(". A file using "=" as a field separator is not a deed.
 ; ("=" MAY appear INSIDE a symbol, e.g., a comparison operator.)
+;
+; CHANGELOG (v1.3.0 → v1.4.0, A7 ruling J14, 2026-11-13):
+;   - Added three doc-heads, each chosen by an exact, case-sensitive file
+;     name: contractile-deed (<Verb>file.deed for the six verbs),
+;     descriptile-deed (the thirteen ALL-CAPS descriptile names, CLADE.deed
+;     among them) and anchor-deed (ANCHOR.deed). A file in capitals says how
+;     it is; a Capitalised file says how it must be (A7 YL4). mustfile.deed,
+;     MUSTFILE.deed, Meta.deed and anchor.deed dispatch to nothing.
+;   Additive: every v1.3.0 deed is a v1.4.0 deed. No clause syntax changes;
+;   the forms these heads carry are grammared by their clause modules.
 ;
 ; CHANGELOG (v1.2.1 → v1.3.0, owner rulings U4 and I4, 2026-11-12):
 ;   - Added uuid (#uuid"<8-4-4-4-12 lowercase hex>"), an opaque UUID literal.
@@ -80,6 +90,9 @@ doc-head      = %s"estate-deed"
               / %s"repo-deed"
               / %s"estate-atlas-deed"
               / %s"praxis-deed"
+              / %s"contractile-deed"
+              / %s"descriptile-deed"
+              / %s"anchor-deed"
                 ; SEMANTIC CONSTRAINT: The doc-head MUST match the
                 ; filename dispatch (see deed-filename below).
                 ; estate_chora.deed → estate-deed
@@ -87,6 +100,9 @@ doc-head      = %s"estate-deed"
                 ; 0-AI-MANIFEST.deed → repo-deed
                 ; *_praxis.deed     → praxis-deed
                 ; *_chora.deed      → repo-deed
+                ; <Verb>file.deed   → contractile-deed (J14)
+                ; <NAME>.deed       → descriptile-deed (J14)
+                ; ANCHOR.deed       → anchor-deed (J14)
                 ; A mismatch is a validation error.
 
 ; --- Filename dispatch -------------------------------------------------
@@ -97,10 +113,21 @@ doc-head      = %s"estate-deed"
 ; ("_chora.deed", "_praxis.deed", etc.). Do NOT split on "." — the
 ; stem may contain dots (e.g., "my.project_chora.deed" → stem "my.project").
 
-deed-filename = estate-file / atlas-file / manifest-file / praxis-file / repo-file
+deed-filename = estate-file / atlas-file / manifest-file / anchor-file
+              / contractile-file / descriptile-file / praxis-file / repo-file
 estate-file   = %s"estate_chora.deed"     ; -> estate-deed
 atlas-file    = %s"ATLAS.deed"            ; -> estate-atlas-deed
 manifest-file = %s"0-AI-MANIFEST.deed"    ; -> repo-deed
+anchor-file   = %s"ANCHOR.deed"           ; -> anchor-deed (J14)
+contractile-file = verb-cap %s"file.deed" ; -> contractile-deed (J14)
+verb-cap      = %s"Intent" / %s"Must" / %s"Trust" / %s"Adjust" / %s"Dust" / %s"Bust"
+descriptile-file = descriptile-name %s".deed" ; -> descriptile-deed (J14)
+descriptile-name = %s"META" / %s"STATE" / %s"ECOSYSTEM" / %s"AGENTIC"
+              / %s"NEUROSYM" / %s"PLAYBOOK" / %s"CLADE"
+              / %s"INTENT" / %s"MUST" / %s"TRUST" / %s"ADJUST" / %s"DUST" / %s"BUST"
+                ; Exact and case-sensitive: the case is the rule (A7 YL4).
+                ; The six verb names are the verb descriptiles; CLADE is the
+                ; repo's own content organisation (A7 W10), never identity.
 praxis-file   = stem %s"_praxis.deed"     ; -> praxis-deed
 repo-file     = stem %s"_chora.deed"      ; -> repo-deed
 stem          = 1*( ALPHA / DIGIT / "-" / "." / "_" )

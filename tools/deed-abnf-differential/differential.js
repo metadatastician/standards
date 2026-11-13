@@ -156,7 +156,7 @@ const fail = (kind, detail) => failures.push({ kind, detail });
 
 // 1. Fixtures: every valid fixture passes both; every valid egress or anchor
 //    fixture's clause parses as its clause rule.
-for (const [dir, clause] of [["valid", null], ["egress/valid", "egress"], ["anchor/valid", "anchor"]]) {
+for (const [dir, clause] of [["valid", null], ["heads/valid", null], ["egress/valid", "egress"], ["anchor/valid", "anchor"]]) {
   for (const name of readdirSync(join(FIXTURES, dir)).sort()) {
     const text = readFileSync(join(FIXTURES, dir, name), "utf8");
     if (!grammarAccepts(grammar, "deed", text)) fail("fixture rejected by deed.abnf", `${dir}/${name}`);
@@ -218,9 +218,37 @@ for (const name of ANCHOR_GRAMMAR_REJECTS) {
   }
 }
 
+// The J14 file names (deed.abnf v1.4.0). The gate dispatches on the file name
+// before parsing, so deed-filename is held to the same names as
+// checkFilenameDispatch, case variants included. The heads/ fixtures must be
+// deeds by deed.abnf, and the gate must accept heads/valid and refuse
+// heads/invalid under their own names. <stem>_chora.deed and _praxis.deed are
+// not probed here: apg-js repeats possessively, so `stem` (which admits "_"
+// and ".") swallows the suffix; RFC 5234 ABNF backtracks and accepts them.
+{
+  const names = [
+    ["Mustfile.deed", true], ["Bustfile.deed", true], ["Intentfile.deed", true], ["STATE.deed", true],
+    ["CLADE.deed", true], ["MUST.deed", true], ["ANCHOR.deed", true], ["mustfile.deed", false],
+    ["MUSTFILE.deed", false], ["Meta.deed", false], ["State.deed", false], ["anchor.deed", false],
+    ["Clade.deed", false], ["Statefile.deed", false], ["ATLAS.deed", true],
+  ];
+  for (const [name, want] of names) {
+    if (grammarAccepts(grammar, "deed-filename", name) !== want) fail(want ? "deed.abnf refuses a file name it must accept" : "deed.abnf accepts a file name it must refuse", name);
+  }
+  for (const dir of ["heads/valid", "heads/invalid"]) {
+    for (const name of readdirSync(join(FIXTURES, dir)).sort()) {
+      const text = readFileSync(join(FIXTURES, dir, name), "utf8");
+      let gate = true;
+      try { validate(text, name); } catch { gate = false; }
+      if (gate !== (dir === "heads/valid")) fail(`gate ${gate ? "accepts" : "refuses"} a heads fixture under its own name`, `${dir}/${name}`);
+      if (!grammarAccepts(grammar, "deed", text)) fail("heads fixture is not a deed by deed.abnf", `${dir}/${name}`);
+    }
+  }
+}
+
 // 2. Mutation differential over the committed deeds and the valid fixtures
 //    (or the given seeds).
-const validFixtures = ["valid", "egress/valid", "anchor/valid"].flatMap((dir) =>
+const validFixtures = ["valid", "heads/valid", "egress/valid", "anchor/valid"].flatMap((dir) =>
   readdirSync(join(FIXTURES, dir)).sort().map((name) => join(FIXTURES, dir, name)),
 );
 const seedFiles = opts.seeds.length ? opts.seeds : [...committedDeeds(ROOT), ...validFixtures];
