@@ -46,16 +46,17 @@ at a time.
 **A2ML is entirely gone.** No `.a2ml` file should exist anywhere. Each one
 still present is a departure: report it, and remove it when you can do so
 safely (translate first anything a reader still needs). Archived copies under `9-archive/` go too
-(owner, 2026-11-13). They are removed in a dedicated PR that first records what
-each held, and updates `scripts/check-a2ml-archived.sh`, which still treats them
-as compliant. Do not delete them piecemeal in unrelated work.
+(owner, 2026-11-13). They were removed on 2026-11-13 (standards#1524), and
+`9-archive/A2ML-REMOVED.adoc` records what each held.
+`scripts/check-a2ml-archived.sh` now fails on any `.a2ml` file not in the legacy
+ledger, archive included.
 
 There are three layers. Never mix them.
 
 | Layer | File | What it is |
 |---|---|---|
 | **Identity** | `<repo>_chora.deed` | What the repo *is*. Its `:repo-uuid`, `(identity)` and `(lineage)`, and where it sits in wider things, including its clade placements as identity facts. It heads towards a Meta-Object-Facility-like model, and the details are not settled. It is not organisation and not configuration. |
-| **Content organisation** | `.machine_readable/descriptiles/CLADE.deed` | How the repo's *own content* is organised for its audience. It acts as an order controller and is never identity. Every repo is to carry one. If unused, it holds the minimum valid structure (`:schema-version` plus `:in-use #f`). **Do not create it yet.** `deed.abnf` has no head that dispatches this file name. The `descriptile-deed` head (A7 J14: approved by the owner in the A1 thread on 2026-11-13, not yet recorded in A7) and a CLADE form must land first. |
+| **Content organisation** | `.machine_readable/descriptiles/CLADE.deed` | How the repo's *own content* is organised for its audience. It acts as an order controller and is never identity. Every repo is to carry one. If unused, it holds the minimum valid structure (`:schema-version` plus `:in-use #f`). **Do not create it yet.** `deed.abnf` v1.4.0 dispatches `CLADE.deed` to the `descriptile-deed` head (A7 J14), but the CLADE form (A7 M3, the `clade` module) has not landed, so no content can be checked. |
 | **Estate registry** | **chora-registry** (formerly `gv-clade-index`) | The register of repo identities, like mathesis for repos. It holds many classification schemes that can be swapped (by type, date of creation or last use, activity, popularity). It is authoritative for estate-wide placement. A copy a repo carries is checked against it. |
 
 **CLADE.deed schemes.** `(scheme :kind strict|judgement|none …)`:

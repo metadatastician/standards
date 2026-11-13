@@ -93,12 +93,20 @@ jobs:
       - name: J14 file-name head fixtures (contractile-deed, descriptile-deed, anchor-deed)
         if: github.repository_id == 1116521501 && steps.bun.outcome == 'success'
         run: bun "$T/deed_lint.js" --fixtures "$T/fixtures/heads"
+      - name: J17 bang fixtures ("!" only after a rule's :id in a contractile-deed)
+        if: github.repository_id == 1116521501 && steps.bun.outcome == 'success'
+        run: bun "$T/deed_lint.js" --fixtures "$T/fixtures/bang"
       # The (anchor …) clause profile is a DRAFT (A7), so it gates only its own
       # fixtures here. It joins the caller-wide lint below once the owner
       # ratifies the profile.
       - name: anchor clause profile fixtures (DRAFT, A7)
         if: github.repository_id == 1116521501 && steps.bun.outcome == 'success'
         run: bun "$T/deed_lint.js" --anchor-fixtures "$T/fixtures/anchor"
+      # The (contractiles …) attestation profile (A7 8.2) is also a DRAFT and
+      # gates only its own fixtures until the owner ratifies A7.
+      - name: contractiles clause profile fixtures (DRAFT, A7)
+        if: github.repository_id == 1116521501 && steps.bun.outcome == 'success'
+        run: bun "$T/deed_lint.js" --contractiles-fixtures "$T/fixtures/contractiles"
       - name: grammar-vs-gate differential (deed.abnf through apg-js, against deed_lint.js)
         # Mutates every committed deed and valid fixture with a seeded generator
         # and fails when the gate and the normative grammar disagree, other than
@@ -126,7 +134,7 @@ jobs:
           ADVISORY: ${{ inputs.advisory || false }}
         run: |
           set -euo pipefail
-          find . -name '*.deed' -not -path './.deed-canon/*' -not -path './1-formats/deed/tools/fixtures/invalid/*' -not -path './1-formats/deed/tools/fixtures/heads/invalid/*' -print | sort > "$RUNNER_TEMP/deeds"
+          find . -name '*.deed' -not -path './.deed-canon/*' -not -path './1-formats/deed/tools/fixtures/invalid/*' -not -path './1-formats/deed/tools/fixtures/heads/invalid/*' -not -path './1-formats/deed/tools/fixtures/bang/invalid/*' -print | sort > "$RUNNER_TEMP/deeds"
           if [ ! -s "$RUNNER_TEMP/deeds" ]; then
             if [ "$REQUIRE_FILES" = "true" ]; then
               # Advisory mode must not attach error-severity annotations.

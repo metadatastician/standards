@@ -99,8 +99,8 @@
       :initial-assignment "Agents may author new files with the correct SPDX under repository policy, and initialise a brand-new repository's LICENSE."
       :existing-declarations "Manual-Only; changes restricted to registered codeowner-admins. Agents flag drift and never sweep or relicense existing content."))
   ; rsr-profile: the CANON's own RSR v2.0 capability declaration, moved here
-  ; from .machine_readable/rsr-profile.a2ml (owner, 2026-11-05; that file is
-  ; archived under 9-archive/a2ml/). Readers: scripts/check-rsr-profile.sh,
+  ; from .machine_readable/rsr-profile.a2ml (owner, 2026-11-05).
+  ; Readers: scripts/check-rsr-profile.sh,
   ; check-package-policy.sh and check-canon-lockstep.sh assertion 5, and the
   ; oracle (Hypatia RsrConformance) for the applicable criteria set.
   ;

@@ -16,8 +16,8 @@
 #
 # An identifier written as a deed opaque literal, #uuid"<id>" (deed.abnf
 # v1.3.0, owner ruling U4, 2026-11-12), is explicitly typed: it carries an id
-# minted elsewhere, which ruling U2 makes the UUIDv5 of a repository's birth
-# path. Inside that literal, version 5 or 8 with variant 10 is accepted in
+# minted elsewhere: for a repository, ruling V8 makes it the profile C UUIDv8
+# of its birth path. Inside that literal, version 5 or 8 with variant 10 is accepted in
 # both modes, exactly as deed.abnf's uuid-hex allows; the body must be lower
 # case, as the grammar requires. In an identity field (CHORA-SPEC 7.1: :repo-uuid,
 # :estate-uuid, :forge-uuid, :beholding-chora, and the clause fields :uuid,

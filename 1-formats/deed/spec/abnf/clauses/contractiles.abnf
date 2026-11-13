@@ -1,0 +1,49 @@
+; SPDX-FileCopyrightText: © 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+; SPDX-License-Identifier: MPL-2.0
+; SPDX-License-Identifier: CC-BY-SA-4.0
+;
+; DEED clause profile: (contractiles …), v1.0.0 (DRAFT)
+; Prose and rationale: docs/estate-reconciliation/A7-contractiles-descriptiles-anchor.adoc
+; section 8.2 (the attestation), rulings Q14, J6 and J10; acceptance tests
+; YC01 to YC05 (section 12.5). M3 module order: section 11.
+;
+; A CLAUSE PROFILE, not a new grammar. Every contractiles-clause below is also
+; a `clause` of deed.abnf v1.4.0, so a deed carrying one still passes
+; deed_lint unchanged. Rules it borrows (string, token-sep) are deed.abnf's,
+; unchanged. Requires RFC 7405 (%s"..." case-sensitive string literals).
+;
+; What it is: the chora deed's attestation of WHERE each of the six verbs'
+; parties is: the edict (<Verb>file.deed), its K9 runner and its reality (the
+; ALL-CAPS descriptile). What it is NOT: a verdict (J6, YL2). The runner
+; derives the verdict and writes a receipt; an accepted shortfall is an A2
+; deviation against contractile/<verb>/<rule-id> (J13), never a field here.
+;
+; Where it appears: exactly one (contractiles …) clause, at the top level of a
+; repo-deed (<repo>_chora.deed). SEMANTIC (validator-enforced): it is refused
+; nested inside another clause or under another head.
+
+contractiles-clause = "(" %s"contractiles" 1*(token-sep verb-entry) [token-sep] ")"
+                    ; SEMANTIC (YC01): each of the six verbs exactly once.
+verb-entry          = "(" %s"verb" 1*(token-sep verb-member) [token-sep] ")"
+                    ; SEMANTIC (YC02): :name, :declaration, :runner and
+                    ; :reality each exactly once.
+verb-member         = ( %s":name" token-sep verb-name )
+                    / ( %s":declaration" token-sep string ) ; .machine_readable/contractiles/<verb>/<Verb>file.deed
+                    / ( %s":runner" token-sep string )      ; .machine_readable/contractiles/<verb>/<verb>.k9.ncl
+                    / ( %s":reality" token-sep string )     ; .machine_readable/descriptiles/<VERB>.deed
+                    ; SEMANTIC (YC02): each path is exactly the one shown for
+                    ; its verb, where <Verb> is Intent, Must, Trust, Adjust,
+                    ; Dust or Bust and <VERB> is INTENT, MUST, TRUST, ADJUST,
+                    ; DUST or BUST (the verb intend takes Intent and INTENT).
+                    ; That the three files exist is a repo check, not a lint
+                    ; check (deed_lint.js --contractiles --root DIR), as is
+                    ; YC03: the reality descriptile exists for every verb.
+                    ; No other member: a verdict, status or score is refused
+                    ; by the grammar itself (YC05).
+verb-name           = %s"intend" / %s"must" / %s"trust" / %s"adjust" / %s"dust" / %s"bust"
+
+; SEMANTIC (YC04, J10): :contractiles_required is derived from this clause.
+; Where a deed that carries (contractiles …) still writes it, anywhere, its
+; value is a list of strings equal as a set to the six directories
+; ".machine_readable/contractiles/<verb>/". After one release it is no longer
+; written.

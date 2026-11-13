@@ -2,7 +2,7 @@
 ; SPDX-License-Identifier: MPL-2.0
 ; SPDX-License-Identifier: CC-BY-SA-4.0
 ;
-; DEED grammar, v1.4.0
+; DEED grammar, v1.5.0
 ; Normative for parsing. Prose and rationale: ../DEED-GRAMMAR-SPEC.adoc
 ;
 ; NOTICE (standards#837): OWNER RULING 2026-09-19 — the grammar files have
@@ -16,6 +16,15 @@
 ; NOTE: there is no "key = value" production and no "[section]" production.
 ; The only bracket is "(". A file using "=" as a field separator is not a deed.
 ; ("=" MAY appear INSIDE a symbol, e.g., a comparison operator.)
+;
+; CHANGELOG (v1.4.0 → v1.5.0, A7 ruling J17, 2026-11-13; SysArch R-03):
+;   - A field may end in the bang token "!", after a separator:
+;     field = keyword token-sep value [token-sep bang]. It marks a blocking
+;     rule (A7 8.4). SEMANTIC (validator-enforced): it is allowed only on
+;     the :id field of a (rule …) clause at the top level of a
+;     contractile-deed; anywhere else it is an error. "!" could start no
+;     field, clause or value before, so no v1.4.0 deed changes verdict:
+;     every v1.4.0 deed is a v1.5.0 deed.
 ;
 ; CHANGELOG (v1.3.0 → v1.4.0, A7 ruling J14, 2026-11-13):
 ;   - Added three doc-heads, each chosen by an exact, case-sensitive file
@@ -140,7 +149,14 @@ stem          = 1*( ALPHA / DIGIT / "-" / "." / "_" )
 ; See ../DEED-GRAMMAR-SPEC.adoc#chora-dispatch-exclusion.
 ; RULED 2026-09-08 by the owner on standards#752.
 
-field         = keyword token-sep value
+field         = keyword token-sep value [token-sep bang]
+bang          = "!"
+                ; v1.5.0 (A7 J17). SEMANTIC (validator-enforced, not
+                ; expressible here): only on the :id field of a (rule …)
+                ; clause at the top level of a contractile-deed, where it
+                ; marks a blocking rule (A7 8.4). Since "!" may continue a
+                ; symbol, "sym!" is one symbol; the bang is "!" standing
+                ; alone after a separator.
 clause        = "(" symbol *(token-sep (field / clause)) [token-sep] ")"
 
 keyword       = ":" symbol
