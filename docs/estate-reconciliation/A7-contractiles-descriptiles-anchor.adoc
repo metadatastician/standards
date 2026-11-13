@@ -83,7 +83,7 @@ W1 to W9 were given by the owner in the A1 thread on 2026-11-13, and W10 the sam
 | W7 | Strictness per verb. `Must`: every clause blocks, never relaxed. `Intent`: advisory, room to explore. `Adjust`, `Trust`, `Dust`: warn, and a clause marked `!` blocks; a `Dust` clause on an irreversible decision takes `!` and blocks until decided. | 8.4
 | W8 | Bust grades: control letter and severity, before and after controls. Every grade other than A is unsuppressible; `X1` blocks; a repo may only tighten. "Can't be bothered" is a threat to everyone. | 8.5
 | W9 | Contractiles become a required A3 check (A3 E12). | 8.4
-| W10 | The chora keeps the repo's clade placements as identity facts: where the repo sits. They are never its id and never an edict. chora-registry (the renamed `gv-clade-index`) holds the estate-wide classification schemes and is authoritative; a copy in the chora is checked against it. A repo's own content organisation is `CLADE.deed` (scheme strict, judgement or none). Amends W1, and A1 R4 and §11 to match. | 1, 12.2
+| W10 | The chora keeps the repo's clade placements as identity facts: where the repo sits. They are never its id and never an edict. chora-registry (the renamed `gv-clade-index`) holds the estate-wide classification schemes and is authoritative; a copy in the chora is checked against it. A repo's own content organisation is `CLADE.deed` (scheme strict, judgement or none). Amends W1. Pending synchronisation: A1 (CHORA-SPEC v0.3.9 §1, R4 and §11) still says the clade is not identity, and the A1 thread is amending it. Until it does, W10 governs for clade placements. A1 test T47 is unchanged: no identity field, the id included, is derived from the clade. | 1, 12.2
 |===
 
 == 3. Relation to A1 and A2
