@@ -46,6 +46,7 @@ const SEMANTIC = [
   /uuid8 domain .* must be non-empty printable ASCII/,
   /boolean meaning must use #t\/#f/,
   /a deed line is at most 998 octets/,
+  /'!' is allowed only directly after a rule's :id value in a contractile-deed/,
 ];
 
 function args(argv) {
@@ -157,7 +158,7 @@ const fail = (kind, detail) => failures.push({ kind, detail });
 
 // 1. Fixtures: every valid fixture passes both; every valid egress or anchor
 //    fixture's clause parses as its clause rule.
-for (const [dir, clause] of [["valid", null], ["heads/valid", null], ["egress/valid", "egress"], ["anchor/valid", "anchor"], ["contractiles/valid", "contractiles"]]) {
+for (const [dir, clause] of [["valid", null], ["heads/valid", null], ["bang/valid", null], ["egress/valid", "egress"], ["anchor/valid", "anchor"], ["contractiles/valid", "contractiles"]]) {
   for (const name of readdirSync(join(FIXTURES, dir)).sort()) {
     const text = readFileSync(join(FIXTURES, dir, name), "utf8");
     if (!grammarAccepts(grammar, "deed", text)) fail("fixture rejected by deed.abnf", `${dir}/${name}`);
@@ -207,6 +208,25 @@ for (const name of readdirSync(join(FIXTURES, "contractiles/invalid")).sort()) {
   if (!grammarAccepts(grammar, "deed", text)) fail("contractiles invalid fixture is not a valid deed", name);
   const e = clauseText(text, "contractiles");
   if (e !== null && !grammarAccepts(grammar, "contractiles-clause", e)) fail("contractiles.abnf refuses a fixture listed as semantic only", name);
+}
+
+// J17's bang (deed.abnf v1.5.0). Each invalid bang fixture is either refused
+// by the grammar itself (a second bang, "!" glued to a value or to a word) or
+// accepted by it and refused only by the gate's SEMANTIC placement check. Both
+// lists are exhaustive, so a new fixture must be filed in one.
+{
+  const grammarRejects = ["Adjustfile.deed", "Intentfile.deed", "Trustfile.deed"];
+  const semanticOnly = ["Bustfile.deed", "Dustfile.deed", "Mustfile.deed", "rules_praxis.deed", "top_chora.deed"];
+  for (const name of readdirSync(join(FIXTURES, "bang/invalid")).sort()) {
+    const text = readFileSync(join(FIXTURES, "bang/invalid", name), "utf8");
+    const g = grammarAccepts(grammar, "deed", text);
+    if (grammarRejects.includes(name)) {
+      if (g) fail("deed.abnf accepts a bang fixture it must refuse", name);
+    } else if (semanticOnly.includes(name)) {
+      if (!g) fail("deed.abnf refuses a bang fixture listed as semantic only", name);
+    } else fail("bang invalid fixture is in neither list", name);
+    if (gateVerdict(text).ok) fail("deed_lint.js accepts an invalid bang fixture", name);
+  }
 }
 
 // A version 5 parent id (A1 rule V8) is refused by anchor.abnf itself. Built at
@@ -277,7 +297,7 @@ for (const name of readdirSync(join(FIXTURES, "contractiles/invalid")).sort()) {
 
 // 2. Mutation differential over the committed deeds and the valid fixtures
 //    (or the given seeds).
-const validFixtures = ["valid", "heads/valid", "egress/valid", "anchor/valid", "contractiles/valid"].flatMap((dir) =>
+const validFixtures = ["valid", "heads/valid", "bang/valid", "egress/valid", "anchor/valid", "contractiles/valid"].flatMap((dir) =>
   readdirSync(join(FIXTURES, dir)).sort().map((name) => join(FIXTURES, dir, name)),
 );
 const seedFiles = opts.seeds.length ? opts.seeds : [...committedDeeds(ROOT), ...validFixtures];

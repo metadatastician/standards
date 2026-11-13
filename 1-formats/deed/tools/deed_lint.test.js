@@ -839,3 +839,38 @@ describe("CLI --contractiles", () => {
     expect(r.out).toContain("CONTRACTILES FIXTURES OK");
   });
 });
+
+// A7 J17 (deed.abnf v1.5.0): the bang token "!" marks a blocking rule. It may
+// follow only the :id value of a top-level (rule …) in a contractile-deed.
+describe("J17 bang", () => {
+  const U = '#uuid"00000000-0000-8000-8000-0000000000a1"';
+  const edict = (body) => `${HDR}(contractile-deed :schema-version "1.0.0" :canonical-name "x" :of-chora ${U} :verb must\n  ${body})\n`;
+  test("a rule's :id may carry the bang, and the AST marks it", () => {
+    const [, items] = validate(edict('(rule :id "m-a" ! :text "t")'), "Mustfile.deed");
+    const id = items.find((it) => it[1] === "rule")[2].find((f) => f[1] === "id");
+    expect(id).toEqual(["field", "id", ["string", "m-a"], true]);
+  });
+  test("a field without the bang keeps its three-element shape", () => {
+    const [, items] = validate(edict('(rule :id "m-a" :text "t")'), "Mustfile.deed");
+    expect(items.find((it) => it[1] === "rule")[2][0]).toEqual(["field", "id", ["string", "m-a"]]);
+  });
+  test("the bang may close the clause or follow a comment", () => {
+    expect(verdict(edict('(rule :id "m-a" !)'), "Mustfile.deed")).toBeNull();
+    expect(verdict(edict('(rule :id "m-a" ; why\n    ! :text "t")'), "Mustfile.deed")).toBeNull();
+  });
+  test("anywhere else it is refused", () => {
+    const bad = /'!' is allowed only directly after a rule's :id value in a contractile-deed/;
+    expect(verdict(edict('(rule :id "m-a" :text "t" !)'), "Mustfile.deed")).toMatch(bad);
+    expect(verdict(edict('(group (rule :id "m-a" !))'), "Mustfile.deed")).toMatch(bad);
+    expect(verdict(edict('(edict :id "m-a" !)'), "Mustfile.deed")).toMatch(bad);
+    expect(verdict(`${HDR}(praxis-deed :schema-version "1.0.0"\n  (rule :id "p" !))\n`, "x_praxis.deed")).toMatch(bad);
+  });
+  test("a glued or doubled bang is not the token", () => {
+    expect(verdict(edict('(rule :id "m-a"!)'), "Mustfile.deed")).toMatch(/needs a separator/);
+    expect(verdict(edict('(rule :id "m-a" !x)'), "Mustfile.deed")).not.toBeNull();
+    expect(verdict(edict('(rule :id "m-a" ! !)'), "Mustfile.deed")).not.toBeNull();
+  });
+  test("a symbol may still end in '!'", () => {
+    expect(verdict(edict('(rule :id "m-a" :mode strict!)'), "Mustfile.deed")).toBeNull();
+  });
+});

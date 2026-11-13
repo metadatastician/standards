@@ -1,5 +1,5 @@
 = DEED Grammar Specification
-:version: 0.2.6
+:version: 0.2.7
 :status: DRAFT
 :media-type: application/vnd.metadatastician.deed
 :toc:
@@ -25,7 +25,7 @@ throughout and is *not* part of the v0.1 conformance surface.
 parsing. The EBNF in <<concrete-syntax>> is informative.
 +
 NOTE (standards#837): owner ruling 2026-09-19 brought the grammar files
-together — `deed.abnf` (now v1.4.0) is the sole normative grammar. The v0.1.0
+together — `deed.abnf` (now v1.5.0) is the sole normative grammar. The v0.1.0
 DRAFT archive lives at `archive/deed.abnf_v0.1.0-draft` under its true
 version (it was previously misnamed `deed.abnf_v1.0`).
 
@@ -40,6 +40,15 @@ Compatible with:
 [cols="1,1,3"]
 |===
 | Version | Date | Changes
+
+| 0.2.7
+| 2026-11-13
+| Aligned to `deed.abnf` v1.5.0 (A7 ruling J17; SysArch R-03): a field may
+  end in the bang token `!`, after a separator, as in
+  `(rule :id "adj-alt-text" !`. It marks a blocking rule (A7 8.4). A
+  validator allows it only on the `:id` of a `(rule …)` clause at the top
+  level of a `contractile-deed` and refuses it anywhere else. `!` could start
+  nothing before, so every v1.4.0 deed is a v1.5.0 deed.
 
 | 0.2.6
 | 2026-11-13
@@ -982,7 +991,7 @@ locally. Either the estate chora gains it, or `extends-vocabulary` lands.
 
 == References
 
-* link:./abnf/deed.abnf[DEED ABNF (v1.4.0, normative)] ·
+* link:./abnf/deed.abnf[DEED ABNF (v1.5.0, normative)] ·
   link:./abnf/archive/deed.abnf_v0.1.0-draft[v0.1.0 DRAFT archive]
 * Clause profiles, each narrowing `clause` for one consumer without changing
   this grammar: link:./abnf/clauses/egress.abnf[`(egress …)`] v1.0.0
