@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 = A7: Contractiles, Descriptiles and Anchor (edicts, reality, course correction)
 :version: 0.2.1-draft
-:status: DRAFT v0.2.1. Owner rulings W1 to W10 of 2026-11-13 recorded (section 2.3; W10 amends W1); they supersede Q11, Q12 (in its form) and Q13 for this subject. J1 to J3, J5 to J8 and J10 to J12 approved 2026-11-13; J9 and J13 approved as amended; J4, J14 to J17 and J18 ruled 2026-11-13. No decision is pending. Builds on A1 v0.3.9, A2 v0.2.3, A3 v0.2.3 and A5 v0.2.2. Supersedes, for its subject, docs/ULTRAPLAN-DEED-K9-CONTRACTILES-2026-10-19.adoc v0.3.3 (J1). Not ratified.
+:status: DRAFT v0.2.2. Owner rulings W1 to W10 of 2026-11-13 recorded (section 2.3; W10 amends W1); they supersede Q11, Q12 (in its form) and Q13 for this subject. J1 to J3, J5 to J8 and J10 to J12 approved 2026-11-13; J9 and J13 approved as amended; J4, J14 to J17 and J18 ruled 2026-11-13. W10 and J15 are synchronised with A1 v0.4.1 and A2 v0.2.4. J19 (the settings interface J4 calls for) is proposed and not yet ruled (14.2). Builds on A1 v0.4.1, A2 v0.2.4, A3 v0.2.3 and A5 v0.2.2. Supersedes, for its subject, docs/ULTRAPLAN-DEED-K9-CONTRACTILES-2026-10-19.adoc v0.3.3 (J1). Not ratified.
 :toc:
 
 Specification A7 of the Estate Reconciliation Plan. It defines how a repository's edicts (the contractiles) are checked against its identity (the chora) and its audited reality (the descriptiles), how an anchor corrects a project that has drifted, and the order in which the estate leaves A2ML behind.
@@ -83,7 +83,7 @@ W1 to W9 were given by the owner in the A1 thread on 2026-11-13, and W10 the sam
 | W7 | Strictness per verb. `Must`: every clause blocks, never relaxed. `Intent`: advisory, room to explore. `Adjust`, `Trust`, `Dust`: warn, and a clause marked `!` blocks; a `Dust` clause on an irreversible decision takes `!` and blocks until decided. | 8.4
 | W8 | Bust grades: control letter and severity, before and after controls. Every grade other than A is unsuppressible; `X1` blocks; a repo may only tighten. "Can't be bothered" is a threat to everyone. | 8.5
 | W9 | Contractiles become a required A3 check (A3 E12). | 8.4
-| W10 | The chora keeps the repo's clade placements as identity facts: where the repo sits. They are never its id and never an edict. chora-registry (the renamed `gv-clade-index`) holds the estate-wide classification schemes and is authoritative; a copy in the chora is checked against it. A repo's own content organisation is `CLADE.deed` (scheme strict, judgement or none). Amends W1. Pending synchronisation: A1 (CHORA-SPEC v0.3.9 §1, R4 and §11) still says the clade is not identity, and the A1 thread is amending it. Until it does, W10 governs for clade placements. A1 test T47 is unchanged: no identity field, the id included, is derived from the clade. | 1, 12.2
+| W10 | The chora keeps the repo's clade placements as identity facts: where the repo sits. They are never its id and never an edict. chora-registry (the renamed `gv-clade-index`) holds the estate-wide classification schemes and is authoritative; a copy in the chora is checked against it. A repo's own content organisation is `CLADE.deed` (scheme strict, judgement or none). Amends W1. Synchronised: A1 v0.4.1 (standards#1514) records W10 in §1, the `(clade ...)` row and §11. A1 test T47 is unchanged: no identity field, the id included, is derived from the clade. | 1, 12.2
 |===
 
 == 3. Relation to A1 and A2
@@ -193,7 +193,7 @@ The legacy `ANCHOR.a2ml` described semantic authority and a golden path. Its fie
 | `authority` | `(anchor :authority)`.
 | `golden_path.*` | `(anchor (golden-path …))`, field for field.
 | `semantic_authority.*`, `satellite_policy.*`, `implementation_policy.*` | Edicts in `Mustfile.deed` (8.1): they say what satellites must not redefine. A legacy file with none of an anchor's required fields translates to edicts only, and no anchor entry.
-| `clade`, `status` | Dropped from the anchor. The clade is a chora finding aid (A1 §11); status is `STATE.deed` (J15).
+| `clade`, `status` | Dropped from the anchor. Clade placements are identity facts in the chora (W10, A1 §11); status is `STATE.deed` (J15).
 | `ssg.*` | `META.deed` `(ssg …)`.
 | `parents` (reverse-DNS names) | `ECOSYSTEM.deed` `(related :uuid #uuid"…" :relationship parent)`, using each parent's chora id. A parent with no registered id is left out, and the translation is reported incomplete: a warning in lax mode, an error in strict (J12).
 |===
@@ -221,7 +221,7 @@ affirm-member = ( %s":affirmed"    token-sep date-string )   ; YYYY-MM-DD
 affirmer      = %s"owner" / %s"agent" / symbol                ; symbol: the check's name
 ----
 
-The affirmation members are required by default, and a repo setting can relax that (J4).
+The affirmation members are required by default, and a repo setting can relax that (J4). Until the settings interface is ruled (J19, 14.2), no setting exists, so the default holds everywhere. J4 supersedes the unconditional requirement in DESCRIPTILE-SPEC §affirmation, which is amended to match in a follow-up; until then, where the two differ for a relaxed repo, J4 governs.
 
 === 7.2 The descriptive deeds (source: DESCRIPTILE-SPEC per-file schemas)
 
@@ -432,7 +432,7 @@ Measured with `grep` over `scripts/`, `.github/workflows/` and the repos named, 
 | `.machine_readable/anchors/ANCHOR.a2ml` | no script or workflow reader found [M] | `ANCHOR.deed` (section 6), translated by the table in 6.4. | standards
 | The contractile CLI (`*file.a2ml`; `adjust` reads `ADJUST.contractile`; there is no `bust`) [R: ultraplan] | hyperpolymath/contractiles | `<Verb>file.deed` for policy, the ALL-CAPS verb descriptile for reality, and `(contractiles …)` for discovery. A2ML is read only behind `--legacy` [O: Q8; ultraplan P2.1]. | estate-wide
 | Hypatia `HYP-S005` (`STATE.a2ml` glob) [R: ultraplan] | hyperpolymath/hypatia | `STATE.deed` (J3, J15). | estate-wide
-| `gv-clade-index` `contractiles/must/clade-hygiene.a2ml` (requires `CLADE.a2ml` in every repo) | the registry's own contractile | Retired. The registry checks `(identity)` and `:repo-uuid` in the chora deed, and reads `(clade …)` when present, as a finding aid. | gv-clade-index
+| `gv-clade-index` `contractiles/must/clade-hygiene.a2ml` (requires `CLADE.a2ml` in every repo) | the registry's own contractile | Retired. The registry checks `(identity)` and `:repo-uuid` in the chora deed, and reads `(clade …)` when present. A placement is an identity fact (W10), checked against the registry's own schemes: a stale placement, or one naming a category or scheme the registry no longer holds, is reported and the registry's placement is used (YP07). | gv-clade-index
 | `rsr-template-repo` `scripts/deed-field.sh --uuid` (re-derives a v5 id from a `#u5` name) | `extract-facts.sh`, the coaptation loop | It reads the opaque `#uuid` body as the id and never re-derives it (U1, V8; J11). | every minted repo
 |===
 
@@ -443,7 +443,7 @@ Not load-bearing, and no replacement needed: `check-launcher-standard-currency.s
 Each step is one draft PR per repository, made only after the owner approves it. A step is done only when its acceptance test passes in that repository with the A2ML input absent.
 
 . *M1, the gate.* Land Part 1a (#1488). Callers get it through the existing pin propagation. From then on, a repo can lose A2ML but cannot gain any.
-. *M2, the generators.* `gv-clade-index` (1b), then `rsr-template-repo` (1c). The template also gets `#uuid` minting (J11), the `(contractiles …)` clause, the six `<Verb>file.deed` files and the twelve ALL-CAPS descriptiles, so every new repo is born on the new forms [ultraplan P0.3, P3 "generator first"]. Before that, a trial on the template with only `Mustfile.deed` and `STATE.deed` shows whether the runner finds a violation from identity (8.1); the design is looked at again with what broke before the other verbs follow.
+. *M2, the generators.* `gv-clade-index` (1b), then `rsr-template-repo` (1c). The template also gets `#uuid` minting (J11), the `(contractiles …)` clause, the six `<Verb>file.deed` files and the thirteen ALL-CAPS descriptiles (`CLADE.deed` among them, in its minimum form `:in-use #f` until the repo organises its content), so every new repo is born on the new forms [ultraplan P0.3, P3 "generator first"]. Before that, a trial on the template with only `Mustfile.deed` and `STATE.deed` shows whether the runner finds a violation from identity (8.1); the design is looked at again with what broke before the other verbs follow.
 . *M3, the clause modules*, one PR each, in this order (the `contractiles` module lands with the generated `contractile` registry of J13): `common`, the three heads of J14, `contractiles`, the edict form, the six verb descriptiles, `anchor-deed` (from the Part 3 module, 6.5), `ecosystem`, `state`, `meta`, `agentic`, `neurosym`, `playbook`, `clade` (W10). Each lands with its linter profile, fixtures and differential entry, then joins the caller-wide lint in `deed-conformance.yml` once ratified.
 . *M4, standards converts itself.* In this order: add `(contractiles …)`; rewire the must gate and verb discovery (section 10, rows 1 and 2); translate `ANCHOR.a2ml` by 6.4; move the four all-caps `.contractile` files field by field into `INTENT.deed`, `MUST.deed`, `TRUST.deed` and `ADJUST.deed` [O: Q12, W3]; move the Debtfile into `debt_praxis.deed` (J9); make `0-AI-MANIFEST.deed` pointer-only [O: Q15]; then delete each A2ML file in the same PR that removes its last reader, which shrinks the ledger.
 . *M5, the shared readers*, each with a new-input-first fallback: readme-derive, the debt ratchet, the RSR profile checker. Then hypatia (rules and `HYP-S005`) and the contractile CLI, each in its own repo.
@@ -479,6 +479,7 @@ Fixtures are valid unless marked `-bad`. `[done]` marks tests that exist and pas
 | YP04 | `just validate-rsr` fails on a `#uuid` id that is not lowercase v5 or v8. It reports a v5 id as `v5-identity` and fails it in strict mode (A1 C10, T30). It reports and passes a legacy `#u5`/`#u8` id. | `uuid-v4-bad`, `uuid-v5-identity`, `legacy-u5`
 | YP05 | A fresh mint carries no `(clade …)`, no prefixed name and no `UNASSIGNED` in `(identity)`. | `tests/e2e/template_instantiation_test.sh`
 | YP06 | The generated `CLAUDE.md` neither tells an agent to read or create an `.a2ml` file nor presents the clade as the repo's id or as an edict. Clade placements may appear as identity facts (W10). | `just validate-claude-md` plus a grep
+| YP07 | A `(clade …)` placement in a chora that chora-registry contradicts (a stale category, or a category or scheme the registry no longer holds) is reported, and the registry's placement is used (W10, A1 T47). It never changes the id. | `clade-registry-stale`, `clade-registry-removed-scheme`
 |===
 
 === 12.3 `(anchor …)` (Part 3)
@@ -510,7 +511,7 @@ These tests cover the semantic-authority clause module merged in #1490. Under W3
 | YD03 | `:evidence` is one of A2 D2's seven symbols. | `evidence-numeric-bad`
 | YD04 | No model pin in `AGENTIC.deed`, and no language list in any descriptile (YL3). | `agentic-model-pin-bad`, `agentic-lang-ban-bad`
 | YD05 | `NEUROSYM.deed` `(symbolic-rules …)` holds no rule definition. | `neurosym-rule-def-bad`
-| YD06 | Unless a repo setting has relaxed it (J4), a descriptile has `:affirmed` and `:affirmed-by`, and `:expires`, if present, is in the future. A relaxation is accepted only when the settings name who may change it and the change was made by that party, and only when it is reported to the channel the settings name (J4). An unauthorised or unreported relaxation is refused. | `unaffirmed-bad`, `expired-bad`, `relaxed-unauthorised-bad`, `relaxed-unreported-bad`, `relaxed-authorised-reported`
+| YD06 | Unless a repo setting has relaxed it (J4, through the interface J19 proposes), a descriptile has `:affirmed` and `:affirmed-by`, and `:expires`, if present, is in the future. A relaxation is accepted only when the settings name who may change it and the change was made by that party, and only when it is reported to the channel the settings name (J4). An unauthorised or unreported relaxation is refused. | `unaffirmed-bad`, `expired-bad`, `relaxed-unauthorised-bad`, `relaxed-unreported-bad`, `relaxed-authorised-reported`
 | YD07 | `ECOSYSTEM.deed` `:project` equals the chora's `:canonical-name`. `:relationship` is in the closed list. `(related :uuid)` is required in strict mode. | `ecosystem-project-bad`, `relationship-unknown-bad`
 |===
 
@@ -574,7 +575,7 @@ These tests cover the semantic-authority clause module merged in #1490. Under W3
 | YB04 | A `Bustfile.deed` that loosens the floor (unblocks `X1`, or hides a grade other than `A`) is refused. | `bust-loosen-bad`
 | YF01 | The head follows the file name exactly (J14): `Mustfile.deed` is `contractile-deed`, `STATE.deed` is `descriptile-deed`, `ANCHOR.deed` is `anchor-deed`. `mustfile.deed`, `MUSTFILE.deed`, `State.deed` and `anchor.deed` are refused. | `case-ok`, `case-lower-bad`, `case-upper-contractile-bad`, `case-title-descriptile-bad`
 | YF02 | A descriptile-deed holding a `(rule …)` and a contractile-deed holding a `(fact …)` are both refused (YL3, YL4). | `rule-in-descriptile-bad`, `fact-in-contractile-bad`
-| YF03 | The chora deed holds no descriptile content once J15 lands: a `(status …)` in the chora is read as a fallback with a warning for one release, then refused in strict mode. | `status-in-chora-lax`, `status-in-chora-strict-bad`
+| YF03 | The chora deed holds no descriptile content once J15 lands: a `(status …)` or `(maturity …)` in the chora is read as a fallback with a warning for one release, then refused in strict mode. | `status-in-chora-lax`, `status-in-chora-strict-bad`, `maturity-in-chora-lax`, `maturity-in-chora-strict-bad`
 | YH01 | Every anchor entry carries the required fields of 6.3, and a released entry carries `:released` and `:released-by`. | `anchor-missing-trigger-bad`, `anchor-released-no-date-bad`
 | YH02 | While an entry is open, a contractile rule in its scope changed after `:issued` is checked as it stood on `:issued`, and the change is reported (YL6). | `anchor-relaxed-must-bad`
 | YH03 | A golden-path criterion written as an edict is checked as gate class while the entry is open, and not after it is released. | `anchor-golden-open-bad`, `anchor-golden-released`
@@ -615,7 +616,7 @@ The owner ruled J1 to J17 on 2026-11-13 in the A1 thread, and J18 the same day i
 | J12 | Related repos keep `:name` and add the chora `:uuid`, required in strict mode only. Parents are named by chora id; a legacy parent with no registered id is left out and the translation reported incomplete (a warning in lax mode, an error in strict). | Approved
 | J13 | `contractile` becomes an A5 rule domain (a G1 addition, a root `rule-domain` term per G2). Its registry, `contractile_rules_praxis.deed` in `standards`, is generated from the six `<Verb>file.deed` files: one `rule-def` per rule, `:id "contractile/<verb>/<rule-id>"`, the rule text as `:text`. Each entry carries A5 R07's fields: `:class gate` for every `must` rule and for every rule marked `!`, `:class advisory` otherwise (8.4); `:excusable-at repo`; `:scope-form exact-paths` (a deviation names the rule with an empty `(scope)`, A5 5.2); `:status active`. A Bust rule's entry carries the estate floor of 8.5, which no deviation lowers. CI fails when regenerating changes the registry. | Approved as amended (class by verb and `!`, Bust floor)
 | J14 | Three new heads, chosen by exact, case-sensitive file name in `deed.abnf`: `<Verb>file.deed` for the six verbs gives `contractile-deed`; the ALL-CAPS descriptile names give `descriptile-deed`, including `CLADE.deed` (W10); `ANCHOR.deed` gives `anchor-deed`. `mustfile.deed` or `Meta.deed` is refused. | Approved
-| J15 | `(status)` and `(maturity)` move from the chora deed to `STATE.deed`. A chora `(status)` is read with a warning for one release, then refused in strict mode. Pending synchronisation: A1 (CHORA-SPEC §5.4) and A2 still list `(status …)` as an optional chora clause. standards#1510 began the A1 amendment; until A1 and A2 match, J15 governs. | Approved
+| J15 | `(status)` and `(maturity)` move from the chora deed to `STATE.deed`. A chora `(status)` or `(maturity)` is read with a warning for one release, then refused in strict mode. Synchronised: A1 v0.4.1 (standards#1510, #1514) and A2 v0.2.4 (standards#1518) say the same. | Approved
 | J16 | Anchor drift `:distance` uses the Bust severity scale, 1 furthest and 5 close. The required fields are those of 6.3. | Approved
 | J17 | `!` becomes a deed token, allowed only directly after a rule's `:id` value in a `contractile-deed`. | Approved
 | J18 | Keep P0.1: a rule witnessed only by a refused `'Hunt` probe is blocking unresolved under every verb, `intend` included. A refused probe is missing evidence, and an unverified signature never looks like a pass. | Approved
@@ -623,7 +624,22 @@ The owner ruled J1 to J17 on 2026-11-13 in the A1 thread, and J18 the same day i
 
 === 14.2 Proposed, not yet ruled
 
-None. J1 to J18 are all ruled (14.1).
+J4 rules that affirmation can be relaxed in settings, by named parties, with a report. It names no settings file, no form and no receipt, so two readers could each invent their own evidence. J19 proposes the interface. Until it is ruled, no relaxation exists, and the J4 default (strict) holds everywhere.
+
+[cols="1,5,2"]
+|===
+| Id | Proposal | Recommended
+
+| J19
+a| *Where the settings live, and what a relaxation records.*
+
+* The settings are a `(settings …)` clause in `AGENTIC.deed`, the descriptile that answers "may I act now". The chora deed carries none, because it is identity, not configuration (D312).
+* `(affirmation :required #t|#f :may-change (<party> …) :report-to (<channel> …))`. `:required #t` is the default and may be omitted. A party is `owner`, `agent` or the symbol of a named role. A channel is a symbol: `feedback-o-tron`, `heron`, or a log named in the repo.
+* Each change is kept as `(relaxation :setting affirmation.required :value #f :changed-by <party> :changed-on "YYYY-MM-DD" :reported-to <channel> :receipt "<id the channel returned>")`. An entry is never deleted.
+* A reader accepts a relaxation only when `:changed-by` is in `:may-change` and `:reported-to` is in `:report-to`, and only when a `:receipt` is present. YD06's `relaxed-unauthorised-bad` and `relaxed-unreported-bad` test exactly these.
+* Not decided here: how a channel issues its receipt. That belongs to the feedback-o-tron and heron interfaces.
+| The `AGENTIC.deed` clause as shown. Alternative: a separate `SETTINGS.deed`. That would be a fourteenth descriptile name and a change to J14.
+|===
 
 == 15. Out of scope
 
