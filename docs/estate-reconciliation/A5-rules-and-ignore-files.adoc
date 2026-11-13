@@ -83,8 +83,8 @@ segment  = 1*( ALPHA / DIGIT / "." / "_" / "-" )
 | A3 `check/<id>` | `check/<id>` | Unchanged. A3 reserved the namespace.
 | A3 gate findings | `gate/forged-or-unverified`, `gate/unsigned`, `gate/mismatch`, `gate/no-envelope` | A4 section 10.
 | `generation/drift` (A2) | `generation/drift` | Unchanged.
-| Language policy bans, e.g. typescript | `lang/typescript`, `lang/python`, ... | A2's samples used `banned-language/...`; A5 names the domain `lang` (G1).
-| `bot-write` | `bot/write` | A2 section 7.6 used the name `bot-write`.
+| Language policy bans, e.g. typescript | `lang/typescript`, `lang/python`, ... | Domain `lang` (G1). An earlier A2 draft used `banned-language/...`; the current samples do not.
+| `bot-write` | `bot/write` | An earlier A2 draft (section 7.6) used the name `bot-write`; the current A2 does not.
 | `HYP-##` | unresolved | I could not tell from the files I read which tool owns the `HYP-` ids. The owner of that domain assigns one (G1).
 | Scanner secret rules (gitleaks rule names) | `secret/<rule name>` | e.g. `secret/generic-api-key`.
 | Pons rules | `pons/<rule id>` | A4 section 5.3 prefix.

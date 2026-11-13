@@ -107,7 +107,7 @@ Totals [M]: 441 files leave (88 + 114 + 20 + 11 + 19 + 87 + 30 + 11 + 61, before
 
 === 4.3 Self-gate scripts (open item)
 
-CR6 moves check scripts by name. Some check scripts verify `standards` itself, for example the map gate (Gate D), the canon lockstep (Gate A), and the profile checker for the canon role. They belong to the repo's own gates and MUST stay. The rule CR6 therefore needs a per-script test: a script that the repo's own workflows or the map's `gate` field call by path, and that tests this repo's own tree, stays. I measured the 87 CR6 files by name only and did not classify them by subject [M: counts by pattern]. The per-script result is a generated table (section 7.2), and the owner rules on the doubtful ones (H5).
+CR6 moves check scripts by name. CR5 moves reusable workflows by name, and the same test applies to it: a reusable that this repo's own callers use on its own tree stays (for example `fork-governance-reusable.yml` and `hypatia-scan-reusable.yml`, called by `fork-governance.yml`). Some check scripts verify `standards` itself, for example the map gate (Gate D), the canon lockstep (Gate A), and the profile checker for the canon role. They belong to the repo's own gates and MUST stay. The rule CR6 therefore needs a per-script test: a script that the repo's own workflows or the map's `gate` field call by path, and that tests this repo's own tree, stays. By that test, `scripts/check-uuid-v8.sh` and its tests, `scripts/check-uuid-v8-domains.sh`, `scripts/check-a2ml-archived.sh` and `scripts/check-no-new-a2ml.sh` stay: this repo's workflows run them on its own tree, directly (`uuid-v8.yml`, `deed-conformance.yml`, `governance.yml` through `governance-reusable.yml`, `self-test.yml`) or through `scripts/tests` in `self-test.yml` (the domain-register check). I measured the 87 CR6 files by name only and did not classify them by subject [M: counts by pattern]. The per-script result is a generated table (section 7.2), and the owner rules on the doubtful ones (H5).
 
 == 5. What the first pass leaves, measured
 
@@ -163,7 +163,7 @@ By risk, lowest first (H8):
 
 . `hypatia-rules` (CR4) is held: 11 files, 7 commits in 90 days, and 10 of them are `.a2ml` files that may not be created in another repo (H11). It moves once the owner rules, or once the rules are written as A5 registries.
 . `config` (CR3): 20 files, consumed by the ruleset applier; its home follows A4.
-. The diary (CR9): 61 files; narrative; links in and out.
+. The diary (CR9): 61 files; narrative; links in and out. Live documents cite some of them, for example owner questions Q1 to Q16 cite `docs/ULTRAPLAN-*`, so the CR9 move updates those citations in the same PR.
 . Format specifications (CR2): `1-formats/deed` 88 files (49 commits), `k9` and `k9-coordination` 114 files. Highest value, because they are hot and canonical. Both have consumers in `.github` and `scripts` that read `deed.abnf` by path, so their moves need the inbound-reference list first [I: not measured].
 . Actuators (CR7), then self-gate review of CR6, then reusables and checks (CR5, CR6): the highest coupling, 368 repos call `governance-reusable.yml` [M].
 
@@ -222,7 +222,7 @@ Every test is new work unless stated. Gate A, Gate D and the link-rot guard alre
 | C15 | No licence file, SPDX header or licence text differs after a move (CL7). | `licence-diff-bad`
 | C16 | The import is one signed commit with a link to the source SHA. | `import-unsigned-bad`
 | C17 | A `canonical = true` entry leaves only if it is in the owner's list of CL9. | `canon-leaves-bad`
-| C18 | A self-gate script (4.3) is not moved by CR6. | `selfgate-moved-bad`
+| C18 | A self-gate script or self-gate reusable (4.3) is not moved by CR5 or CR6. | `selfgate-moved-bad`, `selfgate-reusable-moved-bad`
 | C19 | No move starts while another group's PR is open (CL10). | `two-groups-bad`
 | C20 | No move adds an `.a2ml` file to any destination repo. | `a2ml-created-bad`
 | C21 | The residual report lists the canon's rate and the working files' rate separately. | `residual-split`
