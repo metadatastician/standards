@@ -99,6 +99,11 @@ jobs:
       - name: anchor clause profile fixtures (DRAFT, A7)
         if: github.repository_id == 1116521501 && steps.bun.outcome == 'success'
         run: bun "$T/deed_lint.js" --anchor-fixtures "$T/fixtures/anchor"
+      # The (contractiles …) attestation profile (A7 8.2) is also a DRAFT and
+      # gates only its own fixtures until the owner ratifies A7.
+      - name: contractiles clause profile fixtures (DRAFT, A7)
+        if: github.repository_id == 1116521501 && steps.bun.outcome == 'success'
+        run: bun "$T/deed_lint.js" --contractiles-fixtures "$T/fixtures/contractiles"
       - name: grammar-vs-gate differential (deed.abnf through apg-js, against deed_lint.js)
         # Mutates every committed deed and valid fixture with a seeded generator
         # and fails when the gate and the normative grammar disagree, other than

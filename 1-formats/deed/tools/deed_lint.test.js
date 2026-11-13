@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: MPL-2.0
 // bun test for deed_lint.js (port of deed_lint.py). Run: bun test 1-formats/deed/tools/
 import { describe, expect, test } from "bun:test";
-import { readdirSync, readFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { validate, LintError, SELF_TEST_CASES, checkEgress, EgressError, checkAnchor, AnchorError, profileCOfBody, readMustfileChecks, MustfileError, readProofReceipt, ProofReceiptError } from "./deed_lint.js";
+import { validate, LintError, SELF_TEST_CASES, checkEgress, EgressError, checkAnchor, AnchorError, profileCOfBody, readMustfileChecks, MustfileError, readProofReceipt, ProofReceiptError, checkContractiles, ContractilesError, contractilePaths, CONTRACTILE_VERBS } from "./deed_lint.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const LINT = join(HERE, "deed_lint.js");
@@ -726,5 +727,115 @@ describe("J14 file-name heads", () => {
   });
   test("a deed with no file name may carry any of the new heads", () => {
     for (const h of ["contractile-deed", "descriptile-deed", "anchor-deed"]) expect(verdict(form(h))).toBeNull();
+  });
+});
+
+// A7 8.2: the (contractiles …) attestation clause (YC01 to YC05). The fixture
+// corpus covers what the deed alone decides; --root checks that the named
+// files exist (YC02, YC03), which needs a repo tree, so it is tested here.
+const FIX_CONTRACTILES = join(FIX, "contractiles");
+
+describe("contractiles fixtures", () => {
+  test("valid/ passes and invalid/ fails the profile", () => {
+    for (const [sub, ok] of [["valid", true], ["invalid", false]]) {
+      const dir = join(FIX_CONTRACTILES, sub);
+      const names = readdirSync(dir).filter((n) => n.endsWith(".deed"));
+      expect(names.length).toBeGreaterThan(0);
+      for (const n of names) {
+        let got = true;
+        try {
+          checkContractiles(readFileSync(join(dir, n), "utf8"), join(dir, n));
+        } catch (e) {
+          if (!(e instanceof LintError)) throw e;
+          got = false;
+        }
+        expect([n, got]).toEqual([n, ok]);
+      }
+    }
+  });
+  test("a deed without the clause is outside the profile", () => {
+    const p = join(FIX_CONTRACTILES, "valid", "no-contractiles_chora.deed");
+    expect(checkContractiles(readFileSync(p, "utf8"), p)).toBeNull();
+  });
+  test("the summary lists the six verbs", () => {
+    const p = join(FIX_CONTRACTILES, "valid", "minimal_chora.deed");
+    expect(checkContractiles(readFileSync(p, "utf8"), p).verbs.sort()).toEqual(Object.keys(CONTRACTILE_VERBS).sort());
+  });
+  test("intend takes Intentfile.deed and INTENT.deed", () => {
+    expect(contractilePaths("intend")).toEqual({
+      declaration: ".machine_readable/contractiles/intend/Intentfile.deed",
+      runner: ".machine_readable/contractiles/intend/intend.k9.ncl",
+      reality: ".machine_readable/descriptiles/INTENT.deed",
+    });
+  });
+});
+
+describe("contractiles --root (YC02, YC03)", () => {
+  const deed = readFileSync(join(FIX_CONTRACTILES, "valid", "minimal_chora.deed"), "utf8");
+  /** A repo tree holding every named file except those listed in `omit`. */
+  function tree(omit = []) {
+    const root = mkdtempSync(join(tmpdir(), "contractiles-"));
+    for (const v of Object.keys(CONTRACTILE_VERBS)) {
+      for (const [k, p] of Object.entries(contractilePaths(v))) {
+        if (omit.includes(`${v}.${k}`)) continue;
+        mkdirSync(join(root, dirname(p)), { recursive: true });
+        writeFileSync(join(root, p), "");
+      }
+    }
+    return root;
+  }
+  const run = (omit) => {
+    const root = tree(omit);
+    try {
+      checkContractiles(deed, "x_chora.deed", { root });
+      return null;
+    } catch (e) {
+      if (!(e instanceof ContractilesError)) throw e;
+      return e.message;
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  };
+  test("passes when all eighteen files exist", () => {
+    expect(run([])).toBeNull();
+  });
+  test("declaration-missing-bad", () => {
+    expect(run(["trust.declaration"])).toMatch(/\(verb :name trust\) :declaration ".*Trustfile.deed" does not exist .*\(YC02\)/);
+  });
+  test("no-runner-bad (the file)", () => {
+    expect(run(["dust.runner"])).toMatch(/\(verb :name dust\) :runner .* does not exist .*\(YC02\)/);
+  });
+  test("reality-missing-bad / no-descriptile-bad", () => {
+    expect(run(["intend.reality"])).toMatch(/\(verb :name intend\) :reality ".*INTENT.deed" does not exist .*\(YC03\)/);
+  });
+});
+
+describe("CLI --contractiles", () => {
+  test("reports a valid clause and a deed without one", () => {
+    const a = join(FIX_CONTRACTILES, "valid", "minimal_chora.deed");
+    const b = join(FIX_CONTRACTILES, "valid", "no-contractiles_chora.deed");
+    const r = cli("--contractiles", a, b);
+    expect(r.code).toBe(0);
+    expect(r.out).toContain(`OK   ${a} (contractiles, 6 verbs)`);
+    expect(r.out).toContain(`OK   ${b} (no contractiles clause)`);
+  });
+  test("--root names the missing file", () => {
+    const a = join(FIX_CONTRACTILES, "valid", "minimal_chora.deed");
+    const root = mkdtempSync(join(tmpdir(), "contractiles-"));
+    try {
+      const r = cli("--contractiles", "--root", root, a);
+      expect(r.code).toBe(1);
+      expect(r.out).toContain("does not exist under");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+  test("--root without a DIR is a usage error", () => {
+    expect(cli("--contractiles", "--root").code).toBe(2);
+  });
+  test("--contractiles-fixtures passes on the corpus", () => {
+    const r = cli("--contractiles-fixtures", FIX_CONTRACTILES);
+    expect(r.code).toBe(0);
+    expect(r.out).toContain("CONTRACTILES FIXTURES OK");
   });
 });

@@ -34,6 +34,10 @@ Usage: deed_lint.js FILE...     exit 0 iff all files conform
                                               (anchor …) clause profile (DRAFT, A7; ruling Q11);
                                               --template: the template's own deed, which keeps {{TOKEN}}s
        deed_lint.js --anchor-fixtures DIR      DIR/valid pass the profile, DIR/invalid fail it (both required)
+       deed_lint.js --contractiles [--root DIR] FILE...
+                                              (contractiles …) clause profile (DRAFT, A7 8.2; YC01 to YC05);
+                                              --root: the repo root, where every named file must exist
+       deed_lint.js --contractiles-fixtures DIR DIR/valid pass the profile, DIR/invalid fail it (both required)
        deed_lint.js --ast-json FILE           emit the validated AST as JSON (integer lexemes stay strings)
        deed_lint.js --mustfile-json FILE      validate the Mustfile check profile and emit records
        deed_lint.js --proof-receipt-json FILE validate a proof receipt (PROOF-POLICY §8.5), derive
@@ -41,7 +45,7 @@ Usage: deed_lint.js FILE...     exit 0 iff all files conform
 `;
 
 import { createHash } from "node:crypto";
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 
 const SYMBOL_START = /^[A-Za-z]$/;
@@ -1299,6 +1303,151 @@ export function checkAnchor(text, filename = null, opts = {}) {
   return { authority: field("authority"), members: [...seen].sort(), parents };
 }
 
+// ─── (contractiles …) clause profile ───────────────────────────────────
+// spec/abnf/clauses/contractiles.abnf v1.0.0 (DRAFT; prose: docs/estate-
+// reconciliation/A7-contractiles-descriptiles-anchor.adoc 8.2; rulings Q14, J6,
+// J10; tests YC01 to YC05). Checks only what the profile adds to the grammar;
+// a deed with no (contractiles …) clause is outside the profile. That the
+// named files exist (YC02, YC03) is a repo check, run when opts.root is given.
+
+export class ContractilesError extends LintError {
+  constructor(msg) {
+    super(msg, null);
+    this.name = "ContractilesError";
+  }
+
+  toString() {
+    return this.msg;
+  }
+}
+
+/** The six verbs and the case each file name takes (A7 8.1, 8.2; J14). */
+export const CONTRACTILE_VERBS = {
+  intend: "Intent", must: "Must", trust: "Trust", adjust: "Adjust", dust: "Dust", bust: "Bust",
+};
+
+/** The three paths 8.2 names for a verb, relative to the repo root. */
+export function contractilePaths(verb) {
+  const cap = CONTRACTILE_VERBS[verb];
+  return {
+    declaration: `.machine_readable/contractiles/${verb}/${cap}file.deed`,
+    runner: `.machine_readable/contractiles/${verb}/${verb}.k9.ncl`,
+    reality: `.machine_readable/descriptiles/${cap.toUpperCase()}.deed`,
+  };
+}
+
+const VERB_MEMBERS = ["name", "declaration", "runner", "reality"];
+
+/**
+ * Check the (contractiles …) clause of deed source text. Returns a summary
+ * {verbs} (null when the deed has no contractiles clause); throws LintError on
+ * a grammar or profile violation. opts.root, when given, is the repo root the
+ * deed belongs to: the three files of each verb must exist under it.
+ */
+export function checkContractiles(text, filename = null, opts = {}) {
+  const [head, items] = validate(text, filename);
+  const isC = (it) => it[0] === "clause" && it[1] === "contractiles";
+  const nested = (list) => list.some((it) => it[0] === "clause" && it[2].some((c) => isC(c) || nested([c])));
+  if (nested(items)) {
+    throw new ContractilesError("(contractiles …) may appear only at the top level of a repo deed, not inside another clause");
+  }
+  const clauses = items.filter(isC);
+  if (clauses.length === 0) return null;
+  if (head !== "repo-deed") throw new ContractilesError(`(contractiles …) belongs in a repo-deed, not a ${head}`);
+  if (clauses.length > 1) throw new ContractilesError("a repo deed carries exactly one (contractiles …) clause (YC01)");
+
+  const verbs = new Map();
+  for (const entry of clauses[0][2]) {
+    if (entry[0] !== "clause" || entry[1] !== "verb") {
+      const what = entry[0] === "clause" ? `(${entry[1]} …)` : `:${entry[1]}`;
+      throw new ContractilesError(`(contractiles …) takes (verb …) entries only, not ${what}; the deed attests where the parties are, never a verdict (J6)`);
+    }
+    const f = new Map();
+    for (const m of entry[2]) {
+      if (m[0] !== "field") throw new ContractilesError(`(verb …) takes fields only, not (${m[1]} …)`);
+      if (!VERB_MEMBERS.includes(m[1])) {
+        throw new ContractilesError(`(verb …) has no field :${m[1]}; a verdict, status or score is never written here (YC05)`);
+      }
+      if (f.has(m[1])) throw new ContractilesError(`(verb …) repeats :${m[1]}`);
+      f.set(m[1], m[2]);
+    }
+    for (const k of VERB_MEMBERS) if (!f.has(k)) throw new ContractilesError(`(verb …) is missing :${k} (YC02)`);
+    const name = f.get("name");
+    if (name[0] !== "symbol" || !Object.hasOwn(CONTRACTILE_VERBS, name[1])) {
+      throw new ContractilesError(`(verb …) :name must be one of the symbols ${Object.keys(CONTRACTILE_VERBS).join(" ")}`);
+    }
+    const verb = name[1];
+    if (verbs.has(verb)) throw new ContractilesError(`(contractiles …) names the verb ${verb} twice (YC01)`);
+    const want = contractilePaths(verb);
+    for (const k of ["declaration", "runner", "reality"]) {
+      const v = f.get(k);
+      if (v[0] !== "string") throw new ContractilesError(`(verb :name ${verb}) :${k} must be a string`);
+      if (v[1] !== want[k]) {
+        throw new ContractilesError(`(verb :name ${verb}) :${k} must be ${JSON.stringify(want[k])}, got ${JSON.stringify(v[1])} (YC02)`);
+      }
+    }
+    verbs.set(verb, want);
+  }
+  const missing = Object.keys(CONTRACTILE_VERBS).filter((v) => !verbs.has(v));
+  if (missing.length) throw new ContractilesError(`(contractiles …) is missing the verb${missing.length > 1 ? "s" : ""} ${missing.join(", ")}; all six appear exactly once (YC01)`);
+
+  // YC04, J10: a written :contractiles_required equals the derived set.
+  const derived = Object.keys(CONTRACTILE_VERBS).map((v) => `.machine_readable/contractiles/${v}/`).sort();
+  const walk = (list) => {
+    for (const it of list) {
+      if (it[0] === "clause") {
+        walk(it[2]);
+        continue;
+      }
+      if (it[1] !== "contractiles_required") continue;
+      const v = it[2];
+      if (v[0] !== "list" || v[1].some((x) => x[0] !== "string")) {
+        throw new ContractilesError(":contractiles_required must be a list of strings (YC04)");
+      }
+      const got = [...new Set(v[1].map((x) => x[1]))].sort();
+      if (got.length !== v[1].length || got.join("\n") !== derived.join("\n")) {
+        throw new ContractilesError(`:contractiles_required must equal the set derived from (contractiles …): ${derived.map((d) => JSON.stringify(d)).join(" ")} (YC04, J10)`);
+      }
+    }
+  };
+  walk(items);
+
+  if (opts.root) {
+    for (const [verb, paths] of verbs) {
+      for (const k of ["declaration", "runner", "reality"]) {
+        if (!existsSync(join(opts.root, paths[k]))) {
+          throw new ContractilesError(`(verb :name ${verb}) :${k} ${JSON.stringify(paths[k])} does not exist under ${opts.root} (${k === "reality" ? "YC03" : "YC02"})`);
+        }
+      }
+    }
+  }
+  return { verbs: [...verbs.keys()] };
+}
+
+/** --contractiles [--root DIR] FILE...: profile-check each file; returns exit code. */
+function contractilesFiles(files, opts = {}) {
+  let bad = 0;
+  for (const f of files) {
+    let text;
+    try {
+      text = readFileSync(f, "utf8");
+    } catch (e) {
+      bad += 1;
+      console.log(`FAIL ${f}: cannot read the file (${e.code || e.message})`);
+      continue;
+    }
+    try {
+      const c = checkContractiles(text, f, opts);
+      console.log(`OK   ${f} (${c === null ? "no contractiles clause" : `contractiles, ${c.verbs.length} verbs`})`);
+    } catch (e) {
+      if (!(e instanceof LintError)) throw e;
+      bad += 1;
+      console.log(`FAIL ${f}: ${e.toString()}`);
+    }
+  }
+  return bad ? 1 : 0;
+}
+
 /**
  * valid/ must pass a clause profile; invalid/ must fail it. Returns exit code.
  * Both halves must exist and hold fixtures: a missing or empty half is a
@@ -1479,6 +1628,30 @@ function main(argv) {
     const rc = profileFixtures(d, checkAnchor);
     console.log("ANCHOR FIXTURES " + (rc === 0 ? "OK" : rc === 2 ? "NOT CHECKED" : "FAILED"));
     return rc;
+  }
+  if (argv.includes("--contractiles-fixtures")) {
+    const d = argv[argv.indexOf("--contractiles-fixtures") + 1];
+    if (d === undefined) {
+      console.log("--contractiles-fixtures requires a DIR argument");
+      return 2;
+    }
+    const rc = profileFixtures(d, checkContractiles);
+    console.log("CONTRACTILES FIXTURES " + (rc === 0 ? "OK" : rc === 2 ? "NOT CHECKED" : "FAILED"));
+    return rc;
+  }
+  if (argv.includes("--contractiles")) {
+    const i = argv.indexOf("--root");
+    const root = i === -1 ? null : argv[i + 1];
+    if (i !== -1 && (root === undefined || root.startsWith("-"))) {
+      console.log("--root requires a DIR argument");
+      return 2;
+    }
+    const files = argv.filter((a, k) => !a.startsWith("-") && !(i !== -1 && k === i + 1));
+    if (files.length === 0) {
+      console.log(DOC);
+      return 2;
+    }
+    return contractilesFiles(files, { root });
   }
   if (argv.includes("--anchor")) {
     const files = argv.filter((a) => !a.startsWith("-"));
