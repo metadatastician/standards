@@ -879,7 +879,7 @@ keyword versions. Match only keywords defined in <<identity>>:
 
 ----
 # identity: accept a deed document head
-|| [[ "$line" =~ ^[[:space:]]*\((estate-deed|repo-deed|estate-atlas-deed|praxis-deed)([[:space:]]|$) ]]
+|| [[ "$line" =~ ^[[:space:]]*\((estate-deed|repo-deed|estate-atlas-deed|praxis-deed|contractile-deed|descriptile-deed|anchor-deed)([[:space:]]|$) ]]
 # identity: accept keyword-style identity fields (hyphenated, leading colon)
 || [[ "$line" =~ ^[[:space:]]*:(canonical-name|estate-uuid|repo-uuid|beholding-chora)[[:space:]] ]]
 
