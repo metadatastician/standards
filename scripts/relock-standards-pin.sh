@@ -125,8 +125,8 @@ for w in $newwf; do
   [ -z "$other" ] || refuse "new caller ${w} also uses other actions (${other}); its lock entry cannot be built from the standards pin alone"
 done
 # Job-level reusable-workflow edges (owner/repo@ref, owner/repo lower-cased):
-# their records legitimately carry ref == SHA, with or without nested uses:,
-# so the poisoned-leaf scan and repair never touch them.
+# their records legitimately carry ref == SHA, with or without nested uses:;
+# every other record (leaf or composite, nested uses: or not) is in scope.
 edge_keys=$(grep -hvE '^[[:space:]]*#' "${wfs[@]}" 2>/dev/null | sed -E 's/[[:space:]]+#.*$//' \
             | grep -oE "[\"']?uses[\"']?:[[:space:]]*[\"']?[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/\.github/workflows/[A-Za-z0-9._-]+\.ya?ml@[^[:space:]\"',}]+" \
             | sed -E "s/^[\"']?uses[\"']?:[[:space:]]*[\"']?//" \
@@ -135,14 +135,14 @@ edge_keys=$(grep -hvE '^[[:space:]]*#' "${wfs[@]}" 2>/dev/null | sed -E 's/[[:sp
 # is_edge KEY: true when KEY names a job-level reusable-workflow edge.
 is_edge() { printf '%s\n' "$edge_keys" | grep -qxF "$(printf '%s\n' "$1" | awk '{ i = index($0, "@"); print tolower(substr($0, 1, i - 1)) substr($0, i) }')"; }
 # An already-keyed lock still goes through the rebuild when it holds a
-# poisoned leaf (a record with no nested uses: whose ref repeats its own SHA,
+# poisoned record (any record whose ref repeats its own SHA,
 # and which is not a reusable-workflow edge), so the repair below reaches it.
 # Otherwise it is left exactly as it is.
 poisoned=""
-for k in $(awk -F"'" 'function flush() { if (k != "" && r == s && !u) print k; k = "" }
+for k in $(awk -F"'" 'function flush() { if (k != "" && r == s) print k; k = "" }
                      /^    \x27[^ ]+@[0-9a-f]+\x27:$/ { flush(); k = $2; split(k, a, "@"); s = a[2]; if (length(s) != 40) k = ""; r = ""; u = 0; next }
                      /^    \x27/ || /^[a-z]/ { flush(); next }
-                     /^        ref:/ { r = $2 } /^        uses:$/ { u = 1 }
+                     /^        ref:/ { r = $2 }
                      END { flush() }' "$L"); do
   is_edge "$k" || { poisoned="$k"; break; }
 done
@@ -270,7 +270,7 @@ while read -r u; do
   printf '%s\n' "$r" >> "$tmp/lock"
 done < "$tmp/uses.s"
 
-# Poisoned copies anywhere in the lock. The runner refuses a leaf whose `ref:`
+# Poisoned copies anywhere in the lock. The runner refuses a record whose `ref:`
 # repeats its own commit SHA ("invalid lockfile pin"), and consumers keep such
 # copies after standards repairs its own record (standards#1458: 31 of 40
 # sampled callers failed at Set up job this way). Every such record that
@@ -283,7 +283,6 @@ while read -r key; do
   sha=${key##*@}
   rec=$(rec_body "$key" "$tmp/lock")
   printf '%s\n' "$rec" | grep -qxF "        ref: '$sha'" || continue
-  printf '%s\n' "$rec" | grep -qx '        uses:' && continue
   is_edge "$key" && continue
   skey=$(lock_key "$key" "$tmp/slock")
   repaired=""; [ -z "$skey" ] || repaired=$(rec_body "$skey" "$tmp/slock")

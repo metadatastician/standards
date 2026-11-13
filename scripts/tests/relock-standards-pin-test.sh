@@ -544,4 +544,26 @@ bash "$RELOCK" --to "$NEW" --standards "$S" "$D" >/dev/null 2>"$T/text-log" || f
 grep -q 'SELF-SHA-LEAF left.*unrelated/orphan@4444444444444444444444444444444444444444' "$T/text-log" || fail "a run: string exempted a poisoned leaf as an edge"
 echo "  PASS a run: string naming a reusable path does not exempt a poisoned leaf"
 
+# Case M: a COMPOSITE record (nested uses:) whose ref repeats its own SHA is
+# poisoned exactly like a leaf; only a job-level reusable edge is exempt.
+D=$(consumer composite-poisoned)
+bash "$RELOCK" --to "$NEW" --standards "$S" "$D" >/dev/null
+awk '/^    \x27actions\/checkout@1111111111111111111111111111111111111111\x27:$/{f=1} f&&/^        ref:/{print "        ref: \x271111111111111111111111111111111111111111\x27"; next} f&&/^        repo_id:/{print; print "        uses:"; print "            - \x27acme/tool@3333333333333333333333333333333333333333\x27"; f=0; next} {print}' "$D/actions.lock" > "$T/comp" && cp "$T/comp" "$D/actions.lock"
+grep -A8 -xF "    'actions/checkout@1111111111111111111111111111111111111111':" "$D/actions.lock" | grep -qx '        uses:' || fail "composite fixture has no nested uses:"
+bash "$RELOCK" --to "$NEW" --standards "$S" "$D" >/dev/null 2>"$T/comp-log" || { cat "$T/comp-log" >&2; fail "composite poisoned lock refused"; }
+grep -A8 -xF "    'actions/checkout@1111111111111111111111111111111111111111':" "$D/actions.lock" | grep -qxF "        ref: 'v1'" || fail "composite self-SHA record not repaired"
+grep -A8 -xF "    'actions/checkout@1111111111111111111111111111111111111111':" "$D/actions.lock" | grep -qx '        uses:' || fail "repair dropped the composite nested uses:"
+echo "  PASS a composite record (nested uses:) with ref == SHA is repaired like a leaf"
+
+# Case N: a job-level reusable edge WITH nested uses: and ref == SHA is left alone.
+D=$(consumer edge-with-uses)
+bash "$RELOCK" --to "$NEW" --standards "$S" "$D" >/dev/null
+grep -A8 -xF "    'hyperpolymath/standards@$NEW':" "$D/actions.lock" | grep -qx '        uses:' || fail "edge fixture has no nested uses:"
+grep -qxF "        ref: '$NEW'" "$D/actions.lock" || fail "edge fixture ref is not the SHA"
+cp "$D/actions.lock" "$T/edgeu-before"
+bash "$RELOCK" --to "$NEW" --standards "$S" "$D" >"$T/edgeu-log" 2>&1 || fail "an edge record with uses: refused the relock"
+grep -q 'SELF-SHA-LEAF' "$T/edgeu-log" && fail "an edge with nested uses: was reported as poisoned"
+cmp -s "$D/actions.lock" "$T/edgeu-before" || fail "an edge record with nested uses: was changed"
+echo "  PASS a reusable edge with nested uses: and ref == SHA is left alone"
+
 echo "PASS: relock-standards-pin.sh"
