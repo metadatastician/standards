@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 = A4: Office and Farm (the boundary, the intake envelope, work orders, the move of the scripts)
 :version: 0.2.3-draft
-:status: DRAFT v0.2.3. Decisions F1 to F15 approved by the owner on 2026-11-10. Not yet ratified as a whole. Builds on A1 v0.3.9, A2 v0.2.3 and A3 v0.2.2. Consistency pass applied 2026-11-10. Proposed in standards#1474; bot-review fixes applied 2026-11-12.
+:status: DRAFT v0.2.3. Decisions F1 to F15 approved by the owner on 2026-11-10. Not yet ratified as a whole. Builds on A1 v0.4.1, A2 v0.2.4 and A3 v0.2.3. Consistency pass applied 2026-11-10. Proposed in standards#1474; bot-review fixes applied 2026-11-12.
 :toc:
 
 Specification A4 of the Estate Reconciliation Plan. The office decides and the farm executes (R2). A4 defines the line between them, the one envelope in which every finding and every verdict enters the office, the work order that leaves it, and the rules for moving the farm's label and merge scripts.
@@ -125,7 +125,7 @@ DSSE envelope        payloadType "application/vnd.in-toto+json"; signatures[]
 ----
 
 * The Statement is `https://in-toto.io/Statement/v1`. Its `subject` is one entry: `name` is the repo UUID (A1 `:repo-uuid` value as a string) and `digest` is `{"gitCommit": "<40 hex>"}` [I: in-toto accepts `gitCommit` as a digest key].
-** *Resolved: ADR-008.* Under owner ruling V1 (2026-11-12) the repo UUID is the ADR-008 profile C (v8) id of the birth path, so the bare value in `subject.name` passes the estate UUID gate (`scripts/check-uuid-v8.sh`) as written, and `examples/a4-statement.json.example` needs no `.uuid-v8-exempt` entry [O].
+** *Resolved: ADR-008.* Under owner ruling V8 (A1, 2026-11-12) the repo UUID is the ADR-008 profile C (v8) id of the birth path, so the bare value in `subject.name` passes the estate UUID gate (`scripts/check-uuid-v8.sh`) as written, and `examples/a4-statement.json.example` needs no `.uuid-v8-exempt` entry [O].
 * The signed payload is the Statement canonicalised with JCS (RFC 8785) [I]. The estate routes I-JSON/JCS data through `kyq` [M], so the same canonical form serves the signature and the data route.
 * A signature has one of 2 forms, matching the 2 publisher forms of section 12.
 ** *ed25519.* The signature has a `keyid` and an ed25519 signature [I: DSSE]. The `keyid` is a publisher id in the federation root's `(publishers)` clause (A3 E1) whose entry carries `:ed25519`. A signature whose `keyid` is not listed is not valid.
@@ -317,7 +317,7 @@ Classes for label and merge actions are added only by the move in section 9, eac
 
 === 7.5 Lifecycle orders
 
-Birth, enrolment and retirement of a repo are classes whose only allowed `:trigger` is `dispatch`. No order creates a repo unattended [O: D34(E) as inherited]. Enrolment means: the repo has a chora (A1), its estate names it, and the next index run lists it. Retirement records the state in `(lineage)` and `(status)`. A4 does not define the creation procedure: that is #636's phase 1, which is blocked on the owner.
+Birth, enrolment and retirement of a repo are classes whose only allowed `:trigger` is `dispatch`. No order creates a repo unattended [O: D34(E) as inherited]. Enrolment means: the repo has a chora (A1), its estate names it, and the next index run lists it. Retirement records the state in `(lineage)` and in `STATE.deed` (A7 J15; `(status)` no longer lives in the chora). A4 does not define the creation procedure: that is #636's phase 1, which is blocked on the owner.
 
 == 8. The executor path
 
@@ -412,7 +412,7 @@ A3 section 9.1 left the key of the Actions aggregate to A4. The options are:
 |===
 | Option | Effect
 
-| OIDC-bound attestation (proposed, F3) | The aggregate signs through GitHub's workflow identity. A verifier checks that the signing identity is the pinned reusable workflow at the pinned SHA, and needs no secret in the repo [I: GitHub artifact attestations and Sigstore]. The publisher entry in the root gets a `:kind oidc` form that names the issuer and the workflow path.
+| OIDC-bound attestation (proposed, F3) | The aggregate signs through GitHub's workflow identity. A verifier checks that the signing identity is the pinned reusable workflow at the pinned SHA, and needs no secret in the repo [I: GitHub artifact attestations and Sigstore]. The publisher entry in the root gets the OIDC form of A1 (`:oidc-issuer` and `:workflow`, with no `:kind` field), which names the issuer and the pinned workflow path.
 | Estate-wide signing secret | A secret available to every caller's Actions run. Any workflow in a repo could read it and sign anything. Rejected.
 | Unsigned | The observer reports `gate/unsigned` for every Actions-published head. Safe but noisy, and it leaves no way to tell a real aggregate from a forgery.
 |===
