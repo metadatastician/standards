@@ -693,3 +693,38 @@ describe("CLI --anchor", () => {
     expect(ast.items.find((it) => it[1] === "repo-uuid")[2]).toEqual(["uuid", "00000000-0000-8000-8000-0000000000a7"]);
   });
 });
+
+// A7 J14 (deed.abnf v1.4.0): the three new heads, by exact, case-sensitive
+// file name. MUSTFILE.deed and Meta.deed are tested here, not as fixtures,
+// because a case-insensitive filesystem would fold them onto mustfile.deed.
+describe("J14 file-name heads", () => {
+  const form = (head) => `${HDR}(${head} :schema-version "1.0.0")\n`;
+  const verbs = ["Intent", "Must", "Trust", "Adjust", "Dust", "Bust"];
+  const names = ["META", "STATE", "ECOSYSTEM", "AGENTIC", "NEUROSYM", "PLAYBOOK", "CLADE",
+    "INTENT", "MUST", "TRUST", "ADJUST", "DUST", "BUST"];
+  test("every <Verb>file.deed is a contractile-deed", () => {
+    for (const v of verbs) expect(verdict(form("contractile-deed"), `${v}file.deed`)).toBeNull();
+  });
+  test("every ALL-CAPS descriptile name is a descriptile-deed", () => {
+    for (const n of names) expect(verdict(form("descriptile-deed"), `${n}.deed`)).toBeNull();
+  });
+  test("ANCHOR.deed is an anchor-deed", () => {
+    expect(verdict(form("anchor-deed"), "ANCHOR.deed")).toBeNull();
+  });
+  test("a wrong case matches no dispatch pattern", () => {
+    for (const [f, h] of [["MUSTFILE.deed", "contractile-deed"], ["mustfile.deed", "contractile-deed"],
+      ["Meta.deed", "descriptile-deed"], ["State.deed", "descriptile-deed"], ["anchor.deed", "anchor-deed"],
+      ["Clade.deed", "descriptile-deed"]]) {
+      expect(verdict(form(h), f)).toMatch(/matches no deed dispatch pattern/);
+    }
+  });
+  test("a J14 name with another head is a mismatch", () => {
+    expect(verdict(form("descriptile-deed"), "Mustfile.deed")).toMatch(/dispatches to contractile-deed/);
+    expect(verdict(form("contractile-deed"), "MUST.deed")).toMatch(/dispatches to descriptile-deed/);
+    expect(verdict(form("repo-deed"), "ANCHOR.deed")).toMatch(/dispatches to anchor-deed/);
+    expect(verdict(form("anchor-deed"), "x_chora.deed")).toMatch(/dispatches to repo-deed/);
+  });
+  test("a deed with no file name may carry any of the new heads", () => {
+    for (const h of ["contractile-deed", "descriptile-deed", "anchor-deed"]) expect(verdict(form(h))).toBeNull();
+  });
+});

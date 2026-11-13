@@ -25,7 +25,7 @@ throughout and is *not* part of the v0.1 conformance surface.
 parsing. The EBNF in <<concrete-syntax>> is informative.
 +
 NOTE (standards#837): owner ruling 2026-09-19 brought the grammar files
-together — `deed.abnf` (now v1.3.0) is the sole normative grammar. The v0.1.0
+together — `deed.abnf` (now v1.4.0) is the sole normative grammar. The v0.1.0
 DRAFT archive lives at `archive/deed.abnf_v0.1.0-draft` under its true
 version (it was previously misnamed `deed.abnf_v1.0`).
 
@@ -40,6 +40,14 @@ Compatible with:
 [cols="1,1,3"]
 |===
 | Version | Date | Changes
+
+| 0.2.6
+| 2026-11-13
+| Aligned to `deed.abnf` v1.4.0 (A7 ruling J14): three new heads, each chosen
+  by an exact, case-sensitive file name. `<Verb>file.deed` for the six verbs
+  is a `contractile-deed`; the thirteen ALL-CAPS descriptile names,
+  `CLADE.deed` among them, are `descriptile-deed`; `ANCHOR.deed` is an
+  `anchor-deed`. Additive: every v1.3.0 deed is a v1.4.0 deed.
 
 | 0.2.5
 | 2026-11-12
@@ -258,7 +266,8 @@ Sep          ::= ( WS | COMMENT )+          ; a COMMENT *is* a separator
 Form         ::= "(" DocHead ( Sep ( Field | Clause ) )+ Sep? ")"
                  ; exactly one ":schema-version" STRING field, any position
 DocHead      ::= "estate-deed" | "repo-deed" | "estate-atlas-deed"
-               | "praxis-deed"              ; exact, case-sensitive
+               | "praxis-deed" | "contractile-deed" | "descriptile-deed"
+               | "anchor-deed"              ; exact, case-sensitive
 
 Field        ::= KEYWORD Sep Value
 Value        ::= STRING | SYMBOL | INTEGER | BOOLEAN | UUID5 | UUID8
@@ -367,6 +376,22 @@ case-sensitive.
 | `*_praxis.deed`
 | `praxis-deed`
 | Verb. What a tool DOES. Rules.
+
+| `<Verb>file.deed`, `<Verb>` one of `Intent`, `Must`, `Trust`, `Adjust`,
+  `Dust`, `Bust` (exact)
+| `contractile-deed`
+| How the repo must be: the verb's edicts (A7 J14).
+
+| `META.deed`, `STATE.deed`, `ECOSYSTEM.deed`, `AGENTIC.deed`,
+  `NEUROSYM.deed`, `PLAYBOOK.deed`, `CLADE.deed`, and `INTENT.deed`,
+  `MUST.deed`, `TRUST.deed`, `ADJUST.deed`, `DUST.deed`, `BUST.deed` (exact)
+| `descriptile-deed`
+| How the repo is: audited facts, and `CLADE.deed` its own content
+  organisation, never identity (A7 J14, W10).
+
+| `ANCHOR.deed` (exact)
+| `anchor-deed`
+| The repo's anchor entries (A7 J14).
 |===
 
 The stem is everything before the final suffix (`_chora.deed`,
@@ -381,8 +406,10 @@ implementation MUST test the exact name `estate_chora.deed` BEFORE the
 `*_chora.deed` pattern, and MUST NOT parse `estate_chora.deed` as a
 `repo-deed`. Equivalently, the repo form is `<prefix>_chora.deed` where
 `<prefix>` is any non-empty stem other than the exact string `estate`.
-The exact `0-AI-MANIFEST.deed` name also selects `repo-deed`; other plain
-`.deed` names remain invalid.
+The exact `0-AI-MANIFEST.deed` name also selects `repo-deed`, and the J14
+names select their heads. They are case-sensitive: the case is the rule
+(A7 YL4), so `mustfile.deed`, `MUSTFILE.deed`, `Meta.deed` and
+`anchor.deed` are invalid, as are other plain `.deed` names.
 
 [NOTE]
 ====
@@ -955,7 +982,7 @@ locally. Either the estate chora gains it, or `extends-vocabulary` lands.
 
 == References
 
-* link:./abnf/deed.abnf[DEED ABNF (v1.3.0, normative)] ·
+* link:./abnf/deed.abnf[DEED ABNF (v1.4.0, normative)] ·
   link:./abnf/archive/deed.abnf_v0.1.0-draft[v0.1.0 DRAFT archive]
 * Clause profiles, each narrowing `clause` for one consumer without changing
   this grammar: link:./abnf/clauses/egress.abnf[`(egress …)`] v1.0.0
