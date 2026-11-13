@@ -31,8 +31,7 @@ declare -A REPL=( ["6a2"]="descriptiles" ["agent_instructions"]="bot_directives"
 # paths of their day). Excluded from the check. The scorecard archive is
 # excluded record by record (ruling R5, #837): its README is still checked.
 # 9-archive/ is excluded whole: it is frozen history indexed by
-# 9-archive/MOVED.adoc, and a record archived there (the retired A2ML corpus
-# lands under 9-archive/a2ml/ at its original path) must keep the names of
+# 9-archive/MOVED.adoc, and a record archived there must keep the names of
 # its day. The anchored "9-archive/" prefix does not reach a sibling such as
 # 9-archives/ or a nested .../9-archive/.
 # The legacy A2ML ledger (.machine_readable/a2ml-legacy-allow.txt) names each

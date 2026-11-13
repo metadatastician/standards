@@ -46,9 +46,10 @@ at a time.
 **A2ML is entirely gone.** No `.a2ml` file should exist anywhere. Each one
 still present is a departure: report it, and remove it when you can do so
 safely (translate first anything a reader still needs). Archived copies under `9-archive/` go too
-(owner, 2026-11-13). They are removed in a dedicated PR that first records what
-each held, and updates `scripts/check-a2ml-archived.sh`, which still treats them
-as compliant. Do not delete them piecemeal in unrelated work.
+(owner, 2026-11-13). They were removed on 2026-11-13 (standards#1524), and
+`9-archive/A2ML-REMOVED.adoc` records what each held.
+`scripts/check-a2ml-archived.sh` now fails on any `.a2ml` file not in the legacy
+ledger, archive included.
 
 There are three layers. Never mix them.
 

@@ -1,14 +1,15 @@
 #!/usr/bin/env bun
 // SPDX-License-Identifier: MPL-2.0
 // Port of deed_lint.py to plain JavaScript (bun, zero dependencies).
-const DOC = String.raw`deed-lint — conformance validator for the DEED grammar (deed.abnf v1.4.0).
+const DOC = String.raw`deed-lint — conformance validator for the DEED grammar (deed.abnf v1.5.0).
 
 Stdlib-only. Implements the normative grammar faithfully:
   * header = 1* spdx-line                 (";;" SP "SPDX-" …)
   * form   = "(" doc-head 1*(sep (field/clause)) [sep] ")"
   * doc-head ∈ {estate-deed, repo-deed, estate-atlas-deed, praxis-deed,
                 contractile-deed, descriptile-deed, anchor-deed}
-  * field  = keyword sep value            clause = "(" symbol *(sep (field/clause)) [sep] ")"
+  * field  = keyword sep value [sep "!"]  ("!" only after a rule's :id in a contractile-deed, J17)
+  * clause = "(" symbol *(sep (field/clause)) [sep] ")"
   * value  = string / symbol / integer / boolean / uuid5 / uuid8 / uuid / quoted / list
   * boolean = #t | #f  (lowercase ONLY; true/false/1/0 are parse errors)
   * uuid5 = %s"#u5" string                (body is the RFC 4122 §4.3 NAME input)
@@ -92,6 +93,10 @@ class Lexer {
     this.t = text;
     this.i = 0;
     this.n = text.length;
+    // The doc-head and the open clause heads, outermost first: J17 allows "!"
+    // only on a rule's :id in a contractile-deed, which needs both.
+    this.docHead = null;
+    this.stack = [];
   }
 
   /** 1-based line number of offset `at` (default: current position). */
@@ -402,6 +407,23 @@ function lexFieldOrClause(lx) {
         lx.line(),
       );
     }
+    // field = keyword token-sep value [token-sep bang] (v1.5.0, A7 J17). "!" can
+    // start no field, clause or value, so it is read here or nowhere. It is a
+    // bang only when a separator or ")" follows it; "!x" is not a token.
+    const save = lx.i;
+    if (lx.skipSep() && lx.peek() === "!") {
+      const after = lx.peek(1);
+      if (after === "" || after === " " || after === "\n" || after === "\r" || after === ";" || after === ")") {
+        const line = lx.line();
+        const ok = lx.docHead === "contractile-deed" && lx.stack.length === 1 && lx.stack[0] === "rule" && kw[1] === "id";
+        if (!ok) {
+          throw new LintError("'!' is allowed only directly after a rule's :id value in a contractile-deed (A7 J17)", line);
+        }
+        lx.i += 1;
+        return ["field", kw[1], val, true];
+      }
+    }
+    lx.i = save;
     return ["field", kw[1], val];
   }
   if (c === "(") {
@@ -411,11 +433,13 @@ function lexFieldOrClause(lx) {
       throw new LintError("clause '(' must be followed immediately by a clause symbol (no separator)", lx.line());
     }
     const items = [];
+    lx.stack.push(head[1]);
     for (;;) {
       // clause = "(" symbol *(token-sep (field / clause)) [token-sep] ")"
       const sep = lx.skipSep();
       if (lx.peek() === ")") {
         lx.i += 1;
+        lx.stack.pop();
         return ["clause", head[1], items];
       }
       if (lx.peek() === "" && lx.i >= lx.n) {
@@ -447,6 +471,7 @@ function parseForm(lx) {
   if (!lx.skipSep()) {
     throw new LintError(`doc-head ${head[1]} must be followed by a separator before the first field`, lx.line());
   }
+  lx.docHead = head[1];
   const items = [];
   // The separator after the doc-head was consumed above.
   for (let first = true; ; first = false) {
