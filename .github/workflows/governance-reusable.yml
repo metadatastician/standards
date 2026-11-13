@@ -255,6 +255,50 @@ jobs:
           rm -rf .standards-no-new-a2ml
           bash "$RUNNER_TEMP/check-no-new-a2ml.sh" "$BASE_SHA" "$HEAD_SHA" .
 
+  # Advisory companion to no-new-a2ml: A2ML is entirely gone, so every A2ML file
+  # a caller still tracks is a departure. This job lists them as ::warning::
+  # annotations with an exact count and ALWAYS passes: it never turns a repo
+  # red, edits a file or decides what to delete. The helper is
+  # scripts/list-existing-a2ml.sh at this reusable's own commit.
+  existing-a2ml-warning:
+    name: Existing A2ML (advisory)
+    runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout caller repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Assert this reusable's own commit resolved
+        env:
+          SELF_WORKFLOW_SHA: ${{ job.workflow_sha }}
+        run: |
+          if ! printf '%s' "$SELF_WORKFLOW_SHA" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "::warning::job.workflow_sha resolved to '${SELF_WORKFLOW_SHA:-<empty>}', not a 40-hex commit; the existing-A2ML listing is skipped."
+            echo "SKIP_A2ML_LIST=1" >> "$GITHUB_ENV"
+          fi
+      - name: Checkout the A2ML lister
+        if: env.SKIP_A2ML_LIST != '1'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: metadatastician/standards
+          ref: ${{ job.workflow_sha }}
+          path: .standards-list-a2ml
+          sparse-checkout: scripts/list-existing-a2ml.sh
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: List existing A2ML files (never fails)
+        if: env.SKIP_A2ML_LIST != '1'
+        run: |
+          # Staged outside the scanned tree, as no-new-a2ml does.
+          cp .standards-list-a2ml/scripts/list-existing-a2ml.sh "$RUNNER_TEMP/"
+          rm -rf .standards-list-a2ml
+          bash "$RUNNER_TEMP/list-existing-a2ml.sh" . || echo "::warning::the existing-A2ML listing could not run (exit $?)"
+
   allowlist-preflight:
     name: Allowlist Preflight
     runs-on: ${{ inputs.runs-on }}
@@ -405,10 +449,13 @@ jobs:
 
       - name: Setup Elixir for Hypatia scanner
         if: needs.workflow-staleness.outputs.has_baseline == 'true'
+        # OTP 28.x (28.1 to 28.5.0.8) segfaults the Hypatia scanner and oracle
+        # in sweep_off_heap on some trees; OTP 27.3.4.19 is clean on all of them
+        # (rsr-template-repo#333 and #339; hyperpolymath/hypatia#1061).
         uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1.24.1
         with:
           elixir-version: '1.19.4'
-          otp-version: '28.5.0.8'
+          otp-version: '27.3.4.19'
 
       - name: Resolve Hypatia scanner commit
         if: needs.workflow-staleness.outputs.has_baseline == 'true'
@@ -445,7 +492,7 @@ jobs:
           # ran against a stale ruleset. No restore-keys on purpose — a partial
           # restore would repopulate ~/hypatia and the guards below would skip
           # the rebuild, reintroducing the staleness.
-          key: hypatia-scanner-v4-${{ runner.os }}-otp28.5.0.8-${{ steps.hypatia-rev.outputs.sha }}
+          key: hypatia-scanner-v4-${{ runner.os }}-otp27.3.4.19-${{ steps.hypatia-rev.outputs.sha }}
 
       - name: Check out resolved Hypatia commit
         if: needs.workflow-staleness.outputs.has_baseline == 'true'

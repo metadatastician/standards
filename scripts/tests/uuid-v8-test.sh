@@ -127,7 +127,14 @@ LOWER_V8_B="$(printf '%s' "$V8_B" | tr 'A-F' 'a-f')"
 V5_C="$(uuid 886313e1 3b8a 5372 cb90 0c9aee199e5d)"   # version 5, NON-RFC variant c
 for mode in "" --strict; do
   fresh; printf '(repo-deed :repo-uuid #uuid"%s")\n' "$V5" > "$WORK/t/a_chora.deed"
-  expect 0 "a v5 inside #uuid\"…\" is accepted ${mode:-(default)}" $mode
+  expect 1 "a v5 in the identity field :repo-uuid is rejected ${mode:-(default)}" $mode
+  names "identity field :repo-uuid must carry a v8 id, found v5" "the identity rejection names the field ${mode:-(default)}"
+  for key in :estate-uuid :forge-uuid :beholding-chora :uuid :estate :base :forge :repo; do
+    fresh; printf '(x %s #uuid"%s")\n' "$key" "$V5" > "$WORK/t/a_chora.deed"
+    expect 1 "a v5 in the identity field $key is rejected ${mode:-(default)}" $mode
+  done
+  fresh; printf '(praxis-deed (alias :registry-v5 #uuid"%s"))\n' "$V5" > "$WORK/t/a_praxis.deed"
+  expect 0 "a v5 inside #uuid\"…\" outside an identity field is accepted ${mode:-(default)}" $mode
   fresh; printf '(repo-deed :repo-uuid #uuid"%s")\n' "$LOWER_V8_B" > "$WORK/t/a_chora.deed"
   expect 0 "a v8 inside #uuid\"…\" is accepted ${mode:-(default)}" $mode
   fresh; printf 'The id is `#uuid"%s"`.\n' "$V5" > "$WORK/t/notes.adoc"
