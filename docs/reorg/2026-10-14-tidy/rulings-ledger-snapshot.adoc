@@ -333,7 +333,7 @@ The rulings that do bite on standards' structure:
 | D118 | 2026-09-30 | Marid Dependabot codeql | Exclude github/codeql-action from actions group; bump deliberately with actions.lock regeneration. | ruled | marid
 | D119 | 2026-09-30 | archive Marid satellites | "D66-A executes NOW: archive the 18 marid satellites and delete scripts/publish_all_to_github.sh". | ruled (execute) | marid satellites
 | D120 | 2026-09-30 | licence populations | Games -> AGPL list (IDApTIK, metadatastician game line, airborne-submarine-squadron, megadog, the-nash-equilibrium, game tooling); NOT games -> MPL-2.0 (affinescript-vite, pow-the-game, vcl-ut, universal-modding-studio, enaction-engine); son's IDAp* keep AGPL; proof-of-work unresolved. | ruled | listed repos
-| D120 / D246 | 2026-10-13 | close-out remainder | idaptik-ums (now Invisible-Door-Studios/universal-modding-studio), 688-attack-hub and proof-of-work are the son's (AGPL); canonical-ums see D330. | amends D120/D246 | Invisible-Door-Studios
+| D120 / D246 | 2026-10-13 | close-out remainder | idaptik-ums (now catachresis-colloquium/universal-modding-studio), 688-attack-hub and proof-of-work are the son's (AGPL); canonical-ums see D330. | amends D120/D246 | catachresis-colloquium
 | D121 | 2026-09-30 | deferred label | MetaManifold-WebUI `deferred` label folds into priority:p3. | ruled | MetaManifold-WebUI
 | D122 | 2026-09-30 | major label | `major` stays repo-local (SIZE not priority); epics get meta:umbrella; no size axis in canon. | ruled | standards, affinescript
 | D123 | 2026-09-30 | residual licence | MPL-2.0 code + CC-BY-SA-4.0 docs; full MPL text root LICENSE; REUSE LICENSES/; remove LICENSE.txt notice. | ruled | residual-evidence-types#14
