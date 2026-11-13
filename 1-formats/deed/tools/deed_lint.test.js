@@ -310,12 +310,16 @@ describe("Mustfile check profile", () => {
 describe("proof-receipt profile (PROOF-POLICY §8.5)", () => {
   const C = "0123456789abcdef0123456789abcdef01234567";
   const OTHER = "fedcba9876543210fedcba9876543210fedcba98";
-  const rcpt = (o = {}) => `(receipt :run "${o.run ?? "https://ci/run/1"}" :commit "${o.commit ?? C}" :checker "${o.checker ?? "agda 2.6.4.3"}"`
-    + ` :invocation "${o.inv ?? "agda --safe --without-K --cubical-compatible"}" :state ${o.rstate ?? "current"}${o.reason ? ` :reason "${o.reason}"` : ""})`;
-  const agda = (o = {}) => `(leg :prover agda :route source :token ${o.tok ?? "proven"} :state ${o.state ?? "AGDA-VERIFIED"} ${o.receipts ?? rcpt(o)})`;
+  const D = "a".repeat(64), D2 = "b".repeat(64), T = "c".repeat(64);
+  const rcpt = (o = {}) => `\n(receipt :run "${o.run ?? "https://ci/run/1"}" :commit "${o.commit ?? C}" :checker "${o.checker ?? "agda 2.6.4.3"}"`
+    + ` :invocation "${o.inv ?? "agda --safe --without-K --cubical-compatible"}"`
+    + (o.digest === null ? "" : ` :inputs-sha256 "${o.digest ?? D}"`)
+    + ` :state ${o.rstate ?? "current"}${o.reason ? ` :reason "${o.reason}"` : ""}`
+    + (o.axioms === null ? "" : ` ${o.axioms ?? "(axioms)"}`) + ")";
+  const agda = (o = {}) => `\n(leg :prover agda :route source :token ${o.tok ?? "proven"} :state ${o.state ?? "AGDA-VERIFIED"} ${o.receipts ?? rcpt(o)})`;
   const recheck = (p, o = {}) => o.route === "unavailable" || o.route === "waived" || o.route === undefined && o.counted === false
-    ? `(leg :prover ${p} :route ${o.route ?? "unavailable"} :reason "none yet")`
-    : `(leg :prover ${p} :route ${o.route ?? "transported"} :token ${o.tok ?? "proven"} :state ${o.state ?? "RECONCILED"} ${rcpt({ checker: p, inv: p, commit: o.commit })})`;
+    ? `\n(leg :prover ${p} :route ${o.route ?? "unavailable"} :reason "none yet")`
+    : `\n(leg :prover ${p} :route ${o.route ?? "transported"} :token ${o.tok ?? "proven"} :state ${o.state ?? "RECONCILED"} ${rcpt({ checker: p, inv: p, commit: o.commit, digest: o.digest, axioms: o.axioms })})`;
   const claim = (pwg, legs, o = {}) => `(claim :id "${o.id ?? "T-1"}" :pwg ${pwg} :foundation-diverse ${o.fd ?? "#f"} ${legs})`;
   const doc = (claims, o = {}) => HDR + `(praxis-deed :schema-version "1.0.0" :canonical-name "r" :profile ${o.profile ?? "proof-receipt"}`
     + ` :repository "${o.repo ?? "hyperpolymath/x"}" :source-commit "${o.commit ?? C}" ${o.extra ?? ""} ${claims})`;
@@ -326,6 +330,11 @@ describe("proof-receipt profile (PROOF-POLICY §8.5)", () => {
     const r = readProofReceipt(readFileSync(join(FIX, "proof-receipt", "example_praxis.deed"), "utf8"), "example_praxis.deed");
     expect(r.claims.map((c) => [c.id, c.pwg, c.foundation_diverse])).toEqual([["T-1", "PWG-3", false]]);
     expect(r.trusted_base.map((p) => p.name)).toEqual(["Level", "lzero", "lsuc", "_⊔_"]);
+  });
+  test("the worked echo example derives to PWG-1 through its echo (§8.5.2)", () => {
+    const r = readProofReceipt(readFileSync(join(FIX, "proof-receipt", "echo_praxis.deed"), "utf8"), "echo_praxis.deed");
+    expect(r.claims.map((c) => c.pwg)).toEqual(["PWG-1"]);
+    expect(r.echoes.map((e) => e.image)).toEqual([r.source_commit, r.source_commit]);
   });
   test("each grade is derived from the legs, and only that grade is accepted", () => {
     const rocqOk = recheck("rocq"), leanOk = recheck("lean");
@@ -372,6 +381,87 @@ describe("proof-receipt profile (PROOF-POLICY §8.5)", () => {
     expect(() => read(doc(claim("PWG-3", agda({ tok: "verified" }) + " " + none)))).toThrow(/:token verified .* not one of/);
     expect(() => read(doc(claim("PWG-3", agda() + " " + none), { extra: '(trusted-base)' }))).toThrow(/lists no \(primitive/);
     expect(() => readProofReceipt(HDR + '(repo-deed :schema-version "1" :x "y")')).toThrow(ProofReceiptError);
+  });
+  test("§8.5.1: every current receipt carries a well-formed :inputs-sha256", () => {
+    const one = (o) => read(doc(claim("PWG-3", agda(o) + " " + none)));
+    expect(one({}).claims[0].legs[0].receipts[0]["inputs-sha256"]).toBe(D);
+    expect(() => one({ digest: null })).toThrow(/is current and is missing :inputs-sha256/);
+    expect(() => one({ digest: "A".repeat(64) })).toThrow(/:inputs-sha256 must be 64 lowercase hex/);
+    expect(() => one({ digest: "a".repeat(63) })).toThrow(/:inputs-sha256 must be 64 lowercase hex/);
+    expect(() => one({ digest: "a".repeat(40) })).toThrow(/:inputs-sha256 must be 64 lowercase hex/);
+    // A kept receipt that is not current may predate the field.
+    const old = rcpt({ commit: OTHER, rstate: "superseded", reason: "old", digest: null, axioms: null });
+    expect(read(doc(claim("PWG-3", agda({ receipts: rcpt() + " " + old }) + " " + none))).claims[0].pwg).toBe("PWG-3");
+    // One commit has one input digest per prover.
+    const twice = rcpt({ rstate: "superseded", reason: "rerun", digest: D2 });
+    expect(() => read(doc(claim("PWG-3", agda({ receipts: rcpt() + " " + twice }) + " " + none)))).toThrow(/two different input digests/);
+  });
+  test("§8.4: every current receipt lists its axioms, and only disposition (c) counts", () => {
+    const one = (axioms, pwg = "PWG-3") => read(doc(claim(pwg, agda({ axioms }) + " " + none)));
+    expect(one("(axioms)").claims[0].legs[0].receipts[0].axioms).toEqual([]);
+    expect(one('(axioms (axiom :name "funext" :disposition c))').claims[0].legs[0].receipts[0].axioms)
+      .toEqual([{ name: "funext", disposition: "c" }]);
+    expect(() => one(null)).toThrow(/is current and is missing \(axioms/);
+    expect(() => one("(axioms) (axioms)")).toThrow(/more than one \(axioms/);
+    expect(() => one('(axioms (axiom :name "x" :disposition a))')).toThrow(/:disposition a .* not one of b, c, debt/);
+    expect(() => one('(axioms (axiom :name "x" :disposition c) (axiom :name "x" :disposition c))')).toThrow(/listed twice/);
+    expect(() => one('(axioms (axiom :name "x"))')).toThrow(/missing :disposition/);
+    expect(() => one('(axioms "x")')).toThrow();
+    // An axiom that is debt or budgeted stops the leg from counting.
+    expect(one('(axioms (axiom :name "x" :disposition debt))', "ungraded").claims[0].pwg).toBe("ungraded");
+    expect(() => read(doc(claim("PWG-2i", agda() + " " + recheck("rocq", { axioms: '(axioms (axiom :name "x" :disposition b))' })
+      + " " + recheck("lean", { counted: false }))))).toThrow(/support PWG-3/);
+  });
+  describe("§8.5.2: echoes of a history rewrite", () => {
+    // S1 and S2 are pre-rewrite commits; C (the :source-commit) is their image.
+    const S1 = "1111111111111111111111111111111111111111", S2 = "2222222222222222222222222222222222222222";
+    const echo = (src, img, o = {}) => o.tree
+      ? `\n(echo :source "${src}" :image "${img}" :witness tree-sha256 :tree-sha256 "${o.tree}")`
+      : `\n(echo :source "${src}" :image "${img}" :witness inputs-sha256 ${(o.provers ?? ["agda", "rocq", "lean"]).map((p) => `(inputs :prover ${p} :sha256 "${o.d ?? D}")`).join(" ")})`;
+    const legsAt = (commit) => agda({ commit }) + " " + recheck("rocq", { commit }) + " " + recheck("lean", { commit });
+    const at = (commit, echoes, pwg = "PWG-1") => read(doc(claim(pwg, legsAt(commit)), { extra: echoes }));
+
+    test("a receipt whose :commit has no echo and is not the :source-commit stops at PWG-2ii", () => {
+      expect(at(S1, "", "PWG-2ii").claims[0].pwg).toBe("PWG-2ii");
+      expect(() => at(S1, "")).toThrow(/records :pwg PWG-1, but .* support PWG-2ii/);
+    });
+    test("an echo whose inputs digest matches each leg lets the receipt count for its image", () => {
+      const r = at(S1, echo(S1, C));
+      expect(r.claims[0].pwg).toBe("PWG-1");
+      expect(r.echoes).toEqual([{ source: S1, image: C, witness: "inputs-sha256", tree_sha256: null, inputs: { agda: D, rocq: D, lean: D } }]);
+    });
+    test("an echo without a matching witness does not count", () => {
+      // The echo names no digest for the lean leg.
+      expect(() => at(S1, echo(S1, C, { provers: ["agda", "rocq"] }))).toThrow(/support PWG-2ii/);
+      // The echo's digest disagrees with the receipt at the same commit.
+      expect(() => at(S1, echo(S1, C, { d: D2 }), "PWG-2ii")).toThrow(/two different input digests/);
+    });
+    test("a tree-sha256 echo covers every leg", () => {
+      expect(at(S1, echo(S1, C, { tree: T })).claims[0].pwg).toBe("PWG-1");
+    });
+    test("echoes chain, and the fibre over one image holds several sources", () => {
+      expect(at(S1, echo(S1, S2) + " " + echo(S2, C, { tree: T })).claims[0].pwg).toBe("PWG-1");
+      expect(at(S1, echo(S1, C) + " " + echo(S2, C)).claims[0].pwg).toBe("PWG-1");
+      // A chain that does not reach the :source-commit does not count.
+      expect(() => at(S1, echo(S1, S2))).toThrow(/support PWG-2ii/);
+    });
+    test("the echo records themselves are checked", () => {
+      const ok = claim("PWG-3", agda() + " " + none);
+      const bad = (extra) => () => read(doc(ok, { extra }));
+      expect(bad(echo(S1, C) + " " + echo(S1, S2))).toThrow(/one image only/);
+      expect(bad(echo(S1, S1))).toThrow(/are the same commit/);
+      expect(bad(echo(C, S1))).toThrow(/never a source/);
+      expect(bad(echo(S1, S2) + " " + echo(S2, S1))).toThrow(/cycle/);
+      expect(bad(echo("abc", C))).toThrow(/full 40-character/);
+      expect(bad(`(echo :source "${S1}" :image "${C}" :witness tree-sha256)`)).toThrow(/needs :tree-sha256/);
+      expect(bad(`(echo :source "${S1}" :image "${C}" :witness tree-sha256 :tree-sha256 "abc")`)).toThrow(/64 lowercase hex/);
+      expect(bad(`(echo :source "${S1}" :image "${C}" :witness inputs-sha256)`)).toThrow(/at least one \(inputs/);
+      expect(bad(`(echo :source "${S1}" :image "${C}" :witness tree)`)).toThrow(/:witness tree .* not one of/);
+      expect(bad(`(echo :source "${S1}" :image "${C}" :witness inputs-sha256 :tree-sha256 "${T}" (inputs :prover agda :sha256 "${D}"))`)).toThrow(/carries no :tree-sha256/);
+      expect(bad(`(echo :source "${S1}" :image "${C}" :witness inputs-sha256 (inputs :prover agda :sha256 "${D}") (inputs :prover agda :sha256 "${D}"))`)).toThrow(/two \(inputs/);
+      expect(bad(echo(S1, S2, { tree: T }) + " " + echo(S2, C, { tree: "d".repeat(64) }))).toThrow(/two different tree-sha256/);
+      expect(bad(echo(S1, C, { tree: T }) + " " + echo(S2, S1, { provers: ["agda"], d: D2 }))).toThrow(/input digests of its two commits differ/);
+    });
   });
   test("--proof-receipt-json emits records for a valid receipt and no JSON otherwise", () => {
     const ok = cli("--proof-receipt-json", join(FIX, "proof-receipt", "example_praxis.deed"));
