@@ -118,3 +118,61 @@ Observed instance: all five sections (`deployment`, `incident-response`,
 * `@profile` strings: exactly three distinct `:id` values estate-wide.
 *`scan-depth` symbols are exactly from the closed three-set (validator,
   not eyeballs).
+
+== 6. Per-bot directive files → `(bot-directives …)`
+
+Owner rulings 2026-11-13: a bot with no directives runs its full suite
+(panicbot runs the whole panic-attack suite); a directive that only denies
+means "everything except these"; a dynamic mode takes its target from the
+directives. The §3 `instructions-dir` pointer names a directory; this section
+gives the facts inside it a deed home, because no new fact may be written to a
+`.a2ml` file.
+
+=== Source surface
+
+`<repo>/.machine_readable/bot_directives/<bot>.a2ml`, one per bot (legacy).
+
+=== Target form
+
+One top-level clause on the repo deed, with one `(bot …)` per bot:
+
+[source]
+----
+(bot-directives
+  (bot :name panicbot
+    :allow (assail assay diagnostics)
+    :deny (assault ambush)
+    (target :build "cargo build --release" :program "target/release/foo")
+    (config :min-severity low :timeout-seconds 300)))
+----
+
+*Grammar-forced deviation.* The ruled shape was `(bot panicbot …)`. In
+`deed.abnf` a clause is `"(" symbol *(token-sep (field / clause))`, so a bare
+symbol after the clause name is not a legal member. The bot's name is
+therefore the field `:name`, which comes first by convention. The deed linter
+refuses the bare form (`fixtures/invalid/inbot-bare-name_chora.deed`).
+
+=== Field table
+
+[cols="2,3,4"]
+|===
+| source / meaning | deed path | transform
+
+| the `<bot>` file name | `(bot :name <bot>)` | SYMBOL. Repeatable, one `(bot …)` per bot; a bot named twice is a conflict, not a merge.
+| `allow` | `(bot … :allow (<mode> …))` | list of SYMBOLs. Optional; absent means the bot's full suite.
+| `deny` | `(bot … :deny (<mode> …))` | list of SYMBOLs. Optional. Narrows the suite; deny wins over allow. A `(bot …)` with `:deny` and no `:allow` means everything except those modes.
+| `[config] min-severity` | `(bot … (config :min-severity low))` | SYMBOL verbatim.
+| `[config] timeout-seconds` | `(bot … (config :timeout-seconds 300))` | INTEGER.
+| (new; no legacy key) the dynamic-mode target | `(bot … (target :build "…" :program "…"))` | optional. Absent means dynamic modes report `not_applicable "no target declared"`. `:program` is a STRING path relative to the repo root and MUST resolve inside it (no leading `/`, no `..` escape, no symlink out). `:build` is a STRING shell command and runs only in an unprivileged job.
+|===
+
+Any other legacy key fails closed (frame rule P-2a), not translated by guess.
+The grammar cannot express the `:program` containment or the allow/deny
+precedence; the consuming bot enforces both, and the linter checks only that
+the clause parses.
+
+=== Read order
+
+A bot reads the `(bot-directives …)` clause first. It reads the legacy
+`.a2ml` file second, read-only, for repos not yet migrated. It never writes a
+legacy file.
