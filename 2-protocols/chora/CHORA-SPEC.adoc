@@ -227,6 +227,8 @@ The table in `DEED-GRAMMAR-SPEC.adoc` (section on identity) changes in 3 rows:
 | `estate-atlas-deed` | `:canonical-name`; `:beholding-chora` | unchanged. The fixture `ATLAS.deed` is corrected.
 |===
 
+The three heads of A7 J14 (`contractile-deed`, `descriptile-deed`, `anchor-deed`) are defined by A7, not here. Under A7 J20 they name the repo they belong to with `:of-chora` (the repo's opaque v8 chora id) and carry no `:beholding-chora`. `:beholding-chora` keeps the one meaning this section gives it: the estate chora that a repo or praxis deed belongs to. A praxis deed, `debt_praxis.deed` included, keeps it.
+
 The ABNF requires only `:schema-version` on every form. All other requirements in this section are validator semantics, as they are today. Every identity field in the table takes the opaque `#uuid` literal (section 7.1, U4). The spec's description of `:repo-uuid` as UUID8 of a domain and a path is replaced by section 9.
 
 == 8. The generated index
