@@ -30,7 +30,7 @@ plant() { jq -cS "$2" "$ROOT/docs/decisions/ADR-008-profile-c-domains.json" > "$
 
 echo "the real register"
 expect "is valid" 0 "domain(s) valid"
-expect "registers the domains its repos mint" 0 "registered" proof-goal prove-result echidnabot-proof-obligation gv-clade-index
+expect "registers the domains its repos mint" 0 "registered" proof-goal prove-result echidnabot-proof-obligation gv-clade-index chora-registry
 expect "an unregistered domain fails" 1 'domain "no-such-domain" is not registered' proof-goal no-such-domain
 
 echo "planted defects, each named"
