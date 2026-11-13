@@ -1,5 +1,95 @@
 # CLAUDE.md - AI Assistant Instructions
 
+## Standing priority: correct departures as you meet them (owner, 2026-11-13)
+
+The estate will not be brought into line by one large cross-cutting change.
+It gets there by every agent correcting what it meets. So, whatever your
+task, when you come across a departure from the rulings in this file:
+
+1. **Fix it** if the fix is small, in scope for the repo you are in, and
+   needs no owner decision (the licence rules below still forbid licence
+   and SPDX edits).
+2. **Otherwise tell the owner it exists**, through the question selector
+   (AskUserQuestion). Give the repo, the path or link, and what departs
+   from which ruling. Telling the owner is the minimum, and silence is
+   never acceptable.
+
+This covers code and configuration, and also docs, wikis, READMEs,
+CLAUDE.md files, templates and the connections between repos (links,
+pins, workflow `uses:`, registry rows). It applies above all to:
+
+* any `.a2ml` file or anything that reads, writes or recommends one (see
+  the identity section below). The exception is a new-input-first A2ML
+  fallback that the A7 migration plan (M5 to M7) requires a shared reader to
+  keep until its callers migrate;
+* Python, TypeScript, ReScript, V-lang, Go and every other language in
+  BANNED below, outside the listed exemptions. Grandfathered TypeScript and
+  ReScript are migration inventory, ported under Enforcement Rule 1, not new
+  departures to report;
+* a proof that is not run at the strictest setting its policy names. For
+  Agda theory proofs that is `agda --safe --without-K --cubical-compatible`
+  (`3-practice/PROOF-POLICY.adoc` §2.1). The one exception is a proof that
+  genuinely needs full Cubical Agda or incompatible options and runs under an
+  explicit, separately reviewed proof profile (same section). Weaker flags, an unclassified or
+  inadmissible `postulate` in a load-bearing track, or a skipped proof are
+  departures. A necessary axiom admitted under
+  `docs/TRUSTED-BASE-REDUCTION-POLICY.adoc` is not. Rust uses Creusot
+  with Pearlite and Verus (§1.2), Ada uses SPARK, and APIs and ABIs use
+  Idris2. Other provers follow that policy and
+  `docs/TRUSTED-BASE-REDUCTION-POLICY.adoc`.
+
+Do not turn this into a sweep. Correct or report what you meet, one repo
+at a time.
+
+## Identity, classification and the registry (owner, 2026-11-13)
+
+**A2ML is entirely gone.** No `.a2ml` file should exist anywhere. Each one
+still present is a departure: report it, and remove it when you can do so
+safely (translate first anything a reader still needs). Archived copies under `9-archive/` go too
+(owner, 2026-11-13). They are removed in a dedicated PR that first records what
+each held, and updates `scripts/check-a2ml-archived.sh`, which still treats them
+as compliant. Do not delete them piecemeal in unrelated work.
+
+There are three layers. Never mix them.
+
+| Layer | File | What it is |
+|---|---|---|
+| **Identity** | `<repo>_chora.deed` | What the repo *is*. Its `:repo-uuid`, `(identity)` and `(lineage)`, and where it sits in wider things, including its clade placements as identity facts. It heads towards a Meta-Object-Facility-like model, and the details are not settled. It is not organisation and not configuration. |
+| **Content organisation** | `.machine_readable/descriptiles/CLADE.deed` | How the repo's *own content* is organised for its audience. It acts as an order controller and is never identity. Every repo is to carry one. If unused, it holds the minimum valid structure (`:schema-version` plus `:in-use #f`). **Do not create it yet.** `deed.abnf` has no head that dispatches this file name. The `descriptile-deed` head (A7 J14: approved by the owner in the A1 thread on 2026-11-13, not yet recorded in A7) and a CLADE form must land first. |
+| **Estate registry** | **chora-registry** (formerly `gv-clade-index`) | The register of repo identities, like mathesis for repos. It holds many classification schemes that can be swapped (by type, date of creation or last use, activity, popularity). It is authoritative for estate-wide placement. A copy a repo carries is checked against it. |
+
+**CLADE.deed schemes.** `(scheme :kind strict|judgement|none …)`:
+
+* *strict* is a real taxonomy grounded in its own logic, like Linnean
+  classification. Choosing a category because it "will kind of do" is a
+  hard violation, and a placement that breaks the criterion blocks.
+* *judgement* records the author's best sense ("more a platformer, I
+  guess"). Nothing ever says "you broke Darwin". Only a reference to an
+  unknown category is an error.
+* *none* means organisation does not matter for this repo.
+
+The scheme also says whether something may sit in two categories
+(`:membership single|multiple`) and how the extra placements link
+(`:link symlink|hardlink|junction|shortcut|see-also`).
+
+**The rename.** `gv-clade-index` is being renamed to **chora-registry**.
+"gv" was git-visor, a planned graphical tool for reading git against the
+chora. That is one consumer of the registry, not its purpose. The chora is
+central.
+
+* **The rename does not remint the registry's id.** Under ruling U1
+  ("immutable"), an id is minted once from the birth path and is carried as
+  an opaque `#uuid`. No transfer, rename or move changes it. The birth path
+  stays in the registry archive (CHORA-SPEC §9; `1-formats/deed/README.adoc`).
+  ADR 0007 in the registry, "remint identity on move", is superseded. Any
+  text that still says a rename remints is a departure.
+* **The `"gv-clade-index"` domain string is an open owner question.** It is
+  the ADR-008 profile C *domain* under which new ids are minted and
+  archived ids are re-checked. Changing it would not alter any existing id,
+  because ids are carried opaquely and never re-derived. It would change
+  every future mint and every re-check against the archive. Do not change
+  that string anywhere until the owner rules on it.
+
 ## Fork governance (read before changing a workflow)
 
 Every pull request in this repository gets one generated comment, marked
