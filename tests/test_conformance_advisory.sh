@@ -42,25 +42,25 @@ lint=$(rb 'puts YAML.load_file(ARGV[0])["jobs"]["lint"]["steps"].find{|s| s["id"
 # Gate step
 rb 'puts YAML.load_file(ARGV[0])["jobs"]["validate"]["steps"].find{|s| s["name"]=="Gate"}["run"]' "$K" > "$WORK/gate.sh"
 for st in red orange; do
-  STATE=$st ADVISORY=true FAIL_ON_INDETERMINATE=true bash "$WORK/gate.sh" > "$WORK/o" 2>&1; rc=$?
+  STATE=$st ADVISORY=true FAIL_ON_INDETERMINATE=true bash -e -o pipefail "$WORK/gate.sh" > "$WORK/o" 2>&1; rc=$?
   { [ $rc -eq 0 ] && grep -q '^::warning::K9 conformance (advisory)' "$WORK/o"; } && ok "gate: $st + advisory exits 0 with a warning" || bad "gate: $st + advisory rc=$rc: $(cat "$WORK/o")"
 done
-STATE=red ADVISORY=false FAIL_ON_INDETERMINATE=false bash "$WORK/gate.sh" >/dev/null 2>&1; [ $? -eq 1 ] && ok "gate: red without advisory still fails" || bad "gate: red without advisory did not fail"
-STATE= ADVISORY=true FAIL_ON_INDETERMINATE=false bash "$WORK/gate.sh" > "$WORK/o" 2>&1; { [ $? -eq 0 ] && grep -q 'no verdict' "$WORK/o"; } && ok "gate: no verdict + advisory warns, exits 0" || bad "gate: empty verdict + advisory"
+STATE=red ADVISORY=false FAIL_ON_INDETERMINATE=false bash -e -o pipefail "$WORK/gate.sh" >/dev/null 2>&1; [ $? -eq 1 ] && ok "gate: red without advisory still fails" || bad "gate: red without advisory did not fail"
+STATE= ADVISORY=true FAIL_ON_INDETERMINATE=false bash -e -o pipefail "$WORK/gate.sh" > "$WORK/o" 2>&1; { [ $? -eq 0 ] && grep -q 'no verdict' "$WORK/o"; } && ok "gate: no verdict + advisory warns, exits 0" || bad "gate: empty verdict + advisory"
 
 # deed warning step
 rb 'puts YAML.load_file(ARGV[0])["jobs"]["lint"]["steps"].find{|s| s["name"]=="Advisory findings as warnings"}["run"]' "$D" > "$WORK/deedwarn.sh"
 export RUNNER_TEMP="$WORK"
 printf 'PASS ./a_chora.deed\nFAIL ./b_chora.deed: line 1: deed must begin with an SPDX header\nFAIL ./b_chora.deed: line 1: deed must begin with an SPDX header\n' > "$WORK/deed-lint.log"
-bash "$WORK/deedwarn.sh" > "$WORK/o" 2>&1; rc=$?
+bash -e -o pipefail "$WORK/deedwarn.sh" > "$WORK/o" 2>&1; rc=$?
 { [ $rc -eq 0 ] && grep -q '^::warning file=b_chora.deed::deed conformance (advisory): line 1' "$WORK/o" && [ "$(grep -c '^::warning file=' "$WORK/o")" = 1 ] && grep -q '2 finding(s)' "$WORK/o"; } \
   && ok "deed: FAIL lines become one deduplicated annotation each, with the count" || bad "deed warning step: $(cat "$WORK/o")"
-: > "$WORK/deed-lint.log"; bash "$WORK/deedwarn.sh" > "$WORK/o" 2>&1
+: > "$WORK/deed-lint.log"; bash -e -o pipefail "$WORK/deedwarn.sh" > "$WORK/o" 2>&1
 grep -q 'did not run to completion' "$WORK/o" && ok "deed: an empty log says the check did not complete" || bad "deed: empty log message"
 
 # Escaping: a path with a comma and a colon must not break the property list.
 printf 'FAIL ./a,b:c_chora.deed: line 1: bad\n' > "$WORK/deed-lint.log"
-bash "$WORK/deedwarn.sh" > "$WORK/o" 2>&1
+bash -e -o pipefail "$WORK/deedwarn.sh" > "$WORK/o" 2>&1
 grep -q '^::warning file=a%2Cb%3Ac_chora.deed::deed conformance (advisory): line 1: bad' "$WORK/o" \
   && ok "deed: , and : in a path are escaped in the annotation property" || bad "deed path escaping: $(cat "$WORK/o")"
 
@@ -74,6 +74,17 @@ for spec in "$K:validate:Enumerate the committed K9 files, the changed files and
     && ok "$(basename "$file"): '$step' downgrades its annotation to a warning under advisory" \
     || bad "$(basename "$file"): '$step' still has a bare ::error:: ($bare)"
 done
+
+# Under the runner's `bash -e -o pipefail`, a log with no FAIL line, and a missing
+# log, must still reach the closing warning and exit 0 (Codex P1 on #1519).
+printf 'PASS ./a_chora.deed\n' > "$WORK/deed-lint.log"
+bash -e -o pipefail "$WORK/deedwarn.sh" > "$WORK/o" 2>&1; rc=$?
+{ [ $rc -eq 0 ] && grep -q 'did not run to completion' "$WORK/o"; } && ok "deed: a log with no FAIL line warns and exits 0 under -e -o pipefail" || bad "deed no-FAIL log: rc=$rc $(cat "$WORK/o")"
+rm -f "$WORK/deed-lint.log"
+bash -e -o pipefail "$WORK/deedwarn.sh" > "$WORK/o" 2>&1; rc=$?
+{ [ $rc -eq 0 ] && grep -q 'did not run to completion' "$WORK/o"; } && ok "deed: a missing log warns and exits 0 under -e -o pipefail" || bad "deed missing log: rc=$rc $(cat "$WORK/o")"
+step_coe=$(rb 'puts YAML.load_file(ARGV[0])["jobs"]["lint"]["steps"].find{|s| s["name"]=="Advisory findings as warnings"}["continue-on-error"]' "$D")
+[ "$step_coe" = "true" ] && ok "deed: the annotation step cannot fail the advisory job" || bad "deed annotation step continue-on-error is '$step_coe'"
 
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]
