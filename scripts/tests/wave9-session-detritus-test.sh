@@ -29,6 +29,9 @@ for retired in \
   automation/K9-AUTOMATION-SPEC.a2ml \
   interop/CRG-TRG-RSR-MAPPING.a2ml \
   templates/TEMPLATE-VERSIONING-SPEC.a2ml \
+  9-archive/a2ml/docs/archive/reorg-leftovers/K9-AUTOMATION-SPEC.a2ml \
+  9-archive/a2ml/docs/archive/reorg-leftovers/CRG-TRG-RSR-MAPPING.a2ml \
+  9-archive/a2ml/docs/archive/reorg-leftovers/TEMPLATE-VERSIONING-SPEC.a2ml \
   docs/language-testing-standards.adoc \
   docs/affinescript-testing-guide.adoc \
   docs/julia-testing-tools-guide.adoc \
@@ -43,9 +46,6 @@ for preserved in \
   docs/archive/session-detritus/root/SECURITY_TRAINING_SUMMARY.md \
   docs/archive/session-detritus/axel-protocol/SONNET-TASKS.adoc \
   docs/archive/session-detritus/0-ai-gatekeeper-protocol/AI-GATEKEEPER-PROTOCOL-COMPLETE-2026-02-07.adoc \
-  9-archive/a2ml/docs/archive/reorg-leftovers/K9-AUTOMATION-SPEC.a2ml \
-  9-archive/a2ml/docs/archive/reorg-leftovers/CRG-TRG-RSR-MAPPING.a2ml \
-  9-archive/a2ml/docs/archive/reorg-leftovers/TEMPLATE-VERSIONING-SPEC.a2ml \
   4-readiness/toolchain-readiness-grades/testing/LANGUAGE-TESTING-STANDARDS.adoc \
   4-readiness/toolchain-readiness-grades/testing/affinescript-testing-guide.adoc \
   4-readiness/toolchain-readiness-grades/testing/julia-testing-tools-guide.adoc \

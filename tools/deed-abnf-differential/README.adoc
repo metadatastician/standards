@@ -6,7 +6,8 @@ Keeps the DEED gate and the DEED grammar from drifting apart.
 `1-formats/deed/tools/deed_lint.js` is the gate that CI runs.
 
 `differential.js` compiles `deed.abnf`, with the `(egress …)` and `(anchor …)`
-clause profiles (`clauses/egress.abnf`, `clauses/anchor.abnf`), using
+clause profiles (`clauses/egress.abnf`, `clauses/anchor.abnf`) and the shared
+rules of `clauses/common.abnf`, using
 https://github.com/ldthomas/apg-js[apg-js]. It then gives both the grammar and
 the gate the same inputs:
 
@@ -15,6 +16,9 @@ the gate the same inputs:
 * the anchor fixtures whose defect the grammar expresses
   (`ANCHOR_GRAMMAR_REJECTS` in the script): `anchor.abnf` must refuse each
   clause, so the grammar is the oracle, not a second description;
+* the shared rules of `common.abnf` (dates, the affirmation members, string
+  lists): each must accept and refuse the strings listed in the script, because
+  no clause uses the date and affirmation rules yet;
 * every committed deed and valid fixture, mutated by a seeded generator at the
   grammar's boundaries (separators, line-ends, comments, quoting, brackets,
   `#` forms, control and non-ASCII characters).
