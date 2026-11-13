@@ -120,7 +120,7 @@ jobs:
           ref: ${{ job.workflow_sha }}
           path: .k9-canon
           persist-credentials: false
-          sparse-checkout: "1-formats/k9\nscripts/k9-grid.sh\nscripts/lib/k9-grid.jq\n"
+          sparse-checkout: "1-formats/k9\n2-protocols/k9-coordination/spec/abnf\n2-protocols/k9-coordination/tools/validate\nscripts/k9-grid.sh\nscripts/lib/k9-grid.jq\n"
           sparse-checkout-cone-mode: false
 
       - name: Record which standards commit supplies validator, contract and renderer
@@ -170,7 +170,6 @@ jobs:
         run: bash scripts/tests/k9-grid-test.sh
 
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        if: github.repository_id == 1116521501
         with:
           bun-version: "1.4.2"
 
@@ -289,6 +288,38 @@ jobs:
           echo "CORPUS_CODE=$worst" >> "$GITHUB_ENV"
           echo "validator worst exit status: $worst"
 
+      - name: Validate coordination.k9 files against the v1.2 ABNF (own grid category)
+        # A file the K9 validator routes to the coordination dialect is
+        # checked by 2-protocols/k9-coordination/tools/validate at this
+        # workflow's commit (apg-js on coordination-k9-grammar_v1.2.abnf, plus
+        # the schema and line-length rules). The step never fails the job: the
+        # grid grades it. If the validator cannot run, no record is written
+        # and the routed file stays indeterminate (orange), never green.
+        run: |
+          set +e
+          : > "$RUNNER_TEMP/coord-results.jsonl"
+          jq -r 'select(.verdict == "routed") | .file' "$RUNNER_TEMP/results.jsonl" > "$RUNNER_TEMP/routed" 2>/dev/null
+          if [ -s "$RUNNER_TEMP/routed" ]; then
+            V="$PWD/$CANON/2-protocols/k9-coordination/tools/validate"
+            if (cd "$V" && bun install --frozen-lockfile >"$RUNNER_TEMP/coord-install.log" 2>&1); then
+              while IFS= read -r f; do
+                [ -n "$f" ] || continue
+                # validate.js reads a leading `-` as an option; `./` keeps a
+                # tracked file named `-x.k9` a path.
+                out=$(bun "$V/validate.js" "./$f" 2>&1); rc=$?
+                case "$rc" in
+                  0) jq -nc --arg f "$f" '{file: $f, verdict: "pass", message: ""}' >> "$RUNNER_TEMP/coord-results.jsonl" ;;
+                  1) jq -nc --arg f "$f" --arg m "$out" '{file: $f, verdict: "fail", message: $m}' >> "$RUNNER_TEMP/coord-results.jsonl" ;;
+                  *) echo "::warning::coordination validator could not run on $f (exit $rc)" ;;
+                esac
+              done < "$RUNNER_TEMP/routed"
+            else
+              echo "::warning::coordination validator dependencies did not install; routed files are indeterminate"
+              cat "$RUNNER_TEMP/coord-install.log"
+            fi
+          fi
+          echo "coordination.k9 files checked: $(wc -l < "$RUNNER_TEMP/coord-results.jsonl")"
+
       - name: Read the grid comment from the previous revision (delta column)
         if: github.event_name == 'pull_request'
         env:
@@ -340,11 +371,13 @@ jobs:
           [ -s "$RUNNER_TEMP/ledger-growth" ] && args+=(--ledger-growth "$RUNNER_TEMP/ledger-growth")
           [ -s "$RUNNER_TEMP/previous.md" ] && args+=(--previous "$RUNNER_TEMP/previous.md")
           [ -n "${BASE_UNRESOLVED:-}" ] && args+=("$BASE_UNRESOLVED")
+          [ -f "$RUNNER_TEMP/coord-results.jsonl" ] && args+=(--coord-results "$RUNNER_TEMP/coord-results.jsonl")
           # With require-files the empty corpus is a failing row in the grid
           # itself, so report.md and badge.json carry the red the job reports.
           [ "$REQUIRE_FILES" = "true" ] && args+=(--require-files)
           bash "$CANON/scripts/k9-grid.sh" render "${args[@]}"
           cp "$RUNNER_TEMP/selftest.log" "$RUNNER_TEMP/typecheck.log" "$RUNNER_TEMP/results.jsonl" "$RUNNER_TEMP/k9-grid/"
+          [ -f "$RUNNER_TEMP/coord-results.jsonl" ] && cp "$RUNNER_TEMP/coord-results.jsonl" "$RUNNER_TEMP/k9-grid/"
           [ -f "$RUNNER_TEMP/corpus.log" ] && cp "$RUNNER_TEMP/corpus.log" "$RUNNER_TEMP/k9-grid/"
 
       - name: Archive the grid and its evidence
