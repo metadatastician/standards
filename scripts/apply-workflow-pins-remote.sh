@@ -75,7 +75,26 @@
 #     --ensure-squabbler  also add the CICD Squabbler gate (a thin caller of
 #                         standards' cicd-squabbler-reusable.yml at the target)
 #                         where a repo has none, in the SAME PR as the re-pin
+#     --proven-sha <sha>  also report stamped proven-cicd content (see below)
+#                         against proven/manifest.json of
+#                         hyperpolymath/proven-cicd-and-workflows at this
+#                         40-hex commit. READ-ONLY in every mode.
 #     --self-test         run the pure-function controls and exit
+#
+# PROVEN CONTENT (--proven-sha; census only, never rewritten here):
+#   proven-cicd-and-workflows publishes stamped workflow bodies. A stamped copy's
+#   first line is `# proven-cicd: <artifact>@<MAJOR.MINOR.PATCH> sha256:<hex>`.
+#   The copy itself detects edits (drift); only a sweep against the published
+#   manifest can see that a copy is STALE. Each stamped file gets its own census
+#   row, with a status of its own, never joined to the pin status column:
+#     BEHIND-CONTENT     stamp version older than the manifest's
+#     CONTENT-CURRENT    stamp version equal to the manifest's
+#     CONTENT-AHEAD      stamp version newer than the manifest at --proven-sha
+#     CONTENT-UNLISTED   the manifest does not list the artifact
+#     CONTENT-MALFORMED  a `# proven-cicd:` first line that is not a valid stamp
+#   An unreadable or invalid manifest at --proven-sha stops the run before any
+#   census (fail closed): a content census with no manifest is not evidence.
+#   Rewriting a stale copy is a separate mode, not built here.
 #
 # ENSURE-SQUABBLER (why it rides with the re-pin, never ahead of it):
 #   The squabbler's `chains` job FAILS on a dead upstream. Added to a repo that
@@ -113,8 +132,12 @@ BRANCH_NAME="chore/re-point-standards-workflow-pins"
 # standards' own actions.lock AT THE TARGET from it.
 STANDARDS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RELOCK="$(dirname "${BASH_SOURCE[0]}")/relock-standards-pin.sh"
+# Proven content (--proven-sha). Empty PROVEN_SHA means the content census is off.
+PROVEN_REPO="hyperpolymath/proven-cicd-and-workflows"
+PROVEN_SHA=""
+PROVEN_MANIFEST=""
 
-log() { printf '%s\n' "$*" >&2; }
+log(){ printf '%s\n' "$*" >&2; }
 
 # ---------------------------------------------------------------------------
 # PURE CORE — no network, no filesystem outside the file argument.
@@ -185,6 +208,63 @@ classify_file() {
   fi
   [ "$emitted" -eq 0 ] && echo NONE
   return 0
+}
+
+# --- proven content (pure) ----------------------------------------------------
+
+# A valid stamp line, as proven-cicd-and-workflows scripts/proven-stamp.sh writes it.
+STAMP_RE='^# proven-cicd: ([a-z0-9][a-z0-9-]*)@([0-9]+)\.([0-9]+)\.([0-9]+) sha256:[0-9a-f]{64}$'
+
+# version_cmp <a> <b> — echo lt, eq or gt, comparing MAJOR.MINOR.PATCH as
+# numbers. A lexical compare reads 0.10.0 as older than 0.9.0.
+version_cmp() {
+  local a="$1" b="$2" i x y
+  local -a av bv
+  IFS=. read -r -a av <<< "$a"
+  IFS=. read -r -a bv <<< "$b"
+  for i in 0 1 2; do
+    x=$((10#${av[$i]})); y=$((10#${bv[$i]}))
+    if [ "$x" -lt "$y" ]; then echo lt; return 0; fi
+    if [ "$x" -gt "$y" ]; then echo gt; return 0; fi
+  done
+  echo eq
+}
+
+# manifest_tsv <manifest.json> — validate a proven-cicd/manifest/v1 document
+# and echo `artifact<TAB>version` per artifact. Non-zero, and nothing on
+# stdout, when the document is not a valid manifest: the caller fails closed.
+manifest_tsv() {
+  jq -er '
+    if .schema == "proven-cicd/manifest/v1"
+       and (.artifacts | type == "array" and length > 0)
+       and all(.artifacts[]; (.artifact | type == "string" and test("^[a-z0-9][a-z0-9-]*$"))
+                             and (.version | type == "string" and test("^[0-9]+\\.[0-9]+\\.[0-9]+$")))
+       and ([.artifacts[].artifact] | length == (unique | length))
+    then .artifacts[] | "\(.artifact)\t\(.version)"
+    else error("not a valid proven-cicd/manifest/v1") end' "$1" 2>/dev/null
+}
+
+# content_state <file> <manifest-tsv-file> — for a stamped file, echo ONE line
+# `STATUS<TAB>DETAIL`; for a file with no `# proven-cicd:` first line, echo
+# nothing. Statuses are listed under PROVEN CONTENT in the header.
+content_state() {
+  local f="$1" m="$2" first artifact have want
+  first=$(head -n 1 "$f" 2>/dev/null) || return 0
+  case "$first" in "# proven-cicd:"*) ;; *) return 0 ;; esac
+  if ! [[ $first =~ $STAMP_RE ]]; then
+    printf 'CONTENT-MALFORMED\t-\n'; return 0
+  fi
+  artifact="${BASH_REMATCH[1]}"
+  have="${BASH_REMATCH[2]}.${BASH_REMATCH[3]}.${BASH_REMATCH[4]}"
+  want=$(awk -F'\t' -v a="$artifact" '$1 == a { print $2; exit }' "$m")
+  if [ -z "$want" ]; then
+    printf 'CONTENT-UNLISTED\t%s@%s\n' "$artifact" "$have"; return 0
+  fi
+  case "$(version_cmp "$have" "$want")" in
+    lt) printf 'BEHIND-CONTENT\t%s@%s -> %s\n' "$artifact" "$have" "$want" ;;
+    eq) printf 'CONTENT-CURRENT\t%s@%s\n' "$artifact" "$have" ;;
+    gt) printf 'CONTENT-AHEAD\t%s@%s > %s\n' "$artifact" "$have" "$want" ;;
+  esac
 }
 
 # needs_rewrite <classification> — true when fix mode must re-point the file's
@@ -466,6 +546,60 @@ self_test() {
     sed 's/^/      /' "$d/sqc.yml" >&2; ok_sq=0
   fi
   [ "$ok_sq" -eq 1 ] && echo "  PASS state is PRESENT/MISSING/DEFERRED as specified; caller is FRESH, canonical, no inherit, no cron" || rc=1
+
+  # Proven content: the manifest is validated, and each stamped copy gets the
+  # one status its version earns. 0.10.0 against 0.9.0 catches a lexical compare.
+  echo "control: proven content"
+  local h; h=$(printf 'c%.0s' $(seq 64))
+  cat > "$d/manifest.json" <<'JSON'
+{"schema":"proven-cicd/manifest/v1","artifacts":[
+ {"artifact":"proven-lock-gate","version":"0.1.0","sha256":"x","template":"t","install_path":"p"},
+ {"artifact":"wide-gate","version":"0.10.0","sha256":"x","template":"t","install_path":"p"}]}
+JSON
+  if manifest_tsv "$d/manifest.json" > "$d/manifest.tsv" \
+     && [ "$(cat "$d/manifest.tsv")" = "$(printf 'proven-lock-gate\t0.1.0\nwide-gate\t0.10.0')" ]; then
+    echo "  PASS manifest.json -> 2 artifacts"
+  else
+    echo "  FAIL manifest.json was not read as 2 artifacts" >&2; rc=1
+  fi
+  printf '{"schema":"proven-cicd/manifest/v2","artifacts":[{"artifact":"a","version":"1.0.0"}]}' > "$d/bad-schema.json"
+  printf '{"schema":"proven-cicd/manifest/v1","artifacts":[{"artifact":"a","version":"1.0"}]}' > "$d/bad-version.json"
+  printf '{"schema":"proven-cicd/manifest/v1","artifacts":[{"artifact":"a","version":"1.0.0"},{"artifact":"a","version":"1.0.1"}]}' > "$d/bad-dup.json"
+  printf '{"schema":"proven-cicd/manifest/v1","artifacts":[]}' > "$d/bad-empty.json"
+  printf 'not json' > "$d/bad-json.json"
+  local bad
+  for bad in bad-schema bad-version bad-dup bad-empty bad-json; do
+    if manifest_tsv "$d/$bad.json" >/dev/null; then
+      echo "  FAIL $bad.json was accepted as a manifest" >&2; rc=1
+    else
+      echo "  PASS $bad.json refused"
+    fi
+  done
+  printf '# proven-cicd: proven-lock-gate@0.0.9 sha256:%s\nname: g\n' "$h" > "$d/content-behind.yml"
+  printf '# proven-cicd: proven-lock-gate@0.1.0 sha256:%s\nname: g\n' "$h" > "$d/content-current.yml"
+  printf '# proven-cicd: proven-lock-gate@0.2.0 sha256:%s\nname: g\n' "$h" > "$d/content-ahead.yml"
+  printf '# proven-cicd: wide-gate@0.9.0 sha256:%s\nname: g\n' "$h" > "$d/content-wide.yml"
+  printf '# proven-cicd: other-gate@1.0.0 sha256:%s\nname: g\n' "$h" > "$d/content-unlisted.yml"
+  printf '# proven-cicd: proven-lock-gate@0.1 sha256:%s\nname: g\n' "$h" > "$d/content-malformed.yml"
+  printf 'name: g\n# proven-cicd: proven-lock-gate@0.0.9 sha256:%s\n' "$h" > "$d/content-not-first.yml"
+  ccheck() {
+    local file="$1" want="$2" got
+    got=$(content_state "$d/$file" "$d/manifest.tsv" | cut -f1)
+    if [ "$got" = "$want" ]; then
+      echo "  PASS $file -> ${got:-(none)}"
+    else
+      echo "  FAIL $file -> got '$got' want '$want'" >&2; rc=1
+    fi
+  }
+  ccheck content-behind.yml    BEHIND-CONTENT
+  ccheck content-current.yml   CONTENT-CURRENT
+  ccheck content-ahead.yml     CONTENT-AHEAD
+  ccheck content-wide.yml      BEHIND-CONTENT
+  ccheck content-unlisted.yml  CONTENT-UNLISTED
+  ccheck content-malformed.yml CONTENT-MALFORMED
+  # Only the first line is a stamp; a pin-only workflow has no content row.
+  ccheck content-not-first.yml ""
+  ccheck fresh.yml             ""
 
   echo "control: the lock relock is present"
   if [ -f "$RELOCK" ] && bash -n "$RELOCK"; then
@@ -756,6 +890,7 @@ main() {
       --out) OUT_FILE="$2"; shift ;;
       --limit) LIMIT="$2"; shift ;;
       --ensure-squabbler) ENSURE_SQUABBLER=1 ;;
+      --proven-sha) PROVEN_SHA="$2"; shift ;;
       --self-test) self_test; exit $? ;;
       -h|--help) sed -n '2,/^set -uo pipefail$/p' "$0" | sed '$d'; exit 0 ;;
       *) log "unknown option: $1"; exit 2 ;;
@@ -792,6 +927,22 @@ main() {
   log "== target: ${TARGET_SHA} (reachable from ${STANDARDS_REPO} main; lock self-consistent) =="
   [ "$DO_FIX" -eq 1 ] && log "== MODE: --fix (will open PRs) ==" || log "== MODE: audit (writes nothing) =="
 
+  # Proven content census: the manifest at the pinned commit, or no run at all.
+  if [ -n "$PROVEN_SHA" ]; then
+    [[ $PROVEN_SHA =~ ^[0-9a-f]{40}$ ]] \
+      || { log "FATAL: --proven-sha must be a 40-hex commit, got '${PROVEN_SHA}'."; exit 1; }
+    local mraw; mraw=$(mktemp); PROVEN_MANIFEST=$(mktemp)
+    if ! gh api "repos/${PROVEN_REPO}/contents/proven/manifest.json?ref=${PROVEN_SHA}" \
+           -H 'Accept: application/vnd.github.raw' > "$mraw" 2>/dev/null \
+       || ! manifest_tsv "$mraw" > "$PROVEN_MANIFEST"; then
+      rm -f "$mraw" "$PROVEN_MANIFEST"
+      log "FATAL: proven/manifest.json at ${PROVEN_REPO}@${PROVEN_SHA} is unreadable or not a valid proven-cicd/manifest/v1. Refusing a content census without it."
+      exit 1
+    fi
+    rm -f "$mraw"
+    log "== proven content: $(wc -l < "$PROVEN_MANIFEST") artifact(s) at ${PROVEN_REPO}@${PROVEN_SHA} (census only) =="
+  fi
+
   local tsv; tsv=$(mktemp)
   printf 'REPO\tWORKFLOW\tSTATUS\tDETAIL\n' > "$tsv"
 
@@ -821,6 +972,12 @@ main() {
     for wf in "$rdir"/*.yml "$rdir"/*.yaml; do
       found=1
       base=$(basename "$wf")
+      # A stamped proven-cicd copy gets its own row; it is never rewritten here.
+      if [ -n "$PROVEN_MANIFEST" ]; then
+        local cst
+        cst=$(content_state "$wf" "$PROVEN_MANIFEST")
+        [ -n "$cst" ] && printf '%s\t%s\t%s\n' "$repo" "$base" "$cst" >> "$tsv"
+      fi
       st=$(classify_file "$wf" "$TARGET_SHA" | sort | tr '\n' ',' ); st="${st%,}"
       [ "$st" = "NONE" ] && continue
       detail=""
@@ -911,7 +1068,7 @@ main() {
   awk -F'\t' 'NR>1{c[$3]++} END{for(k in c) printf "   %-28s %d\n", k, c[k]}' "$tsv" >&2
 
   if [ -n "$OUT_FILE" ]; then cp "$tsv" "$OUT_FILE"; log "== census: ${OUT_FILE} =="; else cat "$tsv"; fi
-  rm -f "$tsv"
+  rm -f "$tsv" "${PROVEN_MANIFEST:-}"
 }
 
 if [ "${BASH_SOURCE[0]}" = "$0" ]; then

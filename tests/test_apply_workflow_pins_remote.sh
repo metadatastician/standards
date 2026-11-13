@@ -58,7 +58,10 @@ else
   fail "baseline controls RED — fix the applier before reading any mutant"
   sed 's/^/    /' "$TMP/base.out" >&2
 fi
-for want in "fresh.yml" "behind.yml" "illegal.yml" "tracking.yml" "none.yml" "short.yml"; do
+for want in "fresh.yml" "behind.yml" "illegal.yml" "tracking.yml" "none.yml" "short.yml" \
+            "manifest.json" "bad-schema.json" "bad-version.json" "bad-dup.json" "bad-empty.json" \
+            "bad-json.json" "content-behind.yml" "content-current.yml" "content-ahead.yml" \
+            "content-wide.yml" "content-unlisted.yml" "content-malformed.yml" "content-not-first.yml"; do
   grep -q "PASS $want" "$TMP/base.out" && pass "control present: $want" \
     || fail "control MISSING from baseline: $want (a control that never runs is not a control)"
 done
@@ -137,6 +140,36 @@ kill_mutant rewrite_overreaches \
 kill_mutant illegal_repair_still_illegal \
   's@\@\$\{target\}@\@@g' \
   "FAIL illegal repair"
+
+# M6 — compare stamp versions as strings. 0.9.0 then reads as NEWER than
+# 0.10.0, and a stale copy is reported AHEAD, so it is never refreshed.
+kill_mutant content_lexical_version \
+  's@\[ "\$x" -lt "\$y" \]@[[ "${av[$i]}" < "${bv[$i]}" ]]@; s@\[ "\$x" -gt "\$y" \]@[[ "${av[$i]}" > "${bv[$i]}" ]]@' \
+  "FAIL content-wide.yml"
+
+# M7 — every version compares equal. Every stale copy then reads CURRENT, which
+# is the exact failure the content census exists to see.
+kill_mutant content_behind_blind \
+  's@^    if \[ "\$x" -lt "\$y" \]; then echo lt; return 0; fi$@    :@' \
+  "FAIL content-behind.yml"
+
+# M8 — accept any schema. A document that is not a proven-cicd manifest would
+# then be read as one, and the census would judge copies against it.
+kill_mutant manifest_schema_unchecked \
+  's@\.schema == "proven-cicd/manifest/v1"@true@' \
+  "FAIL bad-schema.json"
+
+# M9 — accept a duplicated artifact. Which of its versions wins would depend on
+# the order of the file, so a census could say CURRENT for a stale copy.
+kill_mutant manifest_duplicate_accepted \
+  's@and \(\[\.artifacts\[\]\.artifact\] \| length == \(unique \| length\)\)@@' \
+  "FAIL bad-dup.json"
+
+# M10 — read the stamp from any line, not the first. A body that merely quotes a
+# stamp (a comment, a heredoc, a test fixture) would be reported as a copy.
+kill_mutant content_stamp_anywhere \
+  's@first=\$\(head -n 1 "\$f" 2>/dev/null\)@first=$(grep -m1 "^# proven-cicd:" "$f" 2>/dev/null)@' \
+  "FAIL content-not-first.yml"
 
 # --- 3. fetch_workflows fails CLOSED -----------------------------------------
 # A rate-limited repo used to come back as "no workflows": fetch_workflows
@@ -235,6 +268,8 @@ if [ "$gql" = 1 ]; then
   [ -f "$GH_FIX/own_squabbler" ] && extra=$(jq -Rs '[{name: "cicd-squabbler.yml", type: "blob", object: {text: .}}]' "$GH_FIX/own_squabbler")
   # $GH_FIX/own_lock: each repository also holds that actions.lock.
   [ -f "$GH_FIX/own_lock" ] && extra=$(printf '%s' "$extra" | jq --rawfile l "$GH_FIX/own_lock" '. + [{name: "actions.lock", type: "blob", object: {text: $l}}]')
+  # $GH_FIX/own_stamped: each repository also holds that stamped proven-cicd copy.
+  [ -f "$GH_FIX/own_stamped" ] && extra=$(printf '%s' "$extra" | jq --rawfile s "$GH_FIX/own_stamped" '. + [{name: "proven-lock-gate.yml", type: "blob", object: {text: $s}}]')
   jq -n --arg sha "$TARGET" --argjson extra "$extra" '{data: {repository: {object: {entries: ([{name: "ci.yml", type: "blob",
     object: {text: ("jobs:\n  a:\n    uses: hyperpolymath/standards/.github/workflows/x.yml@" + $sha + "\n")}}] + $extra)}}}}'
   exit 0
@@ -249,6 +284,9 @@ if [[ "$p" =~ ^repos/[^/]+/[^/]+$ ]]; then
   exit 0
 fi
 case "$p" in
+  # The published proven-cicd manifest, served raw from $GH_FIX/proven_manifest.json.
+  repos/hyperpolymath/proven-cicd-and-workflows/contents/proven/manifest.json)
+    body="$GH_FIX/proven_manifest.json" ;;
   repos/*/commits/*)
     j='{"sha": "cccccccccccccccccccccccccccccccccccccccc"}'
     if [ -n "$jqx" ]; then printf '%s' "$j" | jq -r "$jqx"; else printf '%s' "$j"; fi; exit 0 ;;
@@ -461,6 +499,68 @@ case_main_squabbler() {
   fi
 }
 
+# run_content <dir> <applier> [args...] — the whole applier in audit mode, with
+# the network ancestry proof stubbed out and extra arguments passed through.
+run_content() {
+  local d="$1" a="$2"; shift 2
+  : > "$d/calls.log"
+  # shellcheck disable=SC2016  # $1 is expanded by the inner shell
+  env PATH="$LSTUB:$PATH" GH_FIX="$d" GH_TOKEN=ghs_app GITHUB_TOKEN= TARGET="$T" \
+    bash -c 'source "$1"; validate_target() { return 0; }; shift; main "$@"' _ "$a" \
+      --to "$T" --owners hyperpolymath,metadatastician "$@" > "$d/out" 2> "$d/err"
+  echo $? > "$d/rc"
+}
+P="dddddddddddddddddddddddddddddddddddddddd"
+STAMP_HEX="cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+
+# case_main_content <applier> — --proven-sha reads the manifest at that commit
+# and gives a stale stamped copy its own BEHIND-CONTENT row, while the pin row
+# of the same repository is unchanged.
+case_main_content() {
+  local d; d=$(new_case content)
+  printf '{"schema":"proven-cicd/manifest/v1","artifacts":[{"artifact":"proven-lock-gate","version":"0.1.0","sha256":"x","template":"t","install_path":"p"}]}' \
+    > "$d/proven_manifest.json"
+  printf '# proven-cicd: proven-lock-gate@0.0.9 sha256:%s\nname: g\n' "$STAMP_HEX" > "$d/own_stamped"
+  run_content "$d" "$1" --proven-sha "$P"
+  if [ "$(cat "$d/rc")" = 0 ] \
+     && grep -qF "$(printf 'hyperpolymath/pub-a\tproven-lock-gate.yml\tBEHIND-CONTENT\tproven-lock-gate@0.0.9 -> 0.1.0')" "$d/out" \
+     && grep -qF "$(printf 'hyperpolymath/pub-a\tci.yml\tFRESH')" "$d/out" \
+     && grep -qF "proven-cicd-and-workflows/contents/proven/manifest.json?ref=${P}" "$d/calls.log"; then
+    pass "main: --proven-sha reports a stale stamped copy BEHIND-CONTENT, read at the pinned commit"
+  else
+    fail "main: content census wrong (rc=$(cat "$d/rc"))"
+    sed 's/^/    /' "$d/out" "$d/err" | tail -8 >&2
+  fi
+}
+
+# case_main_content_fail <applier> — an unreadable manifest stops the run
+# before any census: no REPO header, and the refusal is named.
+case_main_content_fail() {
+  local d; d=$(new_case contentfail)
+  printf '# proven-cicd: proven-lock-gate@0.0.9 sha256:%s\nname: g\n' "$STAMP_HEX" > "$d/own_stamped"
+  run_content "$d" "$1" --proven-sha "$P"
+  if [ "$(cat "$d/rc")" = 1 ] && ! grep -q '^REPO' "$d/out" \
+     && grep -q 'Refusing a content census' "$d/err"; then
+    pass "main: an unreadable manifest stops the run before any census"
+  else
+    fail "main: unreadable manifest did not fail closed (rc=$(cat "$d/rc"))"
+  fi
+}
+
+# case_main_content_off <applier> — without --proven-sha nothing changes: no
+# manifest call, no content row.
+case_main_content_off() {
+  local d; d=$(new_case contentoff)
+  printf '# proven-cicd: proven-lock-gate@0.0.9 sha256:%s\nname: g\n' "$STAMP_HEX" > "$d/own_stamped"
+  run_content "$d" "$1"
+  if [ "$(cat "$d/rc")" = 0 ] && ! grep -q 'CONTENT' "$d/out" \
+     && ! grep -q 'proven-cicd-and-workflows' "$d/calls.log"; then
+    pass "main: without --proven-sha there is no manifest call and no content row"
+  else
+    fail "main: content census ran without --proven-sha (rc=$(cat "$d/rc"))"
+  fi
+}
+
 # Planted positives: the stub must be able to say no, or every fail-closed case
 # above could pass because nothing ever failed.
 d=$(new_case planted)
@@ -486,6 +586,9 @@ case_public_fail "$APPLIER"
 case_main_app "$APPLIER"
 case_main_fail "$APPLIER"
 case_main_squabbler "$APPLIER"
+case_main_content "$APPLIER"
+case_main_content_fail "$APPLIER"
+case_main_content_off "$APPLIER"
 
 # A repository whose own cicd-squabbler.yml runs no gate is never overwritten:
 # it is reported SQUABBLER-DEFERRED:NAME-TAKEN.
@@ -643,6 +746,12 @@ list_mutant owner_filter_dropped "s@'index\\(tolower\\(\\\$0\\), o\\) == 1'@'1'@
 list_mutant inst_failure_swallowed 's@\|\| \{ log "FATAL: an App installation token[^}]*\}@|| true@' case_inst_fail
 list_mutant public_failure_swallowed 's@^      log "FATAL: could not list the repositories of.*$@      :@' case_public_fail
 list_mutant fork_not_checked 's@^          true\) sqst=FORK ;;$@          true) sqst=MISSING ;;@' case_main_squabbler
+# Proven content: the census must fail closed without its manifest, must read
+# the manifest at the pinned commit (not at whatever main is now), and must
+# write the content row it computed.
+list_mutant content_fail_open '/Refusing a content census without it/{n;s@exit 1@:@}' case_main_content_fail
+list_mutant content_manifest_unpinned 's@\?ref=\$\{PROVEN_SHA\}@@' case_main_content
+list_mutant content_row_dropped 's@cst=\$\(content_state "\$wf" "\$PROVEN_MANIFEST"\)@cst=""@' case_main_content
 }
 
 echo
