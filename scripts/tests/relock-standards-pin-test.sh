@@ -552,8 +552,8 @@ awk '/^    \x27actions\/checkout@1111111111111111111111111111111111111111\x27:$/
 grep -A8 -xF "    'actions/checkout@1111111111111111111111111111111111111111':" "$D/actions.lock" | grep -qx '        uses:' || fail "composite fixture has no nested uses:"
 bash "$RELOCK" --to "$NEW" --standards "$S" "$D" >/dev/null 2>"$T/comp-log" || { cat "$T/comp-log" >&2; fail "composite poisoned lock refused"; }
 grep -A8 -xF "    'actions/checkout@1111111111111111111111111111111111111111':" "$D/actions.lock" | grep -qxF "        ref: 'v1'" || fail "composite self-SHA record not repaired"
-grep -A8 -xF "    'actions/checkout@1111111111111111111111111111111111111111':" "$D/actions.lock" | grep -qx '        uses:' || fail "repair dropped the composite nested uses:"
-echo "  PASS a composite record (nested uses:) with ref == SHA is repaired like a leaf"
+grep -A8 -xF "    'actions/checkout@1111111111111111111111111111111111111111':" "$D/actions.lock" | grep -qx '        uses:' && fail "repair kept the consumer's invented nested uses: (source has none)"
+echo "  PASS a composite record (nested uses:) with ref == SHA is repaired to the source record like a leaf"
 
 # Case N: a job-level reusable edge WITH nested uses: and ref == SHA is left alone.
 D=$(consumer edge-with-uses)
@@ -627,5 +627,55 @@ echo "  PASS a composite record the reusable does not require (nested uses:) is 
 grep -qxF "        ref: '8888888888888888888888888888888888888888'" "$D/actions.lock" || fail "O: nested reusable record was changed"
 grep -q 'other/repo' "$T/m2-log" && fail "O: nested reusable record was reported"
 echo "  PASS a nested reusable called by a standards reusable is not treated as poisoned"
+
+# Case P: a consumer record with an EXTRA nested edge the standards source lacks
+# ends up identical to the source record after the repair.
+D=$(consumer2 composite-extra-edge)
+awk '/^    \x27example\/composite@5555/{f=1} f&&/^            - \x27acme\/tool@3333/{print; print "            - \x27actions/checkout@1111111111111111111111111111111111111111\x27"; f=0; next} {print}' "$D/actions.lock" > "$T/p-lock" && cp "$T/p-lock" "$D/actions.lock"
+grep -A9 -xF "    'example/composite@5555555555555555555555555555555555555555':" "$D/actions.lock" | grep -qF "actions/checkout@1111" || fail "P fixture has no extra edge"
+bash "$RELOCK" --to "$NEW2" --standards "$S2" "$D" >/dev/null 2>"$T/p-log" || { cat "$T/p-log" >&2; fail "P relock refused"; }
+git -C "$S2" show "$NEW2:.github/workflows/actions.lock" | awk '/^    \x27example\/composite@5555/{f=1;print;next} f&&/^    [^ ]/{exit} f' > "$T/p-src"
+awk '/^    \x27example\/composite@5555/{f=1;print;next} f&&/^    [^ ]/{exit} f' "$D/actions.lock" > "$T/p-got"
+cmp -s "$T/p-src" "$T/p-got" || { diff "$T/p-src" "$T/p-got" >&2; fail "P: repaired record differs from the standards source"; }
+echo "  PASS a repaired record equals the standards source record (extra consumer edge dropped)"
+
+# Case Q: an echoed `uses: .../.github/workflows/...@sha` in a standards
+# reusable's run: value is not an edge, so it exempts nothing.
+S3="$T/standards3"; git clone -q "$S2" "$S3"; git -C "$S3" config user.email t@t; git -C "$S3" config user.name t
+cat >> "$S3/.github/workflows/x-reusable.yml" <<'Y'
+  e:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo 'uses: unrelated/orphan/.github/workflows/z.yml@4444444444444444444444444444444444444444'
+Y
+git -C "$S3" add -A; git -C "$S3" commit -q -m three; NEW3=$(git -C "$S3" rev-parse HEAD)
+sv=$NEW; NEW=$NEW3; D=$(consumer echo-edge); NEW=$sv
+sed -i "s/ref: 'v4'/ref: '4444444444444444444444444444444444444444'/" "$D/actions.lock"
+bash "$RELOCK" --to "$NEW3" --standards "$S3" "$D" >/dev/null 2>"$T/q-log" || fail "Q relock refused"
+grep -q 'SELF-SHA-LEAF left.*unrelated/orphan@4444444444444444444444444444444444444444' "$T/q-log" || fail "Q: an echoed uses: text exempted a poisoned record"
+echo "  PASS an echoed uses: in a standards reusable's run: value does not exempt a poisoned record"
+
+# Case R: a two-hop chain INSIDE standards (x-reusable -> b.yml -> c.yml, local
+# calls) exempts the deepest record C (ref == SHA) from the poisoned scan.
+S4="$T/standards4"; git clone -q "$S2" "$S4"; git -C "$S4" config user.email t@t; git -C "$S4" config user.name t
+printf 'on: { workflow_call: {} }\njobs:\n  c:\n    uses: other/chain/.github/workflows/c.yml@7878787878787878787878787878787878787878\n' > "$S4/.github/workflows/b-reusable.yml"
+git -C "$S4" add -A; git -C "$S4" commit -q -m b; NEWB=$(git -C "$S4" rev-parse HEAD)
+printf '  hop:\n    uses: hyperpolymath/standards/.github/workflows/b-reusable.yml@%s\n' "$NEWB" >> "$S4/.github/workflows/x-reusable.yml"
+git -C "$S4" add -A; git -C "$S4" commit -q -m a; NEW4=$(git -C "$S4" rev-parse HEAD)
+sv=$NEW; NEW=$NEW4; D=$(consumer chain); NEW=$sv
+cat >> "$D/actions.lock" <<'Y'
+    'other/chain@7878787878787878787878787878787878787878':
+        ref: '7878787878787878787878787878787878787878'
+        commit: 'sha1-7878787878787878787878787878787878787878'
+        owner_id: 78
+        repo_id: 79
+        uses:
+            - 'actions/checkout@1111111111111111111111111111111111111111'
+Y
+cp "$D/actions.lock" "$T/r-before"
+bash "$RELOCK" --to "$NEW4" --standards "$S4" "$D" >/dev/null 2>"$T/r-log" || { cat "$T/r-log" >&2; fail "R relock refused"; }
+cat "$T/r-log" >&2; grep -q "other/chain" "$T/r-log" && fail "R: the deepest record of a standards-internal chain was reported"
+grep -qxF "        ref: '7878787878787878787878787878787878787878'" "$D/actions.lock" || fail "R: the deepest record was changed"
+echo "  PASS a two-hop standards-internal chain (A -> B -> C) exempts C's ref == SHA record"
 
 echo "PASS: relock-standards-pin.sh"
