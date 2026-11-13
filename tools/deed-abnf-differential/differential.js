@@ -208,7 +208,8 @@ for (const name of ANCHOR_GRAMMAR_REJECTS) {
     ["date-string", "2026-11-13", false], ["date-string", '"2026-11-13T00:00"', false],
     ["affirm-member", ':affirmed "2026-11-13"', true], ["affirm-member", ':expires "2027-11-13"', true],
     ["affirm-member", ":affirmed-by owner", true], ["affirm-member", ":affirmed-by agent", true],
-    ["affirm-member", ":affirmed-by deed-lint", true], ["affirm-member", ':affirmed-by "owner"', false],
+    ["affirm-member", ":affirmed-by deed-lint", true], ["affirm-member", ":affirmed-by owner-review", true],
+    ["affirm-member", ":affirmed-by agent-check", true], ["affirm-member", ':affirmed-by "owner"', false],
     ["affirm-member", ":affirmed #t", false], ["affirm-member", ":AFFIRMED \"2026-11-13\"", false],
     ["str-list1", "()", false], ["str-list1", '( "a" "b" )', true], ["str-list", "()", true],
   ];

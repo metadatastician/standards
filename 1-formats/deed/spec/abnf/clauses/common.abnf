@@ -48,11 +48,15 @@ date-day        = "0" %x31-39 / %x31-32 DIGIT / "3" %x30-31
 affirm-member   = ( %s":affirmed"    token-sep date-string )
                 / ( %s":affirmed-by" token-sep affirmer )
                 / ( %s":expires"     token-sep date-string )
-affirmer        = %s"owner" / %s"agent" / symbol
+affirmer        = symbol
                 ; A symbol, not a string: who or what last affirmed the facts.
-                ; "owner" and "agent" are named; any other symbol is the name
-                ; of the check that affirmed them.
-                ; SEMANTIC: on every descriptile, each member exactly once by
-                ; default; :expires is not before :affirmed. A repo setting may
-                ; relax the requirement, and a relaxation is authorised and
-                ; reported, never silent (A7 ruling J4).
+                ; The symbols owner and agent are reserved for those two; any
+                ; other symbol is the name of the check that affirmed them
+                ; (owner-review included). Written as one symbol rule, not
+                ; "owner" / "agent" / symbol, so that a parser taking the first
+                ; alternative that matches (apg-js) still reads owner-review
+                ; whole.
+                ; SEMANTIC: where affirmation is required (A7 J4, YD06),
+                ; :affirmed and :affirmed-by each appear exactly once.
+                ; :expires is optional (DESCRIPTILE-SPEC §affirmation): at
+                ; most once, and when present not before :affirmed.
