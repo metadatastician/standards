@@ -78,7 +78,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ github.repository }}
-          ref: ${{ github.ref }}
+          ref: ${{ github.sha }} # not github.ref: refs/pull/<n>/merge is gone once the PR closes
           fetch-depth: 1
           path: caller
 
@@ -115,7 +115,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ github.repository }}
-          ref: ${{ github.ref }}
+          ref: ${{ github.sha }} # not github.ref: refs/pull/<n>/merge is gone once the PR closes
           fetch-depth: 0
           path: caller
 

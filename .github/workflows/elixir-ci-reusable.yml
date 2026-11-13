@@ -179,7 +179,10 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ github.repository }}
-          ref: ${{ github.ref }}
+          # github.sha, not github.ref: on pull_request github.ref is the named
+          # merge ref refs/pull/<n>/merge, which is gone once the PR merges or
+          # closes ("couldn't find remote ref"). See governance-reusable.yml.
+          ref: ${{ github.sha }}
       - name: Detect mix.exs
         id: detect
         run: |
@@ -207,7 +210,10 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ github.repository }}
-          ref: ${{ github.ref }}
+          # github.sha, not github.ref: on pull_request github.ref is the named
+          # merge ref refs/pull/<n>/merge, which is gone once the PR merges or
+          # closes ("couldn't find remote ref"). See governance-reusable.yml.
+          ref: ${{ github.sha }}
 
       # Opt-in databases start before the BEAM toolchain is installed so
       # they warm up while deps compile. Images arrive through env, never
