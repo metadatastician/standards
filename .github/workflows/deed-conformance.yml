@@ -78,6 +78,9 @@ jobs:
       - name: fixture corpus (valid must pass, invalid must fail)
         if: github.repository_id == 1116521501
         run: bun "$T/deed_lint.js" --fixtures "$T/fixtures"
+      - name: J14 file-name head fixtures (contractile-deed, descriptile-deed, anchor-deed)
+        if: github.repository_id == 1116521501
+        run: bun "$T/deed_lint.js" --fixtures "$T/fixtures/heads"
       # The (anchor …) clause profile is a DRAFT (A7), so it gates only its own
       # fixtures here. It joins the caller-wide lint below once the owner
       # ratifies the profile.
@@ -106,7 +109,7 @@ jobs:
           REQUIRE_FILES: ${{ inputs.require-files || false }}
         run: |
           set -euo pipefail
-          find . -name '*.deed' -not -path './.deed-canon/*' -not -path './1-formats/deed/tools/fixtures/invalid/*' -print | sort > "$RUNNER_TEMP/deeds"
+          find . -name '*.deed' -not -path './.deed-canon/*' -not -path './1-formats/deed/tools/fixtures/invalid/*' -not -path './1-formats/deed/tools/fixtures/heads/invalid/*' -print | sort > "$RUNNER_TEMP/deeds"
           if [ ! -s "$RUNNER_TEMP/deeds" ]; then
             if [ "$REQUIRE_FILES" = "true" ]; then
               echo "::error::require-files is set and no committed .deed file was found"
