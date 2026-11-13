@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 = A6: The Carve-out Map for standards (by change rate)
 :version: 0.2.3-draft
-:status: DRAFT v0.2.3. Decisions H1 to H12 approved by the owner on 2026-11-10. Not yet ratified as a whole. Builds on A1 v0.4.1, A2 v0.2.4, A3 v0.2.6, A4 v0.2.3 and A5 v0.2.2. Consistency pass applied 2026-11-10. Proposed in standards#1474; bot-review fixes applied 2026-11-12.
+:status: DRAFT v0.2.3. Decisions H1 to H12 approved by the owner on 2026-11-10. Not yet ratified as a whole. Builds on A1 v0.4.1, A2 v0.2.4, A3 v0.2.7, A4 v0.2.3 and A5 v0.2.2. Consistency pass applied 2026-11-10. Proposed in standards#1474; bot-review fixes applied 2026-11-12.
 :toc:
 
 Specification A6 of the Estate Reconciliation Plan. R3 rules that `standards` is carved out by change rate (campaign #479). A6 defines the metric, the ordered rules that give every file one destination, the mechanism of a move, and the tests. It moves no file.
@@ -107,7 +107,7 @@ Totals [M]: 441 files leave (88 + 114 + 20 + 11 + 19 + 87 + 30 + 11 + 61, before
 
 === 4.3 Self-gate scripts (open item)
 
-CR6 moves check scripts by name. CR5 moves reusable workflows by name, and the same test applies to it: a reusable that this repo's own callers use on its own tree stays (for example `fork-governance-reusable.yml` and `hypatia-scan-reusable.yml`, called by `fork-governance.yml`). Some check scripts verify `standards` itself, for example the map gate (Gate D), the canon lockstep (Gate A), and the profile checker for the canon role. They belong to the repo's own gates and MUST stay. The rule CR6 therefore needs a per-script test: a script that the repo's own workflows or the map's `gate` field call by path, and that tests this repo's own tree, stays. By that test, `scripts/check-uuid-v8.sh` and its tests, `scripts/check-uuid-v8-domains.sh`, `scripts/check-a2ml-archived.sh` and `scripts/check-no-new-a2ml.sh` stay: this repo's workflows run them on its own tree, directly (`uuid-v8.yml`, `deed-conformance.yml`, `governance.yml` through `governance-reusable.yml`, `self-test.yml`) or through `scripts/tests` in `self-test.yml` (the domain-register check). I measured the 87 CR6 files by name only and did not classify them by subject [M: counts by pattern]. The per-script result is a generated table (section 7.2), and the owner rules on the doubtful ones (H5).
+CR6 moves check scripts by name. CR5 moves reusable workflows by name, and a narrower test applies to it. A local caller is not enough, because this repo calls most of its generic reusables itself (`codeql-reusable.yml`, `secret-scanner-reusable.yml`, `elixir-ci-reusable.yml`, `governance-reusable.yml` and others). Those move to `proven-cicd`, and this repo's callers then pin them there. A reusable stays only if it implements a specification that belongs to `standards`: today `fork-governance-reusable.yml` and `hypatia-scan-reusable.yml`, which implement `3-practice/fork-governance/SPEC.adoc`. Some check scripts verify `standards` itself, for example the map gate (Gate D), the canon lockstep (Gate A), and the profile checker for the canon role. They belong to the repo's own gates and MUST stay. The rule CR6 therefore needs a per-script test: a script that the repo's own workflows or the map's `gate` field call by path, and that tests this repo's own tree, stays. By that test, `scripts/check-uuid-v8.sh` and its tests, `scripts/check-uuid-v8-domains.sh`, `scripts/check-a2ml-archived.sh` and `scripts/check-no-new-a2ml.sh` stay: this repo's workflows run them on its own tree, directly (`uuid-v8.yml`, `deed-conformance.yml`, `governance.yml` through `governance-reusable.yml`, `self-test.yml`) or through `scripts/tests` in `self-test.yml` (the domain-register check). I measured the 87 CR6 files by name only and did not classify them by subject [M: counts by pattern]. The per-script result is a generated table (section 7.2), and the owner rules on the doubtful ones (H5).
 
 == 5. What the first pass leaves, measured
 
@@ -222,7 +222,7 @@ Every test is new work unless stated. Gate A, Gate D and the link-rot guard alre
 | C15 | No licence file, SPDX header or licence text differs after a move (CL7). | `licence-diff-bad`
 | C16 | The import is one signed commit with a link to the source SHA. | `import-unsigned-bad`
 | C17 | A `canonical = true` entry leaves only if it is in the owner's list of CL9. | `canon-leaves-bad`
-| C18 | A self-gate script or self-gate reusable (4.3) is not moved by CR5 or CR6. | `selfgate-moved-bad`, `selfgate-reusable-moved-bad`
+| C18 | A self-gate script (4.3) is not moved by CR6, and a reusable that implements a `standards` specification (4.3) is not moved by CR5. A generic reusable with a local caller is still moved by CR5. | `selfgate-moved-bad`, `selfgate-reusable-moved-bad`, `generic-reusable-kept-bad`
 | C19 | No move starts while another group's PR is open (CL10). | `two-groups-bad`
 | C20 | No move adds an `.a2ml` file to any destination repo. | `a2ml-created-bad`
 | C21 | The residual report lists the canon's rate and the working files' rate separately. | `residual-split`

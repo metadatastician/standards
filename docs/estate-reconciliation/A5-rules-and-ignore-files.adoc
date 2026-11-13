@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 = A5: Rule Identifiers, the Deviation Store and the Generated Ignore Files
 :version: 0.2.2-draft
-:status: DRAFT v0.2.2. Decisions G1 to G14 approved by the owner on 2026-11-10. Not yet ratified as a whole. Builds on A1 v0.4.1, A2 v0.2.4, A3 v0.2.6 and A4 v0.2.3. Consistency pass applied 2026-11-10. Proposed in standards#1474; bot-review fixes applied 2026-11-12.
+:status: DRAFT v0.2.2. Decisions G1 to G14 approved by the owner on 2026-11-10. Not yet ratified as a whole. Builds on A1 v0.4.1, A2 v0.2.4, A3 v0.2.7 and A4 v0.2.3. Consistency pass applied 2026-11-10. Proposed in standards#1474; bot-review fixes applied 2026-11-12.
 :toc:
 
 Specification A5 of the Estate Reconciliation Plan. A2 defined the `(deviations)` clause. A5 gives every rule a stable identifier, says how a deviation is checked against the rule it excuses, and defines how the tool-native exemption files are generated from deviations. The plan's rule is: each rule has one identifier and one text, an exception is one record, and the ignore files of each tool are generated from those records [R: plan section 9].

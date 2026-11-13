@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 = A4: Office and Farm (the boundary, the intake envelope, work orders, the move of the scripts)
 :version: 0.2.3-draft
-:status: DRAFT v0.2.3. Decisions F1 to F15 approved by the owner on 2026-11-10. Not yet ratified as a whole. Builds on A1 v0.4.1, A2 v0.2.4 and A3 v0.2.6. Consistency pass applied 2026-11-10. Proposed in standards#1474; bot-review fixes applied 2026-11-12.
+:status: DRAFT v0.2.3. Decisions F1 to F15 approved by the owner on 2026-11-10. Not yet ratified as a whole. Builds on A1 v0.4.1, A2 v0.2.4 and A3 v0.2.7. Consistency pass applied 2026-11-10. Proposed in standards#1474; bot-review fixes applied 2026-11-12.
 :toc:
 
 Specification A4 of the Estate Reconciliation Plan. The office decides and the farm executes (R2). A4 defines the line between them, the one envelope in which every finding and every verdict enters the office, the work order that leaves it, and the rules for moving the farm's label and merge scripts.
