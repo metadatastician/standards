@@ -1,0 +1,58 @@
+; SPDX-FileCopyrightText: © 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+; SPDX-License-Identifier: MPL-2.0
+; SPDX-License-Identifier: CC-BY-SA-4.0
+;
+; DEED clause modules: shared rules, v1.0.0 (DRAFT)
+; Prose and rationale: docs/estate-reconciliation/A7-contractiles-descriptiles-anchor.adoc
+; sections 7.1 (the affirmation members) and 11 (M3: `common` is the first
+; clause module, and every later one borrows from it).
+;
+; A LIBRARY OF RULES, not a profile. It defines no clause of its own. Each
+; clause module (anchor.abnf now; the J14 heads, the descriptile and edict
+; forms after it) borrows these rules instead of restating them, so a rule
+; has one definition when the modules are compiled together, as the
+; grammar-vs-gate differential compiles them. Rules it borrows (string,
+; symbol, token-sep, DQUOTE, DIGIT, hex-lc) are deed.abnf's, unchanged.
+; Requires RFC 7405 (%s"..." case-sensitive string literals).
+
+; --- String lists -------------------------------------------------------
+
+str-list        = "(" [token-sep] [string *(token-sep string)] [token-sep] ")"
+str-list1       = "(" [token-sep] string *(token-sep string) [token-sep] ")"
+                ; str-list1 is non-empty.
+
+; --- The chora id -------------------------------------------------------
+
+chora-uuid8     = %s"#uuid" DQUOTE 8hex-lc "-" 4hex-lc "-" "8" 3hex-lc "-"
+                  lc-variant 3hex-lc "-" 12hex-lc DQUOTE
+                ; deed.abnf's uuid narrowed to version 8: A1 rule V8 puts the
+                ; profile C UUIDv8 in deeds; the UUIDv5 stays in the registry.
+                ; Used for a parent (anchor.abnf) and for :beholding-chora.
+lc-variant      = "8" / "9" / %x61 / %x62
+                ; RFC 9562 variant 10, lowercase only. deed.abnf's uuid-variant
+                ; writes "a" / "b", which ABNF matches case-insensitively; the
+                ; code points keep this rule as strict as deed_lint.
+
+; --- Dates --------------------------------------------------------------
+
+date-string     = DQUOTE date DQUOTE
+date            = 4DIGIT "-" date-month "-" date-day
+date-month      = "0" %x31-39 / "1" %x30-32
+date-day        = "0" %x31-39 / %x31-32 DIGIT / "3" %x30-31
+                ; YYYY-MM-DD, month 01 to 12 and day 01 to 31. SEMANTIC
+                ; (validator-enforced, not expressible in ABNF): a real
+                ; calendar date, so "2026-02-31" and "2025-02-29" are refused.
+
+; --- The affirmation members (A7 7.1, DESCRIPTILE-SPEC §affirmation) ---
+
+affirm-member   = ( %s":affirmed"    token-sep date-string )
+                / ( %s":affirmed-by" token-sep affirmer )
+                / ( %s":expires"     token-sep date-string )
+affirmer        = %s"owner" / %s"agent" / symbol
+                ; A symbol, not a string: who or what last affirmed the facts.
+                ; "owner" and "agent" are named; any other symbol is the name
+                ; of the check that affirmed them.
+                ; SEMANTIC: on every descriptile, each member exactly once by
+                ; default; :expires is not before :affirmed. A repo setting may
+                ; relax the requirement, and a relaxation is authorised and
+                ; reported, never silent (A7 ruling J4).
