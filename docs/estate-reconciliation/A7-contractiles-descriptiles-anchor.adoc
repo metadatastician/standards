@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 = A7: Contractiles, Descriptiles and Anchor (edicts, reality, course correction)
 :version: 0.2.1-draft
-:status: DRAFT v0.2.1. Owner rulings W1 to W10 of 2026-11-13 recorded (section 2.3; W10 amends W1); they supersede Q11, Q12 (in its form) and Q13 for this subject. J1 to J3, J5 to J8 and J10 to J12 approved 2026-11-13; J9 and J13 approved as amended; J4 reopened. J18 approved 2026-11-13 (A7 thread). J14 to J17 proposed. Builds on A1 v0.3.9, A2 v0.2.3, A3 v0.2.3 and A5 v0.2.2. Supersedes, for its subject, docs/ULTRAPLAN-DEED-K9-CONTRACTILES-2026-10-19.adoc v0.3.3 (J1). Not ratified.
+:status: DRAFT v0.2.1. Owner rulings W1 to W10 of 2026-11-13 recorded (section 2.3; W10 amends W1); they supersede Q11, Q12 (in its form) and Q13 for this subject. J1 to J3, J5 to J8 and J10 to J12 approved 2026-11-13; J9 and J13 approved as amended; J4, J14 to J17 and J18 ruled 2026-11-13. No decision is pending. Builds on A1 v0.3.9, A2 v0.2.3, A3 v0.2.3 and A5 v0.2.2. Supersedes, for its subject, docs/ULTRAPLAN-DEED-K9-CONTRACTILES-2026-10-19.adoc v0.3.3 (J1). Not ratified.
 :toc:
 
 Specification A7 of the Estate Reconciliation Plan. It defines how a repository's edicts (the contractiles) are checked against its identity (the chora) and its audited reality (the descriptiles), how an anchor corrects a project that has drifted, and the order in which the estate leaves A2ML behind.
@@ -221,7 +221,7 @@ affirm-member = ( %s":affirmed"    token-sep date-string )   ; YYYY-MM-DD
 affirmer      = %s"owner" / %s"agent" / symbol                ; symbol: the check's name
 ----
 
-When the affirmation members are required is open (J4, reopened).
+The affirmation members are required by default, and a repo setting can relax that (J4).
 
 === 7.2 The six descriptive deeds (source: DESCRIPTILE-SPEC per-file schemas)
 
@@ -593,7 +593,7 @@ These tests cover the semantic-authority clause module merged in #1490. Under W3
 
 === 14.1 Ruled on 2026-11-13 [O]
 
-The owner ruled J1 to J13 on 2026-11-13 in the A1 thread, and J18 the same day in the A7 thread. Where a ruling changed the proposal, the column says how. W1 to W9 (section 2.3) were given in the same session.
+The owner ruled J1 to J17 on 2026-11-13 in the A1 thread, and J18 the same day in both the A1 and A7 threads. Where a ruling changed the proposal, the column says how. W1 to W9 (section 2.3) were given in the same session.
 
 [cols="1,4,2"]
 |===
@@ -602,7 +602,7 @@ The owner ruled J1 to J13 on 2026-11-13 in the A1 thread, and J18 the same day i
 | J1 | A7 supersedes the ultraplan for contractiles, descriptiles and the anchor. The ultraplan keeps Q1 to Q16 and its history; its open steps are rehomed in section 11. | Approved
 | J2 | One ABNF module per deed form under `clauses/`, plus `clauses/common.abnf` for shared rules. | Approved
 | J3 | STATE is `(status)` and `(maturity)`, with the journal in `docs/status/ROADMAP.adoc`. There is no `(state …)` clause. W3 moves them into `STATE.deed` (J15). | Approved
-| J4 | Affirmation members required in strict mode only. The owner answered with W7, which sets strictness per verb, not per mode. When affirmation is required is to be put again. | Reopened
+| J4 | Affirmation is strict by default and switchable in settings. The affirmation members are required unless a repo setting relaxes that. The same settings say who may change which setting. A relaxation is reported to a higher or other authority, a list or a log; feedback-o-tron and heron are the intended channels, specified here as an interface only. Owner's words: "switchable in settings but default strict, both for default setting and what permissions are required to do what and if things need to be notified to a higher or other authority or list or log in such cases". | Approved as amended (replaces the strict-mode-only proposal)
 | J5 | A verb descriptile fact names the edict it witnesses by id, with an A2 D2 evidence label. No numeric scores. | Approved
 | J6 | `(contractiles …)` attests where the parties are, never the verdict. Accepted shortfalls are A2 deviations. | Approved
 | J7 | `:authority` stays an open string in v1.0.0, closed after the census in v1.1.0. It now applies to `(anchor :authority)` in `ANCHOR.deed`. | Approved
@@ -612,22 +612,16 @@ The owner ruled J1 to J13 on 2026-11-13 in the A1 thread, and J18 the same day i
 | J11 | The template mints `:repo-uuid #uuid"<ADR-008 v8 id of the birth path>"` (V8), and `deed-field.sh --uuid` reads it without re-deriving. | Approved
 | J12 | Related repos keep `:name` and add the chora `:uuid`, required in strict mode only. Parents are named by chora id; a legacy parent with no registered id is left out and the translation reported incomplete (a warning in lax mode, an error in strict). | Approved
 | J13 | `contractile` becomes an A5 rule domain (a G1 addition, a root `rule-domain` term per G2). Its registry, `contractile_rules_praxis.deed` in `standards`, is generated from the six `<Verb>file.deed` files: one `rule-def` per rule, `:id "contractile/<verb>/<rule-id>"`, the rule text as `:text`. Each entry carries A5 R07's fields: `:class gate` for every `must` rule and for every rule marked `!`, `:class advisory` otherwise (8.4); `:excusable-at repo`; `:scope-form exact-paths` (a deviation names the rule with an empty `(scope)`, A5 5.2); `:status active`. A Bust rule's entry carries the estate floor of 8.5, which no deviation lowers. CI fails when regenerating changes the registry. | Approved as amended (class by verb and `!`, Bust floor)
+| J14 | Three new heads, chosen by exact, case-sensitive file name in `deed.abnf`: `<Verb>file.deed` for the six verbs gives `contractile-deed`; the ALL-CAPS descriptile names give `descriptile-deed`, including `CLADE.deed` (W10); `ANCHOR.deed` gives `anchor-deed`. `mustfile.deed` or `Meta.deed` is refused. | Approved
+| J15 | `(status)` and `(maturity)` move from the chora deed to `STATE.deed`. A chora `(status)` is read with a warning for one release, then refused in strict mode. A1 §5.4 is amended in standards#1510. | Approved
+| J16 | Anchor drift `:distance` uses the Bust severity scale, 1 furthest and 5 close. The required fields are those of 6.3. | Approved
+| J17 | `!` becomes a deed token, allowed only directly after a rule's `:id` value in a `contractile-deed`. | Approved
 | J18 | Keep P0.1: a rule witnessed only by a refused `'Hunt` probe is blocking unresolved under every verb, `intend` included. A refused probe is missing evidence, and an unverified signature never looks like a pass. | Approved
 |===
 
 === 14.2 Proposed, not yet ruled
 
-Each is the recommendation, with the reason.
-
-[cols="1,4,3"]
-|===
-| Id | Proposal | Why
-
-| J14 | Three new heads, chosen by file name in `deed.abnf` (an additive grammar change, as A1 §7.1 did for `forge-deed`): `<Verb>file.deed` for the six verbs gives `contractile-deed`; the twelve ALL-CAPS descriptile names give `descriptile-deed`; `ANCHOR.deed` gives `anchor-deed`. The match is exact and case-sensitive, so `mustfile.deed` or `Meta.deed` is refused. | The parser chooses a head from the file name. None of these names matches a head today, and case is part of the rule (W4).
-| J15 | `(status)` and `(maturity)` move from the chora deed to `STATE.deed`. The chora's `(status)` is read as a fallback for one release and then refused in strict mode. A1 §5.4 is amended to match. | W3 makes descriptiles files, and a second home would drift (J3).
-| J16 | Anchor drift `:distance` uses the Bust severity scale, 1 furthest and 5 close. The required fields are those of 6.3. | One scale for "how bad" across the set, and the constitution's fields are already required of an anchor.
-| J17 | `!` becomes a deed token, allowed only directly after a rule's `:id` value in a `contractile-deed`. | The owner asked for `!`; the deed grammar has no such token today.
-|===
+None. J1 to J18 are all ruled (14.1).
 
 == 15. Out of scope
 
