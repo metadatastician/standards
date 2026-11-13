@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 = A3: The Single Gate (one required check, the caller contract, the check table)
 :version: 0.2.3-draft
-:status: DRAFT v0.2.5 (the check table gains the append-only `contractiles-adopted` list, so a repo that deletes its clause after first adopting it is not `not_applicable`, A7 YC10; earlier: SysArch review R-04 and R-19: the `contractiles` row is `not_applicable`, reported, until a repo first adopts the clause (M4 for `standards`, M7 for a migrated repo, registration for a template-born repo); the open-anchor failure is cited from A7 YS03; warnings go in the verdict envelope). Decisions E1 to E11 approved by the owner on 2026-11-10, and E12 on 2026-11-13 (contractiles become a required check, with A7 v0.2.3). Not yet ratified as a whole. Builds on A1 v0.4.1 and A2 v0.2.4. Consistency pass applied 2026-11-10. Proposed in standards#1474; bot-review fixes applied 2026-11-12.
+:status: DRAFT v0.2.6 (each `contractiles-adopted` entry carries `:from`, the date from which the repo is held to its clause, since the adopting repo cannot edit the table in its own PR, A7 YR04; earlier: the check table gains the append-only `contractiles-adopted` list, so a repo that deletes its clause after first adopting it is not `not_applicable`, A7 YC10; earlier: SysArch review R-04 and R-19: the `contractiles` row is `not_applicable`, reported, until a repo first adopts the clause (M4 for `standards`, M7 for a migrated repo, registration for a template-born repo); the open-anchor failure is cited from A7 YS03; warnings go in the verdict envelope). Decisions E1 to E11 approved by the owner on 2026-11-10, and E12 on 2026-11-13 (contractiles become a required check, with A7 v0.2.3). Not yet ratified as a whole. Builds on A1 v0.4.1 and A2 v0.2.4. Consistency pass applied 2026-11-10. Proposed in standards#1474; bot-review fixes applied 2026-11-12.
 :toc:
 
 Specification A3 of the Estate Reconciliation Plan. It defines the one required status check of a repo, the one caller workflow, the table from profile to checks, and the rules by which a verdict is computed.
@@ -168,10 +168,11 @@ The table is a `praxis-deed` named `estate-gate_praxis.deed` that `proven-cicd` 
            :runs-on either :timeout 900
            :detect ("Cargo.toml" "*/Cargo.toml") :rule "check/rust-ci"))
   (contractiles-adopted
-    (repo :chora #uuid"806d4d6f-f107-8b36-939b-f89ba6279377")))
+    (repo :chora #uuid"806d4d6f-f107-8b36-939b-f89ba6279377" :from "2026-12-01")))
 ----
 
-The `(contractiles-adopted ...)` clause lists, by opaque chora id (`(repo :chora #uuid"...")`), every repo that has adopted the `(contractiles ...)` clause (A7 8.4, YC10). The PR that first adds the clause adds the entry: M4 for `standards`, M7 for a migrated repo, and registration for a repo born from the template with the clause. The list is append-only: an entry is never removed, and a change to the table that removes one fails its own check (test G64). It is a pinned input of the verdict, like the rest of the table.
+The `(contractiles-adopted ...)` clause lists every repo that adopts the `(contractiles ...)` clause (A7 8.4, YC10). An entry is `(repo :chora #uuid"..." :from "YYYY-MM-DD")`: the repo's opaque chora id and the date from which it is held to the clause. The entry lives in this table's repo, so the adopting repo's own PR cannot add it (one repo per PR, A7 YR04). The table PR comes first and sets `:from`; the repo's PR then adds the clause before that date. For `standards` that PR is M4; for a migrated repo, M7. A repo born from the template with the clause is listed at registration, with `:from` its registration date. The list is append-only: an entry is never removed, and a change to the table that removes one fails its own check (test G64). An entry's `:from` cannot move later. The list is a pinned input of the verdict, like the rest of the table, and the verdict compares `:from` with the date it already takes as an input (section 7).
+
 
 The sample in `docs/estate-reconciliation/examples/a3-estate-gate_praxis.deed.example` (the caller sample is `docs/estate-reconciliation/examples/a3-estate-gate.yml.example`) lints clean under `deed_lint.js` as written: `deed.abnf` v1.3.0 and its linter accept the opaque literal since #1473 [M: linted 2026-11-12]. The linter checks syntax only [I].
 
@@ -215,7 +216,7 @@ A3 does not widen the required set. The first table reproduces the checks requir
 | none yet | `ada-ci`, `bun-ci`, `host` | repo-local files named in `gates.json` | The 28 capabilities of A2 have no `ada`, `bun` or `host` term (E3).
 |===
 
-The `contractiles` row is the one deliberate widening (E12, an owner ruling of 2026-11-13). It fails on a `Must` violation, on a violated clause marked `!`, on a Bust finding graded `X1`, on a blocking unresolved verdict (A7 8.4), and on an open anchor as A7 6.3 and YS03 define it. A violation the verb grades as a warning is reported in the verdict envelope (3.4) and does not fail it. Until a repo first adopts the `(contractiles ...)` clause and is added to the table's `contractiles-adopted` list (5.1), the probe finds no subject and the row is `not_applicable`, with that reason in the envelope. From then on, A7 YC01 applies, and deleting the clause does not make the row `not_applicable` again.
+The `contractiles` row is the one deliberate widening (E12, an owner ruling of 2026-11-13). It fails on a `Must` violation, on a violated clause marked `!`, on a Bust finding graded `X1`, on a blocking unresolved verdict (A7 8.4), and on an open anchor as A7 6.3 and YS03 define it. A violation the verb grades as a warning is reported in the verdict envelope (3.4) and does not fail it. Until a repo carries the `(contractiles ...)` clause, or its `contractiles-adopted` entry's `:from` date passes (5.1), the probe finds no subject and the row is `not_applicable`, with that reason in the envelope. From `:from` on, A7 YC01 applies, and deleting the clause does not make the row `not_applicable` again.
 
 All other catalogue capabilities are `advisory` in the first table. Promoting one to `required` is an owner ruling and a table change. The enforcing checks of the original audit (14 of its 26 actions [M: README]) are not required by `gates.json` today (finding 7) and A3 does not require them.
 
@@ -245,7 +246,7 @@ required(repo) = { c in table : c.obligation = required and (c.when = baseline o
 ----
 
 * A capability in `S` and not in `D` is reported as profile drift (A2 vestigial and missing verdicts). The gate still requires its checks.
-* A capability in `D` and not in `S` still requires its checks. A check with no subject is `not_applicable` only when the aggregate's own probe finds no subject. For `contractiles`, no subject means the repo has no `(contractiles ...)` clause and its chora id is not in the table's `contractiles-adopted` list (5.1, E12). A listed repo without the clause has a subject and fails (A7 YC01, YC10). A check cannot declare itself not applicable.
+* A capability in `D` and not in `S` still requires its checks. A check with no subject is `not_applicable` only when the aggregate's own probe finds no subject. For `contractiles`, no subject means the repo has no `(contractiles ...)` clause and is not held to it: its chora id is not in the table's `contractiles-adopted` list, or its entry's `:from` is after the verdict's date (5.1, E12). A repo that carries the clause is checked whether listed or not. A listed repo whose `:from` has passed has a subject whatever the clause's state, and fails if the clause is missing (A7 YC01, YC10). A check cannot declare itself not applicable.
 * Detection is done by the aggregate from the tree at the head commit. It is never read from a deed field (the self-assertion rule [M: deed spec]).
 * A detected capability that is not a root term does not enter `S`. The aggregate reports it and does not fail on it (E3 covers adding the terms).
 
@@ -383,7 +384,7 @@ Every test is new work unless stated. A fixture is valid unless marked `-bad`.
 | G24 | An `owned` or `either` row without `:timeout` uses 900 seconds (5.4); a `github` row with `:timeout` is rejected. | `table-no-timeout-default`, `table-github-timeout-bad`
 | G25 | A row with `:obligation advisory` never changes a verdict. | `advisory-fail`
 | G26 | Every `:rule` equals `check/<id>`. | `table-rule-bad`
-| G27 | The baseline row `contractiles` is `required`. A fixture with one violated `Must` clause, one with a violated `!` clause, one with an `X1` Bust finding, one with an open anchor (A7 YS03) and one with an unwitnessed `Must` clause each give `failed`; a fixture whose only finding is a warning-level `Adjust` violation gives `passed` with the finding reported. A repo with no `(contractiles ...)` clause that is not in `contractiles-adopted` gives `not_applicable`, with the reason in the envelope; a repo in `contractiles-adopted` with no clause gives `failed`. | `contractiles-must-bad`, `contractiles-bang-bad`, `contractiles-x1-bad`, `contractiles-unwitnessed-bad`, `contractiles-warn-ok`, `contractiles-open-anchor-bad`, `contractiles-pre-m7-na`, `contractiles-adopted-missing-bad`
+| G27 | The baseline row `contractiles` is `required`. A fixture with one violated `Must` clause, one with a violated `!` clause, one with an `X1` Bust finding, one with an open anchor (A7 YS03) and one with an unwitnessed `Must` clause each give `failed`; a fixture whose only finding is a warning-level `Adjust` violation gives `passed` with the finding reported. A repo with no `(contractiles ...)` clause that is not in `contractiles-adopted`, or whose entry's `:from` is after the verdict's date, gives `not_applicable`, with the reason in the envelope; a listed repo with no clause gives `failed` once `:from` has passed. | `contractiles-must-bad`, `contractiles-bang-bad`, `contractiles-x1-bad`, `contractiles-unwitnessed-bad`, `contractiles-warn-ok`, `contractiles-open-anchor-bad`, `contractiles-pre-m7-na`, `contractiles-adopted-missing-bad`, `adopted-before-from-na`, `adopted-after-from-missing-bad`
 |===
 
 === 13.4 Applicability and verdict
@@ -443,7 +444,7 @@ Every test is new work unless stated. A fixture is valid unless marked `-bad`.
 | G61 | A merged head whose envelope is missing is reported. | `merged-no-envelope`
 | G62 | A recomputed verdict that differs from the posted status is reported. | `merged-mismatch`
 | G63 | An unsigned envelope from the Actions aggregate is reported `unsigned`, and is not an error until A4 F3 is in place. | `merged-unsigned`
-| G64 | `contractiles-adopted` is append-only: a check-table change that removes an entry fails, and one that adds an entry passes. | `adopted-removed-bad`, `adopted-added-ok`
+| G64 | `contractiles-adopted` is append-only: a check-table change that removes an entry, or moves an entry's `:from` later, fails; one that adds an entry with a `:from` date passes, and an entry without `:from` fails. | `adopted-removed-bad`, `adopted-from-later-bad`, `adopted-no-from-bad`, `adopted-added-ok`
 |===
 
 == 14. Decisions approved on 2026-11-10 and 2026-11-13 [O]
