@@ -8,7 +8,8 @@
 //
 // deed.abnf is normative (D308); deed_lint.js is the gate that CI runs. This
 // harness keeps them from drifting apart. It compiles deed.abnf (with the
-// (egress …) and (anchor …) clause profiles, clauses/*.abnf) using apg-js, mutates every
+// (egress …) and (anchor …) clause profiles and the shared rules of
+// clauses/common.abnf) using apg-js, mutates every
 // committed deed with a seeded generator, and asks both the grammar and the
 // gate for a verdict on each variant:
 //
@@ -65,6 +66,7 @@ function compileGrammar() {
   const src =
     (readFileSync(join(ABNF, "deed.abnf"), "utf8") + "\n" +
       readFileSync(join(ABNF, "clauses/egress.abnf"), "utf8") + "\n" +
+      readFileSync(join(ABNF, "clauses/common.abnf"), "utf8") + "\n" +
       readFileSync(join(ABNF, "clauses/anchor.abnf"), "utf8")).replace(/[^\x00-\x7f]/g, "?") +
     "\nSP = %x20\nDQUOTE = %x22\nALPHA = %x41-5A / %x61-7A\nDIGIT = %x30-39\n" +
     "VCHAR = %x21-7E\nCR = %x0D\nLF = %x0A\nCRLF = CR LF\n";
@@ -154,7 +156,7 @@ const fail = (kind, detail) => failures.push({ kind, detail });
 
 // 1. Fixtures: every valid fixture passes both; every valid egress or anchor
 //    fixture's clause parses as its clause rule.
-for (const [dir, clause] of [["valid", null], ["egress/valid", "egress"], ["anchor/valid", "anchor"]]) {
+for (const [dir, clause] of [["valid", null], ["heads/valid", null], ["egress/valid", "egress"], ["anchor/valid", "anchor"]]) {
   for (const name of readdirSync(join(FIXTURES, dir)).sort()) {
     const text = readFileSync(join(FIXTURES, dir, name), "utf8");
     if (!grammarAccepts(grammar, "deed", text)) fail("fixture rejected by deed.abnf", `${dir}/${name}`);
@@ -194,9 +196,59 @@ for (const name of ANCHOR_GRAMMAR_REJECTS) {
   if (!grammarAccepts(grammar, "anchor-clause", lower)) fail("anchor.abnf refuses a lowercase variant nibble", lower);
 }
 
+// The shared rules of common.abnf (A7 7.1, M3). No clause uses date-string or
+// affirm-member yet, so they are held to their own accept and refuse lists
+// here. The calendar check (2026-02-31) is SEMANTIC and belongs to the linter.
+{
+  const cases = [
+    ["date-string", '"2026-11-13"', true], ["date-string", '"2026-12-31"', true],
+    ["date-string", '"2026-02-31"', true], ["date-string", '"2026-13-01"', false],
+    ["date-string", '"2026-00-10"', false], ["date-string", '"2026-11-32"', false],
+    ["date-string", '"2026-11-00"', false], ["date-string", '"2026-1-13"', false],
+    ["date-string", "2026-11-13", false], ["date-string", '"2026-11-13T00:00"', false],
+    ["affirm-member", ':affirmed "2026-11-13"', true], ["affirm-member", ':expires "2027-11-13"', true],
+    ["affirm-member", ":affirmed-by owner", true], ["affirm-member", ":affirmed-by agent", true],
+    ["affirm-member", ":affirmed-by deed-lint", true], ["affirm-member", ":affirmed-by owner-review", true],
+    ["affirm-member", ":affirmed-by agent-check", true], ["affirm-member", ':affirmed-by "owner"', false],
+    ["affirm-member", ":affirmed #t", false], ["affirm-member", ":AFFIRMED \"2026-11-13\"", false],
+    ["str-list1", "()", false], ["str-list1", '( "a" "b" )', true], ["str-list", "()", true],
+  ];
+  for (const [rule, text, want] of cases) {
+    if (grammarAccepts(grammar, rule, text) !== want) fail(`common.abnf ${want ? "refuses" : "accepts"} ${rule}`, text);
+  }
+}
+
+// The J14 file names (deed.abnf v1.4.0). The gate dispatches on the file name
+// before parsing, so deed-filename is held to the same names as
+// checkFilenameDispatch, case variants included. The heads/ fixtures must be
+// deeds by deed.abnf, and the gate must accept heads/valid and refuse
+// heads/invalid under their own names. <stem>_chora.deed and _praxis.deed are
+// not probed here: apg-js repeats possessively, so `stem` (which admits "_"
+// and ".") swallows the suffix; RFC 5234 ABNF backtracks and accepts them.
+{
+  const names = [
+    ["Mustfile.deed", true], ["Bustfile.deed", true], ["Intentfile.deed", true], ["STATE.deed", true],
+    ["CLADE.deed", true], ["MUST.deed", true], ["ANCHOR.deed", true], ["mustfile.deed", false],
+    ["MUSTFILE.deed", false], ["Meta.deed", false], ["State.deed", false], ["anchor.deed", false],
+    ["Clade.deed", false], ["Statefile.deed", false], ["ATLAS.deed", true],
+  ];
+  for (const [name, want] of names) {
+    if (grammarAccepts(grammar, "deed-filename", name) !== want) fail(want ? "deed.abnf refuses a file name it must accept" : "deed.abnf accepts a file name it must refuse", name);
+  }
+  for (const dir of ["heads/valid", "heads/invalid"]) {
+    for (const name of readdirSync(join(FIXTURES, dir)).sort()) {
+      const text = readFileSync(join(FIXTURES, dir, name), "utf8");
+      let gate = true;
+      try { validate(text, name); } catch { gate = false; }
+      if (gate !== (dir === "heads/valid")) fail(`gate ${gate ? "accepts" : "refuses"} a heads fixture under its own name`, `${dir}/${name}`);
+      if (!grammarAccepts(grammar, "deed", text)) fail("heads fixture is not a deed by deed.abnf", `${dir}/${name}`);
+    }
+  }
+}
+
 // 2. Mutation differential over the committed deeds and the valid fixtures
 //    (or the given seeds).
-const validFixtures = ["valid", "egress/valid", "anchor/valid"].flatMap((dir) =>
+const validFixtures = ["valid", "heads/valid", "egress/valid", "anchor/valid"].flatMap((dir) =>
   readdirSync(join(FIXTURES, dir)).sort().map((name) => join(FIXTURES, dir, name)),
 );
 const seedFiles = opts.seeds.length ? opts.seeds : [...committedDeeds(ROOT), ...validFixtures];

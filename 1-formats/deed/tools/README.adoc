@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 = DEED conformance lane — tools
-Campaign: standards#837 · Grammar: link:../spec/abnf/deed.abnf[spec/abnf/deed.abnf (v1.3.0, normative)]
+Campaign: standards#837 · Grammar: link:../spec/abnf/deed.abnf[spec/abnf/deed.abnf (v1.4.0, normative)]
 
 == The lane's one property
 
@@ -26,7 +26,7 @@ authority.
 Enforced rules:
 
 * SPDX header required; one form; full input consumed
-* doc-head whitelist (`estate-deed / repo-deed / estate-atlas-deed / praxis-deed`)
+* doc-head whitelist (`estate-deed / repo-deed / estate-atlas-deed / praxis-deed`, and from v1.4.0 the J14 heads `contractile-deed / descriptile-deed / anchor-deed`)
 * `:schema-version` STRING exactly once (validator-level semantic, per grammar)
 * filename ↔ doc-head dispatch with the exact-stem-first side condition
   (`estate_chora.deed` can never be a repo-deed; stems may contain dots —
