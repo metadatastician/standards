@@ -5,17 +5,23 @@ Keeps the DEED gate and the DEED grammar from drifting apart.
 `1-formats/deed/spec/abnf/deed.abnf` is normative (D308).
 `1-formats/deed/tools/deed_lint.js` is the gate that CI runs.
 
-`differential.js` compiles `deed.abnf`, with the `(egress …)` and `(anchor …)`
-clause profiles (`clauses/egress.abnf`, `clauses/anchor.abnf`) and the shared
+`differential.js` compiles `deed.abnf` with the `(egress …)`, `(anchor …)` and
+`(contractiles …)` clause profiles (`clauses/egress.abnf`, `clauses/anchor.abnf`,
+`clauses/contractiles.abnf`) and the shared
 rules of `clauses/common.abnf`, using
 https://github.com/ldthomas/apg-js[apg-js]. It then gives both the grammar and
 the gate the same inputs:
 
-* every valid fixture: both must accept it. A valid egress or anchor fixture's
-  clause must also parse as `egress-clause` or `anchor-clause`;
+* every valid fixture: both must accept it. A valid egress, anchor or
+  contractiles fixture's clause must also parse as `egress-clause`,
+  `anchor-clause` or `contractiles-clause`;
 * the anchor fixtures whose defect the grammar expresses
   (`ANCHOR_GRAMMAR_REJECTS` in the script): `anchor.abnf` must refuse each
   clause, so the grammar is the oracle, not a second description;
+* the contractiles fixtures, split in two lists. Each clause in
+  `CONTRACTILES_GRAMMAR_REJECTS` must be refused by `contractiles.abnf`. Every
+  other invalid fixture breaks only a semantic side condition, so its clause
+  must parse. A new fixture therefore has to be filed in one list or the other;
 * the shared rules of `common.abnf` (dates, the affirmation members, string
   lists): each must accept and refuse the strings listed in the script, because
   no clause uses the date and affirmation rules yet;
