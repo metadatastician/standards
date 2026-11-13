@@ -115,6 +115,11 @@ jobs:
       - name: contractile registry regeneration check (fixture root, A7 J13)
         if: github.repository_id == 1116521501 && steps.bun.outcome == 'success'
         run: bun "$T/deed_lint.js" --contractile-registry --root "$T/fixtures/edict/registry/root" --check
+      # The six verb descriptiles (A7 7.3, 8.5): a DRAFT profile, gated on its own
+      # fixtures until ratified.
+      - name: verb descriptile fixtures (DRAFT, A7)
+        if: github.repository_id == 1116521501 && steps.bun.outcome == 'success'
+        run: bun "$T/deed_lint.js" --verb-descriptile-fixtures "$T/fixtures/verb-descriptile"
       - name: grammar-vs-gate differential (deed.abnf through apg-js, against deed_lint.js)
         # Mutates every committed deed and valid fixture with a seeded generator
         # and fails when the gate and the normative grammar disagree, other than

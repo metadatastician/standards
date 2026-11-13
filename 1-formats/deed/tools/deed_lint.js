@@ -41,6 +41,10 @@ Usage: deed_lint.js FILE...     exit 0 iff all files conform
        deed_lint.js --contractiles-fixtures DIR DIR/valid pass the profile, DIR/invalid fail it (both required)
        deed_lint.js --edict FILE...           the edict form of a contractile-deed (DRAFT, A7 8.1, 8.4, 8.5)
        deed_lint.js --edict-fixtures DIR      DIR/{valid,invalid}/<case>/<Verb>file.deed (both required)
+       deed_lint.js --verb-descriptile FILE... [--root DIR]
+                                              a verb descriptile, INTENT.deed to BUST.deed (DRAFT, A7 7.3, 8.5);
+                                              with --root, each :witnesses must name a rule of the verb's edict (YD02)
+       deed_lint.js --verb-descriptile-fixtures DIR DIR/{valid,invalid}/<case>/<VERB>.deed [+ <Verb>file.deed]
        deed_lint.js --contractile-registry --root DIR [--owner O/N] [--out FILE] [--check]
                                               generate the A5 contractile rule registry from the six edicts (A7 J13)
        deed_lint.js --ast-json FILE           emit the validated AST as JSON (integer lexemes stay strings)
@@ -1811,6 +1815,198 @@ export function checkEdict(text, filename = null) {
   return { verb, rules: out };
 }
 
+// ---------------------------------------------------------------------------
+// The six verb descriptiles (A7 7.1, 7.3, 8.5; clauses/verb-descriptile.abnf).
+
+export class VerbDescriptileError extends LintError {
+  constructor(msg) {
+    super(msg, null);
+    this.name = "VerbDescriptileError";
+  }
+
+  toString() {
+    return this.msg;
+  }
+}
+
+const EVIDENCE = new Set(["draft", "designed", "assumed", "tested", "audited", "proven", "measured"]);
+const BUST_GRADE = /^[ABCDEX][1-5]$/;
+const FACT_FIELDS = ["witnesses", "evidence", "value", "source", "inherent", "residual", "justification"];
+
+/** The verb an ALL-CAPS verb descriptile name declares, or null (A7 7.1, 8.1 table). */
+export function verbOfDescriptile(filename) {
+  if (!filename) return null;
+  const b = basename(filename);
+  for (const [verb, cap] of Object.entries(CONTRACTILE_VERBS)) if (b === `${cap.toUpperCase()}.deed`) return verb;
+  return null;
+}
+
+/**
+ * Check a verb descriptile (INTENT.deed … BUST.deed). Returns
+ * {verb, facts: [{witnesses, evidence}]}, or null when the file is not a
+ * verb descriptile (another head, or another descriptile name). When
+ * opts.ruleIds is a Set (the :id values of the verb's edict), every
+ * :witnesses must be one of them (YD02). Throws LintError on a violation.
+ */
+export function checkVerbDescriptile(text, filename, opts = {}) {
+  const [head, items] = validate(text, filename);
+  if (head !== "descriptile-deed") return null;
+  const verb = verbOfDescriptile(filename);
+  if (verb === null) return null;
+  const E = (m) => new VerbDescriptileError(m);
+  const fields = new Map();
+  const facts = [];
+  for (const it of items) {
+    if (it[0] === "field") {
+      if (it[3]) throw E(`'!' belongs only on a rule's :id in a contractile-deed, not on :${it[1]}`);
+      if (it[1] === "beholding-chora") throw E(":beholding-chora names an estate chora; a descriptile-deed names its repo with :of-chora (J20)");
+      if (!["schema-version", "canonical-name", "of-chora", "affirmed", "affirmed-by", "expires"].includes(it[1])) {
+        throw E(`a verb descriptile has no field :${it[1]}`);
+      }
+      if (fields.has(it[1])) throw E(`a verb descriptile carries :${it[1]} once`);
+      fields.set(it[1], it[2]);
+      continue;
+    }
+    if (it[1] === "fact") facts.push(it[2]);
+    else if (it[1] === "rule") throw E("a descriptile states what is; a (rule …) belongs in the verb's <Verb>file.deed (YF02, YL3)");
+    else throw E(`a verb descriptile has no clause (${it[1]} …); its clauses are (fact …)`);
+  }
+  for (const k of ["canonical-name", "of-chora"]) if (!fields.has(k)) throw E(`a verb descriptile is missing :${k}`);
+  if (fields.get("canonical-name")[0] !== "string") throw E(":canonical-name must be a string");
+  const of = fields.get("of-chora");
+  if (of[0] !== "uuid" || of[1][14] !== "8") throw E(":of-chora must be the repo's opaque version 8 #uuid\"…\" chora id (J20)");
+  // J4: affirmation is required by default, and no relaxation can be written
+  // until the agentic module and the J19 receipt interface exist.
+  for (const k of ["affirmed", "affirmed-by"]) {
+    if (!fields.has(k)) throw E(`a verb descriptile is missing :${k}; affirmation is required by default (J4, YD06)`);
+  }
+  for (const k of ["affirmed", "expires"]) {
+    if (!fields.has(k)) continue;
+    const v = fields.get(k);
+    if (v[0] !== "string" || !isCalendarDate(v[1])) throw E(`:${k} must be a real YYYY-MM-DD date`);
+  }
+  if (fields.get("affirmed-by")[0] !== "symbol") throw E(":affirmed-by must be a symbol: owner, agent or the name of the check (A7 7.1)");
+  if (fields.has("expires") && fields.get("expires")[1] < fields.get("affirmed")[1]) {
+    throw E(":expires is before :affirmed");
+  }
+
+  const seen = new Set();
+  const out = [];
+  for (const members of facts) {
+    const f = new Map();
+    for (const m of members) {
+      if (m[0] !== "field") throw E(`(fact …) takes fields only, not (${m[1]} …)`);
+      if (m[3]) throw E(`'!' belongs only on a rule's :id in a contractile-deed, not on (fact :${m[1]})`);
+      if (!FACT_FIELDS.includes(m[1])) throw E(`(fact …) has no field :${m[1]}`);
+      if (f.has(m[1])) throw E(`(fact …) repeats :${m[1]}`);
+      f.set(m[1], m[2]);
+    }
+    const w = f.get("witnesses");
+    if (!w) throw E("(fact …) is missing :witnesses, the :id of the rule it witnesses (J5)");
+    if (w[0] !== "string" || !EDICT_ID.test(w[1])) throw E("(fact :witnesses …) must be a rule :id: a string of letters, digits, \".\", \"_\" and \"-\"");
+    const where = `(fact :witnesses ${JSON.stringify(w[1])})`;
+    if (seen.has(w[1])) throw E(`${where} appears twice; one fact per rule`);
+    seen.add(w[1]);
+    if (opts.ruleIds && !opts.ruleIds.has(w[1])) {
+      throw E(`${where} names no rule in the ${verb} edict (YD02)`);
+    }
+    const ev = f.get("evidence");
+    if (!ev) throw E(`${where} is missing :evidence (J5, A2 D2)`);
+    if (ev[0] !== "symbol" || !EVIDENCE.has(ev[1])) throw E(`${where} :evidence must be one of ${[...EVIDENCE].join(" ")} (A2 D2, YD03)`);
+    if (f.has("source") && (f.get("source")[0] !== "string" || !isRepoRelative(f.get("source")[1]))) {
+      throw E(`${where} :source must be a repo-relative path`);
+    }
+    if (verb === "bust") {
+      for (const k of ["inherent", "residual"]) {
+        if (!f.has(k)) throw E(`${where} a Bust fact carries :${k}, a grade such as "C1" (A7 8.5)`);
+        const g = f.get(k);
+        if (g[0] !== "string" || !BUST_GRADE.test(g[1])) throw E(`${where} :${k} must be a grade: a letter A, B, C, D, E or X and a number 1 to 5 (A7 8.5)`);
+      }
+      if (f.has("value")) throw E(`${where} a Bust fact has no :value; its residual grade is the fact (A7 8.5)`);
+      if (f.has("justification") && f.get("justification")[0] !== "string") throw E(`${where} :justification must be a string`);
+    } else {
+      if (!f.has("value")) throw E(`${where} is missing :value`);
+      for (const k of ["inherent", "residual", "justification"]) {
+        if (f.has(k)) throw E(`${where} :${k} belongs only in a Bust fact (A7 8.5)`);
+      }
+    }
+    out.push({ witnesses: w[1], evidence: ev[1] });
+  }
+  return { verb, facts: out };
+}
+
+/** The rule ids of the verb's edict under root, for YD02. */
+function edictRuleIds(root, verb) {
+  const p = join(root, contractilePaths(verb).declaration);
+  const r = checkEdict(readFileSync(p, "utf8"), p);
+  return new Set(r.rules.map((x) => x.id));
+}
+
+/** --verb-descriptile FILE... [--root DIR]: profile-check each file; returns exit code. */
+function verbDescriptileFiles(files, root) {
+  let bad = 0;
+  for (const f of files) {
+    try {
+      const text = readFileSync(f, "utf8");
+      const verb = verbOfDescriptile(f);
+      const ruleIds = root && verb ? edictRuleIds(root, verb) : undefined;
+      const r = checkVerbDescriptile(text, f, { ruleIds });
+      console.log(`OK   ${f} (${r === null ? "not a verb descriptile" : `${r.verb} descriptile, ${r.facts.length} fact${r.facts.length === 1 ? "" : "s"}${ruleIds ? ", witnesses checked against the edict" : ""}`})`);
+    } catch (e) {
+      if (!(e instanceof LintError) && !e.code) throw e;
+      bad += 1;
+      console.log(`FAIL ${f}: ${e instanceof LintError ? e.toString() : `cannot read (${e.code})`}`);
+    }
+  }
+  return bad ? 1 : 0;
+}
+
+/**
+ * --verb-descriptile-fixtures DIR: DIR/{valid,invalid}/<case>/<VERB>.deed.
+ * A case may also hold the verb's <Verb>file.deed; then the witnesses are
+ * checked against it (YD02). A missing or empty half is a setup error (2).
+ */
+function verbDescriptileFixtures(d) {
+  let bad = 0;
+  for (const [sub, expect] of [["valid", true], ["invalid", false]]) {
+    let cases;
+    try {
+      cases = readdirSync(join(d, sub)).sort();
+    } catch (e) {
+      console.log(`ERROR ${join(d, sub)}: cannot read the fixture directory (${e.code || e.message})`);
+      return 2;
+    }
+    if (cases.length === 0) {
+      console.log(`ERROR ${join(d, sub)}: no fixture cases`);
+      return 2;
+    }
+    for (const c of cases) {
+      const dir = join(d, sub, c);
+      const deeds = readdirSync(dir).filter((n) => verbOfDescriptile(n) !== null);
+      if (deeds.length !== 1) {
+        console.log(`ERROR ${dir}: a case holds exactly one verb descriptile`);
+        return 2;
+      }
+      const f = join(dir, deeds[0]);
+      const verb = verbOfDescriptile(f);
+      const edict = join(dir, `${CONTRACTILE_VERBS[verb]}file.deed`);
+      let got = true;
+      let err = "";
+      try {
+        const ruleIds = existsSync(edict) ? new Set(checkEdict(readFileSync(edict, "utf8"), edict).rules.map((x) => x.id)) : undefined;
+        if (checkVerbDescriptile(readFileSync(f, "utf8"), f, { ruleIds }) === null) throw new VerbDescriptileError("not a verb descriptile");
+      } catch (e) {
+        if (!(e instanceof LintError)) throw e;
+        got = false;
+        err = e.toString();
+      }
+      if (got !== expect) bad += 1;
+      console.log(`${got === expect ? "PASS " : "FAIL "}${f}` + (got === expect ? "" : `  (unexpected: ${err || "valid"})`));
+    }
+  }
+  return bad ? 1 : 0;
+}
+
 /** --edict FILE...: profile-check each file; returns exit code. */
 function edictFiles(files) {
   let bad = 0;
@@ -2239,6 +2435,26 @@ function main(argv) {
     return rc;
   }
   if (argv.includes("--contractile-registry")) return registryMain(argv.filter((a) => a !== "--contractile-registry"));
+  if (argv.includes("--verb-descriptile-fixtures")) {
+    const d = argv[argv.indexOf("--verb-descriptile-fixtures") + 1];
+    if (d === undefined) {
+      console.log("--verb-descriptile-fixtures requires a DIR argument");
+      return 2;
+    }
+    const rc = verbDescriptileFixtures(d);
+    console.log("VERB DESCRIPTILE FIXTURES " + (rc === 0 ? "OK" : rc === 2 ? "NOT CHECKED" : "FAILED"));
+    return rc;
+  }
+  if (argv.includes("--verb-descriptile")) {
+    const ri = argv.indexOf("--root");
+    const root = ri >= 0 ? argv[ri + 1] : null;
+    const files = argv.filter((a, i) => !a.startsWith("-") && !(ri >= 0 && i === ri + 1));
+    if (files.length === 0) {
+      console.log(DOC);
+      return 2;
+    }
+    return verbDescriptileFiles(files, root);
+  }
   if (argv.includes("--edict-fixtures")) {
     const d = argv[argv.indexOf("--edict-fixtures") + 1];
     if (d === undefined) {

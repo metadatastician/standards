@@ -6,7 +6,7 @@ import { cpSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, writ
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { validate, LintError, SELF_TEST_CASES, checkEgress, EgressError, checkAnchor, AnchorError, profileCOfBody, readMustfileChecks, MustfileError, readProofReceipt, ProofReceiptError, checkContractiles, ContractilesError, contractilePaths, CONTRACTILE_VERBS, checkEdict, EdictError, verbOfFilename } from "./deed_lint.js";
+import { validate, LintError, SELF_TEST_CASES, checkEgress, EgressError, checkAnchor, AnchorError, profileCOfBody, readMustfileChecks, MustfileError, readProofReceipt, ProofReceiptError, checkContractiles, ContractilesError, contractilePaths, CONTRACTILE_VERBS, checkEdict, EdictError, verbOfFilename, checkVerbDescriptile, VerbDescriptileError, verbOfDescriptile } from "./deed_lint.js";
 import { generateContractileRegistry as generateRegistry } from "./deed_lint.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -1103,5 +1103,42 @@ describe("contractile registry (J13)", () => {
     } finally {
       rmSync(tmp, { recursive: true, force: true });
     }
+  });
+});
+
+// A7 7.3, 8.5: the six verb descriptiles (clauses/verb-descriptile.abnf).
+const FIX_VD = join(FIX, "verb-descriptile");
+
+describe("verb descriptile fixtures", () => {
+  test("--verb-descriptile-fixtures passes on the corpus", () => {
+    const r = cli("--verb-descriptile-fixtures", FIX_VD);
+    expect(r.code).toBe(0);
+    expect(r.out).toContain("VERB DESCRIPTILE FIXTURES OK");
+  });
+  test("the file name fixes the verb, INTENT included", () => {
+    expect(verbOfDescriptile("x/INTENT.deed")).toBe("intend");
+    expect(verbOfDescriptile("x/INTEND.deed")).toBeNull();
+    expect(verbOfDescriptile("x/BUST.deed")).toBe("bust");
+    expect(verbOfDescriptile("x/STATE.deed")).toBeNull();
+  });
+  test("another descriptile is outside the profile", () => {
+    const t = readFileSync(join(FIX_VD, "valid", "dust-empty", "DUST.deed"), "utf8");
+    expect(checkVerbDescriptile(t, "STATE.deed")).toBeNull();
+  });
+  test("the summary lists each fact's witness and evidence", () => {
+    const p = join(FIX_VD, "valid", "adjust-expires", "ADJUST.deed");
+    const r = checkVerbDescriptile(readFileSync(p, "utf8"), p);
+    expect(r.verb).toBe("adjust");
+    expect(r.facts).toEqual([{ witnesses: "adj-alt-text", evidence: "measured" }, { witnesses: "adj-contrast", evidence: "measured" }]);
+  });
+  test("with the edict's rule ids, an unknown witness is refused (YD02)", () => {
+    const p = join(FIX_VD, "invalid", "witness-unknown", "MUST.deed");
+    const t = readFileSync(p, "utf8");
+    expect(checkVerbDescriptile(t, p).facts.length).toBe(1);
+    expect(() => checkVerbDescriptile(t, p, { ruleIds: new Set(["must-tests", "must-fmt"]) })).toThrow(VerbDescriptileError);
+  });
+  test("a Bust fact carries grades, not a value (8.5)", () => {
+    const p = join(FIX_VD, "invalid", "bust-value", "BUST.deed");
+    expect(() => checkVerbDescriptile(readFileSync(p, "utf8"), p)).toThrow(/no :value/);
   });
 });
