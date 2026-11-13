@@ -197,10 +197,13 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # OTP 28.x (28.1 to 28.5.0.8) segfaults the Hypatia scanner and oracle
+      # in sweep_off_heap on some trees; OTP 27.3.4.19 is clean on all of them
+      # (rsr-template-repo#333 and #339; hyperpolymath/hypatia#1061).
       - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1.24.1
         with:
           elixir-version: '1.19.4'
-          otp-version: '28.5.0.8'
+          otp-version: '27.3.4.19'
       - name: Check out vetted Hypatia
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
