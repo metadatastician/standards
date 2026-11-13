@@ -136,6 +136,7 @@ jobs:
           AUTOCREATE: ${{ vars.BACKUP_MIRROR_AUTOCREATE }}
           DEST_BRANCH: ${{ inputs.destination-branch }}
           GH_TOKEN: ${{ secrets.BACKUP_MIRROR_TOKEN }}
+          SRC_PRIVATE: ${{ github.event.repository.private }}
         run: |
           set -euo pipefail
 
@@ -201,6 +202,17 @@ jobs:
               ;;
           esac
           echo "destination $DEST_SLUG probe: HTTP $CODE"
+
+          # ── Visibility guard (owner ruling 2026-11-13, CASE-038) ─────────
+          # A private source (or one whose visibility cannot be read) is never
+          # pushed into an existing destination that is not private. The probe
+          # body above is the repository object; .private is its visibility.
+          if [ "$DEST_EXISTS" = true ] && [ "$SRC_PRIVATE" != "false" ]; then
+            DEST_PRIVATE="$(sed '1,/^\r\?$/d' "$RUNNER_TEMP/dest.http" | jq -r 'if type == "object" and has("private") then (.private | tostring) else empty end' 2>/dev/null || true)"
+            if [ "$DEST_PRIVATE" != "true" ]; then
+              refuse "Source is private (or its visibility is unknown) and destination $DEST_SLUG is not confirmed private (private='${DEST_PRIVATE:-unknown}'). Refusing to push private code into it. Make the destination private first."
+            fi
+          fi
 
           if [ "$DEST_EXISTS" = false ]; then
             if [ "$AUTOCREATE" != "true" ]; then

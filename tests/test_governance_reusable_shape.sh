@@ -53,6 +53,7 @@ Debt ratchet
 UUID v7 conformance
 UUID v8 conformance
 No new A2ML
+Existing A2ML (advisory)
 JS runtimes — environment provisions Bun first
 JS runtimes — \${{ matrix.runtime }}"
 ACTUAL=$(grep -P '^    name: ' "$F" | sed 's/^    name: //')
