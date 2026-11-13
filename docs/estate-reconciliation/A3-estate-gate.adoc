@@ -423,10 +423,10 @@ Every test is new work unless stated. A fixture is valid unless marked `-bad`.
 | G50 | A valid `exemption` for `check/<id>` gives `waived` and the gate passes (G5). | `waiver-ok`
 | G51 | A lapsed `deferral` gives the check's real state. | `waiver-lapsed`
 | G52 | A deviation with no `:authority` is not valid. | `waiver-no-auth-bad`
-| G56 | A deviation whose `:authority` resolves only in the candidate change (not in the trusted baseline) is not valid. | `waiver-self-auth-bad`
 | G53 | A `debt` deviation does not waive a check. | `waiver-debt-bad`
 | G54 | A repo-level deviation for a rule that an estate declares is rejected (A2 7.4). | `waiver-higher-bad`
 | G55 | A waiver for a check that is not required has no effect and is reported. | `waiver-unused`
+| G56 | A deviation whose `:authority` resolves only in the candidate change (not in the trusted baseline) is not valid. | `waiver-self-auth-bad`
 |===
 
 === 13.7 Trust

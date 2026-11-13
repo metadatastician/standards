@@ -471,11 +471,11 @@ Every test is new work. A fixture is valid unless marked `-bad`.
 | I03 | The same fingerprint from 2 sensors gives one record with 2 sensors. | `fp-corroborated`
 | I04 | No ledger line carries a finding body or a secret. | `ledger-body-bad`
 | I05 | `fixed` is set only by a later rescan on a later commit. | `fixed-no-rescan-bad`
-| I09 | A finding in `a/` followed by a `ran` rescan whose scope is only `b/` stays unresolved. | `fixed-out-of-scope-bad`
-| I10 | One rule firing on 2 identical lines in one file gives 2 records; an unrelated line inserted above both keeps both fingerprints. | `fp-repeated`
 | I06 | `accepted` requires a valid deviation (A2); on its expiry the record goes `lapsed`. | `accepted-expired`
 | I07 | A sensor cannot set a state. | `sensor-state-bad`
 | I08 | At most one open order per `(repo, class)`. | `two-orders-bad`
+| I09 | A finding in `a/` followed by a `ran` rescan whose scope is only `b/` stays unresolved. | `fixed-out-of-scope-bad`
+| I10 | One rule firing on 2 identical lines in one file gives 2 records; an unrelated line inserted above both keeps both fingerprints. | `fp-repeated`
 |===
 
 === 13.4 Work orders
