@@ -158,12 +158,39 @@ check "a warning is counted" 1 "$(jq -r '.counts.warnings' "$WORK/o8/report.json
 { rec a.k9.ncl routed '[]'; } > "$WORK/r-routed"
 render "$WORK/o9" --results "$WORK/r-routed" --expected "$WORK/expected-a" "${good_evidence[@]}"
 check "a routed-only corpus is grey" grey "$(cat_state "$WORK/o9" corpus)"
-check "grey corpus with green checks is green overall" green "$(state "$WORK/o9")"
+check "a routed file with no coordination result is orange, never green" orange "$(state "$WORK/o9")"
+check "and the coordination category says it is indeterminate" indeterminate "$(jq -r ".categories[] | select(.id == \"coord\") | .items[0].status" "$WORK/o9/report.json")"
+jq -nc "{file: \"a.k9.ncl\", verdict: \"pass\", message: \"\"}" > "$WORK/coord-pass"
+render "$WORK/o9a" --results "$WORK/r-routed" --expected "$WORK/expected-a" "${good_evidence[@]}" --coord-results "$WORK/coord-pass"
+check "a routed file the coordination validator passes is green overall" green "$(state "$WORK/o9a")"
+check "its own category is green" green "$(cat_state "$WORK/o9a" coord)"
+jq -nc "{file: \"a.k9.ncl\", verdict: \"fail\", message: \"line 3: expected section\"}" > "$WORK/coord-fail"
+render "$WORK/o9d" --results "$WORK/r-routed" --expected "$WORK/expected-a" "${good_evidence[@]}" --coord-results "$WORK/coord-fail"
+check "a coordination grammar failure is red" red "$(state "$WORK/o9d")"
+check "the reason is carried" "line 3: expected section" "$(jq -r ".categories[] | select(.id == \"coord\") | .items[0].reason" "$WORK/o9d/report.json")"
 render "$WORK/o9b" --results "$WORK/expected-none" --expected "$WORK/expected-none" "${good_evidence[@]}"
 check "an empty corpus is grey" grey "$(cat_state "$WORK/o9b" corpus)"
 render "$WORK/o9c" --results "$WORK/expected-none" --expected "$WORK/expected-none" "${good_evidence[@]}" --require-files
 check "an empty corpus under --require-files is red in the grid itself" red "$(state "$WORK/o9c")"
 check "and the badge says so" failing "$(jq -r .message "$WORK/o9c/badge.json")"
+
+# 9b. Coordination records follow the corpus's debt rules and are reconciled with
+# the routed files (Codex review on #1516).
+printf '%s\n' a.k9.ncl > "$WORK/ledger-a"
+printf '%s\n' a.k9.ncl > "$WORK/changed-a"
+render "$WORK/o9e" --results "$WORK/r-routed" --expected "$WORK/expected-a" "${good_evidence[@]}" --coord-results "$WORK/coord-fail" --ledger "$WORK/ledger-a"
+check "a ledgered, untouched coordination failure is advisory (yellow), not red" yellow "$(state "$WORK/o9e")"
+render "$WORK/o9f" --results "$WORK/r-routed" --expected "$WORK/expected-a" "${good_evidence[@]}" --coord-results "$WORK/coord-fail" --ledger "$WORK/ledger-a" --changed "$WORK/changed-a"
+check "a ledgered coordination failure the PR touches is blocking (red)" red "$(state "$WORK/o9f")"
+render "$WORK/o9g" --results "$WORK/r-routed" --expected "$WORK/expected-a" "${good_evidence[@]}" --coord-results "$WORK/coord-pass" --ledger "$WORK/ledger-a"
+check "a ledgered coordination file that now conforms is a stale entry (red)" red "$(state "$WORK/o9g")"
+jq -nc '{file: "stray.k9", verdict: "fail", message: "boom"}' > "$WORK/coord-stray"
+{ cat "$WORK/coord-pass"; cat "$WORK/coord-stray"; } > "$WORK/coord-pass-stray"
+render "$WORK/o9h" --results "$WORK/r-routed" --expected "$WORK/expected-a" "${good_evidence[@]}" --coord-results "$WORK/coord-pass-stray"
+check "a record for a file that was not routed is indeterminate (orange), not red" orange "$(state "$WORK/o9h")"
+{ cat "$WORK/coord-pass"; cat "$WORK/coord-pass"; } > "$WORK/coord-dup"
+render "$WORK/o9i" --results "$WORK/r-routed" --expected "$WORK/expected-a" "${good_evidence[@]}" --coord-results "$WORK/coord-dup"
+check "duplicate records for one routed file are indeterminate, never green" orange "$(state "$WORK/o9i")"
 
 # 10. Self-test and typecheck evidence.
 render "$WORK/o10" --results "$WORK/r-clean" --expected "$WORK/expected" --selftest "$bad_selftest" --selftest-code 1 --typecheck "$WORK/empty.log" --typecheck-code 0 --corpus-code 0
