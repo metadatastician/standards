@@ -19,15 +19,21 @@ CLAUDE.md files, templates and the connections between repos (links,
 pins, workflow `uses:`, registry rows). It applies above all to:
 
 * any `.a2ml` file or anything that reads, writes or recommends one (see
-  the identity section below);
+  the identity section below). The exception is a new-input-first A2ML
+  fallback that the A7 migration plan (M5 to M7) requires a shared reader to
+  keep until its callers migrate;
 * Python, TypeScript, ReScript, V-lang, Go and every other language in
-  BANNED below, outside the listed exemptions;
+  BANNED below, outside the listed exemptions. Grandfathered TypeScript and
+  ReScript are migration inventory, ported under Enforcement Rule 1, not new
+  departures to report;
 * a proof that is not run at the strictest setting its policy names. For
   Agda theory proofs that is `agda --safe --without-K --cubical-compatible`
   (`3-practice/PROOF-POLICY.adoc` §2.1). The one exception is a proof that
   genuinely needs full Cubical Agda or incompatible options and runs under an
-  explicit, separately reviewed proof profile (same section). Weaker flags, `postulate` in a
-  load-bearing track, or a skipped proof are departures. Rust uses Creusot
+  explicit, separately reviewed proof profile (same section). Weaker flags, an unclassified or
+  inadmissible `postulate` in a load-bearing track, or a skipped proof are
+  departures. A necessary axiom admitted under
+  `docs/TRUSTED-BASE-REDUCTION-POLICY.adoc` is not. Rust uses Creusot
   with Pearlite and Verus (§1.2), Ada uses SPARK, and APIs and ABIs use
   Idris2. Other provers follow that policy and
   `docs/TRUSTED-BASE-REDUCTION-POLICY.adoc`.
@@ -49,7 +55,7 @@ There are three layers. Never mix them.
 | Layer | File | What it is |
 |---|---|---|
 | **Identity** | `<repo>_chora.deed` | What the repo *is*. Its `:repo-uuid`, `(identity)` and `(lineage)`, and where it sits in wider things, including its clade placements as identity facts. It heads towards a Meta-Object-Facility-like model, and the details are not settled. It is not organisation and not configuration. |
-| **Content organisation** | `.machine_readable/descriptiles/CLADE.deed` | How the repo's *own content* is organised for its audience. It acts as an order controller and is never identity. Every repo is to carry one. If unused, it holds the minimum valid structure (`:schema-version` plus `:in-use #f`). **Do not create it yet.** `deed.abnf` has no head that dispatches this file name. The `descriptile-deed` head (A7 J14, approved) and a CLADE form must land first. |
+| **Content organisation** | `.machine_readable/descriptiles/CLADE.deed` | How the repo's *own content* is organised for its audience. It acts as an order controller and is never identity. Every repo is to carry one. If unused, it holds the minimum valid structure (`:schema-version` plus `:in-use #f`). **Do not create it yet.** `deed.abnf` has no head that dispatches this file name. The `descriptile-deed` head (A7 J14: approved by the owner in the A1 thread on 2026-11-13, not yet recorded in A7) and a CLADE form must land first. |
 | **Estate registry** | **chora-registry** (formerly `gv-clade-index`) | The register of repo identities, like mathesis for repos. It holds many classification schemes that can be swapped (by type, date of creation or last use, activity, popularity). It is authoritative for estate-wide placement. A copy a repo carries is checked against it. |
 
 **CLADE.deed schemes.** `(scheme :kind strict|judgement|none …)`:
