@@ -1,0 +1,52 @@
+;; SPDX-License-Identifier: CC-BY-SA-4.0
+;; SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell (hyperpolymath)
+;; A worked proof receipt with echoes (PROOF-POLICY §8.5.2). The receipts were
+;; earned on 1111…, a pull-request commit. A squash merge rewrote it, with
+;; 2222… from the same pull request, into aaaa…, the :source-commit on the
+;; default branch. Only the receipt, the docs and a script changed between
+;; 1111… and aaaa…, so the tree differs but every leg's inputs digest is the
+;; same: the echo uses :witness inputs-sha256. Both sources are in the fibre
+;; over aaaa…. The claim derives to PWG-1. Run URLs, commits and digests are
+;; illustrative.
+(praxis-deed
+  :schema-version "1.0.0"
+  :canonical-name "example-echo-receipt"
+  :beholding-chora #u5"estate/chora"
+  :profile proof-receipt
+  :repository "hyperpolymath/example"
+  :source-commit "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  (echo :source "1111111111111111111111111111111111111111"
+        :image "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        :witness inputs-sha256
+        (inputs :prover agda :sha256 "0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a")
+        (inputs :prover rocq :sha256 "0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b")
+        (inputs :prover lean :sha256 "0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c"))
+  (echo :source "2222222222222222222222222222222222222222"
+        :image "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        :witness inputs-sha256
+        (inputs :prover agda :sha256 "0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a"))
+  (claim :id "T-1" :pwg PWG-1 :foundation-diverse #f
+    (leg :prover agda :route source :token proven :state AGDA-VERIFIED
+      (receipt :run "https://github.com/hyperpolymath/example/actions/runs/10"
+               :commit "1111111111111111111111111111111111111111"
+               :checker "agda 2.6.4.3"
+               :invocation "agda --safe --without-K --cubical-compatible"
+               :inputs-sha256 "0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a"
+               :state current
+               (axioms)))
+    (leg :prover rocq :route transported :token proven :state RECONCILED
+      (receipt :run "https://github.com/hyperpolymath/example/actions/runs/11"
+               :commit "1111111111111111111111111111111111111111"
+               :checker "rocq 9.0.0"
+               :invocation "rocq compile"
+               :inputs-sha256 "0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b"
+               :state current
+               (axioms)))
+    (leg :prover lean :route re-proved :token proven-with-postulates :state RECONCILED
+      (receipt :run "https://github.com/hyperpolymath/example/actions/runs/12"
+               :commit "1111111111111111111111111111111111111111"
+               :checker "lean 4.19.0"
+               :invocation "lake build"
+               :inputs-sha256 "0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c"
+               :state current
+               (axioms (axiom :name "propext" :disposition c))))))
