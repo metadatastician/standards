@@ -1,0 +1,402 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+// SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+= 9-archive: the A2ML files removed on 2026-11-13
+
+The owner ruled on 2026-11-13 that A2ML is entirely gone, archived copies
+included (`.claude/CLAUDE.md`, section "Identity, classification and the
+registry"). This record lists each `.a2ml` file that was tracked under
+`9-archive/` before its removal.
+
+The contents are not copied here. Git history keeps them. To read one, use
+its blob id, or read its path at the last commit that held it:
+
+[source,bash]
+----
+git cat-file -p <blob id>
+git show 6e6933ab1e2ac71042aafbe82db664755b3a0c80:<path>
+----
+
+Size is in bytes. The sha256 is of the file as it was tracked.
+
+[cols="4,1,3,3,4",options="header"]
+|===
+| Path | Size | sha256 | Git blob id | What it was
+
+| `9-archive/a2ml/.machine_readable/audits/2026-05-26-tech-debt-chain-complete.a2ml`
+| 5568
+| `efb3af5f3137ddc87756dcf5a0ecc29aeacdfe36385d12ff0a61e990920423f5`
+| `076b97c4ddd4287732cfc75e122704985b08e875`
+| Session manifest for the 2026-05-26 estate tech-debt audit chain.
+
+| `9-archive/a2ml/.machine_readable/descriptiles/AGENTIC.a2ml`
+| 1352
+| `8eecd876834f8cc6202d9521065eb2919eb8c3442384570d715d8c66795d8b1e`
+| `79815569c5fa9f560cbe7e769ccb249f45016d08`
+| AGENTIC descriptile for standards (root).
+
+| `9-archive/a2ml/.machine_readable/descriptiles/NEUROSYM.a2ml`
+| 783
+| `ed182be11b3af6dabdbd486e463a75142074694678528e36d199277952964bb4`
+| `9ff90c3dae651bc7c1ea7960fc078f8fb57d90ef`
+| NEUROSYM descriptile for standards (root).
+
+| `9-archive/a2ml/.machine_readable/descriptiles/PLAYBOOK.a2ml`
+| 1665
+| `eb7b99ef7fac821c34ed9faebb82c0ad7836eaf0802fda2c043a7af61ffecac4`
+| `b138f25976f64c5c0cdaa84c85cb90dd07557997`
+| PLAYBOOK descriptile for standards (root).
+
+| `9-archive/a2ml/.machine_readable/migrations/contractile-layout-2026-04-18.a2ml`
+| 2404
+| `a4da49891a59689431ac569b48f08fa6ff18724c07bec143529f0252c724873b`
+| `93a576b60b965913d3ca69bc9d296cce1fe3483e`
+| Migration log for the 2026-04-18 contractile-layout sweep (K9 move to svc/), paired with ADR-001.
+
+| `9-archive/a2ml/.machine_readable/rsr-profile.a2ml`
+| 7625
+| `3b3a4964043c0de7f6fda475d6ba5ccaad804b7d2eab2dc0ce9aff75649eb268`
+| `7c431bfb0edc1228c2846845af7d7588ac5f475c`
+| The canon's own RSR capability declaration (rsr-profile), with canon criteria.
+
+| `9-archive/a2ml/1-formats/k9/.machine_readable/descriptiles/AGENTIC.a2ml`
+| 3173
+| `ce059ef614b6689ed3814942d1b55bbb89512ec5f89cf89680d8de5ee2e246dd`
+| `f89034c46e73b11dd6db0771a0b4a85eef967788`
+| AGENTIC descriptile for 1-formats/k9.
+
+| `9-archive/a2ml/1-formats/k9/.machine_readable/descriptiles/ECOSYSTEM.a2ml`
+| 2290
+| `30a6f62f5aa000326ceb838eb01806a89703e50cae5aa67004d8f8f6102a18cc`
+| `e9b51d917c4d00a175cf7b455ac6ed17d0f5e4fe`
+| ECOSYSTEM descriptile for 1-formats/k9.
+
+| `9-archive/a2ml/1-formats/k9/.machine_readable/descriptiles/META.a2ml`
+| 3301
+| `1b65eedb33058d2f9e996d9b30f8b67b46bd334ad29bf09ace8cd7a0050aa6eb`
+| `247a36a0058e3811e19656d715d70ab26427f6c9`
+| META descriptile for 1-formats/k9.
+
+| `9-archive/a2ml/1-formats/k9/.machine_readable/descriptiles/NEUROSYM.a2ml`
+| 4132
+| `03ec0b9768088b0dc298ac11211e26c57524c3abab9431cf1c7f900587dbec0e`
+| `da598ec143251f928977e0fdb295e51edfc68b67`
+| NEUROSYM descriptile for 1-formats/k9.
+
+| `9-archive/a2ml/1-formats/k9/.machine_readable/descriptiles/PLAYBOOK.a2ml`
+| 2889
+| `4d7ebc90fa1025ecc1770b38676211fe5e56050863b06103f10cf64bc29aa7cd`
+| `fe1a17e7dddbb4571d03e2a788ae941ccc2a6f9c`
+| PLAYBOOK descriptile for 1-formats/k9.
+
+| `9-archive/a2ml/1-formats/k9/.machine_readable/descriptiles/STATE.a2ml`
+| 9520
+| `269db182f8f32128b74e7f4a5fd497bbf4cf4d7fbd82786fb7e8d39155adec45`
+| `611b3f361ef256098aca2a53e4b9f3ed8660c933`
+| STATE descriptile for 1-formats/k9.
+
+| `9-archive/a2ml/2-protocols/0-ai-gatekeeper/.machine_readable/descriptiles/AGENTIC.a2ml`
+| 1439
+| `71fe9f7e96c073a751b5430526a1d5f7369b2bb263560a07f6437d86f72b04be`
+| `2822cbaf163cb596c4a3a4f5348cbac1654f13a0`
+| AGENTIC descriptile for 2-protocols/0-ai-gatekeeper.
+
+| `9-archive/a2ml/2-protocols/0-ai-gatekeeper/.machine_readable/descriptiles/ECOSYSTEM.a2ml`
+| 458
+| `3d7a65a530dfe1a627d26a4da9336c740c7aaabed96cf53c64de770128d768a3`
+| `b2b81783a5784478c306468fa934716d6b789821`
+| ECOSYSTEM descriptile for 2-protocols/0-ai-gatekeeper.
+
+| `9-archive/a2ml/2-protocols/0-ai-gatekeeper/.machine_readable/descriptiles/META.a2ml`
+| 644
+| `353f81aa95df088e16be3146cf334ee5e77747d25b6c7505c001457ac4d96704`
+| `adb7595cf0bbaf34f6c0a6d9880b2bbfd9685ba6`
+| META descriptile for 2-protocols/0-ai-gatekeeper.
+
+| `9-archive/a2ml/2-protocols/0-ai-gatekeeper/.machine_readable/descriptiles/NEUROSYM.a2ml`
+| 604
+| `93cc0d3491484a5796f2f8080e3f982ca86a7d85313f6c4fbdec4cc9a42b2ad7`
+| `e1d34c090f0258e269a5c3c7c5763b7fdc856b5b`
+| NEUROSYM descriptile for 2-protocols/0-ai-gatekeeper.
+
+| `9-archive/a2ml/2-protocols/0-ai-gatekeeper/.machine_readable/descriptiles/PLAYBOOK.a2ml`
+| 839
+| `80a0d33bf1bd3e03293cacae386666270433e75caf325d0e4851631fcd911a36`
+| `5003fd08bba17856441a339796093d62501ea4fe`
+| PLAYBOOK descriptile for 2-protocols/0-ai-gatekeeper.
+
+| `9-archive/a2ml/2-protocols/0-ai-gatekeeper/.machine_readable/descriptiles/STATE.a2ml`
+| 1132
+| `5232e7f13f83d70524f9f220eccd24230de65e99be1d114fda1adec7b6d60c70`
+| `160704f8346e06b79955b6373de8f1608ccde248`
+| STATE descriptile for 2-protocols/0-ai-gatekeeper.
+
+| `9-archive/a2ml/2-protocols/axel/.machine_readable/descriptiles/ECOSYSTEM.a2ml`
+| 481
+| `74d2ddadd99f6074ed897cdd74a863180178f961b5032148b3eb100abca757af`
+| `5b9e87447fd82f96e734f915d9895cb884a41d86`
+| ECOSYSTEM descriptile for 2-protocols/axel.
+
+| `9-archive/a2ml/2-protocols/axel/.machine_readable/descriptiles/META.a2ml`
+| 631
+| `6928e69e82fcb1bd11d710b6e5ca62940d58e89325b50823b3057b54a79c1cd7`
+| `9b7f874d607b7014acfbd81c95fbe042174e4152`
+| META descriptile for 2-protocols/axel.
+
+| `9-archive/a2ml/2-protocols/axel/.machine_readable/descriptiles/STATE.a2ml`
+| 1218
+| `2c724b18b34a717e2a8976b24fbcad5c645c6edb2999638e4ac539c003c72615`
+| `1dc8f57673974b173efcec188e42193e6b683ab2`
+| STATE descriptile for 2-protocols/axel.
+
+| `9-archive/a2ml/2-protocols/overlay/.machine_readable/descriptiles/ECOSYSTEM.a2ml`
+| 589
+| `f2519c5ebcddf60e5137772d2a9b07dc70a48e7a0b61b76ae1813d07a5e574ae`
+| `261ebf4fe3426ab548295d5f45d95655a94847cc`
+| ECOSYSTEM descriptile for 2-protocols/overlay.
+
+| `9-archive/a2ml/2-protocols/overlay/.machine_readable/descriptiles/META.a2ml`
+| 642
+| `dd5007de695719fe3a6a715f73e12e86085af8917899bbd9e9071820dc78e24e`
+| `abe0dfcb1e6a08987dbccd85a3c41c6ed2ed71d6`
+| META descriptile for 2-protocols/overlay.
+
+| `9-archive/a2ml/2-protocols/overlay/.machine_readable/descriptiles/STATE.a2ml`
+| 1112
+| `fabc353e9d5cd2131f59ce315449f67fe3c8adac16d7254b3cbc7eb48d6a98e5`
+| `36758beedc0974ffdcb788bc7cb6ca3079ee5dc3`
+| STATE descriptile for 2-protocols/overlay.
+
+| `9-archive/a2ml/3-practice/outreach/.machine_readable/descriptiles/AGENTIC.a2ml`
+| 1179
+| `dd30f6c36b2f67f3510f871dbb8c415e862cfa27f4ebc30f97fcc9691b98a837`
+| `274d854953189561856d5b0fd1f6fd2ea63aa5f4`
+| AGENTIC descriptile for 3-practice/outreach.
+
+| `9-archive/a2ml/3-practice/outreach/.machine_readable/descriptiles/ECOSYSTEM.a2ml`
+| 423
+| `830ad1a59162e6a02a8446016a962ce637afb19ca5c087dae29a955036624566`
+| `0f8f9c2012b5cc21106d13b2dc4d27ab0cbd2365`
+| ECOSYSTEM descriptile for 3-practice/outreach.
+
+| `9-archive/a2ml/3-practice/outreach/.machine_readable/descriptiles/META.a2ml`
+| 628
+| `8931f24257da27b3cefae2fc0378d25f11188682ae3a65ee4efb6e57a6e345a6`
+| `07229dba65c53743a3d05a556055dbf2b490dd38`
+| META descriptile for 3-practice/outreach.
+
+| `9-archive/a2ml/3-practice/outreach/.machine_readable/descriptiles/NEUROSYM.a2ml`
+| 604
+| `93cc0d3491484a5796f2f8080e3f982ca86a7d85313f6c4fbdec4cc9a42b2ad7`
+| `e1d34c090f0258e269a5c3c7c5763b7fdc856b5b`
+| NEUROSYM descriptile for 3-practice/outreach.
+
+| `9-archive/a2ml/3-practice/outreach/.machine_readable/descriptiles/PLAYBOOK.a2ml`
+| 839
+| `80a0d33bf1bd3e03293cacae386666270433e75caf325d0e4851631fcd911a36`
+| `5003fd08bba17856441a339796093d62501ea4fe`
+| PLAYBOOK descriptile for 3-practice/outreach.
+
+| `9-archive/a2ml/3-practice/outreach/.machine_readable/descriptiles/STATE.a2ml`
+| 893
+| `1561d44f66477fee25f5223148bfff56775ab2a87c0d838a9c1ea763fce2d326`
+| `09c78e19d6b72e12de65e7053b40d2a008f8674a`
+| STATE descriptile for 3-practice/outreach.
+
+| `9-archive/a2ml/docs/archive/reorg-leftovers/CRG-TRG-RSR-MAPPING.a2ml`
+| 5099
+| `e9e90dcb66d0b23f94a6908eec15874b9411153bdcc46449d71259bc65c96b4b`
+| `4e52f92abd1c2651599a66ab321c90f637a4f43c`
+| Interoperability mapping between CRG, TRG and RSR compliance (reorg leftover).
+
+| `9-archive/a2ml/docs/archive/reorg-leftovers/K9-AUTOMATION-SPEC.a2ml`
+| 7534
+| `5ebf7d39e0652cfc720a9de3dc359047c9bbeaf0e28f450af2740ea992842144`
+| `e6b343783074e04643fc244049c1e627b88be70c`
+| K9 automation interface specification (reorg leftover).
+
+| `9-archive/a2ml/docs/archive/reorg-leftovers/TEMPLATE-VERSIONING-SPEC.a2ml`
+| 10029
+| `e44775847f94464c0537bf1f58d5f122a0c097f787c1e49a09d3fca1d1efdd5e`
+| `b0a1788027087bd5a593429c663a1e26998a1c03`
+| Template versioning policy for the standards templates (reorg leftover).
+
+| `9-archive/a2ml/docs/audits/audit-admin-merge-wrapper-sweep-2026-05-26.a2ml`
+| 6267
+| `9e035b0c009f7c110c18620fdd5f5825ada5a7d13409bee0a007cf0cf19c817b`
+| `b02b2cf6e612ed2299d054014518c0d13140bd54`
+| Machine-readable companion manifest to the docs/audits/ report of the same name (audit-admin-merge-wrapper-sweep-2026-05-26).
+
+| `9-archive/a2ml/docs/audits/audit-hypatia-cache-sha-corruption-2026-06-21.a2ml`
+| 4265
+| `7bb9cf6072c893607c701097a605ec45a2cb544eae823ad33caf923cd181b6fa`
+| `91ab4d5f0f5146a64f518d55be0cbbcb4c005d9b`
+| Machine-readable companion manifest to the docs/audits/ report of the same name (audit-hypatia-cache-sha-corruption-2026-06-21).
+
+| `9-archive/a2ml/docs/audits/audit-hypatia-pin-orphan-2026-05-27.a2ml`
+| 5462
+| `9247782f362178158c1819ece8127801df671ddab339c7b170de2df0bf389d4d`
+| `aa60ca7901291adcd5fe341cefce28ac7007b064`
+| Machine-readable companion manifest to the docs/audits/ report of the same name (audit-hypatia-pin-orphan-2026-05-27).
+
+| `9-archive/a2ml/docs/audits/audit-reusables-convergence-2026-05-26.a2ml`
+| 9656
+| `572652abe537777da2ec1fc530b443ce601155dc2650b8c03cda24da3a4b3d37`
+| `3f89e2384194639e8d99134add6a12094b10e569`
+| Machine-readable companion manifest to the docs/audits/ report of the same name (audit-reusables-convergence-2026-05-26).
+
+| `9-archive/a2ml/docs/audits/gap-matrix-2026-04-17.a2ml`
+| 11497
+| `88e4c06ca12182457a8ecc4a7945406a9eb06d74aa96ac6dd509672d4dc409a8`
+| `1a7a186445fc64660880de2b8f6bfd2074f140f8`
+| Machine-readable companion manifest to the docs/audits/ report of the same name (gap-matrix-2026-04-17).
+
+| `9-archive/a2ml/docs/audits/launcher-standard-review-2026-05-26.a2ml`
+| 9610
+| `d9f647c0ccf5f38d220d7e4b9bd7d8ebc18182ad1d61622e64e06bb27abab172`
+| `12d8976c854e395754abd87dfa551d8d250fe72b`
+| Machine-readable companion manifest to the docs/audits/ report of the same name (launcher-standard-review-2026-05-26).
+
+| `9-archive/a2ml/docs/audits/metadatastician-transfer-plan-2026-04-17.a2ml`
+| 16997
+| `2058fdcba351248f09e98b6f46dfbfe40192a8735f4de7c2f172dcafc1f39779`
+| `8ddb9c5c9b0ba2028cdcd79d64c9bef1bbf5caba`
+| Machine-readable companion manifest to the docs/audits/ report of the same name (metadatastician-transfer-plan-2026-04-17).
+
+| `9-archive/a2ml/docs/audits/otpiser-blocker-sweep-2026-05-26.a2ml`
+| 8274
+| `5acb5b9a0447aff2d23e0d2f1611a09094f80700d3938d183074072f85cd4047`
+| `1798d634fdfe4baf9de3150360b020f35d6b70c0`
+| Machine-readable companion manifest to the docs/audits/ report of the same name (otpiser-blocker-sweep-2026-05-26).
+
+| `9-archive/a2ml/standards-update/.machine_readable/6scm-archive/.machine_readable/6a2/AGENTIC.a2ml`
+| 1179
+| `dd30f6c36b2f67f3510f871dbb8c415e862cfa27f4ebc30f97fcc9691b98a837`
+| `274d854953189561856d5b0fd1f6fd2ea63aa5f4`
+| AGENTIC descriptile for standards-update (6scm archive copy).
+
+| `9-archive/a2ml/standards-update/.machine_readable/6scm-archive/.machine_readable/6a2/ECOSYSTEM.a2ml`
+| 442
+| `05d40dbda07853a99ec2a57e79af1fde66ab1396a6b4738833edd371b4b58020`
+| `7f7ea0f47f492a57fa8307f9960718c3ca441ed1`
+| ECOSYSTEM descriptile for standards-update (6scm archive copy).
+
+| `9-archive/a2ml/standards-update/.machine_readable/6scm-archive/.machine_readable/6a2/META.a2ml`
+| 636
+| `5426f2efd89b429ed57a89fa445a997cf2ec258f75310e35a97d236ff8c187a4`
+| `967b35ec151673c3daa4bc24ebfa32e8b7cca95b`
+| META descriptile for standards-update (6scm archive copy).
+
+| `9-archive/a2ml/standards-update/.machine_readable/6scm-archive/.machine_readable/6a2/NEUROSYM.a2ml`
+| 604
+| `93cc0d3491484a5796f2f8080e3f982ca86a7d85313f6c4fbdec4cc9a42b2ad7`
+| `e1d34c090f0258e269a5c3c7c5763b7fdc856b5b`
+| NEUROSYM descriptile for standards-update (6scm archive copy).
+
+| `9-archive/a2ml/standards-update/.machine_readable/6scm-archive/.machine_readable/6a2/PLAYBOOK.a2ml`
+| 839
+| `80a0d33bf1bd3e03293cacae386666270433e75caf325d0e4851631fcd911a36`
+| `5003fd08bba17856441a339796093d62501ea4fe`
+| PLAYBOOK descriptile for standards-update (6scm archive copy).
+
+| `9-archive/a2ml/standards-update/.machine_readable/6scm-archive/.machine_readable/6a2/STATE.a2ml`
+| 897
+| `621b6bf9f821399cb36f3268ab4224b261d0148b3dca438bd6302e902810d84c`
+| `cf490af9df9199400e92b86ec17505985f7498cd`
+| STATE descriptile for standards-update (6scm archive copy).
+
+| `9-archive/a2ml/standards-update/.machine_readable/descriptiles/AGENTIC.a2ml`
+| 2124
+| `c20de141e4715f85d0ec5744a840a2db2bb79aac7dbd253f5ecf6130ec144cf3`
+| `ea51ce3364ff26cb6304edca87e0caaaa7cc5999`
+| AGENTIC descriptile for standards-update.
+
+| `9-archive/a2ml/standards-update/.machine_readable/descriptiles/ECOSYSTEM.a2ml`
+| 1738
+| `522832f5ffc94b100d7dd11a996c68edbbe6fa2acd0ab57988b4182153ddbbd6`
+| `92c4cf02f30e0e435746d3085a7106317649148d`
+| ECOSYSTEM descriptile for standards-update.
+
+| `9-archive/a2ml/standards-update/.machine_readable/descriptiles/META.a2ml`
+| 1838
+| `ec5a28fe5901c94cd03213e68aaff49282229edcfbd3284378ab6ccf83aef5ab`
+| `561dca602cfa824d2dfe8a7b8136bbc1a62ef933`
+| META descriptile for standards-update.
+
+| `9-archive/a2ml/standards-update/.machine_readable/descriptiles/NEUROSYM.a2ml`
+| 1978
+| `655b19be43e18dd0e41cb5b96bf491f68cfa1910262b2cc6a0ec0a3dfac4280d`
+| `220137c527ed25f482dda14f8f3d71769c720301`
+| NEUROSYM descriptile for standards-update.
+
+| `9-archive/a2ml/standards-update/.machine_readable/descriptiles/PLAYBOOK.a2ml`
+| 2399
+| `287f9624e35b9bb127558971ebe05770b02725c935cdbdaeaca6a88701c28ff4`
+| `006ac7a7fcd44759d5c6d80527a33217762cd788`
+| PLAYBOOK descriptile for standards-update.
+
+| `9-archive/a2ml/standards-update/.machine_readable/descriptiles/STATE.a2ml`
+| 3329
+| `b50b722292bf270fa6ed0b154b99843f44c02d584475a951e06a1910f0584c43`
+| `cade42ebf739603cecb87baa994b74fe481ae96a`
+| STATE descriptile for standards-update.
+
+| `9-archive/rhodium-standard-repositories/.machine_readable/descriptiles/AGENTIC.a2ml`
+| 1439
+| `71fe9f7e96c073a751b5430526a1d5f7369b2bb263560a07f6437d86f72b04be`
+| `2822cbaf163cb596c4a3a4f5348cbac1654f13a0`
+| AGENTIC descriptile for rhodium-standard-repositories.
+
+| `9-archive/rhodium-standard-repositories/.machine_readable/descriptiles/ECOSYSTEM.a2ml`
+| 426
+| `21325ff55a2cf4e044ed0e85f715713b2622beefef702b5d276e536f2d34880c`
+| `29ccb969f0038c33adebbe8c14cc05eccc327b31`
+| ECOSYSTEM descriptile for rhodium-standard-repositories.
+
+| `9-archive/rhodium-standard-repositories/.machine_readable/descriptiles/META.a2ml`
+| 649
+| `d79447ce11cb0396189bbb7ec9edc9bbed87f66f1c8f9fde724b0e933608bb65`
+| `ca56de5a120537b75bef3f00fb44d4c31dd7d2bc`
+| META descriptile for rhodium-standard-repositories.
+
+| `9-archive/rhodium-standard-repositories/.machine_readable/descriptiles/NEUROSYM.a2ml`
+| 604
+| `93cc0d3491484a5796f2f8080e3f982ca86a7d85313f6c4fbdec4cc9a42b2ad7`
+| `e1d34c090f0258e269a5c3c7c5763b7fdc856b5b`
+| NEUROSYM descriptile for rhodium-standard-repositories.
+
+| `9-archive/rhodium-standard-repositories/.machine_readable/descriptiles/PLAYBOOK.a2ml`
+| 839
+| `80a0d33bf1bd3e03293cacae386666270433e75caf325d0e4851631fcd911a36`
+| `5003fd08bba17856441a339796093d62501ea4fe`
+| PLAYBOOK descriptile for rhodium-standard-repositories.
+
+| `9-archive/rhodium-standard-repositories/.machine_readable/descriptiles/STATE.a2ml`
+| 918
+| `b2e108b92b15b2f9be4534d815aec88e90ef426f6e445ce4d307e4a63c7d7205`
+| `192df66e95eaaabaa4921b69f0ead9678c660cd9`
+| STATE descriptile for rhodium-standard-repositories.
+
+| `9-archive/rhodium-standard-repositories/contractiles/intend/Intentfile.a2ml`
+| 33
+| `5eed98b18729b4188c289a61dbe59101f95c9ca8e17eff53fff24cf0b05f6e29`
+| `a6545171d64515413a0e79013e406fce26716c82`
+| Placeholder Intentfile for the RSR intend contractile (one line of stub text).
+
+| `9-archive/rhodium-standard-repositories/satellites/META.scm/examples/comprehensive.a2ml`
+| 6380
+| `39c72ed858aac98c5c8ace3e6ac0ee2ca6bc8f958095f23362708469e1cdccd9`
+| `50e2fadd3d0c6445b72f00adf4657f3390cf9677`
+| Comprehensive example META checkpoint file for the META.scm satellite.
+
+| `9-archive/rhodium-standard-repositories/satellites/META.scm/examples/minimal.a2ml`
+| 976
+| `509df05a0790e5e53d72f34329804f2694ad14b7750211de404c1b7de28843f0`
+| `6126a60587cdb2034a813536d8cc90209bbd3746`
+| Minimal example META checkpoint file for the META.scm satellite.
+
+| `9-archive/rhodium-standard-repositories/satellites/cccp/satellites/nextgen-languages/LANGUAGES.a2ml`
+| 18242
+| `38f410ca612873a014f8b00d8edab4072eebbcee723994d2bfc1438788405362`
+| `54f3a9082df007a5e45b238ed8a376d4218c46b5`
+| Next-gen language comparison and strategy for the cccp nextgen-languages satellite.
+|===
