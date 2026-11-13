@@ -1,6 +1,9 @@
 # This workflow is managed by gh actions-lock.
 # SPDX-License-Identifier: MPL-2.0
 # This workflow is managed by gh actions-lock.
+# DEPRECATED (comment only; behaviour unchanged): the rsr-template-repo template now runs the hypatia-scan
+# check as an inline job. New repos should use the template's inline form instead of calling
+# this reusable. Existing callers pinned by SHA keep working. Removal is a separate decision.
 # Hypatia Neurosymbolic CI/CD Security Scan — Reusable Workflow
 name: Hypatia Reusable Scan
 
