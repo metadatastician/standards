@@ -22,6 +22,12 @@
 ; anchor carries no id of its own, no clade (a placement is an identity fact
 ; in the chora, W10) and no lifecycle status (STATE.deed, J15).
 ;
+; STATUS (SysArch R-01, held for the owner's answer to Q1): A7 W3 and J14
+; make the anchor its own file, ANCHOR.deed with head anchor-deed, which
+; deed.abnf v1.4.0 dispatches. This header describes the clause profile as
+; built and tested, which A7 6.5 keeps as input to the anchor-deed module.
+; It is not the target placement; do not implement new readers against it.
+;
 ; Where it appears: at most one (anchor …) clause, at the top level of a
 ; repo-deed (<repo>_chora.deed). SEMANTIC: a validator MUST reject an
 ; (anchor …) clause nested inside any other clause, or in any other head.
