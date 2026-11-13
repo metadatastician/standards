@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 = A7: Contractiles, Descriptiles and Anchor (edicts, reality, course correction)
 :version: 0.2.4-draft
-:status: DRAFT v0.2.4. Owner rulings W1 to W10 of 2026-11-13 recorded (section 2.3; W10 amends W1); they supersede Q11, Q12 (in its form) and Q13 for this subject. J1 to J3, J5 to J8 and J10 to J12 approved 2026-11-13; J9 and J13 approved as amended; J4, J14 to J17 and J18 ruled 2026-11-13. W10 and J15 are synchronised with A1 v0.4.1 and A2 v0.2.4. J19 (the settings interface J4 calls for) is proposed and not yet ruled (14.2). v0.2.4 applies the A7 findings of the SysArch A1 to A7 consistency review that need no owner answer (14.3); R-01, R-02, R-06 and R-07 wait on the owner. Builds on A1 v0.4.1, A2 v0.2.4, A3 v0.2.3 and A5 v0.2.2. Supersedes, for its subject, docs/ULTRAPLAN-DEED-K9-CONTRACTILES-2026-10-19.adoc v0.3.3 (J1). Not ratified.
+:status: DRAFT v0.2.4. Owner rulings W1 to W10 of 2026-11-13 recorded (section 2.3; W10 amends W1); they supersede Q11, Q12 (in its form) and Q13 for this subject. J1 to J3, J5 to J8 and J10 to J12 approved 2026-11-13; J9 and J13 approved as amended; J4, J14 to J17 and J18 ruled 2026-11-13. W10 and J15 are synchronised with A1 v0.4.1 and A2 v0.2.4. J19 (the settings interface J4 calls for), J20 (`:of-chora` in the J14 heads) and J13a (the `contractile` registry lands with the edict form) ruled 2026-11-13 (14.1). v0.2.4 applies the A7 findings of the SysArch A1 to A7 consistency review that need no owner answer (14.3); R-01, R-02 and R-06 wait on the owner; R-07 is ruled as J20. Builds on A1 v0.4.1, A2 v0.2.4, A3 v0.2.3 and A5 v0.2.2. Supersedes, for its subject, docs/ULTRAPLAN-DEED-K9-CONTRACTILES-2026-10-19.adoc v0.3.3 (J1). Not ratified.
 :toc:
 
 Specification A7 of the Estate Reconciliation Plan. It defines how a repository's edicts (the contractiles) are checked against its identity (the chora) and its audited reality (the descriptiles), how an anchor corrects a project that has drifted, and the order in which the estate leaves A2ML behind.
@@ -18,7 +18,7 @@ Specification A7 of the Estate Reconciliation Plan. It defines how a repository'
 | [O] | Owner ruling. Rulings Q1 to Q16 are of 2026-10-20, W1 to W10 of 2026-11-13. The others are named where cited.
 |===
 
-Identifiers are local to this specification, as in A1 to A6. Rulings of 2026-11-13 are `W1` to `W10`; decisions are `J1` to `J18`. Test ids use the two-letter prefixes `YN`, `YP`, `YA`, `YD`, `YC`, `YK`, `YR`, `YE`, `YS`, `YB`, `YF` and `YH`, which no other specification in the set uses [M].
+Identifiers are local to this specification, as in A1 to A6. Rulings of 2026-11-13 are `W1` to `W10`; decisions are `J1` to `J20`, with `J13a` amending J13. Test ids use the two-letter prefixes `YN`, `YP`, `YA`, `YD`, `YC`, `YK`, `YR`, `YE`, `YS`, `YB`, `YF` and `YH`, which no other specification in the set uses [M].
 
 == 1. Summary
 
@@ -151,7 +151,7 @@ File: `.machine_readable/anchors/ANCHOR.deed`, head `anchor-deed` (J14). One fil
 (anchor-deed
   :schema-version "1.0.0"
   :canonical-name "example-game"
-  :beholding-chora #uuid"00000000-0000-8000-8000-0000000000a1"   ; the repo's chora id
+  :of-chora #uuid"00000000-0000-8000-8000-0000000000a1"   ; the repo's chora id (J20)
   (anchor :id "AN-2026-11-13-1" :state open
     :issued "2026-11-13"
     :authority "owner/example-game#12"          ; who may say no; open string (J7)
@@ -206,7 +206,7 @@ The legacy `ANCHOR.a2ml` described semantic authority and a golden path. Its fie
 
 === 7.1 Files, names and modules
 
-Descriptiles live in `.machine_readable/descriptiles/`. Each is a deed of head `descriptile-deed` (J14) whose `:beholding-chora` is the repo's chora id. The file name is the descriptile's name in capitals: `META.deed`, `STATE.deed`, `ECOSYSTEM.deed`, `AGENTIC.deed`, `NEUROSYM.deed`, `PLAYBOOK.deed`, `CLADE.deed` (the repo's own content organisation, W10), and one per verb: `INTENT.deed`, `MUST.deed`, `TRUST.deed`, `ADJUST.deed`, `DUST.deed`, `BUST.deed`. These thirteen names are the J14 descriptile set. The chora deed stays the one identity record (D312) and carries no descriptile content, except the per-bot `(bot-directives …)` clause, which D312 keeps in the chora deed.
+Descriptiles live in `.machine_readable/descriptiles/`. Each is a deed of head `descriptile-deed` (J14) whose `:of-chora` is the repo's chora id (J20). The file name is the descriptile's name in capitals: `META.deed`, `STATE.deed`, `ECOSYSTEM.deed`, `AGENTIC.deed`, `NEUROSYM.deed`, `PLAYBOOK.deed`, `CLADE.deed` (the repo's own content organisation, W10), and one per verb: `INTENT.deed`, `MUST.deed`, `TRUST.deed`, `ADJUST.deed`, `DUST.deed`, `BUST.deed`. These thirteen names are the J14 descriptile set. The chora deed stays the one identity record (D312) and carries no descriptile content, except the per-bot `(bot-directives …)` clause, which D312 keeps in the chora deed.
 
 Case is a rule, not a style (YL4). A file in capitals says *this is how it is*. A Capitalised file (section 8) says *this is how it must be*.
 
@@ -247,7 +247,7 @@ Each verb's reality is its ALL-CAPS deed. It holds facts, each naming the edict 
 (descriptile-deed
   :schema-version "1.0.0"
   :canonical-name "example-game"
-  :beholding-chora #uuid"00000000-0000-8000-8000-0000000000a1"
+  :of-chora #uuid"00000000-0000-8000-8000-0000000000a1"
   :affirmed "2026-11-12" :affirmed-by agent
   (fact :witnesses "adj-alt-text" :value #f :evidence measured
         :source "docs/a11y/audit-2026-11-12.adoc")
@@ -288,7 +288,7 @@ Each rule is an edict with two halves [O: W2]:
 (contractile-deed
   :schema-version "1.0.0"
   :canonical-name "example-game"
-  :beholding-chora #uuid"00000000-0000-8000-8000-0000000000a1"
+  :of-chora #uuid"00000000-0000-8000-8000-0000000000a1"
   :verb adjust
   (rule :id "adj-alt-text" !
     :text "A repo with a developer audience gives every image in its developer front end alt text."
@@ -459,7 +459,7 @@ Each step is one draft PR per repository, made only after the owner approves it.
 
 . *M1, the gate.* Land Part 1a (#1488). Callers get it through the existing pin propagation. From then on, a repo can lose A2ML but cannot gain any.
 . *M2, the generators.* chora-registry (1b), then `rsr-template-repo` (1c). The template also gets `#uuid` minting (J11), the `(contractiles …)` clause, the six `<Verb>file.deed` files and the thirteen ALL-CAPS descriptiles (`CLADE.deed` among them, in its minimum form `:in-use #f` until the repo organises its content), so every new repo is born on the new forms [ultraplan P0.3, P3 "generator first"]. Before that, a trial on the template with only `Mustfile.deed` and `STATE.deed` shows whether the runner finds a violation from identity (8.1); the design is looked at again with what broke before the other verbs follow. *Each new-form file joins the template only once its M3 module has landed* (SysArch R-05): a file the grammar cannot yet check is not born. In particular `CLADE.deed` waits for the `clade` module, and the trial waits for the edict form and the `state` and verb-descriptile modules.
-. *M3, the clause modules*, one PR each, in this order (the `contractiles` module lands with the generated `contractile` registry of J13): `common`, the three heads of J14, `contractiles`, the `!` token (`deed.abnf` v1.5.0: `!` after a field value, restricted by a SEMANTIC side condition to a rule's `:id` in a `contractile-deed`, J17, SysArch R-03), the edict form, the six verb descriptiles, `anchor-deed` (from the Part 3 module, 6.5), `ecosystem`, `state`, `meta`, `agentic`, `neurosym`, `playbook`, `clade` (W10). Each lands with its linter profile, fixtures and differential entry, then joins the caller-wide lint in `deed-conformance.yml` once ratified.
+. *M3, the clause modules*, one PR each, in this order (the generated `contractile` registry of J13 lands with the edict form, whose rules it is generated from; owner, 2026-11-13): `common`, the three heads of J14, `contractiles`, the `!` token (`deed.abnf` v1.5.0: `!` after a field value, restricted by a SEMANTIC side condition to a rule's `:id` in a `contractile-deed`, J17, SysArch R-03), the edict form, the six verb descriptiles, `anchor-deed` (from the Part 3 module, 6.5), `ecosystem`, `state`, `meta`, `agentic`, `neurosym`, `playbook`, `clade` (W10). Each lands with its linter profile, fixtures and differential entry, then joins the caller-wide lint in `deed-conformance.yml` once ratified.
 . *M4, standards converts itself.* In this order: add `(contractiles …)`; rewire the must gate and verb discovery (section 10, rows 1 and 2); translate `ANCHOR.a2ml` by 6.4; move the four all-caps `.contractile` files field by field into `INTENT.deed`, `MUST.deed`, `TRUST.deed` and `ADJUST.deed` [O: Q12, W3]; move the Debtfile into `debt_praxis.deed` (J9); make `0-AI-MANIFEST.deed` pointer-only [O: Q15]; then delete each A2ML file in the same PR that removes its last reader, which shrinks the ledger.
 . *M5, the shared readers*, each with a new-input-first fallback: readme-derive, the debt ratchet, the RSR profile checker. Then hypatia (rules and `HYP-S005`) and the contractile CLI, each in its own repo.
 . *M6, pilot.* Three repos of different shapes: one panoply-class, one deed-clean, one with live A2ML gates [R: ultraplan P3].
@@ -612,7 +612,7 @@ These tests cover the semantic-authority clause module merged in #1490. Under W3
 
 === 14.1 Ruled on 2026-11-13 [O]
 
-The owner ruled J1 to J17 on 2026-11-13 in the A1 thread, and J18 the same day in both the A1 and A7 threads. Where a ruling changed the proposal, the column says how. W1 to W9 (section 2.3) were given in the same session.
+The owner ruled J1 to J17 on 2026-11-13 in the A1 thread, J18 the same day in both the A1 and A7 threads, and J19, J20 and J13a the same day in the A7 thread. Where a ruling changed the proposal, the column says how. W1 to W9 (section 2.3) were given in the same session.
 
 [cols="1,4,2"]
 |===
@@ -636,11 +636,14 @@ The owner ruled J1 to J17 on 2026-11-13 in the A1 thread, and J18 the same day i
 | J16 | Anchor drift `:distance` uses the Bust severity scale, 1 furthest and 5 close. The required fields are those of 6.3. | Approved
 | J17 | `!` becomes a deed token, allowed only directly after a rule's `:id` value in a `contractile-deed`. | Approved
 | J18 | Keep P0.1: a rule witnessed only by a refused `'Hunt` probe is blocking unresolved under every verb, `intend` included. A refused probe is missing evidence, and an unverified signature never looks like a pass. | Approved
+| J19 | The settings interface J4 calls for: the `(settings (affirmation …))` clause in `AGENTIC.deed` and its `(relaxation …)` records, as written in 14.2. | Approved 2026-11-13, as proposed
+| J20 | `:beholding-chora` keeps one meaning: the estate chora a repo or praxis deed belongs to (A1 §7.2). The J14 heads (`contractile-deed`, `descriptile-deed`, `anchor-deed`) name the repo they belong to with `:of-chora`, the repo's opaque version 8 chora id, and carry no `:beholding-chora`; the repo's chora deed already names its estate. A praxis deed, `debt_praxis.deed` included, keeps `:beholding-chora` (SysArch R-07). | Approved 2026-11-13
+| J13a | The `contractile` registry of J13 lands with the edict-form module, not with the `(contractiles …)` module (standards#1529): it is generated from the edicts, which need that grammar and the `!` token first. | Approved 2026-11-13
 |===
 
-=== 14.2 Proposed, not yet ruled
+=== 14.2 J19, the settings interface (ruled 2026-11-13)
 
-J4 rules that affirmation can be relaxed in settings, by named parties, with a report. It names no settings file, no form and no receipt, so two readers could each invent their own evidence. J19 proposes the interface. Until it is ruled, no relaxation exists, and the J4 default (strict) holds everywhere.
+J4 rules that affirmation can be relaxed in settings, by named parties, with a report. It names no settings file, no form and no receipt, so two readers could each invent their own evidence. J19 gives the interface, and the owner approved it as proposed on 2026-11-13 (14.1). Until the `agentic` module lands (section 11, M3), no relaxation can be written or checked, so the J4 default (strict) holds everywhere.
 
 [cols="1,5,2"]
 |===
@@ -654,7 +657,7 @@ a| *Where the settings live, and what a relaxation records.*
 * Each change is kept as `(relaxation :seq <n> :setting affirmation.required :value <#t or #f> :changed-by <party> :changed-on "YYYY-MM-DD" :reported-to <channel> :receipt "<id the channel returned>")`. `:seq` is an integer, starting at 1 and rising by one with each entry, and it orders the entries; the entry with the highest `:seq` gives the current value. An entry is never deleted, so restoring strictness (`:value #t`) is recorded the same way.
 * A reader accepts an entry only when `:changed-by` is in `:may-change`, `:reported-to` is in `:report-to`, and the `:receipt` verifies with that channel as attesting this whole entry: its `:seq`, setting, value and authenticated actor. `:changed-by` alone is self-declared, and a receipt for one entry never verifies another. An entry that fails is reported, and the value stays as the last accepted entry left it.
 * Not decided here: how a channel issues its receipt. That belongs to the feedback-o-tron and heron interfaces.
-| The `AGENTIC.deed` clause as shown. Alternative: a separate `SETTINGS.deed`. That would be a fourteenth descriptile name and a change to J14.
+| Approved: the `AGENTIC.deed` clause as shown. A separate `SETTINGS.deed`, a fourteenth descriptile name, was not chosen.
 |===
 
 === 14.3 The SysArch A1 to A7 consistency review (2026-11-13)
@@ -678,7 +681,7 @@ The owner-requested review read A1 to A7 at `6038273`. Its A7 findings are handl
 | R-30 | `.claude/CLAUDE.md`, in standards#1530.
 | R-32 | Repository references read chora-registry, with the GitHub name until the rename. A reference to the domain of an existing id keeps `gv-clade-index` (V9).
 | R-01, R-02, R-06 | Held for the owner's answers to SysArch Q1, Q2 and Q4.
-| R-07 | Held: `:beholding-chora` names the estate id in repo and praxis deeds (A1 §7.2) and the repo's own id in the J14 heads. Choosing between a new key for the J14 heads and per-head rows in A1 §7.2 is put to the owner.
+| R-07 | Ruled as J20: the J14 heads name their repo with `:of-chora`, and `:beholding-chora` keeps A1's meaning. The samples in 6.2, 7.3 and 8.1 and `clauses/common.abnf`'s comment are updated.
 |===
 
 == 15. Out of scope

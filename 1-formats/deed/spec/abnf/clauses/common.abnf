@@ -27,7 +27,9 @@ chora-uuid8     = %s"#uuid" DQUOTE 8hex-lc "-" 4hex-lc "-" "8" 3hex-lc "-"
                   lc-variant 3hex-lc "-" 12hex-lc DQUOTE
                 ; deed.abnf's uuid narrowed to version 8: A1 rule V8 puts the
                 ; profile C UUIDv8 in deeds; the UUIDv5 stays in the registry.
-                ; Used for a parent (anchor.abnf) and for :beholding-chora.
+                ; Used for a parent (anchor.abnf) and for :of-chora, the J14
+                ; heads' name for the repo they belong to (A7 J20). It is not
+                ; :beholding-chora, which names the estate chora (A1 §7.2).
 lc-variant      = "8" / "9" / %x61 / %x62
                 ; RFC 9562 variant 10, lowercase only, as deed.abnf's uuid-variant
                 ; (%s"a" / %s"b" since the #1482 errata) and deed_lint.
