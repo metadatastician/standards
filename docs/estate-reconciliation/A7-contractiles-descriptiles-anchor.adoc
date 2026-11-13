@@ -509,7 +509,7 @@ These tests cover the semantic-authority clause module merged in #1490. Under W3
 | YD03 | `:evidence` is one of A2 D2's seven symbols. | `evidence-numeric-bad`
 | YD04 | No model pin in `AGENTIC.deed`, and no language list in any descriptile (YL3). | `agentic-model-pin-bad`, `agentic-lang-ban-bad`
 | YD05 | `NEUROSYM.deed` `(symbolic-rules …)` holds no rule definition. | `neurosym-rule-def-bad`
-| YD06 | Where affirmation is required (J4, reopened), a descriptile has `:affirmed` and `:affirmed-by`, and `:expires`, if present, is in the future. | `unaffirmed-bad`, `expired-bad`
+| YD06 | Unless a repo setting has relaxed it (J4), a descriptile has `:affirmed` and `:affirmed-by`, and `:expires`, if present, is in the future. | `unaffirmed-bad`, `expired-bad`
 | YD07 | `ECOSYSTEM.deed` `:project` equals the chora's `:canonical-name`. `:relationship` is in the closed list. `(related :uuid)` is required in strict mode. | `ecosystem-project-bad`, `relationship-unknown-bad`
 |===
 
