@@ -61,7 +61,8 @@ fi
 for want in "fresh.yml" "behind.yml" "illegal.yml" "tracking.yml" "none.yml" "short.yml" \
             "manifest.json" "bad-schema.json" "bad-version.json" "bad-dup.json" "bad-empty.json" \
             "bad-json.json" "content-behind.yml" "content-current.yml" "content-ahead.yml" \
-            "content-wide.yml" "content-unlisted.yml" "content-malformed.yml" "content-not-first.yml"; do
+            "content-wide.yml" "content-unlisted.yml" "content-malformed.yml" "content-not-first.yml" \
+            "bad-huge.json" "content-huge.yml"; do
   grep -q "PASS $want" "$TMP/base.out" && pass "control present: $want" \
     || fail "control MISSING from baseline: $want (a control that never runs is not a control)"
 done
@@ -170,6 +171,16 @@ kill_mutant manifest_duplicate_accepted \
 kill_mutant content_stamp_anywhere \
   's@first=\$\(head -n 1 "\$f" 2>/dev/null\)@first=$(grep -m1 "^# proven-cicd:" "$f" 2>/dev/null)@' \
   "FAIL content-not-first.yml"
+
+# M11, M12 — unbound the version components. version_cmp compares shell
+# integers, which wrap at 2^63: 18446744073709551617.0.0 then equals 1.0.0, and
+# a copy far ahead, or a stale copy against such a manifest, reads CURRENT.
+kill_mutant content_stamp_unbounded \
+  '/^STAMP_RE=/s@\{1,9\}@+@g' \
+  "FAIL content-huge.yml"
+kill_mutant manifest_version_unbounded \
+  '/and \(\.version \| type == "string"/s@\{1,9\}@+@g' \
+  "FAIL bad-huge.json"
 
 # --- 3. fetch_workflows fails CLOSED -----------------------------------------
 # A rate-limited repo used to come back as "no workflows": fetch_workflows
@@ -561,6 +572,39 @@ case_main_content_off() {
   fi
 }
 
+# case_main_content_fix <applier> — the content census is read-only in --fix
+# too. The stub's ci.yml pin sits under the former owner, so fix mode does
+# land a re-pin PR (FRESH,MOVED); that commit must carry ci.yml and must NOT
+# carry the stale stamped copy, which is reported BEHIND-CONTENT and left alone.
+case_main_content_fix() {
+  local d root sha
+  d=$(new_case contentfix)
+  root=$(mktemp -d "$TMP/contentfix-root.XXXX")
+  git -C "$root" init -q
+  git -C "$root" -c user.name=t -c user.email=t@t -c commit.gpgsign=false commit -q --allow-empty -m target
+  sha=$(git -C "$root" rev-parse HEAD)
+  printf '{"schema":"proven-cicd/manifest/v1","artifacts":[{"artifact":"proven-lock-gate","version":"0.1.0","sha256":"x","template":"t","install_path":"p"}]}' \
+    > "$d/proven_manifest.json"
+  printf '# proven-cicd: proven-lock-gate@0.0.9 sha256:%s\nname: g\n' "$STAMP_HEX" > "$d/own_stamped"
+  : > "$d/calls.log"
+  # shellcheck disable=SC2016  # $1 and $2 are expanded by the inner shell
+  env PATH="$LSTUB:$PATH" GH_FIX="$d" GH_TOKEN=ghs_app GITHUB_TOKEN= TARGET="$sha" \
+    bash -c 'source "$1"; STANDARDS_ROOT="$2"; validate_target() { return 0; }; shift 2; main "$@"' _ "$1" "$root" \
+      --to "$sha" --owners hyperpolymath,metadatastician --fix --proven-sha "$P" > "$d/out" 2> "$d/err"
+  echo $? > "$d/rc"
+  local paths
+  paths=$(jq -r '.variables.input.fileChanges.additions[]?.path' "$d/commit.json" 2>/dev/null)
+  if [ "$(cat "$d/rc")" = 0 ] \
+     && grep -qF "$(printf 'hyperpolymath/pub-a\tproven-lock-gate.yml\tBEHIND-CONTENT')" "$d/out" \
+     && printf '%s\n' "$paths" | grep -qxF '.github/workflows/ci.yml' \
+     && ! printf '%s\n' "$paths" | grep -qF 'proven-lock-gate.yml'; then
+    pass "main: --fix re-pins ci.yml but never commits the stale stamped copy"
+  else
+    fail "main: --fix acted on a content row (rc=$(cat "$d/rc"))"
+    sed 's/^/    /' "$d/out" >&2; tail -5 "$d/err" | sed 's/^/    /' >&2
+  fi
+}
+
 # Planted positives: the stub must be able to say no, or every fail-closed case
 # above could pass because nothing ever failed.
 d=$(new_case planted)
@@ -589,6 +633,7 @@ case_main_squabbler "$APPLIER"
 case_main_content "$APPLIER"
 case_main_content_fail "$APPLIER"
 case_main_content_off "$APPLIER"
+case_main_content_fix "$APPLIER"
 
 # A repository whose own cicd-squabbler.yml runs no gate is never overwritten:
 # it is reported SQUABBLER-DEFERRED:NAME-TAKEN.
@@ -752,6 +797,7 @@ list_mutant fork_not_checked 's@^          true\) sqst=FORK ;;$@          true) 
 list_mutant content_fail_open '/Refusing a content census without it/{n;s@exit 1@:@}' case_main_content_fail
 list_mutant content_manifest_unpinned 's@\?ref=\$\{PROVEN_SHA\}@@' case_main_content
 list_mutant content_row_dropped 's@cst=\$\(content_state "\$wf" "\$PROVEN_MANIFEST"\)@cst=""@' case_main_content
+list_mutant content_row_writes 's@\[ -n "\$cst" \] \&\& printf@[ -n "$cst" ] \&\& changed+=("$base"); [ -n "$cst" ] \&\& printf@' case_main_content_fix
 }
 
 echo

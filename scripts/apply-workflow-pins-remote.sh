@@ -95,6 +95,10 @@
 #   An unreadable or invalid manifest at --proven-sha stops the run before any
 #   census (fail closed): a content census with no manifest is not evidence.
 #   Rewriting a stale copy is a separate mode, not built here.
+#   A stamped copy detects edits to its hashed body by sha256. proven-cicd's
+#   stamped bodies carry no standards reusable pins in that region; if one ever
+#   did, a --fix re-pin here would trip the copy's own drift check, so the
+#   rewrite mode must skip stamped files and report them with a status of its own.
 #
 # ENSURE-SQUABBLER (why it rides with the re-pin, never ahead of it):
 #   The squabbler's `chains` job FAILS on a dead upstream. Added to a repo that
@@ -137,7 +141,7 @@ PROVEN_REPO="hyperpolymath/proven-cicd-and-workflows"
 PROVEN_SHA=""
 PROVEN_MANIFEST=""
 
-log(){ printf '%s\n' "$*" >&2; }
+log() { printf '%s\n' "$*" >&2; }
 
 # ---------------------------------------------------------------------------
 # PURE CORE — no network, no filesystem outside the file argument.
@@ -213,7 +217,10 @@ classify_file() {
 # --- proven content (pure) ----------------------------------------------------
 
 # A valid stamp line, as proven-cicd-and-workflows scripts/proven-stamp.sh writes it.
-STAMP_RE='^# proven-cicd: ([a-z0-9][a-z0-9-]*)@([0-9]+)\.([0-9]+)\.([0-9]+) sha256:[0-9a-f]{64}$'
+# Each version component is bounded to nine digits: version_cmp compares them
+# as shell integers, which wrap at 2^63, so an unbounded component could make a
+# copy far ahead (or a stale copy against such a manifest) read CURRENT.
+STAMP_RE='^# proven-cicd: ([a-z0-9][a-z0-9-]*)@([0-9]{1,9})\.([0-9]{1,9})\.([0-9]{1,9}) sha256:[0-9a-f]{64}$'
 
 # version_cmp <a> <b> — echo lt, eq or gt, comparing MAJOR.MINOR.PATCH as
 # numbers. A lexical compare reads 0.10.0 as older than 0.9.0.
@@ -238,7 +245,7 @@ manifest_tsv() {
     if .schema == "proven-cicd/manifest/v1"
        and (.artifacts | type == "array" and length > 0)
        and all(.artifacts[]; (.artifact | type == "string" and test("^[a-z0-9][a-z0-9-]*$"))
-                             and (.version | type == "string" and test("^[0-9]+\\.[0-9]+\\.[0-9]+$")))
+                             and (.version | type == "string" and test("^[0-9]{1,9}\\.[0-9]{1,9}\\.[0-9]{1,9}$")))
        and ([.artifacts[].artifact] | length == (unique | length))
     then .artifacts[] | "\(.artifact)\t\(.version)"
     else error("not a valid proven-cicd/manifest/v1") end' "$1" 2>/dev/null
@@ -264,6 +271,8 @@ content_state() {
     lt) printf 'BEHIND-CONTENT\t%s@%s -> %s\n' "$artifact" "$have" "$want" ;;
     eq) printf 'CONTENT-CURRENT\t%s@%s\n' "$artifact" "$have" ;;
     gt) printf 'CONTENT-AHEAD\t%s@%s > %s\n' "$artifact" "$have" "$want" ;;
+    # Unreachable while version_cmp answers lt, eq or gt; fail loud if it ever does not.
+    *)  printf 'CONTENT-MALFORMED\t-\n' ;;
   esac
 }
 
@@ -567,8 +576,10 @@ JSON
   printf '{"schema":"proven-cicd/manifest/v1","artifacts":[{"artifact":"a","version":"1.0.0"},{"artifact":"a","version":"1.0.1"}]}' > "$d/bad-dup.json"
   printf '{"schema":"proven-cicd/manifest/v1","artifacts":[]}' > "$d/bad-empty.json"
   printf 'not json' > "$d/bad-json.json"
+  # 2^64 + 1: a shell integer wraps to 1, so an unbounded component compares equal.
+  printf '{"schema":"proven-cicd/manifest/v1","artifacts":[{"artifact":"a","version":"18446744073709551617.0.0"}]}' > "$d/bad-huge.json"
   local bad
-  for bad in bad-schema bad-version bad-dup bad-empty bad-json; do
+  for bad in bad-schema bad-version bad-dup bad-empty bad-json bad-huge; do
     if manifest_tsv "$d/$bad.json" >/dev/null; then
       echo "  FAIL $bad.json was accepted as a manifest" >&2; rc=1
     else
@@ -582,6 +593,7 @@ JSON
   printf '# proven-cicd: other-gate@1.0.0 sha256:%s\nname: g\n' "$h" > "$d/content-unlisted.yml"
   printf '# proven-cicd: proven-lock-gate@0.1 sha256:%s\nname: g\n' "$h" > "$d/content-malformed.yml"
   printf 'name: g\n# proven-cicd: proven-lock-gate@0.0.9 sha256:%s\n' "$h" > "$d/content-not-first.yml"
+  printf '# proven-cicd: proven-lock-gate@18446744073709551617.0.0 sha256:%s\nname: g\n' "$h" > "$d/content-huge.yml"
   ccheck() {
     local file="$1" want="$2" got
     got=$(content_state "$d/$file" "$d/manifest.tsv" | cut -f1)
@@ -597,6 +609,8 @@ JSON
   ccheck content-wide.yml      BEHIND-CONTENT
   ccheck content-unlisted.yml  CONTENT-UNLISTED
   ccheck content-malformed.yml CONTENT-MALFORMED
+  # A component past nine digits would wrap in version_cmp and read CURRENT.
+  ccheck content-huge.yml      CONTENT-MALFORMED
   # Only the first line is a stamp; a pin-only workflow has no content row.
   ccheck content-not-first.yml ""
   ccheck fresh.yml             ""
