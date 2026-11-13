@@ -1,0 +1,8 @@
+;; SPDX-License-Identifier: CC-BY-SA-4.0
+(contractile-deed
+  :schema-version "1.0.0"
+  :canonical-name "example-game"
+  :of-chora #uuid"00000000-0000-8000-8000-0000000000a1"
+  :verb must
+  (rule :id "must-tests" :text "Core tests pass." (applies-when (always)) (requires (must :witness "must-tests" :value #t)))
+  (rule :id "must-fmt" ! :text "Formatting is clean." (applies-when (context :path "src")) (requires (must :witness "must-fmt" :value #t))))

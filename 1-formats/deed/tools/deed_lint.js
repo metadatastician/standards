@@ -39,6 +39,8 @@ Usage: deed_lint.js FILE...     exit 0 iff all files conform
                                               (contractiles …) clause profile (DRAFT, A7 8.2; YC01 to YC05);
                                               --root: the repo root, where every named file must exist
        deed_lint.js --contractiles-fixtures DIR DIR/valid pass the profile, DIR/invalid fail it (both required)
+       deed_lint.js --edict FILE...           the edict form of a contractile-deed (DRAFT, A7 8.1, 8.4, 8.5)
+       deed_lint.js --edict-fixtures DIR      DIR/{valid,invalid}/<case>/<Verb>file.deed (both required)
        deed_lint.js --ast-json FILE           emit the validated AST as JSON (integer lexemes stay strings)
        deed_lint.js --mustfile-json FILE      validate the Mustfile check profile and emit records
        deed_lint.js --proof-receipt-json FILE validate a proof receipt (PROOF-POLICY §8.5), derive
@@ -1600,6 +1602,240 @@ function contractilesFiles(files, opts = {}) {
   return bad ? 1 : 0;
 }
 
+// ─── The edict form of a contractile-deed ──────────────────────────────
+// spec/abnf/clauses/edict.abnf v1.0.0 (DRAFT; prose: docs/estate-
+// reconciliation/A7-contractiles-descriptiles-anchor.adoc 8.1, 8.4, 8.5;
+// rulings W2, W7, W10, J5, J13, J17, J20). Checks what the profile adds to the
+// grammar. A deed whose head is not contractile-deed is outside the profile.
+
+export class EdictError extends LintError {
+  constructor(msg) {
+    super(msg, null);
+    this.name = "EdictError";
+  }
+
+  toString() {
+    return this.msg;
+  }
+}
+
+const EDICT_ID = /^[A-Za-z0-9._-]+$/;
+const SELECTOR_HEADS = new Set(["identity", "profile", "capabilities", "context"]);
+const COMPARATORS = ["value", "at-least", "at-most"];
+
+/** The verb a <Verb>file.deed name declares, or null (A7 8.1 table). */
+export function verbOfFilename(filename) {
+  if (!filename) return null;
+  const b = basename(filename);
+  for (const [verb, cap] of Object.entries(CONTRACTILE_VERBS)) if (b === `${cap}file.deed`) return verb;
+  return null;
+}
+
+/**
+ * Check the edict form of contractile-deed source text. Returns
+ * {verb, rules: [{id, bang, text}]} (null for any other head); throws
+ * LintError on a grammar or profile violation.
+ */
+export function checkEdict(text, filename = null) {
+  const [head, items] = validate(text, filename);
+  if (head !== "contractile-deed") return null;
+  const fields = new Map();
+  const rules = [];
+  let envelope = 0;
+  for (const it of items) {
+    if (it[0] === "field") {
+      if (it[3]) throw new EdictError(`'!' is allowed only on a rule's :id, not on :${it[1]}`);
+      if (it[1] === "beholding-chora") {
+        throw new EdictError(":beholding-chora names an estate chora; a contractile-deed names its repo with :of-chora (J20)");
+      }
+      if (!["schema-version", "canonical-name", "of-chora", "verb"].includes(it[1])) {
+        throw new EdictError(`a contractile-deed has no field :${it[1]}`);
+      }
+      if (fields.has(it[1])) throw new EdictError(`a contractile-deed carries :${it[1]} once`);
+      fields.set(it[1], it[2]);
+      continue;
+    }
+    if (it[1] === "rule") rules.push(it[2]);
+    else if (it[1] === "envelope") envelope += 1;
+    else throw new EdictError(`a contractile-deed has no clause (${it[1]} …); its clauses are (rule …) and, in a Bustfile, (envelope …)`);
+  }
+  for (const k of ["canonical-name", "of-chora", "verb"]) if (!fields.has(k)) throw new EdictError(`a contractile-deed is missing :${k}`);
+  if (fields.get("canonical-name")[0] !== "string") throw new EdictError(":canonical-name must be a string");
+  const of = fields.get("of-chora");
+  if (of[0] !== "uuid" || of[1][14] !== "8") {
+    throw new EdictError(":of-chora must be the repo's opaque version 8 #uuid\"…\" chora id (J20)");
+  }
+  const v = fields.get("verb");
+  if (v[0] !== "symbol" || !Object.hasOwn(CONTRACTILE_VERBS, v[1])) {
+    throw new EdictError(`:verb must be one of the symbols ${Object.keys(CONTRACTILE_VERBS).join(" ")}`);
+  }
+  const verb = v[1];
+  const fileVerb = verbOfFilename(filename);
+  if (fileVerb !== null && fileVerb !== verb) {
+    throw new EdictError(`${basename(filename)} is the ${fileVerb} edict, but :verb is ${verb} (A7 8.1)`);
+  }
+  if (envelope > 0 && verb !== "bust") throw new EdictError("(envelope …) belongs only in a Bustfile (A7 8.5)");
+  if (envelope > 1) throw new EdictError("a Bustfile carries at most one (envelope …)");
+  for (const it of items) {
+    if (it[0] !== "clause" || it[1] !== "envelope") continue;
+    const seen = new Set();
+    for (const m of it[2]) {
+      if (m[0] !== "field" || !["for", "not-for", "tolerance"].includes(m[1])) {
+        throw new EdictError(`(envelope …) takes :for, :not-for and :tolerance only, not ${m[0] === "field" ? ":" + m[1] : "(" + m[1] + " …)"}`);
+      }
+      if (m[3]) throw new EdictError(`'!' is allowed only on a rule's :id, not on (envelope :${m[1]})`);
+      if (seen.has(m[1])) throw new EdictError(`(envelope …) repeats :${m[1]}`);
+      seen.add(m[1]);
+      const ok = m[1] === "tolerance" ? m[2][0] === "string" : m[2][0] === "list" && m[2][1].every((x) => x[0] === "string");
+      if (!ok) throw new EdictError(`(envelope :${m[1]}) must be ${m[1] === "tolerance" ? "a string" : "a list of strings"}`);
+    }
+  }
+
+  const ids = new Set();
+  const out = [];
+  for (const members of rules) {
+    const f = new Map();
+    const c = new Map();
+    let bang = false;
+    for (const m of members) {
+      const key = (m[0] === "field" ? ":" : "(") + m[1];
+      if (m[0] === "field") {
+        if (!["id", "text"].includes(m[1])) throw new EdictError(`(rule …) has no field :${m[1]}`);
+        if (f.has(m[1])) throw new EdictError(`(rule …) repeats :${m[1]}`);
+        f.set(m[1], m[2]);
+        if (m[3]) bang = true;
+      } else {
+        if (!["applies-when", "requires"].includes(m[1])) throw new EdictError(`(rule …) has no clause ${key} …)`);
+        if (c.has(m[1])) throw new EdictError(`(rule …) repeats (${m[1]} …)`);
+        c.set(m[1], m[2]);
+      }
+    }
+    for (const k of ["id", "text"]) if (!f.has(k)) throw new EdictError(`(rule …) is missing :${k}`);
+    for (const k of ["applies-when", "requires"]) if (!c.has(k)) throw new EdictError(`(rule …) is missing (${k} …)`);
+    const id = f.get("id");
+    if (id[0] !== "string" || !EDICT_ID.test(id[1])) {
+      throw new EdictError(`(rule :id …) must be a string of letters, digits, ".", "_" and "-" (an A5 name segment)`);
+    }
+    const where = `(rule :id ${JSON.stringify(id[1])})`;
+    if (`contractile/${verb}/${id[1]}`.length > 200) throw new EdictError(`${where}: contractile/${verb}/${id[1]} is longer than 200 characters (A5 3.1)`);
+    if (ids.has(id[1])) throw new EdictError(`${where} appears twice`);
+    ids.add(id[1]);
+    if (f.get("text")[0] !== "string" || f.get("text")[1] === "") throw new EdictError(`${where} :text must be a non-empty string`);
+    if (bang && verb === "intend") throw new EdictError(`${where}: an Intentfile refuses "!"; it keeps room to explore (A7 8.4)`);
+
+    const aw = c.get("applies-when");
+    if (aw.length !== 1 || aw[0][0] !== "clause") throw new EdictError(`${where} (applies-when …) holds exactly one selector`);
+    const sel = aw[0];
+    if (sel[1] === "clade") {
+      throw new EdictError(`${where} (applies-when (clade …)) is refused: a clade placement is an identity fact, and no edict hangs off it (W10)`);
+    }
+    if (sel[1] === "always") {
+      if (sel[2].length) throw new EdictError(`${where} (always) takes nothing`);
+    } else if (SELECTOR_HEADS.has(sel[1])) {
+      if (!sel[2].length) throw new EdictError(`${where} (${sel[1]} …) needs at least one field`);
+      const seen = new Set();
+      for (const m of sel[2]) {
+        if (m[0] !== "field") throw new EdictError(`${where} (${sel[1]} …) takes fields only`);
+        if (m[3]) throw new EdictError(`'!' is allowed only on a rule's :id, not in a selector`);
+        if (seen.has(m[1])) throw new EdictError(`${where} (${sel[1]} …) repeats :${m[1]}`);
+        seen.add(m[1]);
+      }
+    } else {
+      throw new EdictError(`${where} (applies-when (${sel[1]} …)): a selector is (always), (identity …), (profile …), (capabilities …) or (context …)`);
+    }
+
+    const rq = c.get("requires");
+    if (rq.length !== 1 || rq[0][0] !== "clause") throw new EdictError(`${where} (requires …) holds exactly one requirement`);
+    const req = rq[0];
+    if (req[1] !== verb) throw new EdictError(`${where} (requires (${req[1]} …)) must test this verb's facts: (requires (${verb} …))`);
+    const rm = new Map();
+    for (const m of req[2]) {
+      if (m[0] !== "field" || !["witness", ...COMPARATORS].includes(m[1])) {
+        throw new EdictError(`${where} (requires (${verb} …)) takes :witness and one of :value, :at-least, :at-most`);
+      }
+      if (m[3]) throw new EdictError(`'!' is allowed only on a rule's :id, not in a requirement`);
+      if (rm.has(m[1])) throw new EdictError(`${where} (requires (${verb} …)) repeats :${m[1]}`);
+      rm.set(m[1], m[2]);
+    }
+    const w = rm.get("witness");
+    if (!w || w[0] !== "string" || w[1] !== id[1]) {
+      throw new EdictError(`${where} (requires (${verb} :witness …)) must name the rule's own :id ${JSON.stringify(id[1])} (J5)`);
+    }
+    if (COMPARATORS.filter((k) => rm.has(k)).length !== 1) {
+      throw new EdictError(`${where} (requires (${verb} …)) takes exactly one of :value, :at-least and :at-most`);
+    }
+    out.push({ id: id[1], bang, text: f.get("text")[1] });
+  }
+  return { verb, rules: out };
+}
+
+/** --edict FILE...: profile-check each file; returns exit code. */
+function edictFiles(files) {
+  let bad = 0;
+  for (const f of files) {
+    let text;
+    try {
+      text = readFileSync(f, "utf8");
+    } catch (e) {
+      bad += 1;
+      console.log(`FAIL ${f}: cannot read the file (${e.code || e.message})`);
+      continue;
+    }
+    try {
+      const r = checkEdict(text, f);
+      console.log(`OK   ${f} (${r === null ? "not a contractile-deed" : `${r.verb} edict, ${r.rules.length} rule${r.rules.length === 1 ? "" : "s"}`})`);
+    } catch (e) {
+      if (!(e instanceof LintError)) throw e;
+      bad += 1;
+      console.log(`FAIL ${f}: ${e.toString()}`);
+    }
+  }
+  return bad ? 1 : 0;
+}
+
+/**
+ * --edict-fixtures DIR: DIR/valid/<case>/<Verb>file.deed must pass and
+ * DIR/invalid/<case>/<Verb>file.deed must fail. Each case is a directory,
+ * because an edict's file name is fixed by its verb (J14). A missing or empty
+ * half is a setup error (2), never a pass.
+ */
+function edictFixtures(d) {
+  let bad = 0;
+  for (const [sub, expect] of [["valid", true], ["invalid", false]]) {
+    let cases;
+    try {
+      cases = readdirSync(join(d, sub)).sort();
+    } catch (e) {
+      console.log(`ERROR ${join(d, sub)}: cannot read the fixture directory (${e.code || e.message})`);
+      return 2;
+    }
+    if (cases.length === 0) {
+      console.log(`ERROR ${join(d, sub)}: no fixture cases`);
+      return 2;
+    }
+    for (const c of cases) {
+      const deeds = readdirSync(join(d, sub, c)).filter((n) => n.endsWith(".deed"));
+      if (deeds.length !== 1) {
+        console.log(`ERROR ${join(d, sub, c)}: a case holds exactly one .deed`);
+        return 2;
+      }
+      const f = join(d, sub, c, deeds[0]);
+      let got = true;
+      let err = "";
+      try {
+        checkEdict(readFileSync(f, "utf8"), f);
+      } catch (e) {
+        if (!(e instanceof LintError)) throw e;
+        got = false;
+        err = e.toString();
+      }
+      if (got !== expect) bad += 1;
+      console.log(`${got === expect ? "PASS " : "FAIL "}${f}` + (got === expect ? "" : `  (unexpected: ${err || "valid"})`));
+    }
+  }
+  return bad ? 1 : 0;
+}
+
 /**
  * valid/ must pass a clause profile; invalid/ must fail it. Returns exit code.
  * Both halves must exist and hold fixtures: a missing or empty half is a
@@ -1780,6 +2016,24 @@ function main(argv) {
     const rc = profileFixtures(d, checkAnchor);
     console.log("ANCHOR FIXTURES " + (rc === 0 ? "OK" : rc === 2 ? "NOT CHECKED" : "FAILED"));
     return rc;
+  }
+  if (argv.includes("--edict-fixtures")) {
+    const d = argv[argv.indexOf("--edict-fixtures") + 1];
+    if (d === undefined) {
+      console.log("--edict-fixtures requires a DIR argument");
+      return 2;
+    }
+    const rc = edictFixtures(d);
+    console.log("EDICT FIXTURES " + (rc === 0 ? "OK" : rc === 2 ? "NOT CHECKED" : "FAILED"));
+    return rc;
+  }
+  if (argv.includes("--edict")) {
+    const files = argv.filter((a) => !a.startsWith("-"));
+    if (files.length === 0) {
+      console.log(DOC);
+      return 2;
+    }
+    return edictFiles(files);
   }
   if (argv.includes("--contractiles-fixtures")) {
     const d = argv[argv.indexOf("--contractiles-fixtures") + 1];

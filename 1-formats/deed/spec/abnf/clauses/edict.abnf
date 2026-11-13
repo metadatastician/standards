@@ -1,0 +1,69 @@
+; SPDX-FileCopyrightText: © 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+; SPDX-License-Identifier: MPL-2.0
+; SPDX-License-Identifier: CC-BY-SA-4.0
+;
+; DEED clause profile: the edict form of a contractile-deed, v1.0.0 (DRAFT)
+; Prose and rationale: docs/estate-reconciliation/A7-contractiles-descriptiles-anchor.adoc
+; sections 8.1 (the edict), 8.4 (strictness and "!"), 8.5 (the Bust use
+; envelope); rulings W2, W7, W10, J5, J13, J17, J20. M3 module order: section 11.
+;
+; A CLAUSE PROFILE, not a new grammar. Every rule below is also a `clause` of
+; deed.abnf v1.5.0 (the bang included), so an edict file still passes
+; deed_lint unchanged. Rules it borrows: string, value, field, token-sep and
+; bang are deed.abnf's; str-list is common.abnf's; verb-name is
+; contractiles.abnf's. Requires RFC 7405 (%s"..." case-sensitive literals).
+;
+; Where it applies: a <Verb>file.deed (head contractile-deed, J14), at the top
+; level of the form. SEMANTIC (validator-enforced, deed_lint.js --edict):
+;   * the form carries :schema-version, :canonical-name (a string), :of-chora
+;     (the repo's opaque version 8 #uuid chora id, J20) and :verb (a
+;     verb-name), each exactly once, and no :beholding-chora (J20);
+;   * :verb agrees with the file name (Intentfile.deed is intend, Mustfile.deed
+;     is must, and so on; A7 8.1);
+;   * every other top-level member is an edict-rule, or, in a Bustfile only,
+;     at most one bust-envelope (8.5).
+
+edict-rule      = "(" %s"rule" 1*(token-sep edict-member) [token-sep] ")"
+                ; SEMANTIC: :id, :text, (applies-when …) and (requires …)
+                ; each exactly once. The :id is unique in the file, is an A5
+                ; name segment (1*(ALPHA / DIGIT / "." / "_" / "-")), and
+                ; "contractile/<verb>/<id>" is at most 200 characters (A5 3.1,
+                ; J13). :text is not empty.
+edict-member    = id-member / text-member / applies-when / requires
+id-member       = %s":id" token-sep string [token-sep bang]
+                ; "!" marks a blocking rule (J17, 8.4). SEMANTIC: refused in
+                ; an Intentfile, which keeps room to explore (8.4); implied,
+                ; and so optional, in a Mustfile.
+text-member     = %s":text" token-sep string
+
+applies-when    = "(" %s"applies-when" token-sep selector [token-sep] ")"
+                ; What a rule applies to, tested against the chora (A1
+                ; identity; A2 profile and capabilities) and, where a rule
+                ; needs it, context such as a path or a deployment (8.1).
+selector        = always-selector / field-selector
+always-selector = "(" %s"always" [token-sep] ")"
+field-selector  = "(" selector-head 1*(token-sep field) [token-sep] ")"
+                ; Every field must hold (a conjunction). SEMANTIC: no field
+                ; repeats, and no field carries a bang.
+selector-head   = %s"identity" / %s"profile" / %s"capabilities" / %s"context"
+                ; There is no clade selector: a placement is an identity
+                ; fact, but no edict hangs off the clade (W10, 8.1).
+
+requires        = "(" %s"requires" token-sep requirement [token-sep] ")"
+requirement     = "(" verb-name 1*(token-sep requirement-member) [token-sep] ")"
+                ; SEMANTIC: the head is the deed's :verb; :witness appears
+                ; exactly once and equals the rule's own :id (J5: a fact names
+                ; the edict it witnesses); exactly one of :value, :at-least
+                ; and :at-most appears.
+requirement-member = ( %s":witness" token-sep string )
+                   / ( %s":value" token-sep value )
+                   / ( %s":at-least" token-sep value )
+                   / ( %s":at-most" token-sep value )
+
+bust-envelope   = "(" %s"envelope" 1*(token-sep envelope-member) [token-sep] ")"
+                ; What the repo is fit for and not fit for; Bust severity is
+                ; scored inside it (8.5). SEMANTIC: Bustfile.deed only, at
+                ; most once, each member at most once.
+envelope-member = ( %s":for" token-sep str-list )
+                / ( %s":not-for" token-sep str-list )
+                / ( %s":tolerance" token-sep string )

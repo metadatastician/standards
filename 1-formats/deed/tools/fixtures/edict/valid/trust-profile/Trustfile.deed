@@ -1,0 +1,7 @@
+;; SPDX-License-Identifier: CC-BY-SA-4.0
+(contractile-deed
+  :schema-version "1.0.0"
+  :canonical-name "example-game"
+  :of-chora #uuid"00000000-0000-8000-8000-0000000000a1"
+  :verb trust
+  (rule :id "trust-no-sha1" ! :text "No SHA-1 where nothing stronger is used." (applies-when (profile :kind service :network #t)) (requires (trust :witness "trust-no-sha1" :value #f))))

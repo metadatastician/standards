@@ -5,7 +5,8 @@ import { mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSyn
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { validate, LintError, SELF_TEST_CASES, checkEgress, EgressError, checkAnchor, AnchorError, profileCOfBody, readMustfileChecks, MustfileError, readProofReceipt, ProofReceiptError, checkContractiles, ContractilesError, contractilePaths, CONTRACTILE_VERBS } from "./deed_lint.js";
+import { validate, LintError, SELF_TEST_CASES, checkEgress, EgressError, checkAnchor, AnchorError, profileCOfBody, readMustfileChecks, MustfileError, readProofReceipt, ProofReceiptError, checkContractiles, ContractilesError, contractilePaths, CONTRACTILE_VERBS, checkEdict, EdictError, verbOfFilename } from "./deed_lint.js";
+import { generate as generateRegistry } from "./contractile_registry.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const LINT = join(HERE, "deed_lint.js");
@@ -962,5 +963,66 @@ describe("J17 bang", () => {
   });
   test("a symbol may still end in '!'", () => {
     expect(verdict(edict('(rule :id "m-a" :mode strict!)'), "Mustfile.deed")).toBeNull();
+  });
+});
+
+// A7 8.1, 8.4, 8.5: the edict form of a contractile-deed (clauses/edict.abnf),
+// and the J13 registry generated from the edicts (contractile_registry.js).
+const FIX_EDICT = join(FIX, "edict");
+
+describe("edict fixtures", () => {
+  test("--edict-fixtures passes on the corpus", () => {
+    const r = cli("--edict-fixtures", FIX_EDICT);
+    expect(r.code).toBe(0);
+    expect(r.out).toContain("EDICT FIXTURES OK");
+  });
+  test("a deed that is not a contractile-deed is outside the profile", () => {
+    const p = join(FIX, "contractiles", "valid", "minimal_chora.deed");
+    expect(checkEdict(readFileSync(p, "utf8"), p)).toBeNull();
+  });
+  test("the summary lists the rules and their bangs", () => {
+    const p = join(FIX_EDICT, "valid", "adjust-sample", "Adjustfile.deed");
+    const r = checkEdict(readFileSync(p, "utf8"), p);
+    expect(r.verb).toBe("adjust");
+    expect(r.rules.map((x) => [x.id, x.bang])).toEqual([["adj-alt-text", true], ["adj-contrast", false]]);
+  });
+  test("the file name fixes the verb, intend included", () => {
+    expect(verbOfFilename("x/Intentfile.deed")).toBe("intend");
+    expect(verbOfFilename("x/Intendfile.deed")).toBeNull();
+    expect(verbOfFilename("x/Mustfile.deed")).toBe("must");
+  });
+  test("a clade selector is refused (W10)", () => {
+    const p = join(FIX_EDICT, "invalid", "clade-selector", "Trustfile.deed");
+    expect(() => checkEdict(readFileSync(p, "utf8"), p)).toThrow(EdictError);
+  });
+});
+
+describe("contractile registry (J13)", () => {
+  const root = join(FIX_EDICT, "registry", "root");
+  const committed = join(root, ".machine_readable", "contractiles", "contractile_rules_praxis.deed");
+  test("the committed fixture registry matches a fresh generation", () => {
+    expect(generateRegistry(root, "metadatastician/standards")).toBe(readFileSync(committed, "utf8"));
+  });
+  test("class follows the verb and the bang; Bust carries the floor", () => {
+    const t = generateRegistry(root, "metadatastician/standards");
+    const [, items] = validate(t, "contractile_rules_praxis.deed");
+    const defs = items.find((it) => it[1] === "rules")[2].map((d) => Object.fromEntries(d[2].map((f) => [f[1], f[2][1]])));
+    const by = Object.fromEntries(defs.map((d) => [d.id, d]));
+    expect(by["contractile/must/must-tests"].class).toBe("gate");
+    expect(by["contractile/adjust/adj-alt-text"].class).toBe("gate");
+    expect(by["contractile/adjust/adj-contrast"].class).toBe("advisory");
+    expect(by["contractile/bust/bust-oob-parser"].floor).toBe("A7 8.5");
+    expect(by["contractile/adjust/adj-contrast"].floor).toBeUndefined();
+  });
+  test("--check fails when the registry is stale", () => {
+    const tmp = mkdtempSync(join(tmpdir(), "registry-"));
+    try {
+      const out = join(tmp, "rules_praxis.deed");
+      writeFileSync(out, "stale\n");
+      const r = Bun.spawnSync(["bun", join(HERE, "contractile_registry.js"), "--root", root, "--out", out, "--check"]);
+      expect(r.exitCode).toBe(1);
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
   });
 });
