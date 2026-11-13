@@ -8,7 +8,7 @@
 //
 // deed.abnf is normative (D308); deed_lint.js is the gate that CI runs. This
 // harness keeps them from drifting apart. It compiles deed.abnf (with the
-// (egress …) and (anchor …) clause profiles and the shared rules of
+// (egress …), (anchor …) and (contractiles …) clause profiles and the shared rules of
 // clauses/common.abnf) using apg-js, mutates every
 // committed deed with a seeded generator, and asks both the grammar and the
 // gate for a verdict on each variant:
@@ -67,7 +67,8 @@ function compileGrammar() {
     (readFileSync(join(ABNF, "deed.abnf"), "utf8") + "\n" +
       readFileSync(join(ABNF, "clauses/egress.abnf"), "utf8") + "\n" +
       readFileSync(join(ABNF, "clauses/common.abnf"), "utf8") + "\n" +
-      readFileSync(join(ABNF, "clauses/anchor.abnf"), "utf8")).replace(/[^\x00-\x7f]/g, "?") +
+      readFileSync(join(ABNF, "clauses/anchor.abnf"), "utf8") + "\n" +
+      readFileSync(join(ABNF, "clauses/contractiles.abnf"), "utf8")).replace(/[^\x00-\x7f]/g, "?") +
     "\nSP = %x20\nDQUOTE = %x22\nALPHA = %x41-5A / %x61-7A\nDIGIT = %x30-39\n" +
     "VCHAR = %x21-7E\nCR = %x0D\nLF = %x0A\nCRLF = CR LF\n";
   const api = new apgApi(src);
@@ -156,7 +157,7 @@ const fail = (kind, detail) => failures.push({ kind, detail });
 
 // 1. Fixtures: every valid fixture passes both; every valid egress or anchor
 //    fixture's clause parses as its clause rule.
-for (const [dir, clause] of [["valid", null], ["egress/valid", "egress"], ["anchor/valid", "anchor"]]) {
+for (const [dir, clause] of [["valid", null], ["heads/valid", null], ["egress/valid", "egress"], ["anchor/valid", "anchor"], ["contractiles/valid", "contractiles"]]) {
   for (const name of readdirSync(join(FIXTURES, dir)).sort()) {
     const text = readFileSync(join(FIXTURES, dir, name), "utf8");
     if (!grammarAccepts(grammar, "deed", text)) fail("fixture rejected by deed.abnf", `${dir}/${name}`);
@@ -180,6 +181,34 @@ for (const name of ANCHOR_GRAMMAR_REJECTS) {
   if (e === null) fail("anchor invalid fixture has no (anchor …) clause", name);
   else if (grammarAccepts(grammar, "anchor-clause", e)) fail("anchor.abnf accepts a fixture it must refuse", name);
 }
+// Invalid contractiles fixtures whose defect contractiles.abnf itself expresses:
+// a member outside the four of A7 8.2 (a verdict included, YC05), a verb name
+// that is not one of the six symbols, and an empty clause. The others break a
+// SEMANTIC side condition (each verb once, each member once, the exact paths,
+// placement, :contractiles_required), which only deed_lint.js --contractiles
+// checks.
+const CONTRACTILES_GRAMMAR_REJECTS = [
+  "clause-field-bad_chora.deed", "empty-bad_chora.deed", "sub-clause-bad_chora.deed",
+  "unknown-verb-bad_chora.deed", "verb-string-bad_chora.deed", "verdict-field-bad_chora.deed",
+];
+for (const name of CONTRACTILES_GRAMMAR_REJECTS) {
+  const text = readFileSync(join(FIXTURES, "contractiles/invalid", name), "utf8");
+  if (!grammarAccepts(grammar, "deed", text)) fail("contractiles invalid fixture is not a valid deed", name);
+  const e = clauseText(text, "contractiles");
+  if (e === null) fail("contractiles invalid fixture has no (contractiles …) clause", name);
+  else if (grammarAccepts(grammar, "contractiles-clause", e)) fail("contractiles.abnf accepts a fixture it must refuse", name);
+}
+// And the converse: every invalid fixture NOT listed breaks only a semantic
+// side condition, so the grammar accepts its clause. A fixture added to the
+// corpus must be sorted into one list or the other.
+for (const name of readdirSync(join(FIXTURES, "contractiles/invalid")).sort()) {
+  if (CONTRACTILES_GRAMMAR_REJECTS.includes(name)) continue;
+  const text = readFileSync(join(FIXTURES, "contractiles/invalid", name), "utf8");
+  if (!grammarAccepts(grammar, "deed", text)) fail("contractiles invalid fixture is not a valid deed", name);
+  const e = clauseText(text, "contractiles");
+  if (e !== null && !grammarAccepts(grammar, "contractiles-clause", e)) fail("contractiles.abnf refuses a fixture listed as semantic only", name);
+}
+
 // A version 5 parent id (A1 rule V8) is refused by anchor.abnf itself. Built at
 // run time, not committed: the repo carries no version 5 UUID literal
 // (scripts/check-uuid-v8.sh --strict).
@@ -218,9 +247,37 @@ for (const name of ANCHOR_GRAMMAR_REJECTS) {
   }
 }
 
+// The J14 file names (deed.abnf v1.4.0). The gate dispatches on the file name
+// before parsing, so deed-filename is held to the same names as
+// checkFilenameDispatch, case variants included. The heads/ fixtures must be
+// deeds by deed.abnf, and the gate must accept heads/valid and refuse
+// heads/invalid under their own names. <stem>_chora.deed and _praxis.deed are
+// not probed here: apg-js repeats possessively, so `stem` (which admits "_"
+// and ".") swallows the suffix; RFC 5234 ABNF backtracks and accepts them.
+{
+  const names = [
+    ["Mustfile.deed", true], ["Bustfile.deed", true], ["Intentfile.deed", true], ["STATE.deed", true],
+    ["CLADE.deed", true], ["MUST.deed", true], ["ANCHOR.deed", true], ["mustfile.deed", false],
+    ["MUSTFILE.deed", false], ["Meta.deed", false], ["State.deed", false], ["anchor.deed", false],
+    ["Clade.deed", false], ["Statefile.deed", false], ["ATLAS.deed", true],
+  ];
+  for (const [name, want] of names) {
+    if (grammarAccepts(grammar, "deed-filename", name) !== want) fail(want ? "deed.abnf refuses a file name it must accept" : "deed.abnf accepts a file name it must refuse", name);
+  }
+  for (const dir of ["heads/valid", "heads/invalid"]) {
+    for (const name of readdirSync(join(FIXTURES, dir)).sort()) {
+      const text = readFileSync(join(FIXTURES, dir, name), "utf8");
+      let gate = true;
+      try { validate(text, name); } catch { gate = false; }
+      if (gate !== (dir === "heads/valid")) fail(`gate ${gate ? "accepts" : "refuses"} a heads fixture under its own name`, `${dir}/${name}`);
+      if (!grammarAccepts(grammar, "deed", text)) fail("heads fixture is not a deed by deed.abnf", `${dir}/${name}`);
+    }
+  }
+}
+
 // 2. Mutation differential over the committed deeds and the valid fixtures
 //    (or the given seeds).
-const validFixtures = ["valid", "egress/valid", "anchor/valid"].flatMap((dir) =>
+const validFixtures = ["valid", "heads/valid", "egress/valid", "anchor/valid", "contractiles/valid"].flatMap((dir) =>
   readdirSync(join(FIXTURES, dir)).sort().map((name) => join(FIXTURES, dir, name)),
 );
 const seedFiles = opts.seeds.length ? opts.seeds : [...committedDeeds(ROOT), ...validFixtures];

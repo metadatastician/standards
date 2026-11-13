@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 = A3: The Single Gate (one required check, the caller contract, the check table)
 :version: 0.2.3-draft
-:status: DRAFT v0.2.3. Decisions E1 to E11 approved by the owner on 2026-11-10, and E12 on 2026-11-13 (contractiles become a required check, with A7 v0.2.0). Not yet ratified as a whole. Builds on A1 v0.3.9 and A2 v0.2.3. Consistency pass applied 2026-11-10. Proposed in standards#1474; bot-review fixes applied 2026-11-12.
+:status: DRAFT v0.2.4 (SysArch review R-04 and R-19: the `contractiles` row is `not_applicable`, reported, until a repo's A7 M7 PR; the open-anchor failure is cited from A7 YS03; warnings go in the verdict envelope). Decisions E1 to E11 approved by the owner on 2026-11-10, and E12 on 2026-11-13 (contractiles become a required check, with A7 v0.2.3). Not yet ratified as a whole. Builds on A1 v0.4.1 and A2 v0.2.4. Consistency pass applied 2026-11-10. Proposed in standards#1474; bot-review fixes applied 2026-11-12.
 :toc:
 
 Specification A3 of the Estate Reconciliation Plan. It defines the one required status check of a repo, the one caller workflow, the table from profile to checks, and the rules by which a verdict is computed.
@@ -86,7 +86,7 @@ The description is at most 140 characters and names the first failing checks and
 
 === 3.4 Verdict envelope
 
-The `target_url` resolves to an envelope with at least: the head SHA; the pin of the aggregate and of the check table (commit SHA and sha256); the repo chora blob SHA; the required set with the state of each check; the waivers applied; the publisher id; the time; and a signature (section 9). The storage location and the format are for A4, which owns the intake envelope [R: plan A4]. A3 fixes the fields. A4 section 5 fixes the encoding and the storage (decision E9 is resolved there).
+The `target_url` resolves to an envelope with at least: the head SHA; the pin of the aggregate and of the check table (commit SHA and sha256); the repo chora blob SHA; the required set with the state of each check; the findings each check reports, warnings included; the waivers applied; the publisher id; the time; and a signature (section 9). The storage location and the format are for A4, which owns the intake envelope [R: plan A4]. A3 fixes the fields. A4 section 5 fixes the encoding and the storage (decision E9 is resolved there).
 
 == 4. The caller contract
 
@@ -211,7 +211,7 @@ A3 does not widen the required set. The first table reproduces the checks requir
 | none yet | `ada-ci`, `bun-ci`, `host` | repo-local files named in `gates.json` | The 28 capabilities of A2 have no `ada`, `bun` or `host` term (E3).
 |===
 
-The `contractiles` row is the one deliberate widening (E12, an owner ruling of 2026-11-13). It fails on a `Must` violation, on a violated clause marked `!`, on a Bust finding graded `X1`, and on a blocking unresolved verdict (A7 8.4). A violation the verb grades as a warning is reported in the gate comment and does not fail it.
+The `contractiles` row is the one deliberate widening (E12, an owner ruling of 2026-11-13). It fails on a `Must` violation, on a violated clause marked `!`, on a Bust finding graded `X1`, on a blocking unresolved verdict (A7 8.4), and on an open anchor as A7 6.3 and YS03 define it. A violation the verb grades as a warning is reported in the verdict envelope (3.4) and does not fail it. Until a repo's A7 M7 PR lands its `(contractiles ...)` clause, the probe finds no subject and the row is `not_applicable`, with that reason in the envelope; from M7 on, A7 YC01 applies.
 
 All other catalogue capabilities are `advisory` in the first table. Promoting one to `required` is an owner ruling and a table change. The enforcing checks of the original audit (14 of its 26 actions [M: README]) are not required by `gates.json` today (finding 7) and A3 does not require them.
 
@@ -241,7 +241,7 @@ required(repo) = { c in table : c.obligation = required and (c.when = baseline o
 ----
 
 * A capability in `S` and not in `D` is reported as profile drift (A2 vestigial and missing verdicts). The gate still requires its checks.
-* A capability in `D` and not in `S` still requires its checks. A check with no subject is `not_applicable` only when the aggregate's own probe finds no subject. A check cannot declare itself not applicable.
+* A capability in `D` and not in `S` still requires its checks. A check with no subject is `not_applicable` only when the aggregate's own probe finds no subject. For `contractiles`, no subject means the repo has no `(contractiles ...)` clause and its A7 M7 PR has not landed (E12). A check cannot declare itself not applicable.
 * Detection is done by the aggregate from the tree at the head commit. It is never read from a deed field (the self-assertion rule [M: deed spec]).
 * A detected capability that is not a root term does not enter `S`. The aggregate reports it and does not fail on it (E3 covers adding the terms).
 
@@ -379,7 +379,7 @@ Every test is new work unless stated. A fixture is valid unless marked `-bad`.
 | G24 | An `owned` or `either` row without `:timeout` uses 900 seconds (5.4); a `github` row with `:timeout` is rejected. | `table-no-timeout-default`, `table-github-timeout-bad`
 | G25 | A row with `:obligation advisory` never changes a verdict. | `advisory-fail`
 | G26 | Every `:rule` equals `check/<id>`. | `table-rule-bad`
-| G27 | The baseline row `contractiles` is `required`. A fixture with one violated `Must` clause, one with a violated `!` clause, one with an `X1` Bust finding and one with an unwitnessed `Must` clause each give `failed`; a fixture whose only finding is a warning-level `Adjust` violation gives `passed` with the finding reported. | `contractiles-must-bad`, `contractiles-bang-bad`, `contractiles-x1-bad`, `contractiles-unwitnessed-bad`, `contractiles-warn-ok`
+| G27 | The baseline row `contractiles` is `required`. A fixture with one violated `Must` clause, one with a violated `!` clause, one with an `X1` Bust finding, one with an open anchor (A7 YS03) and one with an unwitnessed `Must` clause each give `failed`; a fixture whose only finding is a warning-level `Adjust` violation gives `passed` with the finding reported. A repo with no `(contractiles ...)` clause before its M7 PR gives `not_applicable`, with the reason in the envelope. | `contractiles-must-bad`, `contractiles-bang-bad`, `contractiles-x1-bad`, `contractiles-unwitnessed-bad`, `contractiles-warn-ok`, `contractiles-open-anchor-bad`, `contractiles-pre-m7-na`
 |===
 
 === 13.4 Applicability and verdict

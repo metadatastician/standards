@@ -336,6 +336,13 @@ from their current code:
 * `prove-result`.
 
 `gv-clade-index` is registered as ruled in the D320 amendment.
+*New ids only* (owner ruling V9, 2026-11-13). From V9 on, new repo
+chora ids are minted in the domain `chora-registry`, the registry's new name,
+preimage `chora-registry:github.com/<birth owner>/<name>`. An id minted before
+V9 keeps its `gv-clade-index` id for good and is re-checked under that domain:
+nothing is reminted (rule U1). So `gv-clade-index` stays registered, for
+existing ids only, and no new id is minted in it. `chora-registry` is
+registered here before any mint uses it.
 echidna has no content-id call site yet, so it registers none.
 `berrywiki-import` is left for berrywiki to register with its own name form.
 

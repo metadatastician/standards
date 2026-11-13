@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 = A6: The Carve-out Map for standards (by change rate)
 :version: 0.2.3-draft
-:status: DRAFT v0.2.3. Decisions H1 to H12 approved by the owner on 2026-11-10. Not yet ratified as a whole. Builds on A1 v0.3.9, A2 v0.2.3, A3 v0.2.2, A4 v0.2.3 and A5 v0.2.2. Consistency pass applied 2026-11-10. Proposed in standards#1474; bot-review fixes applied 2026-11-12.
+:status: DRAFT v0.2.3. Decisions H1 to H12 approved by the owner on 2026-11-10. Not yet ratified as a whole. Builds on A1 v0.4.1, A2 v0.2.4, A3 v0.2.4, A4 v0.2.3 and A5 v0.2.2. Consistency pass applied 2026-11-10. Proposed in standards#1474; bot-review fixes applied 2026-11-12.
 :toc:
 
 Specification A6 of the Estate Reconciliation Plan. R3 rules that `standards` is carved out by change rate (campaign #479). A6 defines the metric, the ordered rules that give every file one destination, the mechanism of a move, and the tests. It moves no file.

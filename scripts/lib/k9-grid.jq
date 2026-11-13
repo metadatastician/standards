@@ -124,7 +124,7 @@ def corpus_items(results; expected; ledger; growth; changed; require_files):
         | (($ledger[$r.file] // false) and (($growth[$r.file] // false) | not)) as $listed
         | .rows += [
             if $r.verdict == "routed" then
-              item($r.file; "not_applicable"; "Routed to another dialect; not validated as a K9 contract.")
+              item($r.file; "not_applicable"; "Routed to the coordination.k9 validator; graded in the coordination.k9 category, not as a K9 contract.")
             elif ($errors | any(.rule == "K9-N002")) and ($errors | any(.rule != "K9-N002") | not) then
               item($r.file; "indeterminate"; $reason)
             elif ($errors | length) > 0 or $r.verdict == "fail" or $r.verdict == "error" then
@@ -150,7 +150,41 @@ def corpus_items(results; expected; ledger; growth; changed; require_files):
            else item("live corpus"; "not_applicable"; "No tracked K9 contracts or routing files.") end ]
        else [] end);
 
-def titles: { typecheck: "K9 contract typecheck", selftest: "K9 validator self-test", corpus: "K9 live corpus (L0–L2)" };
+# coordination.k9 files, validated against coordination-k9-grammar_v1.2.abnf by
+# 2-protocols/k9-coordination/tools/validate. Records: {file, verdict: pass|fail,
+# message}. Present only when the lane supplied coordination evidence or the K9
+# validator routed a file there; a routed file with no record is indeterminate,
+# never green (standards: coordination.k9 was previously reported not_applicable).
+def coord_items(coord; results; ledger; growth; changed):
+  (ledger | map({key: ., value: true}) | from_entries) as $ledger
+  | (growth | map({key: ., value: true}) | from_entries) as $growth
+  | (changed | map({key: ., value: true}) | from_entries) as $changed
+  | ([results[] | select((type == "object") and (.verdict // "") == "routed" and ((.file | type) == "string")) | .file]
+     | map({key: ., value: true}) | from_entries) as $routed
+  | ([(coord // [])[] | select((type == "object") and ((.file | type) == "string")) | .file]
+     | reduce .[] as $f ({}; .[$f] += 1)) as $count
+  # The same debt rules as the corpus category: a listed, unchanged failure is
+  # advisory; a listed file that now conforms is a stale entry. Growth rows are
+  # reported once, by the corpus category.
+  | [ (coord // [])[]
+      | if (type != "object") or (has("malformed")) or ((.file | type) != "string") or ((.verdict // "") | IN("pass", "fail") | not)
+        then item("coordination validator output"; "indeterminate"; "Malformed or unexpected result.")
+        elif ($routed[.file] // false) | not
+        then item(.file; "indeterminate"; "A coordination.k9 record for a file the K9 validator did not route to the coordination dialect; not graded.")
+        elif $count[.file] > 1
+        then item(.file; "indeterminate"; "Duplicate coordination.k9 records for one file; not graded.")
+        else
+          (($ledger[.file] // false) and (($growth[.file] // false) | not)) as $listed
+          | if .verdict == "pass" then
+              (if $listed then item(.file; "fail"; "Stale debt exemption: this file now conforms.") else item(.file; "pass"; "") end)
+            else
+              item(.file; "fail"; (.message // "does not conform to coordination-k9-grammar_v1.2.abnf"); ($listed and (($changed[.file] // false) | not)))
+            end
+        end ]
+    + [ results[] | select((type == "object") and (.verdict // "") == "routed" and ((.file | type) == "string") and (($count[.file] // 0) == 0))
+        | item(.file; "indeterminate"; "Routed to the coordination dialect but no coordination.k9 validator result was supplied.") ];
+
+def titles: { typecheck: "K9 contract typecheck", selftest: "K9 validator self-test", corpus: "K9 live corpus (L0–L2)", coord: "coordination.k9 (v1.2 ABNF)" };
 
 # Group item rows with their display title, counts and aggregate verdict.
 def category(id; items): { id: id, title: titles[id], items: items, counts: (items | counts), state: (items | state) };
@@ -172,9 +206,11 @@ def build:
   | ($corpus0
      + (if ($in.corpus_code // 0) != 0 and ($corpus0 | any(.[]; .status == "indeterminate" or .status == "fail") | not)
         then [item("corpus gate"; "indeterminate"; "Validator exited \($in.corpus_code); inspect corpus.log.")] else [] end)) as $corpus
-  | [ category("typecheck"; typecheck_items($in.typecheck // {code: null, output: ""}; $contract)),
+  | coord_items($in.coord; $in.results // []; $in.ledger // []; $in.ledger_growth // []; $in.changed // []) as $coord
+  | ([ category("typecheck"; typecheck_items($in.typecheck // {code: null, output: ""}; $contract)),
       category("selftest"; selftest_items($in.selftest // {code: null, output: ""})),
-      category("corpus"; $corpus) ] as $categories
+      category("corpus"; $corpus) ]
+    + (if ($coord | length) > 0 then [category("coord"; $coord)] else [] end)) as $categories
   | ([$categories[].items[]]) as $all
   | { schema: 1, lane: ($in.identity.lane // "k9"), profile: ($in.profile // ""),
       sha: ($in.identity.sha // ""), run: ($in.identity.run // "local"), url: ($in.identity.url // ""),
@@ -248,7 +284,7 @@ def render(prev):
          + ([ $f[0:20][] | "- **\(.id | esc | .[0:240])** — \(.status | esc)\(if .advisory then " (advisory)" else "" end): \(.reason | esc | .[0:280])\n" ] | add // "")
          + (if ($f | length) > 20 then "- \(($f | length) - 20) more; see the structured report and logs in the artifact.\n" else "" end)
          + "\n</details>\n" ] | add // "")
-  + "\nScope: K9 components L0–L2 against contract v1.0.0 at the named standards commit. L3 signature verification and routed coordination-dialect files are not certified. Green is limited to this scope. Orange is missing evidence; yellow is grandfathered debt or warnings; grey is an explicit scope exclusion. report.json, badge.json and the validator logs are in the k9-grid artifact on the linked run.\n"
+  + "\nScope: K9 components L0–L2 against contract v1.0.0 at the named standards commit. L3 signature verification is not certified. coordination.k9 files are graded in their own category against the v1.2 ABNF grammar and its schema rule. Green is limited to this scope. Orange is missing evidence; yellow is grandfathered debt or warnings; grey is an explicit scope exclusion. report.json, badge.json and the validator logs are in the k9-grid artifact on the linked run.\n"
   + "\n<!-- k9-baseline:\({schema: $r.schema, profile: $r.profile, pr: $r.pr, sha: $r.sha,
         categories: [$r.categories[] | {id, counts}]} | tojson | @base64) -->\n";
 

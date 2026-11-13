@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 = DEED conformance lane — tools
-Campaign: standards#837 · Grammar: link:../spec/abnf/deed.abnf[spec/abnf/deed.abnf (v1.3.0, normative)]
+Campaign: standards#837 · Grammar: link:../spec/abnf/deed.abnf[spec/abnf/deed.abnf (v1.4.0, normative)]
 
 == The lane's one property
 
@@ -26,7 +26,7 @@ authority.
 Enforced rules:
 
 * SPDX header required; one form; full input consumed
-* doc-head whitelist (`estate-deed / repo-deed / estate-atlas-deed / praxis-deed`)
+* doc-head whitelist (`estate-deed / repo-deed / estate-atlas-deed / praxis-deed`, and from v1.4.0 the J14 heads `contractile-deed / descriptile-deed / anchor-deed`)
 * `:schema-version` STRING exactly once (validator-level semantic, per grammar)
 * filename ↔ doc-head dispatch with the exact-stem-first side condition
   (`estate_chora.deed` can never be a repo-deed; stems may contain dots —
@@ -161,6 +161,40 @@ least one fixture: a missing or empty half exits 2, never OK.
 
 The profile is a draft. CI gates only its own fixtures until the owner
 ratifies A7; it does not yet run over a caller's committed deeds.
+
+== `deed_lint.js --contractiles` — the `(contractiles …)` clause profile (DRAFT)
+
+Checks what `spec/abnf/clauses/contractiles.abnf` adds to the grammar, on a
+file that `deed_lint.js` already accepts (A7 8.2, tests YC01 to YC05):
+
+* exactly one `(contractiles …)`, at the top level of a repo deed;
+* each of the six verbs exactly once, as the symbols `intend`, `must`,
+  `trust`, `adjust`, `dust` and `bust`;
+* in each `(verb …)`, `:name`, `:declaration`, `:runner` and `:reality` each
+  exactly once, and nothing else. A verdict, status or score is refused
+  (J6, YC05);
+* each path is exactly the one A7 8.2 names for its verb. For `must`, that is
+  `.machine_readable/contractiles/must/Mustfile.deed`,
+  `.machine_readable/contractiles/must/must.k9.ncl` and
+  `.machine_readable/descriptiles/MUST.deed`. The verb `intend` takes
+  `Intentfile.deed` and `INTENT.deed`;
+* a `:contractiles_required` still written anywhere in the deed equals, as a
+  set, the six directories `.machine_readable/contractiles/<verb>/` (J10,
+  YC04).
+
+A deed with no `(contractiles …)` clause passes.
+
+    bun deed_lint.js --contractiles FILE.deed...
+    bun deed_lint.js --contractiles --root REPO REPO/x_chora.deed
+    bun deed_lint.js --contractiles-fixtures fixtures/contractiles/
+
+That the eighteen named files exist is a repo check, not a lint check.
+`--root` runs it against the repo root given (YC02, and YC03 for the
+descriptile). `--contractiles-fixtures` needs both `valid/` and `invalid/`, as
+for the anchor.
+
+The profile is a draft. CI gates only its own fixtures until the owner
+ratifies A7.
 
 == `a2ml_to_deed.py` — the translator
 

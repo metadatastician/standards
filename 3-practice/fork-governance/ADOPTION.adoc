@@ -24,6 +24,8 @@ jobs:
   fleet:
     uses: hyperpolymath/gitbot-fleet/.github/workflows/fleet-report-back-reusable.yml@<FLEET-SHA>
   hypatia:
+    # hypatia-scan-reusable.yml is deprecated for standalone use (the template inlines
+    # the Hypatia scan), but this fork-governance lane still calls it.
     uses: metadatastician/standards/.github/workflows/hypatia-scan-reusable.yml@<SHA>
   verdict:
     uses: metadatastician/standards/.github/workflows/fork-governance-reusable.yml@<SHA>

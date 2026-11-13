@@ -125,24 +125,55 @@ for w in $newwf; do
   [ -z "$other" ] || refuse "new caller ${w} also uses other actions (${other}); its lock entry cannot be built from the standards pin alone"
 done
 # Job-level reusable-workflow edges (owner/repo@ref, owner/repo lower-cased):
-# their records legitimately carry ref == SHA, with or without nested uses:,
-# so the poisoned-leaf scan and repair never touch them.
+# their records legitimately carry ref == SHA, with or without nested uses:;
+# every other record (leaf or composite, nested uses: or not) is in scope.
 edge_keys=$(grep -hvE '^[[:space:]]*#' "${wfs[@]}" 2>/dev/null | sed -E 's/[[:space:]]+#.*$//' \
             | grep -oE "[\"']?uses[\"']?:[[:space:]]*[\"']?[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/\.github/workflows/[A-Za-z0-9._-]+\.ya?ml@[^[:space:]\"',}]+" \
             | sed -E "s/^[\"']?uses[\"']?:[[:space:]]*[\"']?//" \
             | sed -E 's#^([^/]+/[^/]+)/\.github/workflows/[^@]+@#\1@#' \
             | awk '{ i = index($0, "@"); print tolower(substr($0, 1, i - 1)) substr($0, i) }' | sort -u || true)
+# A standards reusable at TARGET may itself call another reusable workflow; that
+# nested record also legitimately carries ref == SHA (check-reusable-closure.sh
+# 5b, PARENT). Walk the job-level calls the called reusables make, transitively
+# WITHIN the standards checkout ($SROOT): local `./.github/workflows/...` calls
+# at the same commit, and calls to COORD itself at a commit the checkout holds.
+# A call into ANOTHER repository cannot be followed offline: its own nested
+# records are not exempted and stay reported (fail closed).
+visited=""
+walk_reusable() { # walk_reusable PATH COMMIT
+  case " $visited " in *" $2:$1 "*) return 0 ;; esac
+  visited="$visited $2:$1"
+  local calls c ckey cpath cref crepo
+  calls=$(git -C "$SROOT" show "$2:$1" 2>/dev/null | sed -E 's/[[:space:]]+#.*$//' \
+          | grep -oE "^[[:space:]]*(-[[:space:]]+)?[\"']?uses[\"']?[[:space:]]*:[[:space:]]*[\"']?(\./\.github/workflows/[A-Za-z0-9._-]+\.ya?ml|[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/\.github/workflows/[A-Za-z0-9._-]+\.ya?ml@[^[:space:]\"',}]+)" \
+          | sed -E "s/^[[:space:]]*(-[[:space:]]+)?[\"']?uses[\"']?[[:space:]]*:[[:space:]]*[\"']?//" || true)
+  for c in $calls; do
+    case "$c" in
+      ./*) walk_reusable "${c#./}" "$2"; continue ;;
+    esac
+    crepo=${c%%/.github/workflows/*}; cpath=${c#*/.github/workflows/}; cpath=".github/workflows/${cpath%@*}"; cref=${c##*@}
+    ckey=$(printf '%s@%s\n' "$crepo" "$cref" | awk '{ i = index($0, "@"); print tolower(substr($0, 1, i - 1)) substr($0, i) }')
+    edge_keys=$(printf '%s\n%s\n' "$edge_keys" "$ckey" | sort -u)
+    if [ "$(printf '%s' "$crepo" | tr 'A-Z' 'a-z')" = "$(printf '%s' "$COORD" | tr 'A-Z' 'a-z')" ] \
+       && git -C "$SROOT" cat-file -e "${cref}^{commit}" 2>/dev/null; then
+      walk_reusable "$cpath" "$cref"
+    fi
+  done
+}
+for p in $full; do
+  path=${p#${COORD}/}; walk_reusable "${path%@*}" "$TARGET"
+done
 # is_edge KEY: true when KEY names a job-level reusable-workflow edge.
 is_edge() { printf '%s\n' "$edge_keys" | grep -qxF "$(printf '%s\n' "$1" | awk '{ i = index($0, "@"); print tolower(substr($0, 1, i - 1)) substr($0, i) }')"; }
 # An already-keyed lock still goes through the rebuild when it holds a
-# poisoned leaf (a record with no nested uses: whose ref repeats its own SHA,
+# poisoned record (any record whose ref repeats its own SHA,
 # and which is not a reusable-workflow edge), so the repair below reaches it.
 # Otherwise it is left exactly as it is.
 poisoned=""
-for k in $(awk -F"'" 'function flush() { if (k != "" && r == s && !u) print k; k = "" }
+for k in $(awk -F"'" 'function flush() { if (k != "" && r == s) print k; k = "" }
                      /^    \x27[^ ]+@[0-9a-f]+\x27:$/ { flush(); k = $2; split(k, a, "@"); s = a[2]; if (length(s) != 40) k = ""; r = ""; u = 0; next }
                      /^    \x27/ || /^[a-z]/ { flush(); next }
-                     /^        ref:/ { r = $2 } /^        uses:$/ { u = 1 }
+                     /^        ref:/ { r = $2 }
                      END { flush() }' "$L"); do
   is_edge "$k" || { poisoned="$k"; break; }
 done
@@ -159,6 +190,13 @@ q="'"
 # KEY is the unquoted owner/repo@ref. A missing record produces no output and
 # succeeds; a file read error propagates awk's non-zero status.
 rec_body() { awk -v k="    ${q}$1${q}:" '$0==k{f=1;print;next} f&&/^    [^ ]/{exit} f' "$2"; }
+# adopt_source KEY SRC — replace the lock record KEY (in $tmp/lock) by the body of
+# SRC (a standards record), wholesale: at a fixed commit the dependency closure is
+# fixed, so ref, commit, ids AND nested uses all come from the source.
+adopt_source() {
+  printf '%s\n' "$2" | tail -n +2 > "$tmp/srcbody"
+  awk -v k="    ${q}$1${q}:" -v f="$tmp/srcbody" '$0==k{print; while((getline l < f)>0) print l; s=1; next} s&&/^    [^ ]/{s=0} !s' "$tmp/lock" > "$tmp/adopted.lock" && mv "$tmp/adopted.lock" "$tmp/lock"
+}
 
 # GitHub's lockfile parser folds owner/repo case and keeps the ref as written:
 # 'Swatinem/rust-cache@X' and 'swatinem/rust-cache@X' are one key, and two
@@ -241,7 +279,7 @@ while read -r u; do
   existing=""; [ -z "$key" ] || existing=$(rec_body "$key" "$tmp/lock")
   if [[ -n "$existing" ]]; then
     pin=${u##*@}
-    if [[ "$pin" =~ ^[0-9a-f]{40}$ ]] && printf '%s\n' "$existing" | grep -qxF "        ref: '$pin'"; then
+    if [[ "$pin" =~ ^[0-9a-f]{40}$ ]] && ! is_edge "$u" && printf '%s\n' "$existing" | grep -qxF "        ref: '$pin'"; then
       # A consumer can retain a poisoned copy after Standards repairs its own
       # record. Refresh only ref:, and only with identical commit and IDs.
       skey=$(lock_key "$u" "$tmp/slock")
@@ -254,13 +292,7 @@ while read -r u; do
       [[ "$local_identity" == "$source_identity" \
         && "$(printf '%s\n' "$source_identity" | wc -l)" -eq 3 ]] \
         || refuse "identity mismatch while repairing $u"
-      awk -v k="    '$key':" -v replacement="        ref: '$symbolic'" '
-        $0 == k { selected = 1; print; next }
-        /^    [^ ]/ { selected = 0 }
-        selected && /^        ref:/ { print replacement; next }
-        { print }
-      ' "$tmp/lock" > "$tmp/repaired.lock"
-      mv "$tmp/repaired.lock" "$tmp/lock"
+      adopt_source "$key" "$repaired"
     fi
     continue
   fi
@@ -270,7 +302,7 @@ while read -r u; do
   printf '%s\n' "$r" >> "$tmp/lock"
 done < "$tmp/uses.s"
 
-# Poisoned copies anywhere in the lock. The runner refuses a leaf whose `ref:`
+# Poisoned copies anywhere in the lock. The runner refuses a record whose `ref:`
 # repeats its own commit SHA ("invalid lockfile pin"), and consumers keep such
 # copies after standards repairs its own record (standards#1458: 31 of 40
 # sampled callers failed at Set up job this way). Every such record that
@@ -283,7 +315,6 @@ while read -r key; do
   sha=${key##*@}
   rec=$(rec_body "$key" "$tmp/lock")
   printf '%s\n' "$rec" | grep -qxF "        ref: '$sha'" || continue
-  printf '%s\n' "$rec" | grep -qx '        uses:' && continue
   is_edge "$key" && continue
   skey=$(lock_key "$key" "$tmp/slock")
   repaired=""; [ -z "$skey" ] || repaired=$(rec_body "$skey" "$tmp/slock")
@@ -292,16 +323,27 @@ while read -r key; do
   source_identity=$(printf '%s\n' "$repaired" | grep -E '^        (commit|owner_id|repo_id):' || true)
   if [[ -n "$symbolic" && ! "$symbolic" =~ ^[0-9a-fA-F]{40}$ && "$local_identity" == "$source_identity" \
         && "$(printf '%s\n' "$source_identity" | wc -l)" -eq 3 ]]; then
-    awk -v k="    '$key':" -v replacement="        ref: '$symbolic'" '
-      $0 == k { selected = 1; print; next }
-      /^    [^ ]/ { selected = 0 }
-      selected && /^        ref:/ { print replacement; next }
-      { print }' "$tmp/lock" > "$tmp/repaired.lock" && mv "$tmp/repaired.lock" "$tmp/lock"
+    adopt_source "$key" "$repaired"
   else
     unrepaired="$unrepaired $key"
   fi
 done < <(n=$(grep -n '^dependencies:$' "$tmp/lock" | cut -d: -f1); tail -n +"$((n+1))" "$tmp/lock" \
           | grep -oE "^    '[^']+@[0-9a-f]{40}':\$" | sed -E "s/^    '|':\$//g")
+
+# A record adopted from standards names the dependencies of ITS closure. Copy
+# any such record the lock lacks from standards' own lock (to a fixed point); one
+# standards does not hold stays absent and the dangling-edge check below refuses.
+while :; do
+  added=0
+  dn=$(grep -n '^dependencies:$' "$tmp/lock" | cut -d: -f1)
+  tail -n +"$((dn+1))" "$tmp/lock" > "$tmp/depsonly"
+  for e in $(grep -oE "^ {12}- '[^']+'" "$tmp/depsonly" | sed -E "s/^ +- '|'$//g" | LC_ALL=C sort -u); do
+    [ -z "$(lock_key "$e" "$tmp/depsonly")" ] || continue
+    sk=$(lock_key "$e" "$tmp/slock"); [ -n "$sk" ] || continue
+    rec_body "$sk" "$tmp/slock" >> "$tmp/lock"; added=1
+  done
+  [ "$added" = 1 ] || break
+done
 
 # Prune candidates nothing references any more (to a fixed point).
 # deps_line FILE — print the one-based line number of each exact dependencies:

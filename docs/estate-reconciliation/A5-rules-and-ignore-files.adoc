@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 = A5: Rule Identifiers, the Deviation Store and the Generated Ignore Files
 :version: 0.2.2-draft
-:status: DRAFT v0.2.2. Decisions G1 to G14 approved by the owner on 2026-11-10. Not yet ratified as a whole. Builds on A1 v0.3.9, A2 v0.2.3, A3 v0.2.2 and A4 v0.2.3. Consistency pass applied 2026-11-10. Proposed in standards#1474; bot-review fixes applied 2026-11-12.
+:status: DRAFT v0.2.2. Decisions G1 to G14 approved by the owner on 2026-11-10. Not yet ratified as a whole. Builds on A1 v0.4.1, A2 v0.2.4, A3 v0.2.4 and A4 v0.2.3. Consistency pass applied 2026-11-10. Proposed in standards#1474; bot-review fixes applied 2026-11-12.
 :toc:
 
 Specification A5 of the Estate Reconciliation Plan. A2 defined the `(deviations)` clause. A5 gives every rule a stable identifier, says how a deviation is checked against the rule it excuses, and defines how the tool-native exemption files are generated from deviations. The plan's rule is: each rule has one identifier and one text, an exception is one record, and the ignore files of each tool are generated from those records [R: plan section 9].
@@ -275,7 +275,7 @@ For each adapter, a test fixture provides one finding inside a deviation's scope
 
 == 9. Generated indexes
 
-* *Rule index.* A generated file in the office lists every rule: id, domain, class, severity, `:excusable-at`, `:scope-form`, status and the repo and path of its registry entry. It carries no rule text; the text is in the registry (R3).
+* *Rule index.* A generated file in the office lists every rule: id, domain, class, severity, `:excusable-at`, `:scope-form`, status and the repo and path of its registry entry. It carries no rule text; the text is in the registry (RL3).
 * *Exceptions index.* A generated JSON Lines file in the office lists every deviation in the federation, one record per deviation: level, holder (repo UUID or estate), id, kind, rule, scope summary, authority, evidence, dates, ceiling, and the observer's derived state (`active`, `lapsed`, `ceiling-breached`, `unratified`, `stale-rule`, `unknown-rule`) with the observer's witness (A2 7.5). It is not part of `ATLAS.deed` (G9).
 * Both are outputs. Nobody edits them. They are generated with the same determinism law as the generated ignore files (GEN1, GEN3).
 * The deviation counts per repo can be read from the exceptions index. They are a view, not a fact stored in a chora.
@@ -380,7 +380,7 @@ The owner approved G1 to G14 as recommended. The text of this document is the re
 |===
 | Id | Decision | State
 
-| G1 | The initial domains: `hypatia`, `rsr`, `check`, `provision`, `pons`, `gate`, `bot`, `lang`, `generation`, `secret`, and `carve` (added by A6 H9). `unknown` is a reserved placeholder for the importer and is never registered. `HYP-##` has no domain yet. | Approved
+| G1 | The initial domains: `hypatia`, `rsr`, `check`, `provision`, `pons`, `gate`, `bot`, `lang`, `generation`, `secret`, `carve` (added by A6 H9) and `contractile` (added by A7 J13). `unknown` is a reserved placeholder for the importer and is never registered. `HYP-##` has no domain yet. | Approved
 | G2 | Domains are root vocabulary terms of kind `rule-domain`. Each registry sits with the repo that owns the rules. A generated rule index lists all rules. (The owner had no preference.) | Approved
 | G3 | The registry field `:excusable-at` carries A2 7.4. Default `repo` for canon gate rules. | Approved
 | G4 | The registry field `:scope-form` (`exact-paths`, `globs`, `fingerprints`, `repos`, `origins`). | Approved

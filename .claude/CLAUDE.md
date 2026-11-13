@@ -55,7 +55,7 @@ There are three layers. Never mix them.
 | Layer | File | What it is |
 |---|---|---|
 | **Identity** | `<repo>_chora.deed` | What the repo *is*. Its `:repo-uuid`, `(identity)` and `(lineage)`, and where it sits in wider things, including its clade placements as identity facts. It heads towards a Meta-Object-Facility-like model, and the details are not settled. It is not organisation and not configuration. |
-| **Content organisation** | `.machine_readable/descriptiles/CLADE.deed` | How the repo's *own content* is organised for its audience. It acts as an order controller and is never identity. Every repo is to carry one. If unused, it holds the minimum valid structure (`:schema-version` plus `:in-use #f`). **Do not create it yet.** `deed.abnf` has no head that dispatches this file name. The `descriptile-deed` head (A7 J14: approved by the owner in the A1 thread on 2026-11-13, not yet recorded in A7) and a CLADE form must land first. |
+| **Content organisation** | `.machine_readable/descriptiles/CLADE.deed` | How the repo's *own content* is organised for its audience. It acts as an order controller and is never identity. Every repo is to carry one. If unused, it holds the minimum valid structure (`:schema-version` plus `:in-use #f`). **Do not create it yet.** `deed.abnf` v1.4.0 dispatches `CLADE.deed` to the `descriptile-deed` head (A7 J14), but the CLADE form (A7 M3, the `clade` module) has not landed, so no content can be checked. |
 | **Estate registry** | **chora-registry** (formerly `gv-clade-index`) | The register of repo identities, like mathesis for repos. It holds many classification schemes that can be swapped (by type, date of creation or last use, activity, popularity). It is authoritative for estate-wide placement. A copy a repo carries is checked against it. |
 
 **CLADE.deed schemes.** `(scheme :kind strict|judgement|none …)`:
@@ -83,12 +83,14 @@ central.
   stays in the registry archive (CHORA-SPEC §9; `1-formats/deed/README.adoc`).
   ADR 0007 in the registry, "remint identity on move", is superseded. Any
   text that still says a rename remints is a departure.
-* **The `"gv-clade-index"` domain string is an open owner question.** It is
-  the ADR-008 profile C *domain* under which new ids are minted and
-  archived ids are re-checked. Changing it would not alter any existing id,
-  because ids are carried opaquely and never re-derived. It would change
-  every future mint and every re-check against the archive. Do not change
-  that string anywhere until the owner rules on it.
+* **New ids only** (owner ruling V9, 2026-11-13). New repo ids are minted in
+  the ADR-008 profile C domain `"chora-registry"` (preimage
+  `chora-registry:github.com/<birth owner>/<name>`), registered in
+  `docs/decisions/ADR-008-profile-c-domains.json`. Ids minted before V9 keep
+  their `"gv-clade-index"` domain for good and are re-checked under it; none is
+  reminted (U1). So never rewrite an existing id or its domain, and do not
+  "update" `gv-clade-index` to chora-registry where it names the domain of an
+  existing id. References to the repository itself follow the rename.
 
 ## Fork governance (read before changing a workflow)
 

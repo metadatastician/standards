@@ -1,0 +1,11 @@
+;; SPDX-License-Identifier: CC-BY-SA-4.0
+(repo-deed :schema-version "1.0.0" :canonical-name "x" :repo-uuid #uuid"00000000-0000-8000-8000-0000000000a7"
+  (identity :primary-forge github :owner "o")
+  (contractiles
+    (verb :name intend :declaration ".machine_readable/contractiles/intend/Intentfile.deed" :runner ".machine_readable/contractiles/intend/intend.k9.ncl" :reality ".machine_readable/descriptiles/INTEND.deed")
+    (verb :name must :declaration ".machine_readable/contractiles/must/Mustfile.deed" :runner ".machine_readable/contractiles/must/must.k9.ncl" :reality ".machine_readable/descriptiles/MUST.deed")
+    (verb :name trust :declaration ".machine_readable/contractiles/trust/Trustfile.deed" :runner ".machine_readable/contractiles/trust/trust.k9.ncl" :reality ".machine_readable/descriptiles/TRUST.deed")
+    (verb :name adjust :declaration ".machine_readable/contractiles/adjust/Adjustfile.deed" :runner ".machine_readable/contractiles/adjust/adjust.k9.ncl" :reality ".machine_readable/descriptiles/ADJUST.deed")
+    (verb :name dust :declaration ".machine_readable/contractiles/dust/Dustfile.deed" :runner ".machine_readable/contractiles/dust/dust.k9.ncl" :reality ".machine_readable/descriptiles/DUST.deed")
+    (verb :name bust :declaration ".machine_readable/contractiles/bust/Bustfile.deed" :runner ".machine_readable/contractiles/bust/bust.k9.ncl" :reality ".machine_readable/descriptiles/BUST.deed")
+))
