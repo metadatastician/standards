@@ -8,7 +8,7 @@
 //
 // deed.abnf is normative (D308); deed_lint.js is the gate that CI runs. This
 // harness keeps them from drifting apart. It compiles deed.abnf (with the
-// (egress …), (anchor …) and (contractiles …) clause profiles and the shared rules of
+// (egress …), (anchor …), (contractiles …) and edict clause profiles and the shared rules of
 // clauses/common.abnf) using apg-js, mutates every
 // committed deed with a seeded generator, and asks both the grammar and the
 // gate for a verdict on each variant:
@@ -69,7 +69,8 @@ function compileGrammar() {
       readFileSync(join(ABNF, "clauses/egress.abnf"), "utf8") + "\n" +
       readFileSync(join(ABNF, "clauses/common.abnf"), "utf8") + "\n" +
       readFileSync(join(ABNF, "clauses/anchor.abnf"), "utf8") + "\n" +
-      readFileSync(join(ABNF, "clauses/contractiles.abnf"), "utf8")).replace(/[^\x00-\x7f]/g, "?") +
+      readFileSync(join(ABNF, "clauses/contractiles.abnf"), "utf8") + "\n" +
+      readFileSync(join(ABNF, "clauses/edict.abnf"), "utf8")).replace(/[^\x00-\x7f]/g, "?") +
     "\nSP = %x20\nDQUOTE = %x22\nALPHA = %x41-5A / %x61-7A\nDIGIT = %x30-39\n" +
     "VCHAR = %x21-7E\nCR = %x0D\nLF = %x0A\nCRLF = CR LF\n";
   const api = new apgApi(src);
@@ -229,6 +230,48 @@ for (const name of readdirSync(join(FIXTURES, "contractiles/invalid")).sort()) {
   }
 }
 
+// The edict form (A7 8.1, clauses/edict.abnf). Its fixtures are one case per
+// directory, because an edict's file name is fixed by its verb. Every valid
+// case is a valid deed for both, and each of its (rule …) clauses parses as
+// edict-rule (and its (envelope …) as bust-envelope). Each invalid case is
+// filed in one of two exhaustive lists: the grammar refuses its first rule,
+// or the grammar accepts it and only deed_lint.js --edict refuses it.
+const edictCases = (sub) => readdirSync(join(FIXTURES, "edict", sub)).sort().map((c) => {
+  const dir = join(FIXTURES, "edict", sub, c);
+  const name = readdirSync(dir).find((n) => n.endsWith(".deed"));
+  return { c, file: join(dir, name), text: readFileSync(join(dir, name), "utf8") };
+});
+const allClauses = (t, name) => {
+  const out = [];
+  let rest = t;
+  for (let e = clauseText(rest, name); e !== null; e = clauseText(rest, name)) {
+    out.push(e);
+    rest = rest.slice(rest.indexOf(e) + e.length);
+  }
+  return out;
+};
+for (const { c, text } of edictCases("valid")) {
+  if (!grammarAccepts(grammar, "deed", text)) fail("edict valid fixture rejected by deed.abnf", c);
+  const gate = gateVerdict(text);
+  if (!gate.ok) fail("edict valid fixture rejected by deed_lint.js", `${c}: ${gate.why}`);
+  for (const r of allClauses(text, "rule")) if (!grammarAccepts(grammar, "edict-rule", r)) fail("edict.abnf refuses a valid rule", `${c}: ${r.slice(0, 60)}`);
+  for (const r of allClauses(text, "envelope")) if (!grammarAccepts(grammar, "bust-envelope", r)) fail("edict.abnf refuses a valid envelope", c);
+}
+{
+  const grammarRejects = ["always-with-field", "clade-selector", "rule-extra-field", "two-selectors", "unknown-selector"];
+  const semanticOnly = ["beholding-chora", "duplicate-id", "empty-text", "envelope-not-bust", "id-space", "intend-bang",
+    "missing-requires", "missing-text", "no-comparator", "of-chora-legacy", "requires-other-verb", "selector-bang",
+    "two-comparators", "unknown-clause", "verb-filename-mismatch", "witness-other"];
+  for (const { c, text } of edictCases("invalid")) {
+    const rule = clauseText(text, "rule");
+    if (grammarRejects.includes(c)) {
+      if (rule === null || grammarAccepts(grammar, "edict-rule", rule)) fail("edict.abnf accepts a rule it must refuse", c);
+    } else if (semanticOnly.includes(c)) {
+      if (rule !== null && !grammarAccepts(grammar, "edict-rule", rule)) fail("edict.abnf refuses a rule listed as semantic only", c);
+    } else fail("edict invalid fixture is in neither list", c);
+  }
+}
+
 // A version 5 parent id (A1 rule V8) is refused by anchor.abnf itself. Built at
 // run time, not committed: the repo carries no version 5 UUID literal
 // (scripts/check-uuid-v8.sh --strict).
@@ -300,7 +343,9 @@ for (const name of readdirSync(join(FIXTURES, "contractiles/invalid")).sort()) {
 const validFixtures = ["valid", "heads/valid", "bang/valid", "egress/valid", "anchor/valid", "contractiles/valid"].flatMap((dir) =>
   readdirSync(join(FIXTURES, dir)).sort().map((name) => join(FIXTURES, dir, name)),
 );
-const seedFiles = opts.seeds.length ? opts.seeds : [...committedDeeds(ROOT), ...validFixtures];
+const edictValid = readdirSync(join(FIXTURES, "edict/valid")).sort().flatMap((c) =>
+  readdirSync(join(FIXTURES, "edict/valid", c)).filter((n) => n.endsWith(".deed")).map((n) => join(FIXTURES, "edict/valid", c, n)));
+const seedFiles = opts.seeds.length ? opts.seeds : [...committedDeeds(ROOT), ...validFixtures, ...edictValid];
 const texts = seedFiles.map((f) => readFileSync(f, "utf8"));
 let state = opts.seed >>> 0;
 const rnd = (k) => {

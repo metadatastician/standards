@@ -188,6 +188,49 @@ for the anchor.
 The profile is a draft. CI gates only its own fixtures until the owner
 ratifies A7.
 
+== `deed_lint.js --edict` — the edict form of a contractile-deed (DRAFT)
+
+Checks a `<Verb>file.deed` (head `contractile-deed`, J14) against
+`spec/abnf/clauses/edict.abnf` (A7 8.1, 8.4, 8.5). The rules it adds to the grammar:
+
+* the form carries `:canonical-name`, `:of-chora` (an opaque version 8
+  `#uuid`, J20) and `:verb`, each exactly once, and no `:beholding-chora`;
+* `:verb` agrees with the file name. `Intentfile.deed` holds the verb `intend`
+  (the A7 8.1 table);
+* each `(rule …)` has `:id`, `:text`, `(applies-when …)` and `(requires …)`
+  exactly once. The `:id` is unique in the file and is an A5 name segment;
+* `!` follows only a rule's `:id`, and an `Intentfile` refuses it (8.4);
+* `(applies-when …)` holds one selector: `(always)`, or `(identity …)`,
+  `(profile …)`, `(capabilities …)` or `(context …)` with at least one field.
+  `(clade …)` is refused, because no edict hangs off the clade (W10);
+* `(requires …)` holds one requirement whose head is the deed's verb. Its
+  `:witness` is the rule's own `:id` (J5), with exactly one of `:value`,
+  `:at-least` and `:at-most`;
+* `(envelope :for … :not-for … :tolerance …)` appears at most once, and only
+  in a Bustfile (8.5).
+
+    bun deed_lint.js --edict Mustfile.deed
+    bun deed_lint.js --edict-fixtures fixtures/edict/
+
+The fixtures are one case per directory, `fixtures/edict/{valid,invalid}/<case>/<Verb>file.deed`,
+because an edict's file name is fixed by its verb.
+
+== `contractile_registry.js` — the `contractile` rule registry (A7 J13)
+
+Generates the A5 registry `contractile_rules_praxis.deed` from a repo's edicts:
+one `rule-def` per rule, with `:id "contractile/<verb>/<rule-id>"` and the
+rule's `:text`. `:class gate` goes to every `must` rule and every rule marked
+`!`, and `:class advisory` to the rest. Every entry gets `:excusable-at repo`,
+`:scope-form exact-paths` and `:status active`, and a Bust rule also carries
+`:floor "A7 8.5"`. `:beholding-chora` and the SPDX header are copied from the
+repo's own chora deed.
+
+    bun contractile_registry.js --root REPO            # writes .machine_readable/contractiles/contractile_rules_praxis.deed
+    bun contractile_registry.js --root REPO --check    # exit 1 when the committed registry is stale
+
+Until `standards` has its own edicts (A7 M4), CI runs `--check` against the
+fixture repo `fixtures/edict/registry/root/`.
+
 == `a2ml_to_deed.py` — the translator
 
 Implements ONE authoritative mapping: the specs in `../mappings/`. It is

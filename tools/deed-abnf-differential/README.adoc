@@ -6,8 +6,8 @@ Keeps the DEED gate and the DEED grammar from drifting apart.
 `1-formats/deed/tools/deed_lint.js` is the gate that CI runs.
 
 `differential.js` compiles `deed.abnf` with the `(egress …)`, `(anchor …)` and
-`(contractiles …)` clause profiles (`clauses/egress.abnf`, `clauses/anchor.abnf`,
-`clauses/contractiles.abnf`) and the shared
+`(contractiles …)` clause profiles and the edict form (`clauses/egress.abnf`,
+`clauses/anchor.abnf`, `clauses/contractiles.abnf`, `clauses/edict.abnf`) and the shared
 rules of `clauses/common.abnf`, using
 https://github.com/ldthomas/apg-js[apg-js]. It then gives both the grammar and
 the gate the same inputs:
@@ -22,6 +22,9 @@ the gate the same inputs:
   `CONTRACTILES_GRAMMAR_REJECTS` must be refused by `contractiles.abnf`. Every
   other invalid fixture breaks only a semantic side condition, so its clause
   must parse. A new fixture therefore has to be filed in one list or the other;
+* the edict cases (`fixtures/edict/{valid,invalid}/<case>/`): every valid rule
+  parses as `edict-rule`, and every invalid case is filed as grammar-refused or
+  semantic-only, as for the contractiles fixtures;
 * the shared rules of `common.abnf` (dates, the affirmation members, string
   lists): each must accept and refuse the strings listed in the script, because
   no clause uses the date and affirmation rules yet;
