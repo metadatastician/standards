@@ -9,7 +9,7 @@
 ; of the chora deed; there is no ANCHOR.deed and no grammar change.
 ;
 ; A CLAUSE PROFILE, not a new grammar. Every anchor-clause below is also a
-; `clause` of deed.abnf v1.3.0, so a deed carrying one still passes deed_lint
+; `clause` of deed.abnf v1.4.0, so a deed carrying one still passes deed_lint
 ; unchanged. This profile narrows that clause. Rules it borrows (string,
 ; boolean, symbol, token-sep, DQUOTE, DIGIT, ALPHA, hex-lc, str-char, escape)
 ; are deed.abnf's, unchanged; str-list, str-list1, chora-uuid8 and lc-variant
@@ -19,8 +19,14 @@
 ; downstream or satellite repo may extend but not redefine, and how to bring
 ; the repo back on track when it drifts. What it is NOT: identity. The repo's
 ; one id is the chora deed's :repo-uuid (A1, rulings R4, U1 to U4, V8). The
-; anchor carries no id of its own, no clade (a finding aid, A1 §11) and no
-; lifecycle status (the chora's (status …) clause).
+; anchor carries no id of its own, no clade (a placement is an identity fact
+; in the chora, W10) and no lifecycle status (STATE.deed, J15).
+;
+; STATUS (SysArch R-01, held for the owner's answer to Q1): A7 W3 and J14
+; make the anchor its own file, ANCHOR.deed with head anchor-deed, which
+; deed.abnf v1.4.0 dispatches. This header describes the clause profile as
+; built and tested, which A7 6.5 keeps as input to the anchor-deed module.
+; It is not the target placement; do not implement new readers against it.
 ;
 ; Where it appears: at most one (anchor …) clause, at the top level of a
 ; repo-deed (<repo>_chora.deed). SEMANTIC: a validator MUST reject an
