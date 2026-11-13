@@ -405,10 +405,13 @@ jobs:
 
       - name: Setup Elixir for Hypatia scanner
         if: needs.workflow-staleness.outputs.has_baseline == 'true'
+        # OTP 28.x (28.1 to 28.5.0.8) segfaults the Hypatia scanner and oracle
+        # in sweep_off_heap on some trees; OTP 27.3.4.19 is clean on all of them
+        # (rsr-template-repo#333 and #339; hyperpolymath/hypatia#1061).
         uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1.24.1
         with:
           elixir-version: '1.19.4'
-          otp-version: '28.5.0.8'
+          otp-version: '27.3.4.19'
 
       - name: Resolve Hypatia scanner commit
         if: needs.workflow-staleness.outputs.has_baseline == 'true'
@@ -445,7 +448,7 @@ jobs:
           # ran against a stale ruleset. No restore-keys on purpose — a partial
           # restore would repopulate ~/hypatia and the guards below would skip
           # the rebuild, reintroducing the staleness.
-          key: hypatia-scanner-v4-${{ runner.os }}-otp28.5.0.8-${{ steps.hypatia-rev.outputs.sha }}
+          key: hypatia-scanner-v4-${{ runner.os }}-otp27.3.4.19-${{ steps.hypatia-rev.outputs.sha }}
 
       - name: Check out resolved Hypatia commit
         if: needs.workflow-staleness.outputs.has_baseline == 'true'
