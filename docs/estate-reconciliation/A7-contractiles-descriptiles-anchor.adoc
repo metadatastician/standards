@@ -671,7 +671,7 @@ The owner-requested review read A1 to A7 at `6038273`. Its A7 findings are handl
 | Finding | In v0.2.4
 
 | R-03 | 8.1 and section 11: `!` needs `deed.abnf` v1.5.0, an M3 step before the edict form.
-| R-04 | 8.4 and YC10: `contractiles` is `not_applicable`, reported, until the repo's M7 PR, or whichever PR first adds the clause; that PR adds `(repo :chora #uuid"…")` to the pinned table's `contractiles-adopted` list, which is never shortened. Agreed with A1 for A3 §6 (standards#1533).
+| R-04 | 8.4 and YC10: `contractiles` is `not_applicable`, reported, only while a repo has neither the clause nor an adoption entry. The PR that first adds the clause (M4, M7, or registration for a template-born repo) adds `(repo :chora #uuid"…")` to the pinned table's `contractiles-adopted` list, which is never shortened. Agreed with A1 for A3 §6 (standards#1533).
 | R-05 | Section 11, M2: a new-form file joins the template only once its M3 module has landed.
 | R-09 | Section 5, 1a: the template's inline governance needs the job too, in the rollout home the owner chooses.
 | R-13 | Section 5, 1c, and YP03: placements are checked against the registry's scheme, not a fixed list of twelve codes.
