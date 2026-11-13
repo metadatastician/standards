@@ -17,6 +17,7 @@ name: deed-conformance
 #       uses: metadatastician/standards/.github/workflows/deed-conformance.yml@<sha>
 #       with:
 #         require-files: true   # fail when the caller has no .deed at all
+#         advisory: false       # true: findings become ::warning:: and the job passes
 
 on:
   push:
@@ -39,6 +40,11 @@ on:
         type: boolean
         required: false
         default: false
+      advisory:
+        description: "Report findings as ::warning:: annotations and pass, instead of failing the job. Governance calls this reusable with it on, so no repository turns red at once; a repository opts into enforcement by calling with advisory: false (the default for direct callers)."
+        type: boolean
+        required: false
+        default: false
 
 permissions: {}
 
@@ -54,10 +60,14 @@ jobs:
       T: ${{ github.repository_id == 1116521501 && '1-formats/deed/tools' || '.deed-canon/1-formats/deed/tools' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        id: checkout
+        continue-on-error: ${{ inputs.advisory == true }}
         with:
           persist-credentials: false
       - name: checkout the deed linter at this workflow's commit
+        id: canon
         if: github.repository_id != 1116521501
+        continue-on-error: ${{ inputs.advisory == true }}
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: metadatastician/standards
@@ -67,31 +77,33 @@ jobs:
           sparse-checkout: "1-formats/deed/tools\n"
           sparse-checkout-cone-mode: false
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        id: bun
+        continue-on-error: ${{ inputs.advisory == true }}
         with:
           bun-version: "1.4.2"
       - name: validator self-test
-        if: github.repository_id == 1116521501
+        if: github.repository_id == 1116521501 && steps.bun.outcome == 'success'
         run: bun "$T/deed_lint.js" --self-test
       - name: validator unit tests
-        if: github.repository_id == 1116521501
+        if: github.repository_id == 1116521501 && steps.bun.outcome == 'success'
         run: bun test "$T/"
       - name: fixture corpus (valid must pass, invalid must fail)
-        if: github.repository_id == 1116521501
+        if: github.repository_id == 1116521501 && steps.bun.outcome == 'success'
         run: bun "$T/deed_lint.js" --fixtures "$T/fixtures"
       - name: J14 file-name head fixtures (contractile-deed, descriptile-deed, anchor-deed)
-        if: github.repository_id == 1116521501
+        if: github.repository_id == 1116521501 && steps.bun.outcome == 'success'
         run: bun "$T/deed_lint.js" --fixtures "$T/fixtures/heads"
       # The (anchor …) clause profile is a DRAFT (A7), so it gates only its own
       # fixtures here. It joins the caller-wide lint below once the owner
       # ratifies the profile.
       - name: anchor clause profile fixtures (DRAFT, A7)
-        if: github.repository_id == 1116521501
+        if: github.repository_id == 1116521501 && steps.bun.outcome == 'success'
         run: bun "$T/deed_lint.js" --anchor-fixtures "$T/fixtures/anchor"
       - name: grammar-vs-gate differential (deed.abnf through apg-js, against deed_lint.js)
         # Mutates every committed deed and valid fixture with a seeded generator
         # and fails when the gate and the normative grammar disagree, other than
         # on the gate's documented semantic checks. tools/deed-abnf-differential.
-        if: github.repository_id == 1116521501
+        if: github.repository_id == 1116521501 && steps.bun.outcome == 'success'
         working-directory: tools/deed-abnf-differential
         run: |
           bun install --frozen-lockfile
@@ -105,23 +117,62 @@ jobs:
           cargo test --quiet --locked --manifest-path tools/uuid-v8/Cargo.toml
           bash scripts/tests/rust/uuid-v8-rs-test.sh
       - name: lint every committed deed
+        id: lint
+        # Advisory: a failing step does not fail the job; the next step turns
+        # the findings into annotations.
+        continue-on-error: ${{ inputs.advisory == true }}
         env:
           REQUIRE_FILES: ${{ inputs.require-files || false }}
+          ADVISORY: ${{ inputs.advisory || false }}
         run: |
           set -euo pipefail
           find . -name '*.deed' -not -path './.deed-canon/*' -not -path './1-formats/deed/tools/fixtures/invalid/*' -not -path './1-formats/deed/tools/fixtures/heads/invalid/*' -print | sort > "$RUNNER_TEMP/deeds"
           if [ ! -s "$RUNNER_TEMP/deeds" ]; then
             if [ "$REQUIRE_FILES" = "true" ]; then
-              echo "::error::require-files is set and no committed .deed file was found"
+              # Advisory mode must not attach error-severity annotations.
+              sev=error; [ "$ADVISORY" = "true" ] && sev=warning
+              echo "::${sev}::require-files is set and no committed .deed file was found"
               exit 1
             fi
             echo "no committed .deed files — nothing to lint"
             exit 0
           fi
           echo "linting $(wc -l < "$RUNNER_TEMP/deeds") file(s)"
-          xargs bun "$T/deed_lint.js" < "$RUNNER_TEMP/deeds"
+          xargs bun "$T/deed_lint.js" < "$RUNNER_TEMP/deeds" 2>&1 | tee -a "$RUNNER_TEMP/deed-lint.log"
           # The (egress …) clause profile (ADR-009). A deed without the clause
           # passes. Its invalid fixtures are grammatical deeds, so they are
           # excluded here rather than from the grammar lint above.
           grep -v '^\./1-formats/deed/tools/fixtures/egress/invalid/' "$RUNNER_TEMP/deeds" \
-            | xargs bun "$T/deed_lint.js" --egress
+            | xargs bun "$T/deed_lint.js" --egress 2>&1 | tee -a "$RUNNER_TEMP/deed-lint.log"
+      - name: Advisory findings as warnings
+        # Also when a prerequisite step failed: a failed checkout leaves an empty
+        # workspace that lints as "nothing to lint" and would otherwise go green.
+        if: ${{ always() && inputs.advisory == true && (steps.lint.outcome == 'failure' || steps.checkout.outcome == 'failure' || steps.canon.outcome == 'failure' || steps.bun.outcome == 'failure') }}
+        continue-on-error: true
+        run: |
+          # GitHub runs this with `bash -e -o pipefail`: every no-match grep
+          # below is guarded, so a run with no FAIL line (a missing log, or
+          # require-files with no deed) still reaches its closing warning.
+          # deed_lint prints `FAIL <path>: <message>`. Annotate each (capped,
+          # GitHub shows few), then say plainly that nothing was enforced.
+          log="$RUNNER_TEMP/deed-lint.log"
+          [ -f "$log" ] || : > "$log"
+          n=$( { grep -c '^FAIL ' "$log" || true; } | head -n 1)
+          # Sort to a file, then cap from the file: `sort | head` would give sort a
+          # SIGPIPE (141) once head has its 30 lines, which pipefail turns into a
+          # failed step before the closing count.
+          { grep '^FAIL ' "$log" || true; } | sort -u > "$RUNNER_TEMP/deed-fails.txt"
+          head -n 30 "$RUNNER_TEMP/deed-fails.txt" | while IFS= read -r line; do
+            rest="${line#FAIL }"; path="${rest%%: *}"; msg="${rest#*: }"
+            # Workflow-command escaping: the property needs % CR LF : , and
+            # the data part needs % CR LF (toolkit escapeProperty / escapeData).
+            path="${path#./}"
+            path="${path//'%'/%25}"; path="${path//$'\r'/%0D}"; path="${path//$'\n'/%0A}"; path="${path//:/%3A}"; path="${path//,/%2C}"
+            msg="${msg//'%'/%25}"; msg="${msg//$'\r'/%0D}"; msg="${msg//$'\n'/%0A}"
+            printf '::warning file=%s::deed conformance (advisory): %s\n' "$path" "$msg"
+          done
+          if [ "${n:-0}" -eq 0 ]; then
+            echo "::warning::deed conformance (advisory): the check did not run to completion (no finding was recorded); see the step log. Not enforced."
+          else
+            echo "::warning::deed conformance (advisory): ${n} finding(s); not enforced. Fix them, then call deed-conformance.yml with advisory: false to enforce."
+          fi
