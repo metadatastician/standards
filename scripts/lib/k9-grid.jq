@@ -155,14 +155,33 @@ def corpus_items(results; expected; ledger; growth; changed; require_files):
 # message}. Present only when the lane supplied coordination evidence or the K9
 # validator routed a file there; a routed file with no record is indeterminate,
 # never green (standards: coordination.k9 was previously reported not_applicable).
-def coord_items(coord; results):
-  ((coord // []) | map(select(type == "object" and has("file")) | {key: (.file | tostring), value: .}) | from_entries) as $by
+def coord_items(coord; results; ledger; growth; changed):
+  (ledger | map({key: ., value: true}) | from_entries) as $ledger
+  | (growth | map({key: ., value: true}) | from_entries) as $growth
+  | (changed | map({key: ., value: true}) | from_entries) as $changed
+  | ([results[] | select((type == "object") and (.verdict // "") == "routed" and ((.file | type) == "string")) | .file]
+     | map({key: ., value: true}) | from_entries) as $routed
+  | ([(coord // [])[] | select((type == "object") and ((.file | type) == "string")) | .file]
+     | reduce .[] as $f ({}; .[$f] += 1)) as $count
+  # The same debt rules as the corpus category: a listed, unchanged failure is
+  # advisory; a listed file that now conforms is a stale entry. Growth rows are
+  # reported once, by the corpus category.
   | [ (coord // [])[]
-      | if (type != "object") or (has("malformed")) or (has("file") | not) or ((.verdict // "") | IN("pass", "fail") | not)
+      | if (type != "object") or (has("malformed")) or ((.file | type) != "string") or ((.verdict // "") | IN("pass", "fail") | not)
         then item("coordination validator output"; "indeterminate"; "Malformed or unexpected result.")
-        elif .verdict == "pass" then item(.file; "pass"; "")
-        else item(.file; "fail"; (.message // "does not conform to coordination-k9-grammar_v1.2.abnf")) end ]
-    + [ results[] | select((type == "object") and (.verdict // "") == "routed" and ((.file | type) == "string") and (($by[.file] // null) == null))
+        elif ($routed[.file] // false) | not
+        then item(.file; "indeterminate"; "A coordination.k9 record for a file the K9 validator did not route to the coordination dialect; not graded.")
+        elif $count[.file] > 1
+        then item(.file; "indeterminate"; "Duplicate coordination.k9 records for one file; not graded.")
+        else
+          (($ledger[.file] // false) and (($growth[.file] // false) | not)) as $listed
+          | if .verdict == "pass" then
+              (if $listed then item(.file; "fail"; "Stale debt exemption: this file now conforms.") else item(.file; "pass"; "") end)
+            else
+              item(.file; "fail"; (.message // "does not conform to coordination-k9-grammar_v1.2.abnf"); ($listed and (($changed[.file] // false) | not)))
+            end
+        end ]
+    + [ results[] | select((type == "object") and (.verdict // "") == "routed" and ((.file | type) == "string") and (($count[.file] // 0) == 0))
         | item(.file; "indeterminate"; "Routed to the coordination dialect but no coordination.k9 validator result was supplied.") ];
 
 def titles: { typecheck: "K9 contract typecheck", selftest: "K9 validator self-test", corpus: "K9 live corpus (L0–L2)", coord: "coordination.k9 (v1.2 ABNF)" };
@@ -187,7 +206,7 @@ def build:
   | ($corpus0
      + (if ($in.corpus_code // 0) != 0 and ($corpus0 | any(.[]; .status == "indeterminate" or .status == "fail") | not)
         then [item("corpus gate"; "indeterminate"; "Validator exited \($in.corpus_code); inspect corpus.log.")] else [] end)) as $corpus
-  | coord_items($in.coord; $in.results // []) as $coord
+  | coord_items($in.coord; $in.results // []; $in.ledger // []; $in.ledger_growth // []; $in.changed // []) as $coord
   | ([ category("typecheck"; typecheck_items($in.typecheck // {code: null, output: ""}; $contract)),
       category("selftest"; selftest_items($in.selftest // {code: null, output: ""})),
       category("corpus"; $corpus) ]

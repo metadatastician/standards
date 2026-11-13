@@ -174,6 +174,24 @@ render "$WORK/o9c" --results "$WORK/expected-none" --expected "$WORK/expected-no
 check "an empty corpus under --require-files is red in the grid itself" red "$(state "$WORK/o9c")"
 check "and the badge says so" failing "$(jq -r .message "$WORK/o9c/badge.json")"
 
+# 9b. Coordination records follow the corpus's debt rules and are reconciled with
+# the routed files (Codex review on #1516).
+printf '%s\n' a.k9.ncl > "$WORK/ledger-a"
+printf '%s\n' a.k9.ncl > "$WORK/changed-a"
+render "$WORK/o9e" --results "$WORK/r-routed" --expected "$WORK/expected-a" "${good_evidence[@]}" --coord-results "$WORK/coord-fail" --ledger "$WORK/ledger-a"
+check "a ledgered, untouched coordination failure is advisory (yellow), not red" yellow "$(state "$WORK/o9e")"
+render "$WORK/o9f" --results "$WORK/r-routed" --expected "$WORK/expected-a" "${good_evidence[@]}" --coord-results "$WORK/coord-fail" --ledger "$WORK/ledger-a" --changed "$WORK/changed-a"
+check "a ledgered coordination failure the PR touches is blocking (red)" red "$(state "$WORK/o9f")"
+render "$WORK/o9g" --results "$WORK/r-routed" --expected "$WORK/expected-a" "${good_evidence[@]}" --coord-results "$WORK/coord-pass" --ledger "$WORK/ledger-a"
+check "a ledgered coordination file that now conforms is a stale entry (red)" red "$(state "$WORK/o9g")"
+jq -nc '{file: "stray.k9", verdict: "fail", message: "boom"}' > "$WORK/coord-stray"
+{ cat "$WORK/coord-pass"; cat "$WORK/coord-stray"; } > "$WORK/coord-pass-stray"
+render "$WORK/o9h" --results "$WORK/r-routed" --expected "$WORK/expected-a" "${good_evidence[@]}" --coord-results "$WORK/coord-pass-stray"
+check "a record for a file that was not routed is indeterminate (orange), not red" orange "$(state "$WORK/o9h")"
+{ cat "$WORK/coord-pass"; cat "$WORK/coord-pass"; } > "$WORK/coord-dup"
+render "$WORK/o9i" --results "$WORK/r-routed" --expected "$WORK/expected-a" "${good_evidence[@]}" --coord-results "$WORK/coord-dup"
+check "duplicate records for one routed file are indeterminate, never green" orange "$(state "$WORK/o9i")"
+
 # 10. Self-test and typecheck evidence.
 render "$WORK/o10" --results "$WORK/r-clean" --expected "$WORK/expected" --selftest "$bad_selftest" --selftest-code 1 --typecheck "$WORK/empty.log" --typecheck-code 0 --corpus-code 0
 check "a failed self-test assertion is red" red "$(state "$WORK/o10")"

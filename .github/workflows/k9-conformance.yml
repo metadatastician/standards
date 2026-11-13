@@ -307,11 +307,17 @@ jobs:
                 # validate.js reads a leading `-` as an option; `./` keeps a
                 # tracked file named `-x.k9` a path.
                 out=$(bun "$V/validate.js" "./$f" 2>&1); rc=$?
-                case "$rc" in
-                  0) jq -nc --arg f "$f" '{file: $f, verdict: "pass", message: ""}' >> "$RUNNER_TEMP/coord-results.jsonl" ;;
-                  1) jq -nc --arg f "$f" --arg m "$out" '{file: $f, verdict: "fail", message: $m}' >> "$RUNNER_TEMP/coord-results.jsonl" ;;
-                  *) echo "::warning::coordination validator could not run on $f (exit $rc)" ;;
-                esac
+                # Exit 1 is both the validator's "finding" status and what Bun
+                # uses for a crash (module resolution, an uncaught exception), so
+                # a failure needs the validator's own `FAIL <file>:` line.
+                # Anything else leaves no record, and the file stays indeterminate.
+                if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -q '^PASS '; then
+                  jq -nc --arg f "$f" '{file: $f, verdict: "pass", message: ""}' >> "$RUNNER_TEMP/coord-results.jsonl"
+                elif [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -q '^FAIL '; then
+                  jq -nc --arg f "$f" --arg m "$out" '{file: $f, verdict: "fail", message: $m}' >> "$RUNNER_TEMP/coord-results.jsonl"
+                else
+                  echo "::warning::coordination validator gave no verdict on $f (exit $rc); the file stays indeterminate"
+                fi
               done < "$RUNNER_TEMP/routed"
             else
               echo "::warning::coordination validator dependencies did not install; routed files are indeterminate"
