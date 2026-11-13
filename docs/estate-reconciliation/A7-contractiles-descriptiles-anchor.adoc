@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 = A7: Contractiles, Descriptiles and Anchor (edicts, reality, course correction)
 :version: 0.2.1-draft
-:status: DRAFT v0.2.1. Owner rulings W1 to W9 of 2026-11-13 recorded (section 2.3); they supersede Q11, Q12 (in its form) and Q13 for this subject. J1 to J3, J5 to J8 and J10 to J12 approved 2026-11-13; J9 and J13 approved as amended; J4 reopened. J18 approved 2026-11-13 (A7 thread). J14 to J17 proposed. Builds on A1 v0.3.9, A2 v0.2.3, A3 v0.2.3 and A5 v0.2.2. Supersedes, for its subject, docs/ULTRAPLAN-DEED-K9-CONTRACTILES-2026-10-19.adoc v0.3.3 (J1). Not ratified.
+:status: DRAFT v0.2.1. Owner rulings W1 to W10 of 2026-11-13 recorded (section 2.3; W10 amends W1); they supersede Q11, Q12 (in its form) and Q13 for this subject. J1 to J3, J5 to J8 and J10 to J12 approved 2026-11-13; J9 and J13 approved as amended; J4 reopened. J18 approved 2026-11-13 (A7 thread). J14 to J17 proposed. Builds on A1 v0.3.9, A2 v0.2.3, A3 v0.2.3 and A5 v0.2.2. Supersedes, for its subject, docs/ULTRAPLAN-DEED-K9-CONTRACTILES-2026-10-19.adoc v0.3.3 (J1). Not ratified.
 :toc:
 
 Specification A7 of the Estate Reconciliation Plan. It defines how a repository's edicts (the contractiles) are checked against its identity (the chora) and its audited reality (the descriptiles), how an anchor corrects a project that has drifted, and the order in which the estate leaves A2ML behind.
@@ -15,14 +15,14 @@ Specification A7 of the Estate Reconciliation Plan. It defines how a repository'
 | [M] | Measured by me on 2026-11-12, or on 2026-11-13 where section 13 says so, at the commits listed there.
 | [R] | Estate record: a statement in an estate document, including the ultraplan's own measurements. I did not recount it.
 | [I] | Inferred by me. Check before relying on it.
-| [O] | Owner ruling. Rulings Q1 to Q16 are of 2026-10-20, W1 to W9 of 2026-11-13. The others are named where cited.
+| [O] | Owner ruling. Rulings Q1 to Q16 are of 2026-10-20, W1 to W10 of 2026-11-13. The others are named where cited.
 |===
 
-Identifiers are local to this specification, as in A1 to A6. Rulings of 2026-11-13 are `W1` to `W9`; decisions are `J1` to `J17`. Test ids use the two-letter prefixes `YN`, `YP`, `YA`, `YD`, `YC`, `YK`, `YR`, `YE`, `YS`, `YB`, `YF` and `YH`, which no other specification in the set uses [M].
+Identifiers are local to this specification, as in A1 to A6. Rulings of 2026-11-13 are `W1` to `W10`; decisions are `J1` to `J17`. Test ids use the two-letter prefixes `YN`, `YP`, `YA`, `YD`, `YC`, `YK`, `YR`, `YE`, `YS`, `YB`, `YF` and `YH`, which no other specification in the set uses [M].
 
 == 1. Summary
 
-* *Three layers* [O: W1]. The *chora* says what the repo is (A1). The *descriptiles* say what it is like now, from audit. The *contractiles* say what must hold, given what it is. The clade is a finding aid and no edict hangs off it (A1 R4).
+* *Three layers* [O: W1]. The *chora* says what the repo is (A1). The *descriptiles* say what it is like now, from audit. The *contractiles* say what must hold, given what it is. No edict hangs off the clade. Its placements are identity facts in the chora, saying where the repo sits [O: W10, amending A1 R4]. Estate-wide classification schemes live in chora-registry, which is authoritative. A repo's own content organisation is `CLADE.deed`.
 * *An edict is not a checklist* [O: W2]. Each contractile rule has two halves: `applies-when`, a test on identity and context, and `requires`, a test on reality. It is violated when the first holds and the second does not. A list of ticks is a descriptile. This is the aspect-oriented shape: identity selects the rules that apply.
 * *Files, and the case of their names* [O: W3, W4]. Contractiles are Capitalised deeds, one per verb (`Mustfile.deed`, `Trustfile.deed` …), each checked by its K9 runner `<verb>.k9.ncl`. Descriptiles are ALL-CAPS deeds (`META.deed`, `STATE.deed` …). The chora deed stays the one identity record of the repo (D312). The case tells a reader which side a file is on, so nobody "fixes" an edict to match how things turned out.
 * *Keeping a state you like means redeclaring the edict* [O: W5]. A descriptile edit never changes policy.
@@ -66,9 +66,9 @@ Identifiers are local to this specification, as in A1 to A6. Rulings of 2026-11-
 * *A2ML is retired* (D99, D269c, D312, D313). Never create or restore an `.a2ml` file. Deleting content from one is allowed.
 * *Part 1a, 2026-11-12.* The check that refuses an added A2ML file runs as a job of `governance-reusable.yml`. A rename counts as an addition only when the old path is not A2ML.
 
-=== 2.3 Rulings W1 to W9 of 2026-11-13
+=== 2.3 Rulings W1 to W10 of 2026-11-13
 
-Given by the owner in the A1 thread on 2026-11-13. W3 supersedes Q11 and Q13, and Q12 in its form (one descriptile per verb stays; it is a file, not a clause). W7 replaces the subject of J4 as first proposed.
+W1 to W9 were given by the owner in the A1 thread on 2026-11-13, and W10 the same day in the A7 thread. W3 supersedes Q11 and Q13, and Q12 in its form (one descriptile per verb stays; it is a file, not a clause). W7 replaces the subject of J4 as first proposed.
 
 [cols="1,5,2"]
 |===
@@ -83,6 +83,7 @@ Given by the owner in the A1 thread on 2026-11-13. W3 supersedes Q11 and Q13, an
 | W7 | Strictness per verb. `Must`: every clause blocks, never relaxed. `Intent`: advisory, room to explore. `Adjust`, `Trust`, `Dust`: warn, and a clause marked `!` blocks; a `Dust` clause on an irreversible decision takes `!` and blocks until decided. | 8.4
 | W8 | Bust grades: control letter and severity, before and after controls. Every grade other than A is unsuppressible; `X1` blocks; a repo may only tighten. "Can't be bothered" is a threat to everyone. | 8.5
 | W9 | Contractiles become a required A3 check (A3 E12). | 8.4
+| W10 | The chora keeps the repo's clade placements as identity facts: where the repo sits. They are never its id and never an edict. chora-registry (the renamed `gv-clade-index`) holds the estate-wide classification schemes and is authoritative; a copy in the chora is checked against it. A repo's own content organisation is `CLADE.deed` (scheme strict, judgement or none). Amends W1, and A1 R4 and §11 to match. | 1, 12.2
 |===
 
 == 3. Relation to A1 and A2
@@ -476,7 +477,7 @@ Fixtures are valid unless marked `-bad`. `[done]` marks tests that exist and pas
 | YP03 | `just validate-rsr` fails on a declared clade whose code and name disagree. | `clade-mismatch-bad`
 | YP04 | `just validate-rsr` fails on a `#uuid` id that is not lowercase v5 or v8. It reports a v5 id as `v5-identity` and fails it in strict mode (A1 C10, T30). It reports and passes a legacy `#u5`/`#u8` id. | `uuid-v4-bad`, `uuid-v5-identity`, `legacy-u5`
 | YP05 | A fresh mint carries no `(clade …)`, no prefixed name and no `UNASSIGNED` in `(identity)`. | `tests/e2e/template_instantiation_test.sh`
-| YP06 | The generated `CLAUDE.md` neither tells an agent to read or create an `.a2ml` file nor presents the clade as identity. | `just validate-claude-md` plus a grep
+| YP06 | The generated `CLAUDE.md` neither tells an agent to read or create an `.a2ml` file nor presents the clade as the repo's id or as an edict. Clade placements may appear as identity facts (W10). | `just validate-claude-md` plus a grep
 |===
 
 === 12.3 `(anchor …)` (Part 3)
