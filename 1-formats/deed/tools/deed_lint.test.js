@@ -78,6 +78,7 @@ const RULE = {
   "inuuid-short_chora.deed": /must be 8-4-4-4-12 lowercase hex/,
   "inuuid-no-string_chora.deed": /uuid literal must be followed immediately by a string/,
   "inline-999_chora.deed": /line is 999 octets; a deed line is at most 998 octets/,
+  "inbot-bare-name_chora.deed": /expected field/,
 };
 
 describe("fixtures/valid", () => {
