@@ -241,8 +241,9 @@ depend on merges landing first:
 
 == See also
 
-- link:../../9-archive/a2ml/docs/audits/launcher-standard-review-2026-05-26.a2ml[Machine-readable
-  manifest] — same PR set as a parseable A2ML document.
+- link:../../9-archive/A2ML-REMOVED.adoc[Machine-readable
+  manifest] — same PR set as an A2ML document, removed 2026-11-13 (A2ML is
+  retired); its path and git blob id are recorded there.
 - `../UX-standards/launcher-standard.adoc` — the standard being
   revised.
 - `../../launcher/launcher-standard.a2ml` — its machine-readable
