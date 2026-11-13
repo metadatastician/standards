@@ -38,7 +38,7 @@ Every grid has exactly these parts, in this order.
 |The overall state label, the commit (12 hex), the run link, the scanner commits where a tool is pinned, and `working tree modified` when rendered locally on a dirty tree.
 
 |Grid
-|One table. Conformance lanes: `Category · Status · Pass · Fail · Indeterminate · N/A · Since previous revision`. Findings lanes: `Reporter · Status · Critical · High · Medium · Minor · Since previous revision`. Counts are results, files or findings, never lines of log.
+|One table. Conformance lanes: `Category · Status · Pass · Fail · Indeterminate · N/A · Since previous revision`. Findings lanes: `Reporter · Gate · Status · Critical · High · Medium · Minor · Since previous revision`, where `Gate` is `gating` or `advisory` (fork-governance SPEC §3.1). Counts are results, files or findings, never lines of log.
 
 |Accordion
 |One `<details>` block per row that has anything to show: every non-passing item or finding, worst first, at most 20, with a count of the rest. A row whose evidence is missing shows its reason here too.
@@ -83,9 +83,17 @@ failure. Reference rendering: `1-formats/k9/tools/conformance-report.mjs`.
 |orange |`orange` |The reporter did not run, errored, produced no readable result, or its self-test failed. Also an enrolled fleet member that sent no report-back.
 |yellow |`yellow` |The reporter ran and its worst finding is *medium* (Hypatia's `warn` ranks here).
 |blue |`blue` |The reporter ran and reported only *low* or *info* findings: present, minor.
-|green |`brightgreen` |The reporter ran and reported nothing.
+|green |`brightgreen` |The reporter ran and reported nothing *in the graded scope*.
 |grey |`lightgrey` |The reporter is explicitly not relevant to this repository, with a reason (enrolment manifest), or declared itself not applicable in its report-back.
 |===
+
+The green label states its scope, because a bare "clean" over a delta scope
+reads as a claim about the repository (owner ruling 2026-11-12). In delta
+scope, a green row reads `clean in change`, and when it has standing findings
+`clean in change · <n> standing` (with `<n>` the row's `counts_standing`
+total). Over the whole tree it reads `clean`. The state, colour and grading do
+not change; only the words do. The same label is used in the fork-governance
+summary table.
 
 Precedence: purple > red > orange > yellow > blue > green; grey only when
 every row is grey; an empty grid is orange. As in the conformance family, a
@@ -159,7 +167,11 @@ upstream scanner's implementation.
 Fleet rows sort by Hypatia Kin Arbiter priority (`echidnabot`, `rhodibot`,
 `panicbot`, `sustainabot`, `glambot`, `seambot`, `finishingbot`, `cipherbot`,
 `gsbot`, `accessibilitybot`, `the-hotchocolabot`); unknown members follow
-alphabetically. Built-in rows remain Hypatia, panic-attack, pons.
+alphabetically. Built-in rows remain Hypatia, panic-attack, pons, until the
+panic-attack and pons rows move to their fleet adapters, `panicbot` (advisory)
+and `ponsbot` (gating), per gitbot-fleet
+`docs/migrations/scanner-cutover-ponsbot-panicbot.adoc` (owner rulings
+2026-11-12). The scanners stay as external engines behind those adapters.
 
 Schema 3 preserves per-reporter counts but also publishes `unique_total`,
 `reported_total`, `counts` (unique severities), `reported_counts`, and
@@ -209,12 +221,19 @@ Paths are repository-relative with no `./`, so delta scoping can match them.
 { "schema": 1,
   "reporters": {
     "rhodibot":  { "title": "rhodibot (RSR compliance)", "enrolled": true },
+    "ponsbot":   { "enrolled": true, "gating": true },
     "glambot":   { "enrolled": false, "reason": "no served HTML surface" } } }
 ----
 
 Enrolment is a statement by the repository about which members apply. It is
 what lets a row be grey instead of orange, and it is hashed into the profile,
 so changing it ends comparisons with earlier revisions.
+
+`gating` (optional, a JSON boolean, never a string) overrides the reporter's
+default role: gating rows set the lane state, advisory rows are reported beside
+it (fork-governance SPEC §3.1). It applies to built-in rows as well as fleet
+members. Defaults: Hypatia and pons gating; panic-attack and every fleet member
+advisory.
 
 == Comparison
 
@@ -234,13 +253,40 @@ tool or scope yields
 `— no comparable baseline (scanner or policy profile changed)`, never an
 apparent improvement. The comparison now explains which incompatibility
 occurred (no prior PR grid, changed schema, scope or profile, different PR,
-or missing reporter); rerunning an identical commit is explicitly labelled
-as a same-commit run. The revision's
+or missing reporter). The revision's
 changed-file list is not part of the profile. A row whose status changed (a
 scanner that ran last time and not this time) reads `— evidence changed`. Rows that ran both times
 compare blocking findings (critical + high) first, then medium, then minor:
 `↑ improved (n fewer blocking)`, `↓ regressed (n more blocking)`,
 `↑ fewer medium`, `↔ unchanged`, and so on.
+
+=== Re-rendering the same commit: the baseline is carried forward
+
+One commit is rendered several times: each producer workflow that finishes
+re-renders the one comment (fork-governance SPEC §4). If each render compared
+against the comment it replaces, every render after the first would compare a
+commit with itself, and the comparison with the earlier revision would be lost
+within minutes.
+
+So the comment carries two blobs: the current baseline
+(`<lane>-baseline`) and the baseline it was compared against
+(`<lane>-compared-baseline`, same encoding and validation). The renderer picks
+its comparison baseline as follows:
+
+. previous comment's commit differs from this one: compare against its
+  `<lane>-baseline`, and carry *that* blob forward as this render's
+  `<lane>-compared-baseline`;
+. previous comment's commit is this commit: compare against its
+  `<lane>-compared-baseline` when present and valid, and carry it forward
+  unchanged;
+. otherwise (first render, or the carried blob is absent, garbled, or from an
+  incompatible profile): `— same commit (no revision comparison)` or the
+  existing incompatibility reason.
+
+The carried blob comes from the same bot-authored comment and passes the same
+author check and validation as the baseline itself (fork-governance SPEC §2.1),
+so carrying it opens no new forgery path. A rerun therefore shows the same
+revision comparison as the first render of that commit.
 
 == Badges
 

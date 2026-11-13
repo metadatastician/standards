@@ -4,8 +4,9 @@
 
 Every pull request in this repository gets one generated comment, marked
 `<!-- fork-governance-verdict: regenerated on every run -->`. It reports three
-lanes in a fixed order: summary, **K9-DEED conformance**, **Hypatia verdict
-grid**. The comment is produced by `.github/workflows/fork-governance.yml`
+lanes (DEED syntax, **K9-DEED conformance**, **Hypatia verdict grid**) and the
+farm, tests, fork governance, dependencies and reviewer blocks, in the fixed order of
+`SPEC.adoc` §2.2. The comment is produced by `.github/workflows/fork-governance.yml`
 (lanes) and `.github/workflows/fork-governance-reusable.yml` (posting).
 
 Documentation, in AsciiDoc, lives in `3-practice/fork-governance/` — `SPEC.adoc`
