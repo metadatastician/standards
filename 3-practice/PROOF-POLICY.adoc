@@ -668,12 +668,13 @@ prover-supplied postulates of §8.4, by name and binding;
 `transported`, `re-proved`, `waived` or `unavailable` for the others), its
 §5 `:token` and §2.2 `:state`;
 ** each leg holds its `(receipt :run … :commit … :checker … :invocation …
-:inputs-sha256 … :state … (axioms …))` records, with a `:reason` on any that
-is not `current`;
+:inputs-sha256 … :state … (inputs-manifest …) (axioms …))` records, with a
+`:reason` on any that is not `current`;
 * zero or more `(echo …)` records (§8.5.2).
 
-Every `current` receipt carries `:inputs-sha256` and `(axioms …)`. A receipt
-that is kept but is not current may omit them, because it can predate them.
+Every `current` receipt carries `:inputs-sha256`, `(inputs-manifest …)` and
+`(axioms …)`. A receipt that is kept but is not current may omit them,
+because it can predate them.
 
 `:inputs-sha256` is the digest of the files the checker run read from the
 repository. It is 64 lowercase hex digits, computed in the same way in every
@@ -706,6 +707,29 @@ On a clean checkout with no checkout filters, this shell line gives the same
 value:
 
     printf '%s\n' PATH… | LC_ALL=C sort | xargs -d '\n' sha256sum -- | sha256sum
+
+Owner ruling 2026-11-13: the receipt lists the manifest itself, so that a
+consumer can recompute the digest with git alone. An Agda import cone, for
+example, cannot be rebuilt without the prover.
+
+    (inputs-manifest
+      (file :path "src/A.agda" :sha256 "<64 hex>")
+      …)
+
+There is one `(file …)` per line of the manifest, in the same order. The
+reader refuses a manifest:
+
+* that lists no file, or that a receipt without `:inputs-sha256` carries;
+* whose paths are not in strictly increasing bytewise order of their UTF-8
+bytes (so a path also appears only once);
+* with a path that holds a newline or a backslash, or that has an empty, `.`
+or `..` part (this refuses a leading `/` or `./`);
+* with a `:sha256` that is not 64 lowercase hex digits;
+* whose SHA-256, rebuilt as above, is not the receipt's `:inputs-sha256`.
+
+So the digest is derived from the manifest, not asserted. Two manifests for
+one commit and one prover cannot differ, because their digests would then
+differ (§8.5.2).
 
 `(axioms …)` lists each axiom the checker reported, as
 `(axiom :name "…" :disposition c)`. The name is the name the checker
@@ -809,15 +833,28 @@ receipt that derives `PWG-1`:
 
 . check that the `:source-commit` is on the default branch (for example
 `git merge-base --is-ancestor <source-commit> origin/<default>`);
-. compute, with the §8.5.1 algorithm, the `:inputs-sha256` of each current
-receipt at its `:commit`, and check that it is equal to the recorded value;
-. for each echo link that a counted receipt's chain uses, compute the
-witness digest at the link's source and at its image, and check that both
-are equal to the recorded value. If the source is no longer reachable from a
+. check that each entry of each current receipt's `(inputs-manifest …)` is a
+file at the receipt's `:commit`, and that the SHA-256 of its git blob is the
+recorded `:sha256` (then `:inputs-sha256` holds, because the reader
+derived it from the manifest);
+. for each echo link that a counted receipt's chain uses, check the witness
+at the link's source and at its image: for `inputs-sha256`, that the
+receipt's manifest with that digest holds at both commits; for
+`tree-sha256`, that the digest of every tracked file is the recorded value
+at both commits. If the source is no longer reachable from a
 branch, fetch it by the reference that the forge keeps for the pull request
 (on GitHub, `refs/pull/<n>/head`).
 
 If a check fails, the gate fails, and the grade falls as §8.4 says.
+
+link:../scripts/check-proof-receipt.sh[`scripts/check-proof-receipt.sh`]
+`[--branch REF] RECEIPT REPO` does these checks. It checks every echo, not
+only the links that a chain uses. `scripts/tests/check-proof-receipt-test.sh`
+tests it on a scratch repository: a receipt carried to its squash commit by an
+echo passes, and a forged echo, a `:source-commit` off the default branch, a
+manifest that is false at its commit and a missing source commit each fail.
+A gate or a consumer that runs it at a pinned standards commit meets the
+duty below in the same way as every other.
 
 A *consumer* that catalogues grades, such as Mathesis, MUST do the same
 checks against the home repository before it catalogues a `PWG-1`. If it

@@ -23,8 +23,11 @@
                :commit "0123456789abcdef0123456789abcdef01234567"
                :checker "agda 2.6.4.3"
                :invocation "agda --safe --without-K --cubical-compatible"
-               :inputs-sha256 "5d41402abc4b2a76b9719d911017c592ae2fd0e1c6b4c5d5f6a1f0b0e3a7c9d1"
+               :inputs-sha256 "c8945990a8e4242d7eaeaa42dd4e647a4e372fdbd32714fb534744df85066248"
                :state current
+               (inputs-manifest
+                 (file :path "example.agda-lib" :sha256 "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08")
+                 (file :path "src/Example.agda" :sha256 "a1b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"))
                (axioms))
       (receipt :run "https://github.com/hyperpolymath/example/actions/runs/1"
                :commit "fedcba9876543210fedcba9876543210fedcba98"

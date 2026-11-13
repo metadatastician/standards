@@ -105,13 +105,14 @@ error. Unknown or duplicate fields, short commits, a missing Agda leg,
 non-current receipts without a `:reason` and empty receipts fail closed, and
 then no JSON is written.
 
-Every current receipt carries `:inputs-sha256` (§8.5.1) and `(axioms …)`
-(§8.4). A leg whose current receipt lists an axiom that is not disposition
+Every current receipt carries `:inputs-sha256` and `(inputs-manifest …)`
+(§8.5.1), and `(axioms …)` (§8.4). The reader rebuilds the manifest and
+refuses a digest that is not its SHA-256. A leg whose current receipt lists an axiom that is not disposition
 `c` does not count. Top-level `(echo …)` records (§8.5.2) let a receipt
 earned on a commit that a squash or rebase rewrote count toward `PWG-1` for
 its image. The reader checks their form and consistency only. The git checks
-of §8.5.3 belong to the gates, and `scripts/proof-inputs-sha256.sh` computes
-the digests.
+of §8.5.3 belong to the gates: `scripts/check-proof-receipt.sh` does them, and
+`scripts/proof-inputs-sha256.sh` computes the digests.
 
 The worked examples are `fixtures/proof-receipt/example_praxis.deed` and
 `fixtures/proof-receipt/echo_praxis.deed`, and the
