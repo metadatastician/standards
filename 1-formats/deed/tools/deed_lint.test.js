@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MPL-2.0
 // bun test for deed_lint.js (port of deed_lint.py). Run: bun test 1-formats/deed/tools/
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { validate, LintError, SELF_TEST_CASES, checkEgress, EgressError, checkAnchor, AnchorError, profileCOfBody, readMustfileChecks, MustfileError, readProofReceipt, ProofReceiptError, checkContractiles, ContractilesError, contractilePaths, CONTRACTILE_VERBS, checkEdict, EdictError, verbOfFilename } from "./deed_lint.js";
-import { generate as generateRegistry } from "./contractile_registry.js";
+import { generateContractileRegistry as generateRegistry } from "./deed_lint.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const LINT = join(HERE, "deed_lint.js");
@@ -967,7 +967,7 @@ describe("J17 bang", () => {
 });
 
 // A7 8.1, 8.4, 8.5: the edict form of a contractile-deed (clauses/edict.abnf),
-// and the J13 registry generated from the edicts (contractile_registry.js).
+// and the J13 registry generated from the edicts (deed_lint.js --contractile-registry).
 const FIX_EDICT = join(FIX, "edict");
 
 describe("edict fixtures", () => {
@@ -1014,12 +1014,47 @@ describe("contractile registry (J13)", () => {
     expect(by["contractile/bust/bust-oob-parser"].floor).toBe("A7 8.5");
     expect(by["contractile/adjust/adj-contrast"].floor).toBeUndefined();
   });
+  test("the committed fixture registry is its own fixed point", () => {
+    const have = readFileSync(committed, "utf8");
+    expect(generateRegistry(root, "metadatastician/standards", have)).toBe(have);
+  });
+  test("every one of the six edicts is required (J13)", () => {
+    const tmp = mkdtempSync(join(tmpdir(), "registry-"));
+    try {
+      cpSync(root, tmp, { recursive: true });
+      rmSync(join(tmp, ".machine_readable", "contractiles", "trust", "Trustfile.deed"));
+      expect(() => generateRegistry(tmp, "metadatastician/standards")).toThrow(/missing: .*Trustfile\.deed/);
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+  test("a rule that leaves the edicts is retired, not deleted, and its id is not reused (A5 3.2)", () => {
+    const tmp = mkdtempSync(join(tmpdir(), "registry-"));
+    try {
+      cpSync(root, tmp, { recursive: true });
+      const must = join(tmp, ".machine_readable", "contractiles", "must", "Mustfile.deed");
+      const src = readFileSync(must, "utf8");
+      const kept = src.replace(/\n  \(rule :id "must-fmt"[^\n]*\)$/m, ")");
+      writeFileSync(must, kept);
+      const first = generateRegistry(tmp, "metadatastician/standards", readFileSync(committed, "utf8"));
+      const [, items] = validate(first, "contractile_rules_praxis.deed");
+      const defs = items.find((it) => it[1] === "rules")[2].map((d) => Object.fromEntries(d[2].map((x) => [x[1], x[2][1]])));
+      const by = Object.fromEntries(defs.map((d) => [d.id, d]));
+      expect(by["contractile/must/must-fmt"].status).toBe("retired");
+      expect(by["contractile/must/must-tests"].status).toBe("active");
+      expect(generateRegistry(tmp, "metadatastician/standards", first)).toBe(first);
+      writeFileSync(must, src);
+      expect(() => generateRegistry(tmp, "metadatastician/standards", first)).toThrow(/never reused/);
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
   test("--check fails when the registry is stale", () => {
     const tmp = mkdtempSync(join(tmpdir(), "registry-"));
     try {
       const out = join(tmp, "rules_praxis.deed");
       writeFileSync(out, "stale\n");
-      const r = Bun.spawnSync(["bun", join(HERE, "contractile_registry.js"), "--root", root, "--out", out, "--check"]);
+      const r = Bun.spawnSync(["bun", join(HERE, "deed_lint.js"), "--contractile-registry", "--root", root, "--out", out, "--check"]);
       expect(r.exitCode).toBe(1);
     } finally {
       rmSync(tmp, { recursive: true, force: true });

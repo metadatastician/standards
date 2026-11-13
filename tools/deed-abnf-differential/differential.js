@@ -258,13 +258,18 @@ for (const { c, text } of edictCases("valid")) {
   for (const r of allClauses(text, "envelope")) if (!grammarAccepts(grammar, "bust-envelope", r)) fail("edict.abnf refuses a valid envelope", c);
 }
 {
+  // A Bust envelope with no member: bust-envelope needs 1*envelope-member.
+  const envelopeRejects = ["envelope-empty"];
   const grammarRejects = ["always-with-field", "clade-selector", "rule-extra-field", "two-selectors", "unknown-selector"];
   const semanticOnly = ["beholding-chora", "duplicate-id", "empty-text", "envelope-not-bust", "id-space", "intend-bang",
     "missing-requires", "missing-text", "no-comparator", "of-chora-legacy", "requires-other-verb", "selector-bang",
     "two-comparators", "unknown-clause", "verb-filename-mismatch", "witness-other"];
   for (const { c, text } of edictCases("invalid")) {
     const rule = clauseText(text, "rule");
-    if (grammarRejects.includes(c)) {
+    if (envelopeRejects.includes(c)) {
+      const env = clauseText(text, "envelope");
+      if (env === null || grammarAccepts(grammar, "bust-envelope", env)) fail("edict.abnf accepts an envelope it must refuse", c);
+    } else if (grammarRejects.includes(c)) {
       if (rule === null || grammarAccepts(grammar, "edict-rule", rule)) fail("edict.abnf accepts a rule it must refuse", c);
     } else if (semanticOnly.includes(c)) {
       if (rule !== null && !grammarAccepts(grammar, "edict-rule", rule)) fail("edict.abnf refuses a rule listed as semantic only", c);

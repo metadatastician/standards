@@ -1,0 +1,7 @@
+;; SPDX-License-Identifier: CC-BY-SA-4.0
+(contractile-deed
+  :schema-version "1.0.0"
+  :canonical-name "example-game"
+  :of-chora #uuid"00000000-0000-8000-8000-0000000000a1"
+  :verb trust
+  (rule :id "trust-no-secrets" ! :text "No secret is committed." (applies-when (always)) (requires (trust :witness "trust-no-secrets" :value #t))))
