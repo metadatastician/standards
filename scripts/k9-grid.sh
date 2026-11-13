@@ -20,6 +20,11 @@
 #       --selftest LOG --selftest-code N     validator --self-test evidence
 #       --typecheck LOG --typecheck-code N   nickel typecheck of the contract
 #       --corpus-code N       the validator's exit status over the corpus
+#       --coord-results FILE  coordination.k9 validator records, one JSON object per line:
+#                             {"file":PATH,"verdict":"pass"|"fail","message":TEXT}. Gives the
+#                             coordination.k9 files their own grid category; a file the K9
+#                             validator routed to the coordination dialect with no record here
+#                             is indeterminate, never green
 #       --previous FILE       body of the previous grid comment (delta column)
 #     identity
 #       --lane NAME           grid lane (default: k9)
@@ -44,7 +49,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 JQ_LIB="$SCRIPT_DIR/lib/k9-grid.jq"
 
 # Print the invocation summary to stderr and terminate with status 2.
-usage() { sed -n '5,34p' "$0" >&2; exit 2; }
+usage() { sed -n '5,38p' "$0" >&2; exit 2; }
 
 # A path list file to a JSON array; a missing file is an empty list, and so
 # is a file of comments and blanks (grep's no-match exit is not an error).
@@ -81,6 +86,15 @@ results_json() {
       jq -n --arg l "$line" '{malformed: $l}'
     fi
   done < "$file" | jq -s .
+}
+
+# coordination.k9 records to a JSON array, or null when the lane supplied no
+# such evidence (null keeps the category out of a grid with no routed file).
+# A line that is not JSON is kept as malformed evidence.
+coord_json() {
+  local file="${1:-}"
+  [ -n "$file" ] && [ -f "$file" ] || { echo null; return; }
+  results_json "$file"
 }
 
 # Serialise JSON from stdin to stdout with one final LF, preferring ijson-jcs
@@ -128,7 +142,7 @@ case "$cmd" in
     ;;
   render)
     out="" results="" expected="" ledger="" growth="" changed="" prev="" lane="k9"
-    selftest="" selftest_code="" typecheck="" typecheck_code="" corpus_code=""
+    selftest="" selftest_code="" typecheck="" typecheck_code="" corpus_code="" coord=""
     base_resolved=true require_files=false sha="" run="local" url="" pr="local" repo="" canon=""
     while [ $# -gt 0 ]; do
       case "$1" in
@@ -145,6 +159,7 @@ case "$cmd" in
         --typecheck) typecheck="$2"; shift 2 ;;
         --typecheck-code) typecheck_code="$2"; shift 2 ;;
         --corpus-code) corpus_code="$2"; shift 2 ;;
+        --coord-results) coord="$2"; shift 2 ;;
         --previous) prev="$2"; shift 2 ;;
         --lane) lane="$2"; shift 2 ;;
         --sha) sha="$2"; shift 2 ;;
@@ -184,11 +199,11 @@ case "$cmd" in
       --argjson ledger "$(list_json "$ledger")" --argjson growth "$(list_json "$growth")" --argjson changed "$(list_json "$changed")" \
       --argjson base_resolved "$base_resolved" --argjson require_files "$require_files" --argjson selftest "$(evidence_json "$selftest" "$selftest_code")" \
       --argjson typecheck "$(evidence_json "$typecheck" "$typecheck_code")" --argjson corpus_code "$corpus_json" \
-      --arg profile "$profile" --arg lane "$lane" --arg sha "$sha" --arg run "$run" --arg url "$url" \
+      --argjson coord "$(coord_json "$coord")" --arg profile "$profile" --arg lane "$lane" --arg sha "$sha" --arg run "$run" --arg url "$url" \
       --arg pr "$pr" --arg repo "$repo" --argjson dirty "$dirty" --arg generated "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
       --arg canon "$canon" \
       '{results: $results, expected: $expected, ledger: $ledger, ledger_growth: $growth, changed: $changed, base_resolved: $base_resolved, require_files: $require_files,
-        selftest: $selftest, typecheck: $typecheck, corpus_code: $corpus_code, profile: $profile,
+        selftest: $selftest, typecheck: $typecheck, corpus_code: $corpus_code, coord: $coord, profile: $profile,
         identity: {lane: $lane, sha: $sha, run: $run, url: $url, pr: $pr, repo: $repo, dirty: $dirty,
                    generated: $generated, canon_ref: $canon}}' \
       | jq --arg mode build --argjson previous null -f "$JQ_LIB" | canon_json > "$out/report.json"
