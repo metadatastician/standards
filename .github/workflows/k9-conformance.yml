@@ -109,6 +109,7 @@ jobs:
       IJSON_JCS_REV: '0fdeea716fd558e9807362acf6f8202d56d8d88f'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        id: checkout
         continue-on-error: ${{ inputs.advisory == true }}
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -119,6 +120,7 @@ jobs:
           persist-credentials: false
 
       - name: checkout the K9 validator, contract and renderer at this workflow's commit
+        id: canon
         continue-on-error: ${{ inputs.advisory == true }}
         if: github.repository_id != 1116521501
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -426,10 +428,17 @@ jobs:
           STATE: ${{ steps.grid.outputs.state }}
           FAIL_ON_INDETERMINATE: ${{ inputs.fail-on-indeterminate || false }}
           ADVISORY: ${{ inputs.advisory || false }}
+          CHECKOUT_OUTCOME: ${{ steps.checkout.outcome }}
+          CANON_OUTCOME: ${{ steps.canon.outcome }}
         run: |
           set -euo pipefail
           echo "K9 verdict grid: $STATE"
           if [ "$ADVISORY" = "true" ]; then
+            # A failed checkout leaves an empty workspace that grades grey; say so.
+            if [ "${CHECKOUT_OUTCOME:-}" = failure ] || [ "${CANON_OUTCOME:-}" = failure ]; then
+              echo "::warning::K9 conformance (advisory): a checkout step failed, so conformance did not run; not enforced."
+              exit 0
+            fi
             # Advisory: say what would have failed, never fail.
             case "$STATE" in
               red) echo "::warning::K9 conformance (advisory): the grid is red; not enforced. See the k9-grid artifact and the step summary." ;;

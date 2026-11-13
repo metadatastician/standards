@@ -93,5 +93,19 @@ bash -e -o pipefail "$WORK/deedwarn.sh" > "$WORK/o" 2>&1; rc=$?
 { [ $rc -eq 0 ] && [ "$(grep -c '^::warning file=' "$WORK/o")" = 30 ] && grep -q '200000 finding(s)' "$WORK/o"; } \
   && ok "deed: a huge FAIL log is capped at 30 annotations and still ends with the count (no SIGPIPE)" || bad "deed large log: rc=$rc $(tail -c 300 "$WORK/o")"
 
+# A failed checkout under advisory leaves an empty workspace; it must be reported,
+# not graded as "nothing to lint" or grey (Codex P2 on #1519).
+STATE=grey ADVISORY=true CHECKOUT_OUTCOME=failure bash -e -o pipefail "$WORK/gate.sh" > "$WORK/o" 2>&1; rc=$?
+{ [ $rc -eq 0 ] && grep -q 'a checkout step failed' "$WORK/o"; } && ok "k9 gate: a failed checkout with a grey grid warns that conformance did not run" || bad "k9 checkout failure: rc=$rc $(cat "$WORK/o")"
+STATE=grey ADVISORY=true CANON_OUTCOME=failure bash -e -o pipefail "$WORK/gate.sh" > "$WORK/o" 2>&1; rc=$?
+{ [ $rc -eq 0 ] && grep -q 'a checkout step failed' "$WORK/o"; } && ok "k9 gate: a failed canon checkout warns too" || bad "k9 canon failure: rc=$rc $(cat "$WORK/o")"
+STATE=grey ADVISORY=true CHECKOUT_OUTCOME=success CANON_OUTCOME=skipped bash -e -o pipefail "$WORK/gate.sh" > "$WORK/o" 2>&1; rc=$?
+{ [ $rc -eq 0 ] && ! grep -q 'checkout step failed' "$WORK/o"; } && ok "k9 gate: a successful (or skipped) checkout stays quiet on a grey grid" || bad "k9 clean checkout: rc=$rc $(cat "$WORK/o")"
+cond=$(rb 'puts YAML.load_file(ARGV[0])["jobs"]["lint"]["steps"].find{|s| s["name"]=="Advisory findings as warnings"}["if"]' "$D")
+{ [[ "$cond" == *steps.checkout.outcome* ]] && [[ "$cond" == *steps.canon.outcome* ]] && [[ "$cond" == *steps.bun.outcome* ]] && [[ "$cond" == *steps.lint.outcome* ]]; } \
+  && ok "deed: the advisory warning step also runs when a checkout or setup step failed" || bad "deed warning condition: $cond"
+ids=$(rb 'puts YAML.load_file(ARGV[0])["jobs"]["lint"]["steps"].map{|s| s["id"]}.compact.sort.join(",")' "$D")
+[ "$ids" = "bun,canon,checkout,lint" ] && ok "deed: prerequisite steps carry the ids the condition reads" || bad "deed step ids: $ids"
+
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]
