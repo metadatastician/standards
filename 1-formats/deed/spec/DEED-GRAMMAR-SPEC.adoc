@@ -960,6 +960,9 @@ locally. Either the estate chora gains it, or `extends-vocabulary` lands.
 * Clause profiles, each narrowing `clause` for one consumer without changing
   this grammar: link:./abnf/clauses/egress.abnf[`(egress …)`] v1.0.0
   (link:./EGRESS-CLAUSE-SPEC.adoc[prose], ADR-009)
+* Shared rules for the clause modules (A7 M3), borrowed rather than restated:
+  link:./abnf/clauses/common.abnf[`common.abnf`] v1.0.0, DRAFT (dates, string
+  lists, the v8 chora id, the affirmation members)
 * link:https://www.rfc-editor.org/rfc/rfc7405[RFC 7405] (case-sensitive ABNF strings)
 * link:https://www.rfc-editor.org/rfc/rfc4122[RFC 4122] §4.3 (UUID v5)
 * link:../../../2-protocols/k9-coordination/spec/COORDINATION-K9-SPEC.adoc[K9 Coordination File Specification]
