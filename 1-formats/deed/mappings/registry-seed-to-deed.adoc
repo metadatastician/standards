@@ -35,7 +35,12 @@ Owner rulings of 2026-11-14:
 
 == 2. Target form
 
-`verisim/seed/chora-registry_praxis.deed`, head `praxis-deed`.
+`verisim/seed/chora-registry_praxis.deed`, head `praxis-deed`. The file name
+follows `deed.abnf`'s dispatch, under which `*_praxis.deed` selects
+`praxis-deed`, as for the A5 registries. The `<stem>_chora.deed` reminder in
+the mappings README is the rule for the `repo-deed` head and does not apply
+here. The stem is `chora-registry`, and the `:canonical-name` is
+`chora-registry-seed`.
 
 [source]
 ----
@@ -157,8 +162,8 @@ Counts are those at conversion; `N` is the file's `:total-repos`.
 | `grep -c '(scheme :id clade-12' FILE` | 1
 | `grep -c '(category :id' FILE` | 12, one per `clades.a2ml` category
 | `grep -c '^  (repo ' FILE` | N (327 at conversion)
-| `grep -cE -e '^ +:uuid #uuid"[0-9a-f-]{36}" :minted-in gv-clade-index$' -e '^ +:uuid #uuid"[0-9a-f-]{36}" :minted-in chora-registry$' FILE` | N
-| `grep -c '(placement :scheme clade-12 :category [a-z]* :primary #t)' FILE` | N: one primary placement per repo
+| `grep -cE -e '^ +:uuid #uuid"[0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}" :minted-in gv-clade-index$' -e '^ +:uuid #uuid"[0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}" :minted-in chora-registry$' FILE` | N: version nibble 8 and the RFC 9562 variant, so a version 5 id does not count
+| `awk '/^  \(repo /{if(n&&p!=1)b++;n++;p=0} {p+=gsub(/:primary #t\)/,"&")} END{if(n&&p!=1)b++;print b+0}' FILE` | 0: the number of repos without exactly one primary placement
 | `grep -c '#u5"' FILE` | 0
 | `ls verisim/seed/repos.a2ml` | not found
 |===
@@ -184,8 +189,10 @@ Checked by A7 on 2026-11-14, each step run, not taken from the PR text:
 * Rechecked at `7b7d70a`: the deed is byte-identical to `5eedb08`; the
   export (with its escape fix) still gives byte-identical `repos.json`,
   `clades.json` and `archive.json`; `check-registry.sh` and its test pass.
-* Every acceptance grep above gives its expected result on the converted
-  deed.
+* Every acceptance check above gives its expected result on the converted
+  deed. Planted copies fail as they should: a repo with its primary placement
+  removed, and a repo given a second primary, each make the awk check print 1;
+  one `:uuid` changed to version 5 drops the uuid count to 326.
 * Follow-up from the review, in the same PR: the two stale mentions of
   `repos.a2ml` (the portal spec, and a token deleted from
   `0-AI-MANIFEST.a2ml` with nothing added) are corrected.
