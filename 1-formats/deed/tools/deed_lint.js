@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: MPL-2.0
 // The DEED conformance validator, plain JavaScript (bun, zero dependencies).
 // It began as a port of deed_lint.py, which was deleted on 2026-11-13.
-const DOC = String.raw`deed-lint — conformance validator for the DEED grammar (deed.abnf v1.5.0).
+const DOC = String.raw`deed-lint — conformance validator for the DEED grammar (deed.abnf v2.0.0).
 
 Stdlib-only. Implements the normative grammar faithfully:
   * header = 1* spdx-line                 (";;" SP "SPDX-" …)
   * form   = "(" doc-head 1*(sep (field/clause)) [sep] ")"
   * doc-head ∈ {estate-deed, repo-deed, estate-atlas-deed, praxis-deed,
-                contractile-deed, descriptile-deed, anchor-deed}
+                contractile-deed, descriptile-deed}
   * field  = keyword sep value [sep "!"]  ("!" only after a rule's :id in a contractile-deed, J17)
   * clause = "(" symbol *(sep (field/clause)) [sep] ")"
   * value  = string / symbol / integer / boolean / uuid5 / uuid8 / uuid / quoted / list
@@ -476,7 +476,7 @@ function parseForm(lx) {
   const head = lexSymbol(lx);
   const heads = [
     "estate-deed", "repo-deed", "estate-atlas-deed", "praxis-deed",
-    "contractile-deed", "descriptile-deed", "anchor-deed",
+    "contractile-deed", "descriptile-deed",
   ];
   if (!head || !heads.includes(head[1])) {
     const got = head ? head[1] : lx.peek();
@@ -590,8 +590,7 @@ export const DESCRIPTILE_FILES = new Set(
  * Exact names take precedence: estate_chora.deed requires estate-deed,
  * ATLAS.deed requires estate-atlas-deed, and 0-AI-MANIFEST.deed requires
  * repo-deed. The J14 names are exact and case-sensitive too (deed.abnf
- * v1.4.0): ANCHOR.deed requires anchor-deed, <Verb>file.deed for the six
- * verbs requires contractile-deed, and the thirteen ALL-CAPS descriptile
+ * v1.4.0): <Verb>file.deed for the six verbs requires contractile-deed, and the thirteen ALL-CAPS descriptile
  * names (CLADE.deed among them) require descriptile-deed; mustfile.deed,
  * MUSTFILE.deed and Meta.deed match nothing. Otherwise, _praxis.deed selects
  * praxis-deed and _chora.deed selects repo-deed; stems may contain dots
@@ -610,8 +609,6 @@ export function checkFilenameDispatch(filename, head) {
     want = "estate-atlas-deed";
   } else if (base === "0-AI-MANIFEST.deed") {
     want = "repo-deed";
-  } else if (base === "ANCHOR.deed") {
-    want = "anchor-deed";
   } else if (CONTRACTILE_FILES.has(base)) {
     want = "contractile-deed";
   } else if (DESCRIPTILE_FILES.has(base)) {
@@ -626,7 +623,7 @@ export function checkFilenameDispatch(filename, head) {
   } else {
     throw new LintError(
       `filename ${pyRepr(base)} matches no deed dispatch pattern ` +
-        "(estate_chora.deed | ATLAS.deed | 0-AI-MANIFEST.deed | ANCHOR.deed | <Verb>file.deed | " +
+        "(estate_chora.deed | ATLAS.deed | 0-AI-MANIFEST.deed | <Verb>file.deed | " +
         "<DESCRIPTILE>.deed | <stem>_chora.deed | <stem>_praxis.deed; the J14 names are case-sensitive)",
       1,
     );
