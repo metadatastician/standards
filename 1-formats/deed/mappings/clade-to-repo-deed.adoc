@@ -14,14 +14,24 @@ grammar does not require it, and the CLADE-006 pair check belongs to the
 A2ML-era registry, not to the deed. Earlier status: PROPOSAL (no translation
 until owner review).
 
+Owner statement, 2026-11-14 (relayed by SysArch): "gv-clade-index and the
+old CLADE files are now replaced with or should be wiht the chora work, and
+CLADE files are deprecated as was an now serve an epistemological/logical
+form (chora is the ontological/aesthetic variant)". So this spec translates
+a retired `CLADE.a2ml` into *identity* content in the chora deed, and its
+lifecycle content into `STATE.deed` (A7 J15). It never produces a
+`CLADE.deed`: that file is the repo's own content organisation (A7 7.2,
+W10), not identity and not a classification of record, and nothing in a
+`CLADE.a2ml` translates into it.
+
 == 1. Source surface
 
 * Estate instances: `<repo>/.machine_readable/descriptiles/CLADE.a2ml`
   (or `.machine_readable/CLADE.a2ml` in pre-descriptile-dir repos).
 * Mint source: `rsr-template-repo:build/templates/CLADE.a2ml.in` — the file
   every new repo is stamped from (carries the `#122` lineage extensions).
-* Registry coupling: `gv-clade-index` (verisim seed + SPEC-clade-verisim-portal
-  §Identity Model). Checks CLADE-003/004/005/006 referenced below are the
+* Registry coupling: chora-registry (formerly `gv-clade-index`; verisim seed +
+  SPEC-clade-verisim-portal §Identity Model). Checks CLADE-003/004/005/006 referenced below are the
   registry's existing gates.
 
 == 2. Target form
@@ -33,8 +43,9 @@ until owner review).
 
 `repo-deed` head. Stem = the repo's *canonical name* (never `estate` — grammar
 side condition; never the `UNASSIGNED-…` prefixed placeholder either). A repo
-renamed later re-derives this file like any other: the deed is a projection,
-not a rename event.
+renamed later gets a new file name, and nothing in the deed's identity
+changes: `:repo-uuid` was minted once from the birth path and is never
+re-derived (U1, U4).
 
 Head-level scaffolding follows the grammar's required identity table
 (<<identity>> in the grammar spec):
@@ -45,13 +56,13 @@ Head-level scaffolding follows the grammar's required identity table
 (repo-deed
   :schema-version  "1.0.0"        ; structurally FIRST
   :canonical-name  "<repo>"
-  :repo-uuid       #u8"gv-clade-index:github.com/<owner>/<repo>"
+  :repo-uuid       #uuid"<v8 id of the birth path, from the registry>"
   :beholding-chora #uuid"<estate v8 id>"
   ...)
 ----
 
 `:beholding-chora` is *required* and is never invented: the translator
-resolves it from the estate chora's registry entry (gv-clade-index is the
+resolves it from the estate chora's registry entry (chora-registry is the
 one declaration site today) and **refuses to emit a deed without it** — a
 bare filename would resolve against nothing (grammar rationale).
 
@@ -66,7 +77,7 @@ bare filename would resolve against nothing (grammar rationale).
 4+| *Head identity*
 
 | `[identity] canonical-name` | `:canonical-name` | verbatim STRING
-| `[identity] uuid` | `:repo-uuid` | UUIDv8 literal whose BODY IS THE NAME INPUT (`#u8"gv-clade-index:github.com/<owner>/<name>"`), not the derived hex: ADR-008 profile C per P-1 (owner ruling D320). A `#u5` literal is not legal here: owner ruling Q2 (2026-11-14) makes `#u5` in an identity field an error in every mode (CHORA-SPEC 7.1). Translator **re-derives the expected UUIDv8 from the repository name, and never copies or compares it with the legacy source UUID** (§5 P-1)
+| `[identity] uuid` | `:repo-uuid` | The opaque `#uuid"<v8 id>"` literal (owner ruling U4): the repo's ADR-008 profile C id, minted once from its birth path and carried as the registry holds it (U1, §5 P-1). It is never copied from the legacy source UUID. A `#u8` literal is read in an identity field but not written. A `#u5` is an error in every mode (Q2, CHORA-SPEC 7.1)
 | — (new) | `:beholding-chora` | resolved from the registry: the estate chora's v8 id, written `#uuid"…"` (`#u8"chora:estate/<host>/<owner>"` is also accepted). Never `#u5` (Q2)
 
 4+| *Clauses*
@@ -85,6 +96,8 @@ bare filename would resolve against nothing (grammar rationale).
 | `[lineage] born` | `(lineage … :born "…")` | verbatim STRING
 | `[lineage] previous-names` | `(lineage … :previous-names ())` | list of STRINGs
 | `[lineage] instantiated-from` | `(lineage … :instantiated-from "…")` | verbatim STRING
+4+| *Lifecycle.* The `[status]` rows below go to the `(status …)` clause of `.machine_readable/descriptiles/STATE.deed`, not to the chora deed (A7 J15). Its profile (`deed_lint.js --state`) requires `:since` and a non-empty `:ended` to be real `YYYY-MM-DD` dates.
+
 | `[status] phase` | `(status … :phase active)` | enum → SYMBOL — taxonomy verbatim: `reserved incubating active dormant` \| `merged superseded archived extinct`
 | `[status] since` | `(status … :since "…")` | verbatim STRING
 | `[status] present` | `(status … :present #t)` | BOOLEAN — a2ml `true`/`false` → deed `#t`/`#f` — the ONLY booleans in the grammar; `true`/`false` are parse errors
@@ -110,13 +123,16 @@ Fields not listed do not exist in the deed era for this family.
 == 5. Provenance & validation
 
 * **P-1 (identity validation):** the repo UUID is an ADR-008 **profile C**
-  UUIDv8, derived from the name in the `gv-clade-index` domain:
-  bytes 0..15 of `SHA-256("gv-clade-index:github.com/<owner>/<name>")`,
-  version nibble 8, RFC 9562 variant (owner ruling D320, 2026-10-07; it
-  replaces both the earlier CSPRNG-v7 rule and the UUIDv5 derivation). The
-  translator re-derives it from the name and never copies the hex from the
-  source: a v5 or v7 held in a retired `CLADE.a2ml` is the old identity, not
-  the deed's.
+  UUIDv8 of the repo's *birth path*: bytes 0..15 of
+  `SHA-256("<domain>:github.com/<birth owner>/<birth name>")`, version nibble
+  8, RFC 9562 variant (owner ruling D320, 2026-10-07; it replaces both the
+  earlier CSPRNG-v7 rule and the UUIDv5 derivation). The domain is
+  `gv-clade-index` for every id minted before owner ruling V9, for good, and
+  `chora-registry` for ids minted after it. The id is minted once and never
+  re-derived from a later name or path (U1); the translator takes it from
+  chora-registry and writes it as an opaque `#uuid` (U4). It never copies the
+  hex from the source: a v5 or v7 held in a retired `CLADE.a2ml` is the old
+  identity, not the deed's.
 * **P-2 (source must parse as a2ml first):** a source file that no longer
   parses as a2ml (e.g. already hand-"translated" halfway, containing `()`)
   is rejected before any output assignment. A source carrying `=` inside a
@@ -133,7 +149,7 @@ Fields not listed do not exist in the deed era for this family.
   `repo-deed` as a stem.
 * **P-5 (registry gates survive):** CLADE-003/004/005/006 semantics are
   re-expressed over the deed surface before retire-the-checker day — an
-  `UNASSIGNED` clade, a missing `(status …)`, an absent `:repo-uuid`, and a
+  `UNASSIGNED` clade, a missing `(status …)` in `STATE.deed`, an absent `:repo-uuid`, and a
   `:primary`/`:primary-name` disagreement must each still fail.
 
 == 6. Worked translation (real instance: `rsr-template-repo`)
@@ -162,7 +178,7 @@ Emitted `rsr-template-repo_chora.deed`:
 (repo-deed
   :schema-version  "1.0.0"
   :canonical-name  "rsr-template-repo"
-  :repo-uuid       #u8"gv-clade-index:github.com/hyperpolymath/rsr-template-repo"
+  :repo-uuid       #uuid"<v8 id of the birth path github.com/hyperpolymath/rsr-template-repo, from chora-registry>"
   :beholding-chora #uuid"<estate v8 id — resolved from the registry at emit time>"
 
   (identity :primary-forge github
@@ -183,8 +199,21 @@ Emitted `rsr-template-repo_chora.deed`:
             :parent            ""
             :born              "2026-03-16"
             :previous-names    ()
-            :instantiated-from "rsr-template-repo")
+            :instantiated-from "rsr-template-repo"))
+----
 
+Emitted `.machine_readable/descriptiles/STATE.deed` (A7 J15; the profile is
+`deed_lint.js --state`):
+
+[source]
+----
+;; SPDX-License-Identifier: CC-BY-SA-4.0
+(descriptile-deed
+  :schema-version "1.0.0"
+  :canonical-name "rsr-template-repo"
+  :of-chora       #uuid"<the same id as :repo-uuid above>"
+  :affirmed       "<date of translation>"
+  :affirmed-by    agent
   (status   :phase        active
             :since        "2026-03-16"
             :present      #t
@@ -214,8 +243,10 @@ Emitted `rsr-template-repo_chora.deed`:
 . Choice of stem: canonical-name (proposed) vs prefixed-name (changes on
   clade choice). Prefixed-name reads nicer in `ls`; canonical-name is the
   stable identifier the grammar's identity table already commits.
-. Whether `gv-clade-index`'s own registry migrates to the estate chora in
-  the same wave or stays the external authority point `beholding-chora`
-  resolves from.
+. [Answered 2026-11-14] Whether `gv-clade-index`'s own registry migrates to
+  the estate chora in the same wave: the owner ruled that the registry, now
+  chora-registry, carries chora identity content, and that its seed is
+  converted to a deed first (one recorded D313 exception). That conversion
+  has its own mapping, written with A1; this spec does not cover it.
 . `:beholding-chora` for PRs minted before the chora exists in the registry
   — sequential ordering question for the campaign wave.
