@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 = A5: Rule Identifiers, the Deviation Store and the Generated Ignore Files
-:version: 0.2.2-draft
+:version: 0.2.4-draft
 :status: DRAFT v0.2.4 (`rule-def` gains `:floor`, the spec section that sets a rule's floor, A7 J22; earlier: `bot/write` takes `:scope-form (origins repos globs)`, so the bot denylist's vendored globs import as deviations). Decisions G1 to G14 approved by the owner on 2026-11-10. Not yet ratified as a whole. Builds on A1 v0.4.1, A2 v0.2.4, A3 v0.2.8 and A4 v0.2.3. Consistency pass applied 2026-11-10. Proposed in standards#1474; bot-review fixes applied 2026-11-12.
 :toc:
 
