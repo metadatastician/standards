@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: MPL-2.0
 // The DEED conformance validator, plain JavaScript (bun, zero dependencies).
 // It began as a port of deed_lint.py, which was deleted on 2026-11-13.
-const DOC = String.raw`deed-lint — conformance validator for the DEED grammar (deed.abnf v1.5.0).
+const DOC = String.raw`deed-lint — conformance validator for the DEED grammar (deed.abnf v2.0.0).
 
 Stdlib-only. Implements the normative grammar faithfully:
   * header = 1* spdx-line                 (";;" SP "SPDX-" …)
   * form   = "(" doc-head 1*(sep (field/clause)) [sep] ")"
   * doc-head ∈ {estate-deed, repo-deed, estate-atlas-deed, praxis-deed,
-                contractile-deed, descriptile-deed, anchor-deed}
+                contractile-deed, descriptile-deed}
   * field  = keyword sep value [sep "!"]  ("!" only after a rule's :id in a contractile-deed, J17)
   * clause = "(" symbol *(sep (field/clause)) [sep] ")"
   * value  = string / symbol / integer / boolean / uuid5 / uuid8 / uuid / quoted / list
@@ -499,7 +499,7 @@ function parseForm(lx) {
   const head = lexSymbol(lx);
   const heads = [
     "estate-deed", "repo-deed", "estate-atlas-deed", "praxis-deed",
-    "contractile-deed", "descriptile-deed", "anchor-deed",
+    "contractile-deed", "descriptile-deed",
   ];
   if (!head || !heads.includes(head[1])) {
     const got = head ? head[1] : lx.peek();
@@ -666,8 +666,7 @@ export const DESCRIPTILE_FILES = new Set(
  * Exact names take precedence: estate_chora.deed requires estate-deed,
  * ATLAS.deed requires estate-atlas-deed, and 0-AI-MANIFEST.deed requires
  * repo-deed. The J14 names are exact and case-sensitive too (deed.abnf
- * v1.4.0): ANCHOR.deed requires anchor-deed, <Verb>file.deed for the six
- * verbs requires contractile-deed, and the thirteen ALL-CAPS descriptile
+ * v1.4.0): <Verb>file.deed for the six verbs requires contractile-deed, and the thirteen ALL-CAPS descriptile
  * names (CLADE.deed among them) require descriptile-deed; mustfile.deed,
  * MUSTFILE.deed and Meta.deed match nothing. Otherwise, _praxis.deed selects
  * praxis-deed and _chora.deed selects repo-deed; stems may contain dots
@@ -686,8 +685,6 @@ export function checkFilenameDispatch(filename, head) {
     want = "estate-atlas-deed";
   } else if (base === "0-AI-MANIFEST.deed") {
     want = "repo-deed";
-  } else if (base === "ANCHOR.deed") {
-    want = "anchor-deed";
   } else if (CONTRACTILE_FILES.has(base)) {
     want = "contractile-deed";
   } else if (DESCRIPTILE_FILES.has(base)) {
@@ -702,7 +699,7 @@ export function checkFilenameDispatch(filename, head) {
   } else {
     throw new LintError(
       `filename ${pyRepr(base)} matches no deed dispatch pattern ` +
-        "(estate_chora.deed | ATLAS.deed | 0-AI-MANIFEST.deed | ANCHOR.deed | <Verb>file.deed | " +
+        "(estate_chora.deed | ATLAS.deed | 0-AI-MANIFEST.deed | <Verb>file.deed | " +
         "<DESCRIPTILE>.deed | <stem>_chora.deed | <stem>_praxis.deed; the J14 names are case-sensitive)",
       1,
     );
@@ -1591,8 +1588,13 @@ export function checkAnchor(text, filename = null, opts = {}) {
   const ownUuid = !own ? null
     : own[2][0] === "uuid" ? own[2][1]
     : own[2][0] === "uuid8" ? profileCOfBody(own[2][1])
-    : own[2][0] === "uuid5" ? profileCOfBody(`gv-clade-index:${own[2][1]}`)
+    : own[2][0] === "uuid5" ? "u5"
     : null;
+  // A7 S2: a #u5 in an identity field is an error in every mode, so a #u5
+  // :repo-uuid is refused before anything else, with or without (parents …).
+  if (ownUuid === "u5") {
+    throw new AnchorError("the deed's :repo-uuid is a #u5 literal; a version 5 id in an identity field is an error in every mode (A7 S2)");
+  }
   const seen = new Set();
   const parents = [];
   for (const it of clauses[0][2]) {
@@ -1616,7 +1618,7 @@ export function checkAnchor(text, filename = null, opts = {}) {
       // "A parent never names the deed itself" needs an id to compare with:
       // with none, every parent would pass that check unexamined.
       if (ownUuid === null) {
-        throw new AnchorError(`${where} needs the deed's own :repo-uuid (#uuid, #u8 or #u5) to check that no parent names the deed itself`);
+        throw new AnchorError(`${where} needs the deed's own :repo-uuid (#uuid or #u8) to check that no parent names the deed itself`);
       }
       for (const p of it[2]) {
         if (p[0] !== "clause" || p[1] !== "parent") throw new AnchorError(`${where} takes (parent …) clauses only`);
@@ -1624,15 +1626,18 @@ export function checkAnchor(text, filename = null, opts = {}) {
         for (const k of f.keys()) if (k !== "uuid" && k !== "relation") throw new AnchorError(`(parent …) has no field :${k}`);
         const u = f.get("uuid");
         if (!u) throw new AnchorError("(parent …) is missing :uuid");
-        if (u[0] !== "uuid") {
-          throw new AnchorError(`(parent …) :uuid must be an opaque #uuid"…" chora id, got ${u[0]}`);
+        // A1 rule V8: a chora id in a deed is version 8; version 5 stays in
+        // the registry. A #u8 names its profile C id; a #u5 is an error (S2).
+        const pid = choraIdOf(u, (m) => new AnchorError(m), "(parent …) :uuid");
+        if (pid === null) {
+          throw new AnchorError(u[0] === "uuid"
+            ? `(parent …) :uuid ${u[1]} is version ${u[1][14]}, not a version 8 chora id (A1 rule V8)`
+            : `(parent …) :uuid must be a version 8 chora id, an opaque #uuid"…" or a #u8 literal, got ${u[0]}`);
         }
-        // A1 rule V8: a chora id in a deed is version 8; version 5 stays in the registry.
-        if (u[1][14] !== "8") throw new AnchorError(`(parent …) :uuid ${u[1]} is version ${u[1][14]}, not a version 8 chora id (A1 rule V8)`);
         if (f.has("relation") && f.get("relation")[0] !== "symbol") throw new AnchorError("(parent …) :relation must be a symbol");
-        if (parents.includes(u[1])) throw new AnchorError(`(parent …) names ${u[1]} twice`);
-        if (u[1] === ownUuid) throw new AnchorError("(parent …) names the deed's own :repo-uuid");
-        parents.push(u[1]);
+        if (parents.includes(pid)) throw new AnchorError(`(parent …) names ${pid} twice`);
+        if (pid === ownUuid) throw new AnchorError("(parent …) names the deed's own :repo-uuid");
+        parents.push(pid);
       }
     }
   }
@@ -1849,9 +1854,9 @@ export function checkEdict(text, filename = null) {
   }
   for (const k of ["canonical-name", "of-chora", "verb"]) if (!fields.has(k)) throw new EdictError(`a contractile-deed is missing :${k}`);
   if (fields.get("canonical-name")[0] !== "string") throw new EdictError(":canonical-name must be a string");
-  const of = fields.get("of-chora");
-  if (of[0] !== "uuid" || of[1][14] !== "8") {
-    throw new EdictError(":of-chora must be the repo's opaque version 8 #uuid\"…\" chora id (J20)");
+  const ofId = choraIdOf(fields.get("of-chora"), (m) => new EdictError(m), ":of-chora");
+  if (ofId === null) {
+    throw new EdictError(":of-chora must be the repo's version 8 chora id, an opaque #uuid\"…\" or a #u8 literal (J20, J28)");
   }
   const v = fields.get("verb");
   if (v[0] !== "symbol" || !Object.hasOwn(CONTRACTILE_VERBS, v[1])) {
@@ -1955,7 +1960,7 @@ export function checkEdict(text, filename = null) {
     }
     out.push({ id: id[1], bang, text: f.get("text")[1] });
   }
-  return { verb, ofChora: of[1], rules: out };
+  return { verb, ofChora: ofId, rules: out };
 }
 
 // ---------------------------------------------------------------------------
@@ -1981,6 +1986,19 @@ export function verbOfDescriptile(filename) {
   if (!filename) return null;
   const b = basename(filename);
   for (const [verb, cap] of Object.entries(CONTRACTILE_VERBS)) if (b === `${cap.toUpperCase()}.deed`) return verb;
+  return null;
+}
+
+/**
+ * The chora id an identity value names, as a lowercase UUID body, for
+ * comparison (A7 S2, J28): an opaque version 8 #uuid is its own body; a #u8
+ * literal names the profile C id of its preimage; a #u5 is an error in every
+ * mode (S2). Returns null for any other value; the caller words the error.
+ */
+export function choraIdOf(v, E, where) {
+  if (v[0] === "uuid5") throw E(`${where} is a #u5 literal; a version 5 id in an identity field is an error in every mode (A7 S2)`);
+  if (v[0] === "uuid8") return profileCOfBody(v[1]);
+  if (v[0] === "uuid" && v[1][14] === "8") return v[1];
   return null;
 }
 
@@ -2024,10 +2042,10 @@ function checkDescriptileHeader(fields, what, E, repoUuid, today) {
   }
   for (const k of ["canonical-name", "of-chora"]) if (!fields.has(k)) throw E(`${what} is missing :${k}`);
   if (fields.get("canonical-name")[0] !== "string") throw E(":canonical-name must be a string");
-  const of = fields.get("of-chora");
-  if (of[0] !== "uuid" || of[1][14] !== "8") throw E(":of-chora must be the repo's opaque version 8 #uuid\"…\" chora id (J20)");
-  if (repoUuid !== undefined && of[1] !== repoUuid) {
-    throw E(`:of-chora ${of[1]} is not this repo's chora id ${repoUuid}, the :repo-uuid of its chora deed (YD08)`);
+  const ofId = choraIdOf(fields.get("of-chora"), E, ":of-chora");
+  if (ofId === null) throw E(":of-chora must be the repo's version 8 chora id, an opaque #uuid\"…\" or a #u8 literal (J20, J28)");
+  if (repoUuid !== undefined && ofId !== repoUuid) {
+    throw E(`:of-chora ${ofId} is not this repo's chora id ${repoUuid}, the :repo-uuid of its chora deed (YD08)`);
   }
   for (const k of ["affirmed", "affirmed-by"]) {
     if (!fields.has(k)) throw E(`${what} is missing :${k}; affirmation is required by default (J4, YD06)`);
@@ -2132,8 +2150,9 @@ export function checkVerbDescriptile(text, filename, opts = {}) {
 /**
  * The :repo-uuid of the one <repo>_chora.deed directly in dir, for YD08, or
  * undefined when dir holds none. Throws when there are several, or when the
- * id is not a #uuid literal: a legacy #u5 or #u8 id cannot be compared with
- * an opaque :of-chora, so the check fails rather than passing unchecked.
+ * id is neither a version 8 #uuid nor a #u8 literal (whose profile C id is
+ * compared, A7 S2): a #u5 id is an error in every mode, so the check fails
+ * rather than passing unchecked.
  */
 export function choraRepoUuid(dir) {
   const c = rootChora(dir);
@@ -2155,8 +2174,9 @@ export function rootChora(dir, { needName = false } = {}) {
   const us = items.filter((it) => it[0] === "field" && it[1] === "repo-uuid");
   if (us.length > 1) throw new VerbDescriptileError(`${choras[0]} carries :repo-uuid ${us.length} times; YD08 needs exactly one`);
   const u = us[0];
-  if (!u || u[2][0] !== "uuid") {
-    throw new VerbDescriptileError(`${choras[0]} has no opaque #uuid :repo-uuid, so :of-chora cannot be checked against it (YD08)`);
+  const id = u ? choraIdOf(u[2], (m) => new VerbDescriptileError(m), `${choras[0]} :repo-uuid`) : null;
+  if (id === null) {
+    throw new VerbDescriptileError(`${choras[0]} has no version 8 :repo-uuid (#uuid or #u8), so :of-chora cannot be checked against it (YD08)`);
   }
   // YD07 compares against the chora's name, so when it is needed a chora
   // without exactly one string :canonical-name fails here rather than
@@ -2166,7 +2186,7 @@ export function rootChora(dir, { needName = false } = {}) {
   if (needName && !named) {
     throw new VerbDescriptileError(`${choras[0]} must carry exactly one string :canonical-name to check against (YD07)`);
   }
-  return { uuid: u[2][1], name: named ? ns[0][2][1] : null };
+  return { uuid: id, name: named ? ns[0][2][1] : null };
 }
 
 /**
@@ -2201,7 +2221,9 @@ function verbDescriptileFiles(files, root) {
     } catch (e) {
       if (!(e instanceof LintError) && !e.code) throw e;
       bad += 1;
-      console.log(`FAIL ${f}: ${e instanceof LintError ? e.toString() : `cannot read (${e.code})`}`);
+      // Name the file that could not be read: with --root it may be the
+      // verb's edict, not the descriptile.
+      console.log(`FAIL ${f}: ${e instanceof LintError ? e.toString() : `cannot read ${e.path ?? f} (${e.code})`}`);
     }
   }
   return bad ? 1 : 0;
@@ -2355,8 +2377,8 @@ export function checkEcosystem(text, filename, opts = {}) {
     let uuid;
     if (f.has("uuid")) {
       const u = f.get("uuid");
-      if (u[0] !== "uuid" || u[1][14] !== "8") throw E(`${where} :uuid must be the related repo's opaque version 8 #uuid chora id (J12)`);
-      uuid = u[1];
+      uuid = choraIdOf(u, E, `${where} :uuid`);
+      if (uuid === null) throw E(`${where} :uuid must be the related repo's version 8 chora id, an opaque #uuid or a #u8 literal (J12, A7 S2)`);
     } else if (opts.strict) {
       throw E(`${where} needs :uuid, the related repo's chora id, in strict mode (J12)`);
     }

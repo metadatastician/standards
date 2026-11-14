@@ -95,7 +95,7 @@ jobs:
       - name: fixture corpus (valid must pass, invalid must fail)
         if: github.repository_id == 1116521501 && steps.bun.outcome == 'success'
         run: bun "$T/deed_lint.js" --fixtures "$T/fixtures"
-      - name: J14 file-name head fixtures (contractile-deed, descriptile-deed, anchor-deed)
+      - name: J14 file-name head fixtures (contractile-deed, descriptile-deed)
         if: github.repository_id == 1116521501 && steps.bun.outcome == 'success'
         run: bun "$T/deed_lint.js" --fixtures "$T/fixtures/heads"
       - name: J17 bang fixtures ("!" only after a rule's :id in a contractile-deed)

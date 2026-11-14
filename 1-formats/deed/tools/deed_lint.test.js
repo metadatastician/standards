@@ -306,6 +306,24 @@ describe("Mustfile check profile", () => {
     expect(() => validate(HDR + '(praxis-deed :schema-version "1" :canonical-name "x" :alias (":repo-uuid ; example" ' + u5 + '))')).not.toThrow();
     expect(blankComments('a "b;c" ; d\ne')).toBe('a "b;c"    \ne');
   });
+  test("A7 S2: a #u5 in each identity field the A7 profiles read is refused before any profile runs", () => {
+    // These were the fixtures own-u5, parent-legacy-literal, related-uuid-legacy
+    // and of-chora-u5 (edict and verb descriptile). Q2 makes each a parse
+    // error, so the cases live here, with the literal assembled at runtime
+    // (scripts/check-uuid-v8.sh reads committed files by name).
+    const u5 = "#" + 'u5"github.com/o/x"';
+    const anchor = '(anchor :schema "hyperpolymath.anchor/1" :authority "a")';
+    const cases = [
+      ["repo-uuid", HDR + '(repo-deed :schema-version "1" :canonical-name "x" :repo-uuid ' + u5 + ' ' + anchor + ')'],
+      ["uuid", HDR + '(repo-deed :schema-version "1" :canonical-name "x" (anchor :schema "hyperpolymath.anchor/1" :authority "a" (parents (parent :uuid ' + u5 + '))))'],
+      ["uuid", HDR + '(descriptile-deed :schema-version "1" :canonical-name "x" (related :name "p" :relationship parent :notes "n" :uuid ' + u5 + '))'],
+      ["of-chora", HDR + '(contractile-deed :schema-version "1" :canonical-name "x" :of-chora ' + u5 + ')'],
+      ["of-chora", HDR + '(descriptile-deed :schema-version "1" :canonical-name "x" :of-chora ' + u5 + ')'],
+    ];
+    for (const [field, text] of cases) {
+      expect(() => validate(text)).toThrow(new RegExp(`identity field :${field} carries a #u5 literal`));
+    }
+  });
   test("multiline critical check survives parsing and has an executable body", () => {
     const checks = readMustfileChecks(doc('(check\n :id alpha\n :severity critical\n :discharge run\n :body "false")'), "test_praxis.deed");
     expect(checks).toEqual([{ id: "alpha", severity: "critical", discharge: "run", body: "false" }]);
@@ -748,7 +766,6 @@ const ANCHOR_WHY = {
   "missing-schema_chora.deed": "is missing :schema",
   "nested-anchor_chora.deed": "only at the top level",
   "parent-duplicate_chora.deed": "twice",
-  "parent-legacy-literal_chora.deed": "got uuid8",
   "parent-no-own-id_chora.deed": "needs the deed's own :repo-uuid",
   "parent-no-uuid_chora.deed": "is missing :uuid",
   "parent-relation-string_chora.deed": ":relation must be a symbol",
@@ -928,12 +945,13 @@ describe("J14 file-name heads", () => {
   test("every ALL-CAPS descriptile name is a descriptile-deed", () => {
     for (const n of names) expect(verdict(form("descriptile-deed"), `${n}.deed`)).toBeNull();
   });
-  test("ANCHOR.deed is an anchor-deed", () => {
-    expect(verdict(form("anchor-deed"), "ANCHOR.deed")).toBeNull();
+  test("ANCHOR.deed and the anchor-deed head are gone (deed.abnf v2.0.0, A7 S1, J24)", () => {
+    expect(verdict(form("repo-deed"), "ANCHOR.deed")).toMatch(/matches no deed dispatch pattern/);
+    expect(verdict(form("anchor-deed"))).toMatch(/invalid doc-head/);
   });
   test("a wrong case matches no dispatch pattern", () => {
     for (const [f, h] of [["MUSTFILE.deed", "contractile-deed"], ["mustfile.deed", "contractile-deed"],
-      ["Meta.deed", "descriptile-deed"], ["State.deed", "descriptile-deed"], ["anchor.deed", "anchor-deed"],
+      ["Meta.deed", "descriptile-deed"], ["State.deed", "descriptile-deed"], ["anchor.deed", "repo-deed"],
       ["Clade.deed", "descriptile-deed"]]) {
       expect(verdict(form(h), f)).toMatch(/matches no deed dispatch pattern/);
     }
@@ -941,11 +959,10 @@ describe("J14 file-name heads", () => {
   test("a J14 name with another head is a mismatch", () => {
     expect(verdict(form("descriptile-deed"), "Mustfile.deed")).toMatch(/dispatches to contractile-deed/);
     expect(verdict(form("contractile-deed"), "MUST.deed")).toMatch(/dispatches to descriptile-deed/);
-    expect(verdict(form("repo-deed"), "ANCHOR.deed")).toMatch(/dispatches to anchor-deed/);
-    expect(verdict(form("anchor-deed"), "x_chora.deed")).toMatch(/dispatches to repo-deed/);
+    expect(verdict(form("descriptile-deed"), "x_chora.deed")).toMatch(/dispatches to repo-deed/);
   });
   test("a deed with no file name may carry any of the new heads", () => {
-    for (const h of ["contractile-deed", "descriptile-deed", "anchor-deed"]) expect(verdict(form(h))).toBeNull();
+    for (const h of ["contractile-deed", "descriptile-deed"]) expect(verdict(form(h))).toBeNull();
   });
 });
 

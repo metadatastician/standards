@@ -30,6 +30,14 @@ chora-uuid8     = %s"#uuid" DQUOTE 8hex-lc "-" 4hex-lc "-" "8" 3hex-lc "-"
                 ; Used for a parent (anchor.abnf) and for :of-chora, the J14
                 ; heads' name for the repo they belong to (A7 J20). It is not
                 ; :beholding-chora, which names the estate chora (A1 §7.2).
+                ; A7 J28: :of-chora also accepts a #u8 literal, compared by
+                ; the profile C id it names; a #u5 is refused (A7 S2).
+chora-id        = chora-uuid8 / uuid8
+                ; An identity reference: the opaque version 8 #uuid, or the
+                ; computed #u8 form, compared by the profile C id it names.
+                ; A #u5 is an error in every mode (A7 S2). Used for :of-chora
+                ; (J28), a (related :uuid) in ECOSYSTEM.deed and a parent's
+                ; :uuid in an anchor. uuid8 is deed.abnf's.
 lc-variant      = "8" / "9" / %x61 / %x62
                 ; RFC 9562 variant 10, lowercase only, as deed.abnf's uuid-variant
                 ; (%s"a" / %s"b" since the #1482 errata) and deed_lint.

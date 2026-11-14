@@ -16,7 +16,7 @@
 ; Where it applies: a <Verb>file.deed (head contractile-deed, J14), at the top
 ; level of the form. SEMANTIC (validator-enforced, deed_lint.js --edict):
 ;   * the form carries :schema-version, :canonical-name (a string), :of-chora
-;     (the repo's opaque version 8 #uuid chora id, J20) and :verb (a
+;     (the repo's version 8 chora id, #uuid or #u8, J20, J28) and :verb (a
 ;     verb-name), each exactly once, and no :beholding-chora (J20);
 ;   * :verb agrees with the file name (Intentfile.deed is intend, Mustfile.deed
 ;     is must, and so on; A7 8.1);
