@@ -176,4 +176,7 @@ cmp -s "$RELOCK" "$T/mut-visited.sh" && fail "visited mutant changed nothing"
 if RELOCK_TIMEOUT=10 RELOCK_BIN="$T/mut-visited.sh" scenario cycle-mut <<<"$CYCLE_BODY"; then
   fail "the cycle control did not catch a script without the visited check"
 fi
+# capability line: stable, side-effect free, and not reported by main's script (unknown option, exit 2)
+git -C "$SCRIPT_DIR/../.." show origin/main:scripts/relock-standards-pin.sh > "$T/main-relock.sh" 2>/dev/null && { if [ -n "$(bash "$T/main-relock.sh" --capabilities 2>/dev/null)" ]; then fail "main's script claims a capability it lacks"; fi; }
+[ "$(bash "$RELOCK" --capabilities)" = "nested-reusable-walk=1" ] || fail "--capabilities does not report nested-reusable-walk=1"
 echo "PASS: relock-standards-pin.sh records the actions reached through nested standards reusables (by SHA and local); foreign owners (refused), tag forms, absent commits and cycles are not walked"

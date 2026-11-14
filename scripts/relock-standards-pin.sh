@@ -43,6 +43,8 @@
 #                    .github/workflows, or the applier's flat fetch directory.
 #   --standards      a standards git checkout that contains <sha>; default
 #                    $STANDARDS_DIR, else the checkout this script lives in.
+#   --capabilities   print the capability lines (nested-reusable-walk=1) and exit 0,
+#                    with no side effects: a caller tests capability, not script text.
 # Exit: 0 relocked or nothing to do; 1 refused (lock untouched); 2 usage.
 set -euo pipefail
 
@@ -52,7 +54,8 @@ while [ $# -gt 0 ]; do
     --to) TARGET="${2:-}"; shift 2 ;;
     --to=*) TARGET="${1#*=}"; shift ;;
     --standards) SROOT="${2:-}"; shift 2 ;;
-    -h|--help) sed -n '2,44p' "$0"; exit 0 ;;
+    --capabilities) echo "nested-reusable-walk=1"; exit 0 ;;
+    -h|--help) sed -n '2,46p' "$0"; exit 0 ;;
     -*) echo "relock-standards-pin: unknown option $1" >&2; exit 2 ;;
     *) WF="$1"; shift ;;
   esac
