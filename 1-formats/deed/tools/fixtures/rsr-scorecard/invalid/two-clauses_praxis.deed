@@ -7,6 +7,8 @@
     :repo "example-game"
     :spec rsr-criteria-v2
     :spec-version "2.1.0-draft"
+    :assessor "hypatia rsr_score 0.1.0"
+    :assessed-at "2026-11-14T19:33:12Z"
     :tier none
     :score "70.59"
     :provisional #t
@@ -24,6 +26,8 @@
     :repo "example-game"
     :spec rsr-criteria-v2
     :spec-version "2.1.0-draft"
+    :assessor "hypatia rsr_score 0.1.0"
+    :assessed-at "2026-11-14T19:33:12Z"
     :tier none
     :score "70.59"
     :provisional #t

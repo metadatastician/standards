@@ -338,11 +338,11 @@ The fixtures are one case per directory, `fixtures/state/{valid,invalid}/<case>/
 A case may hold a `<repo>_chora.deed`, which is then checked against, and a
 `STRICT` marker file, which runs it in strict mode.
 
-== `deed_lint.js --rsr-scorecard` — the RSR scorecard (DRAFT)
+== `deed_lint.js --rsr-scorecard` — the RSR scorecard
 
 Checks the `(rsr-scorecard …)` clause against
-`spec/abnf/clauses/rsr-scorecard.abnf` v0.1.0 (owner ruling 2026-11-14;
-prose: `../mappings/scorecard-corpus-decision.adoc` §6). It is what the RSR
+`spec/abnf/clauses/rsr-scorecard.abnf` v0.2.0 (owner ruling 2026-11-14,
+ratified the same day with `:assessor` and `:assessed-at`; prose: `../mappings/scorecard-corpus-decision.adoc` §6). It is what the RSR
 oracle (`mix hypatia.rsr_score --write`) writes in place of
 `rsr.scorecard.a2ml`. The rules it adds to the grammar:
 
@@ -352,9 +352,14 @@ oracle (`mix hypatia.rsr_score --write`) writes in place of
   deed, nested, or twice is refused. The praxis-deed carries only
   `:schema-version`, `:canonical-name`, `:profile`, an optional
   `:beholding-chora` and the clause;
-* `:repo`, `:spec rsr-criteria-v2`, `:spec-version`, `:tier`, `:score`,
-  `:provisional` and `:automatable-coverage` once each; `:applicable-weight`,
+* `:repo`, `:spec rsr-criteria-v2`, `:spec-version`, `:assessor`,
+  `:assessed-at`, `:tier`, `:score`, `:provisional` and
+  `:automatable-coverage` once each; `:applicable-weight`,
   `:verified-weight`, `:profile-present` and `:source-commit` at most once;
+* `:assessor` is not empty (the tool and its version, such as
+  `"hypatia rsr_score 0.1.0"`), and `:assessed-at` is an RFC 3339 UTC
+  timestamp written one way, `"2026-11-14T19:33:12Z"` (upper-case `T` and
+  `Z`, whole seconds, no offset, no leap second), on a real day;
 * at least one `(criterion :id :name :tier :gate :weight :verdict)`, every
   field once, ids unique. Tiers and verdicts are symbols; decimals are
   strings such as `"84.08"`, since the grammar has no decimal literal;

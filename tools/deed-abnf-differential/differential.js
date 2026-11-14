@@ -8,7 +8,7 @@
 //
 // deed.abnf is normative (D308); deed_lint.js is the gate that CI runs. This
 // harness keeps them from drifting apart. It compiles deed.abnf (with the
-// (egress …), (anchor …), (contractiles …), edict, verb-descriptile, ecosystem, state and (DRAFT) rsr-scorecard clause profiles and the shared rules of
+// (egress …), (anchor …), (contractiles …), edict, verb-descriptile, ecosystem, state and rsr-scorecard clause profiles and the shared rules of
 // clauses/common.abnf) using apg-js, mutates every
 // committed deed with a seeded generator, and asks both the grammar and the
 // gate for a verdict on each variant:
@@ -261,13 +261,16 @@ for (const name of CONTRACTILES_GRAMMAR_REJECTS) {
 }
 // Invalid RSR scorecard fixtures whose defect rsr-scorecard.abnf itself
 // expresses: an unknown tier or verdict symbol, an integer where a decimal
-// string goes, and a field outside the clause. The others break a SEMANTIC side
-// condition (placement, :profile, counts, the derived score and coverage, the
-// provisional rules), which only deed_lint.js --rsr-scorecard checks; for them
+// string goes, a field outside the clause, and an :assessed-at that is not an
+// RFC 3339 UTC timestamp. The others break a SEMANTIC side condition
+// (placement, :profile, counts, a real day in :assessed-at, the derived score
+// and coverage, the provisional rules), which only deed_lint.js --rsr-scorecard
+// checks; for them
 // the grammar accepts the clause. Every invalid fixture is in one list or the other.
 {
   const RSR_SCORECARD_GRAMMAR_REJECTS = [
-    "score-integer_praxis.deed", "tier-unknown_praxis.deed", "unknown-field_praxis.deed", "verdict-unknown_praxis.deed",
+    "assessed-at-malformed_praxis.deed", "score-integer_praxis.deed", "tier-unknown_praxis.deed", "unknown-field_praxis.deed",
+    "verdict-unknown_praxis.deed",
   ];
   for (const name of readdirSync(join(FIXTURES, "rsr-scorecard/invalid")).sort()) {
     const text = readFileSync(join(FIXTURES, "rsr-scorecard/invalid", name), "utf8");
