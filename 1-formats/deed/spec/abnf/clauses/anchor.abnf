@@ -119,7 +119,7 @@ ssg-member      = ( %s":engine" token-sep string )
 
 parents-clause  = "(" %s"parents" 1*(token-sep parent-clause) [token-sep] ")"
 parent-clause   = "(" %s"parent" 1*(token-sep parent-member) [token-sep] ")"
-parent-member   = ( %s":uuid" token-sep chora-uuid8 )
+parent-member   = ( %s":uuid" token-sep chora-id )
                 / ( %s":relation" token-sep symbol )
                 ; A parent is named by its chora id, the opaque #uuid literal
                 ; of A1 (never a reverse-DNS name, a path or a clade). SEMANTIC:

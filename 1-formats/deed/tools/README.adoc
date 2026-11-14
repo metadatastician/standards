@@ -140,8 +140,8 @@ that `deed_lint.js` already accepts: the member set of `(anchor …)` and of
 each sub-clause, `:schema "hyperpolymath.anchor/1"` and a non-empty
 `:authority` exactly once, value types, a three-segment `:version`, a
 `:last-updated` that is a real calendar date, repo-relative
-`(semantic-authority-files …)` paths, parents named only by an opaque
-version 8 `#uuid` chora id (A1 rule V8), no parent twice and never the deed
+`(semantic-authority-files …)` paths, parents named only by a
+version 8 chora id, an opaque `#uuid` or a `#u8` literal, never `#u5` (A1 rule V8, A7 S2), no parent twice and never the deed
 itself (a legacy `#u8` or `#u5` `:repo-uuid` is compared by the profile C id
 it names), and the clause only at the top level of a repo deed. A deed with
 no `(anchor …)` clause passes. Prose: `docs/estate-reconciliation/A7-contractiles-descriptiles-anchor.adoc`,
@@ -280,7 +280,7 @@ Checks `ECOSYSTEM.deed` (head `descriptile-deed`) against
   `validation-tooling`, `signing-tooling`, `verification-tooling`,
   `minted-from`, `registry` (owner-ruled 2026-09-19 in the mapping) and
   `downstream-consumer`, `sibling-language`, `code-dependency`, `parent`
-  (DESCRIPTILE-SPEC). `:uuid` is a version 8 chora id, and `--strict` requires
+  (DESCRIPTILE-SPEC). `:uuid` is a version 8 chora id (`#uuid` or `#u8`; `#u5` is refused, A7 S2), and `--strict` requires
   it (J12). A `(:name, :relationship)` pair appears once.
 
     bun deed_lint.js --ecosystem ECOSYSTEM.deed [--root REPO] [--strict]

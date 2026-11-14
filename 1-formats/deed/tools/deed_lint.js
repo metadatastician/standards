@@ -1484,15 +1484,18 @@ export function checkAnchor(text, filename = null, opts = {}) {
         for (const k of f.keys()) if (k !== "uuid" && k !== "relation") throw new AnchorError(`(parent …) has no field :${k}`);
         const u = f.get("uuid");
         if (!u) throw new AnchorError("(parent …) is missing :uuid");
-        if (u[0] !== "uuid") {
-          throw new AnchorError(`(parent …) :uuid must be an opaque #uuid"…" chora id, got ${u[0]}`);
+        // A1 rule V8: a chora id in a deed is version 8; version 5 stays in
+        // the registry. A #u8 names its profile C id; a #u5 is an error (S2).
+        const pid = choraIdOf(u, (m) => new AnchorError(m), "(parent …) :uuid");
+        if (pid === null) {
+          throw new AnchorError(u[0] === "uuid"
+            ? `(parent …) :uuid ${u[1]} is version ${u[1][14]}, not a version 8 chora id (A1 rule V8)`
+            : `(parent …) :uuid must be a version 8 chora id, an opaque #uuid"…" or a #u8 literal, got ${u[0]}`);
         }
-        // A1 rule V8: a chora id in a deed is version 8; version 5 stays in the registry.
-        if (u[1][14] !== "8") throw new AnchorError(`(parent …) :uuid ${u[1]} is version ${u[1][14]}, not a version 8 chora id (A1 rule V8)`);
         if (f.has("relation") && f.get("relation")[0] !== "symbol") throw new AnchorError("(parent …) :relation must be a symbol");
-        if (parents.includes(u[1])) throw new AnchorError(`(parent …) names ${u[1]} twice`);
-        if (u[1] === ownUuid) throw new AnchorError("(parent …) names the deed's own :repo-uuid");
-        parents.push(u[1]);
+        if (parents.includes(pid)) throw new AnchorError(`(parent …) names ${pid} twice`);
+        if (pid === ownUuid) throw new AnchorError("(parent …) names the deed's own :repo-uuid");
+        parents.push(pid);
       }
     }
   }
@@ -2192,8 +2195,8 @@ export function checkEcosystem(text, filename, opts = {}) {
     let uuid;
     if (f.has("uuid")) {
       const u = f.get("uuid");
-      if (u[0] !== "uuid" || u[1][14] !== "8") throw E(`${where} :uuid must be the related repo's opaque version 8 #uuid chora id (J12)`);
-      uuid = u[1];
+      uuid = choraIdOf(u, E, `${where} :uuid`);
+      if (uuid === null) throw E(`${where} :uuid must be the related repo's version 8 chora id, an opaque #uuid or a #u8 literal (J12, A7 S2)`);
     } else if (opts.strict) {
       throw E(`${where} needs :uuid, the related repo's chora id, in strict mode (J12)`);
     }
