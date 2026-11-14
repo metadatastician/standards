@@ -469,7 +469,11 @@ is advisory, and so is every fleet member, unless
 `.gitbot-fleet/enrolment.json` sets `reporters.<id>.gating` to a boolean, which
 overrides the default either way. When the pons row moves to its fleet
 adapter (gitbot-fleet `docs/migrations/scanner-cutover-ponsbot-panicbot.adoc`),
-the enrolment sets `"gating": true` for `ponsbot`; `panicbot` stays advisory. A
+the enrolment sets `"gating": true` for `ponsbot`; `panicbot` stays advisory.
+During the phase 1 shadow period (14 days from 2026-11-14) both are enrolled
+with `"gating": false`, beside the direct panic-attack and pons rows, so a
+fault in an adapter cannot block a merge; the flip to `"gating": true` for
+`ponsbot` lands with the phase 2 PR that removes the direct pons row. A
 grid with no gating row at all falls back to grading every row — never green by
 absence of evidence.
 

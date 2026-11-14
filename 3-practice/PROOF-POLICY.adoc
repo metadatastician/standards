@@ -731,6 +731,26 @@ So the digest is derived from the manifest, not asserted. Two manifests for
 one commit and one prover cannot differ, because their digests would then
 differ (§8.5.2).
 
+*Imported repositories.* Owner ruling 2026-11-14. A run can read files of
+another repository that it fetches at a pinned commit, for example a sibling
+library that the proofs import. Those files are not files of the home
+repository, so they are not in `(inputs-manifest …)`. The receipt records each
+such repository in its own clause:
+
+    (import :repository "OWNER/REPO" :commit "<40 hex>" :inputs-sha256 "<64 hex>"
+      (file :path "…" :sha256 "<64 hex>")
+      …)
+
+The files are the files of the imported repository that the run read, and
+their paths are relative to its root. The `:inputs-sha256` is the §8.5.1
+digest of those files at that commit. The reader checks the same form as for
+`(inputs-manifest …)`, and it refuses an `:inputs-sha256` that is not the
+SHA-256 of the rebuilt manifest. It also refuses a `:repository` that is not
+`OWNER/REPO`, an import of the home repository itself, two imports of one
+repository, and a `:commit` that is not a full 40-character lowercase commit.
+The script that holds the pin is a file of the home repository, so it is in
+the home input set: a repin changes the home `:inputs-sha256`.
+
 `(axioms …)` lists each axiom the checker reported, as
 `(axiom :name "…" :disposition c)`. The name is the name the checker
 reports (`#print axioms` for Lean, `Print Assumptions` for Rocq, and for Agda
@@ -848,11 +868,16 @@ branch, fetch it by the reference that the forge keeps for the pull request
 If a check fails, the gate fails, and the grade falls as §8.4 says.
 
 link:../scripts/check-proof-receipt.sh[`scripts/check-proof-receipt.sh`]
-`[--branch REF] RECEIPT REPO` does these checks. It checks every echo, not
-only the links that a chain uses. `scripts/tests/check-proof-receipt-test.sh`
+`[--branch REF] [--import OWNER/REPO=DIR]... RECEIPT REPO` does these checks.
+It checks every echo, not only the links that a chain uses. It also checks the
+manifest of each current receipt of a negative control (§8.5.4), and each
+`(import …)` in the clone of that repository that `--import` gives. An import
+with no clone given fails. `scripts/tests/check-proof-receipt-test.sh`
 tests it on a scratch repository: a receipt carried to its squash commit by an
 echo passes, and a forged echo, a `:source-commit` off the default branch, a
-manifest that is false at its commit and a missing source commit each fail.
+manifest that is false at its commit, a missing source commit, an import whose
+files differ at its pin, an import with no clone and a negative control whose
+manifest is false each fail.
 A gate or a consumer that runs it at a pinned standards commit meets the
 duty below in the same way as every other.
 
@@ -860,6 +885,35 @@ A *consumer* that catalogues grades, such as Mathesis, MUST do the same
 checks against the home repository before it catalogues a `PWG-1`. If it
 cannot do them, it catalogues the grade that the receipt supports without
 `PWG-1`, and it records why.
+
+==== 8.5.4 Negative controls
+
+Owner ruling 2026-11-14. A negative control is a file that the checker must
+refuse. It is evidence that the check can fail: a check that accepts
+everything proves nothing. A claim may record its negative controls:
+
+    (control :path "tests/reject/RoundTripIsFidelity.agda" :prover agda :expect refused
+      (receipt :run … :commit … :checker … :invocation … :inputs-sha256 … :state current
+        (inputs-manifest …)
+        (axioms)))
+
+`:path` is the refused file, relative to the repository root. `:expect` is
+`refused`, the only value. Each `(receipt …)` has the same fields and the same
+rules as a leg's receipt (§8.5.1). A current receipt records a run in which
+the checker refused the file. The refused file must be in the
+`(inputs-manifest …)` of the current receipt.
+
+The reader refuses a control with a path of the wrong form, two controls with
+one path and one prover, a control with no receipt or with more than one
+current receipt, and a current receipt whose manifest does not list the
+refused file. A control's `:inputs-sha256` does not join the per-commit
+agreement of §8.5.2, because its input set holds the refused file and the
+leg's input set does not.
+
+Controls are recorded, not graded. A grade counts witnesses (§8.2), and a
+control is not a witness, so a control never raises or lowers a grade. A
+control that the checker accepts is a failure of the home repository's gate:
+the gate must not record a current receipt for it.
 
 === 8.6 Naming
 

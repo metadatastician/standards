@@ -39,7 +39,7 @@ printf -- '-- proof\n' >>"$R/src/A.agda"; git -C "$R" commit -qam proof
 S=$(git -C "$R" rev-parse HEAD)
 printf 'docs\n' >>"$R/README.adoc"; git -C "$R" commit -qam docs
 git -C "$R" checkout -q main
-git -C "$R" merge -q --squash pr 2>/dev/null; git -C "$R" commit -qm squash
+git -C "$R" merge -q --squash pr >/dev/null 2>&1; git -C "$R" commit -qm squash
 I=$(git -C "$R" rev-parse HEAD)
 # A commit off main whose input differs from S.
 git -C "$R" checkout -q -b forged "$I"
@@ -57,7 +57,7 @@ manifest() { # COMMIT -> (file …) entries
 }
 MANIFEST_S=$(manifest "$S")
 
-# write NAME SOURCE-COMMIT RECEIPT-COMMIT DIGEST MANIFEST ECHO
+# write NAME SOURCE-COMMIT RECEIPT-COMMIT DIGEST MANIFEST ECHO [IMPORTS] [CONTROLS]
 write() {
   cat >"$WORK/$1_praxis.deed" <<EOF
 ;; SPDX-License-Identifier: CC-BY-SA-4.0
@@ -74,10 +74,10 @@ $6
         :invocation "agda --safe --without-K --cubical-compatible"
         :inputs-sha256 "$4" :state current
         (inputs-manifest
-$5)
+$5)${7:-}
         (axioms)))
     (leg :prover rocq :route unavailable :reason "none yet")
-    (leg :prover lean :route unavailable :reason "none yet")))
+    (leg :prover lean :route unavailable :reason "none yet")${8:-}))
 EOF
 }
 ECHO_IN="  (echo :source \"$S\" :image \"$I\" :witness inputs-sha256 (inputs :prover agda :sha256 \"$D\"))"
@@ -113,6 +113,45 @@ expect "a tree-sha256 echo over different trees fails" 1 "tree-sha256 at $S is" 
 write unparsable "$I" "$S" "$D" "" "$ECHO_IN"
 expect "a receipt the reader refuses fails" 1 "FAIL reader" --branch main "$WORK/unparsable_praxis.deed" "$R"
 
+# An imported sibling repository, pinned at a commit and given by --import.
+SIB="$WORK/sibling"
+git init -q -b main "$SIB"
+git -C "$SIB" config user.email t@example.invalid; git -C "$SIB" config user.name t
+git -C "$SIB" config commit.gpgsign false
+printf 'module Algebra where\n' >"$SIB/Algebra.agda"
+git -C "$SIB" add -A; git -C "$SIB" commit -qm sib
+SC=$(git -C "$SIB" rev-parse HEAD)
+SD=$(bash "$DIGEST" -C "$SIB" "$SC" Algebra.agda)
+SH=$(bash "$DIGEST" -C "$SIB" --manifest "$SC" Algebra.agda | cut -d' ' -f1)
+IMPORT="
+        (import :repository \"o/sibling\" :commit \"$SC\" :inputs-sha256 \"$SD\"
+          (file :path \"Algebra.agda\" :sha256 \"$SH\"))"
+write imported "$I" "$S" "$D" "$MANIFEST_S" "$ECHO_IN" "$IMPORT"
+expect "an import that holds in its clone passes" 0 "import o/sibling: the manifest holds at $SC" --branch main --import "o/sibling=$SIB" "$WORK/imported_praxis.deed" "$R"
+expect "an import with no clone given fails" 1 "no clone given (--import o/sibling=DIR)" --branch main "$WORK/imported_praxis.deed" "$R"
+printf -- '-- moved\n' >>"$SIB/Algebra.agda"; git -C "$SIB" commit -qam moved
+SC2=$(git -C "$SIB" rev-parse HEAD)
+write repinned "$I" "$S" "$D" "$MANIFEST_S" "$ECHO_IN" "${IMPORT//$SC/$SC2}"
+expect "an import whose files differ at its pin fails" 1 "import o/sibling: the manifest does not hold at $SC2" --branch main --import "o/sibling=$SIB" "$WORK/repinned_praxis.deed" "$R"
+
+# A negative control: the refused file is an input of its own receipt.
+mkdir -p "$R/tests/reject"; printf 'module Bad where\n' >"$R/tests/reject/Bad.agda"
+git -C "$R" add -A; git -C "$R" commit -qm control
+K=$(git -C "$R" rev-parse HEAD)
+KPATHS=(src/A.agda tests/reject/Bad.agda x.agda-lib)
+KD=$(bash "$DIGEST" -C "$R" "$K" "${KPATHS[@]}")
+KM=$(bash "$DIGEST" -C "$R" --manifest "$K" "${KPATHS[@]}" | while read -r h p; do printf '        (file :path "%s" :sha256 "%s")\n' "$p" "$h"; done)
+control() { # DIGEST MANIFEST
+  printf '\n    (control :path "tests/reject/Bad.agda" :prover agda :expect refused\n      (receipt :run "https://ci/run/2" :commit "%s" :checker "agda 2.6.4.3" :invocation "agda --safe" :inputs-sha256 "%s" :state current\n        (inputs-manifest\n%s)\n        (axioms)))' "$K" "$1" "$2"
+}
+write controlled "$I" "$S" "$D" "$MANIFEST_S" "$ECHO_IN" "" "$(control "$KD" "$KM")"
+expect "a negative control whose manifest holds passes" 0 "agda control tests/reject/Bad.agda receipt: the manifest holds at $K" --branch main "$WORK/controlled_praxis.deed" "$R"
+KFAKE=$(printf '%s\n' "$KM" | sed "s/\"[0-9a-f]\{64\}\")$/\"$(printf '%064d' 7)\")/")
+KFD=$(printf '%s\n' "$KFAKE" | sed -n 's/.*:path "\([^"]*\)" :sha256 "\([^"]*\)").*/\2  \1/p' | sha256sum | cut -d' ' -f1)
+write badcontrol "$I" "$S" "$D" "$MANIFEST_S" "$ECHO_IN" "" "$(control "$KFD" "$KFAKE")"
+expect "a negative control whose manifest is false fails" 1 "control tests/reject/Bad.agda receipt: the manifest does not hold at $K" --branch main "$WORK/badcontrol_praxis.deed" "$R"
+
+expect "exits 2 on a malformed --import" 2 "OWNER/REPO=DIR" --import nonsense "$WORK/good_praxis.deed" "$R"
 expect "exits 2 when REPO is not a clone" 2 "not a git clone" "$WORK/good_praxis.deed" "$WORK"
 expect "exits 2 on bad usage" 2 "usage" "$WORK/good_praxis.deed"
 
