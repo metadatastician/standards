@@ -780,8 +780,22 @@ describe("checkAnchor result", () => {
   (identity :primary-forge github :owner "o")
   (anchor :schema "hyperpolymath.anchor/1" :authority "a" (parents (parent :uuid #uuid"${v5}"))))
 `;
-    expect(() => validate(src)).not.toThrow();
-    expect(() => checkAnchor(src)).toThrow(/not a version 8 chora id/);
+    // :uuid is an identity field (CHORA-SPEC 7.1), so the grammar pass already
+    // refuses a version 5 there (T30), before the anchor profile looks at it.
+    expect(() => validate(src)).toThrow(/identity field :uuid carries a version 5 id \(v5-identity\)/);
+    expect(() => checkAnchor(src)).toThrow();
+  });
+  test("a version 5 #uuid in any identity field is v5-identity; version 8 is accepted (A1 T30)", () => {
+    const v5 = "00000000-0000-" + "5" + "000-8000-0000000000b1";
+    const deed = (id) => `;; SPDX-License-Identifier: CC-BY-SA-4.0
+(repo-deed :schema-version "1.0.0" :canonical-name "x" :repo-uuid #uuid"${id}" :beholding-chora #uuid"00000000-0000-8000-8000-00000000e57a")
+`;
+    expect(() => validate(deed(v5))).toThrow(/identity field :repo-uuid carries a version 5 id/);
+    expect(() => validate(deed("00000000-0000-8000-8000-0000000000a7"))).not.toThrow();
+    // Outside an identity field a version 5 #uuid stays legal (the registry alias).
+    expect(() => validate(`;; SPDX-License-Identifier: CC-BY-SA-4.0
+(praxis-deed :schema-version "1" :canonical-name "x" (alias :registry-v5 #uuid"${v5}"))
+`)).not.toThrow();
   });
   test("profile C of a #u8 body matches scripts/uuid-v8.js", () => {
     expect(profileCOfBody("gv-clade-index:github.com/hyperpolymath/standards")).toBe("b32d6be4-73ba-873e-9d61-e57f43c75cd1");

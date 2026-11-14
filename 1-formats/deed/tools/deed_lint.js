@@ -432,6 +432,14 @@ function lexFieldOrClause(lx) {
         lx.line(),
       );
     }
+    // A1 V8 and T30: an identity field carries version 8; a version 5 inside
+    // #uuid there is v5-identity, an error in every mode (as check-uuid-v8.sh).
+    if (val[0] === "uuid" && IDENTITY_FIELDS.has(kw[1]) && val[1][14] !== "8") {
+      throw new LintError(
+        `identity field :${kw[1]} carries a version ${val[1][14]} id (v5-identity); an identity field carries version 8 (CHORA-SPEC 7.1, T30)`,
+        lx.line(),
+      );
+    }
     // field = keyword token-sep value [token-sep bang] (v1.5.0, A7 J17). "!" can
     // start no field, clause or value, so it is read here or nowhere. It is a
     // bang only when a separator or ")" follows it; "!x" is not a token.
