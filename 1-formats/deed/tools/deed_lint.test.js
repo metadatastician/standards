@@ -6,7 +6,7 @@ import { cpSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, writ
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { validate, blankComments, LintError, SELF_TEST_CASES, checkEgress, EgressError, checkAnchor, AnchorError, profileCOfBody, readMustfileChecks, MustfileError, readProofReceipt, ProofReceiptError, checkContractiles, ContractilesError, contractilePaths, CONTRACTILE_VERBS, checkEdict, EdictError, verbOfFilename, checkVerbDescriptile, VerbDescriptileError, verbOfDescriptile, choraRepoUuid, rootChora, FIXTURE_TODAY, checkEcosystem, EcosystemError, ECOSYSTEM_RELATIONSHIPS, checkState, StateError, STATE_PHASES, MATURITY_LEVELS, checkRsrScorecard, RsrScorecardError, RSR_TIERS, RSR_VERDICTS } from "./deed_lint.js";
+import { validate, blankComments, LintError, SELF_TEST_CASES, checkEgress, EgressError, checkAnchor, AnchorError, profileCOfBody, readMustfileChecks, MustfileError, readProofReceipt, ProofReceiptError, checkContractiles, ContractilesError, contractilePaths, CONTRACTILE_VERBS, checkEdict, EdictError, verbOfFilename, checkVerbDescriptile, VerbDescriptileError, verbOfDescriptile, choraRepoUuid, rootChora, FIXTURE_TODAY, checkEcosystem, EcosystemError, ECOSYSTEM_RELATIONSHIPS, checkState, StateError, STATE_PHASES, MATURITY_LEVELS, checkRsrScorecard, RsrScorecardError, RSR_TIERS, RSR_VERDICTS, checkMeta, MetaError, META_PROJECT_TYPES, ADR_STATUSES } from "./deed_lint.js";
 import { generateContractileRegistry as generateRegistry } from "./deed_lint.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -1489,5 +1489,75 @@ describe("rsr-scorecard profile", () => {
     const bad = cli("--rsr-scorecard", join(FIX_RSR, "invalid", "overclaim_praxis.deed"));
     expect(bad.code).toBe(1);
     expect(bad.out).toMatch(/FAIL .*:provisional must be #t/);
+  });
+});
+
+// A7 7.2, J29 to J32, YF04: META.deed (clauses/meta.abnf).
+const FIX_META = join(FIX, "meta");
+
+describe("meta fixtures", () => {
+  test("--meta-fixtures passes on the corpus", () => {
+    const r = cli("--meta-fixtures", FIX_META);
+    expect(r.code).toBe(0);
+    expect(r.out).toContain("META FIXTURES OK");
+  });
+  test("the template model reads whole: its ADRs are referenced by path (J31)", () => {
+    const p = join(FIX_META, "valid", "template-model", "META.deed");
+    const r = checkMeta(readFileSync(p, "utf8"), p, { today: FIXTURE_TODAY });
+    expect(r.adrs).toEqual([
+      { id: "ADR-001", status: "accepted", ref: "docs/decisions/ADR-001.adoc" },
+      { id: "ADR-002", status: "superseded", ref: "docs/decisions/ADR-002.adoc" },
+    ]);
+    expect(r.warnings).toEqual([]);
+  });
+  test("the closed sets are the mapping's", () => {
+    expect([...META_PROJECT_TYPES]).toEqual(["library", "binary", "service", "website", "monorepo"]);
+    expect([...ADR_STATUSES]).toEqual(["proposed", "accepted", "deprecated", "superseded", "rejected"]);
+  });
+  test("an inline ADR body is refused with the J31 reason, for each of :context, :decision and :consequences", () => {
+    const p = join(FIX_META, "valid", "minimal", "META.deed");
+    const t = readFileSync(p, "utf8");
+    for (const k of ["context", "decision", "consequences"]) {
+      const bad = t.replace(/\)\s*$/, ` (adr :id "ADR-001" :status accepted :date "2026-03-16" :ref "docs/a.adoc" :${k} "x"))\n`);
+      expect(() => checkMeta(bad, p, { today: FIXTURE_TODAY })).toThrow(/referenced, never restated.*\(J31\)/);
+    }
+  });
+  test("YF04: a chora (meta …) is warned with --root, and refused with --strict", () => {
+    const dir = join(FIX_META, "valid", "meta-in-chora-lax");
+    const lax = cli("--meta", "--root", dir, join(dir, "META.deed"));
+    expect(lax.code).toBe(0);
+    expect(lax.out).toMatch(/WARN .*still carries \(meta …\).*\(J30, YF04\)/);
+    const strict = cli("--meta", "--root", dir, "--strict", join(dir, "META.deed"));
+    expect(strict.code).toBe(1);
+    expect(strict.out).toMatch(/refused in strict mode/);
+  });
+  test("the descriptile header applies: :expires must not have passed (YD06)", () => {
+    const p = join(FIX_META, "valid", "minimal", "META.deed");
+    const t = readFileSync(p, "utf8").replace(/:affirmed-by agent/, ':affirmed-by agent :expires "2026-11-14"');
+    expect(checkMeta(t, p, { today: "2026-11-14" }).warnings).toEqual([]);
+    expect(() => checkMeta(t, p, { today: "2026-11-15" })).toThrow(MetaError);
+  });
+  test("another descriptile is outside the profile", () => {
+    const t = readFileSync(join(FIX_META, "valid", "minimal", "META.deed"), "utf8");
+    expect(checkMeta(t, "STATE.deed")).toBeNull();
+  });
+  test("--root without a directory is a usage error", () => {
+    expect(cli("--meta", join(FIX_META, "valid", "minimal", "META.deed"), "--root").code).toBe(2);
+  });
+});
+
+// Names that are properties of Object.prototype are not members (#1594 review):
+// each profile refuses them as unknown, and none crashes.
+describe("prototype-named members are unknown, not crashes", () => {
+  test("(constructor …) in META.deed and STATE.deed, and :constructor in an RSR criterion", () => {
+    const meta = join(FIX_META, "valid", "minimal", "META.deed");
+    const mt = readFileSync(meta, "utf8").replace(/\)\s*$/, ' (constructor :a "b") (toString :c "d"))\n');
+    expect(() => checkMeta(mt, meta, { today: FIXTURE_TODAY })).toThrow(/has no clause \(constructor …\)/);
+    const st = join(FIX, "state", "valid", "minimal", "STATE.deed");
+    const stt = readFileSync(st, "utf8").replace(/\)\s*$/, ' (constructor :a "b"))\n');
+    expect(() => checkState(stt, st, { today: FIXTURE_TODAY })).toThrow(/has no clause \(constructor …\)/);
+    const rsr = join(FIX, "rsr-scorecard", "valid", "minimal_praxis.deed");
+    const rt = readFileSync(rsr, "utf8").replace('(criterion :id "1.1.2"', '(criterion :constructor "x" :id "1.1.2"');
+    expect(() => checkRsrScorecard(rt, rsr)).toThrow(/has no field :constructor/);
   });
 });

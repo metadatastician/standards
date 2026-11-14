@@ -69,3 +69,15 @@ affirmer        = symbol
                 ; :affirmed and :affirmed-by each appear exactly once.
                 ; :expires is optional (DESCRIPTILE-SPEC §affirmation): at
                 ; most once, and when present not before :affirmed.
+
+; --- Site-build configuration (A7 J29) ---------------------------------
+
+ssg-clause      = "(" %s"ssg" 1*(token-sep ssg-member) [token-sep] ")"
+ssg-member      = ( %s":engine" token-sep string )
+                / ( %s":output-dir" token-sep string )
+                / ( %s":boj-trigger" token-sep boolean )
+                / ( %s":cartridge" token-sep string )
+                ; The site-build configuration that standards' legacy
+                ; ANCHOR.a2ml carries. Its one home is META.deed (J29, meta.abnf);
+                ; a /1 anchor's (ssg …) is still read, as legacy (anchor.abnf).
+                ; SEMANTIC: each member at most once. boolean is deed.abnf's.
