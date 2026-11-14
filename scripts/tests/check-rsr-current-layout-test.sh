@@ -34,8 +34,8 @@ write_deed() {
 (repo-deed
   :schema-version "1.0.0"
   :canonical-name "fixture"
-  :repo-uuid #u5"github.com/fixture/fixture"
-  :beholding-chora #u5"estate/chora"
+  :repo-uuid #u8"gv-clade-index:github.com/fixture/fixture"
+  :beholding-chora #u8"chora:estate/github.com/o"
   (rsr-profile :version "1.0.0" :capabilities ("agda" "formal-proofs" "container"))
   $2
   $3)

@@ -283,7 +283,7 @@ describe("Mustfile check profile", () => {
     expect(() => readMustfileChecks(doc(':typo-check "false" ' + one), "test_praxis.deed")).toThrow(/unknown top-level/);
     expect(() => readMustfileChecks(doc(':canonical-name #t ' + one), "test_praxis.deed")).toThrow(/invalid type/);
     expect(() => readMustfileChecks(doc(':canonical-name "x" :canonical-name "y" ' + one), "test_praxis.deed")).toThrow(/duplicate top-level/);
-    expect(() => readMustfileChecks(doc(':canonical-name "must" :beholding-chora #u5"estate/chora" ' + one), "test_praxis.deed")).not.toThrow();
+    expect(() => readMustfileChecks(doc(':canonical-name "must" :beholding-chora #u8"chora:estate/github.com/o" ' + one), "test_praxis.deed")).not.toThrow();
   });
   test("multiline critical check survives parsing and has an executable body", () => {
     const checks = readMustfileChecks(doc('(check\n :id alpha\n :severity critical\n :discharge run\n :body "false")'), "test_praxis.deed");

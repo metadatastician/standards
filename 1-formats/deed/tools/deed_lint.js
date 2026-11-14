@@ -1061,7 +1061,7 @@ const H = ";; SPDX-License-Identifier: CC-BY-SA-4.0\n";
 /** The embedded self-test corpus (same 14 cases, order and expectations as the Python). */
 export const SELF_TEST_CASES = [
   ["valid-minimal", true,
-    H + '(repo-deed :schema-version "1.0.0" :canonical-name "x" :repo-uuid #u5"github.com/o/x" :beholding-chora #u5"estate/chora")\n'],
+    H + '(repo-deed :schema-version "1.0.0" :canonical-name "x" :repo-uuid #u8"gv-clade-index:github.com/o/x" :beholding-chora #u8"chora:estate/github.com/o")\n'],
   ["valid-nested", true,
     H + '(repo-deed\n  :schema-version "1.0.0"\n:canonical-name "x" ; comment between\n  (lineage :type hub :parent "" :previous-names ()) )\n'],
   ["valid-booleans-uuid", true,

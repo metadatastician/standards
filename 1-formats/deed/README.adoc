@@ -497,7 +497,7 @@ than from taste:
 (praxis-deed
   :schema-version  "1.0.0"              ; REQUIRED — first field
   :canonical-name  "cadastre"           ; REQUIRED — identity
-  :beholding-chora #u5"estate/chora"    ; REQUIRED — one declaration site
+  :beholding-chora #uuid"<estate v8 id>" ; REQUIRED — one declaration site
 
   (rules
     (rule :priority 10  :when … :then …)

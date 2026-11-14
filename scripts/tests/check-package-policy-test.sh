@@ -43,7 +43,7 @@ assert() { # label want-status needle cmd...
 repo() { local d="$WORK/$1"; mkdir -p "$d/.machine_readable"; printf '%s' "$d"; }
 # deed <dir> <name> <clause-body>: a minimal valid repo-deed with the body.
 deed() {
-  printf ';; SPDX-License-Identifier: CC-BY-SA-4.0\n(repo-deed\n  :schema-version "1.0.0"\n  :canonical-name "%s"\n  :repo-uuid #u5"github.com/o/%s"\n  :beholding-chora #u5"estate/chora"\n%b)\n' "$2" "$2" "$3" > "$1/${2}_chora.deed"
+  printf ';; SPDX-License-Identifier: CC-BY-SA-4.0\n(repo-deed\n  :schema-version "1.0.0"\n  :canonical-name "%s"\n  :repo-uuid #u8"gv-clade-index:github.com/o/%s"\n  :beholding-chora #u8"chora:estate/github.com/o"\n%b)\n' "$2" "$2" "$3" > "$1/${2}_chora.deed"
 }
 
 echo "=== legacy a2ml profile (unchanged behaviour) ==="
@@ -99,7 +99,7 @@ deed "$d" deedcommented '  ; (rsr-profile :version "1.0.0" :capabilities ("conta
 assert "a commented-out clause is not a profile" 0 "Packaging not applicable" bash "$GATE" "$d"
 
 d=$(repo deed-estate-only)
-printf ';; SPDX-License-Identifier: CC-BY-SA-4.0\n(estate-deed :schema-version "1.0.0" :canonical-name "estate" :estate-uuid #u5"estate/chora" (rsr-profile :capabilities ("container")))\n' > "$d/estate_chora.deed"
+printf ';; SPDX-License-Identifier: CC-BY-SA-4.0\n(estate-deed :schema-version "1.0.0" :canonical-name "estate" :estate-uuid #u8"chora:estate/github.com/o" (rsr-profile :capabilities ("container")))\n' > "$d/estate_chora.deed"
 assert "estate_chora.deed is not a repo deed, so its text is not a profile" 0 "Packaging not applicable" bash "$GATE" "$d"
 
 d=$(repo deed-wins)
@@ -117,7 +117,7 @@ deed "$d" deedsemicolon '  (notes :author "Smith; Jr.") (rsr-profile :version "1
 assert "a ; inside a string before the clause is text, not a comment" 1 "Package policy violation" bash "$GATE" "$d"
 
 d=$(repo deed-large)
-{ printf ';; SPDX-License-Identifier: CC-BY-SA-4.0\n(repo-deed :schema-version "1.0.0" :canonical-name "deedlarge" :repo-uuid #u5"github.com/o/deedlarge" :beholding-chora #u5"estate/chora"\n  (rsr-profile :version "1.0.0" :capabilities ("container"))\n  (notes\n'
+{ printf ';; SPDX-License-Identifier: CC-BY-SA-4.0\n(repo-deed :schema-version "1.0.0" :canonical-name "deedlarge" :repo-uuid #u8"gv-clade-index:github.com/o/deedlarge" :beholding-chora #u8"chora:estate/github.com/o"\n  (rsr-profile :version "1.0.0" :capabilities ("container"))\n  (notes\n'
   awk 'BEGIN { for (i = 0; i < 25000; i++) printf "    :n%d \"%s\"\n", i, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" }'
   printf '  ))\n'; } > "$d/deedlarge_chora.deed"
 assert "a large deed (profile first, then 1.5 MB) is still discovered under pipefail" 1 "Package policy violation" bash "$GATE" "$d"

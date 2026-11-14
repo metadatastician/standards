@@ -85,7 +85,7 @@ this standard survives translation intact.
 (praxis-deed
   :schema-version   "1.0.0"                 ; REQUIRED, structurally FIRST
   :canonical-name   "launcher-standard"     ; REQUIRED
-  :beholding-chora  #u5"estate/chora"       ; REQUIRED — a UUID, never a bare filename
+  :beholding-chora  #uuid"<estate v8 id>"   ; REQUIRED — a UUID, never a bare filename
   :standard-version "0.4.0"
   :standard-date    "2026-09-22"
   :compliance       (...))

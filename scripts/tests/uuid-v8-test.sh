@@ -133,6 +133,20 @@ for mode in "" --strict; do
     fresh; printf '(x %s #uuid"%s")\n' "$key" "$V5" > "$WORK/t/a_chora.deed"
     expect 1 "a v5 in the identity field $key is rejected ${mode:-(default)}" $mode
   done
+  fresh; printf '(x :of-chora #uuid"%s")\n' "$V5" > "$WORK/t/a_chora.deed"
+  expect 1 "a v5 in the identity field :of-chora is rejected ${mode:-(default)}" $mode
+  # Owner ruling Q2 (2026-11-14): #u5 in an identity field is an error in every
+  # mode; #u8 is accepted. Neither file holds a bare UUID, so this also checks
+  # that the #u5 rule runs on files the UUID scan would skip.
+  for key in :repo-uuid :estate-uuid :forge-uuid :beholding-chora :of-chora :uuid :estate :base :forge :repo; do
+    fresh; printf '(x %s #u5"estate/chora")\n' "$key" > "$WORK/t/a_chora.deed"
+    expect 1 "#u5 in the identity field $key is rejected ${mode:-(default)}" $mode
+  done
+  names "identity field :repo carries a #u5 literal" "the #u5 rejection names the field ${mode:-(default)}"
+  fresh; printf '(repo-deed :repo-uuid #u8"gv-clade-index:github.com/o/x" :beholding-chora #u8"chora:estate/github.com/o")\n' > "$WORK/t/a_chora.deed"
+  expect 0 "#u8 in identity fields is accepted ${mode:-(default)}" $mode
+  fresh; printf '(praxis-deed (alias :registry-name #u5"github.com/o/x"))\n' > "$WORK/t/a_praxis.deed"
+  expect 0 "#u5 outside an identity field is not this rule's business ${mode:-(default)}" $mode
   fresh; printf '(praxis-deed (alias :registry-v5 #uuid"%s"))\n' "$V5" > "$WORK/t/a_praxis.deed"
   expect 0 "a v5 inside #uuid\"…\" outside an identity field is accepted ${mode:-(default)}" $mode
   fresh; printf '(repo-deed :repo-uuid #uuid"%s")\n' "$LOWER_V8_B" > "$WORK/t/a_chora.deed"

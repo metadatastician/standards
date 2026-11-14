@@ -12,7 +12,7 @@
 (praxis-deed
   :schema-version   "1.0.0"
   :canonical-name   "provisioning-standard"
-  :beholding-chora  #u5"estate/chora"
+  :beholding-chora  #uuid"0889b37b-defb-831f-973c-e119500db00e"
   :standard-version "1.0.0"
   :standard-date    "2026-09-30"
   :compliance ("PROVISIONING-STANDARD.adoc" "launcher-standard.adoc"

@@ -104,8 +104,8 @@ does not get its own file. (One deed per repo is the doc-head's semantics.)
 (repo-deed
   :schema-version  "1.0.0"
   :canonical-name  "rsr-template-repo"
-  :repo-uuid       #u5"github.com/hyperpolymath/rsr-template-repo"
-  :beholding-chora #u5"<estate chora NAME — resolved at emit time>"
+  :repo-uuid       #u8"gv-clade-index:github.com/hyperpolymath/rsr-template-repo"
+  :beholding-chora #uuid"<estate v8 id — resolved at emit time>"
 
   ; … family-1 clauses (identity clade forges lineage status) …
 
