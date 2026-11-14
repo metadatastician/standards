@@ -844,12 +844,13 @@ describe("J14 file-name heads", () => {
   test("every ALL-CAPS descriptile name is a descriptile-deed", () => {
     for (const n of names) expect(verdict(form("descriptile-deed"), `${n}.deed`)).toBeNull();
   });
-  test("ANCHOR.deed is an anchor-deed", () => {
-    expect(verdict(form("anchor-deed"), "ANCHOR.deed")).toBeNull();
+  test("ANCHOR.deed and the anchor-deed head are gone (deed.abnf v2.0.0, A7 S1, J24)", () => {
+    expect(verdict(form("repo-deed"), "ANCHOR.deed")).toMatch(/matches no deed dispatch pattern/);
+    expect(verdict(form("anchor-deed"))).toMatch(/invalid doc-head/);
   });
   test("a wrong case matches no dispatch pattern", () => {
     for (const [f, h] of [["MUSTFILE.deed", "contractile-deed"], ["mustfile.deed", "contractile-deed"],
-      ["Meta.deed", "descriptile-deed"], ["State.deed", "descriptile-deed"], ["anchor.deed", "anchor-deed"],
+      ["Meta.deed", "descriptile-deed"], ["State.deed", "descriptile-deed"], ["anchor.deed", "repo-deed"],
       ["Clade.deed", "descriptile-deed"]]) {
       expect(verdict(form(h), f)).toMatch(/matches no deed dispatch pattern/);
     }
@@ -857,11 +858,10 @@ describe("J14 file-name heads", () => {
   test("a J14 name with another head is a mismatch", () => {
     expect(verdict(form("descriptile-deed"), "Mustfile.deed")).toMatch(/dispatches to contractile-deed/);
     expect(verdict(form("contractile-deed"), "MUST.deed")).toMatch(/dispatches to descriptile-deed/);
-    expect(verdict(form("repo-deed"), "ANCHOR.deed")).toMatch(/dispatches to anchor-deed/);
-    expect(verdict(form("anchor-deed"), "x_chora.deed")).toMatch(/dispatches to repo-deed/);
+    expect(verdict(form("descriptile-deed"), "x_chora.deed")).toMatch(/dispatches to repo-deed/);
   });
   test("a deed with no file name may carry any of the new heads", () => {
-    for (const h of ["contractile-deed", "descriptile-deed", "anchor-deed"]) expect(verdict(form(h))).toBeNull();
+    for (const h of ["contractile-deed", "descriptile-deed"]) expect(verdict(form(h))).toBeNull();
   });
 });
 
