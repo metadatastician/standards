@@ -45,6 +45,9 @@ on:
         description: 'Also add the CICD Squabbler gate where a repo has none (same PR as the re-pin)'
         type: boolean
         default: false
+      proven_sha:
+        description: 'proven-cicd-and-workflows commit whose proven/manifest.json the content census reads (40-hex; empty = the pin below; off = no content census)'
+        default: ''
 
 concurrency:
   group: apply-workflow-pins
@@ -167,8 +170,21 @@ jobs:
           OWNERS: ${{ inputs.owners || 'hyperpolymath,metadatastician,catachresis-colloquium' }}
           LIMIT: ${{ inputs.limit || '0' }}
           ENSURE_SQUABBLER: ${{ inputs.ensure_squabbler || false }}
+          PROVEN_SHA_INPUT: ${{ inputs.proven_sha || '' }}
         run: |
           set -euo pipefail
+          # Proven content census (read-only in every mode; see the script's
+          # PROVEN CONTENT header). The scheduled run reads proven/manifest.json
+          # of hyperpolymath/proven-cicd-and-workflows at this pinned commit;
+          # a dispatch may name another 40-hex commit, or `off`. An unreadable
+          # manifest degrades loudly: that owner's pin census still completes,
+          # the census gets a CONTENT-CENSUS-FAILED row, and the job ends red.
+          PROVEN_PIN="c4b4256dd8b24462e2531a57c2f34384aeb218dd"
+          case "$PROVEN_SHA_INPUT" in
+            off) PROVEN_SHA="" ;;
+            '')  PROVEN_SHA="$PROVEN_PIN" ;;
+            *)   PROVEN_SHA="$PROVEN_SHA_INPUT" ;;
+          esac
           # One applier run per owner, each with that owner's token. LIMIT
           # applies per owner: a canary of `limit: 5` over three owners opens
           # at most 15 PRs (narrow it with `owners:`).
@@ -179,6 +195,7 @@ jobs:
             [ "$MODE" = "fix" ] && args+=(--fix)
             [ "$REPAIR" = "true" ] && args+=(--repair-illegal)
             [ "$ENSURE_SQUABBLER" = "true" ] && args+=(--ensure-squabbler)
+            [ -n "$PROVEN_SHA" ] && args+=(--proven-sha "$PROVEN_SHA")
             echo "::group::applier: ${owner}"
             GH_TOKEN="${!var:-$FALLBACK_TOKEN}" bash scripts/apply-workflow-pins-remote.sh "${args[@]}" || rc=$?
             echo "::endgroup::"

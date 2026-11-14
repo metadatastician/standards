@@ -7,8 +7,16 @@ on:
   merge_group:
   push:
     branches: ["main"]
+  workflow_run:
+    workflows: ["Governance", "Hypatia Security Scan", "Secret Scanner"]
+    types: [in_progress, completed]
+concurrency:
+  group: estate-gate-${{ github.event.workflow_run.head_sha || github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
 permissions:
   contents: read
+  checks: read
+  actions: read
   statuses: write
   id-token: write
 jobs:
