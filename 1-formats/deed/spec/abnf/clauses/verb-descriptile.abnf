@@ -1,0 +1,65 @@
+; SPDX-FileCopyrightText: © 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+; SPDX-License-Identifier: MPL-2.0
+; SPDX-License-Identifier: CC-BY-SA-4.0
+;
+; DEED clause profile: the six verb descriptiles, v1.0.0 (DRAFT)
+; Prose and rationale: docs/estate-reconciliation/A7-contractiles-descriptiles-anchor.adoc
+; sections 7.1 (files and the affirmation members), 7.3 (the verb
+; descriptiles) and 8.5 (Bust grades); rulings W3, W8, J4, J5, J14, J20 and
+; A2 D2. M3 module order: section 11.
+;
+; A CLAUSE PROFILE, not a new grammar. Every rule below is also a `clause` or
+; `field` of deed.abnf v1.5.0, so a verb descriptile still passes deed_lint
+; unchanged. Rules it borrows: string, value, symbol and token-sep are
+; deed.abnf's; date-string and affirm-member are common.abnf's. Requires
+; RFC 7405 (%s"..." case-sensitive literals).
+;
+; Where it applies: INTENT.deed, MUST.deed, TRUST.deed, ADJUST.deed,
+; DUST.deed and BUST.deed (head descriptile-deed, J14), at the top level of
+; the form. The file name fixes the verb: INTENT.deed is intend (A7 8.1
+; table), the others are their own verb. SEMANTIC (validator-enforced,
+; deed_lint.js --verb-descriptile):
+;   * the form carries :schema-version, :canonical-name (a string) and
+;     :of-chora (the repo's opaque version 8 #uuid chora id, J20), each exactly
+;     once, and no :beholding-chora (J20);
+;   * the affirmation members: :affirmed and :affirmed-by exactly once each,
+;     :expires at most once and not before :affirmed (J4: required by default;
+;     no relaxation can be written until the agentic module and the J19
+;     receipt interface exist). Whether :expires is still in the future is the
+;     runner's check (YD06), since it depends on the day it runs;
+;   * every other top-level member is a verb-fact; no (rule …) (YF02, YL3).
+
+verb-fact       = "(" %s"fact" 1*(token-sep fact-member) [token-sep] ")"
+                ; SEMANTIC: :witnesses and :evidence exactly once each, and
+                ; no member twice. :witnesses is an A5 name segment
+                ; (1*(ALPHA / DIGIT / "." / "_" / "-")), unique in the file
+                ; (one fact per rule), and, when the verb's <Verb>file.deed is
+                ; read alongside, the :id of one of its rules (YD02, J5).
+                ; In INTENT, MUST, TRUST, ADJUST and DUST: :value exactly once,
+                ; and no :inherent, :residual or :justification. In BUST:
+                ; :inherent and :residual exactly once each, and no :value,
+                ; since the residual grade is the fact (8.5).
+fact-member     = ( %s":witnesses"     token-sep string )
+                / ( %s":evidence"      token-sep evidence )
+                / ( %s":value"         token-sep value )
+                / ( %s":source"        token-sep string )
+                / ( %s":inherent"      token-sep bust-grade )
+                / ( %s":residual"      token-sep bust-grade )
+                / ( %s":justification" token-sep string )
+                ; :source is a repo-relative POSIX path (SEMANTIC: no leading
+                ; "/", no "." or ".." segment). A fact never restates the edict
+                ; it witnesses (YL3), so there is no :text.
+
+evidence        = %s"draft" / %s"designed" / %s"assumed" / %s"tested"
+                / %s"audited" / %s"proven" / %s"measured"
+                ; A2 D2: the governance register's six plus measured (YD03).
+                ; SEMANTIC: the whole symbol, so "testedx" is refused.
+
+bust-grade      = DQUOTE grade-letter grade-number DQUOTE
+grade-letter    = %s"A" / %s"B" / %s"C" / %s"D" / %s"E" / %s"X"
+                ; A elimination, B substitution, C prevention, D mitigation,
+                ; E accepted, X not investigated (8.5).
+grade-number    = %x31-35
+                ; 1 devastating to 5 trivial (8.5). A residual "X1" blocks
+                ; at the gate (8.5, the estate floor); the profile only
+                ; checks the form.

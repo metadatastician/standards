@@ -222,6 +222,42 @@ Checks a `<Verb>file.deed` (head `contractile-deed`, J14) against
 The fixtures are one case per directory, `fixtures/edict/{valid,invalid}/<case>/<Verb>file.deed`,
 because an edict's file name is fixed by its verb.
 
+== `deed_lint.js --verb-descriptile` — the six verb descriptiles (DRAFT)
+
+Checks `INTENT.deed`, `MUST.deed`, `TRUST.deed`, `ADJUST.deed`, `DUST.deed` and
+`BUST.deed` (head `descriptile-deed`) against `spec/abnf/clauses/verb-descriptile.abnf`
+(A7 7.1, 7.3, 8.5). The rules it adds to the grammar:
+
+* the form carries `:canonical-name` and `:of-chora` (an opaque version 8
+  `#uuid`, J20) exactly once, and no `:beholding-chora`;
+* `:affirmed` (a real date) and `:affirmed-by` (a symbol) are required, and
+  `:expires`, when present, is not before `:affirmed`. Affirmation is
+  required by default (J4), and no relaxation can be written yet. Whether
+  `:expires` is still in the future is the runner's check (YD06);
+* the only clause is `(fact …)`: a `(rule …)` belongs in the verb's
+  `<Verb>file.deed` (YF02);
+* each fact has `:witnesses` (a rule `:id`, once per file, with
+  `contractile/<verb>/<id>` at most 200 characters, A5 3.1) and `:evidence`
+  (A2 D2's seven symbols), and an optional repo-relative `:source`;
+* outside `BUST.deed` a fact has `:value`; in `BUST.deed` it has `:inherent`
+  and `:residual` grades (`[ABCDEX][1-5]`), an optional `:justification`, and
+  no `:value` (8.5). A residual `X1` blocks at the gate, not here;
+* with `--root DIR`, every `:witnesses` names a rule of the verb's edict at
+  `DIR/.machine_readable/contractiles/<verb>/<Verb>file.deed` (YD02), and
+  `:of-chora` equals the `:repo-uuid` of the one `<repo>_chora.deed` in `DIR`
+  (YD08). The chora deed carries `:repo-uuid` exactly once, and the edict's own
+  `:of-chora` must equal it too, so facts are never joined against another
+  repo's rules. A `--root` with no directory, or a `DIR` with no chora deed,
+  is an error, never a skipped check;
+
+    bun deed_lint.js --verb-descriptile MUST.deed [--root REPO]
+    bun deed_lint.js --verb-descriptile-fixtures fixtures/verb-descriptile/
+
+The fixtures are one case per directory,
+`fixtures/verb-descriptile/{valid,invalid}/<case>/<VERB>.deed`. A case that
+also holds the verb's `<Verb>file.deed` is checked against it (YD02), and one
+that holds a `<repo>_chora.deed` has its `:of-chora` checked against that deed (YD08).
+
 == `deed_lint.js --contractile-registry` — the `contractile` rule registry (A7 J13)
 
 Generates the A5 registry `contractile_rules_praxis.deed` from a repo's six
