@@ -11,6 +11,10 @@
 
 v0.2.0 is a grammar-alignment revision (lexical rules, identity field table,
 normative-vs-informative grammar). It does not ratify the typing chapter.
+
+v0.2.8 applies owner ruling Q2 (2026-11-14): a `#u5` literal in an identity
+field is an error in every mode, and a `#u8` literal there is accepted
+(identity table, UUID5 row).
 ====
 
 Prepared 2026-09-08. Alignment revision: 0.2.0.
@@ -48,6 +52,12 @@ Compatible with:
   is the `(anchor …)` clause of the chora deed (`clauses/anchor.abnf`).
   Not additive: a deed headed `anchor-deed` or named `ANCHOR.deed` no
   longer conforms. Every other v1.5.0 deed is a v2.0.0 deed.
+
+| 0.2.8
+| 2026-11-14
+| Owner ruling Q2 (A1 v0.4.5, standards#1553): a `#u5` literal in an
+  identity field is an error in every mode, and a `#u8` literal there is
+  accepted (identity table, UUID5 row). No grammar change.
 
 | 0.2.7
 | 2026-11-13
@@ -236,7 +246,9 @@ valid; `REPO-DEED` is not. `#t` is valid; `#T` is not. This matches RFC 7405
   excluded. *Transition:* owner ruling D305 folds `#u5` into ESTATE-UUID-V8
   profile C (ADR-008, Q2). `deed.abnf` v1.1.0 adds UUID8 beside it;
   retiring `#u5` changes every existing deed identifier, so it is a
-  separate cutover and `#u5` stays legal until then.
+  separate cutover and `#u5` stays legal until then. In an identity field
+  (CHORA-SPEC 7.1) the cutover has happened: owner ruling Q2 (2026-11-14)
+  makes `#u5` there an error in every mode. See <<identity>>.
 
 | UUID8
 | `#u8` immediately followed by a STRING, with *no* intervening space:
@@ -505,7 +517,7 @@ than from taste:
 (praxis-deed
   :schema-version  "1.0.0"              ; REQUIRED — first field
   :canonical-name  "cadastre"           ; REQUIRED — identity
-  :beholding-chora #u5"estate/chora"    ; REQUIRED — one declaration site
+  :beholding-chora #uuid"<estate v8 id>" ; REQUIRED — one declaration site
 
   (rules
     (rule :priority 10  :when … :then …)
@@ -541,7 +553,7 @@ and nowhere else. Every other deed references it. This is the owner’s
 ruling of 2026-09-04, verbatim: "it should be referrring to the chora".
 
 Both praxis deeds and repo choras name that vocabulary via
-`:beholding-chora <uuid>`. The value is a UUID5, never a bare filename.
+`:beholding-chora <uuid>`. The value is the estate chora's v8 id, written `#uuid"…"` or `#u8"domain:name"`, never a bare filename and never `#u5` (owner ruling Q2, 2026-11-14).
 
 This rule exists because the first draft declared its own parallel type
 universe in a tool deed, and the dependency then ran backwards: a lattice
@@ -627,23 +639,32 @@ onto a `BaseRecord` field is the typed-core bridge, not a parse rule.)
 | Head | Required identity | Required reference
 
 | `estate-deed`
-| `:canonical-name` STRING, `:estate-uuid` UUID5
-| — (this file *is* the vocabulary)
+| `:canonical-name` STRING, `:estate-uuid` UUID: the opaque `#uuid` v8 id
+  (CHORA-SPEC 7.1, U4), or a `#u8` literal
+| `:beholding-chora` UUID, the same form
 
 | `repo-deed`
 | `:canonical-name` STRING, `:repo-uuid` UUID: the registry's `uuid_v8`,
-  written opaque (owner ruling U4). UUID8 (domain `gv-clade-index`) and
-  UUID5 stay legal until each repo moves to the opaque form
-| `:beholding-chora` UUID5
+  written opaque (owner ruling U4), or a `#u8` literal (domain
+  `gv-clade-index` for ids minted before V9)
+| `:beholding-chora` UUID, the same form
 
 | `praxis-deed`
 | `:canonical-name` STRING
-| `:beholding-chora` UUID5
+| `:beholding-chora` UUID, the same form
 
 | `estate-atlas-deed`
 | `:canonical-name` STRING
-| `:beholding-chora` UUID5; `:registry-version` STRING optional
+| `:beholding-chora` UUID, the same form; `:registry-version` STRING optional
 |===
+
+Every UUID field in this table is an identity field (CHORA-SPEC 7.1 lists
+them, with the clause fields). Under owner ruling Q2 (2026-11-14) a `#u5`
+literal in an identity field is an error in every mode, `lax` included, and
+so is a version 5 inside `#uuid`. A `#u8` literal there is accepted, because
+it computes to a v8 id. `#u5` stays legal elsewhere. The legacy beholding
+value `#u5"estate/chora"` is therefore an error. `scripts/check-uuid-v8.sh`
+enforces this.
 
 Plus, on every head: `:schema-version` STRING, exactly once (any position).
 

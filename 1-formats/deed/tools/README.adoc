@@ -103,7 +103,9 @@ then no JSON is written.
 
 Every current receipt carries `:inputs-sha256` and `(inputs-manifest …)`
 (§8.5.1), and `(axioms …)` (§8.4). The reader rebuilds the manifest and
-refuses a digest that is not its SHA-256. A leg whose current receipt lists an axiom that is not disposition
+refuses a digest that is not its SHA-256. A receipt may also hold `(import …)` clauses
+for pinned repositories it read, and a claim may hold negative `(control …)`
+records (§8.5.4), which are never graded. A leg whose current receipt lists an axiom that is not disposition
 `c` does not count. Top-level `(echo …)` records (§8.5.2) let a receipt
 earned on a commit that a squash or rebase rewrote count toward `PWG-1` for
 its image. The reader checks their form and consistency only. The git checks

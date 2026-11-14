@@ -192,7 +192,7 @@ function topLevelFields(t, names) {
 // deed_lint.js --anchor checks.
 const ANCHOR_GRAMMAR_REJECTS = [
   "clade-in-anchor_chora.deed", "empty-authority_chora.deed", "empty-subclause_chora.deed",
-  "id-in-anchor_chora.deed", "metadata-unknown_chora.deed", "parent-legacy-literal_chora.deed",
+  "id-in-anchor_chora.deed", "metadata-unknown_chora.deed",
   "parent-relation-string_chora.deed", "parent-string_chora.deed", "parents-stray_chora.deed",
   "purpose-empty_chora.deed", "purpose-symbols_chora.deed", "satellite-string_chora.deed",
   "schema-symbol_chora.deed", "sem-files-boolean_chora.deed", "status-in-anchor_chora.deed",
@@ -309,7 +309,7 @@ for (const { c, text } of edictCases("valid")) {
   const envelopeRejects = ["envelope-empty"];
   const grammarRejects = ["always-with-field", "clade-selector", "rule-extra-field", "two-selectors", "unknown-selector"];
   const semanticOnly = ["beholding-chora", "duplicate-id", "empty-text", "envelope-not-bust", "id-space", "intend-bang",
-    "missing-requires", "missing-text", "no-comparator", "of-chora-u5", "requires-other-verb", "selector-bang",
+    "missing-requires", "missing-text", "no-comparator", "requires-other-verb", "selector-bang",
     "two-comparators", "unknown-clause", "verb-filename-mismatch", "witness-other"];
   for (const { c, text } of edictCases("invalid")) {
     const rule = clauseText(text, "rule");
@@ -356,7 +356,7 @@ for (const { c, text } of edictCases("valid")) {
   const grammarRejects = ["bust-grade-letter", "bust-grade-zero", "evidence-numeric", "evidence-unknown", "fact-clause-member", "fact-extra-field"];
   const semanticOnly = ["affirmed-by-string", "affirmed-impossible", "beholding-chora", "bust-missing-residual", "bust-value",
     "duplicate-witness", "edict-other-chora", "expires-before-affirmed", "inherent-outside-bust", "missing-affirmed", "missing-affirmed-by",
-    "missing-evidence", "missing-value", "missing-witnesses", "of-chora-mismatch", "of-chora-u5", "of-chora-u8-mismatch", "repo-uuid-twice", "rule-in-descriptile", "source-absolute",
+    "missing-evidence", "missing-value", "missing-witnesses", "of-chora-mismatch", "of-chora-u8-mismatch", "repo-uuid-twice", "rule-in-descriptile", "source-absolute",
     "unknown-clause", "witness-space", "witness-too-long", "witness-unknown"];
   for (const k of cases("invalid")) {
     if (!gateVerdict(k.text).ok) fail("verb descriptile invalid fixture is not a valid deed (YD01)", k.c);
@@ -400,7 +400,7 @@ for (const { c, text } of edictCases("valid")) {
     for (const r of allClauses(k.text, "related")) if (!grammarAccepts(grammar, "eco-related", r)) fail("ecosystem.abnf refuses a valid (related …)", `${k.c}: ${r.slice(0, 60)}`);
     for (const f of fieldsOf(k.text)) if (!grammarAccepts(grammar, "ecosystem-field", f)) fail("ecosystem.abnf refuses a valid field", `${k.c}: ${f.slice(0, 60)}`);
   }
-  const relatedRejects = ["related-clause-member", "related-extra-field", "related-uuid-legacy", "relationship-string", "relationship-unknown"];
+  const relatedRejects = ["related-clause-member", "related-extra-field", "relationship-string", "relationship-unknown"];
   const fieldRejects = ["coordination-string", "not-not-list"];
   const semanticOnly = ["beholding-chora", "chora-no-name", "empty-purpose", "missing-affirmed", "missing-project", "missing-purpose",
     "of-chora-mismatch", "project-mismatch", "project-not-chora", "related-duplicate", "related-missing-notes",

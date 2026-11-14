@@ -10,6 +10,13 @@ This document defines the **Comprehensive Launcher Standard** for the hyperpolym
 It extends the E-Grade principles with specific implementation patterns, code templates, and
 troubleshooting guides for creating robust, reliable application launchers.
 
+The machine-readable form is `launcher/launcher-standard_praxis.deed`. Its
+`:beholding-chora` names the estate chora by its v8 id, written `#uuid"…"` (`#u8"domain:name"` is also accepted), as every
+identity field must (CHORA-SPEC 7.1, owner ruling Q2 of 2026-11-14: a `#u5`
+literal there is an error). The deed that `templates/launcher.sh.tmpl` embeds
+in a generated launcher carries `#uuid"__ESTATE_UUID__"`, which `provision-set`
+fills with the estate's id.
+
 == Standard Launcher Template
 
 The reference implementation is provided in link:comprehensive-launcher-template.sh[comprehensive-launcher-template.sh].

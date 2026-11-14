@@ -107,11 +107,11 @@ check "the comment line above the reusable-workflow permission is not the dismis
 check "the reusable's line before block-on-critical is no longer dismissed" \
   "[ \"\$(plan <(mk 213 TokenPermissionsID .github/workflows/hypatia-scan-reusable.yml 98))\" = '' ]"
 check "the comment line above the fork-governance permission is not the dismissal" \
-  "[ \"\$(plan <(mk 212 TokenPermissionsID .github/workflows/fork-governance.yml 274))\" = '' ]"
+  "[ \"\$(plan <(mk 212 TokenPermissionsID .github/workflows/fork-governance.yml 288))\" = '' ]"
 check "the old fork-governance line is no longer dismissed" \
   "[ \"\$(plan <(mk 208 TokenPermissionsID .github/workflows/fork-governance.yml 81))\" = '' ]"
 check "the current fork-governance permission line is matched" \
-  "[ \"\$(plan <(mk 209 TokenPermissionsID .github/workflows/fork-governance.yml 275))\" = '209 ' ]"
+  "[ \"\$(plan <(mk 209 TokenPermissionsID .github/workflows/fork-governance.yml 289))\" = '209 ' ]"
 check "aggregate rule with a real path does not inherit the SASTID entry" \
   "[ \"\$(plan <(mk 204 SASTID .github/workflows/ci.yml 12))\" = '' ]"
 check "unlisted rule id: no match" \
