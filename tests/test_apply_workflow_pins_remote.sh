@@ -63,6 +63,7 @@ for want in "fresh.yml" "behind.yml" "illegal.yml" "tracking.yml" "none.yml" "sh
             "bad-json.json" "content-behind.yml" "content-current.yml" "content-ahead.yml" \
             "content-wide.yml" "content-unlisted.yml" "content-malformed.yml" "content-not-first.yml" \
             "bad-huge.json" "content-huge.yml" \
+            "dot-local.yml" "dollar-managed.yml" "dollar-unmanaged.yml" "dollar-managed-parent.yml" \
             "owner-stale.lock" "owner-clean.lock" "owner-nonstandards.lock" "owner-tag-key.lock"; do
   grep -q "PASS $want" "$TMP/base.out" && pass "control present: $want" \
     || fail "control MISSING from baseline: $want (a control that never runs is not a control)"
@@ -142,6 +143,28 @@ kill_mutant rewrite_overreaches \
 kill_mutant illegal_repair_still_illegal \
   's@\@\$\{target\}@\@@g' \
   "FAIL illegal repair"
+
+# M5a-d — the owner's ruling on ILLEGAL (2026-11-14): `./` local actions are never
+# ILLEGAL; `$/` is legal in a file `gh actions-lock` manages and ILLEGAL elsewhere;
+# `../` is ILLEGAL even in a managed file. Each mutant undoes one clause.
+# (a) a single dot is illegal again: plain local actions would be reported and,
+# under --repair-illegal, are legal refs the applier has no business touching.
+kill_mutant illegal_dot_slash \
+  's@\(\\\.\\\./\|@(\\.\\.?/|@' \
+  "FAIL dot-local.yml"
+# (b) the managed-file exemption never applies: gh actions-lock's own `$/` is reported.
+kill_mutant managed_exempt_off \
+  's@^  head -n 5 "\$1" 2>/dev/null \| grep -qE "\$ACTIONS_LOCK_MANAGED_RE"@  false@' \
+  "FAIL dollar-managed.yml"
+# (c) the exemption swallows `../` too: a parent-relative ref in a managed file would
+# pass the census while GitHub still refuses it at parse time.
+kill_mutant managed_exempts_parent \
+  's@grep -vE "\$DOLLAR_USES_RE"@grep -vE "uses:"@' \
+  "FAIL dollar-managed-parent.yml"
+# (d) the repair ignores the managed-file exemption and rewrites a legal `$/` line.
+kill_mutant repair_ignores_managed \
+  's@^  if ! actions_lock_managed "\$f"; then@  if true; then@' \
+  "FAIL repair rewrote"
 
 # M6 — compare stamp versions as strings. 0.9.0 then reads as NEWER than
 # 0.10.0, and a stale copy is reported AHEAD, so it is never refreshed.
