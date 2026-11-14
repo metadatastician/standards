@@ -40,7 +40,8 @@ lint=$(rb 'puts YAML.load_file(ARGV[0])["jobs"]["lint"]["steps"].find{|s| s["id"
 [[ "$lint" == *inputs.advisory* ]] && ok "deed lint step tolerates failure under advisory" || bad "deed lint step: '$lint'"
 
 # Gate step
-rb 'puts YAML.load_file(ARGV[0])["jobs"]["validate"]["steps"].find{|s| s["name"]=="Gate"}["run"]' "$K" > "$WORK/gate.sh"
+# The Gate body is scripts/conformance-k9.sh gate (one implementation, shared with the template).
+printf 'exec bash "%s" gate\n' "$ROOT/scripts/conformance-k9.sh" > "$WORK/gate.sh"
 for st in red orange; do
   STATE=$st ADVISORY=true FAIL_ON_INDETERMINATE=true bash -e -o pipefail "$WORK/gate.sh" > "$WORK/o" 2>&1; rc=$?
   { [ $rc -eq 0 ] && grep -q '^::warning::K9 conformance (advisory)' "$WORK/o"; } && ok "gate: $st + advisory exits 0 with a warning" || bad "gate: $st + advisory rc=$rc: $(cat "$WORK/o")"
@@ -69,6 +70,7 @@ grep -q '^::warning file=a%2Cb%3Ac_chora.deed::deed conformance (advisory): line
 for spec in "$K:validate:Enumerate the committed K9 files, the changed files and ledger growth" "$D:lint:lint every committed deed"; do
   file="${spec%%:*}"; rest="${spec#*:}"; job="${rest%%:*}"; step="${rest#*:}"
   if [ "$file" = "$D" ]; then body=$(cat "$ROOT/scripts/conformance-deed.sh")  # the lint body lives in the shared script
+  elif [ "$file" = "$K" ]; then body=$(awk '/^cmd_enumerate\(\)/,/^}/' "$ROOT/scripts/conformance-k9.sh")  # the enumerate body lives in the shared script
   else body=$(rb 'puts YAML.load_file(ARGV[0])["jobs"][ARGV[1]]["steps"].find{|s| s["name"]==ARGV[2]}["run"]' "$file" "$job" "$step"); fi
   # every ::error:: line must be switched on ADVISORY via the ${sev} variable
   bare=$(printf '%s\n' "$body" | grep -c '::error::' || true)
@@ -136,6 +138,21 @@ LANE="$ROOT/scripts/conformance-deed.sh" RUNNER_TEMP="$WORK" bash -e -o pipefail
 paths=$(rb 'puts YAML.load_file(ARGV[0])[true]["push"]["paths"].join("|")' "$D" 2>/dev/null || rb 'puts YAML.load_file(ARGV[0])["on"]["push"]["paths"].join("|")' "$D")
 { [[ "$paths" == *scripts/conformance-deed.sh* ]] && [[ "$paths" == *scripts/tests/conformance-deed-test.sh* ]]; } \
   && ok "deed: a push touching only the extracted script or its test runs the workflow" || bad "deed push paths: $paths"
+
+# The K9 Gate step must not depend on the canon checkout it reports on (same hazard as the deed warning step).
+rb 'puts YAML.load_file(ARGV[0])["jobs"]["validate"]["steps"].find{|s| s["name"]=="Gate"}["run"]' "$K" > "$WORK/gatestep.sh"
+LANE="$WORK/no-such-canon/scripts/conformance-k9.sh" ADVISORY=true RUNNER_TEMP="$WORK" bash -e -o pipefail "$WORK/gatestep.sh" > "$WORK/o" 2>&1; rc=$?
+{ [ $rc -eq 0 ] && grep -q "^::warning::K9 conformance (advisory): the conformance script could not be staged" "$WORK/o"; } \
+  && ok "k9: with the canon checkout missing the Gate step still warns (inline fallback), exit 0" || bad "k9 gate without the script (advisory): rc=$rc $(cat "$WORK/o")"
+LANE="$WORK/no-such-canon/scripts/conformance-k9.sh" ADVISORY=false RUNNER_TEMP="$WORK" bash -e -o pipefail "$WORK/gatestep.sh" > "$WORK/o" 2>&1; rc=$?
+{ [ $rc -eq 1 ] && grep -q "^::error::K9 conformance could not run" "$WORK/o"; } \
+  && ok "k9: without advisory a missing script fails the Gate step" || bad "k9 gate without the script (enforced): rc=$rc $(cat "$WORK/o")"
+STATE=red ADVISORY=true LANE="$ROOT/scripts/conformance-k9.sh" FAIL_ON_INDETERMINATE=false RUNNER_TEMP="$WORK" bash -e -o pipefail "$WORK/gatestep.sh" > "$WORK/o" 2>&1; rc=$?
+{ [ $rc -eq 0 ] && grep -q "^::warning::K9 conformance (advisory): the grid is red" "$WORK/o"; } \
+  && ok "k9: with the script present the Gate step delegates to it" || bad "k9 gate with the script: rc=$rc $(cat "$WORK/o")"
+kpaths=$(rb 'puts YAML.load_file(ARGV[0])[true]["push"]["paths"].join("|")' "$K" 2>/dev/null || rb 'puts YAML.load_file(ARGV[0])["on"]["push"]["paths"].join("|")' "$K")
+{ [[ "$kpaths" == *scripts/conformance-k9.sh* ]] && [[ "$kpaths" == *scripts/tests/conformance-k9-test.sh* ]]; } \
+  && ok "k9: a push touching only the extracted script or its test runs the workflow" || bad "k9 push paths: $kpaths"
 
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]
