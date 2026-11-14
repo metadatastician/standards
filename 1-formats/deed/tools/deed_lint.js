@@ -1437,7 +1437,13 @@ export class AnchorError extends LintError {
   }
 }
 
-export const ANCHOR_SCHEMA = "hyperpolymath.anchor/1";
+// The profile reads both majors (A7 J27): each clause is checked against the
+// major its :schema declares. /1 is legacy (reported, still read); /2 renames
+// (identity …) to (subject …) (J8) and drops (parents …), whose one home is
+// ECOSYSTEM.deed (J26).
+export const ANCHOR_SCHEMA = "hyperpolymath.anchor/2";
+export const ANCHOR_SCHEMA_LEGACY = "hyperpolymath.anchor/1";
+const ANCHOR_MAJOR = { [ANCHOR_SCHEMA_LEGACY]: 1, [ANCHOR_SCHEMA]: 2 };
 const SEMVER = /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/;
 const DATE = /^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/;
 // The template's own deed keeps repo-init's tokens; a minted deed has none.
@@ -1471,13 +1477,21 @@ export function profileCOfBody(body) {
 // Top-level members: field name -> kind, and the clauses allowed.
 const ANCHOR_FIELDS = { schema: "string", authority: "string", repo: "string", purpose: "str-list1" };
 const ANCHOR_CLAUSES = new Set([
-  "metadata", "identity", "semantic-authority", "implementation-policy", "golden-path",
+  "metadata", "identity", "subject", "semantic-authority", "implementation-policy", "golden-path",
   "satellite-policy", "semantic-authority-files", "ssg", "parents",
 ]);
+// Clauses only one major allows (A7 J8, J26, J27).
+const ANCHOR_ONLY_IN = {
+  identity: [1, "is (subject …) in hyperpolymath.anchor/2 (A7 J8)"],
+  parents: [1, "is gone in hyperpolymath.anchor/2: a parent is an ECOSYSTEM.deed (related … :relationship parent) entry (A7 J26)"],
+  ssg: [1, "is gone in hyperpolymath.anchor/2: site-build configuration is META.deed's (ssg …) (A7 J29)"],
+  subject: [2, "needs hyperpolymath.anchor/2; under /1 it is (identity …) (A7 J8)"],
+};
 // Fixed-member sub-clauses: clause -> {field: kind}. Every member at most once.
 const ANCHOR_SUB = {
   metadata: { version: "semver", "last-updated": "date" },
   identity: { project: "string", kind: "string", "one-sentence": "string", domain: "string" },
+  subject: { project: "string", kind: "string", "one-sentence": "string", domain: "string" },
   "semantic-authority": { policy: "string", owns: "str-list1" },
   "implementation-policy": { allowed: "str-list", forbidden: "str-list" },
   "golden-path": { "smoke-test-command": "str-list1", "success-criteria": "str-list1" },
@@ -1595,6 +1609,10 @@ export function checkAnchor(text, filename = null, opts = {}) {
     : own[2][0] === "uuid8" ? profileCOfBody(own[2][1])
     : own[2][0] === "uuid5" ? "u5"
     : null;
+  // The declared major selects the rules (J27). A missing or unknown :schema
+  // is reported after the members, as before; members are then read as /1.
+  const schemaItem = clauses[0][2].find((it) => it[0] === "field" && it[1] === "schema");
+  const major = (schemaItem && schemaItem[2][0] === "string" && ANCHOR_MAJOR[schemaItem[2][1]]) || 1;
   // A7 S2: a #u5 in an identity field is an error in every mode, so a #u5
   // :repo-uuid is refused before anything else, with or without (parents …).
   if (ownUuid === "u5") {
@@ -1612,6 +1630,9 @@ export function checkAnchor(text, filename = null, opts = {}) {
       continue;
     }
     if (!ANCHOR_CLAUSES.has(it[1])) throw new AnchorError(`(anchor …) has no clause (${it[1]} …)`);
+    if (Object.hasOwn(ANCHOR_ONLY_IN, it[1]) && ANCHOR_ONLY_IN[it[1]][0] !== major) {
+      throw new AnchorError(`(anchor (${it[1]} …)) ${ANCHOR_ONLY_IN[it[1]][1]}`);
+    }
     const where = `(anchor (${it[1]} …))`;
     if (Object.hasOwn(ANCHOR_SUB, it[1])) {
       anchorFields(it[2], ANCHOR_SUB[it[1]], where, opts);
@@ -1648,11 +1669,11 @@ export function checkAnchor(text, filename = null, opts = {}) {
   }
   for (const k of [":schema", ":authority"]) if (!seen.has(k)) throw new AnchorError(`(anchor …) is missing ${k}`);
   const field = (n) => clauses[0][2].find((it) => it[0] === "field" && it[1] === n)[2][1];
-  if (field("schema") !== ANCHOR_SCHEMA) {
-    throw new AnchorError(`(anchor …) :schema must be ${JSON.stringify(ANCHOR_SCHEMA)}, got ${JSON.stringify(field("schema"))}`);
+  if (!Object.hasOwn(ANCHOR_MAJOR, field("schema"))) {
+    throw new AnchorError(`(anchor …) :schema must be ${JSON.stringify(ANCHOR_SCHEMA)} (or the legacy ${JSON.stringify(ANCHOR_SCHEMA_LEGACY)}), got ${JSON.stringify(field("schema"))}`);
   }
   if (field("authority") === "") throw new AnchorError("(anchor …) :authority must not be empty");
-  return { authority: field("authority"), members: [...seen].sort(), parents };
+  return { authority: field("authority"), members: [...seen].sort(), parents, schema: field("schema"), legacy: major === 1 };
 }
 
 // ─── (contractiles …) clause profile ───────────────────────────────────
@@ -2785,6 +2806,7 @@ function anchorFiles(files, opts = {}) {
     try {
       const a = checkAnchor(text, f, opts);
       console.log(`OK   ${f} (${a === null ? "no anchor clause" : `anchor, authority ${JSON.stringify(a.authority)}`})`);
+      if (a && a.legacy) console.log(`WARN ${f}: legacy ${ANCHOR_SCHEMA_LEGACY}; move to ${ANCHOR_SCHEMA}: (identity …) becomes (subject …), (parents …) moves to ECOSYSTEM.deed and (ssg …) to META.deed (A7 J8, J26, J27, J29)`);
     } catch (e) {
       if (!(e instanceof LintError)) throw e;
       bad += 1;

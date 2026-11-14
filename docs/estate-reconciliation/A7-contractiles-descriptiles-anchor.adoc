@@ -158,7 +158,7 @@ S1 withdrew the separate `ANCHOR.deed` file (W3) and the authorised course corre
 
 === 6.2 Shape
 
-The grammar is `1-formats/deed/spec/abnf/clauses/anchor.abnf` v1.0.0 (standards#1490), checked by `deed_lint.js --anchor`. Its tests are YA01 to YA08 (12.3).
+The grammar is `1-formats/deed/spec/abnf/clauses/anchor.abnf` v2.0.0 (v1.0.0 in standards#1490), checked by `deed_lint.js --anchor`. Its tests are YA01 to YA09 (12.3).
 
 [source]
 ----
@@ -168,7 +168,7 @@ The grammar is `1-formats/deed/spec/abnf/clauses/anchor.abnf` v1.0.0 (standards#
   :repo-uuid #uuid"00000000-0000-8000-8000-0000000000a1"
   ; … identity, lineage …
   (anchor
-    :schema "hyperpolymath.anchor/1"
+    :schema "hyperpolymath.anchor/2"
     :authority "upstream-canonical"              ; open string (J7)
     :purpose ("A game engine fully usable by developers who cannot see.")
     (metadata :version "1.0.0" :last-updated "2026-11-14")
@@ -205,7 +205,7 @@ The legacy `ANCHOR.a2ml` described semantic authority and a golden path, which i
 
 === 6.5 The `(anchor …)` clause module
 
-`clauses/anchor.abnf` v1.0.0 is the module (S1). It is already on main with its linter profile, fixtures and differential entry (YA01 to YA07), so section 11's M3 step for the anchor is done. `deed.abnf` v2.0.0 drops the `anchor-deed` head and the `ANCHOR.deed` dispatch (J24), and the R-01 hold note leaves `anchor.abnf`'s header. A later module PR brings `anchor.abnf` to v2.0.0 (6.3).
+`clauses/anchor.abnf` is the module (S1). v1.0.0 landed in #1490; v2.0.0 (J8, J26, J27, J29; 6.3) reads both `/1` and `/2`, with its linter profile, fixtures and differential entry (YA01 to YA09). `deed.abnf` v2.0.0 drops the `anchor-deed` head and the `ANCHOR.deed` dispatch (J24), and the R-01 hold note has left `anchor.abnf`'s header. No other anchor module is needed.
 
 == 7. The descriptiles: ALL-CAPS deeds [O: W3, W4, Q12, D312]
 
@@ -512,13 +512,14 @@ These tests cover the `(anchor …)` clause module merged in #1490, which is the
 | Id | Test | Fixture (`fixtures/anchor/`)
 
 | YA01 | The template's clause at `a55669e` passes, mint tokens included. | `valid/template-a55669e` [done]
-| YA02 | `:schema` and `:authority` exactly once. `:schema` is the string `"hyperpolymath.anchor/1"`. `:authority` is non-empty. | `missing-schema`, `wrong-schema`, `schema-symbol`, `missing-authority`, `empty-authority`, `repeated-field` [done]
+| YA02 | `:schema` and `:authority` exactly once. `:schema` is the string `"hyperpolymath.anchor/2"` or the legacy `"hyperpolymath.anchor/1"` (J27). `:authority` is non-empty. | `missing-schema`, `wrong-schema`, `schema-symbol`, `missing-authority`, `empty-authority`, `repeated-field` [done]
 | YA03 | No identity in the anchor: `:id`, `:clade` and `(status …)` are refused. | `id-in-anchor`, `clade-in-anchor`, `status-in-anchor` [done]
 | YA04 | One clause, at the top level of a repo deed. | `two-anchors`, `nested-anchor`, `praxis-head` [done]
 | YA05 | Sub-clause members and types: semver, date, boolean, string lists, no nesting, no empty sub-clause. | `version-two-segment`, `date-bad`, `metadata-unknown`, `satellite-string`, `purpose-empty`, `purpose-symbols`, `sub-nested-clause`, `empty-subclause`, `sem-files-boolean`, `repeated-clause` [done]
 | YA06 | A parent is named only by a version 8 chora id (an opaque `#uuid`, or a `#u8` compared by its profile C id, S2; never `#u5`), appears once, and is never the deed itself. Retired with `(parents …)` in `anchor.abnf` v2.0.0 (J26); the `ecosystem` profile checks a parent there. | `parent-u8` (valid), a `#u5` parent `:uuid` (a parse error under Q2, so a unit test, not a fixture), `parent-string`, `parent-no-uuid`, `parent-duplicate`, `parent-self`, `parent-relation-string`, `parents-stray` [done]
 | YA07 | `anchor.abnf` accepts every valid fixture's clause and refuses the 17 grammar-expressible invalid fixtures. | `tools/deed-abnf-differential` [done]
 | YA08 | The translation of standards' `ANCHOR.a2ml` by table 6.4 keeps every field, sends it to the named destination, or records it as dropped. | step M4
+| YA09 | Each clause is checked against the major its `:schema` declares (J27): `/2` takes `(subject …)` and refuses `(identity …)`, `(parents …)` and `(ssg …)` (J8, J26, J29); `/1` refuses `(subject …)` and passes with a `legacy` warning; an unknown major is refused. | `valid/v2-subject`, `v2-identity`, `v2-parents`, `v2-ssg`, `v1-subject`, `wrong-schema` (`/3`) [done]
 |===
 
 === 12.4 Descriptiles

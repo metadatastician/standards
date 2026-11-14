@@ -1,0 +1,5 @@
+;; SPDX-License-Identifier: CC-BY-SA-4.0
+(repo-deed :schema-version "1.0.0" :canonical-name "x" :repo-uuid #uuid"00000000-0000-8000-8000-0000000000a7" :beholding-chora #uuid"00000000-0000-8000-8000-00000000e57a"
+  (identity :primary-forge github :owner "o")
+  (anchor :schema "hyperpolymath.anchor/2" :authority "upstream-canonical"
+    (identity :project "x")))

@@ -2,11 +2,21 @@
 ; SPDX-License-Identifier: MPL-2.0
 ; SPDX-License-Identifier: CC-BY-SA-4.0
 ;
-; DEED clause profile: (anchor …), v1.0.0 — DRAFT
+; DEED clause profile: (anchor …), v2.0.0 — DRAFT
 ; Prose and rationale: docs/estate-reconciliation/A7-contractiles-descriptiles-anchor.adoc
 ; (section "The (anchor …) clause"). Ruling: Q11 of 2026-10-20 (ultraplan
 ; docs/ULTRAPLAN-DEED-K9-CONTRACTILES-2026-10-19.adoc): the anchor is a clause
 ; of the chora deed; there is no ANCHOR.deed and no grammar change.
+;
+; CHANGELOG (v1.0.0 → v2.0.0, A7 rulings J8, J26, J27 and J29, 2026-11-14):
+;   - :schema may be "hyperpolymath.anchor/2". A /2 clause names the subject
+;     of its authority with (subject …), not (identity …) (J8), and carries
+;     no (parents …): a parent is an ECOSYSTEM.deed (related … :relationship
+;     parent) entry (J26), and no (ssg …): site-build configuration is
+;     META.deed's (J29).
+;   - Both majors are read (J27). Each clause is checked against the major
+;     its :schema declares: /1 under the v1.0.0 rules, reported as legacy,
+;     /2 under the v2.0.0 rules. Every v1.0.0 clause is still accepted.
 ;
 ; A CLAUSE PROFILE, not a new grammar. Every anchor-clause below is also a
 ; `clause` of deed.abnf v2.0.0, so a deed carrying one still passes deed_lint
@@ -25,8 +35,8 @@
 ; STATUS: this is the target placement. The owner answered SysArch Q1 on
 ; 2026-11-14 (A7 S1): the anchor is this clause, and A7 W6, the anchor
 ; sentence of W3, ANCHOR.deed and the anchor-deed head are withdrawn
-; (deed.abnf v2.0.0, A7 J24). v2.0.0 of this profile will rename the nested
-; (identity …) to (subject …) (A7 J8) and drop (parents …), whose one home
+; (deed.abnf v2.0.0, A7 J24). v2.0.0 of this profile renames the nested
+; (identity …) to (subject …) (A7 J8) and drops (parents …), whose one home
 ; is ECOSYSTEM.deed (related … :relationship parent) (A7 J26).
 ;
 ; Where it appears: at most one (anchor …) clause, at the top level of a
@@ -38,13 +48,19 @@ anchor-clause   = "(" %s"anchor" 1*(token-sep anchor-member) [token-sep] ")"
                 ; :schema and :authority each appear EXACTLY once; every other
                 ; member at most once; no member outside this list.
 anchor-member   = schema-field / authority-field / repo-field / purpose-field
-                / metadata-clause / subject-clause / sem-authority-clause
+                / metadata-clause / subject-clause / legacy-subject-clause
+                / sem-authority-clause
                 / impl-policy-clause / golden-path-clause / satellite-clause
                 / sem-files-clause / ssg-clause / parents-clause
 
-schema-field    = %s":schema" token-sep DQUOTE %s"hyperpolymath.anchor/1" DQUOTE
-                ; The profile version this clause is written against. A reader
-                ; refuses another major (A7 law, after ultraplan Q5).
+schema-field    = %s":schema" token-sep DQUOTE
+                  ( %s"hyperpolymath.anchor/2" / %s"hyperpolymath.anchor/1" ) DQUOTE
+                ; The profile major this clause is written against. A reader
+                ; refuses a major it does not know (A7 law, after ultraplan
+                ; Q5); this one knows /1 (legacy) and /2 (A7 J27).
+                ; SEMANTIC: under /2, legacy-subject-clause, parents-clause
+                ; and ssg-clause are refused (J8, J26, J29); under /1,
+                ; subject-clause is refused.
 
 authority-field = %s":authority" token-sep DQUOTE 1*( str-char / escape ) DQUOTE
                 ; Non-empty; deed.abnf's four escapes are allowed, as in any
@@ -62,7 +78,8 @@ metadata-clause = "(" %s"metadata" 1*(token-sep metadata-member) [token-sep] ")"
 metadata-member = ( %s":version" token-sep string )
                   ; SEMANTIC: three-segment MAJOR.MINOR.PATCH. The version of
                   ; this anchor's content (the legacy `version`), not of the
-                  ; format: the format major is :schema's "/1" (ultraplan Q5).
+                  ; format: the format major is the one :schema names, "/1"
+                  ; or "/2" (ultraplan Q5; A7 J27).
                 / ( %s":last-updated" token-sep string )
                   ; SEMANTIC: a real calendar date YYYY-MM-DD (2026-02-31 is
                   ; refused), or a mint placeholder {{NAME}} in the template's
@@ -70,11 +87,12 @@ metadata-member = ( %s":version" token-sep string )
                   ; fills it; in any other deed a placeholder is an error.
                 ; SEMANTIC: each member at most once.
 
-subject-clause  = "(" %s"identity" 1*(token-sep subject-member) [token-sep] ")"
-                ; Named (identity …) for compatibility with the template. Inside
-                ; (anchor …) it describes the SUBJECT of the authority (what the
-                ; project is), not the repo's identity. A7 J8 proposes renaming
-                ; it (subject …) in v2.0.0.
+subject-clause  = "(" %s"subject" 1*(token-sep subject-member) [token-sep] ")"
+                ; The SUBJECT of the authority (what the project is), not the
+                ; repo's identity. /2 only (A7 J8).
+legacy-subject-clause = "(" %s"identity" 1*(token-sep subject-member) [token-sep] ")"
+                ; The /1 spelling of subject-clause, kept so v1.0.0 clauses
+                ; still read (A7 J27). /1 only.
 subject-member  = ( %s":project" / %s":kind" / %s":one-sentence" / %s":domain" )
                   token-sep string
                 ; SEMANTIC: each member at most once.
@@ -115,9 +133,12 @@ ssg-member      = ( %s":engine" token-sep string )
                 / ( %s":boj-trigger" token-sep boolean )
                 / ( %s":cartridge" token-sep string )
                 ; The site-build configuration that standards' legacy
-                ; ANCHOR.a2ml carries (A7 migration table).
+                ; ANCHOR.a2ml carries. /1 only: under /2 it is META.deed's
+                ; (ssg …) (A7 J29).
 
 parents-clause  = "(" %s"parents" 1*(token-sep parent-clause) [token-sep] ")"
+                ; /1 only. Under /2 a parent is an ECOSYSTEM.deed
+                ; (related :uuid … :relationship parent) entry (A7 J26).
 parent-clause   = "(" %s"parent" 1*(token-sep parent-member) [token-sep] ")"
 parent-member   = ( %s":uuid" token-sep chora-id )
                 / ( %s":relation" token-sep symbol )
