@@ -1,0 +1,14 @@
+;; SPDX-License-Identifier: CC-BY-SA-4.0
+; Field-like text in strings and comments is prose, not a field: :project x
+(descriptile-deed
+  :schema-version "1.0.0"
+  :canonical-name "example-game"
+  :of-chora #uuid"00000000-0000-8000-8000-0000000000a1"
+  :affirmed "2026-11-14" :affirmed-by agent
+  :project ; the chora's :canonical-name
+    "example-game"
+  :ecosystem "hyperpolymath"
+  :position-type "game"
+  :purpose "A small example game; the :project field (see :chain) names it."
+  :not ("a library (:coordination standards is elsewhere)")
+  (related :name "standards" :relationship standard-source :notes "The :project x mapping lives in standards."))

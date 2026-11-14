@@ -6,7 +6,7 @@ import { cpSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, writ
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { validate, blankComments, LintError, SELF_TEST_CASES, checkEgress, EgressError, checkAnchor, AnchorError, profileCOfBody, readMustfileChecks, MustfileError, readProofReceipt, ProofReceiptError, checkContractiles, ContractilesError, contractilePaths, CONTRACTILE_VERBS, checkEdict, EdictError, verbOfFilename, checkVerbDescriptile, VerbDescriptileError, verbOfDescriptile, choraRepoUuid } from "./deed_lint.js";
+import { validate, blankComments, LintError, SELF_TEST_CASES, checkEgress, EgressError, checkAnchor, AnchorError, profileCOfBody, readMustfileChecks, MustfileError, readProofReceipt, ProofReceiptError, checkContractiles, ContractilesError, contractilePaths, CONTRACTILE_VERBS, checkEdict, EdictError, verbOfFilename, checkVerbDescriptile, VerbDescriptileError, verbOfDescriptile, choraRepoUuid, rootChora, FIXTURE_TODAY, checkEcosystem, EcosystemError, ECOSYSTEM_RELATIONSHIPS } from "./deed_lint.js";
 import { generateContractileRegistry as generateRegistry } from "./deed_lint.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -1211,7 +1211,7 @@ describe("verb descriptile fixtures", () => {
   });
   test("the summary lists each fact's witness and evidence", () => {
     const p = join(FIX_VD, "valid", "adjust-expires", "ADJUST.deed");
-    const r = checkVerbDescriptile(readFileSync(p, "utf8"), p);
+    const r = checkVerbDescriptile(readFileSync(p, "utf8"), p, { today: FIXTURE_TODAY });
     expect(r.verb).toBe("adjust");
     expect(r.facts).toEqual([{ witnesses: "adj-alt-text", evidence: "measured" }, { witnesses: "adj-contrast", evidence: "measured" }]);
   });
@@ -1228,6 +1228,13 @@ describe("verb descriptile fixtures", () => {
     expect(checkVerbDescriptile(t, p, { repoUuid: "00000000-0000-8000-8000-0000000000a1" }).facts.length).toBe(2);
     expect(() => checkVerbDescriptile(t, p, { repoUuid: "00000000-0000-8000-8000-0000000000b2" })).toThrow(/YD08/);
   });
+  test("the YD08 id lookup does not need the chora's :canonical-name; the ecosystem profile (YD07) does", () => {
+    const dir = mkdtempSync(join(tmpdir(), "chora-noname-"));
+    writeFileSync(join(dir, "x_chora.deed"), HDR + '(repo-deed :schema-version "1" :repo-uuid #uuid"00000000-0000-8000-8000-0000000000a1")\n');
+    expect(choraRepoUuid(dir)).toBe("00000000-0000-8000-8000-0000000000a1");
+    expect(rootChora(dir)).toEqual({ uuid: "00000000-0000-8000-8000-0000000000a1", name: null });
+    expect(() => rootChora(dir, { needName: true })).toThrow(/:canonical-name to check against \(YD07\)/);
+  });
   test("--root without a directory is a usage error, not a skipped check", () => {
     const r = cli("--verb-descriptile", join(FIX_VD, "valid", "intent-basic", "INTENT.deed"), "--root");
     expect(r.code).toBe(2);
@@ -1241,5 +1248,69 @@ describe("verb descriptile fixtures", () => {
   test("a Bust fact carries grades, not a value (8.5)", () => {
     const p = join(FIX_VD, "invalid", "bust-value", "BUST.deed");
     expect(() => checkVerbDescriptile(readFileSync(p, "utf8"), p)).toThrow(/no :value/);
+  });
+});
+
+// A7 7.2, YD07: ECOSYSTEM.deed (clauses/ecosystem.abnf).
+const FIX_ECO = join(FIX, "ecosystem");
+
+describe("ecosystem fixtures", () => {
+  test("--ecosystem-fixtures passes on the corpus", () => {
+    const r = cli("--ecosystem-fixtures", FIX_ECO);
+    expect(r.code).toBe(0);
+    expect(r.out).toContain("ECOSYSTEM FIXTURES OK");
+  });
+  test("the descriptile header: :expires must not have passed (YD06), and :schema-version is three segments, major 1 (A7 Q5)", () => {
+    const eco = join(FIX_ECO, "valid", "minimal", "ECOSYSTEM.deed");
+    const vd = join(FIX_VD, "valid", "intent-basic", "INTENT.deed");
+    const ecoText = readFileSync(eco, "utf8");
+    const vdText = readFileSync(vd, "utf8");
+    // An :expires of today has not passed; the day after it has.
+    const exp = (s, d) => s.replace(/:affirmed-by agent/, `:affirmed-by agent :expires "${d}"`);
+    expect(checkEcosystem(exp(ecoText, "2026-11-14"), eco, { today: "2026-11-14" }).warnings).toEqual([]);
+    expect(() => checkEcosystem(exp(ecoText, "2026-11-14"), eco, { today: "2026-11-15" })).toThrow(/has passed .*\(YD06\)/);
+    // A newer minor is read and warned; another major, or a non-version, is refused.
+    const ver = (s, v) => s.replace(/:schema-version "1\.0\.0"/, `:schema-version "${v}"`);
+    expect(checkEcosystem(ver(ecoText, "1.1.0"), eco, { today: FIXTURE_TODAY }).warnings).toEqual([expect.stringMatching(/newer minor .*\(A7 Q5\)/)]);
+    expect(checkVerbDescriptile(ver(vdText, "1.2.0"), vd, { today: FIXTURE_TODAY }).warnings).toEqual([expect.stringMatching(/newer minor/)]);
+    for (const v of ["2.0.0", "0.9.0", "1.0", "1.0.0-rc1", "01.0.0", "nonsense"]) {
+      expect(() => checkEcosystem(ver(ecoText, v), eco, { today: FIXTURE_TODAY })).toThrow(/\(A7 Q5\)/);
+      expect(() => checkVerbDescriptile(ver(vdText, v), vd, { today: FIXTURE_TODAY })).toThrow(/\(A7 Q5\)/);
+    }
+    // The command line prints the warning and passes.
+    const dir = mkdtempSync(join(tmpdir(), "eco-minor-"));
+    writeFileSync(join(dir, "ECOSYSTEM.deed"), ver(ecoText, "1.1.0"));
+    const r = cli("--ecosystem", join(dir, "ECOSYSTEM.deed"));
+    expect(r.code).toBe(0);
+    expect(r.out).toMatch(/WARN .*newer minor/);
+  });
+  test("another descriptile is outside the profile", () => {
+    const t = readFileSync(join(FIX_ECO, "valid", "minimal", "ECOSYSTEM.deed"), "utf8");
+    expect(checkEcosystem(t, "STATE.deed")).toBeNull();
+  });
+  test("the closed relationship list has the 7 mapped terms and DESCRIPTILE-SPEC's 4", () => {
+    expect(ECOSYSTEM_RELATIONSHIPS.size).toBe(11);
+    for (const t of ["standard-source", "minted-from", "registry", "parent", "downstream-consumer"]) expect(ECOSYSTEM_RELATIONSHIPS.has(t)).toBe(true);
+  });
+  test("the summary lists project and related entries", () => {
+    const p = join(FIX_ECO, "valid", "template-model", "ECOSYSTEM.deed");
+    const r = checkEcosystem(readFileSync(p, "utf8"), p);
+    expect(r.project).toBe("example-game");
+    expect(r.related.map((x) => x.relationship)).toEqual(["standard-source", "minted-from", "registry"]);
+  });
+  test("strict mode requires (related :uuid) (J12)", () => {
+    const p = join(FIX_ECO, "invalid", "strict-no-uuid", "ECOSYSTEM.deed");
+    const t = readFileSync(p, "utf8");
+    expect(checkEcosystem(t, p).related.length).toBe(1);
+    expect(() => checkEcosystem(t, p, { strict: true })).toThrow(EcosystemError);
+  });
+  test(":project must equal the chora deed's :canonical-name with --root (YD07)", () => {
+    const r = cli("--ecosystem", "--root", join(FIX_ECO, "invalid", "project-not-chora"), join(FIX_ECO, "invalid", "project-not-chora", "ECOSYSTEM.deed"));
+    expect(r.code).toBe(1);
+    expect(r.out).toContain("YD07");
+  });
+  test("--root without a directory is a usage error", () => {
+    const r = cli("--ecosystem", join(FIX_ECO, "valid", "minimal", "ECOSYSTEM.deed"), "--root");
+    expect(r.code).toBe(2);
   });
 });
