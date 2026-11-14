@@ -258,6 +258,38 @@ The fixtures are one case per directory,
 also holds the verb's `<Verb>file.deed` is checked against it (YD02), and one
 that holds a `<repo>_chora.deed` has its `:of-chora` checked against that deed (YD08).
 
+== `deed_lint.js --ecosystem` — ECOSYSTEM.deed (DRAFT)
+
+Checks `ECOSYSTEM.deed` (head `descriptile-deed`) against
+`spec/abnf/clauses/ecosystem.abnf` (A7 7.2, YD07). The field mapping is
+`../mappings/meta-ecosystem-to-repo-deed.adoc`. The rules it adds to the grammar:
+
+* the descriptile header, as for the verb descriptiles: `:canonical-name`, a
+  version 8 `:of-chora` (J20), no `:beholding-chora`, and `:affirmed` and
+  `:affirmed-by`, required by default (J4, YD06);
+* `:project`, `:ecosystem`, `:position-type` and `:purpose` are required,
+  non-empty strings. `:not` (a list of strings), `:pipeline-position`,
+  `:chain`, `:pipeline-notes` and `:coordination` are optional, each at most
+  once. `:coordination` is the hub repo's name as a symbol, or `""` for a
+  standalone repo;
+* `:project` equals the deed's own `:canonical-name` and, with `--root DIR`,
+  the `:canonical-name` of the chora deed in `DIR`, whose `:repo-uuid` must
+  also equal `:of-chora` (YD07, YD08);
+* each `(related :name :relationship :notes [:uuid])` takes `:relationship`
+  from the closed list: `standard-source`, `build-tooling`,
+  `validation-tooling`, `signing-tooling`, `verification-tooling`,
+  `minted-from`, `registry` (owner-ruled 2026-09-19 in the mapping) and
+  `downstream-consumer`, `sibling-language`, `code-dependency`, `parent`
+  (DESCRIPTILE-SPEC). `:uuid` is a version 8 chora id, and `--strict` requires
+  it (J12). A `(:name, :relationship)` pair appears once.
+
+    bun deed_lint.js --ecosystem ECOSYSTEM.deed [--root REPO] [--strict]
+    bun deed_lint.js --ecosystem-fixtures fixtures/ecosystem/
+
+The fixtures are one case per directory, `fixtures/ecosystem/{valid,invalid}/<case>/ECOSYSTEM.deed`.
+A case may hold a `<repo>_chora.deed`, which is then checked against, and a
+`STRICT` marker file, which runs it in strict mode.
+
 == `deed_lint.js --contractile-registry` — the `contractile` rule registry (A7 J13)
 
 Generates the A5 registry `contractile_rules_praxis.deed` from a repo's six

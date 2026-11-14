@@ -6,7 +6,7 @@ import { cpSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, writ
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { validate, LintError, SELF_TEST_CASES, checkEgress, EgressError, checkAnchor, AnchorError, profileCOfBody, readMustfileChecks, MustfileError, readProofReceipt, ProofReceiptError, checkContractiles, ContractilesError, contractilePaths, CONTRACTILE_VERBS, checkEdict, EdictError, verbOfFilename, checkVerbDescriptile, VerbDescriptileError, verbOfDescriptile, choraRepoUuid } from "./deed_lint.js";
+import { validate, LintError, SELF_TEST_CASES, checkEgress, EgressError, checkAnchor, AnchorError, profileCOfBody, readMustfileChecks, MustfileError, readProofReceipt, ProofReceiptError, checkContractiles, ContractilesError, contractilePaths, CONTRACTILE_VERBS, checkEdict, EdictError, verbOfFilename, checkVerbDescriptile, VerbDescriptileError, verbOfDescriptile, choraRepoUuid, checkEcosystem, EcosystemError, ECOSYSTEM_RELATIONSHIPS } from "./deed_lint.js";
 import { generateContractileRegistry as generateRegistry } from "./deed_lint.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -1157,5 +1157,45 @@ describe("verb descriptile fixtures", () => {
   test("a Bust fact carries grades, not a value (8.5)", () => {
     const p = join(FIX_VD, "invalid", "bust-value", "BUST.deed");
     expect(() => checkVerbDescriptile(readFileSync(p, "utf8"), p)).toThrow(/no :value/);
+  });
+});
+
+// A7 7.2, YD07: ECOSYSTEM.deed (clauses/ecosystem.abnf).
+const FIX_ECO = join(FIX, "ecosystem");
+
+describe("ecosystem fixtures", () => {
+  test("--ecosystem-fixtures passes on the corpus", () => {
+    const r = cli("--ecosystem-fixtures", FIX_ECO);
+    expect(r.code).toBe(0);
+    expect(r.out).toContain("ECOSYSTEM FIXTURES OK");
+  });
+  test("another descriptile is outside the profile", () => {
+    const t = readFileSync(join(FIX_ECO, "valid", "minimal", "ECOSYSTEM.deed"), "utf8");
+    expect(checkEcosystem(t, "STATE.deed")).toBeNull();
+  });
+  test("the closed relationship list has the 7 mapped terms and DESCRIPTILE-SPEC's 4", () => {
+    expect(ECOSYSTEM_RELATIONSHIPS.size).toBe(11);
+    for (const t of ["standard-source", "minted-from", "registry", "parent", "downstream-consumer"]) expect(ECOSYSTEM_RELATIONSHIPS.has(t)).toBe(true);
+  });
+  test("the summary lists project and related entries", () => {
+    const p = join(FIX_ECO, "valid", "template-model", "ECOSYSTEM.deed");
+    const r = checkEcosystem(readFileSync(p, "utf8"), p);
+    expect(r.project).toBe("example-game");
+    expect(r.related.map((x) => x.relationship)).toEqual(["standard-source", "minted-from", "registry"]);
+  });
+  test("strict mode requires (related :uuid) (J12)", () => {
+    const p = join(FIX_ECO, "invalid", "strict-no-uuid", "ECOSYSTEM.deed");
+    const t = readFileSync(p, "utf8");
+    expect(checkEcosystem(t, p).related.length).toBe(1);
+    expect(() => checkEcosystem(t, p, { strict: true })).toThrow(EcosystemError);
+  });
+  test(":project must equal the chora deed's :canonical-name with --root (YD07)", () => {
+    const r = cli("--ecosystem", "--root", join(FIX_ECO, "invalid", "project-not-chora"), join(FIX_ECO, "invalid", "project-not-chora", "ECOSYSTEM.deed"));
+    expect(r.code).toBe(1);
+    expect(r.out).toContain("YD07");
+  });
+  test("--root without a directory is a usage error", () => {
+    const r = cli("--ecosystem", join(FIX_ECO, "valid", "minimal", "ECOSYSTEM.deed"), "--root");
+    expect(r.code).toBe(2);
   });
 });

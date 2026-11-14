@@ -1,0 +1,11 @@
+;; SPDX-License-Identifier: CC-BY-SA-4.0
+(descriptile-deed
+  :schema-version "1.0.0"
+  :canonical-name "example-game"
+  :of-chora #uuid"00000000-0000-8000-8000-0000000000a1"
+  :affirmed "2026-11-14" :affirmed-by agent
+  :project "example-game"
+  :ecosystem "hyperpolymath"
+  :position-type "game"
+  :purpose "A small example game used by the deed fixtures."
+  :owner "o")
