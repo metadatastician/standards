@@ -223,6 +223,39 @@ for p in $full; do
     | grep -oE "^[[:space:]]*-?[[:space:]]*uses:[[:space:]]*['\"]?[A-Za-z0-9_.-]+/[A-Za-z0-9_./-]+@[^[:space:]'\"]+" \
     | sed -E "s/^[[:space:]]*-?[[:space:]]*uses:[[:space:]]*['\"]?//; s#^([^/]+/[^/@]+)[^@]*@#\1@#" >> "$tmp/uses" || true
 done
+# A called reusable may itself call another standards reusable at a pinned commit
+# (governance-reusable.yml nests deed-conformance.yml and k9-conformance.yml). The
+# actions THAT file uses are reached at startup too, so the caller's lock must
+# record them: without this the TARGET record lacks e.g. actions/upload-artifact
+# and the caller's closure check reports it as recorded nowhere (standards#1290).
+# Walk the nested calls transitively within the standards checkout: local
+# `./.github/workflows/x.yml` at the same commit, and `<owner>/standards/...@<40-hex>`
+# at a commit the checkout holds. A call into another repository cannot be read
+# offline and is left to the closure check (fail closed).
+nvisited=""
+collect_nested() { # collect_nested PATH COMMIT
+  case " $nvisited " in *" $2:$1 "*) return 0 ;; esac
+  nvisited="$nvisited $2:$1"
+  local body c cpath cref
+  body=$(git -C "$SROOT" show "$2:$1" 2>/dev/null | sed -E 's/[[:space:]]+#.*$//') || return 0
+  [ -n "$body" ] || return 0
+  printf '%s\n' "$body" \
+    | grep -oE "^[[:space:]]*-?[[:space:]]*uses:[[:space:]]*['\"]?[A-Za-z0-9_.-]+/[A-Za-z0-9_./-]+@[^[:space:]'\"]+" \
+    | sed -E "s/^[[:space:]]*-?[[:space:]]*uses:[[:space:]]*['\"]?//; s#^([^/]+/[^/@]+)[^@]*@#\1@#" >> "$tmp/uses" || true
+  for c in $(printf '%s\n' "$body" \
+      | grep -oE "^[[:space:]]*uses:[[:space:]]*['\"]?(\./\.github/workflows/[A-Za-z0-9._-]+\.ya?ml|[A-Za-z0-9_.-]+/standards/\.github/workflows/[A-Za-z0-9._-]+\.ya?ml@[0-9a-f]{40})" \
+      | sed -E "s/^[[:space:]]*uses:[[:space:]]*['\"]?//" || true); do
+    case "$c" in
+      ./*) collect_nested "${c#./}" "$2"; continue ;;
+    esac
+    cpath=".github/workflows/${c#*/.github/workflows/}"; cpath=${cpath%@*}; cref=${c##*@}
+    git -C "$SROOT" cat-file -e "${cref}^{commit}" 2>/dev/null && collect_nested "$cpath" "$cref"
+  done
+  return 0
+}
+for p in $full; do
+  path=${p#${COORD}/}; collect_nested "${path%@*}" "$TARGET"
+done
 grep -Ev '^(hyperpolymath|metadatastician)/standards@' "$tmp/uses" | LC_ALL=C sort -u > "$tmp/uses.s" || true
 
 # owner_id / repo_id come from an OLD record; without one the lock was already
