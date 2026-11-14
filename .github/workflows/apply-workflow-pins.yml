@@ -48,6 +48,9 @@ on:
       proven_sha:
         description: 'proven-cicd-and-workflows commit whose proven/manifest.json the content census reads (40-hex; empty = the pin below; off = no content census)'
         default: ''
+      only:
+        description: 'Restrict the run to ONE repository, as owner/name (empty = walk every repo). Only that repository''s owner is walked; every other owner in `owners` is skipped. Use for a pilot: `limit` alone cannot choose WHICH repo gets the PR.'
+        default: ''
 
 concurrency:
   group: apply-workflow-pins
@@ -171,6 +174,7 @@ jobs:
           LIMIT: ${{ inputs.limit || '0' }}
           ENSURE_SQUABBLER: ${{ inputs.ensure_squabbler || false }}
           PROVEN_SHA_INPUT: ${{ inputs.proven_sha || '' }}
+          ONLY: ${{ inputs.only || '' }}
         run: |
           set -euo pipefail
           # Proven content census (read-only in every mode; see the script's
@@ -189,9 +193,25 @@ jobs:
           # applies per owner: a canary of `limit: 5` over three owners opens
           # at most 15 PRs (narrow it with `owners:`).
           rc=0; first=1
+          # `only` names ONE repository (owner/name): reject a malformed value
+          # before any run, then walk only that repository's owner. An `only`
+          # that matches none of the owners walked is an error, not a clean sweep.
+          if [ -n "$ONLY" ]; then
+            case "$ONLY" in
+              */*/*|/*|*/|*[!A-Za-z0-9._/-]*) echo "::error::only must be owner/name, got '${ONLY}'" >&2; exit 1 ;;
+              */*) ;;
+              *) echo "::error::only must be owner/name, got '${ONLY}'" >&2; exit 1 ;;
+            esac
+            case ",${OWNERS}," in
+              *",${ONLY%%/*},"*) ;;
+              *) echo "::error::only=${ONLY}: its owner is not in owners (${OWNERS}); refusing to report a clean run that walked nothing" >&2; exit 1 ;;
+            esac
+          fi
           for owner in ${OWNERS//,/ }; do
+            if [ -n "$ONLY" ] && [ "${ONLY%%/*}" != "$owner" ]; then continue; fi
             var="TOK_$(printf '%s' "$owner" | tr 'a-z-' 'A-Z_')"
             args=(--owners "$owner" --limit "$LIMIT" --out "census-${owner}.tsv")
+            [ -n "$ONLY" ] && args+=(--only "$ONLY")
             [ "$MODE" = "fix" ] && args+=(--fix)
             [ "$REPAIR" = "true" ] && args+=(--repair-illegal)
             [ "$ENSURE_SQUABBLER" = "true" ] && args+=(--ensure-squabbler)
