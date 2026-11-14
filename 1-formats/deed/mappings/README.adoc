@@ -49,6 +49,6 @@ Highest-loss-risk first — a family with no v2 surface dies first if we drift:
 * `:schema-version "1.0.0"` is structurally FIRST on every head.
 * Enums and codes that were quoted strings in a2ml become *symbols*
   (`:primary fv`, not `:primary "fv"`) — symbols are the typed half.
-* UUIDs are `#u5"…"` literals; a bare filename never stands in for one.
+* An id is written `#uuid"<v8 id>"` (or `#u8"domain:name"`); a bare filename never stands in for one. A `#u5` literal in an identity field is an error (owner ruling Q2, CHORA-SPEC 7.1).
 * `estate_chora.deed` dispatch is exact-stem-first; validators hand-encode
   the ordering (grammar cannot express it).

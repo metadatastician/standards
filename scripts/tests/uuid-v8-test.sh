@@ -145,6 +145,10 @@ for mode in "" --strict; do
   names "identity field :repo carries a #u5 literal" "the #u5 rejection names the field ${mode:-(default)}"
   fresh; printf '(repo-deed\n  :repo-uuid\n  #u5"github.com/o/x")\n' > "$WORK/t/a_chora.deed"
   expect 1 "#u5 on the line after its identity field is rejected ${mode:-(default)}" $mode
+  fresh; printf '(repo-deed\n  :repo-uuid ; a note\n  #u5"github.com/o/x")\n' > "$WORK/t/a_chora.deed"
+  expect 1 "#u5 after a comment used as the separator is rejected ${mode:-(default)}" $mode
+  fresh; printf '(repo-deed\n  :repo-uuid ; a note\n  #uuid"%s")\n' "$V5" > "$WORK/t/a_chora.deed"
+  expect 1 "a v5 #uuid after a comment used as the separator is rejected ${mode:-(default)}" $mode
   fresh; printf '(repo-deed\n  :repo-uuid\n  #uuid"%s")\n' "$V5" > "$WORK/t/a_chora.deed"
   expect 1 "a v5 #uuid on the line after its identity field is rejected ${mode:-(default)}" $mode
   fresh; printf '\000\001:repo-uuid \043u5"github.com/o/x"\000' > "$WORK/t/blob.bin"

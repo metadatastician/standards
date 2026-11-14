@@ -116,6 +116,19 @@ scannable_text() {
   esac
 }
 
+# Print two one-line views of a file's scannable text, for the identity
+# rules: the text with line breaks folded to spaces (so a field and its value
+# on separate lines meet), and the same with ';' comments removed first (so a
+# comment used as the separator between them cannot hide the value). The raw
+# view keeps comments, so a comment that quotes a field and a #u5 is still
+# flagged (owner ruling of 2026-11-14: the rule is lexical).
+folded_views() {
+  scannable_text "$1" | tr '\n\r' '  '
+  printf '\n'
+  scannable_text "$1" | sed 's/;.*$//' | tr '\n\r' '  '
+  printf '\n'
+}
+
 # Exit 0 when a version:variant pair is acceptable in the current mode.
 # Keep this POSIX so it can run in every estate checkout.
 acceptable() {
@@ -167,7 +180,7 @@ while IFS= read -r file; do
     printf '%s: identity field %s carries a #u5 literal; write #uuid"<v8 id>" (%s)\n' "$file" "$key" "$pair" >&2
     status=1
   done <<EOF
-$(grep -Iq . "$file" 2>/dev/null && scannable_text "$file" | tr '\n\r' '  ' | grep -oE -- "$U5_IDENT_RE" || true)
+$(grep -Iq . "$file" 2>/dev/null && folded_views "$file" | grep -oE -- "$U5_IDENT_RE" | sort -u || true)
 EOF
   if grep -IEni -- "$UUID_RE" "$file" >/dev/null 2>&1; then
     # Typed literals first: each #uuid"<id>" must be exactly the literal, and
@@ -200,7 +213,7 @@ EOF
         status=1
       fi
     done <<EOF
-$(scannable_text "$file" | tr '\n\r' '  ' | grep -oE -- "$IDENT_RE" || true)
+$(folded_views "$file" | grep -oE -- "$IDENT_RE" | sort -u || true)
 EOF
     # Then every other UUID, with the typed literals removed. Every UUID on a
     # line is checked, not only the last one (grep -o).
