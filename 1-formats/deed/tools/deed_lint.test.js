@@ -298,7 +298,9 @@ describe("Mustfile check profile", () => {
     // "by name"): a field name and #u5 in a comment or a string fail too, and a
     // comment between a field and its value does not hide the value.
     expect(() => validate(HDR + '(praxis-deed :schema-version "1" :canonical-name "x") ; :repo-uuid ' + u5 + '\n')).toThrow(/identity field :repo-uuid carries a #u5 literal/);
-    expect(() => validate(HDR + '(praxis-deed :schema-version "1" :canonical-name "x" :note ":estate ' + u5.replace(/"/g, '\\"') + '")')).not.toThrow();
+    // A string that only mentions the field, with escaped quotes, holds no #u5 literal.
+    const u5Quoted = "#" + 'u5\\"estate/chora\\"';
+    expect(() => validate(HDR + '(praxis-deed :schema-version "1" :canonical-name "x" :note ":estate ' + u5Quoted + '")')).not.toThrow();
     expect(() => validate(HDR + '(praxis-deed :schema-version "1" :canonical-name "x" :beholding-chora ; note\n  ' + u5 + ')')).toThrow(/carries a #u5 literal/);
     // A ';' inside a string is not a comment, so stripping comments invents no field.
     expect(() => validate(HDR + '(praxis-deed :schema-version "1" :canonical-name "x" :alias (":repo-uuid ; example" ' + u5 + '))')).not.toThrow();
