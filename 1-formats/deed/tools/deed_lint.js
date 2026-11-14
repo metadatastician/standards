@@ -2423,7 +2423,7 @@ function anchorFiles(files, opts = {}) {
     try {
       const a = checkAnchor(text, f, opts);
       console.log(`OK   ${f} (${a === null ? "no anchor clause" : `anchor, authority ${JSON.stringify(a.authority)}`})`);
-      if (a && a.legacy) console.log(`WARN ${f}: legacy ${ANCHOR_SCHEMA_LEGACY}; move to ${ANCHOR_SCHEMA}: (identity …) becomes (subject …), (parents …) moves to ECOSYSTEM.deed (A7 J8, J26, J27)`);
+      if (a && a.legacy) console.log(`WARN ${f}: legacy ${ANCHOR_SCHEMA_LEGACY}; move to ${ANCHOR_SCHEMA}: (identity …) becomes (subject …), (parents …) moves to ECOSYSTEM.deed and (ssg …) to META.deed (A7 J8, J26, J27, J29)`);
     } catch (e) {
       if (!(e instanceof LintError)) throw e;
       bad += 1;

@@ -769,6 +769,14 @@ describe("checkAnchor result", () => {
     expect(a.legacy).toBe(false);
     expect(a.members).toContain("(subject");
   });
+  test("the /1 warning names every move to /2: identity, parents and ssg (A7 J26, J27, J29)", () => {
+    const { code, out } = cli("--anchor", join(FIX_ANCHOR, "valid", "translated_chora.deed"));
+    expect(code).toBe(0);
+    expect(out).toContain("(identity …) becomes (subject …)");
+    expect(out).toContain("(parents …) moves to ECOSYSTEM.deed");
+    expect(out).toContain("(ssg …) to META.deed");
+    expect(out).toContain("J29");
+  });
   test("the template's own clause, mint tokens included, passes in template mode", () => {
     const f = join(FIX_ANCHOR, "valid", "template-a55669e_chora.deed");
     expect(checkAnchor(readFileSync(f, "utf8"), f, { template: true }).authority).toBe("upstream-canonical");
