@@ -167,10 +167,31 @@ kill_mutant manifest_duplicate_accepted \
   's@and \(\[\.artifacts\[\]\.artifact\] \| length == \(unique \| length\)\)@@' \
   "FAIL bad-dup.json"
 
-# M10 — read the stamp from any line, not the first. A body that merely quotes a
-# stamp (a comment, a heredoc, a test fixture) would be reported as a copy.
+# M10 — read the stamp from any line, not from its own (line 2 under the SPDX
+# line, or legacy line 1). A body that merely quotes a stamp (a comment, a
+# heredoc, a test fixture) would be reported as a copy.
 kill_mutant content_stamp_anywhere \
-  's@first=\$\(head -n 1 "\$f" 2>/dev/null\)@first=$(grep -m1 "^# proven-cicd:" "$f" 2>/dev/null)@' \
+  's@first=\$\(stamp_text "\$f"\)@first=$(grep -m1 "^# proven-cicd:" "$f" 2>/dev/null)@' \
+  "FAIL content-not-first.yml"
+
+# M10b — find the stamp on line 1 only, as before proven-cicd #116 moved it under
+# the SPDX line. Every copy in the current layout then drops out of the census,
+# and every current template is refused by --fix-content.
+kill_mutant stamp_line_legacy_only \
+  's@^    case "\$l2" in "# proven-cicd:"\*\) echo 2; return 0 ;; esac$@    :@' \
+  "FAIL content-l2-behind.yml"
+
+# M10c — hash every line but line 1, whatever the layout. In the current layout
+# that hashes the stamp and skips the SPDX line, so a good template never
+# matches its own stamp.
+kill_mutant stamp_region_line_one \
+  's@NR == sl \{ next \}@NR == 1 { next }@' \
+  "FAIL template_ok refused a good line-2 template"
+
+# M10d — say nothing about a stamp off its line. A copy whose stamp was pushed
+# down a line (or lost) silently leaves the content census.
+kill_mutant misplaced_stamp_silent \
+  's@^      if \[ -n "\$stray" \]; then$@      if false; then@' \
   "FAIL content-not-first.yml"
 
 # M11 — judge any record's owner_id, not only standards'. hyperpolymath/cicd-suite
@@ -765,15 +786,18 @@ case_main_content_refused() {
 # case_main_stamped_held <applier> — --fix never re-pins a stamped copy, even
 # one whose standards pin is MOVED: its body is proven-cicd's, so a re-pin would
 # make it drift from its stamp. It is held with a STAMPED-PIN-HELD row, and the
-# commit carries ci.yml alone.
+# commit carries ci.yml alone. With `l2` the copy is in the current layout (the
+# stamp on line 2 under the SPDX line, proven-cicd #116); without it, legacy.
 case_main_stamped_held() {
-  local d root sha paths
+  local d root sha paths head=""
+  [ "${2:-}" = l2 ] && head='# SPDX-License-Identifier: MPL-2.0\n'
   d=$(new_case stampedheld)
   root=$(mktemp -d "$TMP/stampedheld-root.XXXX")
   git -C "$root" init -q
   git -C "$root" -c user.name=t -c user.email=t@t -c commit.gpgsign=false commit -q --allow-empty -m target
   sha=$(git -C "$root" rev-parse HEAD)
-  printf '# proven-cicd: proven-lock-gate@0.1.0 sha256:%s\njobs:\n  a:\n    uses: hyperpolymath/standards/.github/workflows/x.yml@%s\n' "$STAMP_HEX" "$sha" > "$d/own_stamped"
+  # shellcheck disable=SC2059  # $head is a printf fragment by design
+  printf "${head}"'# proven-cicd: proven-lock-gate@0.1.0 sha256:%s\njobs:\n  a:\n    uses: hyperpolymath/standards/.github/workflows/x.yml@%s\n' "$STAMP_HEX" "$sha" > "$d/own_stamped"
   : > "$d/calls.log"
   # shellcheck disable=SC2016  # $1 and $2 are expanded by the inner shell
   env PATH="$LSTUB:$PATH" GH_FIX="$d" GH_TOKEN=ghs_app GITHUB_TOKEN= TARGET="$sha" \
@@ -784,7 +808,7 @@ case_main_stamped_held() {
   if [ "$(cat "$d/rc")" = 0 ] \
      && grep -qF "$(printf 'hyperpolymath/pub-a\tproven-lock-gate.yml\tSTAMPED-PIN-HELD\t')" "$d/out" \
      && [ "$paths" = ".github/workflows/ci.yml" ]; then
-    pass "main: --fix holds a stamped copy's MOVED pin (STAMPED-PIN-HELD) and commits ci.yml alone"
+    pass "main: --fix holds a stamped copy's MOVED pin (STAMPED-PIN-HELD, layout ${2:-legacy}) and commits ci.yml alone"
   else
     fail "main: --fix re-pinned a stamped copy (rc=$(cat "$d/rc")); committed: [${paths//$'\n'/ }]"
     sed 's/^/    /' "$d/out" >&2
@@ -1025,6 +1049,7 @@ case_main_content_refused "$APPLIER" "a uses: change in a repository that carrie
   '      - uses: actions/cache@3333333333333333333333333333333333333333 # v4\n'
 case_main_content_flags "$APPLIER"
 case_main_stamped_held "$APPLIER"
+case_main_stamped_held "$APPLIER" l2
 
 # Mutant: the census stays silent about an unreadable lock (the defect Codex found
 # on #1565: it read as "this repository has no lock"). It must turn red.
@@ -1207,6 +1232,10 @@ list_mutant content_fail_stops_pin_census 's@^      log "ERROR: \$\{content_fail
 list_mutant content_manifest_unpinned 's@\?ref=\$\{PROVEN_SHA\}@@' case_main_content
 list_mutant content_row_dropped 's@cst=\$\(content_state "\$wf" "\$PROVEN_MANIFEST"\)@cst=""@' case_main_content
 list_mutant content_row_writes 's@\[ -n "\$cst" \] \&\& printf@[ -n "$cst" ] \&\& changed+=("$base"); [ -n "$cst" ] \&\& printf@' case_main_content_fix
+# A stamped copy in the current layout (stamp on line 2) is still held by --fix:
+# a hold that only recognises the legacy line-1 stamp re-pins it and breaks its hash.
+case_main_stamped_held_l2() { case_main_stamped_held "$1" l2; }
+list_mutant stamped_hold_legacy_only 's@\[ "\$\(stamp_line_of "\$wf"\)" -gt 0 \]@[ "$(stamp_line_of "$wf")" -eq 1 ]@' case_main_stamped_held_l2
 # Owner ids: the census must read the lock it was given (not skip it), and must
 # say nothing when there is nothing to say.
 list_mutant owner_row_dropped 's@ost=\$\(lock_owner_state "\$rdir/actions\.lock"\)@ost=""@' case_main_owner_stale
