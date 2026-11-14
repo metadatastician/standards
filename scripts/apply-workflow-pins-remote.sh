@@ -43,7 +43,11 @@
 #              (6759885, hyperpolymath). Standards moved to metadatastician; a
 #              record written before the move keeps the old identity. Census
 #              only, in every mode: reported, never rewritten here. The count and
-#              the records (owner/standards@8-hex) are in DETAIL.
+#              the records (owner/standards@8-hex) are in DETAIL. The repo slug
+#              is compared case-insensitively (GitHub slugs are).
+#   OWNER-ID-UNREAD (own row, WORKFLOW column `actions.lock`) the tree lists an
+#              actions.lock that could not be read as text, so it was not judged.
+#              Never read as "this repository has no lock".
 #
 # SAFETY PROPERTIES (do not weaken any of these):
 #   * READ-ONLY by default. --fix is required to write anything.
@@ -303,7 +307,7 @@ lock_owner_state() {
     /^    [^ ]/ { cur = "" }
     $1 == "owner_id:" && cur != "" && $2 == old {
       n = split(cur, a, "@")
-      if (n == 2 && a[1] ~ /^(hyperpolymath|metadatastician)\/standards$/) {
+      if (n == 2 && tolower(a[1]) ~ /^(hyperpolymath|metadatastician)\/standards$/) {
         recs = recs (recs == "" ? "" : " ") a[1] "@" substr(a[2], 1, 8); cnt++
       }
     }
@@ -660,6 +664,7 @@ JSON
   printf "version: 'v0.0.3'\ndependencies:\n    'metadatastician/standards@%s':\n        ref: '%s'\n        owner_id: 297579217\n        repo_id: 1\n" "$S1" "$S1" > "$d/owner-clean.lock"
   printf "version: 'v0.0.3'\ndependencies:\n    'hyperpolymath/cicd-suite@%s':\n        ref: 'main'\n        owner_id: 6759885\n    'actions/checkout@%s':\n        ref: 'v1'\n        owner_id: 44036562\n" "$S1" "$S2" > "$d/owner-nonstandards.lock"
   printf "version: 'v0.0.3'\ndependencies:\n    'metadatastician/standards@main':\n        ref: 'main'\n        owner_id: 6759885\n" > "$d/owner-tag-key.lock"
+  printf "version: 'v0.0.3'\ndependencies:\n    'Metadatastician/Standards@%s':\n        ref: '%s'\n        owner_id: 6759885\n" "$S1" "$S1" > "$d/owner-mixed-case.lock"
   ocheck() {
     local file="$1" want="$2" got
     got=$(lock_owner_state "$d/$file" | cut -f2 | sed -E 's/^([0-9]+) .*/\1/')
@@ -674,6 +679,7 @@ JSON
   ocheck owner-clean.lock        0
   ocheck owner-nonstandards.lock 0
   ocheck owner-tag-key.lock      1
+  ocheck owner-mixed-case.lock   1
 
   echo "control: the lock relock is present"
   if [ -f "$RELOCK" ] && bash -n "$RELOCK"; then
@@ -835,6 +841,13 @@ fetch_workflows() {
         | select((.name | test("\\.ya?ml$")) or .name == "actions.lock")
         | select(.object.text != null)
         | "\(.name)\t\(.object.text | @base64)"' "$resp" 2>/dev/null)
+    # A lock the tree LISTS but this loop did not write (a blob without text, or
+    # text that would not decode) is not a repository without a lock. Leave a
+    # marker so the census says so, instead of reading the gap as "no lock".
+    if [ ! -f "${dest}/actions.lock" ] \
+       && jq -e '(.data.repository.object.entries // [])[] | select(.type == "blob" and .name == "actions.lock")' "$resp" >/dev/null 2>&1; then
+      : > "${dest}/.actions.lock.unread"
+    fi
     rm -f "$resp"
     # A repo with no .github/workflows yields an empty tree, which is a valid
     # answer, not a failure. Only fall back when the call itself failed.
@@ -1086,6 +1099,8 @@ main() {
     if [ -f "$rdir/actions.lock" ]; then
       local ost; ost=$(lock_owner_state "$rdir/actions.lock")
       [ -n "$ost" ] && printf '%s\tactions.lock\t%s\n' "$repo" "$ost" >> "$tsv"
+    elif [ -f "$rdir/.actions.lock.unread" ]; then
+      printf '%s\tactions.lock\tOWNER-ID-UNREAD\tlisted in the tree but not materialised (blob without text, or undecodable); not judged\n' "$repo" >> "$tsv"
     fi
     [ "$found" -eq 0 ] && [ "$ENSURE_SQUABBLER" -eq 0 ] && continue
 
