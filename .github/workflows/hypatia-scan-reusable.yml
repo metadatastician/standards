@@ -88,7 +88,7 @@ on:
         description: panic-attack commit (40-hex SHA or HEAD for an explicit canary).
         type: string
         required: false
-        default: 410a8f821ea8297833162565b50a298f787815da
+        default: cbf2b935ef4260cc3ae66010f4ffc91385ff8f8c
       pons-ref:
         description: pons asinorum commit (40-hex SHA or HEAD for an explicit canary).
         type: string
