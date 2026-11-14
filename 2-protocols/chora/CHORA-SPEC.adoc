@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 = A1: The Chora (forge, estate, repo)
-:version: 0.4.5-draft
-:status: DRAFT v0.4.5 (owner ruling Q2 of 2026-11-14: a `#u5` literal in an identity field, references included, is an error in every mode and `#u8` is accepted; the identity fields are listed per head and clause in 7.1; T32 legacy beholding withdrawn; C10 and T30 tightened; earlier: v0.4.4, owner ruling Q3 of 2026-11-14: `ATLAS.deed` is the finding index and lives in chora-registry, which the office reads; the second sense of "registry" is dropped; chora-registry mints the `chora` domain; earlier: owner ruling U1a of 2026-11-14: one exception to U1, the id of the Julia package `CoprocessorRuntime.jl` is re-minted as a UUIDv8, that id only and no precedent; V9 kept as recorded; earlier: V9 restated 2026-11-13: the domain rename applies to new mints only, existing ids are kept and re-checked under the domain the archive records for them; owner ruling A7 W10 of 2026-11-13 amends R4: clade placements are identity facts in the chora, chora-registry is authoritative for the schemes; owner ruling V9 of 2026-11-13 renames the v8 preimage domain from `gv-clade-index` to `chora-registry` for new mints; A7 J15 moves `(status)` and `(maturity)` to `STATE.deed`; earlier: deed ids are profile C UUIDv8 of the birth path, rule V8; adds the invariant `:id` from A2 D1, the root `(publishers)` clause from A3 E1 and its OIDC form from A4 F3). Rulings U1 to U4 recorded; decisions C1 to C8 approved by the owner on 2026-11-10, and C9 and C10 on 2026-11-12. Not yet ratified as a whole. Consistency pass applied 2026-11-10. Proposed in standards#1474; bot-review fixes applied 2026-11-12.
+:version: 0.4.6-draft
+:status: DRAFT v0.4.6 (owner rulings of 2026-11-14 relayed by SysArch: a moved repo keeps its birth estate as `:beholding-chora` (B1); a pre-V9 repo that was never registered is registered late under the `gv-clade-index` domain (L1); repos may carry the `#u8` form in identity fields (Q2a); the four estate ids are listed in section 9; earlier: v0.4.5, owner ruling Q2 of 2026-11-14: a `#u5` literal in an identity field, references included, is an error in every mode and `#u8` is accepted; the identity fields are listed per head and clause in 7.1; T32 legacy beholding withdrawn; C10 and T30 tightened; earlier: v0.4.4, owner ruling Q3 of 2026-11-14: `ATLAS.deed` is the finding index and lives in chora-registry, which the office reads; the second sense of "registry" is dropped; chora-registry mints the `chora` domain; earlier: owner ruling U1a of 2026-11-14: one exception to U1, the id of the Julia package `CoprocessorRuntime.jl` is re-minted as a UUIDv8, that id only and no precedent; V9 kept as recorded; earlier: V9 restated 2026-11-13: the domain rename applies to new mints only, existing ids are kept and re-checked under the domain the archive records for them; owner ruling A7 W10 of 2026-11-13 amends R4: clade placements are identity facts in the chora, chora-registry is authoritative for the schemes; owner ruling V9 of 2026-11-13 renames the v8 preimage domain from `gv-clade-index` to `chora-registry` for new mints; A7 J15 moves `(status)` and `(maturity)` to `STATE.deed`; earlier: deed ids are profile C UUIDv8 of the birth path, rule V8; adds the invariant `:id` from A2 D1, the root `(publishers)` clause from A3 E1 and its OIDC form from A4 F3). Rulings U1 to U4 recorded; decisions C1 to C8 approved by the owner on 2026-11-10, and C9 and C10 on 2026-11-12. Not yet ratified as a whole. Consistency pass applied 2026-11-10. Proposed in standards#1474; bot-review fixes applied 2026-11-12.
 :toc:
 
 Specification A1 of the Estate Reconciliation Plan. It replaces the draft
@@ -187,7 +187,7 @@ The existing recommendation `(provenance ...)` and `(project ...)` of the draft 
 . `(co-estates)` adds graph edges. A co-estate edge does not give the repo vocabulary or invariants. Only the primary estate does that.
 . Each co-estate edge MUST be confirmed from the other side. Confirmation [O, C7]: the co-estate's estate chora lists the repo's UUID in an optional `(co-repos (co-repo :uuid <repo-uuid>))` clause. Until it does, an unconfirmed edge is reported with state `unconfirmed` and is not an error.
 . A praxis deed (A2 pack manifests, A3 check table, A4 work orders, A5 rule registries) names an estate chora in `:beholding-chora`, as the deed spec requires. Its value is an `:estate-uuid`.
-. A transfer changes `:beholding-chora` and records the previous estate under `(lineage)`. The repo UUID does not change (section 9).
+. A transfer or move does not change `:beholding-chora`: it stays the repo's birth estate, the estate of its birth path (B1 [O], 2026-11-14). The estate that now hosts the repo may be listed in `(co-estates ...)`, as `standards` lists metadatastician beside its birth estate hyperpolymath. The repo UUID does not change either (section 9).
 
 == 7. Grammar proposals (not edits to the ABNF)
 
@@ -293,6 +293,18 @@ States, for an estate or repo record:
 . *No `:minted-name`.* The registry archive record (birth path, generation 1) replaces the `:minted-name` field that this section used to define. `:minted-name` is withdrawn, and a deed that carries it is reported. Because no retired name has to appear in a deed, decisions C4 and C6 no longer pull against each other.
 . *Checking.* A validator checks the literal's shape, version and variant (section 7.1). Where it can read the registry archive, it checks that `:repo-uuid` equals the generation-1 id of the repo's archive record (T33). An id cannot be checked from the deed alone, and no check may claim otherwise.
 . *Ids that are not repos.* Estate, platform and federation ids are also minted once and carried opaquely. Their preimages are `chora:estate/<host>/<owner>`, `chora:platform/<host>` and `chora:federation/<name>`, minted as profile C UUIDv8: the preimage is already `domain:name` with domain `chora`, as `#u8` bodies are (C9 [O], amended to version 8 by rule V8). The domain `chora` is registered in `docs/decisions/ADR-008-profile-c-domains.json`, with chora-registry as the minting repo, because the index that lists these ids lives there (Q3 [O], 2026-11-14; it replaces the owner choice of 2026-11-12, `metadatastician/git-logistics-office`). The register names the registry by its current GitHub name, `hyperpolymath/gv-clade-index`, until the rename lands. `scripts/check-uuid-v8-domains.sh chora` passes [M].
++
+The estate ids, each the profile C UUIDv8 of `chora:estate/github.com/<owner>` [M: computed with `profileCOfBody` in `1-formats/deed/tools/deed_lint.js`, 2026-11-14]:
++
+[cols="2,3"]
+|===
+| Estate | `:estate-uuid`
+
+| hyperpolymath | `0889b37b-defb-831f-973c-e119500db00e`
+| metadatastician | `1642c392-8eac-8e3f-b762-2898b9344228`
+| catachresis-colloquium | `ca875671-2b07-84f1-b009-621713eec801`
+| stuff-of-awe | `1bc5f342-d528-881e-a0a9-4418f93b72ef`
+|===
 . Legacy value. `#u5"estate/chora"` was a legacy beholding value, accepted in `lax` mode. Under Q2 (7.1) it is an error in every mode. Each repo replaces it with its estate's opaque id, one PR per repo. That is not a sweep, and A1 does not perform it.
 . A UUID proves reproducibility from the registry archive, not authenticity. This keeps the spec's own statement that `enforce-uuid-provenance` is not an unfalsifiability guarantee [M: DEED-GRAMMAR-SPEC].
 
@@ -315,6 +327,12 @@ States, for an estate or repo record:
 * The registry archive records, for each id, the domain that minted it, so a re-check derives the id with that domain.
 * Before any id is minted under the new domain, `chora-registry` is registered in `docs/decisions/ADR-008-profile-c-domains.json` (standards#1515), with its minting repos (the registry, under its current GitHub name `hyperpolymath/gv-clade-index` until the rename lands, and `hyperpolymath/rsr-template-repo`). `gv-clade-index` stays registered for good as the domain of the ids minted before V9: no new id is minted in it, and existing ids are re-checked under it. It is not retired. That is a separate change, not part of A1.
 * Nothing is reminted, and no deed changes because of V9.
+
+*L1 [O].* Owner ruling, 2026-11-14, by selector in the SysArch thread and relayed to the A1 thread: a repo that existed before V9 but was never registered is registered late, with its birth path, and its id is the profile C UUIDv8 of `gv-clade-index:github.com/<birth owner>/<name>`. That is a late registration of a birth that came before V9, not a new mint, so V9's `chora-registry` domain does not apply. About 65 repos are affected. The #u5 fixer thread opens one registry PR for them.
+
+*B1 [O].* Owner ruling, 2026-11-14, by selector in the SysArch thread and relayed to the A1 thread: a moved repo's `:beholding-chora` is its birth estate, as a general rule. `standards` keeps hyperpolymath, and burble does too. Section 6 states the rule.
+
+*Q2a [O].* Owner ruling, 2026-11-14, by selector in the SysArch thread and relayed to the A1 thread: in identity fields the fixer writes the `#u8` form, `#u8"gv-clade-index:github.com/<birth owner>/<name>"` for a repo id and `#u8"chora:estate/github.com/<owner>"` for an estate reference, because many repos pin a `deed_lint` that predates `#uuid`. Q2 already accepts `#u8`, which computes to the same v8 id as the opaque `#uuid` literal. The `#u8` body names the birth path, which U4 keeps out of deeds, so Q2a is a transitional exception to U4: T31 reports a birth path in a `#u8` identity body as a warning, not an error. Once a repo pins a `deed_lint` that reads `#uuid`, it moves to the opaque literal, one PR per repo, and the warning has done its work.
 
 *U1a [O].* Owner ruling, 2026-11-14, given by selector in the hub thread and relayed to the A1 thread: V9 stands as recorded, and U1 has exactly one exception. The id of the Julia package `CoprocessorRuntime.jl` is re-minted as a UUIDv8, whatever it carries now. The scope is that one id. The exception sets no precedent: every other id, repo or not, stays under U1, and a later re-mint needs its own owner ruling. The value is minted by the thread that owns the CoprocessorRuntime work, not by A1, and A1 does not record it.
 
@@ -405,6 +423,9 @@ The owner approved C1 to C8 as recommended. The text of this document is the rec
 | Q2 | A `#u5` literal in an identity field (7.1 lists them, references included) is an error in every mode; `#u8` is accepted; a v5 inside `#uuid` there is an error in every mode. `scripts/check-uuid-v8.sh` enforces it from 2026-11-14. Withdraws T32's `lax` acceptance of `#u5"estate/chora"`. Owner ruling of 2026-11-14 (SysArch Q2; scope and timing by selector in the A1 thread). Section 7.1. | Approved 2026-11-14
 | Q3 | `ATLAS.deed` is the finding index and lives in chora-registry; the office reads it. "Registry" means chora-registry only. chora-registry mints the `chora` domain, and `docs/decisions/ADR-008-profile-c-domains.json` agrees. Owner ruling of 2026-11-14 (SysArch Q3, findings R-11 and R-12). Sections 1, 8 and 9. | Approved 2026-11-14
 | U1a | One exception to U1: the id of the Julia package `CoprocessorRuntime.jl` is re-minted as a UUIDv8. That id only; it sets no precedent, and V9 is unchanged. The thread that owns the CoprocessorRuntime work mints the value. Owner ruling of 2026-11-14, by selector in the hub thread. Section 9.1. | Approved 2026-11-14
+| L1 | A repo that existed before V9 but was never registered is registered late with its birth path, under the `gv-clade-index` domain; it is not a new mint. Owner ruling of 2026-11-14. Section 9.1. | Approved 2026-11-14
+| B1 | A moved repo's `:beholding-chora` is its birth estate; the hosting estate may be a co-estate. Owner ruling of 2026-11-14. Sections 6 and 9.1. | Approved 2026-11-14
+| Q2a | The `#u8` form is the one the fixer writes in identity fields while pinned linters predate `#uuid`. Owner ruling of 2026-11-14. Section 9.1. | Approved 2026-11-14
 | J15 | `(status)` and `(maturity)` move from the repo chora to `STATE.deed` (A7 J15); a chora copy is read with a warning for one release, then refused in `strict`. Section 5.4. | Approved 2026-11-13
 |===
 
@@ -471,7 +492,7 @@ Each test is a check that a validator can run. `deed_lint.js` already implements
 | Id | Test | Fixture
 
 | T30 | Every identity field (7.1) carries `#uuid"<8-4-4-4-12 lowercase hex>"` with version digit `8` and an RFC 4122 variant digit, or a `#u8"domain:name"` literal. Version `5` in `#uuid` is `v5-identity`, and a `#u5` literal is `u5-identity`. Both are errors in every mode, `lax` included (Q2). | `uuid-shape-bad`, `uuid-v4-bad`, `uuid-v5-identity`, `u5-identity-bad`, `u5-beholding-bad`, `u8-identity-ok`
-| T31 | A transferred repo keeps its `:repo-uuid` unchanged. Its location history is in the registry archive and not in the deed. A deed that carries `:minted-name` or a birth path in an identity field is reported. | `transferred`, `minted-name-bad`
+| T31 | A transferred repo keeps its `:repo-uuid` unchanged. Its location history is in the registry archive and not in the deed. A deed that carries `:minted-name` or a birth path in an identity field is reported. A birth path inside a `#u8` identity body is a warning while Q2a holds (section 9.1). | `transferred`, `minted-name-bad`, `u8-birth-path-warn`
 | T32 | `#u5"estate/chora"` in `:beholding-chora` is an error in every mode, `lax` included (Q2; withdraws the former `lax` acceptance). | `legacy-beholding`
 | T33 | Where the registry archive is readable, `:repo-uuid` equals the generation-1 id of the repo's archive record. The check derives the id with the domain the archive records for it (`gv-clade-index` before V9, `chora-registry` after). Any other value is reported, unless the owner has ruled the change. | `uuid-not-birth-bad`, `uuid-birth-ok`, `uuid-domain-recorded`
 |===

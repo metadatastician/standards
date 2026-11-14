@@ -10,7 +10,7 @@ Stage A of the Estate Reconciliation Plan. Seven draft specifications. None is r
 |===
 | Spec | File | Version | Subject and approved decisions
 
-| A1 | link:../../2-protocols/chora/CHORA-SPEC.adoc[2-protocols/chora/CHORA-SPEC.adoc] | 0.4.5 | The chora at three levels (forge, estate, repo), the generated index, acceptance tests. Decisions C1 to C10 and rulings U1 to U4, U1a, V8, V9, Q2, Q3, W10 and J15.
+| A1 | link:../../2-protocols/chora/CHORA-SPEC.adoc[2-protocols/chora/CHORA-SPEC.adoc] | 0.4.6 | The chora at three levels (forge, estate, repo), the generated index, acceptance tests. Decisions C1 to C10 and rulings U1 to U4, U1a, V8, V9, Q2, Q3, W10 and J15.
 | A2 | link:A2-profile-generation-deviations.adoc[A2-profile-generation-deviations.adoc] | 0.2.4 | The `(profile)`, `(generation)` and `(deviations)` clauses, and the pack laws. Decisions D1 to D9.
 | A3 | link:A3-estate-gate.adoc[A3-estate-gate.adoc] | 0.2.11 | The single required check `estate-gate`, the caller contract, the check table, the verdict function. Decisions E1 to E12 (E12: contractiles are a required check).
 | A4 | link:A4-office-farm.adoc[A4-office-farm.adoc] | 0.2.4 | The office and farm boundary, the signed intake envelope, work orders, the executor path. Decisions F1 to F15.
