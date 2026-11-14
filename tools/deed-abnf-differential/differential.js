@@ -8,7 +8,7 @@
 //
 // deed.abnf is normative (D308); deed_lint.js is the gate that CI runs. This
 // harness keeps them from drifting apart. It compiles deed.abnf (with the
-// (egress …), (anchor …), (contractiles …) and edict clause profiles and the shared rules of
+// (egress …), (anchor …), (contractiles …), edict and verb-descriptile clause profiles and the shared rules of
 // clauses/common.abnf) using apg-js, mutates every
 // committed deed with a seeded generator, and asks both the grammar and the
 // gate for a verdict on each variant:
@@ -26,7 +26,7 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import apg from "apg-js";
-import { validate } from "../../1-formats/deed/tools/deed_lint.js";
+import { checkVerbDescriptile, choraRepoUuid, edictRuleIdsAt, LintError, validate, verbOfDescriptile } from "../../1-formats/deed/tools/deed_lint.js";
 
 const { apgApi, apgLib } = apg;
 const ROOT = resolve(import.meta.dir, "../..");
@@ -70,7 +70,8 @@ function compileGrammar() {
       readFileSync(join(ABNF, "clauses/common.abnf"), "utf8") + "\n" +
       readFileSync(join(ABNF, "clauses/anchor.abnf"), "utf8") + "\n" +
       readFileSync(join(ABNF, "clauses/contractiles.abnf"), "utf8") + "\n" +
-      readFileSync(join(ABNF, "clauses/edict.abnf"), "utf8")).replace(/[^\x00-\x7f]/g, "?") +
+      readFileSync(join(ABNF, "clauses/edict.abnf"), "utf8") + "\n" +
+      readFileSync(join(ABNF, "clauses/verb-descriptile.abnf"), "utf8")).replace(/[^\x00-\x7f]/g, "?") +
     "\nSP = %x20\nDQUOTE = %x22\nALPHA = %x41-5A / %x61-7A\nDIGIT = %x30-39\n" +
     "VCHAR = %x21-7E\nCR = %x0D\nLF = %x0A\nCRLF = CR LF\n";
   const api = new apgApi(src);
@@ -274,6 +275,52 @@ for (const { c, text } of edictCases("valid")) {
     } else if (semanticOnly.includes(c)) {
       if (rule !== null && !grammarAccepts(grammar, "edict-rule", rule)) fail("edict.abnf refuses a rule listed as semantic only", c);
     } else fail("edict invalid fixture is in neither list", c);
+  }
+}
+
+// The six verb descriptiles (A7 7.3, 8.5, clauses/verb-descriptile.abnf). One
+// case per directory, as the edict form: DIR/{valid,invalid}/<case>/<VERB>.deed,
+// with the verb's <Verb>file.deed beside it when the case checks YD02. Every
+// valid case is a valid deed for both, passes the profile, and each (fact …)
+// parses as verb-fact. Each invalid case is filed in one of two exhaustive
+// lists: the grammar refuses its first fact, or the grammar accepts it (or it
+// has no fact) and only deed_lint.js --verb-descriptile refuses it.
+{
+  const cases = (sub) => readdirSync(join(FIXTURES, "verb-descriptile", sub)).sort().map((c) => {
+    const dir = join(FIXTURES, "verb-descriptile", sub, c);
+    const name = readdirSync(dir).find((n) => verbOfDescriptile(n) !== null);
+    const edict = readdirSync(dir).find((n) => /file\.deed$/.test(n));
+    return { c, dir, file: join(dir, name), text: readFileSync(join(dir, name), "utf8"), edict: edict ? join(dir, edict) : null };
+  });
+  const profile = ({ dir, file, text, edict }) => {
+    try {
+      const repoUuid = choraRepoUuid(dir);
+      const ruleIds = edict ? edictRuleIdsAt(edict, repoUuid) : undefined;
+      return checkVerbDescriptile(text, file, { ruleIds, repoUuid }) !== null;
+    } catch (e) {
+      if (!(e instanceof LintError)) throw e;
+      return false;
+    }
+  };
+  for (const k of cases("valid")) {
+    if (!grammarAccepts(grammar, "deed", k.text)) fail("verb descriptile valid fixture rejected by deed.abnf", k.c);
+    if (!profile(k)) fail("verb descriptile valid fixture rejected by deed_lint.js --verb-descriptile", k.c);
+    for (const f of allClauses(k.text, "fact")) if (!grammarAccepts(grammar, "verb-fact", f)) fail("verb-descriptile.abnf refuses a valid fact", `${k.c}: ${f.slice(0, 60)}`);
+  }
+  const grammarRejects = ["bust-grade-letter", "bust-grade-zero", "evidence-numeric", "evidence-unknown", "fact-clause-member", "fact-extra-field"];
+  const semanticOnly = ["affirmed-by-string", "affirmed-impossible", "beholding-chora", "bust-missing-residual", "bust-value",
+    "duplicate-witness", "edict-other-chora", "expires-before-affirmed", "inherent-outside-bust", "missing-affirmed", "missing-affirmed-by",
+    "missing-evidence", "missing-value", "missing-witnesses", "of-chora-legacy", "of-chora-mismatch", "repo-uuid-twice", "rule-in-descriptile", "source-absolute",
+    "unknown-clause", "witness-space", "witness-too-long", "witness-unknown"];
+  for (const k of cases("invalid")) {
+    if (!gateVerdict(k.text).ok) fail("verb descriptile invalid fixture is not a valid deed (YD01)", k.c);
+    if (profile(k)) fail("deed_lint.js --verb-descriptile accepts an invalid fixture", k.c);
+    const fact = clauseText(k.text, "fact");
+    if (grammarRejects.includes(k.c)) {
+      if (fact === null || grammarAccepts(grammar, "verb-fact", fact)) fail("verb-descriptile.abnf accepts a fact it must refuse", k.c);
+    } else if (semanticOnly.includes(k.c)) {
+      if (fact !== null && !grammarAccepts(grammar, "verb-fact", fact)) fail("verb-descriptile.abnf refuses a fact listed as semantic only", k.c);
+    } else fail("verb descriptile invalid fixture is in neither list", k.c);
   }
 }
 

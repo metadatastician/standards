@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 = A3: The Single Gate (one required check, the caller contract, the check table)
-:version: 0.2.3-draft
+:version: 0.2.8-draft
 :status: DRAFT v0.2.8 (an adopted entry must resolve in chora-registry, and the G65 pin floor follows the last change to an entry; earlier: `contractiles-adopted` entries are unique per chora id and carry a valid date, and a listed repo cannot pin the aggregate or table before its entry, G65; earlier: each `contractiles-adopted` entry carries `:from`, the date from which the repo is held to its clause, since the adopting repo cannot edit the table in its own PR, A7 YR04; earlier: the check table gains the append-only `contractiles-adopted` list, so a repo that deletes its clause after first adopting it is not `not_applicable`, A7 YC10; earlier: SysArch review R-04 and R-19: the `contractiles` row is `not_applicable`, reported, until a repo first adopts the clause (M4 for `standards`, M7 for a migrated repo, registration for a template-born repo); the open-anchor failure is cited from A7 YS03; warnings go in the verdict envelope). Decisions E1 to E11 approved by the owner on 2026-11-10, and E12 on 2026-11-13 (contractiles become a required check, with A7 v0.2.3). Not yet ratified as a whole. Builds on A1 v0.4.1 and A2 v0.2.4. Consistency pass applied 2026-11-10. Proposed in standards#1474; bot-review fixes applied 2026-11-12.
 :toc:
 
