@@ -1465,7 +1465,7 @@ export function checkAnchor(text, filename = null, opts = {}) {
   const ownUuid = !own ? null
     : own[2][0] === "uuid" ? own[2][1]
     : own[2][0] === "uuid8" ? profileCOfBody(own[2][1])
-    : own[2][0] === "uuid5" ? profileCOfBody(`gv-clade-index:${own[2][1]}`)
+    : own[2][0] === "uuid5" ? "u5"
     : null;
   // The declared major selects the rules (J27). A missing or unknown :schema
   // is reported after the members, as before; members are then read as /1.
@@ -1496,8 +1496,13 @@ export function checkAnchor(text, filename = null, opts = {}) {
       if (it[2].length === 0) throw new AnchorError(`${where} is empty`);
       // "A parent never names the deed itself" needs an id to compare with:
       // with none, every parent would pass that check unexamined.
+      // A7 S2: a #u5 in an identity field is an error in every mode, so a
+      // #u5 :repo-uuid is refused here, not converted to compare with.
+      if (ownUuid === "u5") {
+        throw new AnchorError("the deed's :repo-uuid is a #u5 literal; a version 5 id in an identity field is an error in every mode (A7 S2)");
+      }
       if (ownUuid === null) {
-        throw new AnchorError(`${where} needs the deed's own :repo-uuid (#uuid, #u8 or #u5) to check that no parent names the deed itself`);
+        throw new AnchorError(`${where} needs the deed's own :repo-uuid (#uuid or #u8) to check that no parent names the deed itself`);
       }
       for (const p of it[2]) {
         if (p[0] !== "clause" || p[1] !== "parent") throw new AnchorError(`${where} takes (parent …) clauses only`);

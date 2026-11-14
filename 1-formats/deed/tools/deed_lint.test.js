@@ -682,7 +682,7 @@ const ANCHOR_WHY = {
   "parent-no-uuid_chora.deed": "is missing :uuid",
   "parent-relation-string_chora.deed": ":relation must be a symbol",
   "parent-self_chora.deed": "the deed's own :repo-uuid",
-  "parent-self-u5_chora.deed": "the deed's own :repo-uuid",
+  "parent-self-u5_chora.deed": "a #u5 literal",
   "parent-self-u8_chora.deed": "the deed's own :repo-uuid",
   "parent-string_chora.deed": "got string",
   "parents-stray_chora.deed": "takes (parent …) clauses only",
