@@ -50,9 +50,6 @@ on:
         description: 'Also add the CICD Squabbler gate where a repo has none (same PR as the re-pin)'
         type: boolean
         default: false
-      only:
-        description: 'Walk this one repository (owner/name) instead of every owner; its owner token is used'
-        default: ''
       proven_sha:
         description: 'proven-cicd-and-workflows commit whose proven/manifest.json the content census reads (40-hex; empty = the pin below; off = no content census)'
         default: ''
@@ -144,8 +141,11 @@ jobs:
           set -euo pipefail
           if [ -n "$ONLY" ]; then
             [[ $ONLY =~ ^[A-Za-z0-9-]+/[A-Za-z0-9._-]+$ ]] || { echo "::error::only must be owner/name, got '${ONLY}'" >&2; exit 1; }
-            OWNERS="${ONLY%%/*}"
           fi
+          # GitHub owner slugs are case-insensitive and a dispatch may write `a, b`:
+          # compare both lists on one normal form (lower case, no whitespace).
+          OWNERS=$(printf '%s' "$OWNERS" | tr 'A-Z' 'a-z' | tr -d '[:space:]')
+          ONLY_OWNER=$(printf '%s' "${ONLY%%/*}" | tr 'A-Z' 'a-z')
           # Every owner walked needs its OWN installation token: a token for one
           # owner cannot write to another owner's repositories. Until 2026-11-10
           # this step checked only the hyperpolymath token, and the run step used
