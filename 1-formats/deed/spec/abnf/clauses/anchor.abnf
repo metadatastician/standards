@@ -58,8 +58,9 @@ schema-field    = %s":schema" token-sep DQUOTE
                 ; The profile major this clause is written against. A reader
                 ; refuses a major it does not know (A7 law, after ultraplan
                 ; Q5); this one knows /1 (legacy) and /2 (A7 J27).
-                ; SEMANTIC: under /2, legacy-subject-clause and parents-clause
-                ; are refused; under /1, subject-clause is refused.
+                ; SEMANTIC: under /2, legacy-subject-clause, parents-clause
+                ; and ssg-clause are refused (J8, J26, J29); under /1,
+                ; subject-clause is refused.
 
 authority-field = %s":authority" token-sep DQUOTE 1*( str-char / escape ) DQUOTE
                 ; Non-empty; deed.abnf's four escapes are allowed, as in any
