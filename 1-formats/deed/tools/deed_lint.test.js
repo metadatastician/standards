@@ -6,7 +6,7 @@ import { cpSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, writ
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { validate, blankComments, LintError, SELF_TEST_CASES, checkEgress, EgressError, checkAnchor, AnchorError, profileCOfBody, readMustfileChecks, MustfileError, readProofReceipt, ProofReceiptError, checkContractiles, ContractilesError, contractilePaths, CONTRACTILE_VERBS, checkEdict, EdictError, verbOfFilename, checkVerbDescriptile, VerbDescriptileError, verbOfDescriptile, choraRepoUuid, checkEcosystem, EcosystemError, ECOSYSTEM_RELATIONSHIPS } from "./deed_lint.js";
+import { validate, blankComments, LintError, SELF_TEST_CASES, checkEgress, EgressError, checkAnchor, AnchorError, profileCOfBody, readMustfileChecks, MustfileError, readProofReceipt, ProofReceiptError, checkContractiles, ContractilesError, contractilePaths, CONTRACTILE_VERBS, checkEdict, EdictError, verbOfFilename, checkVerbDescriptile, VerbDescriptileError, verbOfDescriptile, choraRepoUuid, rootChora, checkEcosystem, EcosystemError, ECOSYSTEM_RELATIONSHIPS } from "./deed_lint.js";
 import { generateContractileRegistry as generateRegistry } from "./deed_lint.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -1220,6 +1220,13 @@ describe("verb descriptile fixtures", () => {
     expect(choraRepoUuid(join(FIX_VD, "valid", "must-with-edict"))).toBe("00000000-0000-8000-8000-0000000000a1");
     expect(checkVerbDescriptile(t, p, { repoUuid: "00000000-0000-8000-8000-0000000000a1" }).facts.length).toBe(2);
     expect(() => checkVerbDescriptile(t, p, { repoUuid: "00000000-0000-8000-8000-0000000000b2" })).toThrow(/YD08/);
+  });
+  test("the YD08 id lookup does not need the chora's :canonical-name; the ecosystem profile (YD07) does", () => {
+    const dir = mkdtempSync(join(tmpdir(), "chora-noname-"));
+    writeFileSync(join(dir, "x_chora.deed"), HDR + '(repo-deed :schema-version "1" :repo-uuid #uuid"00000000-0000-8000-8000-0000000000a1")\n');
+    expect(choraRepoUuid(dir)).toBe("00000000-0000-8000-8000-0000000000a1");
+    expect(rootChora(dir)).toEqual({ uuid: "00000000-0000-8000-8000-0000000000a1", name: null });
+    expect(() => rootChora(dir, { needName: true })).toThrow(/:canonical-name to check against \(YD07\)/);
   });
   test("--root without a directory is a usage error, not a skipped check", () => {
     const r = cli("--verb-descriptile", join(FIX_VD, "valid", "intent-basic", "INTENT.deed"), "--root");
