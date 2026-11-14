@@ -177,8 +177,8 @@ jobs:
           # PROVEN CONTENT header). The scheduled run reads proven/manifest.json
           # of hyperpolymath/proven-cicd-and-workflows at this pinned commit;
           # a dispatch may name another 40-hex commit, or `off`. An unreadable
-          # manifest at the pin stops that owner's run before any census
-          # (fail closed), so the pin must name a commit that carries one.
+          # manifest degrades loudly: that owner's pin census still completes,
+          # the census gets a CONTENT-CENSUS-FAILED row, and the job ends red.
           PROVEN_PIN="c4b4256dd8b24462e2531a57c2f34384aeb218dd"
           case "$PROVEN_SHA_INPUT" in
             off) PROVEN_SHA="" ;;

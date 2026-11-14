@@ -92,8 +92,10 @@
 #     CONTENT-AHEAD      stamp version newer than the manifest at --proven-sha
 #     CONTENT-UNLISTED   the manifest does not list the artifact
 #     CONTENT-MALFORMED  a `# proven-cicd:` first line that is not a valid stamp
-#   An unreadable or invalid manifest at --proven-sha stops the run before any
-#   census (fail closed): a content census with no manifest is not evidence.
+#   An unreadable or invalid manifest at --proven-sha degrades loudly: the pin
+#   census still runs, one CONTENT-CENSUS-FAILED row replaces the content rows,
+#   and the run exits 1 at the end. A content census with no manifest is not
+#   evidence, and an outage at proven-cicd must not blind the pin census.
 #   Rewriting a stale copy is a separate mode, not built here.
 #   A stamped copy detects edits to its hashed body by sha256. proven-cicd's
 #   stamped bodies carry no standards reusable pins in that region; if one ever
@@ -941,24 +943,34 @@ main() {
   log "== target: ${TARGET_SHA} (reachable from ${STANDARDS_REPO} main; lock self-consistent) =="
   [ "$DO_FIX" -eq 1 ] && log "== MODE: --fix (will open PRs) ==" || log "== MODE: audit (writes nothing) =="
 
-  # Proven content census: the manifest at the pinned commit, or no run at all.
+  # Proven content census: the manifest at the pinned commit. Without it the
+  # content census DEGRADES LOUDLY: the pin census still runs, the census gets
+  # one CONTENT-CENSUS-FAILED row instead of content rows, and the run exits 1
+  # at the end. An outage at proven-cicd cannot blind the pin census, and a
+  # content census with no manifest never reads as clean.
+  local content_failed=""
   if [ -n "$PROVEN_SHA" ]; then
     [[ $PROVEN_SHA =~ ^[0-9a-f]{40}$ ]] \
       || { log "FATAL: --proven-sha must be a 40-hex commit, got '${PROVEN_SHA}'."; exit 1; }
     local mraw; mraw=$(mktemp); PROVEN_MANIFEST=$(mktemp)
     if ! gh api "repos/${PROVEN_REPO}/contents/proven/manifest.json?ref=${PROVEN_SHA}" \
-           -H 'Accept: application/vnd.github.raw' > "$mraw" 2>/dev/null \
-       || ! manifest_tsv "$mraw" > "$PROVEN_MANIFEST"; then
-      rm -f "$mraw" "$PROVEN_MANIFEST"
-      log "FATAL: proven/manifest.json at ${PROVEN_REPO}@${PROVEN_SHA} is unreadable or not a valid proven-cicd/manifest/v1. Refusing a content census without it."
-      exit 1
+           -H 'Accept: application/vnd.github.raw' > "$mraw" 2>/dev/null; then
+      content_failed="proven/manifest.json unreadable at ${PROVEN_REPO}@${PROVEN_SHA}"
+    elif ! manifest_tsv "$mraw" > "$PROVEN_MANIFEST"; then
+      content_failed="proven/manifest.json at ${PROVEN_REPO}@${PROVEN_SHA} is not a valid proven-cicd/manifest/v1"
     fi
     rm -f "$mraw"
-    log "== proven content: $(wc -l < "$PROVEN_MANIFEST") artifact(s) at ${PROVEN_REPO}@${PROVEN_SHA} (census only) =="
+    if [ -n "$content_failed" ]; then
+      rm -f "$PROVEN_MANIFEST"; PROVEN_MANIFEST=""
+      log "ERROR: ${content_failed}. No content census; the pin census continues and the run will end red."
+    else
+      log "== proven content: $(wc -l < "$PROVEN_MANIFEST") artifact(s) at ${PROVEN_REPO}@${PROVEN_SHA} (census only) =="
+    fi
   fi
 
   local tsv; tsv=$(mktemp)
   printf 'REPO\tWORKFLOW\tSTATUS\tDETAIL\n' > "$tsv"
+  [ -n "$content_failed" ] && printf -- '-\t-\tCONTENT-CENSUS-FAILED\t%s\n' "$content_failed" >> "$tsv"
 
   WORKDIR=$(mktemp -d); trap 'rm -rf "${WORKDIR:-}"' EXIT
   local repos n=0
@@ -1083,6 +1095,10 @@ main() {
 
   if [ -n "$OUT_FILE" ]; then cp "$tsv" "$OUT_FILE"; log "== census: ${OUT_FILE} =="; else cat "$tsv"; fi
   rm -f "$tsv" "${PROVEN_MANIFEST:-}"
+  if [ -n "$content_failed" ]; then
+    log "FAILED: the content census did not run (${content_failed}); the pin census above is complete."
+    exit 1
+  fi
 }
 
 if [ "${BASH_SOURCE[0]}" = "$0" ]; then
