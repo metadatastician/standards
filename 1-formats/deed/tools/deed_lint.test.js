@@ -677,7 +677,7 @@ const ANCHOR_WHY = {
   "missing-schema_chora.deed": "is missing :schema",
   "nested-anchor_chora.deed": "only at the top level",
   "parent-duplicate_chora.deed": "twice",
-  "parent-legacy-literal_chora.deed": "got uuid8",
+  "parent-legacy-literal_chora.deed": "a #u5 literal",
   "parent-no-own-id_chora.deed": "needs the deed's own :repo-uuid",
   "parent-no-uuid_chora.deed": "is missing :uuid",
   "parent-relation-string_chora.deed": ":relation must be a symbol",

@@ -136,7 +136,7 @@ parents-clause  = "(" %s"parents" 1*(token-sep parent-clause) [token-sep] ")"
                 ; /1 only. Under /2 a parent is an ECOSYSTEM.deed
                 ; (related :uuid … :relationship parent) entry (A7 J26).
 parent-clause   = "(" %s"parent" 1*(token-sep parent-member) [token-sep] ")"
-parent-member   = ( %s":uuid" token-sep chora-uuid8 )
+parent-member   = ( %s":uuid" token-sep chora-id )
                 / ( %s":relation" token-sep symbol )
                 ; A parent is named by its chora id, the opaque #uuid literal
                 ; of A1 (never a reverse-DNS name, a path or a clade). SEMANTIC:

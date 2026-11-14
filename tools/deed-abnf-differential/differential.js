@@ -140,6 +140,51 @@ function clauseText(t, name) {
   return null;
 }
 
+// The source text of each top-level field of the form whose keyword is in
+// `names`, from its ":" to the end of its value, comments between them kept.
+// Strings and comments are skipped, so a ":project" inside a string or a
+// comment, or inside a nested clause, is never taken for a field.
+function topLevelFields(t, names) {
+  const out = [];
+  const skipString = (k) => { for (k++; k < t.length && t[k] !== '"'; k++) if (t[k] === "\\") k++; return k; };
+  const skipComment = (k) => { while (k < t.length && t[k] !== "\n") k++; return k; };
+  let depth = 0;
+  for (let k = 0; k < t.length; k++) {
+    const c = t[k];
+    if (c === '"') k = skipString(k);
+    else if (c === ";") k = skipComment(k);
+    else if (c === "(") depth++;
+    else if (c === ")") depth--;
+    else if (c === ":" && depth === 1 && /[\s(]/.test(t[k - 1] ?? " ")) {
+      const m = /^:([a-z][a-z0-9-]*)/.exec(t.slice(k));
+      if (!m || !names.has(m[1])) continue;
+      let v = k + m[0].length;
+      // separators and comments before the value
+      for (;;) {
+        if (/\s/.test(t[v] ?? "")) v++;
+        else if (t[v] === ";") v = skipComment(v) + 1;
+        else break;
+      }
+      let end;
+      if (t[v] === '"') end = skipString(v) + 1;
+      else if (t[v] === "(") {
+        let d = 0;
+        for (end = v; end < t.length; end++) {
+          if (t[end] === '"') end = skipString(end);
+          else if (t[end] === ";") end = skipComment(end);
+          else if (t[end] === "(") d++;
+          else if (t[end] === ")" && --d === 0) { end++; break; }
+        }
+      } else {
+        for (end = v; end < t.length && !/[\s);]/.test(t[end]); end++);
+      }
+      out.push(t.slice(k, end));
+      k = end - 1;
+    }
+  }
+  return out;
+}
+
 // Invalid anchor fixtures whose defect the grammar itself expresses. Each must
 // be a valid deed whose (anchor …) clause anchor.abnf refuses. The others in
 // fixtures/anchor/invalid/ break a SEMANTIC side condition of the profile
@@ -333,8 +378,8 @@ for (const { c, text } of edictCases("valid")) {
 // three exhaustive lists: the grammar refuses its first (related …), the
 // grammar refuses one of its ecosystem fields, or only the profile refuses it.
 {
-  const ecoField = /:(project|ecosystem|position-type|purpose|not|pipeline-position|chain|pipeline-notes|coordination)\s+("(?:[^"\\]|\\.)*"|\([^)]*\)|[^\s)]+)/g;
-  const fieldsOf = (t) => [...t.matchAll(ecoField)].map((m) => m[0]);
+  const ECO_FIELDS = new Set(["project", "ecosystem", "position-type", "purpose", "not", "pipeline-position", "chain", "pipeline-notes", "coordination"]);
+  const fieldsOf = (t) => topLevelFields(t, ECO_FIELDS);
   const cases = (sub) => readdirSync(join(FIXTURES, "ecosystem", sub)).sort().map((c) => {
     const dir = join(FIXTURES, "ecosystem", sub, c);
     return { c, dir, file: join(dir, "ECOSYSTEM.deed"), text: readFileSync(join(dir, "ECOSYSTEM.deed"), "utf8") };
@@ -357,7 +402,7 @@ for (const { c, text } of edictCases("valid")) {
   }
   const relatedRejects = ["related-clause-member", "related-extra-field", "related-uuid-legacy", "relationship-string", "relationship-unknown"];
   const fieldRejects = ["coordination-string", "not-not-list"];
-  const semanticOnly = ["beholding-chora", "empty-purpose", "missing-affirmed", "missing-project", "missing-purpose",
+  const semanticOnly = ["beholding-chora", "chora-no-name", "empty-purpose", "missing-affirmed", "missing-project", "missing-purpose",
     "of-chora-mismatch", "project-mismatch", "project-not-chora", "related-duplicate", "related-missing-notes",
     "rule-in-descriptile", "strict-no-uuid", "unknown-clause", "unknown-field"];
   for (const k of cases("invalid")) {

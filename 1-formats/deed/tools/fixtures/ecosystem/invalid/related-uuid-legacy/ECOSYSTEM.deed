@@ -8,4 +8,4 @@
   :ecosystem "hyperpolymath"
   :position-type "game"
   :purpose "A small example game used by the deed fixtures."
-  (related :name "x" :relationship parent :notes "n" :uuid #u8"chora-registry:github.com/o/x"))
+  (related :name "x" :relationship parent :notes "n" :uuid #u5"github.com/o/x"))
