@@ -493,6 +493,13 @@ describe("proof-receipt profile (PROOF-POLICY §8.5)", () => {
     expect(() => one(imp({ digest: D }))).toThrow(/import o\/sibling: :inputs-sha256 is not the SHA-256 of its files/);
     expect(() => one(imp({ repo: "nope" }))).toThrow(/:repository must be OWNER\/REPO/);
     expect(() => one(imp({ repo: "hyperpolymath/x" }))).toThrow(/does not import itself/);
+    // Names are case-insensitive, and §8.6's alias names the same repository.
+    expect(() => one(imp({ repo: "HyperPolymath/X" }))).toThrow(/does not import itself/);
+    expect(() => one(imp({ repo: "o/sibling" }) + imp({ repo: "O/Sibling" }))).toThrow(/listed twice/);
+    const std = (repo) => read(doc(claim("PWG-3", agda({ manifest: manifest(FILES) + imp({ repo }) }) + " " + none), { repo: "metadatastician/standards" }));
+    expect(() => std("hyperpolymath/standards")).toThrow(/does not import itself/);
+    expect(() => std("Metadatastician/Standards")).toThrow(/does not import itself/);
+    expect(std("hyperpolymath/standards-other").claims[0].legs[0].receipts[0].imports).toHaveLength(1);
     expect(() => one(imp() + imp())).toThrow(/listed twice \(one pin per repository\)/);
     expect(() => one(imp({ commit: "abc" }))).toThrow(/:commit must be the full 40-character/);
     expect(() => one(imp({ files: [["b", h], ["a", h]] }))).toThrow(/import o\/sibling manifest path "a" is out of order/);
