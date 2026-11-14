@@ -342,6 +342,10 @@ than restate them — one canonical home per decision.
 
 `relationship` must be drawn from a closed vocabulary. Observed:
 `downstream-consumer`, `sibling-language`, `code-dependency`, `parent`.
+The full closed list (16 terms, including the five the owner added on
+2026-11-14: `sibling-standard`, `data-dependency`, `dispatch-target`,
+`scanner-source`, `mcp-host`) is in
+`1-formats/deed/mappings/meta-ecosystem-to-repo-deed.adoc` §3 and §3.1.
 
 *This file is the single source of ecosystem relationships.* Per the wiring
 design of 2026-09-01, the `(ecosystem ...)` block in `INTENT.contractile` —

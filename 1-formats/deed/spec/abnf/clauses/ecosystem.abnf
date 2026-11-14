@@ -2,15 +2,24 @@
 ; SPDX-License-Identifier: MPL-2.0
 ; SPDX-License-Identifier: CC-BY-SA-4.0
 ;
-; DEED clause profile: ECOSYSTEM.deed, v1.0.0 (DRAFT)
+; DEED clause profile: ECOSYSTEM.deed, v1.1.0 (DRAFT)
 ; Prose and rationale: docs/estate-reconciliation/A7-contractiles-descriptiles-anchor.adoc
 ; sections 7.1 (files and the affirmation members) and 7.2 (the ECOSYSTEM.deed
 ; row); rulings J12, J14, J20; the field mapping is
 ; 1-formats/deed/mappings/meta-ecosystem-to-repo-deed.adoc. M3 module order:
 ; section 11.
 ;
+; CHANGELOG (v1.0.0 → v1.1.0, owner ruling 2026-11-14, from hypatia's
+; ECOSYSTEM.a2ml migration):
+;   - The closed :relationship list gains five terms, sibling-standard,
+;     data-dependency, dispatch-target, scanner-source and mcp-host (16 in
+;     all). Each is defined in mappings/meta-ecosystem-to-repo-deed.adoc 3.
+;     Additive: every v1.0.0 (related …) is still accepted, and an unknown
+;     term is still refused.
+;   - The header cites deed.abnf v2.0.0 (J24), the grammar now in force.
+;
 ; A CLAUSE PROFILE, not a new grammar. Every rule below is also a `field` or
-; `clause` of deed.abnf v1.5.0, so ECOSYSTEM.deed still passes deed_lint
+; `clause` of deed.abnf v2.0.0, so ECOSYSTEM.deed still passes deed_lint
 ; unchanged. Rules it borrows: string, symbol and token-sep are deed.abnf's;
 ; str-list and chora-id are common.abnf's. Requires RFC 7405 (%s"..."
 ; case-sensitive literals).
@@ -55,7 +64,10 @@ relationship    = %s"standard-source" / %s"build-tooling" / %s"validation-toolin
                 / %s"signing-tooling" / %s"verification-tooling" / %s"minted-from"
                 / %s"registry" / %s"downstream-consumer" / %s"sibling-language"
                 / %s"code-dependency" / %s"parent"
+                / %s"sibling-standard" / %s"data-dependency" / %s"dispatch-target"
+                / %s"scanner-source" / %s"mcp-host"
                 ; The closed list of A7 7.2: the seven terms the owner ruled
-                ; on 2026-09-19 (mappings/meta-ecosystem-to-repo-deed.adoc) and
-                ; the four DESCRIPTILE-SPEC observed, parent among them.
+                ; on 2026-09-19 (mappings/meta-ecosystem-to-repo-deed.adoc),
+                ; the four DESCRIPTILE-SPEC observed, parent among them, and
+                ; the five the owner ruled on 2026-11-14 (v1.1.0).
                 ; SEMANTIC: the whole symbol, so "registry-x" is refused.

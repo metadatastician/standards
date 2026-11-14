@@ -435,7 +435,7 @@ for (const { c, text } of edictCases("valid")) {
     for (const r of allClauses(k.text, "related")) if (!grammarAccepts(grammar, "eco-related", r)) fail("ecosystem.abnf refuses a valid (related …)", `${k.c}: ${r.slice(0, 60)}`);
     for (const f of fieldsOf(k.text)) if (!grammarAccepts(grammar, "ecosystem-field", f)) fail("ecosystem.abnf refuses a valid field", `${k.c}: ${f.slice(0, 60)}`);
   }
-  const relatedRejects = ["related-clause-member", "related-extra-field", "relationship-string", "relationship-unknown"];
+  const relatedRejects = ["related-clause-member", "related-extra-field", "relationship-near-miss", "relationship-string", "relationship-unknown"];
   const fieldRejects = ["coordination-string", "not-not-list"];
   const semanticOnly = ["beholding-chora", "chora-no-name", "empty-purpose", "expired", "missing-affirmed", "missing-project", "missing-purpose",
     "of-chora-mismatch", "project-mismatch", "project-not-chora", "related-duplicate", "related-missing-notes",

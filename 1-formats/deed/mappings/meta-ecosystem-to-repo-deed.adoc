@@ -66,8 +66,30 @@ does not get its own file. (One deed per repo is the doc-head's semantics.)
 | `[pipeline] chain` | `(ecosystem :chain "standards → rsr-template-repo → (every estate repo)")` | verbatim STRING (arrow prose stays prose)
 | `[pipeline] notes` | `(ecosystem :pipeline-notes "…")` | verbatim STRING
 | `[pipeline] coordination` | `(ecosystem :coordination standards)` | **the #726 hub-pointer, carried VERBATIM** — hub repo name → SYMBOL; empty string (standalone) stays `:coordination ""`
-| `[related-projects] projects[]` | repeated clauses: `(related :name "standards" :relationship standard-source :notes "…")` | name → STRING, relationship → SYMBOL (`standard-source build-tooling validation-tooling signing-tooling verification-tooling minted-from registry` — closed set, **owner-ruled 2026-09-19** per the first estate conversion report (marid): `minted-from` = the rsr-template parent edge every minted repo carries, `registry` = the gv-clade-index registration edge; the template-instance seen-set could never contain them, so the gap was structural, not incidental), notes → STRING; one `(related …)` per array element, order-free (deed order is not semantic)
+| `[related-projects] projects[]` | repeated clauses: `(related :name "standards" :relationship standard-source :notes "…")` | name → STRING, relationship → SYMBOL (`standard-source build-tooling validation-tooling signing-tooling verification-tooling minted-from registry` — closed set, **owner-ruled 2026-09-19** per the first estate conversion report (marid): `minted-from` = the rsr-template parent edge every minted repo carries, `registry` = the gv-clade-index registration edge; the template-instance seen-set could never contain them, so the gap was structural, not incidental; extended by DESCRIPTILE-SPEC's four observed terms `downstream-consumer sibling-language code-dependency parent` and, **owner-ruled 2026-11-14**, by `sibling-standard data-dependency dispatch-target scanner-source mcp-host`, 16 terms in all, defined in §3.1), notes → STRING; one `(related …)` per array element, order-free (deed order is not semantic)
+| `[[related-projects.<group>]]` entries (`name`, `relationship`, `description`) | the same repeated `(related :name "…" :relationship … :notes "…")` clauses | the grouped spelling (hypatia's `sibling` and `infrastructure` groups): `description` → `:notes` STRING; the group name is not carried (the relationship already says what the group did); relationship from the same closed set. Added 2026-11-14 with the five terms, so the hypatia edges translate by table, not ad hoc
 |===
+
+=== 3.1 The `:relationship` vocabulary added 2026-11-14
+
+The owner extended the closed set on 2026-11-14, when hypatia's
+`ECOSYSTEM.a2ml` migration found seven edges whose relationships it could
+not carry (`clauses/ecosystem.abnf` v1.1.0). Each term reads from this
+repo towards the related one:
+
+* `sibling-standard`: a peer that works to the same standard or protocol
+  family as this repo; neither is the other's source, tooling or consumer.
+* `data-dependency`: this repo reads a data store, corpus or dataset the
+  related repo holds or defines; no code is linked.
+* `dispatch-target`: this repo sends work (dispatches, jobs, findings) to
+  the related repo, which acts on it.
+* `scanner-source`: the related repo produces the scan reports this repo
+  reads as input.
+* `mcp-host`: the related repo serves this repo's capabilities over the
+  Model Context Protocol; this repo runs no MCP server of its own.
+
+The set stays closed: a term outside the 16 is refused, and a new one
+needs an owner ruling and a minor version of `clauses/ecosystem.abnf`.
 
 == 4. Drop doctrine
 
