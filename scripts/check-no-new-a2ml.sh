@@ -10,20 +10,20 @@
 # adds. Files that already exist at BASE are never judged, so a repository
 # with legacy A2ML adopts the gate with no baseline and no ledger.
 #
-# What counts as an addition (owner ruling 2026-11-12, A7 Part 1a):
+# What counts as an addition (owner rulings of 2026-11-12, A7 Part 1a, and
+# of 2026-11-14, "A2ML moves fail"): any A2ML file at a path where BASE had
+# none, that is:
 #   * a new A2ML path (git status A);
-#   * a rename whose new path is A2ML and whose old path is not (git status R
-#     from a non-A2ML file), because that creates an A2ML file;
+#   * a rename or move whose new path is A2ML, from any old path, an A2ML one
+#     included (for example into 9-archive/): the file now stands at a new
+#     path, and an A2ML file is to leave the tree, not move within it;
 #   * a copy whose new path is A2ML.
-# What does not:
-#   * a rename from one A2ML path to another (for example into 9-archive/):
-#     a move adds no fact;
-#   * editing or deleting an existing A2ML file (deleting content is allowed).
-# Rename detection is git's default (50% similarity), applied to the change
-# as a whole: the gate compares two snapshots, so commit boundaries inside a
-# PR do not count. A move that also rewrites most of the file is seen as a
-# deletion plus an addition and fails; land the move in its own PR first, then
-# edit the file in a second PR.
+# What does not: editing an existing A2ML file in place, or deleting one
+# (deleting content is allowed). Rename detection is git's default (50%
+# similarity), applied to the change as a whole: the gate compares two
+# snapshots, so commit boundaries inside a PR do not count. A move that also
+# rewrites most of the file is seen as a deletion plus an addition, and fails
+# the same way.
 #
 # The change is measured from the merge base of BASE and HEAD, as a pull
 # request diff is, so an A2ML file that the base branch deleted or moved after
@@ -72,10 +72,9 @@ while IFS= read -r -d '' status; do
   case "$status" in
     R*|C*)
       IFS= read -r -d '' old; IFS= read -r -d '' new
+      # Owner ruling 2026-11-14: a move between two A2ML paths fails too.
       if is_a2ml "$new"; then
-        if [[ "$status" == C* ]] || ! is_a2ml "$old"; then
-          added+=("$new"$'\t'"$status from $old")
-        fi
+        added+=("$new"$'\t'"$status from $old")
       fi
       ;;
     A*)
@@ -97,5 +96,5 @@ for entry in "${added[@]}"; do
   path="${entry%%$'\t'*}"; how="${entry#*$'\t'}"
   echo "::error file=${path}::A2ML is retired: this change adds ${path} (${how}). Write the content as a clause of <repo>_chora.deed, a *.k9.ncl contract or coordination.k9 instead (standards .claude/CLAUDE.md, Machine-Readable Artefacts)."
 done
-echo "no-new-a2ml: FAIL — ${#added[@]} A2ML file(s) added. Existing A2ML files may be edited down or deleted, never added."
+echo "no-new-a2ml: FAIL — ${#added[@]} A2ML file(s) at a new path. Existing A2ML files may be edited down in place or deleted, never added, moved or copied."
 exit 1
