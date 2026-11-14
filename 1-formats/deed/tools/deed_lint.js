@@ -578,6 +578,58 @@ function checkLineLength(text) {
   }
 }
 
+/**
+ * The text with each ';' comment blanked to spaces, outside strings only. Line
+ * breaks and offsets are kept, so a match index still gives its line.
+ */
+export function blankComments(text) {
+  let out = "", inStr = false;
+  for (let k = 0; k < text.length; k++) {
+    const c = text[k];
+    if (inStr) {
+      out += c;
+      if (c === "\\" && k + 1 < text.length) out += text[++k];
+      else if (c === '"') inStr = false;
+    } else if (c === '"') { inStr = true; out += c; }
+    else if (c === ";") {
+      while (k < text.length && text[k] !== "\n") { out += " "; k++; }
+      if (k < text.length) out += "\n";
+    } else out += c;
+  }
+  return out;
+}
+
+const FIELD_ALT = [...IDENTITY_FIELDS].join("|");
+const U5_LEXICAL = new RegExp(`:(${FIELD_ALT})\\s+#u5"[^"]*"`, "g");
+const UUID_LEXICAL = new RegExp(`:(${FIELD_ALT})\\s+#uuid"[0-9a-f]{8}-[0-9a-f]{4}-([0-9a-f])[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}"`, "g");
+
+/**
+ * The identity rule read lexically, as scripts/check-uuid-v8.sh reads it (owner
+ * rulings Q2 and "by name", 2026-11-14, CHORA-SPEC 7.1): an identity field name
+ * followed by #u5, or by a #uuid that is not version 8, is an error wherever it
+ * appears, comments and strings included. Two views are read: the raw text, and
+ * the text with comments blanked, so a comment between a field and its value
+ * cannot hide the value.
+ */
+export function checkIdentityLexical(text) {
+  const lineOf = (i) => { let ln = 1; for (let k = 0; k < i; k++) if (text[k] === "\n") ln++; return ln; };
+  for (const view of [text, blankComments(text)]) {
+    for (const m of view.matchAll(U5_LEXICAL)) {
+      throw new LintError(
+        `identity field :${m[1]} carries a #u5 literal; write #uuid"<v8 id>" or #u8"domain:name" (owner ruling Q2, CHORA-SPEC 7.1)`,
+        lineOf(m.index),
+      );
+    }
+    for (const m of view.matchAll(UUID_LEXICAL)) {
+      if (m[2] === "8") continue;
+      throw new LintError(
+        `identity field :${m[1]} carries a version ${m[2]} id (v5-identity); an identity field carries version 8 (CHORA-SPEC 7.1, T30)`,
+        lineOf(m.index),
+      );
+    }
+  }
+}
+
 /** Validate DEED source text. Returns [head, items] on success; throws LintError. */
 export function validate(text, filename = null) {
   const tab = text.indexOf("\t");
@@ -591,6 +643,7 @@ export function validate(text, filename = null) {
   parseHeader(lx);
   lx.skipSep();
   const [head, items] = parseForm(lx);
+  checkIdentityLexical(text);
   if (filename) checkFilenameDispatch(filename, head);
   return [head, items];
 }

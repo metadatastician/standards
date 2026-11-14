@@ -6,7 +6,7 @@ import { cpSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, writ
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { validate, LintError, SELF_TEST_CASES, checkEgress, EgressError, checkAnchor, AnchorError, profileCOfBody, readMustfileChecks, MustfileError, readProofReceipt, ProofReceiptError, checkContractiles, ContractilesError, contractilePaths, CONTRACTILE_VERBS, checkEdict, EdictError, verbOfFilename, checkVerbDescriptile, VerbDescriptileError, verbOfDescriptile, choraRepoUuid } from "./deed_lint.js";
+import { validate, blankComments, LintError, SELF_TEST_CASES, checkEgress, EgressError, checkAnchor, AnchorError, profileCOfBody, readMustfileChecks, MustfileError, readProofReceipt, ProofReceiptError, checkContractiles, ContractilesError, contractilePaths, CONTRACTILE_VERBS, checkEdict, EdictError, verbOfFilename, checkVerbDescriptile, VerbDescriptileError, verbOfDescriptile, choraRepoUuid } from "./deed_lint.js";
 import { generateContractileRegistry as generateRegistry } from "./deed_lint.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -294,6 +294,15 @@ describe("Mustfile check profile", () => {
     // field and its value does not hide it.
     expect(() => validate(HDR + '(praxis-deed :schema-version "1" :canonical-name "x" :alias ' + u5 + ')')).not.toThrow();
     expect(() => validate(HDR + '(praxis-deed :schema-version "1" :canonical-name "x" :beholding-chora\n  ' + u5 + ')')).toThrow(/carries a #u5 literal/);
+    // The rule is lexical, as in check-uuid-v8.sh (owner ruling of 2026-11-14,
+    // "by name"): a field name and #u5 in a comment or a string fail too, and a
+    // comment between a field and its value does not hide the value.
+    expect(() => validate(HDR + '(praxis-deed :schema-version "1" :canonical-name "x") ; :repo-uuid ' + u5 + '\n')).toThrow(/identity field :repo-uuid carries a #u5 literal/);
+    expect(() => validate(HDR + '(praxis-deed :schema-version "1" :canonical-name "x" :note ":estate ' + u5.replace(/"/g, '\\"') + '")')).not.toThrow();
+    expect(() => validate(HDR + '(praxis-deed :schema-version "1" :canonical-name "x" :beholding-chora ; note\n  ' + u5 + ')')).toThrow(/carries a #u5 literal/);
+    // A ';' inside a string is not a comment, so stripping comments invents no field.
+    expect(() => validate(HDR + '(praxis-deed :schema-version "1" :canonical-name "x" :alias (":repo-uuid ; example" ' + u5 + '))')).not.toThrow();
+    expect(blankComments('a "b;c" ; d\ne')).toBe('a "b;c"    \ne');
   });
   test("multiline critical check survives parsing and has an executable body", () => {
     const checks = readMustfileChecks(doc('(check\n :id alpha\n :severity critical\n :discharge run\n :body "false")'), "test_praxis.deed");

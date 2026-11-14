@@ -119,13 +119,26 @@ scannable_text() {
 # Print two one-line views of a file's scannable text, for the identity
 # rules: the text with line breaks folded to spaces (so a field and its value
 # on separate lines meet), and the same with ';' comments removed first (so a
-# comment used as the separator between them cannot hide the value). The raw
+# comment used as the separator between them cannot hide the value). A ';'
+# inside a double-quoted string is not a comment, so strings are tracked,
+# across lines, with backslash escapes. The raw
 # view keeps comments, so a comment that quotes a field and a #u5 is still
 # flagged (owner ruling of 2026-11-14: the rule is lexical).
 folded_views() {
   scannable_text "$1" | tr '\n\r' '  '
   printf '\n'
-  scannable_text "$1" | sed 's/;.*$//' | tr '\n\r' '  '
+  scannable_text "$1" | awk '
+    { out = ""; n = length($0)
+      for (i = 1; i <= n; i++) {
+        c = substr($0, i, 1)
+        if (q) { out = out c
+                 if (c == "\\") { i++; out = out substr($0, i, 1) }
+                 else if (c == "\"") q = 0 }
+        else if (c == "\"") { q = 1; out = out c }
+        else if (c == ";") break
+        else out = out c
+      }
+      print out }' | tr '\n\r' '  '
   printf '\n'
 }
 
@@ -173,14 +186,15 @@ while IFS= read -r file; do
   # are skipped, as for every other rule here. Line breaks are folded to
   # spaces first, because a deed may put a field and its value on separate
   # lines. The rule is lexical, like IDENT_RE: a field followed by #u5 fails
-  # wherever it appears, prose and comments included.
+  # wherever it appears, prose and comments included. A file without "#u5"
+  # cannot match, so it is skipped before the views are built.
   while IFS= read -r pair; do
     [ -n "$pair" ] || continue
     key=${pair%%[[:space:]]*}
     printf '%s: identity field %s carries a #u5 literal; write #uuid"<v8 id>" (%s)\n' "$file" "$key" "$pair" >&2
     status=1
   done <<EOF
-$(grep -Iq . "$file" 2>/dev/null && folded_views "$file" | grep -oE -- "$U5_IDENT_RE" | sort -u || true)
+$(grep -Iq -- '#u5"' "$file" 2>/dev/null && folded_views "$file" | grep -oE -- "$U5_IDENT_RE" | sort -u || true)
 EOF
   if grep -IEni -- "$UUID_RE" "$file" >/dev/null 2>&1; then
     # Typed literals first: each #uuid"<id>" must be exactly the literal, and
@@ -213,7 +227,7 @@ EOF
         status=1
       fi
     done <<EOF
-$(folded_views "$file" | grep -oE -- "$IDENT_RE" | sort -u || true)
+$(grep -q -- '#uuid"' "$file" 2>/dev/null && folded_views "$file" | grep -oE -- "$IDENT_RE" | sort -u || true)
 EOF
     # Then every other UUID, with the typed literals removed. Every UUID on a
     # line is checked, not only the last one (grep -o).

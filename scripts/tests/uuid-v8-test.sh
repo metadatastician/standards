@@ -149,6 +149,12 @@ for mode in "" --strict; do
   expect 1 "#u5 after a comment used as the separator is rejected ${mode:-(default)}" $mode
   fresh; printf '(repo-deed\n  :repo-uuid ; a note\n  #uuid"%s")\n' "$V5" > "$WORK/t/a_chora.deed"
   expect 1 "a v5 #uuid after a comment used as the separator is rejected ${mode:-(default)}" $mode
+  fresh; printf '(repo-deed :note (":repo-uuid ; example" \043u5"ordinary-name"))\n' > "$WORK/t/a_chora.deed"
+  expect 0 "a ';' inside a string is not a comment, so no identity field is invented ${mode:-(default)}" $mode
+  fresh; printf '(repo-deed :note ":repo-uuid \\" ; still a string" \043u5"ordinary-name")\n' > "$WORK/t/a_chora.deed"
+  expect 0 "an escaped quote does not end the string before a ';' ${mode:-(default)}" $mode
+  fresh; printf '(repo-deed) ; :repo-uuid \043u5"github.com/o/x"\n' > "$WORK/t/a_chora.deed"
+  expect 1 "a comment that quotes a field with #u5 is rejected (lexical rule) ${mode:-(default)}" $mode
   fresh; printf '(repo-deed\n  :repo-uuid\n  #uuid"%s")\n' "$V5" > "$WORK/t/a_chora.deed"
   expect 1 "a v5 #uuid on the line after its identity field is rejected ${mode:-(default)}" $mode
   fresh; printf '\000\001:repo-uuid \043u5"github.com/o/x"\000' > "$WORK/t/blob.bin"
