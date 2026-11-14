@@ -19,9 +19,22 @@ reviewed, and extend the table — they never translate ad-hoc.
 
 == 2. Target form
 
-Both translate into clauses of the SAME `<canonical-name>_chora.deed`
-(`repo-deed` head) that family 1 created — this family ADDS clauses; it
-does not get its own file. (One deed per repo is the doc-head's semantics.)
+META translates into a `(meta …)` clause of the SAME
+`<canonical-name>_chora.deed` (`repo-deed` head) that family 1 created: this
+family ADDS clauses. (One deed per repo is the doc-head's semantics.)
+
+ECOSYSTEM has two valid target forms (owner ruling 2026-11-14), and a
+translator may emit either or both from the one §3 table:
+
+* the `(ecosystem …)` clause of that same chora deed, as above; or
+* `ECOSYSTEM.deed`, a `descriptile-deed` (A7 §7.1–7.2), whose members are
+  checked by `clauses/ecosystem.abnf` and `deed_lint.js --ecosystem`. It adds
+  the descriptile header (`:canonical-name`, `:of-chora`, the affirmation
+  members); `:of-chora` is the chora's `:repo-uuid`, copied, never minted.
+
+The two forms carry the same members with the same values; only the
+enclosing form differs. This settles the conflict between this section and
+A7 §7.1 that the hypatia migration (#1113) recorded as open.
 
 == 3. Field tables
 
@@ -103,6 +116,10 @@ needs an owner ruling and a minor version of `clauses/ecosystem.abnf`.
   to prose sections.
 
 == 5. Provenance & validation (extends family 1's P-1..P-5)
+
+Every check below applies to both ECOSYSTEM target forms of §2. In the
+`ECOSYSTEM.deed` form, P-6 compares `:project` with that file's
+`:canonical-name`, which must itself equal the chora's (YD07).
 
 * **P-2a (table-closed):** any field not in §3 fails translation loudly —
   no best-effort passthrough.
