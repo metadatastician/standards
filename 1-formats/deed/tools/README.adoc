@@ -236,9 +236,14 @@ Checks `INTENT.deed`, `MUST.deed`, `TRUST.deed`, `ADJUST.deed`, `DUST.deed` and
 * the form carries `:canonical-name` and `:of-chora` (a version 8 chora id,
   an opaque `#uuid` or a `#u8` literal; `#u5` is refused; J20, J28) exactly once, and no `:beholding-chora`;
 * `:affirmed` (a real date) and `:affirmed-by` (a symbol) are required, and
-  `:expires`, when present, is not before `:affirmed`. Affirmation is
-  required by default (J4), and no relaxation can be written yet. Whether
-  `:expires` is still in the future is the runner's check (YD06);
+  `:expires`, when present, is not before `:affirmed` and has not passed by
+  today, UTC (YD06; an `:expires` of today has not passed). Affirmation is
+  required by default (J4), and no relaxation can be written yet. The fixture
+  runners and the unit tests check against a fixed date, `FIXTURE_TODAY`, so
+  a committed fixture cannot age into failure;
+* `:schema-version` has three numeric segments and major 1. A higher minor
+  is read under the 1.0 rules and reported on a `WARN` line; another major,
+  or anything else, is refused (A7 Q5);
 * the only clause is `(fact …)`: a `(rule …)` belongs in the verb's
   `<Verb>file.deed` (YF02);
 * each fact has `:witnesses` (a rule `:id`, once per file, with
@@ -270,8 +275,9 @@ Checks `ECOSYSTEM.deed` (head `descriptile-deed`) against
 `../mappings/meta-ecosystem-to-repo-deed.adoc`. The rules it adds to the grammar:
 
 * the descriptile header, as for the verb descriptiles: `:canonical-name`, a
-  version 8 `:of-chora` (`#uuid` or `#u8`; J20, J28), no `:beholding-chora`, and `:affirmed` and
-  `:affirmed-by`, required by default (J4, YD06);
+  version 8 `:of-chora` (`#uuid` or `#u8`; J20, J28), no `:beholding-chora`,
+  `:affirmed` and `:affirmed-by`, required by default, an `:expires` that has
+  not passed (J4, YD06), and a `:schema-version` of major 1 (A7 Q5);
 * `:project`, `:ecosystem`, `:position-type` and `:purpose` are required,
   non-empty strings. `:not` (a list of strings), `:pipeline-position`,
   `:chain`, `:pipeline-notes` and `:coordination` are optional, each at most

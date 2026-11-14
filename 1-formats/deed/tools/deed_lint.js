@@ -2026,13 +2026,41 @@ export function choraIdOf(v, E, where) {
 /** The header fields every descriptile-deed carries (A7 7.1). */
 const DESCRIPTILE_HEADER = ["schema-version", "canonical-name", "of-chora", "affirmed", "affirmed-by", "expires"];
 
+/** The descriptile schema this profile reads (A7 Q5): major 1, minor 0. */
+const DESCRIPTILE_SCHEMA = [1, 0];
+
+/**
+ * The fixed date the fixture runners and unit tests check :expires against
+ * (YD06), so a committed fixture cannot age into failure. Production checks
+ * use todayUtc().
+ */
+export const FIXTURE_TODAY = "2026-11-14";
+
+/** Today, UTC, as YYYY-MM-DD. */
+function todayUtc() {
+  return new Date().toISOString().slice(0, 10);
+}
+
 /**
  * Check a descriptile-deed's header fields (A7 7.1): :canonical-name, a
  * version 8 :of-chora (J20; equal to repoUuid when given, YD08), and the
  * affirmation members, required by default (J4, YD06): no relaxation can be
  * written until the agentic module and the J19 receipt interface exist.
+ * :expires, when present, must not have passed by today (YD06). The
+ * :schema-version has three numeric segments and major 1; a higher minor is
+ * read and warned (A7 Q5). Returns the warnings.
  */
-function checkDescriptileHeader(fields, what, E, repoUuid) {
+function checkDescriptileHeader(fields, what, E, repoUuid, today) {
+  const warnings = [];
+  const sv = fields.get("schema-version");
+  const m = sv && sv[0] === "string" ? /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.exec(sv[1]) : null;
+  if (!m) throw E(`:schema-version must have three numeric segments, as "1.0.0" (A7 Q5)`);
+  if (Number(m[1]) !== DESCRIPTILE_SCHEMA[0]) {
+    throw E(`:schema-version ${sv[1]} has major ${m[1]}; this profile reads major ${DESCRIPTILE_SCHEMA[0]} only (A7 Q5)`);
+  }
+  if (Number(m[2]) > DESCRIPTILE_SCHEMA[1]) {
+    warnings.push(`:schema-version ${sv[1]} is a newer minor than ${DESCRIPTILE_SCHEMA.join(".")}; read under the ${DESCRIPTILE_SCHEMA.join(".")} rules (A7 Q5)`);
+  }
   for (const k of ["canonical-name", "of-chora"]) if (!fields.has(k)) throw E(`${what} is missing :${k}`);
   if (fields.get("canonical-name")[0] !== "string") throw E(":canonical-name must be a string");
   const ofId = choraIdOf(fields.get("of-chora"), E, ":of-chora");
@@ -2052,6 +2080,10 @@ function checkDescriptileHeader(fields, what, E, repoUuid) {
   if (fields.has("expires") && fields.get("expires")[1] < fields.get("affirmed")[1]) {
     throw E(":expires is before :affirmed");
   }
+  if (fields.has("expires") && fields.get("expires")[1] < today) {
+    throw E(`:expires ${fields.get("expires")[1]} has passed (today is ${today}); an expired descriptile is refused (YD06)`);
+  }
+  return warnings;
 }
 
 /**
@@ -2086,7 +2118,7 @@ export function checkVerbDescriptile(text, filename, opts = {}) {
     else if (it[1] === "rule") throw E("a descriptile states what is; a (rule …) belongs in the verb's <Verb>file.deed (YF02, YL3)");
     else throw E(`a verb descriptile has no clause (${it[1]} …); its clauses are (fact …)`);
   }
-  checkDescriptileHeader(fields, "a verb descriptile", E, opts.repoUuid);
+  const warnings = checkDescriptileHeader(fields, "a verb descriptile", E, opts.repoUuid, opts.today ?? todayUtc());
 
   const seen = new Set();
   const out = [];
@@ -2133,7 +2165,7 @@ export function checkVerbDescriptile(text, filename, opts = {}) {
     }
     out.push({ witnesses: w[1], evidence: ev[1] });
   }
-  return { verb, facts: out };
+  return { verb, facts: out, warnings };
 }
 
 /**
@@ -2206,6 +2238,7 @@ function verbDescriptileFiles(files, root) {
       const ruleIds = root && verb ? edictRuleIdsAt(join(root, contractilePaths(verb).declaration), repoUuid) : undefined;
       const r = checkVerbDescriptile(text, f, { ruleIds, repoUuid });
       console.log(`OK   ${f} (${r === null ? "not a verb descriptile" : `${r.verb} descriptile, ${r.facts.length} fact${r.facts.length === 1 ? "" : "s"}${ruleIds ? ", witnesses and :of-chora checked against the repo" : ""}`})`);
+      for (const w of (r && r.warnings) || []) console.log(`WARN ${f}: ${w}`);
     } catch (e) {
       if (!(e instanceof LintError) && !e.code) throw e;
       bad += 1;
@@ -2252,7 +2285,7 @@ function verbDescriptileFixtures(d) {
       try {
         const repoUuid = choraRepoUuid(dir);
         const ruleIds = existsSync(edict) ? edictRuleIdsAt(edict, repoUuid) : undefined;
-        if (checkVerbDescriptile(readFileSync(f, "utf8"), f, { ruleIds, repoUuid }) === null) throw new VerbDescriptileError("not a verb descriptile");
+        if (checkVerbDescriptile(readFileSync(f, "utf8"), f, { ruleIds, repoUuid, today: FIXTURE_TODAY }) === null) throw new VerbDescriptileError("not a verb descriptile");
       } catch (e) {
         if (!(e instanceof LintError)) throw e;
         got = false;
@@ -2317,7 +2350,7 @@ export function checkEcosystem(text, filename, opts = {}) {
     else if (it[1] === "rule") throw E("a descriptile states what is; a (rule …) belongs in an edict (YF02, YL3)");
     else throw E(`ECOSYSTEM.deed has no clause (${it[1]} …); its clause is (related …)`);
   }
-  checkDescriptileHeader(fields, "ECOSYSTEM.deed", E, opts.repoUuid);
+  const warnings = checkDescriptileHeader(fields, "ECOSYSTEM.deed", E, opts.repoUuid, opts.today ?? todayUtc());
   for (const k of ["project", "ecosystem", "position-type", "purpose"]) {
     if (!fields.has(k)) throw E(`ECOSYSTEM.deed is missing :${k} (A7 7.2)`);
   }
@@ -2375,7 +2408,7 @@ export function checkEcosystem(text, filename, opts = {}) {
     seen.add(key);
     out.push({ name: name[1], relationship: rel[1], uuid });
   }
-  return { project, related: out };
+  return { project, related: out, warnings };
 }
 
 /** --ecosystem FILE... [--root DIR] [--strict]: returns exit code. */
@@ -2391,6 +2424,7 @@ function ecosystemFiles(files, root, strict) {
       }
       const r = checkEcosystem(text, f, { repoUuid: chora && chora.uuid, choraName: chora && chora.name, strict });
       console.log(`OK   ${f} (${r === null ? "not ECOSYSTEM.deed" : `${r.related.length} related${chora ? ", checked against the chora" : ""}${strict ? ", strict" : ""}`})`);
+      for (const w of (r && r.warnings) || []) console.log(`WARN ${f}: ${w}`);
     } catch (e) {
       if (!(e instanceof LintError) && !e.code) throw e;
       bad += 1;
@@ -2431,7 +2465,7 @@ function ecosystemFixtures(d) {
       try {
         const chora = rootChora(dir, { needName: true });
         const r = checkEcosystem(readFileSync(f, "utf8"), f, {
-          repoUuid: chora && chora.uuid, choraName: chora && chora.name, strict: existsSync(join(dir, "STRICT")),
+          repoUuid: chora && chora.uuid, choraName: chora && chora.name, strict: existsSync(join(dir, "STRICT")), today: FIXTURE_TODAY,
         });
         if (r === null) throw new EcosystemError("not ECOSYSTEM.deed");
       } catch (e) {
