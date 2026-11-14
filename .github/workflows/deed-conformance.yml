@@ -125,6 +125,10 @@ jobs:
       - name: verb descriptile fixtures (DRAFT, A7)
         if: github.repository_id == 1116521501 && steps.bun.outcome == 'success'
         run: bun "$T/deed_lint.js" --verb-descriptile-fixtures "$T/fixtures/verb-descriptile"
+      # ECOSYSTEM.deed (A7 7.2): a DRAFT profile, gated on its own fixtures until ratified.
+      - name: ecosystem fixtures (DRAFT, A7)
+        if: github.repository_id == 1116521501 && steps.bun.outcome == 'success'
+        run: bun "$T/deed_lint.js" --ecosystem-fixtures "$T/fixtures/ecosystem"
       - name: grammar-vs-gate differential (deed.abnf through apg-js, against deed_lint.js)
         # Mutates every committed deed and valid fixture with a seeded generator
         # and fails when the gate and the normative grammar disagree, other than
