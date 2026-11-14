@@ -243,7 +243,7 @@ collect_nested() { # collect_nested PATH COMMIT
     | grep -oE "^[[:space:]]*-?[[:space:]]*uses:[[:space:]]*['\"]?[A-Za-z0-9_.-]+/[A-Za-z0-9_./-]+@[^[:space:]'\"]+" \
     | sed -E "s/^[[:space:]]*-?[[:space:]]*uses:[[:space:]]*['\"]?//; s#^([^/]+/[^/@]+)[^@]*@#\1@#" >> "$tmp/uses" || true
   for c in $(printf '%s\n' "$body" \
-      | grep -oE "^[[:space:]]*uses:[[:space:]]*['\"]?(\./\.github/workflows/[A-Za-z0-9._-]+\.ya?ml|[A-Za-z0-9_.-]+/standards/\.github/workflows/[A-Za-z0-9._-]+\.ya?ml@[0-9a-f]{40})" \
+      | grep -oE "^[[:space:]]*uses:[[:space:]]*['\"]?(\./\.github/workflows/[A-Za-z0-9._-]+\.ya?ml|(hyperpolymath|metadatastician)/standards/\.github/workflows/[A-Za-z0-9._-]+\.ya?ml@[0-9a-f]{40})" \
       | sed -E "s/^[[:space:]]*uses:[[:space:]]*['\"]?//" || true); do
     case "$c" in
       ./*) collect_nested "${c#./}" "$2"; continue ;;
