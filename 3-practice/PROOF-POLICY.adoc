@@ -879,8 +879,10 @@ manifest of each current receipt of a negative control (§8.5.4), and each
 `(import …)` in the clone of that repository that `--import` gives. An import
 with no clone given fails. So does an import whose clone holds the home
 `:source-commit`, or whose pinned `:commit` is in the home clone: that is the
-home repository under another name, even in a shallow clone. The `--import`
-name matches the receipt's name without regard to case. `scripts/tests/check-proof-receipt-test.sh`
+home repository under another name, even in a shallow clone. The home clone
+must be full, not shallow, or the script does not run: a shallow home clone
+hides the history that these two checks read. The `--import` name matches the
+receipt's name without regard to case. `scripts/tests/check-proof-receipt-test.sh`
 tests it on a scratch repository: a receipt carried to its squash commit by an
 echo passes, and a forged echo, a `:source-commit` off the default branch, a
 manifest that is false at its commit, a missing source commit, an import whose

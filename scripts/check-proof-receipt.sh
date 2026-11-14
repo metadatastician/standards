@@ -12,7 +12,7 @@
 # Usage: check-proof-receipt.sh [--branch REF] [--import OWNER/REPO=DIR]... RECEIPT REPO
 #
 #   RECEIPT  the *_praxis.deed proof receipt
-#   REPO     a clone of the receipt's :repository. Every commit the receipt
+#   REPO     a full (not shallow) clone of the receipt's :repository. Every commit the receipt
 #            names must be present: fetch a squashed or rebased source by
 #            the reference the forge keeps (on GitHub refs/pull/<n>/head).
 #   --branch the default-branch ref in REPO (default: HEAD)
@@ -62,6 +62,12 @@ for tool in bun jq git sha256sum; do
   command -v "$tool" >/dev/null || { echo "cannot run: $tool is not installed" >&2; exit 2; }
 done
 git -C "$repo" rev-parse --git-dir >/dev/null 2>&1 || { echo "cannot run: $repo is not a git clone" >&2; exit 2; }
+# The checks need the home history whole: the ancestry check of the
+# :source-commit, and the refusal of an import whose pinned commit is home
+# history. A shallow home clone hides both, so it cannot be checked.
+if [ "$(git -C "$repo" rev-parse --is-shallow-repository)" = true ]; then
+  echo "cannot run: $repo is a shallow clone; fetch its full history (git fetch --unshallow)" >&2; exit 2
+fi
 git -C "$repo" rev-parse --verify --quiet "$branch^{commit}" >/dev/null \
   || { echo "cannot run: $branch is not a commit in $repo" >&2; exit 2; }
 
