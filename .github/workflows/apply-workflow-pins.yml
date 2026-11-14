@@ -134,6 +134,10 @@ jobs:
           ONLY: ${{ inputs.only || '' }}
         run: |
           set -euo pipefail
+          # GitHub owner slugs are case-insensitive and a dispatch may write `a, b`:
+          # compare both lists on one normal form (lower case, no whitespace).
+          OWNERS=$(printf '%s' "$OWNERS" | tr 'A-Z' 'a-z' | tr -d '[:space:]')
+          ONLY_OWNER=$(printf '%s' "${ONLY%%/*}" | tr 'A-Z' 'a-z')
           # Every owner walked needs its OWN installation token: a token for one
           # owner cannot write to another owner's repositories. Until 2026-11-10
           # this step checked only the hyperpolymath token, and the run step used
@@ -142,7 +146,7 @@ jobs:
           # only that owner's token is required; the others are skipped here too.
           missing=""
           for owner in ${OWNERS//,/ }; do
-            if [ -n "$ONLY" ] && [ "${ONLY%%/*}" != "$owner" ]; then continue; fi
+            if [ -n "$ONLY" ] && [ "$ONLY_OWNER" != "$owner" ]; then continue; fi
             var="TOK_$(printf '%s' "$owner" | tr 'a-z-' 'A-Z_')"
             [ -n "${!var:-}" ] || missing="${missing} ${owner}"
           done
@@ -181,6 +185,10 @@ jobs:
           ONLY: ${{ inputs.only || '' }}
         run: |
           set -euo pipefail
+          # GitHub owner slugs are case-insensitive and a dispatch may write `a, b`:
+          # compare both lists on one normal form (lower case, no whitespace).
+          OWNERS=$(printf '%s' "$OWNERS" | tr 'A-Z' 'a-z' | tr -d '[:space:]')
+          ONLY_OWNER=$(printf '%s' "${ONLY%%/*}" | tr 'A-Z' 'a-z')
           # Proven content census (read-only in every mode; see the script's
           # PROVEN CONTENT header). The scheduled run reads proven/manifest.json
           # of hyperpolymath/proven-cicd-and-workflows at this pinned commit;
@@ -207,12 +215,12 @@ jobs:
               *) echo "::error::only must be owner/name, got '${ONLY}'" >&2; exit 1 ;;
             esac
             case ",${OWNERS}," in
-              *",${ONLY%%/*},"*) ;;
+              *",${ONLY_OWNER},"*) ;;
               *) echo "::error::only=${ONLY}: its owner is not in owners (${OWNERS}); refusing to report a clean run that walked nothing" >&2; exit 1 ;;
             esac
           fi
           for owner in ${OWNERS//,/ }; do
-            if [ -n "$ONLY" ] && [ "${ONLY%%/*}" != "$owner" ]; then continue; fi
+            if [ -n "$ONLY" ] && [ "$ONLY_OWNER" != "$owner" ]; then continue; fi
             var="TOK_$(printf '%s' "$owner" | tr 'a-z-' 'A-Z_')"
             args=(--owners "$owner" --limit "$LIMIT" --out "census-${owner}.tsv")
             [ -n "$ONLY" ] && args+=(--only "$ONLY")
