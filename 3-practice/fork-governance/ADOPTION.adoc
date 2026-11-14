@@ -376,7 +376,10 @@ The example follows Hypatia Kin Arbiter priority (highest first); the grid sorts
 fleet rows by that order regardless of manifest or artifact order. Fleet rows
 are explicitly advisory (`"gating": false`). Do not enrol panicbot alongside
 the direct panic-attack scan unless duplicate observations are intentionally
-wanted: they are the same scanner. Per-row counts can double-count, and the
+wanted: they are the same scanner. (This repository does so on purpose from
+2026-11-14: phase 1 of the scanner cutover runs `panicbot` and `ponsbot` as
+advisory shadows beside the direct rows for 14 days, then compares them. See
+gitbot-fleet `docs/migrations/scanner-cutover-ponsbot-panicbot.adoc`.) Per-row counts can double-count, and the
 unique total can only corroborate findings with sufficient path, line and class
 identity; it is not a licence to sum duplicate rows.
 
