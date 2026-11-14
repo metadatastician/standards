@@ -57,7 +57,9 @@ assert "editing an existing A2ML file passes" 0 "no-new-a2ml: OK" bash "$GATE" H
 base delete; g rm -q .machine_readable/LEGACY.a2ml; change
 assert "deleting an A2ML file passes" 0 "no-new-a2ml: OK" bash "$GATE" HEAD~1 HEAD "$d"
 base archive; mkdir -p "$d/9-archive/a2ml"; g mv .machine_readable/LEGACY.a2ml 9-archive/a2ml/LEGACY.a2ml; change
-assert "moving an A2ML file to another A2ML path passes" 0 "no-new-a2ml: OK" bash "$GATE" HEAD~1 HEAD "$d"
+assert "moving an A2ML file into 9-archive/ fails (owner ruling 2026-11-14)" 1 "file=9-archive/a2ml/LEGACY.a2ml::" bash "$GATE" HEAD~1 HEAD "$d"
+base movesame; g mv .machine_readable/LEGACY.a2ml .machine_readable/RENAMED.a2ml; change
+assert "renaming an A2ML file in place fails, and names the old path" 1 "from .machine_readable/LEGACY.a2ml" bash "$GATE" HEAD~1 HEAD "$d"
 base deed; printf ';; SPDX-License-Identifier: MPL-2.0\n' > "$d/x_chora.deed"; printf 'x\n' > "$d/notes.a2ml.md"; change
 assert "a .deed and a name that only contains .a2ml pass" 0 "no-new-a2ml: OK" bash "$GATE" HEAD~1 HEAD "$d"
 
@@ -65,7 +67,7 @@ echo "=== additions ==="
 base add; printf 'x\n' > "$d/.machine_readable/CLADE.a2ml"; change
 assert "a new .a2ml fails and is named" 1 "file=.machine_readable/CLADE.a2ml::" bash "$GATE" HEAD~1 HEAD "$d"
 base tmpl; printf 'x\n' > "$d/META.a2ml.template"; printf 'x\n' > "$d/STATE.a2ml.v2.template"; printf 'x\n' > "$d/X.a2ml.in"; change
-assert "template and .in spellings fail, all three counted" 1 "3 A2ML file(s) added" bash "$GATE" HEAD~1 HEAD "$d"
+assert "template and .in spellings fail, all three counted" 1 "3 A2ML file(s) at a new path" bash "$GATE" HEAD~1 HEAD "$d"
 base renin; g mv notes.txt notes.a2ml; change
 assert "renaming a non-A2ML file to .a2ml fails" 1 "R100 from notes.txt" bash "$GATE" HEAD~1 HEAD "$d"
 base copy; cp "$d/.machine_readable/LEGACY.a2ml" "$d/COPY.a2ml"; printf 'touched\n' >> "$d/.machine_readable/LEGACY.a2ml"; change
