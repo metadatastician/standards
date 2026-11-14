@@ -186,6 +186,11 @@ kill_mutant owner_case_sensitive \
   's@tolower\(a\[1\]\) ~ /\^@a[1] ~ /^@' \
   "FAIL owner-mixed-case.lock"
 
+# M12b, M12c — the deed over-cap function: the cap is a strict greater-than on
+# OCTETS (a 998-octet line is legal), and the line terminator is not counted.
+kill_mutant deed_cap_off_by_one 's@if \(n > cap\)@if (n >= cap)@' "FAIL deed-exact.deed"
+kill_mutant deed_counts_terminator 's@sub\(/\\r\$/, "", line\);@@' "FAIL deed-crlf.deed"
+
 # M12 — drop the owner_id test. Every standards record would then read stale,
 # including one that already carries the current owner's id.
 kill_mutant owner_id_unchecked \
@@ -303,7 +308,11 @@ if [ "$gql" = 1 ]; then
   [ -f "$GH_FIX/own_lock_unread" ] && extra=$(printf '%s' "$extra" | jq '. + [{name: "actions.lock", type: "blob", object: {text: null}}]')
   # $GH_FIX/own_stamped: each repository also holds that stamped proven-cicd copy.
   [ -f "$GH_FIX/own_stamped" ] && extra=$(printf '%s' "$extra" | jq --rawfile s "$GH_FIX/own_stamped" '. + [{name: "proven-lock-gate.yml", type: "blob", object: {text: $s}}]')
-  jq -n --arg sha "$TARGET" --argjson extra "$extra" '{data: {repository: {object: {entries: ([{name: "ci.yml", type: "blob",
+  # $GH_FIX/own_deed: each repository has that root deed; own_deed_unread: a deed blob with no text.
+  deed_json=null
+  [ -f "$GH_FIX/own_deed" ] && deed_json=$(jq -Rs '{text: ., isTruncated: false}' "$GH_FIX/own_deed")
+  [ -f "$GH_FIX/own_deed_unread" ] && deed_json=$(jq -n '{text: null, isTruncated: false}')
+  jq -n --arg sha "$TARGET" --argjson extra "$extra" --argjson deed "$deed_json" '{data: {repository: {deed: $deed, object: {entries: ([{name: "ci.yml", type: "blob",
     object: {text: ("jobs:\n  a:\n    uses: hyperpolymath/standards/.github/workflows/x.yml@" + $sha + "\n")}}] + $extra)}}}}'
   exit 0
 fi
@@ -687,6 +696,57 @@ case_main_owner_unread() {
   fi
 }
 
+# case_main_deed_overcap <applier> — a root deed with a line over 998 octets gets its
+# own DEED-OVERCAP row (count, line number, octet size) and the pin row of the same
+# repository is unchanged.
+case_main_deed_overcap() {
+  local d; d=$(new_case deedover)
+  { printf '(deed\n'; head -c 1159 /dev/zero | tr '\0' 'a'; printf '\n)\n'; } > "$d/own_deed"
+  run_content "$d" "$1"
+  if [ "$(cat "$d/rc")" = 0 ] \
+     && grep -qF "$(printf 'hyperpolymath/pub-a\tpub-a_chora.deed\tDEED-OVERCAP\t1 line(s) over 998 octets: L2=1159')" "$d/out" \
+     && grep -qF "$(printf 'hyperpolymath/pub-a\tci.yml\tFRESH')" "$d/out"; then
+    pass "main: a root deed line over 998 octets is reported DEED-OVERCAP (with line and size)"
+  else
+    fail "main: deed over-cap census wrong (rc=$(cat "$d/rc"))"
+    sed 's/^/    /' "$d/out" "$d/err" | tail -8 >&2
+  fi
+}
+
+# case_main_deed_clean <applier> — a root deed within the cap, and a repository with
+# no root deed at all, produce no deed row.
+case_main_deed_clean() {
+  local d; d=$(new_case deedclean)
+  printf '(deed\n  (identity))\n' > "$d/own_deed"
+  run_content "$d" "$1"
+  local ok=0
+  [ "$(cat "$d/rc")" = 0 ] && ! grep -qF "_chora.deed" "$d/out" && ok=1
+  rm -f "$d/own_deed"
+  run_content "$d" "$1"
+  { [ "$(cat "$d/rc")" = 0 ] && ! grep -qF "_chora.deed" "$d/out"; } || ok=0
+  if [ "$ok" = 1 ]; then
+    pass "main: an in-cap deed, and no deed at all, get no deed row"
+  else
+    fail "main: a clean or absent deed produced a row"
+    sed 's/^/    /' "$d/out" "$d/err" | tail -8 >&2
+  fi
+}
+
+# case_main_deed_unread <applier> — a deed blob that came back without text is
+# reported DEED-OVERCAP-UNREAD, never read as "no over-cap line".
+case_main_deed_unread() {
+  local d; d=$(new_case deedunread)
+  : > "$d/own_deed_unread"
+  run_content "$d" "$1"
+  if [ "$(cat "$d/rc")" = 0 ] \
+     && grep -qF "$(printf 'hyperpolymath/pub-a\tpub-a_chora.deed\tDEED-OVERCAP-UNREAD\t')" "$d/out"; then
+    pass "main: a deed that could not be read whole is reported DEED-OVERCAP-UNREAD"
+  else
+    fail "main: an unreadable deed was not reported (rc=$(cat "$d/rc"))"
+    sed 's/^/    /' "$d/out" "$d/err" | tail -8 >&2
+  fi
+}
+
 # Planted positives: the stub must be able to say no, or every fail-closed case
 # above could pass because nothing ever failed.
 d=$(new_case planted)
@@ -718,6 +778,9 @@ case_main_content_off "$APPLIER"
 case_main_owner_stale "$APPLIER"
 case_main_owner_clean "$APPLIER"
 case_main_owner_unread "$APPLIER"
+case_main_deed_overcap "$APPLIER"
+case_main_deed_clean "$APPLIER"
+case_main_deed_unread "$APPLIER"
 case_main_content_fix "$APPLIER"
 
 # Mutant: the census stays silent about an unreadable lock (the defect Codex found
@@ -905,6 +968,11 @@ list_mutant content_row_writes 's@\[ -n "\$cst" \] \&\& printf@[ -n "$cst" ] \&\
 # say nothing when there is nothing to say.
 list_mutant owner_row_dropped 's@ost=\$\(lock_owner_state "\$rdir/actions\.lock"\)@ost=""@' case_main_owner_stale
 list_mutant owner_row_always 's@\[ -n "\$ost" \] && printf@true \&\& printf@' case_main_owner_clean
+# Deed over-cap census: the row must be written, must not be written for a clean
+# deed, and an unreadable deed must be said, not skipped.
+list_mutant deed_row_dropped 's@dst=\$\(deed_overcap "\$rdir/\.root\.deed"\)@dst=""@' case_main_deed_overcap
+list_mutant deed_row_always 's@\[ -n "\$dst" \] && printf@true \&\& printf@' case_main_deed_clean
+list_mutant deed_unread_silent 's@elif \[ -f "\$rdir/\.root\.deed\.unread" \]; then@elif false; then@' case_main_deed_unread
 }
 
 echo
