@@ -132,6 +132,15 @@ expect "an import with no clone given fails" 1 "no clone given (--import o/sibli
 printf -- '-- moved\n' >>"$SIB/Algebra.agda"; git -C "$SIB" commit -qam moved
 SC2=$(git -C "$SIB" rev-parse HEAD)
 write repinned "$I" "$S" "$D" "$MANIFEST_S" "$ECHO_IN" "${IMPORT//$SC/$SC2}"
+expect "the --import name matches without regard to case" 0 "import o/sibling: the manifest holds at $SC" --branch main --import "O/Sibling=$SIB" "$WORK/imported_praxis.deed" "$R"
+# A shallow clone of the home repository at an old home commit, under an alias.
+SHALLOW="$WORK/shallow"; git clone -q --depth 1 --no-local --branch pr "file://$R" "$SHALLOW" 2>/dev/null
+HC=$(git -C "$SHALLOW" rev-parse HEAD)
+HIMPORT="
+        (import :repository \"o/alias\" :commit \"$HC\" :inputs-sha256 \"$(bash "$DIGEST" -C "$SHALLOW" "$HC" src/A.agda)\"
+          (file :path \"src/A.agda\" :sha256 \"$(bash "$DIGEST" -C "$SHALLOW" --manifest "$HC" src/A.agda | cut -d' ' -f1)\"))"
+write shallowalias "$I" "$S" "$D" "$MANIFEST_S" "$ECHO_IN" "$HIMPORT"
+expect "a shallow alias clone of the home repository fails" 1 "is in the home repository, so it is the home repository" --branch main --import "o/alias=$SHALLOW" "$WORK/shallowalias_praxis.deed" "$R"
 expect "an import whose clone is the home repository fails" 1 "its clone holds the home :source-commit" --branch main --import "o/sibling=$R" "$WORK/imported_praxis.deed" "$R"
 expect "an import whose files differ at its pin fails" 1 "import o/sibling: the manifest does not hold at $SC2" --branch main --import "o/sibling=$SIB" "$WORK/repinned_praxis.deed" "$R"
 

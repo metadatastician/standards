@@ -751,7 +751,8 @@ repository, and a `:commit` that is not a full 40-character lowercase commit.
 Two names are the same repository when they agree without regard to case
 (GitHub names are case-insensitive) or through the alias of §8.6. The reader
 cannot know every other alias, so `scripts/check-proof-receipt.sh` also
-refuses an import whose clone holds the home `:source-commit` (§8.5.3).
+refuses an import whose clone holds the home `:source-commit`, or whose pinned
+`:commit` is in the home clone (§8.5.3).
 The script that holds the pin is a file of the home repository, so it is in
 the home input set: a repin changes the home `:inputs-sha256`.
 
@@ -876,8 +877,10 @@ link:../scripts/check-proof-receipt.sh[`scripts/check-proof-receipt.sh`]
 It checks every echo, not only the links that a chain uses. It also checks the
 manifest of each current receipt of a negative control (§8.5.4), and each
 `(import …)` in the clone of that repository that `--import` gives. An import
-with no clone given fails, and so does an import whose clone holds the home
-`:source-commit`, because that clone is the home repository under another name. `scripts/tests/check-proof-receipt-test.sh`
+with no clone given fails. So does an import whose clone holds the home
+`:source-commit`, or whose pinned `:commit` is in the home clone: that is the
+home repository under another name, even in a shallow clone. The `--import`
+name matches the receipt's name without regard to case. `scripts/tests/check-proof-receipt-test.sh`
 tests it on a scratch repository: a receipt carried to its squash commit by an
 echo passes, and a forged echo, a `:source-commit` off the default branch, a
 manifest that is false at its commit, a missing source commit, an import whose
@@ -922,6 +925,6 @@ the gate must not record a current receipt for it.
 
 === 8.6 Naming
 
-`metadatastician/standards` and `metadatastician/standards` are the same
-repository. GitHub redirects the older name, and both names resolve to the
+`hyperpolymath/standards` (the former name) and `metadatastician/standards`
+are the same repository. GitHub redirects the older name, and both names resolve to the
 same commits. Cite either name, and pin by commit (§7).
