@@ -43,6 +43,8 @@
 #                    .github/workflows, or the applier's flat fetch directory.
 #   --standards      a standards git checkout that contains <sha>; default
 #                    $STANDARDS_DIR, else the checkout this script lives in.
+#   --capabilities   print the capability lines (nested-reusable-walk=1) and exit 0,
+#                    with no side effects: a caller tests capability, not script text.
 # Exit: 0 relocked or nothing to do; 1 refused (lock untouched); 2 usage.
 set -euo pipefail
 
@@ -52,7 +54,8 @@ while [ $# -gt 0 ]; do
     --to) TARGET="${2:-}"; shift 2 ;;
     --to=*) TARGET="${1#*=}"; shift ;;
     --standards) SROOT="${2:-}"; shift 2 ;;
-    -h|--help) sed -n '2,44p' "$0"; exit 0 ;;
+    --capabilities) echo "nested-reusable-walk=1"; exit 0 ;;
+    -h|--help) sed -n '2,46p' "$0"; exit 0 ;;
     -*) echo "relock-standards-pin: unknown option $1" >&2; exit 2 ;;
     *) WF="$1"; shift ;;
   esac
@@ -222,6 +225,39 @@ for p in $full; do
   sed 's/[[:space:]]#.*$//' "$tmp/reusable" \
     | grep -oE "^[[:space:]]*-?[[:space:]]*uses:[[:space:]]*['\"]?[A-Za-z0-9_.-]+/[A-Za-z0-9_./-]+@[^[:space:]'\"]+" \
     | sed -E "s/^[[:space:]]*-?[[:space:]]*uses:[[:space:]]*['\"]?//; s#^([^/]+/[^/@]+)[^@]*@#\1@#" >> "$tmp/uses" || true
+done
+# A called reusable may itself call another standards reusable at a pinned commit
+# (governance-reusable.yml nests deed-conformance.yml and k9-conformance.yml). The
+# actions THAT file uses are reached at startup too, so the caller's lock must
+# record them: without this the TARGET record lacks e.g. actions/upload-artifact
+# and the caller's closure check reports it as recorded nowhere (standards#1290).
+# Walk the nested calls transitively within the standards checkout: local
+# `./.github/workflows/x.yml` at the same commit, and `<owner>/standards/...@<40-hex>`
+# at a commit the checkout holds. A call into another repository cannot be read
+# offline and is left to the closure check (fail closed).
+nvisited=""
+collect_nested() { # collect_nested PATH COMMIT
+  case " $nvisited " in *" $2:$1 "*) return 0 ;; esac
+  nvisited="$nvisited $2:$1"
+  local body c cpath cref
+  body=$(git -C "$SROOT" show "$2:$1" 2>/dev/null | sed -E 's/[[:space:]]+#.*$//') || return 0
+  [ -n "$body" ] || return 0
+  printf '%s\n' "$body" \
+    | grep -oE "^[[:space:]]*-?[[:space:]]*uses:[[:space:]]*['\"]?[A-Za-z0-9_.-]+/[A-Za-z0-9_./-]+@[^[:space:]'\"]+" \
+    | sed -E "s/^[[:space:]]*-?[[:space:]]*uses:[[:space:]]*['\"]?//; s#^([^/]+/[^/@]+)[^@]*@#\1@#" >> "$tmp/uses" || true
+  for c in $(printf '%s\n' "$body" \
+      | grep -oE "^[[:space:]]*uses:[[:space:]]*['\"]?(\./\.github/workflows/[A-Za-z0-9._-]+\.ya?ml|(hyperpolymath|metadatastician)/standards/\.github/workflows/[A-Za-z0-9._-]+\.ya?ml@[0-9a-f]{40})" \
+      | sed -E "s/^[[:space:]]*uses:[[:space:]]*['\"]?//" || true); do
+    case "$c" in
+      ./*) collect_nested "${c#./}" "$2"; continue ;;
+    esac
+    cpath=".github/workflows/${c#*/.github/workflows/}"; cpath=${cpath%@*}; cref=${c##*@}
+    git -C "$SROOT" cat-file -e "${cref}^{commit}" 2>/dev/null && collect_nested "$cpath" "$cref"
+  done
+  return 0
+}
+for p in $full; do
+  path=${p#${COORD}/}; collect_nested "${path%@*}" "$TARGET"
 done
 grep -Ev '^(hyperpolymath|metadatastician)/standards@' "$tmp/uses" | LC_ALL=C sort -u > "$tmp/uses.s" || true
 

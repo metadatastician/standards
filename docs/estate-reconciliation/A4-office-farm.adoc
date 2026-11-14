@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 = A4: Office and Farm (the boundary, the intake envelope, work orders, the move of the scripts)
-:version: 0.2.3-draft
-:status: DRAFT v0.2.3. Decisions F1 to F15 approved by the owner on 2026-11-10. Not yet ratified as a whole. Builds on A1 v0.4.1, A2 v0.2.4 and A3 v0.2.8. Consistency pass applied 2026-11-10. Proposed in standards#1474; bot-review fixes applied 2026-11-12.
+:version: 0.2.4-draft
+:status: DRAFT v0.2.4 (owner ruling Q3 of 2026-11-14: the generated index lives in chora-registry and the office reads it). Decisions F1 to F15 approved by the owner on 2026-11-10. Not yet ratified as a whole. Builds on A1 v0.4.1, A2 v0.2.4 and A3 v0.2.8. Consistency pass applied 2026-11-10. Proposed in standards#1474; bot-review fixes applied 2026-11-12.
 :toc:
 
 Specification A4 of the Estate Reconciliation Plan. The office decides and the farm executes (R2). A4 defines the line between them, the one envelope in which every finding and every verdict enters the office, the work order that leaves it, and the rules for moving the farm's label and merge scripts.
@@ -27,7 +27,7 @@ Identifiers. Every decision, law and test id in this specification is local to i
 
 == 1. Summary
 
-* The office decides: desired state, repo lifecycle, the intake ledger, the generated index (A1) and the work orders. The farm hosts execution: credentials, runners, scheduling and the actuator switch. The farm decides nothing about what to change (R2 [O]).
+* The office decides: desired state, repo lifecycle, the intake ledger and the work orders. It reads the generated index (A1) from chora-registry, where it lives (Q3). The farm hosts execution: credentials, runners, scheduling and the actuator switch. The farm decides nothing about what to change (R2 [O]).
 * One executor path: office work order, then evaluator, then Kin gate, then `robot-repo-automaton` running on the farm, then rescan, then outcome [O]. Fleet bots are sensors. A bot reports a SARIF row and a report-back, and writes nothing.
 * One envelope for findings, check verdicts, gate verdicts and outcomes: a SARIF 2.1.0 body inside an in-toto Statement, signed in a DSSE envelope [O]. It resolves A3 E9.
 * A work order is a deed clause profile `(work-order ...)` in a `praxis-deed`. A k9 contract can be generated from it later [O].
@@ -61,7 +61,7 @@ Identifiers. Every decision, law and test id in this specification is local to i
 
 | Desired state of a repo (profile, generation, deviations, ruleset, settings) | Office | Sources are the repo chora (A2) and the estate canon. The ruleset JSON and settings JSON are canon data. Their home after the `standards` carve-out is A6's.
 | Repo lifecycle: birth, enrolment, life, death | Office | Phase 1 is dispatch-only (section 7).
-| The generated index (A1 section 8) | Office | The generator runs on the farm. Its output is committed to the office.
+| The generated index (A1 section 8) | chora-registry | `ATLAS.deed` is the finding index and lives in chora-registry (Q3 [O], 2026-11-14). The generator runs on the farm and commits its output there. The office reads it and does not hold a copy.
 | The intake ledger | Office | Section 6.
 | Work orders | Office | Section 7.
 | Evaluation of an order | Fleet (evaluator) | Wave 1 [M]. Not built.
@@ -538,9 +538,9 @@ Every test is new work. A fixture is valid unless marked `-bad`.
 | O05 | The observer writes no status and changes no repo. | `obs-writes-bad`
 |===
 
-== 14. Decisions approved on 2026-11-10 [O]
+== 14. Decisions approved on 2026-11-10 and 2026-11-14 [O]
 
-The owner approved F1 to F15 as recommended. The text of this document is the recommendation in each case. F3 amends A1: a `(publishers)` entry is either an ed25519 key or an OIDC identity.
+The owner approved F1 to F15 as recommended, and ruled Q3 on 2026-11-14. The text of this document is the recommendation in each case. F3 amends A1: a `(publishers)` entry is either an ed25519 key or an OIDC identity.
 
 [cols="1,4,1"]
 |===
@@ -561,6 +561,7 @@ The owner approved F1 to F15 as recommended. The text of this document is the re
 | F13 | One open order per `(repo, class)`. | Approved
 | F14 | The retention of envelopes. A4 requires only that a merged head's gate envelope is kept while it may be verified. | Approved
 | F15 | The envelope store is a directory the farm keeps until a store exists. VeriSimDB replaces it behind the same interface. | Approved
+| Q3 | `ATLAS.deed` lives in chora-registry, not in the office; the office reads it. Owner ruling of 2026-11-14 (SysArch Q3, finding R-12). Section 3.1. | Approved 2026-11-14
 |===
 
 Open after approval: A4 as a whole is not ratified. No credential, workflow, ruleset, script or repo is changed until the owner approves.

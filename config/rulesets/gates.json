@@ -108,6 +108,10 @@
     "Allowlist Preflight",
     "Code quality + docs",
     "Existing A2ML (advisory)",
+    "Deed conformance",
+    "K9 conformance",
+    "Deed conformance / lint",
+    "K9 conformance / validate",
     "CodeQL (default setup)",
     "Live Actions policy (credentialed advisory)"
   ]
