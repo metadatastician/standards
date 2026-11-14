@@ -1,0 +1,61 @@
+; SPDX-FileCopyrightText: © 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+; SPDX-License-Identifier: MPL-2.0
+; SPDX-License-Identifier: CC-BY-SA-4.0
+;
+; DEED clause profile: ECOSYSTEM.deed, v1.0.0 (DRAFT)
+; Prose and rationale: docs/estate-reconciliation/A7-contractiles-descriptiles-anchor.adoc
+; sections 7.1 (files and the affirmation members) and 7.2 (the ECOSYSTEM.deed
+; row); rulings J12, J14, J20; the field mapping is
+; 1-formats/deed/mappings/meta-ecosystem-to-repo-deed.adoc. M3 module order:
+; section 11.
+;
+; A CLAUSE PROFILE, not a new grammar. Every rule below is also a `field` or
+; `clause` of deed.abnf v1.5.0, so ECOSYSTEM.deed still passes deed_lint
+; unchanged. Rules it borrows: string, symbol and token-sep are deed.abnf's;
+; str-list and chora-id are common.abnf's. Requires RFC 7405 (%s"..."
+; case-sensitive literals).
+;
+; Where it applies: ECOSYSTEM.deed (head descriptile-deed, J14), at the top
+; level of the form. SEMANTIC (validator-enforced, deed_lint.js --ecosystem):
+;   * the descriptile header: :schema-version, :canonical-name and a version 8
+;     :of-chora (#uuid or #u8; J20, J28) once each, no :beholding-chora, and the affirmation
+;     members, required by default (J4, YD06), as for every descriptile;
+;   * :project, :ecosystem, :position-type and :purpose once each (required),
+;     the other ecosystem-field members at most once;
+;   * :project equals the deed's :canonical-name and, when the repo's chora
+;     deed is read alongside, its :canonical-name (YD07);
+;   * every other top-level member is an eco-related; no (rule …) (YF02).
+
+ecosystem-field = ( %s":project"           token-sep string )
+                / ( %s":ecosystem"         token-sep string )
+                / ( %s":position-type"     token-sep string )
+                / ( %s":purpose"           token-sep string )
+                / ( %s":not"               token-sep str-list )
+                / ( %s":pipeline-position" token-sep string )
+                / ( %s":chain"             token-sep string )
+                / ( %s":pipeline-notes"    token-sep string )
+                / ( %s":coordination"      token-sep coordination )
+                ; SEMANTIC: the strings are not empty. :pipeline-notes is not in
+                ; A7 7.2's row; the mapping carries it from [pipeline] notes, and
+                ; the worked model (rsr-template-repo) has it.
+coordination    = symbol / ( DQUOTE DQUOTE )
+                ; The hub repo's name as a symbol, or "" for a standalone repo
+                ; (the #726 hub pointer, carried verbatim by the mapping).
+
+eco-related     = "(" %s"related" 1*(token-sep related-member) [token-sep] ")"
+                ; SEMANTIC: :name, :relationship and :notes exactly once each,
+                ; :uuid at most once and required in strict mode (J12); no
+                ; member twice; one entry per (:name, :relationship) pair.
+related-member  = ( %s":name"         token-sep string )
+                / ( %s":relationship" token-sep relationship )
+                / ( %s":notes"        token-sep string )
+                / ( %s":uuid"         token-sep chora-id )
+
+relationship    = %s"standard-source" / %s"build-tooling" / %s"validation-tooling"
+                / %s"signing-tooling" / %s"verification-tooling" / %s"minted-from"
+                / %s"registry" / %s"downstream-consumer" / %s"sibling-language"
+                / %s"code-dependency" / %s"parent"
+                ; The closed list of A7 7.2: the seven terms the owner ruled
+                ; on 2026-09-19 (mappings/meta-ecosystem-to-repo-deed.adoc) and
+                ; the four DESCRIPTILE-SPEC observed, parent among them.
+                ; SEMANTIC: the whole symbol, so "registry-x" is refused.

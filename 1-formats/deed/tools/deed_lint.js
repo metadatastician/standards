@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: MPL-2.0
 // The DEED conformance validator, plain JavaScript (bun, zero dependencies).
 // It began as a port of deed_lint.py, which was deleted on 2026-11-13.
-const DOC = String.raw`deed-lint — conformance validator for the DEED grammar (deed.abnf v1.5.0).
+const DOC = String.raw`deed-lint — conformance validator for the DEED grammar (deed.abnf v2.0.0).
 
 Stdlib-only. Implements the normative grammar faithfully:
   * header = 1* spdx-line                 (";;" SP "SPDX-" …)
   * form   = "(" doc-head 1*(sep (field/clause)) [sep] ")"
   * doc-head ∈ {estate-deed, repo-deed, estate-atlas-deed, praxis-deed,
-                contractile-deed, descriptile-deed, anchor-deed}
+                contractile-deed, descriptile-deed}
   * field  = keyword sep value [sep "!"]  ("!" only after a rule's :id in a contractile-deed, J17)
   * clause = "(" symbol *(sep (field/clause)) [sep] ")"
   * value  = string / symbol / integer / boolean / uuid5 / uuid8 / uuid / quoted / list
@@ -47,6 +47,10 @@ Usage: deed_lint.js FILE...     exit 0 iff all files conform
                                               with --root, each :witnesses must name a rule of the verb's edict (YD02)
                                               and :of-chora must equal the root chora's :repo-uuid (YD08)
        deed_lint.js --verb-descriptile-fixtures DIR DIR/{valid,invalid}/<case>/<VERB>.deed [+ <Verb>file.deed]
+       deed_lint.js --ecosystem FILE... [--root DIR] [--strict]
+                                              ECOSYSTEM.deed (DRAFT, A7 7.2, YD07); --root checks :project and
+                                              :of-chora against the chora deed; --strict requires (related :uuid) (J12)
+       deed_lint.js --ecosystem-fixtures DIR  DIR/{valid,invalid}/<case>/ECOSYSTEM.deed [+ <repo>_chora.deed, STRICT]
        deed_lint.js --contractile-registry --root DIR [--owner O/N] [--out FILE] [--check]
                                               generate the A5 contractile rule registry from the six edicts (A7 J13)
        deed_lint.js --ast-json FILE           emit the validated AST as JSON (integer lexemes stay strings)
@@ -495,7 +499,7 @@ function parseForm(lx) {
   const head = lexSymbol(lx);
   const heads = [
     "estate-deed", "repo-deed", "estate-atlas-deed", "praxis-deed",
-    "contractile-deed", "descriptile-deed", "anchor-deed",
+    "contractile-deed", "descriptile-deed",
   ];
   if (!head || !heads.includes(head[1])) {
     const got = head ? head[1] : lx.peek();
@@ -662,8 +666,7 @@ export const DESCRIPTILE_FILES = new Set(
  * Exact names take precedence: estate_chora.deed requires estate-deed,
  * ATLAS.deed requires estate-atlas-deed, and 0-AI-MANIFEST.deed requires
  * repo-deed. The J14 names are exact and case-sensitive too (deed.abnf
- * v1.4.0): ANCHOR.deed requires anchor-deed, <Verb>file.deed for the six
- * verbs requires contractile-deed, and the thirteen ALL-CAPS descriptile
+ * v1.4.0): <Verb>file.deed for the six verbs requires contractile-deed, and the thirteen ALL-CAPS descriptile
  * names (CLADE.deed among them) require descriptile-deed; mustfile.deed,
  * MUSTFILE.deed and Meta.deed match nothing. Otherwise, _praxis.deed selects
  * praxis-deed and _chora.deed selects repo-deed; stems may contain dots
@@ -682,8 +685,6 @@ export function checkFilenameDispatch(filename, head) {
     want = "estate-atlas-deed";
   } else if (base === "0-AI-MANIFEST.deed") {
     want = "repo-deed";
-  } else if (base === "ANCHOR.deed") {
-    want = "anchor-deed";
   } else if (CONTRACTILE_FILES.has(base)) {
     want = "contractile-deed";
   } else if (DESCRIPTILE_FILES.has(base)) {
@@ -698,7 +699,7 @@ export function checkFilenameDispatch(filename, head) {
   } else {
     throw new LintError(
       `filename ${pyRepr(base)} matches no deed dispatch pattern ` +
-        "(estate_chora.deed | ATLAS.deed | 0-AI-MANIFEST.deed | ANCHOR.deed | <Verb>file.deed | " +
+        "(estate_chora.deed | ATLAS.deed | 0-AI-MANIFEST.deed | <Verb>file.deed | " +
         "<DESCRIPTILE>.deed | <stem>_chora.deed | <stem>_praxis.deed; the J14 names are case-sensitive)",
       1,
     );
@@ -1587,8 +1588,13 @@ export function checkAnchor(text, filename = null, opts = {}) {
   const ownUuid = !own ? null
     : own[2][0] === "uuid" ? own[2][1]
     : own[2][0] === "uuid8" ? profileCOfBody(own[2][1])
-    : own[2][0] === "uuid5" ? profileCOfBody(`gv-clade-index:${own[2][1]}`)
+    : own[2][0] === "uuid5" ? "u5"
     : null;
+  // A7 S2: a #u5 in an identity field is an error in every mode, so a #u5
+  // :repo-uuid is refused before anything else, with or without (parents …).
+  if (ownUuid === "u5") {
+    throw new AnchorError("the deed's :repo-uuid is a #u5 literal; a version 5 id in an identity field is an error in every mode (A7 S2)");
+  }
   const seen = new Set();
   const parents = [];
   for (const it of clauses[0][2]) {
@@ -1612,7 +1618,7 @@ export function checkAnchor(text, filename = null, opts = {}) {
       // "A parent never names the deed itself" needs an id to compare with:
       // with none, every parent would pass that check unexamined.
       if (ownUuid === null) {
-        throw new AnchorError(`${where} needs the deed's own :repo-uuid (#uuid, #u8 or #u5) to check that no parent names the deed itself`);
+        throw new AnchorError(`${where} needs the deed's own :repo-uuid (#uuid or #u8) to check that no parent names the deed itself`);
       }
       for (const p of it[2]) {
         if (p[0] !== "clause" || p[1] !== "parent") throw new AnchorError(`${where} takes (parent …) clauses only`);
@@ -1620,15 +1626,18 @@ export function checkAnchor(text, filename = null, opts = {}) {
         for (const k of f.keys()) if (k !== "uuid" && k !== "relation") throw new AnchorError(`(parent …) has no field :${k}`);
         const u = f.get("uuid");
         if (!u) throw new AnchorError("(parent …) is missing :uuid");
-        if (u[0] !== "uuid") {
-          throw new AnchorError(`(parent …) :uuid must be an opaque #uuid"…" chora id, got ${u[0]}`);
+        // A1 rule V8: a chora id in a deed is version 8; version 5 stays in
+        // the registry. A #u8 names its profile C id; a #u5 is an error (S2).
+        const pid = choraIdOf(u, (m) => new AnchorError(m), "(parent …) :uuid");
+        if (pid === null) {
+          throw new AnchorError(u[0] === "uuid"
+            ? `(parent …) :uuid ${u[1]} is version ${u[1][14]}, not a version 8 chora id (A1 rule V8)`
+            : `(parent …) :uuid must be a version 8 chora id, an opaque #uuid"…" or a #u8 literal, got ${u[0]}`);
         }
-        // A1 rule V8: a chora id in a deed is version 8; version 5 stays in the registry.
-        if (u[1][14] !== "8") throw new AnchorError(`(parent …) :uuid ${u[1]} is version ${u[1][14]}, not a version 8 chora id (A1 rule V8)`);
         if (f.has("relation") && f.get("relation")[0] !== "symbol") throw new AnchorError("(parent …) :relation must be a symbol");
-        if (parents.includes(u[1])) throw new AnchorError(`(parent …) names ${u[1]} twice`);
-        if (u[1] === ownUuid) throw new AnchorError("(parent …) names the deed's own :repo-uuid");
-        parents.push(u[1]);
+        if (parents.includes(pid)) throw new AnchorError(`(parent …) names ${pid} twice`);
+        if (pid === ownUuid) throw new AnchorError("(parent …) names the deed's own :repo-uuid");
+        parents.push(pid);
       }
     }
   }
@@ -1845,9 +1854,9 @@ export function checkEdict(text, filename = null) {
   }
   for (const k of ["canonical-name", "of-chora", "verb"]) if (!fields.has(k)) throw new EdictError(`a contractile-deed is missing :${k}`);
   if (fields.get("canonical-name")[0] !== "string") throw new EdictError(":canonical-name must be a string");
-  const of = fields.get("of-chora");
-  if (of[0] !== "uuid" || of[1][14] !== "8") {
-    throw new EdictError(":of-chora must be the repo's opaque version 8 #uuid\"…\" chora id (J20)");
+  const ofId = choraIdOf(fields.get("of-chora"), (m) => new EdictError(m), ":of-chora");
+  if (ofId === null) {
+    throw new EdictError(":of-chora must be the repo's version 8 chora id, an opaque #uuid\"…\" or a #u8 literal (J20, J28)");
   }
   const v = fields.get("verb");
   if (v[0] !== "symbol" || !Object.hasOwn(CONTRACTILE_VERBS, v[1])) {
@@ -1951,7 +1960,7 @@ export function checkEdict(text, filename = null) {
     }
     out.push({ id: id[1], bang, text: f.get("text")[1] });
   }
-  return { verb, ofChora: of[1], rules: out };
+  return { verb, ofChora: ofId, rules: out };
 }
 
 // ---------------------------------------------------------------------------
@@ -1978,6 +1987,82 @@ export function verbOfDescriptile(filename) {
   const b = basename(filename);
   for (const [verb, cap] of Object.entries(CONTRACTILE_VERBS)) if (b === `${cap.toUpperCase()}.deed`) return verb;
   return null;
+}
+
+/**
+ * The chora id an identity value names, as a lowercase UUID body, for
+ * comparison (A7 S2, J28): an opaque version 8 #uuid is its own body; a #u8
+ * literal names the profile C id of its preimage; a #u5 is an error in every
+ * mode (S2). Returns null for any other value; the caller words the error.
+ */
+export function choraIdOf(v, E, where) {
+  if (v[0] === "uuid5") throw E(`${where} is a #u5 literal; a version 5 id in an identity field is an error in every mode (A7 S2)`);
+  if (v[0] === "uuid8") return profileCOfBody(v[1]);
+  if (v[0] === "uuid" && v[1][14] === "8") return v[1];
+  return null;
+}
+
+/** The header fields every descriptile-deed carries (A7 7.1). */
+const DESCRIPTILE_HEADER = ["schema-version", "canonical-name", "of-chora", "affirmed", "affirmed-by", "expires"];
+
+/** The descriptile schema this profile reads (A7 Q5): major 1, minor 0. */
+const DESCRIPTILE_SCHEMA = [1, 0];
+
+/**
+ * The fixed date the fixture runners and unit tests check :expires against
+ * (YD06), so a committed fixture cannot age into failure. Production checks
+ * use todayUtc().
+ */
+export const FIXTURE_TODAY = "2026-11-14";
+
+/** Today, UTC, as YYYY-MM-DD. */
+function todayUtc() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/**
+ * Check a descriptile-deed's header fields (A7 7.1): :canonical-name, a
+ * version 8 :of-chora (J20; equal to repoUuid when given, YD08), and the
+ * affirmation members, required by default (J4, YD06): no relaxation can be
+ * written until the agentic module and the J19 receipt interface exist.
+ * :expires, when present, must not have passed by today (YD06). The
+ * :schema-version has three numeric segments and major 1; a higher minor is
+ * read and warned (A7 Q5). Returns the warnings.
+ */
+function checkDescriptileHeader(fields, what, E, repoUuid, today) {
+  const warnings = [];
+  const sv = fields.get("schema-version");
+  const m = sv && sv[0] === "string" ? /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.exec(sv[1]) : null;
+  if (!m) throw E(`:schema-version must have three numeric segments, as "1.0.0" (A7 Q5)`);
+  if (Number(m[1]) !== DESCRIPTILE_SCHEMA[0]) {
+    throw E(`:schema-version ${sv[1]} has major ${m[1]}; this profile reads major ${DESCRIPTILE_SCHEMA[0]} only (A7 Q5)`);
+  }
+  if (Number(m[2]) > DESCRIPTILE_SCHEMA[1]) {
+    warnings.push(`:schema-version ${sv[1]} is a newer minor than ${DESCRIPTILE_SCHEMA.join(".")}; read under the ${DESCRIPTILE_SCHEMA.join(".")} rules (A7 Q5)`);
+  }
+  for (const k of ["canonical-name", "of-chora"]) if (!fields.has(k)) throw E(`${what} is missing :${k}`);
+  if (fields.get("canonical-name")[0] !== "string") throw E(":canonical-name must be a string");
+  const ofId = choraIdOf(fields.get("of-chora"), E, ":of-chora");
+  if (ofId === null) throw E(":of-chora must be the repo's version 8 chora id, an opaque #uuid\"…\" or a #u8 literal (J20, J28)");
+  if (repoUuid !== undefined && ofId !== repoUuid) {
+    throw E(`:of-chora ${ofId} is not this repo's chora id ${repoUuid}, the :repo-uuid of its chora deed (YD08)`);
+  }
+  for (const k of ["affirmed", "affirmed-by"]) {
+    if (!fields.has(k)) throw E(`${what} is missing :${k}; affirmation is required by default (J4, YD06)`);
+  }
+  for (const k of ["affirmed", "expires"]) {
+    if (!fields.has(k)) continue;
+    const v = fields.get(k);
+    if (v[0] !== "string" || !isCalendarDate(v[1])) throw E(`:${k} must be a real YYYY-MM-DD date`);
+  }
+  if (fields.get("affirmed-by")[0] !== "symbol") throw E(":affirmed-by must be a symbol: owner, agent or the name of the check (A7 7.1)");
+  if (fields.has("expires") && fields.get("expires")[1] < fields.get("affirmed")[1]) {
+    throw E(":expires is before :affirmed");
+  }
+  if (fields.has("expires") && fields.get("expires")[1] < today) {
+    throw E(`:expires ${fields.get("expires")[1]} has passed (today is ${today}); an expired descriptile is refused (YD06)`);
+  }
+  return warnings;
 }
 
 /**
@@ -2012,27 +2097,7 @@ export function checkVerbDescriptile(text, filename, opts = {}) {
     else if (it[1] === "rule") throw E("a descriptile states what is; a (rule …) belongs in the verb's <Verb>file.deed (YF02, YL3)");
     else throw E(`a verb descriptile has no clause (${it[1]} …); its clauses are (fact …)`);
   }
-  for (const k of ["canonical-name", "of-chora"]) if (!fields.has(k)) throw E(`a verb descriptile is missing :${k}`);
-  if (fields.get("canonical-name")[0] !== "string") throw E(":canonical-name must be a string");
-  const of = fields.get("of-chora");
-  if (of[0] !== "uuid" || of[1][14] !== "8") throw E(":of-chora must be the repo's opaque version 8 #uuid\"…\" chora id (J20)");
-  if (opts.repoUuid !== undefined && of[1] !== opts.repoUuid) {
-    throw E(`:of-chora ${of[1]} is not this repo's chora id ${opts.repoUuid}, the :repo-uuid of its chora deed (YD08)`);
-  }
-  // J4: affirmation is required by default, and no relaxation can be written
-  // until the agentic module and the J19 receipt interface exist.
-  for (const k of ["affirmed", "affirmed-by"]) {
-    if (!fields.has(k)) throw E(`a verb descriptile is missing :${k}; affirmation is required by default (J4, YD06)`);
-  }
-  for (const k of ["affirmed", "expires"]) {
-    if (!fields.has(k)) continue;
-    const v = fields.get(k);
-    if (v[0] !== "string" || !isCalendarDate(v[1])) throw E(`:${k} must be a real YYYY-MM-DD date`);
-  }
-  if (fields.get("affirmed-by")[0] !== "symbol") throw E(":affirmed-by must be a symbol: owner, agent or the name of the check (A7 7.1)");
-  if (fields.has("expires") && fields.get("expires")[1] < fields.get("affirmed")[1]) {
-    throw E(":expires is before :affirmed");
-  }
+  const warnings = checkDescriptileHeader(fields, "a verb descriptile", E, opts.repoUuid, opts.today ?? todayUtc());
 
   const seen = new Set();
   const out = [];
@@ -2079,16 +2144,28 @@ export function checkVerbDescriptile(text, filename, opts = {}) {
     }
     out.push({ witnesses: w[1], evidence: ev[1] });
   }
-  return { verb, facts: out };
+  return { verb, facts: out, warnings };
 }
 
 /**
  * The :repo-uuid of the one <repo>_chora.deed directly in dir, for YD08, or
  * undefined when dir holds none. Throws when there are several, or when the
- * id is not a #uuid literal: a legacy #u5 or #u8 id cannot be compared with
- * an opaque :of-chora, so the check fails rather than passing unchecked.
+ * id is neither a version 8 #uuid nor a #u8 literal (whose profile C id is
+ * compared, A7 S2): a #u5 id is an error in every mode, so the check fails
+ * rather than passing unchecked.
  */
 export function choraRepoUuid(dir) {
+  const c = rootChora(dir);
+  return c === undefined ? undefined : c.uuid;
+}
+
+/**
+ * The one <repo>_chora.deed directly in dir: {uuid, name}, or undefined.
+ * needName (the ecosystem profile, YD07) also requires exactly one string
+ * :canonical-name; the YD08 id lookup alone does not, and name is then null
+ * when the chora has none.
+ */
+export function rootChora(dir, { needName = false } = {}) {
   const choras = readdirSync(dir).filter((n) => n.endsWith("_chora.deed") && n !== "estate_chora.deed");
   if (choras.length === 0) return undefined;
   if (choras.length > 1) throw new VerbDescriptileError(`${dir} holds ${choras.length} chora deeds; YD08 needs exactly one`);
@@ -2097,10 +2174,19 @@ export function choraRepoUuid(dir) {
   const us = items.filter((it) => it[0] === "field" && it[1] === "repo-uuid");
   if (us.length > 1) throw new VerbDescriptileError(`${choras[0]} carries :repo-uuid ${us.length} times; YD08 needs exactly one`);
   const u = us[0];
-  if (!u || u[2][0] !== "uuid") {
-    throw new VerbDescriptileError(`${choras[0]} has no opaque #uuid :repo-uuid, so :of-chora cannot be checked against it (YD08)`);
+  const id = u ? choraIdOf(u[2], (m) => new VerbDescriptileError(m), `${choras[0]} :repo-uuid`) : null;
+  if (id === null) {
+    throw new VerbDescriptileError(`${choras[0]} has no version 8 :repo-uuid (#uuid or #u8), so :of-chora cannot be checked against it (YD08)`);
   }
-  return u[2][1];
+  // YD07 compares against the chora's name, so when it is needed a chora
+  // without exactly one string :canonical-name fails here rather than
+  // skipping that check.
+  const ns = items.filter((it) => it[0] === "field" && it[1] === "canonical-name");
+  const named = ns.length === 1 && ns[0][2][0] === "string";
+  if (needName && !named) {
+    throw new VerbDescriptileError(`${choras[0]} must carry exactly one string :canonical-name to check against (YD07)`);
+  }
+  return { uuid: id, name: named ? ns[0][2][1] : null };
 }
 
 /**
@@ -2131,10 +2217,13 @@ function verbDescriptileFiles(files, root) {
       const ruleIds = root && verb ? edictRuleIdsAt(join(root, contractilePaths(verb).declaration), repoUuid) : undefined;
       const r = checkVerbDescriptile(text, f, { ruleIds, repoUuid });
       console.log(`OK   ${f} (${r === null ? "not a verb descriptile" : `${r.verb} descriptile, ${r.facts.length} fact${r.facts.length === 1 ? "" : "s"}${ruleIds ? ", witnesses and :of-chora checked against the repo" : ""}`})`);
+      for (const w of (r && r.warnings) || []) console.log(`WARN ${f}: ${w}`);
     } catch (e) {
       if (!(e instanceof LintError) && !e.code) throw e;
       bad += 1;
-      console.log(`FAIL ${f}: ${e instanceof LintError ? e.toString() : `cannot read (${e.code})`}`);
+      // Name the file that could not be read: with --root it may be the
+      // verb's edict, not the descriptile.
+      console.log(`FAIL ${f}: ${e instanceof LintError ? e.toString() : `cannot read ${e.path ?? f} (${e.code})`}`);
     }
   }
   return bad ? 1 : 0;
@@ -2175,7 +2264,189 @@ function verbDescriptileFixtures(d) {
       try {
         const repoUuid = choraRepoUuid(dir);
         const ruleIds = existsSync(edict) ? edictRuleIdsAt(edict, repoUuid) : undefined;
-        if (checkVerbDescriptile(readFileSync(f, "utf8"), f, { ruleIds, repoUuid }) === null) throw new VerbDescriptileError("not a verb descriptile");
+        if (checkVerbDescriptile(readFileSync(f, "utf8"), f, { ruleIds, repoUuid, today: FIXTURE_TODAY }) === null) throw new VerbDescriptileError("not a verb descriptile");
+      } catch (e) {
+        if (!(e instanceof LintError)) throw e;
+        got = false;
+        err = e.toString();
+      }
+      if (got !== expect) bad += 1;
+      console.log(`${got === expect ? "PASS " : "FAIL "}${f}` + (got === expect ? "" : `  (unexpected: ${err || "valid"})`));
+    }
+  }
+  return bad ? 1 : 0;
+}
+
+// ---------------------------------------------------------------------------
+// ECOSYSTEM.deed (A7 7.2, YD07; clauses/ecosystem.abnf).
+
+export class EcosystemError extends LintError {
+  constructor(msg) {
+    super(msg, null);
+    this.name = "EcosystemError";
+  }
+
+  toString() {
+    return this.msg;
+  }
+}
+
+/**
+ * The closed :relationship vocabulary (A7 7.2): the seven terms owner-ruled
+ * 2026-09-19 in mappings/meta-ecosystem-to-repo-deed.adoc, and the four
+ * DESCRIPTILE-SPEC observed (parent among them).
+ */
+export const ECOSYSTEM_RELATIONSHIPS = new Set([
+  "standard-source", "build-tooling", "validation-tooling", "signing-tooling",
+  "verification-tooling", "minted-from", "registry",
+  "downstream-consumer", "sibling-language", "code-dependency", "parent",
+]);
+const ECOSYSTEM_STRINGS = ["project", "ecosystem", "position-type", "purpose", "pipeline-position", "chain", "pipeline-notes"];
+const ECOSYSTEM_FIELDS = [...DESCRIPTILE_HEADER, ...ECOSYSTEM_STRINGS, "not", "coordination"];
+
+/**
+ * Check ECOSYSTEM.deed source text. Returns {project, related: [{name,
+ * relationship, uuid}]}, or null for any other file or head. opts.repoUuid
+ * and opts.choraName come from the repo's chora deed (YD08, YD07);
+ * opts.strict requires :uuid on every (related …) (J12).
+ */
+export function checkEcosystem(text, filename, opts = {}) {
+  const [head, items] = validate(text, filename);
+  if (head !== "descriptile-deed" || basename(filename || "") !== "ECOSYSTEM.deed") return null;
+  const E = (m) => new EcosystemError(m);
+  const fields = new Map();
+  const related = [];
+  for (const it of items) {
+    if (it[0] === "field") {
+      if (it[3]) throw E(`'!' belongs only on a rule's :id in a contractile-deed, not on :${it[1]}`);
+      if (it[1] === "beholding-chora") throw E(":beholding-chora names an estate chora; a descriptile-deed names its repo with :of-chora (J20)");
+      if (!ECOSYSTEM_FIELDS.includes(it[1])) throw E(`ECOSYSTEM.deed has no field :${it[1]}`);
+      if (fields.has(it[1])) throw E(`ECOSYSTEM.deed carries :${it[1]} once`);
+      fields.set(it[1], it[2]);
+      continue;
+    }
+    if (it[1] === "related") related.push(it[2]);
+    else if (it[1] === "rule") throw E("a descriptile states what is; a (rule …) belongs in an edict (YF02, YL3)");
+    else throw E(`ECOSYSTEM.deed has no clause (${it[1]} …); its clause is (related …)`);
+  }
+  const warnings = checkDescriptileHeader(fields, "ECOSYSTEM.deed", E, opts.repoUuid, opts.today ?? todayUtc());
+  for (const k of ["project", "ecosystem", "position-type", "purpose"]) {
+    if (!fields.has(k)) throw E(`ECOSYSTEM.deed is missing :${k} (A7 7.2)`);
+  }
+  for (const k of ECOSYSTEM_STRINGS) {
+    if (fields.has(k) && (fields.get(k)[0] !== "string" || fields.get(k)[1] === "")) throw E(`:${k} must be a non-empty string`);
+  }
+  if (fields.has("not")) {
+    const n = fields.get("not");
+    if (n[0] !== "list" || !n[1].every((x) => x[0] === "string" && x[1] !== "")) throw E(":not must be a list of non-empty strings");
+  }
+  if (fields.has("coordination")) {
+    const c = fields.get("coordination");
+    // the hub repo's name as a symbol, or "" for a standalone repo (mappings/meta-ecosystem-to-repo-deed.adoc)
+    if (!(c[0] === "symbol" || (c[0] === "string" && c[1] === ""))) {
+      throw E(':coordination must be the hub repo\'s name as a symbol, or "" for a standalone repo');
+    }
+  }
+  const project = fields.get("project")[1];
+  const own = fields.get("canonical-name")[1];
+  if (project !== own) throw E(`:project ${JSON.stringify(project)} must equal :canonical-name ${JSON.stringify(own)} (YD07)`);
+  if (opts.choraName !== undefined && project !== opts.choraName) {
+    throw E(`:project ${JSON.stringify(project)} must equal the chora deed's :canonical-name ${JSON.stringify(opts.choraName)} (YD07)`);
+  }
+
+  const seen = new Set();
+  const out = [];
+  for (const members of related) {
+    const f = new Map();
+    for (const m of members) {
+      if (m[0] !== "field") throw E(`(related …) takes fields only, not (${m[1]} …)`);
+      if (m[3]) throw E(`'!' belongs only on a rule's :id in a contractile-deed, not on (related :${m[1]})`);
+      if (!["name", "relationship", "notes", "uuid"].includes(m[1])) throw E(`(related …) has no field :${m[1]}`);
+      if (f.has(m[1])) throw E(`(related …) repeats :${m[1]}`);
+      f.set(m[1], m[2]);
+    }
+    for (const k of ["name", "relationship", "notes"]) if (!f.has(k)) throw E(`(related …) is missing :${k} (A7 7.2)`);
+    const name = f.get("name");
+    if (name[0] !== "string" || name[1] === "") throw E("(related :name …) must be a non-empty string");
+    const where = `(related :name ${JSON.stringify(name[1])})`;
+    const rel = f.get("relationship");
+    if (rel[0] !== "symbol" || !ECOSYSTEM_RELATIONSHIPS.has(rel[1])) {
+      throw E(`${where} :relationship must be one of ${[...ECOSYSTEM_RELATIONSHIPS].join(" ")} (A7 7.2, YD07)`);
+    }
+    if (f.get("notes")[0] !== "string") throw E(`${where} :notes must be a string`);
+    let uuid;
+    if (f.has("uuid")) {
+      const u = f.get("uuid");
+      uuid = choraIdOf(u, E, `${where} :uuid`);
+      if (uuid === null) throw E(`${where} :uuid must be the related repo's version 8 chora id, an opaque #uuid or a #u8 literal (J12, A7 S2)`);
+    } else if (opts.strict) {
+      throw E(`${where} needs :uuid, the related repo's chora id, in strict mode (J12)`);
+    }
+    const key = `${name[1]}\u0000${rel[1]}`;
+    if (seen.has(key)) throw E(`${where} :relationship ${rel[1]} appears twice`);
+    seen.add(key);
+    out.push({ name: name[1], relationship: rel[1], uuid });
+  }
+  return { project, related: out, warnings };
+}
+
+/** --ecosystem FILE... [--root DIR] [--strict]: returns exit code. */
+function ecosystemFiles(files, root, strict) {
+  let bad = 0;
+  for (const f of files) {
+    try {
+      const text = readFileSync(f, "utf8");
+      let chora;
+      if (root) {
+        chora = rootChora(root, { needName: true });
+        if (chora === undefined) throw new EcosystemError(`--root ${root} holds no <repo>_chora.deed to check against (YD07, YD08)`);
+      }
+      const r = checkEcosystem(text, f, { repoUuid: chora && chora.uuid, choraName: chora && chora.name, strict });
+      console.log(`OK   ${f} (${r === null ? "not ECOSYSTEM.deed" : `${r.related.length} related${chora ? ", checked against the chora" : ""}${strict ? ", strict" : ""}`})`);
+      for (const w of (r && r.warnings) || []) console.log(`WARN ${f}: ${w}`);
+    } catch (e) {
+      if (!(e instanceof LintError) && !e.code) throw e;
+      bad += 1;
+      console.log(`FAIL ${f}: ${e instanceof LintError ? e.toString() : `cannot read (${e.code})`}`);
+    }
+  }
+  return bad ? 1 : 0;
+}
+
+/**
+ * --ecosystem-fixtures DIR: DIR/{valid,invalid}/<case>/ECOSYSTEM.deed, with an
+ * optional <repo>_chora.deed beside it (then YD07 and YD08 are checked against
+ * it) and an optional file named STRICT (then the case runs in strict mode).
+ */
+function ecosystemFixtures(d) {
+  let bad = 0;
+  for (const [sub, expect] of [["valid", true], ["invalid", false]]) {
+    let cases;
+    try {
+      cases = readdirSync(join(d, sub)).sort();
+    } catch (e) {
+      console.log(`ERROR ${join(d, sub)}: cannot read the fixture directory (${e.code || e.message})`);
+      return 2;
+    }
+    if (cases.length === 0) {
+      console.log(`ERROR ${join(d, sub)}: no fixture cases`);
+      return 2;
+    }
+    for (const c of cases) {
+      const dir = join(d, sub, c);
+      const f = join(dir, "ECOSYSTEM.deed");
+      if (!existsSync(f)) {
+        console.log(`ERROR ${dir}: a case holds ECOSYSTEM.deed`);
+        return 2;
+      }
+      let got = true;
+      let err = "";
+      try {
+        const chora = rootChora(dir, { needName: true });
+        const r = checkEcosystem(readFileSync(f, "utf8"), f, {
+          repoUuid: chora && chora.uuid, choraName: chora && chora.name, strict: existsSync(join(dir, "STRICT")), today: FIXTURE_TODAY,
+        });
+        if (r === null) throw new EcosystemError("not ECOSYSTEM.deed");
       } catch (e) {
         if (!(e instanceof LintError)) throw e;
         got = false;
@@ -2616,6 +2887,30 @@ function main(argv) {
     return rc;
   }
   if (argv.includes("--contractile-registry")) return registryMain(argv.filter((a) => a !== "--contractile-registry"));
+  if (argv.includes("--ecosystem-fixtures")) {
+    const d = argv[argv.indexOf("--ecosystem-fixtures") + 1];
+    if (d === undefined) {
+      console.log("--ecosystem-fixtures requires a DIR argument");
+      return 2;
+    }
+    const rc = ecosystemFixtures(d);
+    console.log("ECOSYSTEM FIXTURES " + (rc === 0 ? "OK" : rc === 2 ? "NOT CHECKED" : "FAILED"));
+    return rc;
+  }
+  if (argv.includes("--ecosystem")) {
+    const ri = argv.indexOf("--root");
+    const root = ri >= 0 ? argv[ri + 1] : null;
+    if (ri >= 0 && (root === undefined || root === "" || root.startsWith("-"))) {
+      console.log("--root requires a DIR argument");
+      return 2;
+    }
+    const files = argv.filter((a, i) => !a.startsWith("-") && !(ri >= 0 && i === ri + 1));
+    if (files.length === 0) {
+      console.log(DOC);
+      return 2;
+    }
+    return ecosystemFiles(files, root, argv.includes("--strict"));
+  }
   if (argv.includes("--verb-descriptile-fixtures")) {
     const d = argv[argv.indexOf("--verb-descriptile-fixtures") + 1];
     if (d === undefined) {

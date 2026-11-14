@@ -38,6 +38,16 @@
 #   TRACKING   `@main` or another non-SHA ref. Gets cures for free; also
 #              unpinned, which the estate's own policy forbids. Reported, not
 #              rewritten, because re-pointing it is a policy change, not a fix.
+#   OWNER-ID-STALE  (own row, WORKFLOW column `actions.lock`) a lock record for a
+#              standards commit still carries the former owner's account id
+#              (6759885, hyperpolymath). Standards moved to metadatastician; a
+#              record written before the move keeps the old identity. Census
+#              only, in every mode: reported, never rewritten here. The count and
+#              the records (owner/standards@8-hex) are in DETAIL. The repo slug
+#              is compared case-insensitively (GitHub slugs are).
+#   OWNER-ID-UNREAD (own row, WORKFLOW column `actions.lock`) the tree lists an
+#              actions.lock that could not be read as text, so it was not judged.
+#              Never read as "this repository has no lock".
 #
 # SAFETY PROPERTIES (do not weaken any of these):
 #   * READ-ONLY by default. --fix is required to write anything.
@@ -276,6 +286,33 @@ content_state() {
     # Unreachable while version_cmp answers lt, eq or gt; fail loud if it ever does not.
     *)  printf 'CONTENT-MALFORMED\t-\n' ;;
   esac
+}
+
+# --- lock owner ids (pure) ---------------------------------------------------
+
+# The former owner's account id. Standards moved from hyperpolymath to
+# metadatastician; a lock record for a standards commit that still carries this
+# owner_id was written before the move (or copied from a lock that was).
+STALE_OWNER_ID=6759885
+
+# lock_owner_state <actions.lock> — echo ONE line `OWNER-ID-STALE<TAB>DETAIL` when a
+# record keyed `<owner>/standards@<ref>` carries owner_id STALE_OWNER_ID, else
+# nothing. Only standards records are judged: another action's owner_id may
+# legitimately be the same account's (hyperpolymath/cicd-suite, say).
+lock_owner_state() {
+  awk -v old="$STALE_OWNER_ID" '
+    /^    [\047"][^\047"]+[\047"]:[ \t]*$/ {
+      k = $0; sub(/^    [\047"]/, "", k); sub(/[\047"]:[ \t]*$/, "", k); cur = k; next
+    }
+    /^    [^ ]/ { cur = "" }
+    $1 == "owner_id:" && cur != "" && $2 == old {
+      n = split(cur, a, "@")
+      if (n == 2 && tolower(a[1]) ~ /^(hyperpolymath|metadatastician)\/standards$/) {
+        recs = recs (recs == "" ? "" : " ") a[1] "@" substr(a[2], 1, 8); cnt++
+      }
+    }
+    END { if (cnt > 0) printf "OWNER-ID-STALE\t%d standards record(s) carry owner_id %s: %s\n", cnt, old, recs }
+  ' "$1"
 }
 
 # needs_rewrite <classification> — true when fix mode must re-point the file's
@@ -617,6 +654,33 @@ JSON
   ccheck content-not-first.yml ""
   ccheck fresh.yml             ""
 
+  # Lock owner ids: only a standards record with the former owner's id is
+  # stale. Another action's record with that same id is the same account's own
+  # and is fine; a standards record with the current id is fine.
+  echo "control: lock owner ids"
+  local S1 S2
+  S1=$(printf 'a%.0s' $(seq 40)); S2=$(printf 'b%.0s' $(seq 40))
+  printf "version: 'v0.0.3'\ndependencies:\n    'metadatastician/standards@%s':\n        ref: '%s'\n        owner_id: 6759885\n        repo_id: 1\n    'hyperpolymath/standards@%s':\n        ref: '%s'\n        owner_id: 6759885\n" "$S1" "$S1" "$S2" "$S2" > "$d/owner-stale.lock"
+  printf "version: 'v0.0.3'\ndependencies:\n    'metadatastician/standards@%s':\n        ref: '%s'\n        owner_id: 297579217\n        repo_id: 1\n" "$S1" "$S1" > "$d/owner-clean.lock"
+  printf "version: 'v0.0.3'\ndependencies:\n    'hyperpolymath/cicd-suite@%s':\n        ref: 'main'\n        owner_id: 6759885\n    'actions/checkout@%s':\n        ref: 'v1'\n        owner_id: 44036562\n" "$S1" "$S2" > "$d/owner-nonstandards.lock"
+  printf "version: 'v0.0.3'\ndependencies:\n    'metadatastician/standards@main':\n        ref: 'main'\n        owner_id: 6759885\n" > "$d/owner-tag-key.lock"
+  printf "version: 'v0.0.3'\ndependencies:\n    'Metadatastician/Standards@%s':\n        ref: '%s'\n        owner_id: 6759885\n" "$S1" "$S1" > "$d/owner-mixed-case.lock"
+  ocheck() {
+    local file="$1" want="$2" got
+    got=$(lock_owner_state "$d/$file" | cut -f2 | sed -E 's/^([0-9]+) .*/\1/')
+    got=${got:-0}
+    if [ "$got" = "$want" ]; then
+      echo "  PASS $file -> $got stale"
+    else
+      echo "  FAIL $file -> got '$got' want '$want'" >&2; rc=1
+    fi
+  }
+  ocheck owner-stale.lock        2
+  ocheck owner-clean.lock        0
+  ocheck owner-nonstandards.lock 0
+  ocheck owner-tag-key.lock      1
+  ocheck owner-mixed-case.lock   1
+
   echo "control: the lock relock is present"
   if [ -f "$RELOCK" ] && bash -n "$RELOCK"; then
     echo "  PASS $(basename "$RELOCK") present and parses"
@@ -777,6 +841,13 @@ fetch_workflows() {
         | select((.name | test("\\.ya?ml$")) or .name == "actions.lock")
         | select(.object.text != null)
         | "\(.name)\t\(.object.text | @base64)"' "$resp" 2>/dev/null)
+    # A lock the tree LISTS but this loop did not write (a blob without text, or
+    # text that would not decode) is not a repository without a lock. Leave a
+    # marker so the census says so, instead of reading the gap as "no lock".
+    if [ ! -f "${dest}/actions.lock" ] \
+       && jq -e '(.data.repository.object.entries // [])[] | select(.type == "blob" and .name == "actions.lock")' "$resp" >/dev/null 2>&1; then
+      : > "${dest}/.actions.lock.unread"
+    fi
     rm -f "$resp"
     # A repo with no .github/workflows yields an empty tree, which is a valid
     # answer, not a failure. Only fall back when the call itself failed.
@@ -1023,6 +1094,14 @@ main() {
       fi
     done
     shopt -u nullglob
+    # A standards lock record under the former owner's id is reported, never
+    # rewritten here (census only, in every mode).
+    if [ -f "$rdir/actions.lock" ]; then
+      local ost; ost=$(lock_owner_state "$rdir/actions.lock")
+      [ -n "$ost" ] && printf '%s\tactions.lock\t%s\n' "$repo" "$ost" >> "$tsv"
+    elif [ -f "$rdir/.actions.lock.unread" ]; then
+      printf '%s\tactions.lock\tOWNER-ID-UNREAD\tlisted in the tree but not materialised (blob without text, or undecodable); not judged\n' "$repo" >> "$tsv"
+    fi
     [ "$found" -eq 0 ] && [ "$ENSURE_SQUABBLER" -eq 0 ] && continue
 
     # The squabbler gate rides with the re-pin (see ENSURE-SQUABBLER above).

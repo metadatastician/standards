@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 = DEED conformance lane — tools
-Campaign: standards#837 · Grammar: link:../spec/abnf/deed.abnf[spec/abnf/deed.abnf (v1.5.0, normative)]
+Campaign: standards#837 · Grammar: link:../spec/abnf/deed.abnf[spec/abnf/deed.abnf (v2.0.0, normative)]
 
 == The lane's one property
 
@@ -22,7 +22,7 @@ family's content goes.
 Enforced rules:
 
 * SPDX header required; one form; full input consumed
-* doc-head whitelist (`estate-deed / repo-deed / estate-atlas-deed / praxis-deed`, and from v1.4.0 the J14 heads `contractile-deed / descriptile-deed / anchor-deed`)
+* doc-head whitelist (`estate-deed / repo-deed / estate-atlas-deed / praxis-deed`, and from v1.4.0 the J14 heads `contractile-deed / descriptile-deed`; v2.0.0 removed `anchor-deed`)
 * the J17 bang (v1.5.0): `!` after a separator, only on the `:id` of a top-level `(rule …)` in a `contractile-deed`
 * `:schema-version` STRING exactly once (validator-level semantic, per grammar)
 * filename ↔ doc-head dispatch with the exact-stem-first side condition
@@ -142,10 +142,11 @@ that `deed_lint.js` already accepts: the member set of `(anchor …)` and of
 each sub-clause, `:schema "hyperpolymath.anchor/1"` and a non-empty
 `:authority` exactly once, value types, a three-segment `:version`, a
 `:last-updated` that is a real calendar date, repo-relative
-`(semantic-authority-files …)` paths, parents named only by an opaque
-version 8 `#uuid` chora id (A1 rule V8), no parent twice and never the deed
-itself (a legacy `#u8` or `#u5` `:repo-uuid` is compared by the profile C id
-it names), and the clause only at the top level of a repo deed. A deed with
+`(semantic-authority-files …)` paths, parents named only by a
+version 8 chora id, an opaque `#uuid` or a `#u8` literal, never `#u5` (A1 rule V8, A7 S2), no parent twice and never the deed
+itself (a `#u8` `:repo-uuid` is compared by the profile C id
+it names), and the clause only at the top level of a repo deed. A deed whose
+`(anchor …)` sits beside a `#u5` `:repo-uuid` fails, with or without parents (A7 S2). A deed with
 no `(anchor …)` clause passes. Prose: `docs/estate-reconciliation/A7-contractiles-descriptiles-anchor.adoc`,
 proposed in standards#1489; ruling Q11 of the 2026-10-19 ultraplan.
 
@@ -201,8 +202,8 @@ ratifies A7.
 Checks a `<Verb>file.deed` (head `contractile-deed`, J14) against
 `spec/abnf/clauses/edict.abnf` (A7 8.1, 8.4, 8.5). The rules it adds to the grammar:
 
-* the form carries `:canonical-name`, `:of-chora` (an opaque version 8
-  `#uuid`, J20) and `:verb`, each exactly once, and no `:beholding-chora`;
+* the form carries `:canonical-name`, `:of-chora` (a version 8 chora id,
+  an opaque `#uuid` or a `#u8` literal; `#u5` is refused; J20, J28) and `:verb`, each exactly once, and no `:beholding-chora`;
 * `:verb` agrees with the file name. `Intentfile.deed` holds the verb `intend`
   (the A7 8.1 table);
 * each `(rule …)` has `:id`, `:text`, `(applies-when …)` and `(requires …)`
@@ -230,12 +231,17 @@ Checks `INTENT.deed`, `MUST.deed`, `TRUST.deed`, `ADJUST.deed`, `DUST.deed` and
 `BUST.deed` (head `descriptile-deed`) against `spec/abnf/clauses/verb-descriptile.abnf`
 (A7 7.1, 7.3, 8.5). The rules it adds to the grammar:
 
-* the form carries `:canonical-name` and `:of-chora` (an opaque version 8
-  `#uuid`, J20) exactly once, and no `:beholding-chora`;
+* the form carries `:canonical-name` and `:of-chora` (a version 8 chora id,
+  an opaque `#uuid` or a `#u8` literal; `#u5` is refused; J20, J28) exactly once, and no `:beholding-chora`;
 * `:affirmed` (a real date) and `:affirmed-by` (a symbol) are required, and
-  `:expires`, when present, is not before `:affirmed`. Affirmation is
-  required by default (J4), and no relaxation can be written yet. Whether
-  `:expires` is still in the future is the runner's check (YD06);
+  `:expires`, when present, is not before `:affirmed` and has not passed by
+  today, UTC (YD06; an `:expires` of today has not passed). Affirmation is
+  required by default (J4), and no relaxation can be written yet. The fixture
+  runners and the unit tests check against a fixed date, `FIXTURE_TODAY`, so
+  a committed fixture cannot age into failure;
+* `:schema-version` has three numeric segments and major 1. A higher minor
+  is read under the 1.0 rules and reported on a `WARN` line; another major,
+  or anything else, is refused (A7 Q5);
 * the only clause is `(fact …)`: a `(rule …)` belongs in the verb's
   `<Verb>file.deed` (YF02);
 * each fact has `:witnesses` (a rule `:id`, once per file, with
@@ -259,6 +265,39 @@ The fixtures are one case per directory,
 `fixtures/verb-descriptile/{valid,invalid}/<case>/<VERB>.deed`. A case that
 also holds the verb's `<Verb>file.deed` is checked against it (YD02), and one
 that holds a `<repo>_chora.deed` has its `:of-chora` checked against that deed (YD08).
+
+== `deed_lint.js --ecosystem` — ECOSYSTEM.deed (DRAFT)
+
+Checks `ECOSYSTEM.deed` (head `descriptile-deed`) against
+`spec/abnf/clauses/ecosystem.abnf` (A7 7.2, YD07). The field mapping is
+`../mappings/meta-ecosystem-to-repo-deed.adoc`. The rules it adds to the grammar:
+
+* the descriptile header, as for the verb descriptiles: `:canonical-name`, a
+  version 8 `:of-chora` (`#uuid` or `#u8`; J20, J28), no `:beholding-chora`,
+  `:affirmed` and `:affirmed-by`, required by default, an `:expires` that has
+  not passed (J4, YD06), and a `:schema-version` of major 1 (A7 Q5);
+* `:project`, `:ecosystem`, `:position-type` and `:purpose` are required,
+  non-empty strings. `:not` (a list of strings), `:pipeline-position`,
+  `:chain`, `:pipeline-notes` and `:coordination` are optional, each at most
+  once. `:coordination` is the hub repo's name as a symbol, or `""` for a
+  standalone repo;
+* `:project` equals the deed's own `:canonical-name` and, with `--root DIR`,
+  the `:canonical-name` of the chora deed in `DIR`, whose `:repo-uuid` must
+  also equal `:of-chora` (YD07, YD08);
+* each `(related :name :relationship :notes [:uuid])` takes `:relationship`
+  from the closed list: `standard-source`, `build-tooling`,
+  `validation-tooling`, `signing-tooling`, `verification-tooling`,
+  `minted-from`, `registry` (owner-ruled 2026-09-19 in the mapping) and
+  `downstream-consumer`, `sibling-language`, `code-dependency`, `parent`
+  (DESCRIPTILE-SPEC). `:uuid` is a version 8 chora id (`#uuid` or `#u8`; `#u5` is refused, A7 S2), and `--strict` requires
+  it (J12). A `(:name, :relationship)` pair appears once.
+
+    bun deed_lint.js --ecosystem ECOSYSTEM.deed [--root REPO] [--strict]
+    bun deed_lint.js --ecosystem-fixtures fixtures/ecosystem/
+
+The fixtures are one case per directory, `fixtures/ecosystem/{valid,invalid}/<case>/ECOSYSTEM.deed`.
+A case may hold a `<repo>_chora.deed`, which is then checked against, and a
+`STRICT` marker file, which runs it in strict mode.
 
 == `deed_lint.js --contractile-registry` — the `contractile` rule registry (A7 J13)
 

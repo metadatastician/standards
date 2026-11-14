@@ -214,9 +214,10 @@ jobs:
 
   # A2ML is retired (D99, D269c, D312, D313). This job fails a pull request
   # that ADDS an A2ML file; files already at the base are never judged, so a
-  # caller with legacy A2ML needs no baseline. A move from one A2ML path to
-  # another passes; renaming any other file to *.a2ml fails (owner ruling of
-  # 2026-11-12, standards A7 Part 1a). It runs here so that every caller of
+  # caller with legacy A2ML needs no baseline. Any A2ML file at a new path
+  # fails: an addition, a copy, or a rename or move, from an A2ML path too
+  # (into 9-archive/ included). Only in-place edits and deletions pass (owner
+  # rulings of 2026-11-12 and 2026-11-14, standards A7 Part 1a). It runs here so that every caller of
   # this reusable gets it when its pin moves, with no per-repo workflow.
   no-new-a2ml:
     name: No new A2ML

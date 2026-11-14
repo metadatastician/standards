@@ -9,7 +9,7 @@
 ; of the chora deed; there is no ANCHOR.deed and no grammar change.
 ;
 ; A CLAUSE PROFILE, not a new grammar. Every anchor-clause below is also a
-; `clause` of deed.abnf v1.4.0, so a deed carrying one still passes deed_lint
+; `clause` of deed.abnf v2.0.0, so a deed carrying one still passes deed_lint
 ; unchanged. This profile narrows that clause. Rules it borrows (string,
 ; boolean, symbol, token-sep, DQUOTE, DIGIT, ALPHA, hex-lc, str-char, escape)
 ; are deed.abnf's, unchanged; str-list, str-list1, chora-uuid8 and lc-variant
@@ -22,11 +22,12 @@
 ; anchor carries no id of its own, no clade (a placement is an identity fact
 ; in the chora, W10) and no lifecycle status (STATE.deed, J15).
 ;
-; STATUS (SysArch R-01, held for the owner's answer to Q1): A7 W3 and J14
-; make the anchor its own file, ANCHOR.deed with head anchor-deed, which
-; deed.abnf v1.4.0 dispatches. This header describes the clause profile as
-; built and tested, which A7 6.5 keeps as input to the anchor-deed module.
-; It is not the target placement; do not implement new readers against it.
+; STATUS: this is the target placement. The owner answered SysArch Q1 on
+; 2026-11-14 (A7 S1): the anchor is this clause, and A7 W6, the anchor
+; sentence of W3, ANCHOR.deed and the anchor-deed head are withdrawn
+; (deed.abnf v2.0.0, A7 J24). v2.0.0 of this profile will rename the nested
+; (identity …) to (subject …) (A7 J8) and drop (parents …), whose one home
+; is ECOSYSTEM.deed (related … :relationship parent) (A7 J26).
 ;
 ; Where it appears: at most one (anchor …) clause, at the top level of a
 ; repo-deed (<repo>_chora.deed). SEMANTIC: a validator MUST reject an
@@ -118,7 +119,7 @@ ssg-member      = ( %s":engine" token-sep string )
 
 parents-clause  = "(" %s"parents" 1*(token-sep parent-clause) [token-sep] ")"
 parent-clause   = "(" %s"parent" 1*(token-sep parent-member) [token-sep] ")"
-parent-member   = ( %s":uuid" token-sep chora-uuid8 )
+parent-member   = ( %s":uuid" token-sep chora-id )
                 / ( %s":relation" token-sep symbol )
                 ; A parent is named by its chora id, the opaque #uuid literal
                 ; of A1 (never a reverse-DNS name, a path or a clade). SEMANTIC:

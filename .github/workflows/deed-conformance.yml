@@ -25,6 +25,8 @@ on:
       - '**.deed'
       - '1-formats/deed/**'
       - '.github/workflows/deed-conformance.yml'
+      - 'scripts/conformance-deed.sh'
+      - 'scripts/tests/conformance-deed-test.sh'
       - 'scripts/uuid-v8.js'
       - 'scripts/tests/bun/**'
       - 'tools/uuid-v8/**'
@@ -58,6 +60,9 @@ jobs:
       # In this repo the PR's own linter is in the first checkout; a caller
       # gets the linter from the canon checkout at job.workflow_sha.
       T: ${{ github.repository_id == 1116521501 && '1-formats/deed/tools' || '.deed-canon/1-formats/deed/tools' }}
+      # The lane logic is scripts/conformance-deed.sh, the one implementation the
+      # template's inline governance calls too.
+      LANE: ${{ github.repository_id == 1116521501 && 'scripts/conformance-deed.sh' || '.deed-canon/scripts/conformance-deed.sh' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         id: checkout
@@ -74,7 +79,7 @@ jobs:
           ref: ${{ job.workflow_sha }}
           path: .deed-canon
           persist-credentials: false
-          sparse-checkout: "1-formats/deed/tools\n"
+          sparse-checkout: "1-formats/deed/tools\nscripts/conformance-deed.sh\n"
           sparse-checkout-cone-mode: false
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         id: bun
@@ -90,7 +95,7 @@ jobs:
       - name: fixture corpus (valid must pass, invalid must fail)
         if: github.repository_id == 1116521501 && steps.bun.outcome == 'success'
         run: bun "$T/deed_lint.js" --fixtures "$T/fixtures"
-      - name: J14 file-name head fixtures (contractile-deed, descriptile-deed, anchor-deed)
+      - name: J14 file-name head fixtures (contractile-deed, descriptile-deed)
         if: github.repository_id == 1116521501 && steps.bun.outcome == 'success'
         run: bun "$T/deed_lint.js" --fixtures "$T/fixtures/heads"
       - name: J17 bang fixtures ("!" only after a rule's :id in a contractile-deed)
@@ -120,6 +125,10 @@ jobs:
       - name: verb descriptile fixtures (DRAFT, A7)
         if: github.repository_id == 1116521501 && steps.bun.outcome == 'success'
         run: bun "$T/deed_lint.js" --verb-descriptile-fixtures "$T/fixtures/verb-descriptile"
+      # ECOSYSTEM.deed (A7 7.2): a DRAFT profile, gated on its own fixtures until ratified.
+      - name: ecosystem fixtures (DRAFT, A7)
+        if: github.repository_id == 1116521501 && steps.bun.outcome == 'success'
+        run: bun "$T/deed_lint.js" --ecosystem-fixtures "$T/fixtures/ecosystem"
       - name: grammar-vs-gate differential (deed.abnf through apg-js, against deed_lint.js)
         # Mutates every committed deed and valid fixture with a seeded generator
         # and fails when the gate and the normative grammar disagree, other than
@@ -145,55 +154,17 @@ jobs:
         env:
           REQUIRE_FILES: ${{ inputs.require-files || false }}
           ADVISORY: ${{ inputs.advisory || false }}
-        run: |
-          set -euo pipefail
-          find . -name '*.deed' -not -path './.deed-canon/*' -not -path './1-formats/deed/tools/fixtures/invalid/*' -not -path './1-formats/deed/tools/fixtures/heads/invalid/*' -not -path './1-formats/deed/tools/fixtures/bang/invalid/*' -not -path './1-formats/deed/tools/fixtures/edict/invalid/*' -print | sort > "$RUNNER_TEMP/deeds"
-          if [ ! -s "$RUNNER_TEMP/deeds" ]; then
-            if [ "$REQUIRE_FILES" = "true" ]; then
-              # Advisory mode must not attach error-severity annotations.
-              sev=error; [ "$ADVISORY" = "true" ] && sev=warning
-              echo "::${sev}::require-files is set and no committed .deed file was found"
-              exit 1
-            fi
-            echo "no committed .deed files — nothing to lint"
-            exit 0
-          fi
-          echo "linting $(wc -l < "$RUNNER_TEMP/deeds") file(s)"
-          xargs bun "$T/deed_lint.js" < "$RUNNER_TEMP/deeds" 2>&1 | tee -a "$RUNNER_TEMP/deed-lint.log"
-          # The (egress …) clause profile (ADR-009). A deed without the clause
-          # passes. Its invalid fixtures are grammatical deeds, so they are
-          # excluded here rather than from the grammar lint above.
-          grep -v '^\./1-formats/deed/tools/fixtures/egress/invalid/' "$RUNNER_TEMP/deeds" \
-            | xargs bun "$T/deed_lint.js" --egress 2>&1 | tee -a "$RUNNER_TEMP/deed-lint.log"
+        run: bash "$LANE" lint
       - name: Advisory findings as warnings
         # Also when a prerequisite step failed: a failed checkout leaves an empty
         # workspace that lints as "nothing to lint" and would otherwise go green.
         if: ${{ always() && inputs.advisory == true && (steps.lint.outcome == 'failure' || steps.checkout.outcome == 'failure' || steps.canon.outcome == 'failure' || steps.bun.outcome == 'failure') }}
         continue-on-error: true
         run: |
-          # GitHub runs this with `bash -e -o pipefail`: every no-match grep
-          # below is guarded, so a run with no FAIL line (a missing log, or
-          # require-files with no deed) still reaches its closing warning.
-          # deed_lint prints `FAIL <path>: <message>`. Annotate each (capped,
-          # GitHub shows few), then say plainly that nothing was enforced.
-          log="$RUNNER_TEMP/deed-lint.log"
-          [ -f "$log" ] || : > "$log"
-          n=$( { grep -c '^FAIL ' "$log" || true; } | head -n 1)
-          # Sort to a file, then cap from the file: `sort | head` would give sort a
-          # SIGPIPE (141) once head has its 30 lines, which pipefail turns into a
-          # failed step before the closing count.
-          { grep '^FAIL ' "$log" || true; } | sort -u > "$RUNNER_TEMP/deed-fails.txt"
-          head -n 30 "$RUNNER_TEMP/deed-fails.txt" | while IFS= read -r line; do
-            rest="${line#FAIL }"; path="${rest%%: *}"; msg="${rest#*: }"
-            # Workflow-command escaping: the property needs % CR LF : , and
-            # the data part needs % CR LF (toolkit escapeProperty / escapeData).
-            path="${path#./}"
-            path="${path//'%'/%25}"; path="${path//$'\r'/%0D}"; path="${path//$'\n'/%0A}"; path="${path//:/%3A}"; path="${path//,/%2C}"
-            msg="${msg//'%'/%25}"; msg="${msg//$'\r'/%0D}"; msg="${msg//$'\n'/%0A}"
-            printf '::warning file=%s::deed conformance (advisory): %s\n' "$path" "$msg"
-          done
-          if [ "${n:-0}" -eq 0 ]; then
-            echo "::warning::deed conformance (advisory): the check did not run to completion (no finding was recorded); see the step log. Not enforced."
+          # The script lives in the canon checkout this step may be reporting on, so
+          # the fallback for its absence is inline: a failed checkout must still warn.
+          if [ -f "$LANE" ]; then
+            bash "$LANE" warn
           else
-            echo "::warning::deed conformance (advisory): ${n} finding(s); not enforced. Fix them, then call deed-conformance.yml with advisory: false to enforce."
+            echo "::warning::deed conformance (advisory): the conformance script could not be staged (a checkout step failed), so conformance did not run; not enforced."
           fi

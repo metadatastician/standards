@@ -55,6 +55,8 @@ on:
       - '1-formats/k9/**'
       - '2-protocols/k9-coordination/**'
       - 'scripts/k9-grid.sh'
+      - 'scripts/conformance-k9.sh'
+      - 'scripts/tests/conformance-k9-test.sh'
       - 'scripts/lib/k9-grid.jq'
       - 'scripts/tests/k9-grid-test.sh'
       - '.machine_readable/k9-contract-debt.txt'
@@ -104,6 +106,9 @@ jobs:
       # gets validator, contract and renderer from the canon checkout at
       # job.workflow_sha.
       CANON: ${{ github.repository_id == 1116521501 && '.' || '.k9-canon' }}
+      # The lane logic is scripts/conformance-k9.sh, the one implementation the
+      # template's inline governance calls too.
+      LANE: ${{ github.repository_id == 1116521501 && 'scripts/conformance-k9.sh' || '.k9-canon/scripts/conformance-k9.sh' }}
       NICKEL_VERSION: '1.18.0'
       NICKEL_SHA256: '9cba4dd65ae9915ec61f73033aafcff307a377665a83fd8f530df086763318cb'
       IJSON_JCS_REV: '0fdeea716fd558e9807362acf6f8202d56d8d88f'
@@ -129,7 +134,7 @@ jobs:
           ref: ${{ job.workflow_sha }}
           path: .k9-canon
           persist-credentials: false
-          sparse-checkout: "1-formats/k9\n2-protocols/k9-coordination/spec/abnf\n2-protocols/k9-coordination/tools/validate\nscripts/k9-grid.sh\nscripts/lib/k9-grid.jq\n"
+          sparse-checkout: "1-formats/k9\n2-protocols/k9-coordination/spec/abnf\n2-protocols/k9-coordination/tools/validate\nscripts/k9-grid.sh\nscripts/lib/k9-grid.jq\nscripts/conformance-k9.sh\n"
           sparse-checkout-cone-mode: false
 
       - name: Record which standards commit supplies validator, contract and renderer
@@ -222,20 +227,10 @@ jobs:
 
       - name: Validator self-test
         continue-on-error: ${{ inputs.advisory == true }}
-        run: |
-          set +e
-          bash "$CANON/1-formats/k9/tools/k9-validate.sh" --self-test > "$RUNNER_TEMP/selftest.log" 2>&1
-          echo "SELFTEST_CODE=$?" >> "$GITHUB_ENV"
-          tail -n 5 "$RUNNER_TEMP/selftest.log"
-
+        run: bash "$LANE" selftest
       - name: Contract typecheck
         continue-on-error: ${{ inputs.advisory == true }}
-        run: |
-          set +e
-          nickel typecheck "$CANON/1-formats/k9/spec/contract/k9_contract.ncl" > "$RUNNER_TEMP/typecheck.log" 2>&1
-          echo "TYPECHECK_CODE=$?" >> "$GITHUB_ENV"
-          cat "$RUNNER_TEMP/typecheck.log"
-
+        run: bash "$LANE" typecheck
       - name: Enumerate the committed K9 files, the changed files and ledger growth
         continue-on-error: ${{ inputs.advisory == true }}
         env:
@@ -245,92 +240,10 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           LEDGER: .machine_readable/k9-contract-debt.txt
           ADVISORY: ${{ inputs.advisory || false }}
-        run: |
-          set -euo pipefail
-          # Tracked files only: an untracked file is not a committed contract.
-          # The two extensions K9-CONTRACT-SPEC.adoc reserves, nothing else.
-          # A caller with no K9 file at all is a legitimate (grey) corpus, so
-          # grep's no-match exit is not an error here.
-          git ls-files -z -- '*.k9.ncl' '*.k9' \
-            | tr '\0' '\n' \
-            | { grep -v -E '^(\.k9-canon/|9-archive/|1-formats/k9/tools/fixtures/|2-protocols/k9-coordination/tools/validate/fixtures/)' || [ $? -eq 1 ]; } \
-            | sort > "$RUNNER_TEMP/expected"
-          echo "$(wc -l < "$RUNNER_TEMP/expected") committed K9 file(s)"
-          : > "$RUNNER_TEMP/changed"
-          : > "$RUNNER_TEMP/ledger-growth"
-          echo "BASE_UNRESOLVED=" >> "$GITHUB_ENV"
-          case "$BASE_SHA" in *[!0]*) ;; *) BASE_SHA="" ;; esac
-          [ -n "$BASE_SHA" ] || exit 0
-
-          # The PR's own changes are those since its merge base, not since the
-          # base branch tip: a file the base branch changed after the PR
-          # branched is not this PR's edit. A push compares with `before`
-          # itself, never a merge base: after a force push the fork point is
-          # not the state the push replaced, and a ledger entry the old tip
-          # had removed would come back unseen. The full checkout already
-          # holds the base commit; the fetch
-          # is a fallback only, and runs without credentials
-          # (persist-credentials is off), so it serves public repositories.
-          if { git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null || git fetch --quiet origin "$BASE_SHA" 2>/dev/null; } \
-             && merge_base=$(if [ "$GITHUB_EVENT_NAME" = pull_request ]; then git merge-base "$BASE_SHA" "$HEAD_SHA"; else git rev-parse --verify "$BASE_SHA^{commit}"; fi 2>/dev/null) \
-             && git diff --name-only "$merge_base" "$HEAD_SHA" > "$RUNNER_TEMP/changed" 2>/dev/null; then
-            echo "$(wc -l < "$RUNNER_TEMP/changed") file(s) changed since the merge base $merge_base"
-          else
-            echo "::warning::could not resolve the PR base/head range; debt exemptions are reported as indeterminate"
-            echo "BASE_UNRESOLVED=--base-unresolved" >> "$GITHUB_ENV"
-            exit 0
-          fi
-
-          # The ledger is shrink-only. Entries present at HEAD and absent at
-          # the merge base are growth; growth exempts nothing unless a commit
-          # message in the PR or the PR body declares it in the exemption
-          # ratchet's form, naming this ledger:
-          #     Ratchet-exception: .machine_readable/k9-contract-debt.txt — <why>
-          #     Ratchet-exception(.machine_readable/k9-contract-debt.txt): <why>
-          # Read ledger paths from stdin and emit sorted unique entries,
-          # excluding comments and blank lines; an empty ledger succeeds.
-          entries() { { grep -vE '^[[:space:]]*(#|$)' || [ $? -eq 1 ]; } | sort -u; }
-          head_entries=$RUNNER_TEMP/ledger-head
-          base_entries=$RUNNER_TEMP/ledger-base
-          if [ -f "$LEDGER" ]; then entries < "$LEDGER" > "$head_entries"; else : > "$head_entries"; fi
-          { git show "$merge_base:$LEDGER" 2>/dev/null || true; } | entries > "$base_entries"
-          comm -13 "$base_entries" "$head_entries" > "$RUNNER_TEMP/ledger-growth"
-          [ -s "$RUNNER_TEMP/ledger-growth" ] || exit 0
-          declared=no
-          if git log --format=%B "$merge_base..$HEAD_SHA" | grep -iE '^Ratchet-exception' | grep -qF "$LEDGER"; then
-            declared=yes
-          elif [ -f "${GITHUB_EVENT_PATH:-}" ] \
-               && jq -r '.pull_request.body // ""' "$GITHUB_EVENT_PATH" | grep -iE '^Ratchet-exception' | grep -qF "$LEDGER"; then
-            declared=yes
-          fi
-          n=$(wc -l < "$RUNNER_TEMP/ledger-growth")
-          if [ "$declared" = yes ]; then
-            echo "::notice::$LEDGER grew by $n entr(y/ies) under a declared Ratchet-exception"
-            : > "$RUNNER_TEMP/ledger-growth"
-          else
-            # Advisory mode must not attach error-severity annotations.
-            sev=error; [ "$ADVISORY" = "true" ] && sev=warning
-            echo "::${sev}::$LEDGER grew by $n entr(y/ies) with no Ratchet-exception naming it; the new entries exempt nothing"
-            sed 's/^/  + /' "$RUNNER_TEMP/ledger-growth"
-          fi
-
+        run: bash "$LANE" enumerate
       - name: Validate every committed K9 file (L0–L2, strict)
         continue-on-error: ${{ inputs.advisory == true }}
-        run: |
-          set +e
-          : > "$RUNNER_TEMP/results.jsonl"
-          worst=0
-          while IFS= read -r f; do
-            [ -n "$f" ] || continue
-            # `--` ends the options: a tracked file whose name starts with `-`
-            # is a path, not a flag.
-            bash "$CANON/1-formats/k9/tools/k9-validate.sh" --strict --layer L2 --json --quiet -- "$f" >> "$RUNNER_TEMP/results.jsonl" 2>> "$RUNNER_TEMP/corpus.log"
-            rc=$?
-            [ "$rc" -gt "$worst" ] && worst=$rc
-          done < "$RUNNER_TEMP/expected"
-          echo "CORPUS_CODE=$worst" >> "$GITHUB_ENV"
-          echo "validator worst exit status: $worst"
-
+        run: bash "$LANE" validate
       - name: Validate coordination.k9 files against the v1.2 ABNF (own grid category)
         continue-on-error: ${{ inputs.advisory == true }}
         # A file the K9 validator routes to the coordination dialect is
@@ -339,37 +252,7 @@ jobs:
         # the schema and line-length rules). The step never fails the job: the
         # grid grades it. If the validator cannot run, no record is written
         # and the routed file stays indeterminate (orange), never green.
-        run: |
-          set +e
-          : > "$RUNNER_TEMP/coord-results.jsonl"
-          jq -r 'select(.verdict == "routed") | .file' "$RUNNER_TEMP/results.jsonl" > "$RUNNER_TEMP/routed" 2>/dev/null
-          if [ -s "$RUNNER_TEMP/routed" ]; then
-            V="$PWD/$CANON/2-protocols/k9-coordination/tools/validate"
-            if (cd "$V" && bun install --frozen-lockfile >"$RUNNER_TEMP/coord-install.log" 2>&1); then
-              while IFS= read -r f; do
-                [ -n "$f" ] || continue
-                # validate.js reads a leading `-` as an option; `./` keeps a
-                # tracked file named `-x.k9` a path.
-                out=$(bun "$V/validate.js" "./$f" 2>&1); rc=$?
-                # Exit 1 is both the validator's "finding" status and what Bun
-                # uses for a crash (module resolution, an uncaught exception), so
-                # a failure needs the validator's own `FAIL <file>:` line.
-                # Anything else leaves no record, and the file stays indeterminate.
-                if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -q '^PASS '; then
-                  jq -nc --arg f "$f" '{file: $f, verdict: "pass", message: ""}' >> "$RUNNER_TEMP/coord-results.jsonl"
-                elif [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -q '^FAIL '; then
-                  jq -nc --arg f "$f" --arg m "$out" '{file: $f, verdict: "fail", message: $m}' >> "$RUNNER_TEMP/coord-results.jsonl"
-                else
-                  echo "::warning::coordination validator gave no verdict on $f (exit $rc); the file stays indeterminate"
-                fi
-              done < "$RUNNER_TEMP/routed"
-            else
-              echo "::warning::coordination validator dependencies did not install; routed files are indeterminate"
-              cat "$RUNNER_TEMP/coord-install.log"
-            fi
-          fi
-          echo "coordination.k9 files checked: $(wc -l < "$RUNNER_TEMP/coord-results.jsonl")"
-
+        run: bash "$LANE" coord
       - name: Read the grid comment from the previous revision (delta column)
         continue-on-error: ${{ inputs.advisory == true }}
         if: github.event_name == 'pull_request'
@@ -378,31 +261,7 @@ jobs:
           COMMENTS_URL: ${{ github.event.pull_request.comments_url }}
           MARKER: '<!-- verdict-grid:k9 regenerated on every run -->'
           GRID_AUTHOR: ${{ inputs.grid-author || 'github-actions[bot]' }}
-        run: |
-          set -euo pipefail
-          # Best effort: the caller's posting account writes the grid under
-          # this marker and regenerates it in place, so its last comment
-          # carrying the marker is the previous revision's grid and baseline.
-          # Only that account's comments count: anyone who can comment could
-          # otherwise plant a marker and a forged baseline. Any failure here
-          # only costs the "since previous revision" column.
-          : > "$RUNNER_TEMP/previous.md"
-          page=1
-          while [ "$page" -le 10 ]; do
-            if ! curl -sSf --retry 2 -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
-                 "$COMMENTS_URL?per_page=100&page=$page" > "$RUNNER_TEMP/comments.json"; then
-              echo "::notice::could not read the pull request comments; the delta column reports no comparable baseline"
-              break
-            fi
-            jq -r --arg m "$MARKER" --arg a "$GRID_AUTHOR" \
-              '[.[] | select((.user.login // "") == $a and ((.body // "") | contains($m)))] | last | .body // empty' \
-              "$RUNNER_TEMP/comments.json" > "$RUNNER_TEMP/previous-page.md"
-            [ -s "$RUNNER_TEMP/previous-page.md" ] && mv "$RUNNER_TEMP/previous-page.md" "$RUNNER_TEMP/previous.md"
-            [ "$(jq length "$RUNNER_TEMP/comments.json")" -eq 100 ] || break
-            page=$((page + 1))
-          done
-          [ -s "$RUNNER_TEMP/previous.md" ] && echo "previous grid found" || echo "no previous grid"
-
+        run: bash "$LANE" previous
       - name: Render the verdict grid
         continue-on-error: ${{ inputs.advisory == true }}
         id: grid
@@ -411,27 +270,7 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number || 'local' }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-        run: |
-          set -euo pipefail
-          ledger=.machine_readable/k9-contract-debt.txt
-          args=(--out "$RUNNER_TEMP/k9-grid" --results "$RUNNER_TEMP/results.jsonl" --expected "$RUNNER_TEMP/expected"
-                --changed "$RUNNER_TEMP/changed" --selftest "$RUNNER_TEMP/selftest.log" --selftest-code "$SELFTEST_CODE"
-                --typecheck "$RUNNER_TEMP/typecheck.log" --typecheck-code "$TYPECHECK_CODE" --corpus-code "$CORPUS_CODE"
-                --sha "$HEAD_SHA" --run "$GITHUB_RUN_ID" --url "$RUN_URL" --pr "$PR_NUMBER" --repo "$GITHUB_REPOSITORY"
-                --canon-ref "$CANON_REF")
-          [ -f "$ledger" ] && args+=(--ledger "$ledger")
-          [ -s "$RUNNER_TEMP/ledger-growth" ] && args+=(--ledger-growth "$RUNNER_TEMP/ledger-growth")
-          [ -s "$RUNNER_TEMP/previous.md" ] && args+=(--previous "$RUNNER_TEMP/previous.md")
-          [ -n "${BASE_UNRESOLVED:-}" ] && args+=("$BASE_UNRESOLVED")
-          [ -f "$RUNNER_TEMP/coord-results.jsonl" ] && args+=(--coord-results "$RUNNER_TEMP/coord-results.jsonl")
-          # With require-files the empty corpus is a failing row in the grid
-          # itself, so report.md and badge.json carry the red the job reports.
-          [ "$REQUIRE_FILES" = "true" ] && args+=(--require-files)
-          bash "$CANON/scripts/k9-grid.sh" render "${args[@]}"
-          cp "$RUNNER_TEMP/selftest.log" "$RUNNER_TEMP/typecheck.log" "$RUNNER_TEMP/results.jsonl" "$RUNNER_TEMP/k9-grid/"
-          [ -f "$RUNNER_TEMP/coord-results.jsonl" ] && cp "$RUNNER_TEMP/coord-results.jsonl" "$RUNNER_TEMP/k9-grid/"
-          [ -f "$RUNNER_TEMP/corpus.log" ] && cp "$RUNNER_TEMP/corpus.log" "$RUNNER_TEMP/k9-grid/"
-
+        run: bash "$LANE" render
       - name: Archive the grid and its evidence
         continue-on-error: ${{ inputs.advisory == true }}
         if: ${{ always() && steps.grid.outcome != 'skipped' }}
@@ -451,32 +290,12 @@ jobs:
           CHECKOUT_OUTCOME: ${{ steps.checkout.outcome }}
           CANON_OUTCOME: ${{ steps.canon.outcome }}
         run: |
-          set -euo pipefail
-          echo "K9 verdict grid: $STATE"
-          if [ "$ADVISORY" = "true" ]; then
-            # A failed checkout leaves an empty workspace that grades grey; say so.
-            if [ "${CHECKOUT_OUTCOME:-}" = failure ] || [ "${CANON_OUTCOME:-}" = failure ]; then
-              echo "::warning::K9 conformance (advisory): a checkout step failed, so conformance did not run; not enforced."
-              exit 0
-            fi
-            # Advisory: say what would have failed, never fail.
-            case "$STATE" in
-              red) echo "::warning::K9 conformance (advisory): the grid is red; not enforced. See the k9-grid artifact and the step summary." ;;
-              orange) echo "::warning::K9 conformance (advisory): indeterminate, evidence is missing; not enforced." ;;
-              yellow) echo "::notice::K9 conformance passes with ledgered debt or warnings" ;;
-              green|grey) ;;
-              *) echo "::warning::K9 conformance (advisory): no verdict was produced (an earlier step did not complete); not enforced." ;;
-            esac
-            exit 0
+          # The script lives in the canon checkout this step may be reporting on, so the
+          # fallback for its absence is inline: a failed checkout must still say so.
+          if [ -f "$LANE" ]; then
+            bash "$LANE" gate
+          elif [ "$ADVISORY" = "true" ]; then
+            echo "::warning::K9 conformance (advisory): the conformance script could not be staged (a checkout step failed), so conformance did not run; not enforced."
+          else
+            echo "::error::K9 conformance could not run: the conformance script could not be staged (a checkout step failed)"; exit 1
           fi
-          case "$STATE" in
-            red) echo "::error::K9 conformance failed; see the k9-grid artifact and the step summary"; exit 1 ;;
-            orange)
-              if [ "$FAIL_ON_INDETERMINATE" = "true" ]; then
-                echo "::error::K9 conformance is indeterminate and fail-on-indeterminate is set"; exit 1
-              fi
-              echo "::warning::K9 conformance is indeterminate: evidence is missing, not clean" ;;
-            yellow) echo "::notice::K9 conformance passes with ledgered debt or warnings" ;;
-            green|grey) ;;
-            *) echo "::error::no verdict was produced"; exit 1 ;;
-          esac
