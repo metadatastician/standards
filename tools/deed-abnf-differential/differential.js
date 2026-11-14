@@ -264,7 +264,7 @@ for (const { c, text } of edictCases("valid")) {
   const envelopeRejects = ["envelope-empty"];
   const grammarRejects = ["always-with-field", "clade-selector", "rule-extra-field", "two-selectors", "unknown-selector"];
   const semanticOnly = ["beholding-chora", "duplicate-id", "empty-text", "envelope-not-bust", "id-space", "intend-bang",
-    "missing-requires", "missing-text", "no-comparator", "of-chora-legacy", "requires-other-verb", "selector-bang",
+    "missing-requires", "missing-text", "no-comparator", "of-chora-u5", "requires-other-verb", "selector-bang",
     "two-comparators", "unknown-clause", "verb-filename-mismatch", "witness-other"];
   for (const { c, text } of edictCases("invalid")) {
     const rule = clauseText(text, "rule");
@@ -311,7 +311,7 @@ for (const { c, text } of edictCases("valid")) {
   const grammarRejects = ["bust-grade-letter", "bust-grade-zero", "evidence-numeric", "evidence-unknown", "fact-clause-member", "fact-extra-field"];
   const semanticOnly = ["affirmed-by-string", "affirmed-impossible", "beholding-chora", "bust-missing-residual", "bust-value",
     "duplicate-witness", "edict-other-chora", "expires-before-affirmed", "inherent-outside-bust", "missing-affirmed", "missing-affirmed-by",
-    "missing-evidence", "missing-value", "missing-witnesses", "of-chora-legacy", "of-chora-mismatch", "repo-uuid-twice", "rule-in-descriptile", "source-absolute",
+    "missing-evidence", "missing-value", "missing-witnesses", "of-chora-mismatch", "of-chora-u5", "of-chora-u8-mismatch", "repo-uuid-twice", "rule-in-descriptile", "source-absolute",
     "unknown-clause", "witness-space", "witness-too-long", "witness-unknown"];
   for (const k of cases("invalid")) {
     if (!gateVerdict(k.text).ok) fail("verb descriptile invalid fixture is not a valid deed (YD01)", k.c);

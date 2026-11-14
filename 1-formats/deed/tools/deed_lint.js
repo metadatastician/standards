@@ -1709,9 +1709,9 @@ export function checkEdict(text, filename = null) {
   }
   for (const k of ["canonical-name", "of-chora", "verb"]) if (!fields.has(k)) throw new EdictError(`a contractile-deed is missing :${k}`);
   if (fields.get("canonical-name")[0] !== "string") throw new EdictError(":canonical-name must be a string");
-  const of = fields.get("of-chora");
-  if (of[0] !== "uuid" || of[1][14] !== "8") {
-    throw new EdictError(":of-chora must be the repo's opaque version 8 #uuid\"…\" chora id (J20)");
+  const ofId = choraIdOf(fields.get("of-chora"), (m) => new EdictError(m), ":of-chora");
+  if (ofId === null) {
+    throw new EdictError(":of-chora must be the repo's version 8 chora id, an opaque #uuid\"…\" or a #u8 literal (J20, J28)");
   }
   const v = fields.get("verb");
   if (v[0] !== "symbol" || !Object.hasOwn(CONTRACTILE_VERBS, v[1])) {
@@ -1815,7 +1815,7 @@ export function checkEdict(text, filename = null) {
     }
     out.push({ id: id[1], bang, text: f.get("text")[1] });
   }
-  return { verb, ofChora: of[1], rules: out };
+  return { verb, ofChora: ofId, rules: out };
 }
 
 // ---------------------------------------------------------------------------
@@ -1844,6 +1844,19 @@ export function verbOfDescriptile(filename) {
   return null;
 }
 
+/**
+ * The chora id an identity value names, as a lowercase UUID body, for
+ * comparison (A7 S2, J28): an opaque version 8 #uuid is its own body; a #u8
+ * literal names the profile C id of its preimage; a #u5 is an error in every
+ * mode (S2). Returns null for any other value; the caller words the error.
+ */
+export function choraIdOf(v, E, where) {
+  if (v[0] === "uuid5") throw E(`${where} is a #u5 literal; a version 5 id in an identity field is an error in every mode (A7 S2)`);
+  if (v[0] === "uuid8") return profileCOfBody(v[1]);
+  if (v[0] === "uuid" && v[1][14] === "8") return v[1];
+  return null;
+}
+
 /** The header fields every descriptile-deed carries (A7 7.1). */
 const DESCRIPTILE_HEADER = ["schema-version", "canonical-name", "of-chora", "affirmed", "affirmed-by", "expires"];
 
@@ -1856,10 +1869,10 @@ const DESCRIPTILE_HEADER = ["schema-version", "canonical-name", "of-chora", "aff
 function checkDescriptileHeader(fields, what, E, repoUuid) {
   for (const k of ["canonical-name", "of-chora"]) if (!fields.has(k)) throw E(`${what} is missing :${k}`);
   if (fields.get("canonical-name")[0] !== "string") throw E(":canonical-name must be a string");
-  const of = fields.get("of-chora");
-  if (of[0] !== "uuid" || of[1][14] !== "8") throw E(":of-chora must be the repo's opaque version 8 #uuid\"…\" chora id (J20)");
-  if (repoUuid !== undefined && of[1] !== repoUuid) {
-    throw E(`:of-chora ${of[1]} is not this repo's chora id ${repoUuid}, the :repo-uuid of its chora deed (YD08)`);
+  const ofId = choraIdOf(fields.get("of-chora"), E, ":of-chora");
+  if (ofId === null) throw E(":of-chora must be the repo's version 8 chora id, an opaque #uuid\"…\" or a #u8 literal (J20, J28)");
+  if (repoUuid !== undefined && ofId !== repoUuid) {
+    throw E(`:of-chora ${ofId} is not this repo's chora id ${repoUuid}, the :repo-uuid of its chora deed (YD08)`);
   }
   for (const k of ["affirmed", "affirmed-by"]) {
     if (!fields.has(k)) throw E(`${what} is missing :${k}; affirmation is required by default (J4, YD06)`);
@@ -1960,8 +1973,9 @@ export function checkVerbDescriptile(text, filename, opts = {}) {
 /**
  * The :repo-uuid of the one <repo>_chora.deed directly in dir, for YD08, or
  * undefined when dir holds none. Throws when there are several, or when the
- * id is not a #uuid literal: a legacy #u5 or #u8 id cannot be compared with
- * an opaque :of-chora, so the check fails rather than passing unchecked.
+ * id is neither a version 8 #uuid nor a #u8 literal (whose profile C id is
+ * compared, A7 S2): a #u5 id is an error in every mode, so the check fails
+ * rather than passing unchecked.
  */
 export function choraRepoUuid(dir) {
   const c = rootChora(dir);
@@ -1978,11 +1992,12 @@ export function rootChora(dir) {
   const us = items.filter((it) => it[0] === "field" && it[1] === "repo-uuid");
   if (us.length > 1) throw new VerbDescriptileError(`${choras[0]} carries :repo-uuid ${us.length} times; YD08 needs exactly one`);
   const u = us[0];
-  if (!u || u[2][0] !== "uuid") {
-    throw new VerbDescriptileError(`${choras[0]} has no opaque #uuid :repo-uuid, so :of-chora cannot be checked against it (YD08)`);
+  const id = u ? choraIdOf(u[2], (m) => new VerbDescriptileError(m), `${choras[0]} :repo-uuid`) : null;
+  if (id === null) {
+    throw new VerbDescriptileError(`${choras[0]} has no version 8 :repo-uuid (#uuid or #u8), so :of-chora cannot be checked against it (YD08)`);
   }
   const n = items.find((it) => it[0] === "field" && it[1] === "canonical-name");
-  return { uuid: u[2][1], name: n && n[2][0] === "string" ? n[2][1] : undefined };
+  return { uuid: id, name: n && n[2][0] === "string" ? n[2][1] : undefined };
 }
 
 /**
@@ -2016,7 +2031,9 @@ function verbDescriptileFiles(files, root) {
     } catch (e) {
       if (!(e instanceof LintError) && !e.code) throw e;
       bad += 1;
-      console.log(`FAIL ${f}: ${e instanceof LintError ? e.toString() : `cannot read (${e.code})`}`);
+      // Name the file that could not be read: with --root it may be the
+      // verb's edict, not the descriptile.
+      console.log(`FAIL ${f}: ${e instanceof LintError ? e.toString() : `cannot read ${e.path ?? f} (${e.code})`}`);
     }
   }
   return bad ? 1 : 0;

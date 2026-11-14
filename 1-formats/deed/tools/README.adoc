@@ -199,8 +199,8 @@ ratifies A7.
 Checks a `<Verb>file.deed` (head `contractile-deed`, J14) against
 `spec/abnf/clauses/edict.abnf` (A7 8.1, 8.4, 8.5). The rules it adds to the grammar:
 
-* the form carries `:canonical-name`, `:of-chora` (an opaque version 8
-  `#uuid`, J20) and `:verb`, each exactly once, and no `:beholding-chora`;
+* the form carries `:canonical-name`, `:of-chora` (a version 8 chora id,
+  an opaque `#uuid` or a `#u8` literal; `#u5` is refused; J20, J28) and `:verb`, each exactly once, and no `:beholding-chora`;
 * `:verb` agrees with the file name. `Intentfile.deed` holds the verb `intend`
   (the A7 8.1 table);
 * each `(rule …)` has `:id`, `:text`, `(applies-when …)` and `(requires …)`
@@ -228,8 +228,8 @@ Checks `INTENT.deed`, `MUST.deed`, `TRUST.deed`, `ADJUST.deed`, `DUST.deed` and
 `BUST.deed` (head `descriptile-deed`) against `spec/abnf/clauses/verb-descriptile.abnf`
 (A7 7.1, 7.3, 8.5). The rules it adds to the grammar:
 
-* the form carries `:canonical-name` and `:of-chora` (an opaque version 8
-  `#uuid`, J20) exactly once, and no `:beholding-chora`;
+* the form carries `:canonical-name` and `:of-chora` (a version 8 chora id,
+  an opaque `#uuid` or a `#u8` literal; `#u5` is refused; J20, J28) exactly once, and no `:beholding-chora`;
 * `:affirmed` (a real date) and `:affirmed-by` (a symbol) are required, and
   `:expires`, when present, is not before `:affirmed`. Affirmation is
   required by default (J4), and no relaxation can be written yet. Whether
@@ -265,7 +265,7 @@ Checks `ECOSYSTEM.deed` (head `descriptile-deed`) against
 `../mappings/meta-ecosystem-to-repo-deed.adoc`. The rules it adds to the grammar:
 
 * the descriptile header, as for the verb descriptiles: `:canonical-name`, a
-  version 8 `:of-chora` (J20), no `:beholding-chora`, and `:affirmed` and
+  version 8 `:of-chora` (`#uuid` or `#u8`; J20, J28), no `:beholding-chora`, and `:affirmed` and
   `:affirmed-by`, required by default (J4, YD06);
 * `:project`, `:ecosystem`, `:position-type` and `:purpose` are required,
   non-empty strings. `:not` (a list of strings), `:pipeline-position`,
