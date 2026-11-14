@@ -8,7 +8,7 @@
 //
 // deed.abnf is normative (D308); deed_lint.js is the gate that CI runs. This
 // harness keeps them from drifting apart. It compiles deed.abnf (with the
-// (egress …), (anchor …), (contractiles …), edict, verb-descriptile, ecosystem and state clause profiles and the shared rules of
+// (egress …), (anchor …), (contractiles …), edict, verb-descriptile, ecosystem, state and (DRAFT) rsr-scorecard clause profiles and the shared rules of
 // clauses/common.abnf) using apg-js, mutates every
 // committed deed with a seeded generator, and asks both the grammar and the
 // gate for a verdict on each variant:
@@ -26,7 +26,7 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import apg from "apg-js";
-import { checkEcosystem, checkState, checkVerbDescriptile, choraRepoUuid, edictRuleIdsAt, FIXTURE_TODAY, LintError, rootChora, validate, verbOfDescriptile } from "../../1-formats/deed/tools/deed_lint.js";
+import { checkEcosystem, checkRsrScorecard, checkState, checkVerbDescriptile, choraRepoUuid, edictRuleIdsAt, FIXTURE_TODAY, LintError, rootChora, validate, verbOfDescriptile } from "../../1-formats/deed/tools/deed_lint.js";
 
 const { apgApi, apgLib } = apg;
 const ROOT = resolve(import.meta.dir, "../..");
@@ -73,7 +73,8 @@ function compileGrammar() {
       readFileSync(join(ABNF, "clauses/edict.abnf"), "utf8") + "\n" +
       readFileSync(join(ABNF, "clauses/verb-descriptile.abnf"), "utf8") + "\n" +
       readFileSync(join(ABNF, "clauses/ecosystem.abnf"), "utf8") + "\n" +
-      readFileSync(join(ABNF, "clauses/state.abnf"), "utf8")).replace(/[^\x00-\x7f]/g, "?") +
+      readFileSync(join(ABNF, "clauses/state.abnf"), "utf8") + "\n" +
+      readFileSync(join(ABNF, "clauses/rsr-scorecard.abnf"), "utf8")).replace(/[^\x00-\x7f]/g, "?") +
     "\nSP = %x20\nDQUOTE = %x22\nALPHA = %x41-5A / %x61-7A\nDIGIT = %x30-39\n" +
     "VCHAR = %x21-7E\nCR = %x0D\nLF = %x0A\nCRLF = CR LF\n";
   const api = new apgApi(src);
@@ -91,6 +92,16 @@ function compileGrammar() {
 // The grammar's UTF8-n rules are byte rules, so apg parses UTF-8 bytes.
 function grammarAccepts(grammar, start, text) {
   return new apgLib.parser().parse(grammar, start, Array.from(Buffer.from(text, "utf8"))).success;
+}
+
+// True when the RSR scorecard profile accepts the text as a scorecard.
+function checkRsrScorecardSafe(text, name) {
+  try {
+    return checkRsrScorecard(text, name) !== null;
+  } catch (e) {
+    if (!(e instanceof LintError)) throw e;
+    return false;
+  }
 }
 
 function gateVerdict(text) {
@@ -207,7 +218,7 @@ const fail = (kind, detail) => failures.push({ kind, detail });
 
 // 1. Fixtures: every valid fixture passes both; every valid egress or anchor
 //    fixture's clause parses as its clause rule.
-for (const [dir, clause] of [["valid", null], ["heads/valid", null], ["bang/valid", null], ["egress/valid", "egress"], ["anchor/valid", "anchor"], ["contractiles/valid", "contractiles"]]) {
+for (const [dir, clause] of [["valid", null], ["heads/valid", null], ["bang/valid", null], ["egress/valid", "egress"], ["anchor/valid", "anchor"], ["contractiles/valid", "contractiles"], ["rsr-scorecard/valid", "rsr-scorecard"]]) {
   for (const name of readdirSync(join(FIXTURES, dir)).sort()) {
     const text = readFileSync(join(FIXTURES, dir, name), "utf8");
     if (!grammarAccepts(grammar, "deed", text)) fail("fixture rejected by deed.abnf", `${dir}/${name}`);
@@ -247,6 +258,29 @@ for (const name of CONTRACTILES_GRAMMAR_REJECTS) {
   const e = clauseText(text, "contractiles");
   if (e === null) fail("contractiles invalid fixture has no (contractiles …) clause", name);
   else if (grammarAccepts(grammar, "contractiles-clause", e)) fail("contractiles.abnf accepts a fixture it must refuse", name);
+}
+// Invalid RSR scorecard fixtures whose defect rsr-scorecard.abnf itself
+// expresses: an unknown tier or verdict symbol, an integer where a decimal
+// string goes, and a field outside the clause. The others break a SEMANTIC side
+// condition (placement, :profile, counts, the derived score and coverage, the
+// provisional rules), which only deed_lint.js --rsr-scorecard checks; for them
+// the grammar accepts the clause. Every invalid fixture is in one list or the other.
+{
+  const RSR_SCORECARD_GRAMMAR_REJECTS = [
+    "score-integer_praxis.deed", "tier-unknown_praxis.deed", "unknown-field_praxis.deed", "verdict-unknown_praxis.deed",
+  ];
+  for (const name of readdirSync(join(FIXTURES, "rsr-scorecard/invalid")).sort()) {
+    const text = readFileSync(join(FIXTURES, "rsr-scorecard/invalid", name), "utf8");
+    if (!grammarAccepts(grammar, "deed", text)) fail("rsr-scorecard invalid fixture is not a valid deed", name);
+    if (!gateVerdict(text).ok) fail("rsr-scorecard invalid fixture is refused by deed_lint.js itself", name);
+    if (checkRsrScorecardSafe(text, name)) fail("deed_lint.js --rsr-scorecard accepts an invalid fixture", name);
+    const e = clauseText(text, "rsr-scorecard");
+    if (RSR_SCORECARD_GRAMMAR_REJECTS.includes(name)) {
+      if (e === null || grammarAccepts(grammar, "rsr-scorecard-clause", e)) fail("rsr-scorecard.abnf accepts a fixture it must refuse", name);
+    } else if (e !== null && !grammarAccepts(grammar, "rsr-scorecard-clause", e)) {
+      fail("rsr-scorecard.abnf refuses a fixture listed as semantic only", name);
+    }
+  }
 }
 // And the converse: every invalid fixture NOT listed breaks only a semantic
 // side condition, so the grammar accepts its clause. A fixture added to the
@@ -539,7 +573,7 @@ for (const { c, text } of edictCases("valid")) {
 
 // 2. Mutation differential over the committed deeds and the valid fixtures
 //    (or the given seeds).
-const validFixtures = ["valid", "heads/valid", "bang/valid", "egress/valid", "anchor/valid", "contractiles/valid"].flatMap((dir) =>
+const validFixtures = ["valid", "heads/valid", "bang/valid", "egress/valid", "anchor/valid", "contractiles/valid", "rsr-scorecard/valid"].flatMap((dir) =>
   readdirSync(join(FIXTURES, dir)).sort().map((name) => join(FIXTURES, dir, name)),
 );
 const edictValid = readdirSync(join(FIXTURES, "edict/valid")).sort().flatMap((c) =>

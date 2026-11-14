@@ -1,0 +1,85 @@
+; SPDX-FileCopyrightText: © 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+; SPDX-License-Identifier: MPL-2.0
+; SPDX-License-Identifier: CC-BY-SA-4.0
+;
+; DEED clause profile: (rsr-scorecard …), v0.1.0 (DRAFT)
+; Prose and rationale: 1-formats/deed/mappings/scorecard-corpus-decision.adoc
+; section 6 (the RSR scorecard). Owner ruling 2026-11-14: a new RSR scorecard
+; clause carrying the tier, the score and the per-criterion results, which the
+; oracle (Hypatia RsrConformance, `mix hypatia.rsr_score --write`) writes in
+; place of .machine_readable/scorecards/rsr.scorecard.a2ml. Not ratified.
+;
+; A CLAUSE PROFILE, not a new grammar. Every rule below is also a `field` or
+; `clause` of deed.abnf v2.0.0, so a deed carrying one still passes deed_lint
+; unchanged, and no file name or doc-head is added. Rules it borrows (string,
+; boolean, token-sep, hex-lc, DQUOTE, DIGIT) are deed.abnf's, unchanged.
+; Requires RFC 7405 (%s"..." case-sensitive string literals).
+;
+; Where it appears: exactly one (rsr-scorecard …) clause, at the top level of a
+; praxis-deed whose :profile is the symbol rsr-scorecard, conventionally
+; .machine_readable/scorecards/rsr-scorecard_praxis.deed in the scored repo.
+; A scorecard is an assessment record, neither identity (the chora deed) nor
+; content organisation (CLADE.deed) nor registry (chora-registry), so it is
+; never a clause of a repo-deed; it follows the proof receipt (PROOF-POLICY
+; 8.5), the other machine-written verification record, which is a praxis-deed
+; profile too. SEMANTIC (validator-enforced, deed_lint.js --rsr-scorecard):
+;   * the praxis-deed's top level carries :schema-version, :canonical-name and
+;     :profile rsr-scorecard, at most :beholding-chora besides, and the one
+;     clause; an (rsr-scorecard …) anywhere else is refused;
+;   * :repo, :spec, :spec-version, :tier, :score, :provisional and
+;     :automatable-coverage exactly once; the other fields at most once;
+;   * at least one (criterion …); in each, every crit-field exactly once;
+;     :id unique across the clause;
+;   * :score is at most 100, and :automatable-coverage at most 1;
+;   * :provisional is #t when :automatable-coverage is below 1, and a
+;     provisional scorecard is never rhodium (RSR-SPEC-v2 section 10: no firm
+;     tier claim from partial coverage);
+;   * :score is derived, not asserted: it equals 100 times the passed weight
+;     (pass counts whole, partial half) over the verified weight (pass,
+;     partial and fail), within 0.02 for the rounding of the weights, and is
+;     "0" when nothing is verified;
+;   * :automatable-coverage likewise equals the verified weight over the
+;     applicable weight (every verdict but na), within 0.001;
+;   * :applicable-weight and :verified-weight, when present, equal those sums
+;     within 0.01.
+
+rsr-scorecard-clause = "(" %s"rsr-scorecard" 1*(token-sep sc-member) [token-sep] ")"
+sc-member       = sc-field / sc-criterion
+
+sc-field        = ( %s":repo"                 token-sep string )
+                / ( %s":spec"                 token-sep %s"rsr-criteria-v2" )
+                / ( %s":spec-version"         token-sep string )
+                / ( %s":tier"                 token-sep sc-tier )
+                / ( %s":score"                token-sep sc-decimal )
+                / ( %s":provisional"          token-sep boolean )
+                / ( %s":automatable-coverage" token-sep sc-decimal )
+                / ( %s":applicable-weight"    token-sep sc-decimal )
+                / ( %s":verified-weight"      token-sep sc-decimal )
+                / ( %s":profile-present"      token-sep boolean )
+                / ( %s":source-commit"        token-sep DQUOTE 40hex-lc DQUOTE )
+                ; :repo is the scored repo's name (its chora deed's
+                ; :canonical-name when it has one). :spec names the criteria
+                ; family as a symbol; :spec-version is the catalogue's own
+                ; version string, verbatim. :source-commit is the scored
+                ; commit, when the writer was told it.
+
+sc-tier         = %s"none" / %s"bronze" / %s"silver" / %s"gold" / %s"rhodium"
+crit-tier       = %s"bronze" / %s"silver" / %s"gold" / %s"rhodium"
+sc-verdict      = %s"pass" / %s"partial" / %s"fail" / %s"unverified" / %s"na"
+                ; Symbols, matched whole: each is followed by token-sep or ")".
+
+sc-decimal      = DQUOTE 1*DIGIT [ "." 1*DIGIT ] DQUOTE
+                ; deed.abnf has no decimal literal, so a decimal is a string
+                ; of this shape: "84.08", "0.73", "1".
+
+sc-criterion    = "(" %s"criterion" 1*(token-sep crit-field) [token-sep] ")"
+crit-field      = ( %s":id"      token-sep DQUOTE crit-id DQUOTE )
+                / ( %s":name"    token-sep string )
+                / ( %s":tier"    token-sep crit-tier )
+                / ( %s":gate"    token-sep string )
+                / ( %s":weight"  token-sep sc-decimal )
+                / ( %s":verdict" token-sep sc-verdict )
+crit-id         = 1*DIGIT 1*( "." 1*DIGIT )
+                ; The criterion's id in the catalogue, e.g. "3.1.1". :gate is
+                ; the capability that makes it applicable ("universal" or a
+                ; capability name), verbatim from the catalogue.

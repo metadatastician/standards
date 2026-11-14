@@ -338,6 +338,39 @@ The fixtures are one case per directory, `fixtures/state/{valid,invalid}/<case>/
 A case may hold a `<repo>_chora.deed`, which is then checked against, and a
 `STRICT` marker file, which runs it in strict mode.
 
+== `deed_lint.js --rsr-scorecard` — the RSR scorecard (DRAFT)
+
+Checks the `(rsr-scorecard …)` clause against
+`spec/abnf/clauses/rsr-scorecard.abnf` v0.1.0 (owner ruling 2026-11-14;
+prose: `../mappings/scorecard-corpus-decision.adoc` §6). It is what the RSR
+oracle (`mix hypatia.rsr_score --write`) writes in place of
+`rsr.scorecard.a2ml`. The rules it adds to the grammar:
+
+* the clause sits once, at the top level of a `praxis-deed` whose `:profile`
+  is `rsr-scorecard` (conventionally
+  `.machine_readable/scorecards/rsr-scorecard_praxis.deed`); one in a chora
+  deed, nested, or twice is refused. The praxis-deed carries only
+  `:schema-version`, `:canonical-name`, `:profile`, an optional
+  `:beholding-chora` and the clause;
+* `:repo`, `:spec rsr-criteria-v2`, `:spec-version`, `:tier`, `:score`,
+  `:provisional` and `:automatable-coverage` once each; `:applicable-weight`,
+  `:verified-weight`, `:profile-present` and `:source-commit` at most once;
+* at least one `(criterion :id :name :tier :gate :weight :verdict)`, every
+  field once, ids unique. Tiers and verdicts are symbols; decimals are
+  strings such as `"84.08"`, since the grammar has no decimal literal;
+* no overclaim: coverage below 1 needs `:provisional #t`, and a provisional
+  scorecard is never `rhodium`;
+* the score and the coverage are derived from the criteria (pass whole,
+  partial half, over pass, partial and fail; coverage over every verdict but
+  `na`), and a recorded value they do not give is refused.
+
+    bun deed_lint.js --rsr-scorecard rsr-scorecard_praxis.deed
+    bun deed_lint.js --rsr-scorecard-fixtures fixtures/rsr-scorecard/
+
+The fixtures are flat, `fixtures/rsr-scorecard/{valid,invalid}/*.deed`; the
+differential sorts each invalid one into those the grammar refuses and those
+only the profile does.
+
 == `deed_lint.js --contractile-registry` — the `contractile` rule registry (A7 J13)
 
 Generates the A5 registry `contractile_rules_praxis.deed` from a repo's six

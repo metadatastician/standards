@@ -1021,6 +1021,9 @@ locally. Either the estate chora gains it, or `extends-vocabulary` lands.
 * Clause profiles, each narrowing `clause` for one consumer without changing
   this grammar: link:./abnf/clauses/egress.abnf[`(egress …)`] v1.0.0
   (link:./EGRESS-CLAUSE-SPEC.adoc[prose], ADR-009)
+  and link:./abnf/clauses/rsr-scorecard.abnf[`(rsr-scorecard …)`] v0.1.0, DRAFT
+  (link:../mappings/scorecard-corpus-decision.adoc[prose] §6; the clause of a
+  `praxis-deed` of `:profile rsr-scorecard`)
 * Shared rules for the clause modules (A7 M3), borrowed rather than restated:
   link:./abnf/clauses/common.abnf[`common.abnf`] v1.0.0, DRAFT (dates, string
   lists, the v8 chora id, the affirmation members)
