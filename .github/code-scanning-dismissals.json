@@ -76,7 +76,7 @@
     {
       "alert_number": null,
       "comment": "Same structural requirement as codeql.yml and hypatia-scan.yml: this job is the caller of hypatia-scan-reusable.yml, which uploads SARIF and therefore declares security-events: write. A caller may not grant less than the callee declares - the run then dies at startup with zero jobs - so there is no lower-privilege spelling of this workflow. Workflow level stays contents: read.",
-      "line": 275,
+      "line": 289,
       "path": ".github/workflows/fork-governance.yml",
       "reason": "won't fix",
       "rule_id": "TokenPermissionsID"
