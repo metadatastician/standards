@@ -1,0 +1,14 @@
+;; SPDX-License-Identifier: CC-BY-SA-4.0
+(praxis-deed
+  :schema-version "1.0.0"
+  :canonical-name "rsr-scorecard"
+  :profile rsr-scorecard
+  (rsr-scorecard
+    :repo "example-game"
+    :spec rsr-criteria-v2
+    :spec-version "2.1.0-draft"
+    :tier gold
+    :score "100"
+    :provisional #f
+    :automatable-coverage "1"
+    (criterion :id "1.1.2" :name "justfile" :tier bronze :gate "universal" :weight "1" :verdict pass)))

@@ -6,7 +6,7 @@ import { cpSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, writ
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { validate, blankComments, LintError, SELF_TEST_CASES, checkEgress, EgressError, checkAnchor, AnchorError, profileCOfBody, readMustfileChecks, MustfileError, readProofReceipt, ProofReceiptError, checkContractiles, ContractilesError, contractilePaths, CONTRACTILE_VERBS, checkEdict, EdictError, verbOfFilename, checkVerbDescriptile, VerbDescriptileError, verbOfDescriptile, choraRepoUuid, rootChora, FIXTURE_TODAY, checkEcosystem, EcosystemError, ECOSYSTEM_RELATIONSHIPS, checkState, StateError, STATE_PHASES, MATURITY_LEVELS } from "./deed_lint.js";
+import { validate, blankComments, LintError, SELF_TEST_CASES, checkEgress, EgressError, checkAnchor, AnchorError, profileCOfBody, readMustfileChecks, MustfileError, readProofReceipt, ProofReceiptError, checkContractiles, ContractilesError, contractilePaths, CONTRACTILE_VERBS, checkEdict, EdictError, verbOfFilename, checkVerbDescriptile, VerbDescriptileError, verbOfDescriptile, choraRepoUuid, rootChora, FIXTURE_TODAY, checkEcosystem, EcosystemError, ECOSYSTEM_RELATIONSHIPS, checkState, StateError, STATE_PHASES, MATURITY_LEVELS, checkRsrScorecard, RsrScorecardError, RSR_TIERS, RSR_VERDICTS } from "./deed_lint.js";
 import { generateContractileRegistry as generateRegistry } from "./deed_lint.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -1398,5 +1398,45 @@ describe("state fixtures", () => {
   test("--root without a directory is a usage error", () => {
     const r = cli("--state", join(FIX_STATE, "valid", "minimal", "STATE.deed"), "--root");
     expect(r.code).toBe(2);
+  });
+});
+
+// DRAFT: the RSR scorecard (clauses/rsr-scorecard.abnf; owner ruling 2026-11-14).
+const FIX_RSR = join(FIX, "rsr-scorecard");
+
+describe("rsr-scorecard profile", () => {
+  test("--rsr-scorecard-fixtures passes on the corpus", () => {
+    const r = cli("--rsr-scorecard-fixtures", FIX_RSR);
+    expect(r.code).toBe(0);
+    expect(r.out).toContain("RSR SCORECARD FIXTURES OK");
+  });
+  test("the summary carries the tier, the score and each criterion", () => {
+    const p = join(FIX_RSR, "valid", "provisional_praxis.deed");
+    const r = checkRsrScorecard(readFileSync(p, "utf8"), p);
+    expect(r).toMatchObject({ repo: "example-game", tier: "none", score: 70.59, provisional: true });
+    expect(r.criteria.map((c) => c.verdict)).toEqual(["pass", "pass", "partial", "fail", "unverified", "na"]);
+    expect(RSR_TIERS).toEqual(["none", "bronze", "silver", "gold", "rhodium"]);
+    expect(RSR_VERDICTS).toEqual(["pass", "partial", "fail", "unverified", "na"]);
+  });
+  test("a deed with no scorecard is outside the profile", () => {
+    const p = join(FIX, "valid", "rsr-template-repo_chora.deed");
+    expect(checkRsrScorecard(readFileSync(p, "utf8"), p)).toBeNull();
+  });
+  test("the score is derived: one changed verdict refuses the recorded score", () => {
+    const p = join(FIX_RSR, "valid", "provisional_praxis.deed");
+    const t = readFileSync(p, "utf8").replace(":weight \"1.5\" :verdict fail", ":weight \"1.5\" :verdict pass");
+    expect(() => checkRsrScorecard(t, p)).toThrow(/derived, not asserted/);
+  });
+  test("a scorecard never sits in the chora deed", () => {
+    const p = join(FIX_RSR, "invalid", "in-chora_chora.deed");
+    expect(() => checkRsrScorecard(readFileSync(p, "utf8"), p)).toThrow(RsrScorecardError);
+  });
+  test("--rsr-scorecard reports each file", () => {
+    const ok = cli("--rsr-scorecard", join(FIX_RSR, "valid", "minimal_praxis.deed"));
+    expect(ok.code).toBe(0);
+    expect(ok.out).toMatch(/OK .*tier gold, score 100, 1 criteria/);
+    const bad = cli("--rsr-scorecard", join(FIX_RSR, "invalid", "overclaim_praxis.deed"));
+    expect(bad.code).toBe(1);
+    expect(bad.out).toMatch(/FAIL .*:provisional must be #t/);
   });
 });
