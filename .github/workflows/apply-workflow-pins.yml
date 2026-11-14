@@ -131,14 +131,18 @@ jobs:
           TOK_CATACHRESIS_COLLOQUIUM: ${{ steps.tok-cc.outputs.token }}
           MODE: ${{ inputs.mode || 'audit' }}
           OWNERS: ${{ inputs.owners || 'hyperpolymath,metadatastician,catachresis-colloquium' }}
+          ONLY: ${{ inputs.only || '' }}
         run: |
           set -euo pipefail
           # Every owner walked needs its OWN installation token: a token for one
           # owner cannot write to another owner's repositories. Until 2026-11-10
           # this step checked only the hyperpolymath token, and the run step used
           # it for every owner, so fix mode could not write to metadatastician.
+          # With `only` (owner/name) the run walks just that repository's owner, so
+          # only that owner's token is required; the others are skipped here too.
           missing=""
           for owner in ${OWNERS//,/ }; do
+            if [ -n "$ONLY" ] && [ "${ONLY%%/*}" != "$owner" ]; then continue; fi
             var="TOK_$(printf '%s' "$owner" | tr 'a-z-' 'A-Z_')"
             [ -n "${!var:-}" ] || missing="${missing} ${owner}"
           done
