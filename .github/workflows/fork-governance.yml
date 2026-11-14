@@ -147,10 +147,14 @@ jobs:
     env:
       # hyperpolymath/gitbot-fleet commit whose driver and adapters run. Bump
       # deliberately; the envelope contract is docs/VERDICT-GRID-SPEC.adoc.
-      FLEET_REF: e44af8144789594fcce891ccc7b77fc9a464a520
+      FLEET_REF: 7fc27784a66a71a54e10e4b2f9b59476ecae0887
       # panic-attack commit for panicbot, kept equal to PANIC_ATTACK_SHA in
       # hypatia-scan-reusable.yml so both rows describe one tool.
       PANIC_ATTACK_SHA: 410a8f821ea8297833162565b50a298f787815da
+      # pons commit for ponsbot, kept equal to `pons-ref` in
+      # hypatia-scan-reusable.yml and to `commit` in gitbot-fleet
+      # bots/ponsbot/canon/pin.toml (the build script refuses a mismatch).
+      PONS_SHA: bca1ea289a4f8a86bac6212731e6f8ec15c67ad4
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -189,6 +193,7 @@ jobs:
           crates=$(printf '%s\n' "$plan" | awk -F'\t' '$2 != "" {print $2}' | sort -u | tr '\n' ' ')
           echo "crates=${crates% }" >> "$GITHUB_OUTPUT"
           if printf '%s\n' "$plan" | awk -F'\t' '$1 == "panicbot" {f=1} END {exit !f}'; then echo panicbot=true; else echo panicbot=false; fi >> "$GITHUB_OUTPUT"
+          if printf '%s\n' "$plan" | awk -F'\t' '$1 == "ponsbot" {f=1} END {exit !f}'; then echo ponsbot=true; else echo ponsbot=false; fi >> "$GITHUB_OUTPUT"
           { echo "workspaces<<WS"; for c in $crates; do echo "$RUNNER_TEMP/fleet-src/bots/$c -> target"; done; echo "$RUNNER_TEMP/fleet-src/shared-context -> target"; echo WS; } >> "$GITHUB_OUTPUT"
           if [ -n "${crates% }" ]; then echo build=true; else echo build=false; fi >> "$GITHUB_OUTPUT"
 
@@ -210,7 +215,7 @@ jobs:
             fleet-report-back-v3-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Report the Rust toolchain in use
-        if: steps.plan.outputs.build == 'true' || steps.plan.outputs.panicbot == 'true'
+        if: steps.plan.outputs.build == 'true' || steps.plan.outputs.panicbot == 'true' || steps.plan.outputs.ponsbot == 'true'
         run: |
           set -euo pipefail
           command -v cargo >/dev/null || { echo "::error::cargo is not on this runner; the adapters cannot be built"; exit 1; }
@@ -223,15 +228,24 @@ jobs:
           path: ~/.panic-attack
           key: panic-attack-v1-${{ runner.os }}-${{ runner.arch }}-${{ env.PANIC_ATTACK_SHA }}
 
+      - name: Restore pons build cache
+        if: steps.plan.outputs.ponsbot == 'true'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.pons
+          key: pons-v1-${{ runner.os }}-${{ runner.arch }}-${{ env.PONS_SHA }}
+
       - name: Build the enrolled adapters
-        if: steps.plan.outputs.build == 'true' || steps.plan.outputs.panicbot == 'true'
+        if: steps.plan.outputs.build == 'true' || steps.plan.outputs.panicbot == 'true' || steps.plan.outputs.ponsbot == 'true'
         env:
           CRATES: ${{ steps.plan.outputs.crates }}
           PANICBOT: ${{ steps.plan.outputs.panicbot }}
+          PONSBOT: ${{ steps.plan.outputs.ponsbot }}
         run: |
           set -euo pipefail
           args=(--fleet "$RUNNER_TEMP/fleet-src" --bin-dir "$RUNNER_TEMP/fleet-bin" --crates "$CRATES")
           [ "$PANICBOT" = true ] && args+=(--panic-attack "$PANIC_ATTACK_SHA")
+          [ "$PONSBOT" = true ] && args+=(--pons "$PONS_SHA")
           bash "$RUNNER_TEMP/fleet-src/scripts/fleet-report-back-build.sh" "${args[@]}"
 
       - name: Run the enrolled adapters and write the envelopes
