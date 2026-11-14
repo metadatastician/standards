@@ -684,6 +684,7 @@ const ANCHOR_WHY = {
   "parent-self_chora.deed": "the deed's own :repo-uuid",
   "parent-self-u5_chora.deed": "a #u5 literal",
   "parent-self-u8_chora.deed": "the deed's own :repo-uuid",
+  "own-u5_chora.deed": "a #u5 literal",
   "parent-string_chora.deed": "got string",
   "parents-stray_chora.deed": "takes (parent …) clauses only",
   "praxis-head_praxis.deed": "belongs in a repo-deed",
