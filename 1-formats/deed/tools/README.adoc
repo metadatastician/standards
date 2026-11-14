@@ -101,13 +101,14 @@ error. Unknown or duplicate fields, short commits, a missing Agda leg,
 non-current receipts without a `:reason` and empty receipts fail closed, and
 then no JSON is written.
 
-Every current receipt carries `:inputs-sha256` (§8.5.1) and `(axioms …)`
-(§8.4). A leg whose current receipt lists an axiom that is not disposition
+Every current receipt carries `:inputs-sha256` and `(inputs-manifest …)`
+(§8.5.1), and `(axioms …)` (§8.4). The reader rebuilds the manifest and
+refuses a digest that is not its SHA-256. A leg whose current receipt lists an axiom that is not disposition
 `c` does not count. Top-level `(echo …)` records (§8.5.2) let a receipt
 earned on a commit that a squash or rebase rewrote count toward `PWG-1` for
 its image. The reader checks their form and consistency only. The git checks
-of §8.5.3 belong to the gates, and `scripts/proof-inputs-sha256.sh` computes
-the digests.
+of §8.5.3 belong to the gates: `scripts/check-proof-receipt.sh` does them, and
+`scripts/proof-inputs-sha256.sh` computes the digests.
 
 The worked examples are `fixtures/proof-receipt/example_praxis.deed` and
 `fixtures/proof-receipt/echo_praxis.deed`, and the
@@ -212,7 +213,8 @@ Checks a `<Verb>file.deed` (head `contractile-deed`, J14) against
   `:witness` is the rule's own `:id` (J5), with exactly one of `:value`,
   `:at-least` and `:at-most`;
 * `(envelope :for … :not-for … :tolerance …)` appears at most once, and only
-  in a Bustfile (8.5).
+  in a Bustfile (8.5). It holds at least one of the three fields, as
+  `bust-envelope` requires, so an empty `(envelope)` is refused.
 
     bun deed_lint.js --edict Mustfile.deed
     bun deed_lint.js --edict-fixtures fixtures/edict/
@@ -220,18 +222,31 @@ Checks a `<Verb>file.deed` (head `contractile-deed`, J14) against
 The fixtures are one case per directory, `fixtures/edict/{valid,invalid}/<case>/<Verb>file.deed`,
 because an edict's file name is fixed by its verb.
 
-== `contractile_registry.js` — the `contractile` rule registry (A7 J13)
+== `deed_lint.js --contractile-registry` — the `contractile` rule registry (A7 J13)
 
-Generates the A5 registry `contractile_rules_praxis.deed` from a repo's edicts:
-one `rule-def` per rule, with `:id "contractile/<verb>/<rule-id>"` and the
-rule's `:text`. `:class gate` goes to every `must` rule and every rule marked
-`!`, and `:class advisory` to the rest. Every entry gets `:excusable-at repo`,
-`:scope-form exact-paths` and `:status active`, and a Bust rule also carries
-`:floor "A7 8.5"`. `:beholding-chora` and the SPDX header are copied from the
-repo's own chora deed.
+Generates the A5 registry `contractile_rules_praxis.deed` from a repo's six
+edicts. All six `<Verb>file.deed` files are required; a missing one is an
+error, so an accidental deletion cannot shrink the registry. There is one
+`rule-def` per rule, with `:id "contractile/<verb>/<rule-id>"` and the rule's
+`:text`. `:class gate` goes to every `must` rule and every rule marked `!`,
+and `:class advisory` to the rest. Every entry gets `:excusable-at repo` and
+`:scope-form exact-paths`, and a Bust rule also carries `:floor "A7 8.5"`.
+`:beholding-chora` and the SPDX header are copied from the repo's own chora
+deed.
 
-    bun contractile_registry.js --root REPO            # writes .machine_readable/contractiles/contractile_rules_praxis.deed
-    bun contractile_registry.js --root REPO --check    # exit 1 when the committed registry is stale
+A5 3.2 says an id is never deleted or reused. The generator therefore reads
+the registry as last written: a rule that has left the edicts keeps its entry
+with `:status retired`, and an edict that brings a retired id back is refused.
+The edict form records no supersession, so a rename is a retirement plus a new
+id, and `:supersedes` links are not generated. A hand deletion of a retired
+entry is caught only against the base version (A5 R05), not by this tool.
+
+The generator lives in `deed_lint.js` rather than its own script, so the
+estate's count of hand-authored JavaScript does not grow
+(`.github/no-js-baseline.txt`).
+
+    bun deed_lint.js --contractile-registry --root REPO            # writes .machine_readable/contractiles/contractile_rules_praxis.deed
+    bun deed_lint.js --contractile-registry --root REPO --check    # exit 1 when the committed registry is stale
 
 Until `standards` has its own edicts (A7 M4), CI runs `--check` against the
 fixture repo `fixtures/edict/registry/root/`.

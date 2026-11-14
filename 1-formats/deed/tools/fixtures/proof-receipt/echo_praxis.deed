@@ -18,35 +18,46 @@
   (echo :source "1111111111111111111111111111111111111111"
         :image "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
         :witness inputs-sha256
-        (inputs :prover agda :sha256 "0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a")
-        (inputs :prover rocq :sha256 "0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b")
-        (inputs :prover lean :sha256 "0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c"))
+        (inputs :prover agda :sha256 "c8945990a8e4242d7eaeaa42dd4e647a4e372fdbd32714fb534744df85066248")
+        (inputs :prover rocq :sha256 "f2f95ed848340e07892c42e698b008dbed477d1a13358457a8e7128a9e21337a")
+        (inputs :prover lean :sha256 "39064d25a19fd0854cae1bda8a3829c856f168c230fef46d333bb8150adfa78c"))
   (echo :source "2222222222222222222222222222222222222222"
         :image "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
         :witness inputs-sha256
-        (inputs :prover agda :sha256 "0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a"))
+        (inputs :prover agda :sha256 "c8945990a8e4242d7eaeaa42dd4e647a4e372fdbd32714fb534744df85066248"))
   (claim :id "T-1" :pwg PWG-1 :foundation-diverse #f
     (leg :prover agda :route source :token proven :state AGDA-VERIFIED
       (receipt :run "https://github.com/hyperpolymath/example/actions/runs/10"
                :commit "1111111111111111111111111111111111111111"
                :checker "agda 2.6.4.3"
                :invocation "agda --safe --without-K --cubical-compatible"
-               :inputs-sha256 "0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a"
+               :inputs-sha256 "c8945990a8e4242d7eaeaa42dd4e647a4e372fdbd32714fb534744df85066248"
                :state current
+               (inputs-manifest
+                 (file :path "example.agda-lib" :sha256 "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08")
+                 (file :path "src/Example.agda" :sha256 "a1b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"))
                (axioms)))
     (leg :prover rocq :route transported :token proven :state RECONCILED
       (receipt :run "https://github.com/hyperpolymath/example/actions/runs/11"
                :commit "1111111111111111111111111111111111111111"
                :checker "rocq 9.0.0"
                :invocation "rocq compile"
-               :inputs-sha256 "0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b"
+               :inputs-sha256 "f2f95ed848340e07892c42e698b008dbed477d1a13358457a8e7128a9e21337a"
                :state current
+               (inputs-manifest
+                 (file :path "_CoqProject" :sha256 "60303ae22b998861bce3b28f33eec1be758a213c86c93c076dbe9f558c11c752")
+                 (file :path "rocq/Example.v" :sha256 "fd61a03af4f77d870fc21e05e7e80678095c92d808cfb3b5c279ee04c74aca13"))
                (axioms)))
     (leg :prover lean :route re-proved :token proven-with-postulates :state RECONCILED
       (receipt :run "https://github.com/hyperpolymath/example/actions/runs/12"
                :commit "1111111111111111111111111111111111111111"
                :checker "lean 4.19.0"
                :invocation "lake build"
-               :inputs-sha256 "0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c"
+               :inputs-sha256 "39064d25a19fd0854cae1bda8a3829c856f168c230fef46d333bb8150adfa78c"
                :state current
+               (inputs-manifest
+                 (file :path "lake-manifest.json" :sha256 "a4e624d686e03ed2767c0abd85c14426b0b1157d2ce81d27bb4fe4f6f01d688a")
+                 (file :path "lakefile.toml" :sha256 "2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae")
+                 (file :path "lean-toolchain" :sha256 "fcde2b2edba56bf408601fb721fe9b5c338d10ee429ea04fae5511b68fbf8fb9")
+                 (file :path "lean/Example.lean" :sha256 "d2e2adf7177b7a8afddbc12d1634cf23ea1a71020f6a1308070a16400fb68fde"))
                (axioms (axiom :name "propext" :disposition c))))))

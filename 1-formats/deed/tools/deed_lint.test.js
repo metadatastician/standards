@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: MPL-2.0
 // bun test for deed_lint.js. Run: bun test 1-formats/deed/tools/
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { cpSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { validate, LintError, SELF_TEST_CASES, checkEgress, EgressError, checkAnchor, AnchorError, profileCOfBody, readMustfileChecks, MustfileError, readProofReceipt, ProofReceiptError, checkContractiles, ContractilesError, contractilePaths, CONTRACTILE_VERBS, checkEdict, EdictError, verbOfFilename } from "./deed_lint.js";
-import { generate as generateRegistry } from "./contractile_registry.js";
+import { generateContractileRegistry as generateRegistry } from "./deed_lint.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const LINT = join(HERE, "deed_lint.js");
@@ -311,11 +312,19 @@ describe("Mustfile check profile", () => {
 describe("proof-receipt profile (PROOF-POLICY §8.5)", () => {
   const C = "0123456789abcdef0123456789abcdef01234567";
   const OTHER = "fedcba9876543210fedcba9876543210fedcba98";
-  const D = "a".repeat(64), D2 = "b".repeat(64), T = "c".repeat(64);
+  // §8.5.1 manifests: FILES is the default input set, FILES2 a changed one.
+  // D and D2 are their digests, so a receipt's :inputs-sha256 is derived.
+  const FILES = [["src/A.agda", "1".repeat(64)], ["src/Sub/B.agda", "2".repeat(64)], ["x.agda-lib", "3".repeat(64)]];
+  const FILES2 = [["src/A.agda", "4".repeat(64)], ["src/Sub/B.agda", "2".repeat(64)], ["x.agda-lib", "3".repeat(64)]];
+  const digestOf = (files) => createHash("sha256").update(files.map(([p, h]) => `${h}  ${p}\n`).join(""), "utf8").digest("hex");
+  const manifest = (files) => `\n  (inputs-manifest${files.map(([p, h]) => `\n    (file :path "${p}" :sha256 "${h}")`).join("")})`;
+  const D = digestOf(FILES), D2 = digestOf(FILES2), T = "c".repeat(64);
   const rcpt = (o = {}) => `\n(receipt :run "${o.run ?? "https://ci/run/1"}" :commit "${o.commit ?? C}" :checker "${o.checker ?? "agda 2.6.4.3"}"`
     + ` :invocation "${o.inv ?? "agda --safe --without-K --cubical-compatible"}"`
     + (o.digest === null ? "" : ` :inputs-sha256 "${o.digest ?? D}"`)
     + ` :state ${o.rstate ?? "current"}${o.reason ? ` :reason "${o.reason}"` : ""}`
+    + (o.manifest === null || (o.manifest === undefined && o.digest === null) ? ""
+      : o.manifest !== undefined ? o.manifest : manifest(o.digest === D2 ? FILES2 : FILES))
     + (o.axioms === null ? "" : ` ${o.axioms ?? "(axioms)"}`) + ")";
   const agda = (o = {}) => `\n(leg :prover agda :route source :token ${o.tok ?? "proven"} :state ${o.state ?? "AGDA-VERIFIED"} ${o.receipts ?? rcpt(o)})`;
   const recheck = (p, o = {}) => o.route === "unavailable" || o.route === "waived" || o.route === undefined && o.counted === false
@@ -396,6 +405,41 @@ describe("proof-receipt profile (PROOF-POLICY §8.5)", () => {
     // One commit has one input digest per prover.
     const twice = rcpt({ rstate: "superseded", reason: "rerun", digest: D2 });
     expect(() => read(doc(claim("PWG-3", agda({ receipts: rcpt() + " " + twice }) + " " + none)))).toThrow(/two different input digests/);
+  });
+  test("§8.5.1: every current receipt carries its (inputs-manifest …), and the digest is derived from it", () => {
+    const one = (o) => read(doc(claim("PWG-3", agda(o) + " " + none)));
+    const r = one({}).claims[0].legs[0].receipts[0];
+    expect(r.inputs_manifest.map((m) => m.path)).toEqual(["src/A.agda", "src/Sub/B.agda", "x.agda-lib"]);
+    expect(() => one({ manifest: null })).toThrow(/is current and is missing \(inputs-manifest/);
+    expect(() => one({ manifest: manifest(FILES) + manifest(FILES) })).toThrow(/more than one \(inputs-manifest/);
+    expect(() => one({ manifest: "\n(inputs-manifest)" })).toThrow(/lists no \(file/);
+    // The digest must be the SHA-256 of the manifest.
+    expect(() => one({ manifest: manifest(FILES2) })).toThrow(/is not the SHA-256 of its \(inputs-manifest/);
+    // Form of each entry.
+    const h = "1".repeat(64);
+    const bad = (files) => () => one({ digest: digestOf(files), manifest: manifest(files) });
+    expect(bad([["x.agda-lib", h], ["src/A.agda", h]])).toThrow(/out of order/);
+    expect(bad([["Z.agda", h], ["a.agda", h]])()).toBeTruthy(); // "Z" (0x5a) sorts before "a" (0x61) in byte order
+    expect(bad([["a.agda", h], ["a.agda", h]])).toThrow(/listed twice/);
+    expect(bad([["./a.agda", h]])).toThrow(/no empty, "\." or "\.\." part/);
+    expect(bad([["/a.agda", h]])).toThrow(/no empty/);
+    expect(bad([["src//a.agda", h]])).toThrow(/no empty/);
+    expect(bad([["../a.agda", h]])).toThrow(/no empty/);
+    expect(bad([["src/", h]])).toThrow(/no empty/);
+    expect(() => one({ digest: digestOf([["a\\b", h]]), manifest: '\n(inputs-manifest (file :path "a\\\\b" :sha256 "' + h + '"))' })).toThrow(/newline or a backslash/);
+    expect(bad([["a.agda", "A".repeat(64)]])).toThrow(/:sha256 must be 64 lowercase hex/);
+    expect(() => one({ manifest: '\n(inputs-manifest (file :path "a.agda"))' })).toThrow(/missing :sha256/);
+    expect(() => one({ manifest: '\n(inputs-manifest (entry :path "a.agda"))' })).toThrow(/unexpected clause \(entry\)/);
+    // A manifest needs the digest it derives.
+    const kept = rcpt({ commit: OTHER, rstate: "superseded", reason: "old", digest: null, manifest: manifest(FILES) });
+    expect(() => read(doc(claim("PWG-3", agda({ receipts: rcpt() + " " + kept }) + " " + none)))).toThrow(/needs :inputs-sha256/);
+    // Byte order, not UTF-16 order: U+FF5E sorts before U+10000 in UTF-16 but after it in UTF-8.
+    expect(bad([["\u{10000}.agda", h], ["\uFF5E.agda", h]])).toThrow(/out of order/);
+    expect(bad([["\uFF5E.agda", h], ["\u{10000}.agda", h]])()).toBeTruthy();
+  });
+  test("§8.5.2: two manifests for one commit and one prover cannot differ", () => {
+    const other = rcpt({ rstate: "superseded", reason: "rerun", digest: D2 });
+    expect(() => read(doc(claim("PWG-3", agda({ receipts: rcpt() + " " + other }) + " " + none)))).toThrow(/two different input digests/);
   });
   test("§8.4: every current receipt lists its axioms, and only disposition (c) counts", () => {
     const one = (axioms, pwg = "PWG-3") => read(doc(claim(pwg, agda({ axioms }) + " " + none)));
@@ -967,7 +1011,7 @@ describe("J17 bang", () => {
 });
 
 // A7 8.1, 8.4, 8.5: the edict form of a contractile-deed (clauses/edict.abnf),
-// and the J13 registry generated from the edicts (contractile_registry.js).
+// and the J13 registry generated from the edicts (deed_lint.js --contractile-registry).
 const FIX_EDICT = join(FIX, "edict");
 
 describe("edict fixtures", () => {
@@ -1014,12 +1058,47 @@ describe("contractile registry (J13)", () => {
     expect(by["contractile/bust/bust-oob-parser"].floor).toBe("A7 8.5");
     expect(by["contractile/adjust/adj-contrast"].floor).toBeUndefined();
   });
+  test("the committed fixture registry is its own fixed point", () => {
+    const have = readFileSync(committed, "utf8");
+    expect(generateRegistry(root, "metadatastician/standards", have)).toBe(have);
+  });
+  test("every one of the six edicts is required (J13)", () => {
+    const tmp = mkdtempSync(join(tmpdir(), "registry-"));
+    try {
+      cpSync(root, tmp, { recursive: true });
+      rmSync(join(tmp, ".machine_readable", "contractiles", "trust", "Trustfile.deed"));
+      expect(() => generateRegistry(tmp, "metadatastician/standards")).toThrow(/missing: .*Trustfile\.deed/);
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+  test("a rule that leaves the edicts is retired, not deleted, and its id is not reused (A5 3.2)", () => {
+    const tmp = mkdtempSync(join(tmpdir(), "registry-"));
+    try {
+      cpSync(root, tmp, { recursive: true });
+      const must = join(tmp, ".machine_readable", "contractiles", "must", "Mustfile.deed");
+      const src = readFileSync(must, "utf8");
+      const kept = src.replace(/\n  \(rule :id "must-fmt"[^\n]*\)$/m, ")");
+      writeFileSync(must, kept);
+      const first = generateRegistry(tmp, "metadatastician/standards", readFileSync(committed, "utf8"));
+      const [, items] = validate(first, "contractile_rules_praxis.deed");
+      const defs = items.find((it) => it[1] === "rules")[2].map((d) => Object.fromEntries(d[2].map((x) => [x[1], x[2][1]])));
+      const by = Object.fromEntries(defs.map((d) => [d.id, d]));
+      expect(by["contractile/must/must-fmt"].status).toBe("retired");
+      expect(by["contractile/must/must-tests"].status).toBe("active");
+      expect(generateRegistry(tmp, "metadatastician/standards", first)).toBe(first);
+      writeFileSync(must, src);
+      expect(() => generateRegistry(tmp, "metadatastician/standards", first)).toThrow(/never reused/);
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
   test("--check fails when the registry is stale", () => {
     const tmp = mkdtempSync(join(tmpdir(), "registry-"));
     try {
       const out = join(tmp, "rules_praxis.deed");
       writeFileSync(out, "stale\n");
-      const r = Bun.spawnSync(["bun", join(HERE, "contractile_registry.js"), "--root", root, "--out", out, "--check"]);
+      const r = Bun.spawnSync(["bun", join(HERE, "deed_lint.js"), "--contractile-registry", "--root", root, "--out", out, "--check"]);
       expect(r.exitCode).toBe(1);
     } finally {
       rmSync(tmp, { recursive: true, force: true });

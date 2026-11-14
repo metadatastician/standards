@@ -114,7 +114,7 @@ jobs:
         run: bun "$T/deed_lint.js" --edict-fixtures "$T/fixtures/edict"
       - name: contractile registry regeneration check (fixture root, A7 J13)
         if: github.repository_id == 1116521501 && steps.bun.outcome == 'success'
-        run: bun "$T/contractile_registry.js" --root "$T/fixtures/edict/registry/root" --check
+        run: bun "$T/deed_lint.js" --contractile-registry --root "$T/fixtures/edict/registry/root" --check
       - name: grammar-vs-gate differential (deed.abnf through apg-js, against deed_lint.js)
         # Mutates every committed deed and valid fixture with a seeded generator
         # and fails when the gate and the normative grammar disagree, other than

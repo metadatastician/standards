@@ -42,6 +42,8 @@ Usage: deed_lint.js FILE...     exit 0 iff all files conform
        deed_lint.js --contractiles-fixtures DIR DIR/valid pass the profile, DIR/invalid fail it (both required)
        deed_lint.js --edict FILE...           the edict form of a contractile-deed (DRAFT, A7 8.1, 8.4, 8.5)
        deed_lint.js --edict-fixtures DIR      DIR/{valid,invalid}/<case>/<Verb>file.deed (both required)
+       deed_lint.js --contractile-registry --root DIR [--owner O/N] [--out FILE] [--check]
+                                              generate the A5 contractile rule registry from the six edicts (A7 J13)
        deed_lint.js --ast-json FILE           emit the validated AST as JSON (integer lexemes stay strings)
        deed_lint.js --mustfile-json FILE      validate the Mustfile check profile and emit records
        deed_lint.js --proof-receipt-json FILE validate a proof receipt (PROOF-POLICY §8.5), derive
@@ -50,7 +52,7 @@ Usage: deed_lint.js FILE...     exit 0 iff all files conform
 `;
 
 import { createHash } from "node:crypto";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 
 const SYMBOL_START = /^[A-Za-z]$/;
@@ -732,7 +734,7 @@ export const PROOF_RECEIPT_VOCABULARY = {
  * Grade from its legs and their receipts (§8.2). A recorded :pwg that the
  * receipts do not support is refused: grades are derived, not asserted (§8.4).
  * The same holds for :foundation-diverse (§8.3). Every current receipt carries
- * its :inputs-sha256 (§8.5.1) and its (axioms …) (§8.4). Top-level (echo …)
+ * its :inputs-sha256 and (inputs-manifest …) (§8.5.1) and its (axioms …) (§8.4). Top-level (echo …)
  * records (§8.5.2) let a receipt earned on a commit that a squash or rebase
  * rewrote count toward PWG-1 for its image. The reader checks only what the
  * text shows: the form of the records, that the rewrite is a function with no
@@ -921,7 +923,7 @@ export function readProofReceipt(text, filename = null) {
           "inputs-sha256": { types: ["string"] },
           state: { types: ["symbol"], required: true, oneOf: V.receiptState },
           reason: { types: ["string"] },
-        }, ["axioms"]);
+        }, ["axioms", "inputs-manifest"]);
         if (!HEX40.test(rf.get("commit"))) fail(`${where}: a receipt :commit must be the full 40-character commit`);
         if (rf.get("state") !== "current" && !rf.has("reason")) fail(`${where}: a ${rf.get("state")} receipt needs :reason`);
         const isCurrent = rf.get("state") === "current";
@@ -930,14 +932,53 @@ export function readProofReceipt(text, filename = null) {
           if (!HEX64.test(rf.get("inputs-sha256"))) fail(`${rw}: :inputs-sha256 must be 64 lowercase hex digits`);
           state(inputsAt, `${rf.get("commit")} ${prover}`, rf.get("inputs-sha256"), "input digests");
         } else if (isCurrent) fail(`${rw} is current and is missing :inputs-sha256 (§8.5.1)`);
+        // §8.5.1: the manifest itself, so that a consumer recomputes the digest
+        // with git alone. The reader rebuilds the manifest and checks that its
+        // SHA-256 is the :inputs-sha256: the digest is derived, not asserted.
+        const manifests = rc.filter((c) => c[1] === "inputs-manifest");
+        if (manifests.length > 1) fail(`${rw} has more than one (inputs-manifest …)`);
+        if (manifests.length === 0 && isCurrent) fail(`${rw} is current and is missing (inputs-manifest …) (§8.5.1)`);
+        let inputsManifest = null;
+        if (manifests.length === 1) {
+          if (!rf.has("inputs-sha256")) fail(`${rw}: an (inputs-manifest …) needs :inputs-sha256`);
+          inputsManifest = [];
+          let previous = null;
+          for (const e of fieldsOf(`(inputs-manifest …) of ${rw}`, manifests[0][2], {}, ["file"]).clauses) {
+            const ef = fieldsOf(`a (file …) of the manifest of ${rw}`, e[2], {
+              path: { types: ["string"], required: true },
+              sha256: { types: ["string"], required: true },
+            }, []).fields;
+            const path = ef.get("path"), sha = ef.get("sha256");
+            if (!HEX64.test(sha)) fail(`${rw}: manifest file "${path}": :sha256 must be 64 lowercase hex digits`);
+            if (/[\n\\]/.test(path)) fail(`${rw}: manifest path "${path}" holds a newline or a backslash`);
+            if (path.split("/").some((part) => part === "" || part === "." || part === "..")) {
+              fail(`${rw}: manifest path "${path}" must be relative to the repository root, with no empty, "." or ".." part`);
+            }
+            const bytes = Buffer.from(path, "utf8");
+            if (previous !== null) {
+              const order = Buffer.compare(previous, bytes);
+              if (order === 0) fail(`${rw}: manifest path "${path}" is listed twice`);
+              if (order > 0) fail(`${rw}: manifest path "${path}" is out of order (sort in C byte order)`);
+            }
+            previous = bytes;
+            inputsManifest.push({ path, sha256: sha });
+          }
+          if (inputsManifest.length === 0) fail(`${rw}: (inputs-manifest …) lists no (file …)`);
+          const text = inputsManifest.map((m) => `${m.sha256}  ${m.path}\n`).join("");
+          const digest = createHash("sha256").update(text, "utf8").digest("hex");
+          if (digest !== rf.get("inputs-sha256")) {
+            fail(`${rw}: :inputs-sha256 is not the SHA-256 of its (inputs-manifest …) (the manifest gives ${digest})`);
+          }
+        }
         // §8.4: the axioms the checker reported, each with its disposition.
-        if (rc.length > 1) fail(`${rw} has more than one (axioms …)`);
-        if (rc.length === 0 && isCurrent) fail(`${rw} is current and is missing (axioms …) (§8.4; write (axioms) when none were reported)`);
+        const axiomClauses = rc.filter((c) => c[1] === "axioms");
+        if (axiomClauses.length > 1) fail(`${rw} has more than one (axioms …)`);
+        if (axiomClauses.length === 0 && isCurrent) fail(`${rw} is current and is missing (axioms …) (§8.4; write (axioms) when none were reported)`);
         let axioms = null;
-        if (rc.length === 1) {
+        if (axiomClauses.length === 1) {
           axioms = [];
           const names = new Set();
-          for (const a of fieldsOf(`(axioms …) of ${rw}`, rc[0][2], {}, ["axiom"]).clauses) {
+          for (const a of fieldsOf(`(axioms …) of ${rw}`, axiomClauses[0][2], {}, ["axiom"]).clauses) {
             const af = fieldsOf(`an (axiom …) of ${rw}`, a[2], {
               name: { types: ["string"], required: true },
               disposition: { types: ["symbol"], required: true, oneOf: V.disposition },
@@ -947,7 +988,7 @@ export function readProofReceipt(text, filename = null) {
             axioms.push({ name: af.get("name"), disposition: af.get("disposition") });
           }
         }
-        return { ...Object.fromEntries(rf), axioms };
+        return { ...Object.fromEntries(rf), inputs_manifest: inputsManifest, axioms };
       });
       if (receipts.filter((r) => r.state === "current").length > 1) fail(`${where}: the ${prover} leg has more than one current receipt`);
       legs.push({ prover, route, token: lf.fields.get("token") ?? null, state: lf.fields.get("state") ?? null,
@@ -1679,6 +1720,7 @@ export function checkEdict(text, filename = null) {
   if (envelope > 1) throw new EdictError("a Bustfile carries at most one (envelope …)");
   for (const it of items) {
     if (it[0] !== "clause" || it[1] !== "envelope") continue;
+    if (it[2].length === 0) throw new EdictError("(envelope) is empty; it takes at least one of :for, :not-for and :tolerance (A7 8.5)");
     const seen = new Set();
     for (const m of it[2]) {
       if (m[0] !== "field" || !["for", "not-for", "tolerance"].includes(m[1])) {
@@ -1951,6 +1993,185 @@ function fixtures(d) {
 }
 
 /** CLI entry: dispatch on --self-test / --fixtures / file list; returns exit code. */
+
+// ---------------------------------------------------------------------------
+// --contractile-registry: generate the A5 rule registry of the `contractile`
+// domain from a repo's six edicts (A7 J13, J13a).
+//
+//   bun deed_lint.js --contractile-registry --root DIR [--owner OWNER/NAME] [--out FILE] [--check]
+//
+// Reads .machine_readable/contractiles/<verb>/<Verb>file.deed under DIR for
+// all six verbs (a missing edict is an error, A7 J13), checks each with deed_lint.js's edict profile, and
+// writes one praxis-deed (A5 4.1) with one rule-def per rule:
+//
+//   :id "contractile/<verb>/<rule-id>"   :text   the rule's text
+//   :class gate        for every must rule and every rule marked "!"
+//   :class advisory    otherwise (A7 8.4)
+//   :excusable-at repo :scope-form exact-paths :status active
+//   :floor "A7 8.5"    on a bust rule: the estate floor, which no deviation lowers
+//
+// A rule that has left the edicts keeps its entry with :status retired, read
+// from the registry as last written, and a retired id cannot return (A5 3.2).
+// A rename is a retirement plus a new id here: the edict form records no
+// supersession, so :supersedes links are not generated.
+//
+// :beholding-chora and the SPDX header are copied from the repo's own chora
+// deed at DIR, so nothing is invented. --check regenerates in memory and exits
+// 1 when the committed file differs (A7 J13: CI fails when regenerating
+// changes the registry). Output order is fixed: the verbs in A7's order, the
+// rules in file order.
+const REGISTRY_OUT = ".machine_readable/contractiles/contractile_rules_praxis.deed";
+
+function registryArgs(argv) {
+  const o = { root: null, owner: "metadatastician/standards", out: null, check: false };
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "--root") o.root = argv[++i];
+    else if (a === "--owner") o.owner = argv[++i];
+    else if (a === "--out") o.out = argv[++i];
+    else if (a === "--check") o.check = true;
+    else throw new Error(`unknown argument ${a}`);
+  }
+  if (!o.root) throw new Error("--root DIR is required");
+  if (!/^[^/\s]+\/[^/\s]+$/.test(o.owner || "")) throw new Error("--owner must be OWNER/NAME");
+  return o;
+}
+
+/** A deed string literal for s: the four escapes deed.abnf allows. */
+function deedStr(s) {
+  return '"' + s.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n").replace(/\t/g, "\\t") + '"';
+}
+
+/** Re-serialise an identity value from the AST, exactly as written. */
+function idLiteral(v) {
+  if (v[0] === "uuid") return `#uuid"${v[1]}"`;
+  if (v[0] === "uuid8") return `#u8${deedStr(v[1])}`;
+  if (v[0] === "uuid5") return `#u5${deedStr(v[1])}`;
+  throw new Error(`:beholding-chora is a ${v[0]}, not a UUID literal`);
+}
+
+/** The repo's chora deed at root: its SPDX header lines and :beholding-chora. */
+function readChora(root) {
+  const choras = readdirSync(root).filter((n) => n.endsWith("_chora.deed") && n !== "estate_chora.deed");
+  if (choras.length !== 1) throw new Error(`expected one <repo>_chora.deed at ${root}, found ${choras.length}`);
+  const file = join(root, choras[0]);
+  const text = readFileSync(file, "utf8");
+  const [, items] = validate(text, file);
+  const b = items.find((it) => it[0] === "field" && it[1] === "beholding-chora");
+  if (!b) throw new Error(`${choras[0]} has no :beholding-chora`);
+  const spdx = text.split("\n").filter((l) => /^;; SPDX-/.test(l));
+  return { spdx, beholding: idLiteral(b[2]) };
+}
+
+/** One rule-def, fields in fixed order. */
+function ruleDef(d) {
+  const lines = [
+    `    (rule-def`,
+    `      :id ${deedStr(d.id)}`,
+    `      :text ${deedStr(d.text)}`,
+    `      :class ${d.class}`,
+    `      :excusable-at ${d["excusable-at"]}`,
+    `      :scope-form ${d["scope-form"]}`,
+    `      :status ${d.status}`,
+  ];
+  if (d["superseded-by"] !== undefined) lines.push(`      :superseded-by ${deedStr(d["superseded-by"])}`);
+  if (d.floor !== undefined) lines.push(`      :floor ${deedStr(d.floor)}`);
+  return lines.join("\n") + ")";
+}
+
+/** The rule-defs of an earlier generated registry, as plain objects, in order. */
+function priorDefs(prior, file) {
+  if (prior === null) return [];
+  const [, items] = validate(prior, file);
+  const rules = items.find((it) => it[0] === "clause" && it[1] === "rules");
+  if (!rules) return [];
+  return rules[2]
+    .filter((d) => d[0] === "clause" && d[1] === "rule-def")
+    .map((d) => Object.fromEntries(d[2].filter((f) => f[0] === "field").map((f) => [f[1], f[2][1]])));
+}
+
+/**
+ * Generate the registry text. prior is the registry as last committed (or
+ * null): A5 3.2 says an id is never deleted or reused, so a rule that has left
+ * the edicts stays, with :status retired, and an id that was retired cannot
+ * come back as an active rule.
+ */
+export function generateContractileRegistry(root, owner, prior = null, priorFile = REGISTRY_OUT) {
+  const { spdx, beholding } = readChora(root);
+  const missing = Object.keys(CONTRACTILE_VERBS)
+    .map((verb) => contractilePaths(verb).declaration)
+    .filter((p) => !existsSync(join(root, p)));
+  if (missing.length) throw new Error(`the registry is generated from all six edicts (A7 J13); missing: ${missing.join(", ")}`);
+  const old = priorDefs(prior, priorFile);
+  const retired = new Set(old.filter((d) => d.status === "retired").map((d) => d.id));
+  const current = [];
+  for (const verb of Object.keys(CONTRACTILE_VERBS)) {
+    const p = join(root, contractilePaths(verb).declaration);
+    const r = checkEdict(readFileSync(p, "utf8"), p);
+    for (const rule of r.rules) {
+      const id = `contractile/${verb}/${rule.id}`;
+      if (retired.has(id)) throw new Error(`${id} was retired; a retired id is never reused (A5 3.2)`);
+      current.push({
+        id,
+        text: rule.text,
+        class: verb === "must" || rule.bang ? "gate" : "advisory",
+        "excusable-at": "repo",
+        "scope-form": "exact-paths",
+        status: "active",
+        floor: verb === "bust" ? "A7 8.5" : undefined,
+      });
+    }
+  }
+  const live = new Set(current.map((d) => d.id));
+  const gone = old.filter((d) => !live.has(d.id)).map((d) => ({ ...d, status: "retired" }));
+  const defs = [...current, ...gone].map(ruleDef);
+  return [
+    ...spdx,
+    ";; GENERATED by 1-formats/deed/tools/deed_lint.js --contractile-registry from the six",
+    ";; <Verb>file.deed edicts (A7 J13). Do not edit; regenerate.",
+    "(praxis-deed",
+    '  :schema-version "1.0.0"',
+    '  :canonical-name "contractile-rules"',
+    `  :beholding-chora ${beholding}`,
+    `  (rule-domain :name "contractile" :owner ${deedStr(owner)})`,
+    defs.length ? `  (rules\n${defs.join("\n")}))` : "  (rules))",
+    "",
+  ].join("\n");
+}
+
+function registryMain(argv) {
+  let o;
+  try {
+    o = registryArgs(argv);
+  } catch (e) {
+    console.error(`usage: deed_lint.js --contractile-registry --root DIR [--owner OWNER/NAME] [--out FILE] [--check]\n${e.message}`);
+    return 2;
+  }
+  const out = o.out || join(o.root, REGISTRY_OUT);
+  const prior = existsSync(out) ? readFileSync(out, "utf8") : null;
+  let text;
+  try {
+    text = generateContractileRegistry(o.root, o.owner, prior, out);
+    validate(text, out);
+  } catch (e) {
+    console.error(`FAIL ${o.root}: ${e instanceof LintError ? e.toString() : e.message}`);
+    return 1;
+  }
+  if (o.check) {
+    const have = prior;
+    if (have === text) {
+      console.log(`OK   ${out} is up to date`);
+      return 0;
+    }
+    console.log(`FAIL ${out} ${have === null ? "is missing" : "differs from the edicts"}; regenerate with deed_lint.js --contractile-registry --root ${o.root}`);
+    return 1;
+  }
+  writeFileSync(out, text);
+  console.log(`wrote ${out}`);
+  return 0;
+}
+
+
 function main(argv) {
   if (argv.includes("--proof-receipt-json")) {
     if (argv.length !== 2 || argv[0] !== "--proof-receipt-json" || argv[1].startsWith("-")) {
@@ -2018,6 +2239,7 @@ function main(argv) {
     console.log("ANCHOR FIXTURES " + (rc === 0 ? "OK" : rc === 2 ? "NOT CHECKED" : "FAILED"));
     return rc;
   }
+  if (argv.includes("--contractile-registry")) return registryMain(argv.filter((a) => a !== "--contractile-registry"));
   if (argv.includes("--edict-fixtures")) {
     const d = argv[argv.indexOf("--edict-fixtures") + 1];
     if (d === undefined) {
