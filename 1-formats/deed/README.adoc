@@ -224,7 +224,9 @@ valid; `REPO-DEED` is not. `#t` is valid; `#T` is not. This matches RFC 7405
   excluded. *Transition:* owner ruling D305 folds `#u5` into ESTATE-UUID-V8
   profile C (ADR-008, Q2). `deed.abnf` v1.1.0 adds UUID8 beside it;
   retiring `#u5` changes every existing deed identifier, so it is a
-  separate cutover and `#u5` stays legal until then.
+  separate cutover and `#u5` stays legal until then. In an identity field
+  (CHORA-SPEC 7.1) the cutover has happened: owner ruling Q2 (2026-11-14)
+  makes `#u5` there an error in every mode. See the identity table below.
 
 | UUID8
 | `#u8` immediately followed by a STRING, with *no* intervening space:
