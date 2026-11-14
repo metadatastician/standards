@@ -12,7 +12,7 @@
 # Usage: check-proof-receipt.sh [--branch REF] [--import OWNER/REPO=DIR]... RECEIPT REPO
 #
 #   RECEIPT  the *_praxis.deed proof receipt
-#   REPO     a clone of the receipt's :repository. Every commit the receipt
+#   REPO     a full (not shallow) clone of the receipt's :repository. Every commit the receipt
 #            names must be present: fetch a squashed or rebased source by
 #            the reference the forge keeps (on GitHub refs/pull/<n>/head).
 #   --branch the default-branch ref in REPO (default: HEAD)
@@ -50,7 +50,7 @@ while [ $# -gt 0 ]; do
     --branch) [ $# -ge 2 ] || { echo "usage: --branch needs a ref" >&2; exit 2; }; branch=$2; shift 2 ;;
     --import)
       [ $# -ge 2 ] && [[ $2 == */*=* ]] || { echo "usage: --import needs OWNER/REPO=DIR" >&2; exit 2; }
-      import_dir[${2%%=*}]=${2#*=}; shift 2 ;;
+      key=${2%%=*}; import_dir[${key,,}]=${2#*=}; shift 2 ;;
     --) shift; break ;;
     -*) echo "unknown option: $1" >&2; exit 2 ;;
     *) break ;;
@@ -62,6 +62,12 @@ for tool in bun jq git sha256sum; do
   command -v "$tool" >/dev/null || { echo "cannot run: $tool is not installed" >&2; exit 2; }
 done
 git -C "$repo" rev-parse --git-dir >/dev/null 2>&1 || { echo "cannot run: $repo is not a git clone" >&2; exit 2; }
+# The checks need the home history whole: the ancestry check of the
+# :source-commit, and the refusal of an import whose pinned commit is home
+# history. A shallow home clone hides both, so it cannot be checked.
+if [ "$(git -C "$repo" rev-parse --is-shallow-repository)" = true ]; then
+  echo "cannot run: $repo is a shallow clone; fetch its full history (git fetch --unshallow)" >&2; exit 2
+fi
 git -C "$repo" rev-parse --verify --quiet "$branch^{commit}" >/dev/null \
   || { echo "cannot run: $branch is not a commit in $repo" >&2; exit 2; }
 
@@ -117,12 +123,23 @@ while IFS= read -r r; do
   label=$(jq -r '"claim \(.claim) \(.what) receipt"' <<<"$r")
   check_manifest "$label" "$(jq -r .commit <<<"$r")" "$(jq -c .manifest <<<"$r")"
   while IFS= read -r i; do
-    irepo=$(jq -r .repository <<<"$i")
-    if [ -z "${import_dir[$irepo]+x}" ]; then
+    irepo=$(jq -r .repository <<<"$i"); ikey=${irepo,,}; icommit=$(jq -r .commit <<<"$i")
+    if [ -z "${import_dir[$ikey]+x}" ]; then
       fail "$label: import $irepo: no clone given (--import $irepo=DIR)"
       continue
     fi
-    check_manifest "$label: import $irepo" "$(jq -r .commit <<<"$i")" "$(jq -c .files <<<"$i")" "${import_dir[$irepo]}"
+    # The home repository (or a fork of it) under another name: its files
+    # belong in (inputs-manifest …). A full clone holds the home :source-commit;
+    # a shallow one may not, but its pinned commit is then home history.
+    if have_commit "$src" "${import_dir[$ikey]}"; then
+      fail "$label: import $irepo: its clone holds the home :source-commit $src, so it is the home repository"
+      continue
+    fi
+    if have_commit "$icommit" "$repo"; then
+      fail "$label: import $irepo: its pinned commit $icommit is in the home repository, so it is the home repository"
+      continue
+    fi
+    check_manifest "$label: import $irepo" "$icommit" "$(jq -c .files <<<"$i")" "${import_dir[$ikey]}"
   done < <(jq -c '.imports[]' <<<"$r")
 done < <(jq -c '.claims[] as $c
   | ( ($c.legs[] | {what: .prover, receipts}),
