@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 = A4: Office and Farm (the boundary, the intake envelope, work orders, the move of the scripts)
-:version: 0.2.4-draft
-:status: DRAFT v0.2.4 (owner ruling Q3 of 2026-11-14: the generated index lives in chora-registry and the office reads it). Decisions F1 to F15 approved by the owner on 2026-11-10. Not yet ratified as a whole. Builds on A1 v0.4.1, A2 v0.2.4 and A3 v0.2.8. Consistency pass applied 2026-11-10. Proposed in standards#1474; bot-review fixes applied 2026-11-12.
+:version: 0.2.5-draft
+:status: DRAFT v0.2.5 (the `gate-verdict` predicate carries the A3 v0.2.12 fields: `mode`, `basis` and `inlineInputs`; a `publish` envelope, signed by the A3 publisher from the default branch, is bound to its subject head through its `basis`, not through the certificate's source commit; earlier: v0.2.4, owner ruling Q3 of 2026-11-14: the generated index lives in chora-registry and the office reads it). Decisions F1 to F15 approved by the owner on 2026-11-10. Not yet ratified as a whole. Builds on A1 v0.4.1, A2 v0.2.4 and A3 v0.2.8. Consistency pass applied 2026-11-10. Proposed in standards#1474; bot-review fixes applied 2026-11-12.
 :toc:
 
 Specification A4 of the Estate Reconciliation Plan. The office decides and the farm executes (R2). A4 defines the line between them, the one envelope in which every finding and every verdict enters the office, the work order that leaves it, and the rules for moving the farm's label and merge scripts.
@@ -129,7 +129,8 @@ DSSE envelope        payloadType "application/vnd.in-toto+json"; signatures[]
 * The signed payload is the Statement canonicalised with JCS (RFC 8785) [I]. The estate routes I-JSON/JCS data through `kyq` [M], so the same canonical form serves the signature and the data route.
 * A signature has one of 2 forms, matching the 2 publisher forms of section 12.
 ** *ed25519.* The signature has a `keyid` and an ed25519 signature [I: DSSE]. The `keyid` is a publisher id in the federation root's `(publishers)` clause (A3 E1) whose entry carries `:ed25519`. A signature whose `keyid` is not listed is not valid.
-** *OIDC.* The signature is a Sigstore bundle over the same DSSE payload [I: GitHub artifact attestations]. It is valid only when: the bundle verifies; the certificate's OIDC issuer equals the `:oidc-issuer` of a listed publisher; the certificate's workflow identity (the reusable workflow path and ref) equals that publisher's `:workflow` at the 40-hex SHA that A3 pins; and the certificate's source commit equals the Statement's subject commit. A workflow at any other path or SHA is not that publisher. A4 does not fix the issuer value; the owner records it in the root.
+** *OIDC.* The signature is a Sigstore bundle over the same DSSE payload [I: GitHub artifact attestations]. It is valid only when: the bundle verifies; the certificate's OIDC issuer equals the `:oidc-issuer` of a listed publisher; the certificate's workflow identity (the reusable workflow path and ref) equals that publisher's `:workflow` at the 40-hex SHA that A3 pins; and the certificate's source commit equals the Statement's subject commit. A workflow at any other path or SHA is not that publisher.
+** *OIDC, `publish` mode.* A `gate-verdict` with `mode: publish` (5.5) is signed by the A3 publisher (A3 4.4), a `workflow_run` listener. GitHub runs it at the last commit of the default branch, not at the head it judges [I: GitHub `workflow_run` documentation], so its certificate's source commit is the default branch's. For this mode the rule above is replaced by three conditions. The certificate's source commit is a commit on the subject repo's default branch. The certificate's workflow identity is the publisher's `:workflow` at the pinned SHA. The predicate's `basis` is the sha256 of an `evaluate` envelope whose subject equals this Statement's subject, and that envelope passes A3 4.4's acceptance rule. The subject head is therefore bound by the `basis`, and the signer by its certificate; neither stands in for the other. Every other predicate keeps the rule above. A4 does not fix the issuer value; the owner records it in the root.
 
 Samples: `docs/estate-reconciliation/examples/a4-statement.json.example` and `docs/estate-reconciliation/examples/a4-envelope.json.example` parse as JSON [M]. I did not check them against the in-toto or DSSE schemas [I].
 
@@ -178,13 +179,16 @@ A sensor that cannot emit SARIF directly is wrapped by an adapter. The adapter i
 === 5.5 `check-verdict` and `gate-verdict` predicates
 
 * `check-verdict`: `check` (the A3 capability id), `state` (`passed`, `failed`, `not_run`, `not_applicable`), `exit_code`, `reason`, `producer`.
-* `gate-verdict`: the fields A3 section 3.4 lists: head SHA, pin and sha256 of the aggregate and of the check table, blob SHA of the repo chora, the required set with each state, the waivers applied, the publisher id and the time.
+* `gate-verdict`: the fields A3 section 3.4 lists: head SHA, pin and sha256 of the aggregate and of the check table, blob SHA of the repo chora, the required set with each state, the waivers applied, the publisher id and the time. Also:
+** `mode`: `evaluate` for the envelope the caller's run writes, or `publish` for the one the A3 publisher signs and posts (A3 4.4). Required.
+** `inlineInputs`: one entry per inline-job input of A3 5.3, `{check, workflowPath, event, runId, runAttempt, conclusion}`, the attempt the verdict was computed from. Required in both modes; empty only when the table has no inline-job rows. The publisher compares it with the latest attempts before it posts.
+** `basis`: for `mode: publish`, the sha256 of the `evaluate` envelope the verdict is based on, and that envelope's workflow run id and attempt. Absent for `mode: evaluate`.
 
 The status posted to GitHub (A3 section 3.3) has `target_url` pointing to the DSSE envelope of the `gate-verdict`. Storage is in section 5.7.
 
 === 5.6 Validity rules
 
-An envelope is *valid* when: the DSSE signature verifies for a listed publisher, by the rule of 5.2 for that publisher's form (ed25519 or OIDC, never one for the other); the payload parses as the Statement; the subject has exactly one entry, whose `name` equals the `:repo-uuid` of the repo being checked; the subject digest names a commit that exists in that repo; the predicate matches its type; and the SARIF log, if present, parses as 2.1.0. A valid envelope is not a *true* one. It says the publisher signed these bytes. Truth is checked by the observer (section 10).
+An envelope is *valid* when: the DSSE signature verifies for a listed publisher, by the rule of 5.2 for that publisher's form (ed25519 or OIDC, never one for the other); the payload parses as the Statement; the subject has exactly one entry, whose `name` equals the `:repo-uuid` of the repo being checked; the subject digest names a commit that exists in that repo; the predicate matches its type; and the SARIF log, if present, parses as 2.1.0. A `gate-verdict` is also invalid when `mode` or `inlineInputs` is missing, when `mode` is `publish` and `basis` is missing or names an envelope whose subject differs, or when `mode` is `evaluate` and `basis` is present. A valid envelope is not a *true* one. It says the publisher signed these bytes. Truth is checked by the observer (section 10).
 
 === 5.7 Storage
 
@@ -400,7 +404,7 @@ For each merged head the observer: reads the `estate-gate` status and its `targe
 
 * A1: `(publishers)` in the root signs every envelope. The repo and estate UUIDs address every record.
 * A2: `(deviations)` is what moves a ledger record to `accepted`. `(generation)` pins the generator whose output the rescan reads.
-* A3: `check-verdict` and `gate-verdict` are the verdict forms of section 5. The Actions aggregate signs as section 12 (F3) says. Owned-compute inputs are `check-verdict` envelopes.
+* A3: `check-verdict` and `gate-verdict` are the verdict forms of section 5. The caller's evaluation run signs its `evaluate` envelope where GitHub grants it a token, and the A3 publisher signs the `publish` envelope it posts, both as section 12 (F3) says. Owned-compute inputs are `check-verdict` envelopes.
 * A5: owns the rule identifier namespace, the rule registries and the generated ignore files. A4 uses the ids of A5 section 3.
 * A6: owns the home of the ruleset and settings canon that the office applies.
 
@@ -458,6 +462,8 @@ Every test is new work. A fixture is valid unless marked `-bad`.
 | E13 | An OIDC-signed envelope from the listed issuer but a different workflow path or SHA fails. | `env-oidc-other-workflow-bad`
 | E14 | An ed25519 signature checked against an OIDC publisher entry, or the reverse, fails. | `env-form-mismatch-bad`
 | E15 | A valid envelope whose subject `name` is another repo's UUID is rejected for this repo, even when the commit exists in both. | `env-wrong-repo-bad`
+| E16 | A `gate-verdict` without `mode` or `inlineInputs` is invalid; one with `mode: evaluate` and a `basis`, or `mode: publish` without one, is invalid. | `gv-no-mode-bad`, `gv-no-inline-bad`, `gv-evaluate-basis-bad`, `gv-publish-no-basis-bad`
+| E17 | A `publish` envelope verifies when its certificate's source commit is on the default branch, its workflow is the publisher's at the pinned SHA, and its `basis` names an `evaluate` envelope with the same subject. A `basis` with another subject, or a source commit off the default branch, fails. Any other predicate whose source commit differs from its subject still fails. | `gv-publish-ok`, `gv-publish-basis-other-subject-bad`, `gv-publish-off-default-branch-bad`, `env-oidc-source-mismatch-bad`
 |===
 
 === 13.3 Ledger
