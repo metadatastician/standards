@@ -8,7 +8,7 @@
 //
 // deed.abnf is normative (D308); deed_lint.js is the gate that CI runs. This
 // harness keeps them from drifting apart. It compiles deed.abnf (with the
-// (egress …), (anchor …), (contractiles …), edict, verb-descriptile, ecosystem, state and rsr-scorecard clause profiles and the shared rules of
+// (egress …), (anchor …), (contractiles …), edict, verb-descriptile, ecosystem, state, meta and rsr-scorecard clause profiles and the shared rules of
 // clauses/common.abnf) using apg-js, mutates every
 // committed deed with a seeded generator, and asks both the grammar and the
 // gate for a verdict on each variant:
@@ -26,7 +26,7 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import apg from "apg-js";
-import { checkEcosystem, checkRsrScorecard, checkState, checkVerbDescriptile, choraRepoUuid, edictRuleIdsAt, FIXTURE_TODAY, LintError, rootChora, validate, verbOfDescriptile } from "../../1-formats/deed/tools/deed_lint.js";
+import { checkEcosystem, checkMeta, checkRsrScorecard, checkState, checkVerbDescriptile, choraRepoUuid, edictRuleIdsAt, FIXTURE_TODAY, LintError, rootChora, validate, verbOfDescriptile } from "../../1-formats/deed/tools/deed_lint.js";
 
 const { apgApi, apgLib } = apg;
 const ROOT = resolve(import.meta.dir, "../..");
@@ -74,6 +74,7 @@ function compileGrammar() {
       readFileSync(join(ABNF, "clauses/verb-descriptile.abnf"), "utf8") + "\n" +
       readFileSync(join(ABNF, "clauses/ecosystem.abnf"), "utf8") + "\n" +
       readFileSync(join(ABNF, "clauses/state.abnf"), "utf8") + "\n" +
+      readFileSync(join(ABNF, "clauses/meta.abnf"), "utf8") + "\n" +
       readFileSync(join(ABNF, "clauses/rsr-scorecard.abnf"), "utf8")).replace(/[^\x00-\x7f]/g, "?") +
     "\nSP = %x20\nDQUOTE = %x22\nALPHA = %x41-5A / %x61-7A\nDIGIT = %x30-39\n" +
     "VCHAR = %x21-7E\nCR = %x0D\nLF = %x0A\nCRLF = CR LF\n";
@@ -505,6 +506,57 @@ for (const { c, text } of edictCases("valid")) {
       for (const r of allClauses(k.text, "status")) if (!grammarAccepts(grammar, "state-status", r)) fail("state.abnf refuses a (status …) listed as semantic only", k.c);
       for (const r of allClauses(k.text, "maturity")) if (!grammarAccepts(grammar, "state-maturity", r)) fail("state.abnf refuses a (maturity …) listed as semantic only", k.c);
     } else fail("state invalid fixture is in neither list", k.c);
+  }
+}
+
+// META.deed (A7 7.2, J29 to J32, YF04; clauses/meta.abnf). One case per
+// directory, as STATE.deed. Every valid case is a valid deed for both, passes
+// the profile, and each top-level META field parses as meta-field and each
+// clause as its rule. Each invalid case is filed in one of two exhaustive
+// lists: the grammar refuses one of its fields or clauses (and the map says
+// which rule), or only the profile refuses it.
+{
+  const META_FIELDS = new Set(["version", "last-updated", "type", "languages", "license", "author", "design-rationale",
+    "scoping-first", "execution-order", "axis-1", "axis-2", "axis-3", "corrective-first", "adaptive-second",
+    "adaptive-focus", "perfective-third", "perfective-source", "build-tool", "container-runtime", "ci-platform", "package-manager"]);
+  const CLAUSE_RULES = { "development-practices": "meta-practices", scoping: "meta-scoping", "axis-3": "meta-axis-3", adr: "meta-adr", ssg: "ssg-clause" };
+  const fieldsOf = (t) => topLevelFields(t, META_FIELDS);
+  const clausesOf = (t) => Object.entries(CLAUSE_RULES).flatMap(([n, rule]) => allClauses(t, n).map((c) => [rule, c]));
+  const cases = (sub) => readdirSync(join(FIXTURES, "meta", sub)).sort().map((c) => {
+    const dir = join(FIXTURES, "meta", sub, c);
+    return { c, dir, file: join(dir, "META.deed"), text: readFileSync(join(dir, "META.deed"), "utf8") };
+  });
+  const profile = ({ dir, file, text }) => {
+    try {
+      const ch = rootChora(dir);
+      const strict = readdirSync(dir).includes("STRICT");
+      return checkMeta(text, file, { repoUuid: ch && ch.uuid, choraClauses: ch && ch.clauses, strict, today: FIXTURE_TODAY }) !== null;
+    } catch (e) {
+      if (!(e instanceof LintError)) throw e;
+      return false;
+    }
+  };
+  const grammarOk = (t) => fieldsOf(t).every((f) => grammarAccepts(grammar, "meta-field", f)) && clausesOf(t).every(([r, c]) => grammarAccepts(grammar, r, c));
+  for (const k of cases("valid")) {
+    if (!grammarAccepts(grammar, "deed", k.text)) fail("meta valid fixture rejected by deed.abnf", k.c);
+    if (!profile(k)) fail("meta valid fixture rejected by deed_lint.js --meta", k.c);
+    for (const f of fieldsOf(k.text)) if (!grammarAccepts(grammar, "meta-field", f)) fail("meta.abnf refuses a valid field", `${k.c}: ${f.slice(0, 60)}`);
+    for (const [r, c] of clausesOf(k.text)) if (!grammarAccepts(grammar, r, c)) fail(`meta.abnf refuses a valid clause as ${r}`, `${k.c}: ${c.slice(0, 60)}`);
+  }
+  const grammarRejects = ["adr-date-not-date", "adr-inline-decision", "adr-status-unknown", "languages-strings", "last-updated-not-date",
+    "license-string", "practices-tool-string", "practices-unknown", "scoping-first-string", "scoping-unknown", "ssg-trigger-string",
+    "ssg-unknown", "tool-at-top", "type-string", "type-unknown"];
+  const semanticOnly = ["adr-date-impossible", "adr-duplicate-id", "adr-missing-ref", "adr-ref-absolute", "adr-ref-dotdot", "adr-twice-status",
+    "beholding-chora", "empty-author", "meta-clause", "meta-in-chora-strict", "missing-affirmed", "of-chora-mismatch",
+    "practices-twice", "rule-in-descriptile", "ssg-twice", "unknown-clause", "unknown-field", "version-twice"];
+  for (const k of cases("invalid")) {
+    if (!gateVerdict(k.text).ok) fail("meta invalid fixture is not a valid deed (YD01)", k.c);
+    if (profile(k)) fail("deed_lint.js --meta accepts an invalid fixture", k.c);
+    if (grammarRejects.includes(k.c)) {
+      if (grammarOk(k.text)) fail("meta.abnf accepts every field and clause of a case it must refuse", k.c);
+    } else if (semanticOnly.includes(k.c)) {
+      if (!grammarOk(k.text)) fail("meta.abnf refuses a field or clause of a case listed as semantic only", k.c);
+    } else fail("meta invalid fixture is in neither list", k.c);
   }
 }
 

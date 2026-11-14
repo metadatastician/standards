@@ -380,6 +380,46 @@ The fixtures are flat, `fixtures/rsr-scorecard/{valid,invalid}/*.deed`; the
 differential sorts each invalid one into those the grammar refuses and those
 only the profile does.
 
+== `deed_lint.js --meta` — META.deed (DRAFT)
+
+Checks `META.deed` (head `descriptile-deed`) against
+`spec/abnf/clauses/meta.abnf` (A7 7.2; owner rulings J29 to J32 of
+2026-11-14). The members come from the chora's `(meta …)` clause, which moves
+here whole (J30), and from DESCRIPTILE-SPEC's META schema. Every member is
+optional. The rules it adds to the grammar:
+
+* the descriptile header, as for the other descriptiles (J20, J28, J4, YD06,
+  A7 Q5);
+* the top-level members carried over from the chora: `:version`,
+  `:last-updated` (a real date), `:type` (`library`, `binary`, `service`,
+  `website` or `monorepo`), `:languages` (a list of symbols, describing the
+  repo, not an allow or ban list), `:license` (the SPDX id as a symbol, read
+  verbatim and never edited), `:author`, the maintenance-axis members and the
+  `(scoping …)` and `(axis-3 …)` clauses, plus `:design-rationale`. Each
+  appears at most once, and strings are not empty;
+* `(development-practices …)` at most once, taking DESCRIPTILE-SPEC's six
+  prose members and the four tool symbols `:build-tool`, `:container-runtime`,
+  `:ci-platform` and `:package-manager` (J32). A tool symbol at the top level
+  is refused;
+* `(adr :id :status :date :ref [:title])`, repeated, with ids unique.
+  `:status` is `proposed`, `accepted`, `deprecated`, `superseded` or
+  `rejected`. `:ref` is the repo-relative path of the ADR document. An ADR is
+  referenced, never restated: `:context`, `:decision` and `:consequences` are
+  refused (J31);
+* `(ssg :engine :output-dir :boj-trigger :cartridge)` at most once, the one
+  home of site-build configuration (J29). Its rule now lives in `common.abnf`,
+  shared with the anchor profile, which still reads a `/1` anchor's `(ssg …)`;
+* no other field or clause, no `(meta …)` and no `(rule …)` (YF02);
+* with `--root DIR`, `:of-chora` must equal the chora's `:repo-uuid` (YD08). A
+  `(meta …)` still in the chora is warned, as a fallback read for one release,
+  and `--strict` refuses it (J30, YF04).
+
+    bun deed_lint.js --meta META.deed [--root REPO] [--strict]
+    bun deed_lint.js --meta-fixtures fixtures/meta/
+
+The fixtures are one case per directory, `fixtures/meta/{valid,invalid}/<case>/META.deed`,
+with an optional `<repo>_chora.deed` and `STRICT` marker, as for `--state`.
+
 == `deed_lint.js --contractile-registry` — the `contractile` rule registry (A7 J13)
 
 Generates the A5 registry `contractile_rules_praxis.deed` from a repo's six

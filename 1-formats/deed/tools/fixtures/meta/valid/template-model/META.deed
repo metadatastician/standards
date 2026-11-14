@@ -1,0 +1,29 @@
+;; SPDX-License-Identifier: CC-BY-SA-4.0
+(descriptile-deed
+  :schema-version "1.0.0"
+  :canonical-name "example-game"
+  :of-chora #uuid"00000000-0000-8000-8000-0000000000a1"
+  :affirmed "2026-11-14" :affirmed-by agent
+  :version "0.1.0"
+  :last-updated "2026-04-11"
+  :type library
+  :languages (rust zig)
+  :license MPL-2.0
+  :author "An Example Author"
+  :scoping-first #t
+  :execution-order "axis-1 > axis-2 > axis-3"
+  :axis-1 "must > intend > like"
+  :axis-2 "corrective > adaptive > perfective"
+  :axis-3 "systems > compliance > effects"
+  :corrective-first #t
+  :adaptive-second #t
+  :adaptive-focus "scope-change reconciliation"
+  :perfective-third #t
+  :perfective-source "axis-1 honest state"
+  (scoping :sources "README, roadmap" :marker-scan "TODO/FIXME" :idris-unsound-scan "believe_me")
+  (axis-3 :audit-focus "systems in place" :compliance-focus "exception register" :drift-risk-example "one exception broadening" :effects-evidence "benchmarks")
+  (development-practices :build-tool just :container-runtime podman :ci-platform github-actions :package-manager guix
+    :code-style "formatter defaults" :testing "unit and property tests" :versioning "semver" :branching "trunk")
+  (adr :id "ADR-001" :title "Use deed for metadata" :status accepted :date "2026-03-16" :ref "docs/decisions/ADR-001.adoc")
+  (adr :id "ADR-002" :status superseded :date "2026-04-01" :ref "docs/decisions/ADR-002.adoc")
+  (ssg :engine "casket" :output-dir "_site" :boj-trigger #f :cartridge "docs"))

@@ -19,9 +19,18 @@ reviewed, and extend the table — they never translate ad-hoc.
 
 == 2. Target form
 
-META translates into a `(meta …)` clause of the SAME
-`<canonical-name>_chora.deed` (`repo-deed` head) that family 1 created: this
-family ADDS clauses. (One deed per repo is the doc-head's semantics.)
+META translates into `.machine_readable/descriptiles/META.deed`, a
+`descriptile-deed` checked by `deed_lint.js --meta` (A7 7.2, owner rulings
+J30 to J32 of 2026-11-14). The `(meta …)` members in §3 become META.deed's own
+top-level members, except the four tool members (`build-tool`,
+`container-runtime`, `ci-platform`, `package-manager`), which go into its
+`(development-practices …)` (J32). An ADR becomes `(adr :id :status :date
+:ref [:title])`, where `:ref` is the path of the ADR document; an inline ADR
+body is not translated (J31). The chora deed keeps no `(meta …)`: one that
+remains is warned for one release, then refused in strict mode (J30, A7
+YF04). Earlier, before J30, this family added a `(meta …)` clause to the
+`<canonical-name>_chora.deed` that family 1 created; the worked example in §6
+still shows that earlier form.
 
 ECOSYSTEM has two valid target forms (owner ruling 2026-11-14), and a
 translator may emit either or both from the one §3 table:
