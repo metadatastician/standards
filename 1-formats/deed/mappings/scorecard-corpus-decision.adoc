@@ -2,9 +2,12 @@
 = Decision spec — `*.scorecard.a2ml` corpus (70+) → deed era (family 5)
 Campaign: standards#837 · Frame: link:README.adoc[mappings/README] ·
 Status: **RULED: option B** (owner, 2026-10-09, ruling R5 on standards#837).
+For the RSR scorecard, R5 option B is superseded by the owner's ruling of
+2026-11-14 (§6).
 Increment 1 (§4 leak clean + archive) is done; increments 2 and 3 are
 pending. See §5.
-§6, the RSR scorecard clause (owner ruling 2026-11-14), is DRAFT.
+§6, the RSR scorecard clause, is RULED (owner, 2026-11-14, ratified with
+`:assessor` and `:assessed-at`).
 
 Scorecards are the wrong shape for the naïve "translate each file" move:
 they are **time-stamped assessment records**, not repo state. Translating
@@ -100,10 +103,10 @@ archived file: adding a forward link inside a frozen `.a2ml` record would
 add content to a retired format. Increment 2 adds the forward link to the
 tombstone when the deed exists.
 
-== 6. The RSR scorecard (DRAFT, owner ruling 2026-11-14)
+== 6. The RSR scorecard (owner rulings 2026-11-14)
 
-Status: *DRAFT*, not ratified. Grammar:
-`../spec/abnf/clauses/rsr-scorecard.abnf` v0.1.0. Checker:
+Status: *RULED* (owner, 2026-11-14; §6.4). Grammar:
+`../spec/abnf/clauses/rsr-scorecard.abnf` v0.2.0. Checker:
 `deed_lint.js --rsr-scorecard` (`../tools/README.adoc`).
 
 The RSR oracle (Hypatia `RsrConformance`, run by `mix hypatia.rsr_score
@@ -145,6 +148,8 @@ verification record (PROOF-POLICY §8.5):
     :repo "hypatia"                ; the scored repo's :canonical-name
     :spec rsr-criteria-v2
     :spec-version "2.1.0-draft"    ; the catalogue's own version, verbatim
+    :assessor "hypatia rsr_score 0.1.0" ; the tool that scored, and its version
+    :assessed-at "2026-11-14T19:33:12Z" ; when it ran: RFC 3339, UTC
     :tier bronze                   ; none | bronze | silver | gold | rhodium
     :score "85.78"                 ; decimal string, derived (6.3)
     :provisional #t
@@ -171,14 +176,30 @@ included, so the record is complete and the denominators can be recomputed.
   the weights). The tier is not recomputed: its thresholds are the catalogue's.
 * *No overclaim* (RSR-SPEC-v2 §10). Coverage below 1 needs `:provisional #t`,
   and a provisional scorecard is never `rhodium`.
+* *Who and when.* `:assessor` and `:assessed-at` appear exactly once each.
+  `:assessor` is not empty; it names the tool and its version, such as
+  `"hypatia rsr_score 0.1.0"`. `:assessed-at` is the RFC 3339 date-time in
+  UTC, written one way (`YYYY-MM-DDThh:mm:ssZ`: upper-case `T` and `Z`,
+  whole seconds, no offset, no leap second), and its date is a real day.
 * The `rsr.scorecard.a2ml` files already in repos are legacy. The writer no
   longer produces them; whether each is deleted or archived is the per-repo
   M7 PR's decision, not the writer's.
 
-=== 6.4 Open for the owner
+=== 6.4 Ruling: ratified with `:assessor` and `:assessed-at` (owner, 2026-11-14)
 
-. Ratification of the clause, and of the praxis-deed placement (6.1) in
-  preference to a chora-deed clause or a new doc-head.
-. Whether `:assessor` and an assessment date join the clause, as in §2 B.2's
-  `(assessment …)`. They are left out so that an unchanged repo rescored gives
-  a byte-identical file; `:source-commit` names what was scored.
+The owner ratified this design on 2026-11-14 (standards#1583), with one
+change: `:assessor` and `:assessed-at` join the clause. The ruling settles
+both questions this section left open in v0.1.0:
+
+. *Ratified:* the `(rsr-scorecard …)` clause, and its placement as the one
+  clause of a praxis-deed (6.1) in preference to a chora-deed clause or a new
+  doc-head. It supersedes R5 option B (§5) for the RSR scorecard: an RSR
+  result is not an `(assessment …)` summary on the assessed repo's own deed.
+. *Closed:* the assessor and the date join the clause, required, once each
+  (6.2, 6.3). v0.1.0 left them out so that an unchanged repo rescored gave a
+  byte-identical file. With `:assessed-at` that no longer holds: each run
+  writes a new time, and `:source-commit` still names what was scored.
+
+`rsr-scorecard.abnf` v0.2.0 carries the change. It is not additive: a
+v0.1.0 scorecard without the two fields is refused and is rewritten by
+rescoring. The writer is Hypatia's `RsrConformance.to_deed/2`.

@@ -29,6 +29,7 @@ W="$T/w1"; mkdir -p "$W/.tmp" "$W/.deed-canon/x" "$W/.standards-checkout/y" "$W/
   && ! grep -q 'c.deed' "$T/bun.log" && ! grep -q 'd.deed' "$T/bun.log"; } \
   && ok "lints the caller's deeds and never the .deed-canon / .standards-checkout copies" || bad "deed selection: rc=$rc log=$(cat "$T/bun.log") out=$out"
 grep -q -- '--egress' "$T/bun.log" && ok "runs the (egress) profile pass too" || bad "no --egress pass"
+grep -q -- '--rsr-scorecard' "$T/bun.log" && ok "runs the (rsr-scorecard) profile pass too" || bad "no --rsr-scorecard pass"
 
 # 2. require-files: a repository with no deed fails, with the right severity
 W="$T/w2"; mkdir -p "$W/.tmp"

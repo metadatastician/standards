@@ -1409,7 +1409,8 @@ describe("state fixtures", () => {
   });
 });
 
-// DRAFT: the RSR scorecard (clauses/rsr-scorecard.abnf; owner ruling 2026-11-14).
+// The RSR scorecard (clauses/rsr-scorecard.abnf v0.2.0; owner ruling 2026-11-14,
+// ratified the same day with :assessor and :assessed-at).
 const FIX_RSR = join(FIX, "rsr-scorecard");
 
 describe("rsr-scorecard profile", () => {
@@ -1421,7 +1422,7 @@ describe("rsr-scorecard profile", () => {
   test("the summary carries the tier, the score and each criterion", () => {
     const p = join(FIX_RSR, "valid", "provisional_praxis.deed");
     const r = checkRsrScorecard(readFileSync(p, "utf8"), p);
-    expect(r).toMatchObject({ repo: "example-game", tier: "none", score: 70.59, provisional: true });
+    expect(r).toMatchObject({ repo: "example-game", assessor: "hypatia rsr_score 0.1.0", assessedAt: "2026-11-14T19:33:12Z", tier: "none", score: 70.59, provisional: true });
     expect(r.criteria.map((c) => c.verdict)).toEqual(["pass", "pass", "partial", "fail", "unverified", "na"]);
     expect(RSR_TIERS).toEqual(["none", "bronze", "silver", "gold", "rhodium"]);
     expect(RSR_VERDICTS).toEqual(["pass", "partial", "fail", "unverified", "na"]);
@@ -1434,6 +1435,26 @@ describe("rsr-scorecard profile", () => {
     const p = join(FIX_RSR, "valid", "provisional_praxis.deed");
     const t = readFileSync(p, "utf8").replace(":weight \"1.5\" :verdict fail", ":weight \"1.5\" :verdict pass");
     expect(() => checkRsrScorecard(t, p)).toThrow(/derived, not asserted/);
+  });
+  test(":assessor and :assessed-at are required, once each", () => {
+    const p = join(FIX_RSR, "valid", "minimal_praxis.deed");
+    const t = readFileSync(p, "utf8");
+    expect(() => checkRsrScorecard(t.replace(/^ *:assessor .*\n/m, ""), p)).toThrow(/missing :assessor/);
+    expect(() => checkRsrScorecard(t.replace(/^ *:assessed-at .*\n/m, ""), p)).toThrow(/missing :assessed-at/);
+    expect(() => checkRsrScorecard(t.replace(/^( *):assessor (.*)$/m, "$1:assessor $2\n$1:assessor $2"), p)).toThrow(/repeats :assessor/);
+    expect(() => checkRsrScorecard(t.replace(/:assessor "[^"]*"/, ':assessor ""'), p)).toThrow(/:assessor must not be empty/);
+  });
+  test(":assessed-at is one RFC 3339 UTC spelling naming a real day", () => {
+    const p = join(FIX_RSR, "valid", "minimal_praxis.deed");
+    const t = readFileSync(p, "utf8");
+    const at = (v) => t.replace(/:assessed-at "[^"]*"/, `:assessed-at "${v}"`);
+    expect(checkRsrScorecard(at("2028-02-29T23:59:59Z"), p).assessedAt).toBe("2028-02-29T23:59:59Z");
+    for (const bad of ["2026-11-14", "2026-11-14T19:33:12", "2026-11-14 19:33:12Z", "2026-11-14T19:33:12+00:00",
+      "2026-11-14T19:33:12.5Z", "2026-11-14t19:33:12z", "2026-11-14T24:00:00Z", "2026-11-14T19:33:60Z"]) {
+      expect(() => checkRsrScorecard(at(bad), p)).toThrow(/RFC 3339 UTC timestamp/);
+    }
+    expect(() => checkRsrScorecard(at("2026-02-31T00:00:00Z"), p)).toThrow(/does not name a real day/);
+    expect(() => checkRsrScorecard(t.replace(/:assessed-at "[^"]*"/, ":assessed-at now"), p)).toThrow(RsrScorecardError);
   });
   test("a scorecard never sits in the chora deed", () => {
     const p = join(FIX_RSR, "invalid", "in-chora_chora.deed");

@@ -52,8 +52,9 @@ Usage: deed_lint.js FILE...     exit 0 iff all files conform
                                               :of-chora against the chora deed; --strict requires (related :uuid) (J12)
        deed_lint.js --ecosystem-fixtures DIR  DIR/{valid,invalid}/<case>/ECOSYSTEM.deed [+ <repo>_chora.deed, STRICT]
        deed_lint.js --rsr-scorecard FILE...   an RSR scorecard: the (rsr-scorecard …) clause of a praxis-deed of
-                                              :profile rsr-scorecard (DRAFT, owner ruling 2026-11-14); the score and
-                                              coverage must be what the criteria give
+                                              :profile rsr-scorecard (v0.2.0, ratified 2026-11-14); :assessor and an
+                                              RFC 3339 UTC :assessed-at once each; the score and coverage must be
+                                              what the criteria give
        deed_lint.js --rsr-scorecard-fixtures DIR DIR/valid pass the profile, DIR/invalid fail it (both required)
        deed_lint.js --state FILE... [--root DIR] [--strict]
                                               STATE.deed (DRAFT, A7 7.2, J3, J15); --root checks :of-chora against the
@@ -2312,8 +2313,9 @@ function verbDescriptileFixtures(d) {
 }
 
 // ---------------------------------------------------------------------------
-// RSR scorecard (DRAFT; clauses/rsr-scorecard.abnf v0.1.0; owner ruling
-// 2026-11-14; prose: mappings/scorecard-corpus-decision.adoc section 6).
+// RSR scorecard (clauses/rsr-scorecard.abnf v0.2.0; owner ruling 2026-11-14,
+// ratified the same day with :assessor and :assessed-at; prose:
+// mappings/scorecard-corpus-decision.adoc section 6).
 
 export class RsrScorecardError extends LintError {
   constructor(msg) {
@@ -2330,10 +2332,15 @@ export const RSR_TIERS = ["none", "bronze", "silver", "gold", "rhodium"];
 export const RSR_VERDICTS = ["pass", "partial", "fail", "unverified", "na"];
 const RSR_DECIMAL = /^[0-9]+(\.[0-9]+)?$/;
 const RSR_CRIT_ID = /^[0-9]+(\.[0-9]+)+$/;
+// sc-timestamp: RFC 3339 in UTC, one spelling (upper-case T and Z, whole
+// seconds, no offset, no leap second); the date part must also be a real day.
+const RSR_TIMESTAMP = /^([0-9]{4}-[0-9]{2}-[0-9]{2})T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]Z$/;
 const RSR_FIELDS = {
   repo: { type: "string", required: true },
   spec: { type: "symbol", required: true, oneOf: ["rsr-criteria-v2"] },
   "spec-version": { type: "string", required: true },
+  assessor: { type: "string", required: true },
+  "assessed-at": { type: "timestamp", required: true },
   tier: { type: "symbol", required: true, oneOf: RSR_TIERS },
   score: { type: "decimal", required: true },
   provisional: { type: "boolean", required: true },
@@ -2354,11 +2361,16 @@ const RSR_CRIT_FIELDS = {
 
 /** One field value against its kind; returns the JS value. */
 function rsrValue(v, spec, where, E) {
-  const want = { decimal: "string", "crit-id": "string", commit: "string" }[spec.type] || spec.type;
+  const want = { decimal: "string", "crit-id": "string", commit: "string", timestamp: "string" }[spec.type] || spec.type;
   if (v[0] !== want) throw E(`${where} must be a ${spec.type === "decimal" ? 'decimal string such as "84.08"' : spec.type}`);
   if (spec.type === "decimal" && !RSR_DECIMAL.test(v[1])) throw E(`${where} must be a decimal string such as "84.08", not ${JSON.stringify(v[1])}`);
   if (spec.type === "crit-id" && !RSR_CRIT_ID.test(v[1])) throw E(`${where} must be a criterion id such as "3.1.1"`);
   if (spec.type === "commit" && !/^[0-9a-f]{40}$/.test(v[1])) throw E(`${where} must be the full 40-character lowercase commit`);
+  if (spec.type === "timestamp") {
+    const m = RSR_TIMESTAMP.exec(v[1]);
+    if (!m) throw E(`${where} must be an RFC 3339 UTC timestamp such as "2026-11-14T19:33:12Z", not ${JSON.stringify(v[1])}`);
+    if (!isCalendarDate(m[1])) throw E(`${where} ${JSON.stringify(v[1])} does not name a real day`);
+  }
   if (spec.type === "string" && v[1].trim() === "") throw E(`${where} must not be empty`);
   if (spec.oneOf && !spec.oneOf.includes(v[1])) throw E(`${where} must be one of ${spec.oneOf.join(" ")}`);
   if (spec.type === "decimal") return Number(v[1]);
@@ -2448,7 +2460,7 @@ export function checkRsrScorecard(text, filename = null) {
   if (Math.abs(coverage - wantCoverage) > 0.001) throw E(`:automatable-coverage ${coverage} is not what the criteria give (${wantCoverage.toFixed(4)})`);
   if (f.has("applicable-weight") && Math.abs(f.get("applicable-weight") - applicable) > 0.01) throw E(`:applicable-weight ${f.get("applicable-weight")} is not the criteria's (${applicable.toFixed(4)})`);
   if (f.has("verified-weight") && Math.abs(f.get("verified-weight") - verified) > 0.01) throw E(`:verified-weight ${f.get("verified-weight")} is not the criteria's (${verified.toFixed(4)})`);
-  return { repo: f.get("repo"), tier, score, provisional, criteria };
+  return { repo: f.get("repo"), assessor: f.get("assessor"), assessedAt: f.get("assessed-at"), tier, score, provisional, criteria };
 }
 
 /** --rsr-scorecard FILE...: profile-check each file; returns exit code. */

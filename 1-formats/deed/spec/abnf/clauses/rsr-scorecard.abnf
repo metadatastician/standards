@@ -2,17 +2,29 @@
 ; SPDX-License-Identifier: MPL-2.0
 ; SPDX-License-Identifier: CC-BY-SA-4.0
 ;
-; DEED clause profile: (rsr-scorecard …), v0.1.0 (DRAFT)
+; DEED clause profile: (rsr-scorecard …), v0.2.0
 ; Prose and rationale: 1-formats/deed/mappings/scorecard-corpus-decision.adoc
 ; section 6 (the RSR scorecard). Owner ruling 2026-11-14: a new RSR scorecard
 ; clause carrying the tier, the score and the per-criterion results, which the
 ; oracle (Hypatia RsrConformance, `mix hypatia.rsr_score --write`) writes in
-; place of .machine_readable/scorecards/rsr.scorecard.a2ml. Not ratified.
+; place of .machine_readable/scorecards/rsr.scorecard.a2ml. Ratified by the
+; owner on 2026-11-14 (superseding R5 option B), with :assessor and
+; :assessed-at added.
+;
+; CHANGELOG (v0.1.0 DRAFT → v0.2.0, owner ratification 2026-11-14):
+;   - Two required fields, each exactly once: :assessor, the tool that
+;     produced the scorecard (a non-empty string such as
+;     "hypatia rsr_score 0.1.0"), and :assessed-at, when it ran, an RFC 3339
+;     UTC timestamp string (sc-timestamp). Not additive: a v0.1.0 scorecard
+;     without them is refused, and is rewritten by rescoring.
+;   - The date in :assessed-at is common.abnf's date, borrowed, not restated.
+;   - The profile is no longer marked DRAFT.
 ;
 ; A CLAUSE PROFILE, not a new grammar. Every rule below is also a `field` or
 ; `clause` of deed.abnf v2.0.0, so a deed carrying one still passes deed_lint
 ; unchanged, and no file name or doc-head is added. Rules it borrows (string,
-; boolean, token-sep, hex-lc, DQUOTE, DIGIT) are deed.abnf's, unchanged.
+; boolean, token-sep, hex-lc, DQUOTE, DIGIT) are deed.abnf's, and date is
+; common.abnf's, all unchanged.
 ; Requires RFC 7405 (%s"..." case-sensitive string literals).
 ;
 ; Where it appears: exactly one (rsr-scorecard …) clause, at the top level of a
@@ -26,8 +38,11 @@
 ;   * the praxis-deed's top level carries :schema-version, :canonical-name and
 ;     :profile rsr-scorecard, at most :beholding-chora besides, and the one
 ;     clause; an (rsr-scorecard …) anywhere else is refused;
-;   * :repo, :spec, :spec-version, :tier, :score, :provisional and
-;     :automatable-coverage exactly once; the other fields at most once;
+;   * :repo, :spec, :spec-version, :assessor, :assessed-at, :tier, :score,
+;     :provisional and :automatable-coverage exactly once; the other fields
+;     at most once;
+;   * :assessor is not empty, and the date in :assessed-at is a real
+;     calendar date (2026-02-31 is refused), as common.abnf's date says;
 ;   * at least one (criterion …); in each, every crit-field exactly once;
 ;     :id unique across the clause;
 ;   * :score is at most 100, and :automatable-coverage at most 1;
@@ -49,6 +64,8 @@ sc-member       = sc-field / sc-criterion
 sc-field        = ( %s":repo"                 token-sep string )
                 / ( %s":spec"                 token-sep %s"rsr-criteria-v2" )
                 / ( %s":spec-version"         token-sep string )
+                / ( %s":assessor"             token-sep string )
+                / ( %s":assessed-at"          token-sep sc-timestamp )
                 / ( %s":tier"                 token-sep sc-tier )
                 / ( %s":score"                token-sep sc-decimal )
                 / ( %s":provisional"          token-sep boolean )
@@ -61,7 +78,18 @@ sc-field        = ( %s":repo"                 token-sep string )
                 ; :canonical-name when it has one). :spec names the criteria
                 ; family as a symbol; :spec-version is the catalogue's own
                 ; version string, verbatim. :source-commit is the scored
-                ; commit, when the writer was told it.
+                ; commit, when the writer was told it. :assessor names the
+                ; tool that produced the scorecard and its version, such as
+                ; "hypatia rsr_score 0.1.0"; :assessed-at is when it ran.
+
+sc-timestamp    = DQUOTE date %s"T" sc-hour ":" sc-minute ":" sc-second %s"Z" DQUOTE
+sc-hour         = ( "0" / "1" ) DIGIT / "2" %x30-33
+sc-minute       = %x30-35 DIGIT
+sc-second       = %x30-35 DIGIT
+                ; RFC 3339 date-time in UTC, written one way: an upper-case T
+                ; and Z, whole seconds, no fraction, no numeric offset, and no
+                ; leap second (60), which no writer emits. For example
+                ; "2026-11-14T19:33:12Z". date is common.abnf's (YYYY-MM-DD).
 
 sc-tier         = %s"none" / %s"bronze" / %s"silver" / %s"gold" / %s"rhodium"
 crit-tier       = %s"bronze" / %s"silver" / %s"gold" / %s"rhodium"

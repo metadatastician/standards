@@ -47,6 +47,11 @@ cmd_lint() {
   # excluded here rather than from the grammar lint above.
   grep -v '^\./1-formats/deed/tools/fixtures/egress/invalid/' "$RUNNER_TEMP/deeds" \
     | xargs bun "$T/deed_lint.js" --egress 2>&1 | tee -a "$RUNNER_TEMP/deed-lint.log"
+  # The RSR scorecard profile (rsr-scorecard.abnf v0.2.0, ratified 2026-11-14).
+  # A deed without the clause passes. Its invalid fixtures are grammatical
+  # deeds, so they are excluded here, as the egress ones are above.
+  grep -v '^\./1-formats/deed/tools/fixtures/rsr-scorecard/invalid/' "$RUNNER_TEMP/deeds" \
+    | xargs bun "$T/deed_lint.js" --rsr-scorecard 2>&1 | tee -a "$RUNNER_TEMP/deed-lint.log"
 }
 
 cmd_warn() {
