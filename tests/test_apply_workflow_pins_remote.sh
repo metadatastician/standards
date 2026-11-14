@@ -62,7 +62,8 @@ for want in "fresh.yml" "behind.yml" "illegal.yml" "tracking.yml" "none.yml" "sh
             "manifest.json" "bad-schema.json" "bad-version.json" "bad-dup.json" "bad-empty.json" \
             "bad-json.json" "content-behind.yml" "content-current.yml" "content-ahead.yml" \
             "content-wide.yml" "content-unlisted.yml" "content-malformed.yml" "content-not-first.yml" \
-            "bad-huge.json" "content-huge.yml"; do
+            "bad-huge.json" "content-huge.yml" \
+            "owner-stale.lock" "owner-clean.lock" "owner-nonstandards.lock" "owner-tag-key.lock"; do
   grep -q "PASS $want" "$TMP/base.out" && pass "control present: $want" \
     || fail "control MISSING from baseline: $want (a control that never runs is not a control)"
 done
@@ -171,6 +172,18 @@ kill_mutant manifest_duplicate_accepted \
 kill_mutant content_stamp_anywhere \
   's@first=\$\(head -n 1 "\$f" 2>/dev/null\)@first=$(grep -m1 "^# proven-cicd:" "$f" 2>/dev/null)@' \
   "FAIL content-not-first.yml"
+
+# M11 — judge any record's owner_id, not only standards'. hyperpolymath/cicd-suite
+# legitimately carries the same account id, so the census would cry wolf on it.
+kill_mutant owner_filter_widened \
+  's@a\[1\] ~ /\^\(hyperpolymath\|metadatastician\)\\/standards\$/@a[1] ~ /./@' \
+  "FAIL owner-nonstandards.lock"
+
+# M12 — drop the owner_id test. Every standards record would then read stale,
+# including one that already carries the current owner's id.
+kill_mutant owner_id_unchecked \
+  's@ && \$2 == old@@' \
+  "FAIL owner-clean.lock"
 
 # M11, M12 — unbound the version components. version_cmp compares shell
 # integers, which wrap at 2^63: 18446744073709551617.0.0 then equals 1.0.0, and
@@ -605,6 +618,39 @@ case_main_content_fix() {
   fi
 }
 
+# case_main_owner_stale <applier> — a standards lock record that still carries the
+# former owner's id gets its own OWNER-ID-STALE row, and the pin row of the same
+# repository is unchanged. (P is a 40-hex stand-in for a standards commit.)
+case_main_owner_stale() {
+  local d; d=$(new_case ownerstale)
+  printf "version: 'v0.0.3'\ndependencies:\n    'metadatastician/standards@%s':\n        ref: '%s'\n        owner_id: 6759885\n" "$P" "$P" > "$d/own_lock"
+  run_content "$d" "$1"
+  if [ "$(cat "$d/rc")" = 0 ] \
+     && grep -qF "$(printf 'hyperpolymath/pub-a\tactions.lock\tOWNER-ID-STALE\t1 standards record(s) carry owner_id 6759885: metadatastician/standards@dddddddd')" "$d/out" \
+     && grep -qF "$(printf 'hyperpolymath/pub-a\tci.yml\tFRESH')" "$d/out"; then
+    pass "main: a standards lock record under the former owner id is reported OWNER-ID-STALE"
+  else
+    fail "main: owner-id census wrong (rc=$(cat "$d/rc"))"
+    sed 's/^/    /' "$d/out" "$d/err" | tail -8 >&2
+  fi
+}
+
+# case_main_owner_clean <applier> — a lock whose standards record carries the
+# current owner's id produces no actions.lock row at all.
+case_main_owner_clean() {
+  local d; d=$(new_case ownerclean)
+  printf "version: 'v0.0.3'\ndependencies:\n    'metadatastician/standards@%s':\n        ref: '%s'\n        owner_id: 297579217\n" "$P" "$P" > "$d/own_lock"
+  run_content "$d" "$1"
+  if [ "$(cat "$d/rc")" = 0 ] \
+     && ! grep -qF "$(printf 'hyperpolymath/pub-a\tactions.lock')" "$d/out" \
+     && grep -qF "$(printf 'hyperpolymath/pub-a\tci.yml\tFRESH')" "$d/out"; then
+    pass "main: a standards lock record with the current owner id gets no row"
+  else
+    fail "main: a clean lock produced an owner-id row (rc=$(cat "$d/rc"))"
+    sed 's/^/    /' "$d/out" "$d/err" | tail -8 >&2
+  fi
+}
+
 # Planted positives: the stub must be able to say no, or every fail-closed case
 # above could pass because nothing ever failed.
 d=$(new_case planted)
@@ -633,6 +679,8 @@ case_main_squabbler "$APPLIER"
 case_main_content "$APPLIER"
 case_main_content_fail "$APPLIER"
 case_main_content_off "$APPLIER"
+case_main_owner_stale "$APPLIER"
+case_main_owner_clean "$APPLIER"
 case_main_content_fix "$APPLIER"
 
 # A repository whose own cicd-squabbler.yml runs no gate is never overwritten:
@@ -798,6 +846,10 @@ list_mutant content_fail_open '/Refusing a content census without it/{n;s@exit 1
 list_mutant content_manifest_unpinned 's@\?ref=\$\{PROVEN_SHA\}@@' case_main_content
 list_mutant content_row_dropped 's@cst=\$\(content_state "\$wf" "\$PROVEN_MANIFEST"\)@cst=""@' case_main_content
 list_mutant content_row_writes 's@\[ -n "\$cst" \] \&\& printf@[ -n "$cst" ] \&\& changed+=("$base"); [ -n "$cst" ] \&\& printf@' case_main_content_fix
+# Owner ids: the census must read the lock it was given (not skip it), and must
+# say nothing when there is nothing to say.
+list_mutant owner_row_dropped 's@ost=\$\(lock_owner_state "\$rdir/actions\.lock"\)@ost=""@' case_main_owner_stale
+list_mutant owner_row_always 's@\[ -n "\$ost" \] && printf@true \&\& printf@' case_main_owner_clean
 }
 
 echo
