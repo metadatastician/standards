@@ -135,15 +135,30 @@ run_case pr_secret "$r" pull_request
 # 3. push to main: full history, so the old deleted secret is found.
 r="$(make_repo push_full)"
 run_case push_full "$r" push
-[ "$RANGE" = "HEAD" ] && [ "$SCAN_RC" -ne 0 ] \
+[ "$RANGE" = "--all" ] && [ "$SCAN_RC" -ne 0 ] \
   && ok "push: FULL scope, finds the old secret" \
   || bad "push: range=$RANGE rc=$SCAN_RC"
 
 # 4. schedule: full history too.
 run_case schedule_full "$r" schedule
-[ "$RANGE" = "HEAD" ] && [ "$SCAN_RC" -ne 0 ] \
+[ "$RANGE" = "--all" ] && [ "$SCAN_RC" -ne 0 ] \
   && ok "schedule: FULL scope, finds the old secret" \
   || bad "schedule: range=$RANGE rc=$SCAN_RC"
+
+# 4b. A secret committed and deleted ONLY on an unmerged branch is still found
+#     by the full scan (every ref, not just HEAD's ancestors).
+r="$WORK/stray"; rm -rf "$r"; mkdir -p "$r"
+git -C "$r" init -q -b main
+cp "$BASELINE" "$r/.gitleaks-estate.toml"
+echo "readme" > "$r/README.txt"; commit "$r" base
+git -C "$r" checkout -q -b stray
+printf 'k = "%s"\n' "$SECRET" > "$r/s.txt"; commit "$r" "stray secret"
+rm "$r/s.txt"; commit "$r" "stray secret removed"
+git -C "$r" checkout -q main
+run_case stray "$r" push
+[ "$RANGE" = "--all" ] && [ "$SCAN_RC" -ne 0 ] \
+  && ok "push: FULL scope finds a secret on an unmerged branch" \
+  || bad "push: secret on an unmerged branch missed (range=$RANGE rc=$SCAN_RC)"
 
 # 5. PR checkout that is not a merge commit, with a known base: base..HEAD.
 r="$(make_repo pr_linear)"
@@ -156,13 +171,13 @@ run_case pr_linear "$r" pull_request "$base"
 
 # 6. PR whose base cannot be resolved: FULL, never nothing.
 run_case pr_nobase "$r" pull_request "0000000000000000000000000000000000000000"
-[ "$RANGE" = "HEAD" ] && [ "$SCAN_RC" -ne 0 ] \
+[ "$RANGE" = "--all" ] && [ "$SCAN_RC" -ne 0 ] \
   && ok "PR with unresolvable base: falls back to FULL" \
   || bad "PR with unresolvable base: range=$RANGE rc=$SCAN_RC"
 
 # 7. An empty range (base == HEAD) falls back to FULL instead of scanning 0 commits.
 run_case pr_empty "$r" pull_request "$(git -C "$r" rev-parse HEAD)"
-[ "$RANGE" = "HEAD" ] && [ "$SCAN_RC" -ne 0 ] \
+[ "$RANGE" = "--all" ] && [ "$SCAN_RC" -ne 0 ] \
   && ok "PR with empty range: falls back to FULL" \
   || bad "PR with empty range: range=$RANGE rc=$SCAN_RC"
 
