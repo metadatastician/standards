@@ -1,0 +1,4 @@
+;; SPDX-License-Identifier: CC-BY-SA-4.0
+(repo-deed :schema-version "1.0.0" :canonical-name "example-game" :repo-uuid #uuid"00000000-0000-8000-8000-0000000000a1" :beholding-chora #uuid"00000000-0000-8000-8000-0000000000e5"
+  (identity :primary-forge github :owner "o")
+  (maturity :level beta))

@@ -51,6 +51,11 @@ Usage: deed_lint.js FILE...     exit 0 iff all files conform
                                               ECOSYSTEM.deed (DRAFT, A7 7.2, YD07); --root checks :project and
                                               :of-chora against the chora deed; --strict requires (related :uuid) (J12)
        deed_lint.js --ecosystem-fixtures DIR  DIR/{valid,invalid}/<case>/ECOSYSTEM.deed [+ <repo>_chora.deed, STRICT]
+       deed_lint.js --state FILE... [--root DIR] [--strict]
+                                              STATE.deed (DRAFT, A7 7.2, J3, J15); --root checks :of-chora against the
+                                              chora deed (YD08) and warns on a chora (status …) or (maturity …), which
+                                              --strict refuses (YF03)
+       deed_lint.js --state-fixtures DIR      DIR/{valid,invalid}/<case>/STATE.deed [+ <repo>_chora.deed, STRICT]
        deed_lint.js --contractile-registry --root DIR [--owner O/N] [--out FILE] [--check]
                                               generate the A5 contractile rule registry from the six edicts (A7 J13)
        deed_lint.js --ast-json FILE           emit the validated AST as JSON (integer lexemes stay strings)
@@ -2160,7 +2165,8 @@ export function choraRepoUuid(dir) {
 }
 
 /**
- * The one <repo>_chora.deed directly in dir: {uuid, name}, or undefined.
+ * The one <repo>_chora.deed directly in dir: {uuid, name, clauses}, or
+ * undefined; clauses are its top-level clause names (YF03).
  * needName (the ecosystem profile, YD07) also requires exactly one string
  * :canonical-name; the YD08 id lookup alone does not, and name is then null
  * when the chora has none.
@@ -2186,7 +2192,10 @@ export function rootChora(dir, { needName = false } = {}) {
   if (needName && !named) {
     throw new VerbDescriptileError(`${choras[0]} must carry exactly one string :canonical-name to check against (YD07)`);
   }
-  return { uuid: id, name: named ? ns[0][2][1] : null };
+  // The chora's top-level clause names, for YF03 (a chora (status …) or
+  // (maturity …) after J15).
+  const clauses = items.filter((it) => it[0] === "clause").map((it) => it[1]);
+  return { uuid: id, name: named ? ns[0][2][1] : null, clauses };
 }
 
 /**
@@ -2447,6 +2456,202 @@ function ecosystemFixtures(d) {
           repoUuid: chora && chora.uuid, choraName: chora && chora.name, strict: existsSync(join(dir, "STRICT")), today: FIXTURE_TODAY,
         });
         if (r === null) throw new EcosystemError("not ECOSYSTEM.deed");
+      } catch (e) {
+        if (!(e instanceof LintError)) throw e;
+        got = false;
+        err = e.toString();
+      }
+      if (got !== expect) bad += 1;
+      console.log(`${got === expect ? "PASS " : "FAIL "}${f}` + (got === expect ? "" : `  (unexpected: ${err || "valid"})`));
+    }
+  }
+  return bad ? 1 : 0;
+}
+
+// ---------------------------------------------------------------------------
+// STATE.deed (A7 7.2, J3, J15, YF03; clauses/state.abnf).
+
+export class StateError extends LintError {
+  constructor(msg) {
+    super(msg, null);
+    this.name = "StateError";
+  }
+
+  toString() {
+    return this.msg;
+  }
+}
+
+/** The lifecycle phases, verbatim (CLADE-004/005; mappings/clade-to-repo-deed.adoc). */
+export const STATE_PHASES = new Set(["reserved", "incubating", "active", "dormant", "merged", "superseded", "archived", "extinct"]);
+/** The maturity levels (vocabulary/maturity.adoc). */
+export const MATURITY_LEVELS = new Set(["experimental", "alpha", "beta", "production", "lts"]);
+
+/**
+ * The fields of one clause as a Map, each at most once and each named in
+ * `allowed`; a nested clause is refused unless `nested` names it, and then
+ * kept under its own name as ["clause", members].
+ */
+function stateMembers(members, where, allowed, E, nested = []) {
+  const f = new Map();
+  for (const m of members) {
+    if (m[0] === "field") {
+      if (m[3]) throw E(`'!' belongs only on a rule's :id in a contractile-deed, not on ${where} :${m[1]}`);
+      if (!allowed.includes(m[1])) throw E(`${where} has no field :${m[1]}`);
+    } else if (!nested.includes(m[1])) {
+      throw E(`${where} has no clause (${m[1]} …)`);
+    }
+    const key = m[0] === "field" ? m[1] : `(${m[1]})`;
+    if (f.has(key)) throw E(`${where} carries ${m[0] === "field" ? `:${m[1]}` : `(${m[1]} …)`} once`);
+    f.set(key, m[2]);
+  }
+  return f;
+}
+
+function stateSymbol(f, k, set, where, E) {
+  const v = f.get(k);
+  if (v[0] !== "symbol" || !set.has(v[1])) throw E(`${where} :${k} must be one of ${[...set].join(" ")}, as a symbol`);
+  return v[1];
+}
+
+function stateDate(f, k, where, E, { empty = false } = {}) {
+  if (!f.has(k)) return;
+  const v = f.get(k);
+  if (v[0] === "string" && (isCalendarDate(v[1]) || (empty && v[1] === ""))) return;
+  throw E(`${where} :${k} must be a real YYYY-MM-DD date${empty ? ' or ""' : ""}`);
+}
+
+function stateStrings(f, k, where, E) {
+  if (!f.has(k)) return;
+  const v = f.get(k);
+  if (v[0] !== "list" || !v[1].every((x) => x[0] === "string")) throw E(`${where} :${k} must be a list of strings`);
+}
+
+/**
+ * Check STATE.deed source text. Returns {phase, maturity, warnings}, or null
+ * for any other file or head. opts.repoUuid comes from the repo's chora deed
+ * (YD08); opts.choraClauses (the chora's top-level clause names) turns on
+ * YF03: a chora (status …) or (maturity …) is warned, and refused when
+ * opts.strict.
+ */
+export function checkState(text, filename, opts = {}) {
+  const [head, items] = validate(text, filename);
+  if (head !== "descriptile-deed" || basename(filename || "") !== "STATE.deed") return null;
+  const E = (m) => new StateError(m);
+  const fields = new Map();
+  const clauses = { status: [], maturity: [] };
+  for (const it of items) {
+    if (it[0] === "field") {
+      if (it[3]) throw E(`'!' belongs only on a rule's :id in a contractile-deed, not on :${it[1]}`);
+      if (it[1] === "beholding-chora") throw E(":beholding-chora names an estate chora; a descriptile-deed names its repo with :of-chora (J20)");
+      if (!DESCRIPTILE_HEADER.includes(it[1])) throw E(`STATE.deed has no field :${it[1]}; its facts are the (status …) and (maturity …) clauses (A7 7.2)`);
+      if (fields.has(it[1])) throw E(`STATE.deed carries :${it[1]} once`);
+      fields.set(it[1], it[2]);
+      continue;
+    }
+    if (it[1] === "rule") throw E("a descriptile states what is; a (rule …) belongs in an edict (YF02, YL3)");
+    if (it[1] === "state") throw E("there is no (state …) clause: the journal stays in docs/status/ROADMAP.adoc (J3)");
+    if (!(it[1] in clauses)) throw E(`STATE.deed has no clause (${it[1]} …); its clauses are (status …) and (maturity …) (A7 7.2)`);
+    clauses[it[1]].push(it[2]);
+  }
+  const warnings = checkDescriptileHeader(fields, "STATE.deed", E, opts.repoUuid, opts.today ?? todayUtc());
+  if (clauses.status.length !== 1) throw E(`STATE.deed carries (status …) exactly once, not ${clauses.status.length} times (A7 7.2, J15)`);
+  if (clauses.maturity.length > 1) throw E("STATE.deed carries (maturity …) at most once (vocabulary/maturity.adoc)");
+
+  const s = stateMembers(clauses.status[0], "(status …)", ["phase", "since", "present", "aliases", "merged-into", "superseded-by", "successors", "ended"], E, ["history"]);
+  if (!s.has("phase")) throw E("(status …) is missing :phase (A7 7.2)");
+  const phase = stateSymbol(s, "phase", STATE_PHASES, "(status …)", E);
+  stateDate(s, "since", "(status …)", E);
+  stateDate(s, "ended", "(status …)", E, { empty: true });
+  if (s.has("present") && s.get("present")[0] !== "boolean") throw E("(status …) :present must be #t or #f");
+  for (const k of ["merged-into", "superseded-by"]) if (s.has(k) && s.get(k)[0] !== "string") throw E(`(status …) :${k} must be a string`);
+  for (const k of ["aliases", "successors"]) stateStrings(s, k, "(status …)", E);
+  for (const entry of s.get("(history)") || []) {
+    if (entry[0] !== "clause" || entry[1] !== "entry") {
+      throw E(`(history …) holds (entry …) clauses only, not ${entry[0] === "field" ? `:${entry[1]}` : `(${entry[1]} …)`}`);
+    }
+    const e = stateMembers(entry[2], "(history (entry …))", ["phase", "since", "note"], E);
+    for (const k of ["phase", "since"]) if (!e.has(k)) throw E(`(history (entry …)) is missing :${k}`);
+    stateSymbol(e, "phase", STATE_PHASES, "(history (entry …))", E);
+    stateDate(e, "since", "(history (entry …))", E);
+    if (e.has("note") && e.get("note")[0] !== "string") throw E("(history (entry …)) :note must be a string");
+  }
+
+  let maturity = null;
+  if (clauses.maturity.length === 1) {
+    const m = stateMembers(clauses.maturity[0], "(maturity …)", ["level", "since"], E);
+    if (!m.has("level")) throw E("(maturity …) is missing :level (vocabulary/maturity.adoc)");
+    maturity = stateSymbol(m, "level", MATURITY_LEVELS, "(maturity …)", E);
+    stateDate(m, "since", "(maturity …)", E);
+  }
+
+  for (const c of ["status", "maturity"]) {
+    if (!(opts.choraClauses || []).includes(c)) continue;
+    const msg = `the chora deed still carries (${c} …), which moved to STATE.deed (J15, YF03)`;
+    if (opts.strict) throw E(`${msg}; refused in strict mode`);
+    warnings.push(`${msg}; read as a fallback for one release`);
+  }
+  return { phase, maturity, warnings };
+}
+
+/** --state FILE... [--root DIR] [--strict]: returns exit code. */
+function stateFiles(files, root, strict) {
+  let bad = 0;
+  for (const f of files) {
+    try {
+      const text = readFileSync(f, "utf8");
+      let chora;
+      if (root) {
+        chora = rootChora(root);
+        if (chora === undefined) throw new StateError(`--root ${root} holds no <repo>_chora.deed to check against (YD08, YF03)`);
+      }
+      const r = checkState(text, f, { repoUuid: chora && chora.uuid, choraClauses: chora && chora.clauses, strict });
+      console.log(`OK   ${f} (${r === null ? "not STATE.deed" : `phase ${r.phase}, maturity ${r.maturity ?? "unstated"}${chora ? ", checked against the chora" : ""}${strict ? ", strict" : ""}`})`);
+      for (const w of (r && r.warnings) || []) console.log(`WARN ${f}: ${w}`);
+    } catch (e) {
+      if (!(e instanceof LintError) && !e.code) throw e;
+      bad += 1;
+      console.log(`FAIL ${f}: ${e instanceof LintError ? e.toString() : `cannot read (${e.code})`}`);
+    }
+  }
+  return bad ? 1 : 0;
+}
+
+/**
+ * --state-fixtures DIR: DIR/{valid,invalid}/<case>/STATE.deed, with an
+ * optional <repo>_chora.deed beside it (then YD08 and YF03 are checked
+ * against it) and an optional file named STRICT (then the case runs in
+ * strict mode).
+ */
+function stateFixtures(d) {
+  let bad = 0;
+  for (const [sub, expect] of [["valid", true], ["invalid", false]]) {
+    let cases;
+    try {
+      cases = readdirSync(join(d, sub)).sort();
+    } catch (e) {
+      console.log(`ERROR ${join(d, sub)}: cannot read the fixture directory (${e.code || e.message})`);
+      return 2;
+    }
+    if (cases.length === 0) {
+      console.log(`ERROR ${join(d, sub)}: no fixture cases`);
+      return 2;
+    }
+    for (const c of cases) {
+      const dir = join(d, sub, c);
+      const f = join(dir, "STATE.deed");
+      if (!existsSync(f)) {
+        console.log(`ERROR ${dir}: a case holds STATE.deed`);
+        return 2;
+      }
+      let got = true;
+      let err = "";
+      try {
+        const chora = rootChora(dir);
+        const r = checkState(readFileSync(f, "utf8"), f, {
+          repoUuid: chora && chora.uuid, choraClauses: chora && chora.clauses, strict: existsSync(join(dir, "STRICT")), today: FIXTURE_TODAY,
+        });
+        if (r === null) throw new StateError("not STATE.deed");
       } catch (e) {
         if (!(e instanceof LintError)) throw e;
         got = false;
@@ -2910,6 +3115,30 @@ function main(argv) {
       return 2;
     }
     return ecosystemFiles(files, root, argv.includes("--strict"));
+  }
+  if (argv.includes("--state-fixtures")) {
+    const d = argv[argv.indexOf("--state-fixtures") + 1];
+    if (d === undefined) {
+      console.log("--state-fixtures requires a DIR argument");
+      return 2;
+    }
+    const rc = stateFixtures(d);
+    console.log("STATE FIXTURES " + (rc === 0 ? "OK" : rc === 2 ? "NOT CHECKED" : "FAILED"));
+    return rc;
+  }
+  if (argv.includes("--state")) {
+    const ri = argv.indexOf("--root");
+    const root = ri >= 0 ? argv[ri + 1] : null;
+    if (ri >= 0 && (root === undefined || root === "" || root.startsWith("-"))) {
+      console.log("--root requires a DIR argument");
+      return 2;
+    }
+    const files = argv.filter((a, i) => !a.startsWith("-") && !(ri >= 0 && i === ri + 1));
+    if (files.length === 0) {
+      console.log(DOC);
+      return 2;
+    }
+    return stateFiles(files, root, argv.includes("--strict"));
   }
   if (argv.includes("--verb-descriptile-fixtures")) {
     const d = argv[argv.indexOf("--verb-descriptile-fixtures") + 1];

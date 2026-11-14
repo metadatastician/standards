@@ -1,0 +1,70 @@
+; SPDX-FileCopyrightText: © 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+; SPDX-License-Identifier: MPL-2.0
+; SPDX-License-Identifier: CC-BY-SA-4.0
+;
+; DEED clause profile: STATE.deed, v1.0.0 (DRAFT)
+; Prose and rationale: docs/estate-reconciliation/A7-contractiles-descriptiles-anchor.adoc
+; sections 7.1 (files and the affirmation members) and 7.2 (the STATE.deed
+; row); rulings J3, J14, J15, J20. The member vocabulary is the chora's, moved
+; unchanged (J15): (status …) is 1-formats/deed/mappings/clade-to-repo-deed.adoc
+; section 3, and (maturity …) is 1-formats/deed/vocabulary/maturity.adoc. M3
+; module order: section 11.
+;
+; A CLAUSE PROFILE, not a new grammar. Every rule below is also a `clause` or
+; `field` of deed.abnf v1.5.0, so STATE.deed still passes deed_lint
+; unchanged. Rules it borrows: string, symbol, boolean and token-sep are
+; deed.abnf's; str-list and date-string are common.abnf's. Requires RFC 7405
+; (%s"..." case-sensitive literals).
+;
+; Where it applies: STATE.deed (head descriptile-deed, J14), at the top level
+; of the form. The journal (last and next action) is not here: it stays in
+; docs/status/ROADMAP.adoc, and there is no (state …) clause (J3).
+; SEMANTIC (validator-enforced, deed_lint.js --state):
+;   * the descriptile header: :schema-version, :canonical-name and a version 8
+;     :of-chora (#uuid or #u8; J20, J28) once each, no :beholding-chora, and
+;     the affirmation members, required by default (J4, YD06), as for every
+;     descriptile;
+;   * exactly one state-status and at most one state-maturity; no other
+;     top-level field or clause, and no (rule …) (YF02);
+;   * every date is a real calendar date (common.abnf's date);
+;   * when the repo's chora deed is read alongside, a (status …) or
+;     (maturity …) still in the chora is warned, and refused in strict mode
+;     (YF03, J15).
+
+state-status    = "(" %s"status" 1*(token-sep status-member) [token-sep] ")"
+                ; SEMANTIC: :phase exactly once; every other member, the
+                ; (history …) clause included, at most once.
+status-member   = ( %s":phase"         token-sep phase )
+                / ( %s":since"         token-sep date-string )
+                / ( %s":present"       token-sep boolean )
+                / ( %s":aliases"       token-sep str-list )
+                / ( %s":merged-into"   token-sep string )
+                / ( %s":superseded-by" token-sep string )
+                / ( %s":successors"    token-sep str-list )
+                / ( %s":ended"         token-sep ended )
+                / status-history
+                ; Empty strings and lists stay as the empty slots the mapping
+                ; keeps ("" and ()), so the history stays greppable.
+ended           = DQUOTE [date] DQUOTE
+                ; "" while the repo lives, else the day it ended.
+
+status-history  = "(" %s"history" *(token-sep history-entry) [token-sep] ")"
+history-entry   = "(" %s"entry" 1*(token-sep entry-member) [token-sep] ")"
+                ; SEMANTIC: :phase and :since exactly once each, :note at
+                ; most once.
+entry-member    = ( %s":phase" token-sep phase )
+                / ( %s":since" token-sep date-string )
+                / ( %s":note"  token-sep string )
+
+phase           = %s"reserved" / %s"incubating" / %s"active" / %s"dormant"
+                / %s"merged" / %s"superseded" / %s"archived" / %s"extinct"
+                ; The lifecycle taxonomy, verbatim (CLADE-004/005, #726/#728).
+                ; SEMANTIC: the whole symbol, so "activex" is refused.
+
+state-maturity  = "(" %s"maturity" 1*(token-sep maturity-member) [token-sep] ")"
+                ; SEMANTIC: :level exactly once, :since at most once. No
+                ; clause means the maturity is unstated, never experimental.
+maturity-member = ( %s":level" token-sep maturity-level )
+                / ( %s":since" token-sep date-string )
+maturity-level  = %s"experimental" / %s"alpha" / %s"beta" / %s"production" / %s"lts"
+                ; vocabulary/maturity.adoc. SEMANTIC: the whole symbol.
