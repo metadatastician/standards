@@ -6,7 +6,7 @@ import { cpSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, writ
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { validate, LintError, SELF_TEST_CASES, checkEgress, EgressError, checkAnchor, AnchorError, profileCOfBody, readMustfileChecks, MustfileError, readProofReceipt, ProofReceiptError, checkContractiles, ContractilesError, contractilePaths, CONTRACTILE_VERBS, checkEdict, EdictError, verbOfFilename, checkVerbDescriptile, VerbDescriptileError, verbOfDescriptile } from "./deed_lint.js";
+import { validate, LintError, SELF_TEST_CASES, checkEgress, EgressError, checkAnchor, AnchorError, profileCOfBody, readMustfileChecks, MustfileError, readProofReceipt, ProofReceiptError, checkContractiles, ContractilesError, contractilePaths, CONTRACTILE_VERBS, checkEdict, EdictError, verbOfFilename, checkVerbDescriptile, VerbDescriptileError, verbOfDescriptile, choraRepoUuid } from "./deed_lint.js";
 import { generateContractileRegistry as generateRegistry } from "./deed_lint.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -1136,6 +1136,18 @@ describe("verb descriptile fixtures", () => {
     const t = readFileSync(p, "utf8");
     expect(checkVerbDescriptile(t, p).facts.length).toBe(1);
     expect(() => checkVerbDescriptile(t, p, { ruleIds: new Set(["must-tests", "must-fmt"]) })).toThrow(VerbDescriptileError);
+  });
+  test(":of-chora must equal the chora deed's :repo-uuid (YD08)", () => {
+    const p = join(FIX_VD, "valid", "must-with-edict", "MUST.deed");
+    const t = readFileSync(p, "utf8");
+    expect(choraRepoUuid(join(FIX_VD, "valid", "must-with-edict"))).toBe("00000000-0000-8000-8000-0000000000a1");
+    expect(checkVerbDescriptile(t, p, { repoUuid: "00000000-0000-8000-8000-0000000000a1" }).facts.length).toBe(2);
+    expect(() => checkVerbDescriptile(t, p, { repoUuid: "00000000-0000-8000-8000-0000000000b2" })).toThrow(/YD08/);
+  });
+  test("--root without a directory is a usage error, not a skipped check", () => {
+    const r = cli("--verb-descriptile", join(FIX_VD, "valid", "intent-basic", "INTENT.deed"), "--root");
+    expect(r.code).toBe(2);
+    expect(r.out).toContain("--root requires a DIR argument");
   });
   test("a Bust fact carries grades, not a value (8.5)", () => {
     const p = join(FIX_VD, "invalid", "bust-value", "BUST.deed");

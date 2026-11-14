@@ -44,6 +44,7 @@ Usage: deed_lint.js FILE...     exit 0 iff all files conform
        deed_lint.js --verb-descriptile FILE... [--root DIR]
                                               a verb descriptile, INTENT.deed to BUST.deed (DRAFT, A7 7.3, 8.5);
                                               with --root, each :witnesses must name a rule of the verb's edict (YD02)
+                                              and :of-chora must equal the root chora's :repo-uuid (YD08)
        deed_lint.js --verb-descriptile-fixtures DIR DIR/{valid,invalid}/<case>/<VERB>.deed [+ <Verb>file.deed]
        deed_lint.js --contractile-registry --root DIR [--owner O/N] [--out FILE] [--check]
                                               generate the A5 contractile rule registry from the six edicts (A7 J13)
@@ -1846,7 +1847,9 @@ export function verbOfDescriptile(filename) {
  * {verb, facts: [{witnesses, evidence}]}, or null when the file is not a
  * verb descriptile (another head, or another descriptile name). When
  * opts.ruleIds is a Set (the :id values of the verb's edict), every
- * :witnesses must be one of them (YD02). Throws LintError on a violation.
+ * :witnesses must be one of them (YD02). When opts.repoUuid is a string (the
+ * :repo-uuid of the repo's chora deed), :of-chora must equal it (YD08).
+ * Throws LintError on a violation.
  */
 export function checkVerbDescriptile(text, filename, opts = {}) {
   const [head, items] = validate(text, filename);
@@ -1875,6 +1878,9 @@ export function checkVerbDescriptile(text, filename, opts = {}) {
   if (fields.get("canonical-name")[0] !== "string") throw E(":canonical-name must be a string");
   const of = fields.get("of-chora");
   if (of[0] !== "uuid" || of[1][14] !== "8") throw E(":of-chora must be the repo's opaque version 8 #uuid\"…\" chora id (J20)");
+  if (opts.repoUuid !== undefined && of[1] !== opts.repoUuid) {
+    throw E(`:of-chora ${of[1]} is not this repo's chora id ${opts.repoUuid}, the :repo-uuid of its chora deed (YD08)`);
+  }
   // J4: affirmation is required by default, and no relaxation can be written
   // until the agentic module and the J19 receipt interface exist.
   for (const k of ["affirmed", "affirmed-by"]) {
@@ -1935,6 +1941,25 @@ export function checkVerbDescriptile(text, filename, opts = {}) {
   return { verb, facts: out };
 }
 
+/**
+ * The :repo-uuid of the one <repo>_chora.deed directly in dir, for YD08, or
+ * undefined when dir holds none. Throws when there are several, or when the
+ * id is not a #uuid literal: a legacy #u5 or #u8 id cannot be compared with
+ * an opaque :of-chora, so the check fails rather than passing unchecked.
+ */
+export function choraRepoUuid(dir) {
+  const choras = readdirSync(dir).filter((n) => n.endsWith("_chora.deed") && n !== "estate_chora.deed");
+  if (choras.length === 0) return undefined;
+  if (choras.length > 1) throw new VerbDescriptileError(`${dir} holds ${choras.length} chora deeds; YD08 needs exactly one`);
+  const f = join(dir, choras[0]);
+  const [, items] = validate(readFileSync(f, "utf8"), f);
+  const u = items.find((it) => it[0] === "field" && it[1] === "repo-uuid");
+  if (!u || u[2][0] !== "uuid") {
+    throw new VerbDescriptileError(`${choras[0]} has no opaque #uuid :repo-uuid, so :of-chora cannot be checked against it (YD08)`);
+  }
+  return u[2][1];
+}
+
 /** The rule ids of the verb's edict under root, for YD02. */
 function edictRuleIds(root, verb) {
   const p = join(root, contractilePaths(verb).declaration);
@@ -1950,8 +1975,13 @@ function verbDescriptileFiles(files, root) {
       const text = readFileSync(f, "utf8");
       const verb = verbOfDescriptile(f);
       const ruleIds = root && verb ? edictRuleIds(root, verb) : undefined;
-      const r = checkVerbDescriptile(text, f, { ruleIds });
-      console.log(`OK   ${f} (${r === null ? "not a verb descriptile" : `${r.verb} descriptile, ${r.facts.length} fact${r.facts.length === 1 ? "" : "s"}${ruleIds ? ", witnesses checked against the edict" : ""}`})`);
+      let repoUuid;
+      if (root) {
+        repoUuid = choraRepoUuid(root);
+        if (repoUuid === undefined) throw new VerbDescriptileError(`--root ${root} holds no <repo>_chora.deed to check :of-chora against (YD08)`);
+      }
+      const r = checkVerbDescriptile(text, f, { ruleIds, repoUuid });
+      console.log(`OK   ${f} (${r === null ? "not a verb descriptile" : `${r.verb} descriptile, ${r.facts.length} fact${r.facts.length === 1 ? "" : "s"}${ruleIds ? ", witnesses and :of-chora checked against the repo" : ""}`})`);
     } catch (e) {
       if (!(e instanceof LintError) && !e.code) throw e;
       bad += 1;
@@ -1963,8 +1993,9 @@ function verbDescriptileFiles(files, root) {
 
 /**
  * --verb-descriptile-fixtures DIR: DIR/{valid,invalid}/<case>/<VERB>.deed.
- * A case may also hold the verb's <Verb>file.deed; then the witnesses are
- * checked against it (YD02). A missing or empty half is a setup error (2).
+ * A case may also hold the verb's <Verb>file.deed, and then the witnesses are
+ * checked against it (YD02), and a <repo>_chora.deed, and then :of-chora is
+ * checked against its :repo-uuid (YD08). A missing or empty half is a setup error (2).
  */
 function verbDescriptileFixtures(d) {
   let bad = 0;
@@ -1994,7 +2025,8 @@ function verbDescriptileFixtures(d) {
       let err = "";
       try {
         const ruleIds = existsSync(edict) ? new Set(checkEdict(readFileSync(edict, "utf8"), edict).rules.map((x) => x.id)) : undefined;
-        if (checkVerbDescriptile(readFileSync(f, "utf8"), f, { ruleIds }) === null) throw new VerbDescriptileError("not a verb descriptile");
+        const repoUuid = choraRepoUuid(dir);
+        if (checkVerbDescriptile(readFileSync(f, "utf8"), f, { ruleIds, repoUuid }) === null) throw new VerbDescriptileError("not a verb descriptile");
       } catch (e) {
         if (!(e instanceof LintError)) throw e;
         got = false;
@@ -2448,6 +2480,10 @@ function main(argv) {
   if (argv.includes("--verb-descriptile")) {
     const ri = argv.indexOf("--root");
     const root = ri >= 0 ? argv[ri + 1] : null;
+    if (ri >= 0 && (root === undefined || root.startsWith("-"))) {
+      console.log("--root requires a DIR argument");
+      return 2;
+    }
     const files = argv.filter((a, i) => !a.startsWith("-") && !(ri >= 0 && i === ri + 1));
     if (files.length === 0) {
       console.log(DOC);

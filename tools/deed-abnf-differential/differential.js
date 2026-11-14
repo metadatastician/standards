@@ -26,7 +26,7 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import apg from "apg-js";
-import { checkEdict, checkVerbDescriptile, LintError, validate, verbOfDescriptile } from "../../1-formats/deed/tools/deed_lint.js";
+import { checkEdict, checkVerbDescriptile, choraRepoUuid, LintError, validate, verbOfDescriptile } from "../../1-formats/deed/tools/deed_lint.js";
 
 const { apgApi, apgLib } = apg;
 const ROOT = resolve(import.meta.dir, "../..");
@@ -290,12 +290,12 @@ for (const { c, text } of edictCases("valid")) {
     const dir = join(FIXTURES, "verb-descriptile", sub, c);
     const name = readdirSync(dir).find((n) => verbOfDescriptile(n) !== null);
     const edict = readdirSync(dir).find((n) => /file\.deed$/.test(n));
-    return { c, file: join(dir, name), text: readFileSync(join(dir, name), "utf8"), edict: edict ? join(dir, edict) : null };
+    return { c, dir, file: join(dir, name), text: readFileSync(join(dir, name), "utf8"), edict: edict ? join(dir, edict) : null };
   });
-  const profile = ({ file, text, edict }) => {
+  const profile = ({ dir, file, text, edict }) => {
     try {
       const ruleIds = edict ? new Set(checkEdict(readFileSync(edict, "utf8"), edict).rules.map((x) => x.id)) : undefined;
-      return checkVerbDescriptile(text, file, { ruleIds }) !== null;
+      return checkVerbDescriptile(text, file, { ruleIds, repoUuid: choraRepoUuid(dir) }) !== null;
     } catch (e) {
       if (!(e instanceof LintError)) throw e;
       return false;
@@ -309,7 +309,7 @@ for (const { c, text } of edictCases("valid")) {
   const grammarRejects = ["bust-grade-letter", "bust-grade-zero", "evidence-numeric", "evidence-unknown", "fact-clause-member", "fact-extra-field"];
   const semanticOnly = ["affirmed-by-string", "affirmed-impossible", "beholding-chora", "bust-missing-residual", "bust-value",
     "duplicate-witness", "expires-before-affirmed", "inherent-outside-bust", "missing-affirmed", "missing-affirmed-by",
-    "missing-evidence", "missing-value", "missing-witnesses", "of-chora-legacy", "rule-in-descriptile", "source-absolute",
+    "missing-evidence", "missing-value", "missing-witnesses", "of-chora-legacy", "of-chora-mismatch", "rule-in-descriptile", "source-absolute",
     "unknown-clause", "witness-space", "witness-unknown"];
   for (const k of cases("invalid")) {
     if (!gateVerdict(k.text).ok) fail("verb descriptile invalid fixture is not a valid deed (YD01)", k.c);

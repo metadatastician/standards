@@ -246,14 +246,18 @@ Checks `INTENT.deed`, `MUST.deed`, `TRUST.deed`, `ADJUST.deed`, `DUST.deed` and
   and `:residual` grades (`[ABCDEX][1-5]`), an optional `:justification`, and
   no `:value` (8.5). A residual `X1` blocks at the gate, not here;
 * with `--root DIR`, every `:witnesses` names a rule of the verb's edict at
-  `DIR/.machine_readable/contractiles/<verb>/<Verb>file.deed` (YD02).
+  `DIR/.machine_readable/contractiles/<verb>/<Verb>file.deed` (YD02), and
+  `:of-chora` equals the `:repo-uuid` of the one `<repo>_chora.deed` in `DIR`
+  (YD08). A `--root` with no directory, or a `DIR` with no chora deed, is an
+  error, never a skipped check.
 
     bun deed_lint.js --verb-descriptile MUST.deed [--root REPO]
     bun deed_lint.js --verb-descriptile-fixtures fixtures/verb-descriptile/
 
 The fixtures are one case per directory,
 `fixtures/verb-descriptile/{valid,invalid}/<case>/<VERB>.deed`. A case that
-also holds the verb's `<Verb>file.deed` is checked against it (YD02).
+also holds the verb's `<Verb>file.deed` is checked against it (YD02), and one
+that holds a `<repo>_chora.deed` has its `:of-chora` checked against that deed (YD08).
 
 == `deed_lint.js --contractile-registry` — the `contractile` rule registry (A7 J13)
 
