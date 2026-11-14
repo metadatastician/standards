@@ -29,7 +29,11 @@
 #              never proves the cause.
 #   ILLEGAL    `uses: ../../...` or `uses: $/...`. Rejected at PARSE time, so the
 #              run dies before any job starts. Seeded into repos by RSR templates
-#              (issue #808). Repaired only under --repair-illegal.
+#              (issue #808). Repaired only under --repair-illegal. Owner ruling
+#              2026-11-14: a plain `./` local action is never ILLEGAL, and `$/`
+#              is legal (not reported, not repaired) in a workflow whose header
+#              says `# This workflow is managed by gh actions-lock.`; `../` is
+#              ILLEGAL even there.
 #   MOVED      a SHA pin still under the former owner (`hyperpolymath/standards/…`).
 #              GitHub does not follow the transfer for `jobs.<id>.uses`, so the
 #              run dies at plan time ("workflow was not found") even when the SHA
@@ -201,9 +205,16 @@ log() { printf '%s\n' "$*" >&2; }
 PIN_RE='(hyperpolymath|metadatastician)/standards/\.github/workflows/[A-Za-z0-9._-]+\.ya?ml@[0-9a-fA-F]{7,40}'
 # The same reference pinned to anything at all (SHA, branch, tag).
 ANYREF_RE='(hyperpolymath|metadatastician)/standards/\.github/workflows/[A-Za-z0-9._-]+\.ya?ml@[A-Za-z0-9._/-]+'
-# A `uses:` that can never parse: relative, or the `$/` form that
-# `gh actions-lock` once invented. Both are rejected before any job starts.
-ILLEGAL_RE='^[[:space:]]*uses:[[:space:]]*['"'"'"]?(\.\.?/|\$/)'
+# A `uses:` that can never parse: a parent-relative `../` reference, or the `$/`
+# form that `gh actions-lock` once invented. Both are rejected before any job
+# starts. Owner ruling 2026-11-14 (relayed by the hub): a plain `./` local action
+# is never ILLEGAL, and `$/` is legal in a workflow that `gh actions-lock` manages
+# (see actions_lock_managed); `../` is ILLEGAL everywhere.
+ILLEGAL_RE='^[[:space:]]*uses:[[:space:]]*['"'"'"]?(\.\./|\$/)'
+# The `$/` alternative on its own: the part of ILLEGAL_RE a managed file is exempt from.
+DOLLAR_USES_RE='^[0-9]*:?[[:space:]]*uses:[[:space:]]*['"'"'"]?\$/'
+# The header `gh actions-lock` writes at the top of every workflow it manages.
+ACTIONS_LOCK_MANAGED_RE='^# This workflow is managed by gh actions-lock\.'
 
 # Echo every standards pin SHA found in $1, one per line.
 pin_shas() {
@@ -217,9 +228,21 @@ tracking_refs() {
     | grep -vE '^[0-9a-fA-F]{7,40}$' || true
 }
 
-# Echo every illegal `uses:` line in $1 (line-number prefixed).
+# True when $1 is managed by `gh actions-lock`: its header is in the first lines.
+actions_lock_managed() {
+  head -n 5 "$1" 2>/dev/null | grep -qE "$ACTIONS_LOCK_MANAGED_RE"
+}
+
+# Echo every illegal `uses:` line in $1 (line-number prefixed). In a file that
+# `gh actions-lock` manages, a `$/` line is its own local-action syntax and is
+# not illegal; a `../` line is illegal there too.
 illegal_uses() {
-  grep -nE "$ILLEGAL_RE" "$1" 2>/dev/null || true
+  local hits
+  hits=$(grep -nE "$ILLEGAL_RE" "$1" 2>/dev/null || true)
+  if [ -n "$hits" ] && actions_lock_managed "$1"; then
+    hits=$(printf '%s\n' "$hits" | grep -vE "$DOLLAR_USES_RE" || true)
+  fi
+  printf '%s\n' "$hits"
 }
 
 # classify_file <file> <target_sha>
@@ -540,9 +563,13 @@ rewrite_illegal() {
   sed -E -i \
     "s#(uses:[[:space:]]*)['\"]?(\.\./)+\.github/workflows/([A-Za-z0-9._-]+\.ya?ml)['\"]?#\1${STANDARDS_REPO}/.github/workflows/\3@${target}#g" \
     "$f"
-  sed -E -i \
-    "s#(uses:[[:space:]]*)['\"]?\\\$/\.github/workflows/([A-Za-z0-9._-]+\.ya?ml)['\"]?#\1${STANDARDS_REPO}/.github/workflows/\2@${target}#g" \
-    "$f"
+  # A `$/` line in a file `gh actions-lock` manages is legal (see illegal_uses),
+  # so the repair leaves it alone.
+  if ! actions_lock_managed "$f"; then
+    sed -E -i \
+      "s#(uses:[[:space:]]*)['\"]?\\\$/\.github/workflows/([A-Za-z0-9._-]+\.ya?ml)['\"]?#\1${STANDARDS_REPO}/.github/workflows/\2@${target}#g" \
+      "$f"
+  fi
 }
 
 # squabbler_state <dir> <target_sha> <repair_illegal 0|1>, PRESENT, MISSING,
@@ -633,6 +660,13 @@ self_test() {
   printf 'jobs:\n  a:\n    uses: metadatastician/standards/.github/workflows/x.yml@%s\n' "$t" > "$d/fresh.yml"
   printf 'jobs:\n  a:\n    uses: metadatastician/standards/.github/workflows/x.yml@%s\n' "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" > "$d/behind.yml"
   printf 'jobs:\n  a:\n    uses: ../../.github/workflows/x.yml\n' > "$d/illegal.yml"
+  # Owner ruling 2026-11-14: `./` local actions are never ILLEGAL; `$/` is legal in a
+  # file `gh actions-lock` manages and ILLEGAL elsewhere; `../` is ILLEGAL even in a
+  # managed file.
+  printf 'jobs:\n  a:\n    uses: ./.github/workflows/local.yml\n  b:\n    steps:\n      - name: l\n        uses: ./.github/actions/local\n' > "$d/dot-local.yml"
+  printf '# This workflow is managed by gh actions-lock.\njobs:\n  a:\n    steps:\n      - name: m\n        uses: "$/actions/manifest-check"\n' > "$d/dollar-managed.yml"
+  printf 'jobs:\n  a:\n    steps:\n      - name: m\n        uses: "$/actions/manifest-check"\n' > "$d/dollar-unmanaged.yml"
+  printf '# This workflow is managed by gh actions-lock.\njobs:\n  a:\n    uses: ../../.github/workflows/x.yml\n' > "$d/dollar-managed-parent.yml"
   printf 'jobs:\n  a:\n    uses: metadatastician/standards/.github/workflows/x.yml@main\n' > "$d/tracking.yml"
   printf 'jobs:\n  a:\n    runs-on: ubuntu-latest\n' > "$d/none.yml"
   printf 'jobs:\n  a:\n    uses: metadatastician/standards/.github/workflows/x.yml@%s\n' "${t:0:7}" > "$d/short.yml"
@@ -656,6 +690,10 @@ self_test() {
   check fresh.yml    "FRESH,"
   check behind.yml   "BEHIND,"
   check illegal.yml  "ILLEGAL,"
+  check dot-local.yml             "NONE,"
+  check dollar-managed.yml        "NONE,"
+  check dollar-unmanaged.yml      "ILLEGAL,"
+  check dollar-managed-parent.yml "ILLEGAL,"
   check tracking.yml "TRACKING,"
   check none.yml     "NONE,"
   # A short pin that PREFIXES the target is FRESH, not BEHIND. Without this the
@@ -747,6 +785,23 @@ self_test() {
     echo "  PASS illegal ref became a legal pin"
   else
     echo "  FAIL illegal repair did not yield a legal pin: $(cat "$d/illegal.yml")" >&2; rc=1
+  fi
+  # The repair leaves a managed file's legal `$/` line alone, and still repairs an
+  # unmanaged `$/.github/workflows/` reference.
+  printf '# This workflow is managed by gh actions-lock.\njobs:\n  a:\n    uses: $/.github/workflows/x.yml\n' > "$d/dollar-managed-wf.yml"
+  cp "$d/dollar-managed-wf.yml" "$d/dollar-managed-wf.before"
+  rewrite_illegal "$d/dollar-managed-wf.yml" "$t"
+  if cmp -s "$d/dollar-managed-wf.yml" "$d/dollar-managed-wf.before"; then
+    echo "  PASS repair leaves a managed file's legal \$/ line untouched"
+  else
+    echo "  FAIL repair rewrote a managed file's legal \$/ line: $(cat "$d/dollar-managed-wf.yml")" >&2; rc=1
+  fi
+  printf 'jobs:\n  a:\n    uses: $/.github/workflows/x.yml\n' > "$d/dollar-unmanaged-wf.yml"
+  rewrite_illegal "$d/dollar-unmanaged-wf.yml" "$t"
+  if grep -qE "uses: $PIN_RE" "$d/dollar-unmanaged-wf.yml" && [ -z "$(illegal_uses "$d/dollar-unmanaged-wf.yml" | tr -d '\n')" ]; then
+    echo "  PASS repair still turns an unmanaged \$/ reusable reference into a legal pin"
+  else
+    echo "  FAIL repair did not fix an unmanaged \$/ reference: $(cat "$d/dollar-unmanaged-wf.yml")" >&2; rc=1
   fi
 
   # The relock is what keeps a fix-mode PR from desyncing actions.lock; a
