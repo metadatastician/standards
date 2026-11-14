@@ -733,7 +733,7 @@ export const PROOF_RECEIPT_VOCABULARY = {
  * Grade from its legs and their receipts (§8.2). A recorded :pwg that the
  * receipts do not support is refused: grades are derived, not asserted (§8.4).
  * The same holds for :foundation-diverse (§8.3). Every current receipt carries
- * its :inputs-sha256 (§8.5.1) and its (axioms …) (§8.4). Top-level (echo …)
+ * its :inputs-sha256 and (inputs-manifest …) (§8.5.1) and its (axioms …) (§8.4). Top-level (echo …)
  * records (§8.5.2) let a receipt earned on a commit that a squash or rebase
  * rewrote count toward PWG-1 for its image. The reader checks only what the
  * text shows: the form of the records, that the rewrite is a function with no
@@ -922,7 +922,7 @@ export function readProofReceipt(text, filename = null) {
           "inputs-sha256": { types: ["string"] },
           state: { types: ["symbol"], required: true, oneOf: V.receiptState },
           reason: { types: ["string"] },
-        }, ["axioms"]);
+        }, ["axioms", "inputs-manifest"]);
         if (!HEX40.test(rf.get("commit"))) fail(`${where}: a receipt :commit must be the full 40-character commit`);
         if (rf.get("state") !== "current" && !rf.has("reason")) fail(`${where}: a ${rf.get("state")} receipt needs :reason`);
         const isCurrent = rf.get("state") === "current";
@@ -931,14 +931,53 @@ export function readProofReceipt(text, filename = null) {
           if (!HEX64.test(rf.get("inputs-sha256"))) fail(`${rw}: :inputs-sha256 must be 64 lowercase hex digits`);
           state(inputsAt, `${rf.get("commit")} ${prover}`, rf.get("inputs-sha256"), "input digests");
         } else if (isCurrent) fail(`${rw} is current and is missing :inputs-sha256 (§8.5.1)`);
+        // §8.5.1: the manifest itself, so that a consumer recomputes the digest
+        // with git alone. The reader rebuilds the manifest and checks that its
+        // SHA-256 is the :inputs-sha256: the digest is derived, not asserted.
+        const manifests = rc.filter((c) => c[1] === "inputs-manifest");
+        if (manifests.length > 1) fail(`${rw} has more than one (inputs-manifest …)`);
+        if (manifests.length === 0 && isCurrent) fail(`${rw} is current and is missing (inputs-manifest …) (§8.5.1)`);
+        let inputsManifest = null;
+        if (manifests.length === 1) {
+          if (!rf.has("inputs-sha256")) fail(`${rw}: an (inputs-manifest …) needs :inputs-sha256`);
+          inputsManifest = [];
+          let previous = null;
+          for (const e of fieldsOf(`(inputs-manifest …) of ${rw}`, manifests[0][2], {}, ["file"]).clauses) {
+            const ef = fieldsOf(`a (file …) of the manifest of ${rw}`, e[2], {
+              path: { types: ["string"], required: true },
+              sha256: { types: ["string"], required: true },
+            }, []).fields;
+            const path = ef.get("path"), sha = ef.get("sha256");
+            if (!HEX64.test(sha)) fail(`${rw}: manifest file "${path}": :sha256 must be 64 lowercase hex digits`);
+            if (/[\n\\]/.test(path)) fail(`${rw}: manifest path "${path}" holds a newline or a backslash`);
+            if (path.split("/").some((part) => part === "" || part === "." || part === "..")) {
+              fail(`${rw}: manifest path "${path}" must be relative to the repository root, with no empty, "." or ".." part`);
+            }
+            const bytes = Buffer.from(path, "utf8");
+            if (previous !== null) {
+              const order = Buffer.compare(previous, bytes);
+              if (order === 0) fail(`${rw}: manifest path "${path}" is listed twice`);
+              if (order > 0) fail(`${rw}: manifest path "${path}" is out of order (sort in C byte order)`);
+            }
+            previous = bytes;
+            inputsManifest.push({ path, sha256: sha });
+          }
+          if (inputsManifest.length === 0) fail(`${rw}: (inputs-manifest …) lists no (file …)`);
+          const text = inputsManifest.map((m) => `${m.sha256}  ${m.path}\n`).join("");
+          const digest = createHash("sha256").update(text, "utf8").digest("hex");
+          if (digest !== rf.get("inputs-sha256")) {
+            fail(`${rw}: :inputs-sha256 is not the SHA-256 of its (inputs-manifest …) (the manifest gives ${digest})`);
+          }
+        }
         // §8.4: the axioms the checker reported, each with its disposition.
-        if (rc.length > 1) fail(`${rw} has more than one (axioms …)`);
-        if (rc.length === 0 && isCurrent) fail(`${rw} is current and is missing (axioms …) (§8.4; write (axioms) when none were reported)`);
+        const axiomClauses = rc.filter((c) => c[1] === "axioms");
+        if (axiomClauses.length > 1) fail(`${rw} has more than one (axioms …)`);
+        if (axiomClauses.length === 0 && isCurrent) fail(`${rw} is current and is missing (axioms …) (§8.4; write (axioms) when none were reported)`);
         let axioms = null;
-        if (rc.length === 1) {
+        if (axiomClauses.length === 1) {
           axioms = [];
           const names = new Set();
-          for (const a of fieldsOf(`(axioms …) of ${rw}`, rc[0][2], {}, ["axiom"]).clauses) {
+          for (const a of fieldsOf(`(axioms …) of ${rw}`, axiomClauses[0][2], {}, ["axiom"]).clauses) {
             const af = fieldsOf(`an (axiom …) of ${rw}`, a[2], {
               name: { types: ["string"], required: true },
               disposition: { types: ["symbol"], required: true, oneOf: V.disposition },
@@ -948,7 +987,7 @@ export function readProofReceipt(text, filename = null) {
             axioms.push({ name: af.get("name"), disposition: af.get("disposition") });
           }
         }
-        return { ...Object.fromEntries(rf), axioms };
+        return { ...Object.fromEntries(rf), inputs_manifest: inputsManifest, axioms };
       });
       if (receipts.filter((r) => r.state === "current").length > 1) fail(`${where}: the ${prover} leg has more than one current receipt`);
       legs.push({ prover, route, token: lf.fields.get("token") ?? null, state: lf.fields.get("state") ?? null,
