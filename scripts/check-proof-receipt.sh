@@ -122,6 +122,12 @@ while IFS= read -r r; do
       fail "$label: import $irepo: no clone given (--import $irepo=DIR)"
       continue
     fi
+    # A clone that holds the home :source-commit is the home repository (or a
+    # fork of it) under another name: its files belong in (inputs-manifest …).
+    if have_commit "$src" "${import_dir[$irepo]}"; then
+      fail "$label: import $irepo: its clone holds the home :source-commit $src, so it is the home repository"
+      continue
+    fi
     check_manifest "$label: import $irepo" "$(jq -r .commit <<<"$i")" "$(jq -c .files <<<"$i")" "${import_dir[$irepo]}"
   done < <(jq -c '.imports[]' <<<"$r")
 done < <(jq -c '.claims[] as $c

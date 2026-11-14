@@ -132,6 +132,7 @@ expect "an import with no clone given fails" 1 "no clone given (--import o/sibli
 printf -- '-- moved\n' >>"$SIB/Algebra.agda"; git -C "$SIB" commit -qam moved
 SC2=$(git -C "$SIB" rev-parse HEAD)
 write repinned "$I" "$S" "$D" "$MANIFEST_S" "$ECHO_IN" "${IMPORT//$SC/$SC2}"
+expect "an import whose clone is the home repository fails" 1 "its clone holds the home :source-commit" --branch main --import "o/sibling=$R" "$WORK/imported_praxis.deed" "$R"
 expect "an import whose files differ at its pin fails" 1 "import o/sibling: the manifest does not hold at $SC2" --branch main --import "o/sibling=$SIB" "$WORK/repinned_praxis.deed" "$R"
 
 # A negative control: the refused file is an input of its own receipt.

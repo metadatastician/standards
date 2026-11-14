@@ -958,6 +958,13 @@ export function readProofReceipt(text, filename = null) {
     }
   }
 
+  // GitHub repository names are case-insensitive, and §8.6 names one alias:
+  // the former owner of this repository. Two names are the same repository
+  // when they agree after both. A gate with git also refuses an import clone
+  // that holds the :source-commit (§8.5.3), which catches any other alias.
+  const REPOSITORY_ALIASES = { "hyperpolymath/standards": "metadatastician/standards" };
+  const canonicalRepository = (r) => REPOSITORY_ALIASES[r.toLowerCase()] ?? r.toLowerCase();
+  const sameRepository = (a, b) => canonicalRepository(a) === canonicalRepository(b);
   // §8.5.1: a relative repository path, as a manifest line and a control name it.
   const checkPath = (who, path) => {
     if (/[\n\\]/.test(path)) fail(`${who} path "${path}" holds a newline or a backslash`);
@@ -1038,8 +1045,8 @@ export function readProofReceipt(text, filename = null) {
       const repo = fi.get("repository");
       const iw = `${rw}: import ${repo}`;
       if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repo)) fail(`${iw}: :repository must be OWNER/REPO`);
-      if (repo === repository) fail(`${iw}: a repository does not import itself; its files belong in (inputs-manifest …)`);
-      if (imports.some((i) => i.repository === repo)) fail(`${iw} is listed twice (one pin per repository)`);
+      if (sameRepository(repo, repository)) fail(`${iw}: a repository does not import itself; its files belong in (inputs-manifest …)`);
+      if (imports.some((i) => sameRepository(i.repository, repo))) fail(`${iw} is listed twice (one pin per repository)`);
       if (!HEX40.test(fi.get("commit"))) fail(`${iw}: :commit must be the full 40-character lowercase commit`);
       if (!HEX64.test(fi.get("inputs-sha256"))) fail(`${iw}: :inputs-sha256 must be 64 lowercase hex digits`);
       const m = readFiles(`${iw} manifest`, `${iw}`, c[2].filter((x) => x[0] !== "field"));
