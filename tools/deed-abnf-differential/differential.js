@@ -26,7 +26,7 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import apg from "apg-js";
-import { checkEcosystem, checkVerbDescriptile, choraRepoUuid, edictRuleIdsAt, LintError, rootChora, validate, verbOfDescriptile } from "../../1-formats/deed/tools/deed_lint.js";
+import { checkEcosystem, checkVerbDescriptile, choraRepoUuid, edictRuleIdsAt, FIXTURE_TODAY, LintError, rootChora, validate, verbOfDescriptile } from "../../1-formats/deed/tools/deed_lint.js";
 
 const { apgApi, apgLib } = apg;
 const ROOT = resolve(import.meta.dir, "../..");
@@ -342,7 +342,7 @@ for (const { c, text } of edictCases("valid")) {
     try {
       const repoUuid = choraRepoUuid(dir);
       const ruleIds = edict ? edictRuleIdsAt(edict, repoUuid) : undefined;
-      return checkVerbDescriptile(text, file, { ruleIds, repoUuid }) !== null;
+      return checkVerbDescriptile(text, file, { ruleIds, repoUuid, today: FIXTURE_TODAY }) !== null;
     } catch (e) {
       if (!(e instanceof LintError)) throw e;
       return false;
@@ -355,8 +355,8 @@ for (const { c, text } of edictCases("valid")) {
   }
   const grammarRejects = ["bust-grade-letter", "bust-grade-zero", "evidence-numeric", "evidence-unknown", "fact-clause-member", "fact-extra-field"];
   const semanticOnly = ["affirmed-by-string", "affirmed-impossible", "beholding-chora", "bust-missing-residual", "bust-value",
-    "duplicate-witness", "edict-other-chora", "expires-before-affirmed", "inherent-outside-bust", "missing-affirmed", "missing-affirmed-by",
-    "missing-evidence", "missing-value", "missing-witnesses", "of-chora-legacy", "of-chora-mismatch", "repo-uuid-twice", "rule-in-descriptile", "source-absolute",
+    "duplicate-witness", "edict-other-chora", "expired", "expires-before-affirmed", "inherent-outside-bust", "missing-affirmed", "missing-affirmed-by",
+    "missing-evidence", "missing-value", "missing-witnesses", "of-chora-legacy", "of-chora-mismatch", "repo-uuid-twice", "rule-in-descriptile", "schema-major", "schema-not-version", "source-absolute",
     "unknown-clause", "witness-space", "witness-too-long", "witness-unknown"];
   for (const k of cases("invalid")) {
     if (!gateVerdict(k.text).ok) fail("verb descriptile invalid fixture is not a valid deed (YD01)", k.c);
@@ -386,9 +386,9 @@ for (const { c, text } of edictCases("valid")) {
   });
   const profile = ({ dir, file, text }) => {
     try {
-      const ch = rootChora(dir);
+      const ch = rootChora(dir, { needName: true });
       const strict = readdirSync(dir).includes("STRICT");
-      return checkEcosystem(text, file, { repoUuid: ch && ch.uuid, choraName: ch && ch.name, strict }) !== null;
+      return checkEcosystem(text, file, { repoUuid: ch && ch.uuid, choraName: ch && ch.name, strict, today: FIXTURE_TODAY }) !== null;
     } catch (e) {
       if (!(e instanceof LintError)) throw e;
       return false;
@@ -402,7 +402,7 @@ for (const { c, text } of edictCases("valid")) {
   }
   const relatedRejects = ["related-clause-member", "related-extra-field", "related-uuid-legacy", "relationship-string", "relationship-unknown"];
   const fieldRejects = ["coordination-string", "not-not-list"];
-  const semanticOnly = ["beholding-chora", "chora-no-name", "empty-purpose", "missing-affirmed", "missing-project", "missing-purpose",
+  const semanticOnly = ["beholding-chora", "chora-no-name", "empty-purpose", "expired", "missing-affirmed", "missing-project", "missing-purpose",
     "of-chora-mismatch", "project-mismatch", "project-not-chora", "related-duplicate", "related-missing-notes",
     "rule-in-descriptile", "strict-no-uuid", "unknown-clause", "unknown-field"];
   for (const k of cases("invalid")) {
