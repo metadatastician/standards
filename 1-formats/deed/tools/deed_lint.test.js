@@ -462,6 +462,49 @@ describe("proof-receipt profile (PROOF-POLICY §8.5)", () => {
     const other = rcpt({ rstate: "superseded", reason: "rerun", digest: D2 });
     expect(() => read(doc(claim("PWG-3", agda({ receipts: rcpt() + " " + other }) + " " + none)))).toThrow(/two different input digests/);
   });
+  test("§8.5.1: an (import …) records a pinned repository with its own derived manifest", () => {
+    const IC = "9".repeat(40), h = "5".repeat(64);
+    const IFILES = [["src/Algebra.agda", h], ["x.agda-lib", "6".repeat(64)]];
+    const imp = (o = {}) => `\n  (import :repository "${o.repo ?? "o/sibling"}" :commit "${o.commit ?? IC}" :inputs-sha256 "${o.digest ?? digestOf(o.files ?? IFILES)}"`
+      + (o.files ?? IFILES).map(([p, x]) => `\n    (file :path "${p}" :sha256 "${x}")`).join("") + ")";
+    const one = (imports) => read(doc(claim("PWG-3", agda({ manifest: manifest(FILES) + imports }) + " " + none)));
+    const r = one(imp()).claims[0].legs[0].receipts[0];
+    expect(r.imports).toEqual([{ repository: "o/sibling", commit: IC, "inputs-sha256": digestOf(IFILES),
+      files: IFILES.map(([path, sha256]) => ({ path, sha256 })) }]);
+    expect(one("").claims[0].legs[0].receipts[0].imports).toEqual([]);
+    expect(() => one(imp({ digest: D }))).toThrow(/import o\/sibling: :inputs-sha256 is not the SHA-256 of its files/);
+    expect(() => one(imp({ repo: "nope" }))).toThrow(/:repository must be OWNER\/REPO/);
+    expect(() => one(imp({ repo: "hyperpolymath/x" }))).toThrow(/does not import itself/);
+    expect(() => one(imp() + imp())).toThrow(/listed twice \(one pin per repository\)/);
+    expect(() => one(imp({ commit: "abc" }))).toThrow(/:commit must be the full 40-character/);
+    expect(() => one(imp({ files: [["b", h], ["a", h]] }))).toThrow(/import o\/sibling manifest path "a" is out of order/);
+    expect(() => one(imp({ files: [["../a", h]] }))).toThrow(/no empty/);
+    expect(() => one(imp({ files: [] }))).toThrow(/lists no \(file/);
+    expect(() => one('\n  (import :repository "o/s" :commit "' + IC + '" (file :path "a" :sha256 "' + h + '"))')).toThrow(/missing :inputs-sha256/);
+  });
+  test("§8.5.4: a negative control is recorded, checked for form and never graded", () => {
+    const REJ = [["src/A.agda", "1".repeat(64)], ["tests/reject/Bad.agda", "7".repeat(64)], ["x.agda-lib", "3".repeat(64)]];
+    const ctl = (o = {}) => `\n  (control :path "${o.path ?? "tests/reject/Bad.agda"}" :prover ${o.prover ?? "agda"} :expect ${o.expect ?? "refused"}`
+      + (o.receipts ?? rcpt({ digest: digestOf(o.files ?? REJ), manifest: manifest(o.files ?? REJ) })) + ")";
+    const one = (controls, pwg = "PWG-3") => read(doc(claim(pwg, agda() + " " + none + controls)));
+    const r = one(ctl()).claims[0];
+    expect(r.pwg).toBe("PWG-3");
+    expect(r.controls.map((c) => [c.path, c.prover, c.expect])).toEqual([["tests/reject/Bad.agda", "agda", "refused"]]);
+    expect(one("").claims[0].controls).toEqual([]);
+    // Never graded: a control does not raise or lower the grade.
+    expect(() => one(ctl(), "PWG-2i")).toThrow(/support PWG-3/);
+    // Its digest stays out of the per-commit agreement: same commit and prover, other inputs.
+    expect(one(ctl()).claims[0].legs[0].receipts[0]["inputs-sha256"]).toBe(D);
+    expect(() => one(ctl({ expect: "accepted" }))).toThrow(/:expect accepted .* not one of refused/);
+    expect(() => one(ctl({ path: "./x.agda" }))).toThrow(/no empty/);
+    expect(() => one(ctl() + ctl())).toThrow(/is listed twice/);
+    expect(() => one(ctl({ receipts: "" }))).toThrow(/has no \(receipt/);
+    expect(() => one(ctl({ files: FILES }))).toThrow(/the refused file is not in its current receipt/);
+    expect(() => one(ctl({ receipts: rcpt({ digest: digestOf(REJ), manifest: manifest(REJ) }) + rcpt({ digest: digestOf(REJ), manifest: manifest(REJ) }) })))
+      .toThrow(/more than one current receipt/);
+    expect(() => one(ctl({ receipts: rcpt({ manifest: null }) }))).toThrow(/is missing \(inputs-manifest/);
+    expect(() => one('\n  (control :path "tests/reject/Bad.agda" :expect refused)')).toThrow(/missing :prover/);
+  });
   test("§8.4: every current receipt lists its axioms, and only disposition (c) counts", () => {
     const one = (axioms, pwg = "PWG-3") => read(doc(claim(pwg, agda({ axioms }) + " " + none)));
     expect(one("(axioms)").claims[0].legs[0].receipts[0].axioms).toEqual([]);
