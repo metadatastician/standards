@@ -175,6 +175,96 @@ typed_acceptable() {
   esac
 }
 
+# External UUID pragma (owner ruling CASE-067, 2026-11-14). An external,
+# non-estate UUID constant (a protocol GUID such as RFC 6455's, a test vector,
+# a vendor id) is marked on its own line, in any comment syntax:
+#
+#   <code with the UUID>   <comment> hypatia: allow uuid/external -- <reason>
+#
+# or, where the format cannot carry a comment on the same line, on the line
+# before it:
+#
+#   <comment> hypatia: allow-next-line uuid/external -- <reason>
+#
+# The mark exempts the bare-UUID rule on exactly that one line. It never
+# exempts an identity field (CHORA-SPEC 7.1), a #u5 identity value or a
+# malformed #uuid literal. The reason is required. A mark whose line carries
+# no UUID the gate would refuse is stale and fails, so marks cannot pile up
+# unseen. Formats with no comment syntax at all (JSON) keep the per-file
+# .uuid-v8-exempt. Hypatia refers a missing or stale mark; nothing autofixes
+# one. A mark whose reason is the literal placeholder "<reason>" is a
+# documentation example and is ignored.
+PRAGMA_KEY='uuid/external'
+
+# Read scannable text on stdin; print "U <uuid>" for every UUID on a line the
+# pragma does not cover, and "E <line>: <message>" for a malformed or stale
+# pragma. POSIX awk only (no interval expressions), so it runs under mawk.
+pragma_scan() {
+  awk -v strict="$strict" '
+    function refused(u,   v, r) {
+      v = substr(u, 15, 1); r = tolower(substr(u, 20, 1))
+      if (r !~ /^[89ab]$/) return 1
+      if (v == "8") return 0
+      if (v == "7" && strict == 0) return 0
+      return 1
+    }
+    # Collect the UUIDs on line s into arr; return how many.
+    function uuids(s, arr,   n) {
+      n = 0
+      while (match(s, H8 "-" H4 "-" H4 "-" H4 "-" H12)) {
+        arr[++n] = substr(s, RSTART, RLENGTH)
+        s = substr(s, RSTART + RLENGTH)
+      }
+      return n
+    }
+    function any_refused(s,   a, n, i) {
+      n = uuids(s, a)
+      for (i = 1; i <= n; i++) if (refused(a[i])) return 1
+      return 0
+    }
+    # Classify the pragma on line s: "" none, "doc", "bad", "same", "next".
+    function kind(s,   k, rest) {
+      if (index(s, "uuid/external") == 0) return ""
+      if (s ~ /hypatia:[ \t]*allow-next-line[ \t]+uuid\/external/) k = "next"
+      else if (s ~ /hypatia:[ \t]*allow[ \t]+uuid\/external/) k = "same"
+      else return ""
+      rest = s; sub(/.*uuid\/external/, "", rest)
+      if (rest ~ /^[ \t]*--[ \t]*<reason>/) return "doc"
+      if (rest !~ /^[ \t]*--[ \t]*[^ \t]/) return "bad"
+      return k
+    }
+    BEGIN {
+      h = "[0-9A-Fa-f]"; H4 = h h h h; H8 = H4 H4; H12 = H8 H4
+      pend = 0
+    }
+    {
+      k = kind($0)
+      covered = 0
+      if (pend) {
+        covered = 1
+        if (!any_refused($0))
+          print "E " pend ": stale uuid/external pragma (the next line has no UUID the gate refuses)"
+        pend = 0
+      }
+      if (k == "bad") {
+        print "E " NR ": malformed uuid/external pragma; write \"hypatia: allow uuid/external -- <reason>\" with a reason"
+      } else if (k == "same") {
+        covered = 1
+        if (!any_refused($0))
+          print "E " NR ": stale uuid/external pragma (this line has no UUID the gate refuses)"
+      } else if (k == "next") {
+        pend = NR
+      }
+      if (!covered) {
+        n = uuids($0, a)
+        for (i = 1; i <= n; i++) print "U " a[i]
+      }
+    }
+    END {
+      if (pend) print "E " pend ": stale uuid/external pragma (no line follows it)"
+    }'
+}
+
 status=0
 while IFS= read -r file; do
   [ -f "$file" ] || continue
@@ -232,10 +322,23 @@ EOF
     done <<EOF
 $(grep -q -- '#uuid"' "$file" 2>/dev/null && folded_views "$file" | grep -oE -- "$IDENT_RE" | sort -u || true)
 EOF
-    # Then every other UUID, with the typed literals removed. Every UUID on a
-    # line is checked, not only the last one (grep -o).
-    while IFS= read -r uuid; do
-      [ -n "$uuid" ] || continue
+  fi
+  # Then every other UUID, with the typed literals removed. Every UUID on a
+  # line is checked, not only the last one. A line marked with the external
+  # pragma is not checked for bare UUIDs (owner ruling CASE-067, 2026-11-14);
+  # the identity rules above never honour it. pragma_scan prints "U <uuid>"
+  # for each bare UUID on an unmarked line and "E <message>" for each
+  # malformed or stale pragma. A file with no UUID and no pragma is skipped.
+  if grep -IEqi -- "$UUID_RE" "$file" 2>/dev/null || grep -Iq -- "$PRAGMA_KEY" "$file" 2>/dev/null; then
+    while IFS= read -r rec; do
+      [ -n "$rec" ] || continue
+      case "$rec" in
+        E\ *)
+          printf '%s:%s\n' "$file" "${rec#E }" >&2
+          status=1
+          continue ;;
+      esac
+      uuid=${rec#U }
       version=$(printf '%s' "$uuid" | cut -d- -f3 | cut -c1)
       variant=$(printf '%s' "$uuid" | cut -d- -f4 | cut -c1 | tr 'A-F' 'a-f')
       if ! acceptable "$version:$variant"; then
@@ -247,7 +350,7 @@ EOF
         status=1
       fi
     done <<EOF
-$(scannable_text "$file" | sed -E "s/$APPARENT_RE//g" | grep -oEi -- "$UUID_RE" || true)
+$(scannable_text "$file" | sed -E "s/$APPARENT_RE//g" | pragma_scan)
 EOF
   fi
 done <<EOF
@@ -255,6 +358,6 @@ $(find "$@" -type f -not -path '*/.git/*' -print 2>/dev/null)
 EOF
 
 if [ "$status" -ne 0 ]; then
-  printf '%s\n' 'UUID check failed. Use ESTATE-UUID-V8 (docs/decisions/ADR-008-uuid-v8-estate-standard.adoc) and type external/legacy IDs explicitly.' >&2
+  printf '%s\n' 'UUID check failed. Use ESTATE-UUID-V8 (docs/decisions/ADR-008-uuid-v8-estate-standard.adoc) and type external/legacy IDs explicitly: an external constant takes "hypatia: allow uuid/external -- <reason>" on its line (ADR-008, CASE-067).' >&2
 fi
 exit "$status"

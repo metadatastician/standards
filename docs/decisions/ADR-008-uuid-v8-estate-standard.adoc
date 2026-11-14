@@ -369,6 +369,41 @@ its pin moved past the rename.
   still requires "UUID v7 conformance", delete `uuid-v7-conformance` and take
   it off the frozen list.
 
+== Amendment: external UUID constants carry a one-line pragma (owner ruling CASE-067, 2026-11-14)
+
+Some UUIDs are not the estate's to choose: a protocol constant (the RFC 6455
+WebSocket GUID is version 4), a published test vector, a vendor's id. Before
+this amendment the gate's only escapes were `#uuid"…"`, which admits version 5
+or 8 only, and the per-file `.uuid-v8-exempt`, which exempts a whole file. So
+"type external IDs explicitly" could not be followed for a version 1, 3 or 4
+constant, and a whole file had to be exempted for one line.
+
+The owner chose an inline mark, and chose its syntax by selector:
+
+* On the same line as the UUID, in any comment syntax:
+  `hypatia: allow uuid/external -- <reason>`.
+* Where a format cannot carry a comment on that line, on the line before:
+  `hypatia: allow-next-line uuid/external -- <reason>`.
+* A format with no comment syntax at all (JSON) keeps the per-file
+  `.uuid-v8-exempt`, reviewed in the repository that adds it.
+
+The rules, enforced by `scripts/check-uuid-v8.sh` in both modes and tested by
+`scripts/tests/uuid-v8-pragma-test.sh` (also run under mawk):
+
+. The mark exempts the bare-UUID rule on exactly one line.
+. It never exempts an identity field (CHORA-SPEC 7.1), a `#u5` identity value
+  or a malformed `#uuid` literal.
+. The reason is required. A mark without one fails.
+. A mark is stale when its line holds no UUID the gate would refuse (the
+  constant was removed, or became version 8). A stale mark fails, so marks do
+  not pile up unseen.
+. A mark whose reason is the literal placeholder `<reason>` is a
+  documentation example and is ignored.
+
+Hypatia and cicd-squabbler refer a missing or stale mark. They never write
+one: whether a UUID is truly external is a human judgement, and rewriting an
+external constant would break the protocol it belongs to.
+
 == What this record does not do
 
 It does not migrate any repository (P3), change the deed grammar, or update
