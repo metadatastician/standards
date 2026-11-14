@@ -33,6 +33,19 @@ on:
         type: boolean
         required: false
         default: false
+      conformance-mode:
+        description: >-
+          How the nested DEED and K9 conformance lanes (deed-conformance.yml and
+          k9-conformance.yml at the standards commit pinned in the jobs below)
+          report. `advisory` (default): every finding is a ::warning:: annotation
+          and the lane passes, so no repository turns red at once. `enforce`:
+          findings fail the lane, as a direct caller of those workflows gets.
+          `off`: the lanes do not run. A repository opts into `enforce` once its
+          deeds and K9 files conform. Not applied in the standards repository
+          itself, where fork-governance runs both lanes.
+        type: string
+        required: false
+        default: advisory
     secrets:
       HYPATIA_SCAN_PAT:
         description: Fine-grained token with repository Administration read access
@@ -301,6 +314,30 @@ jobs:
           cp .standards-list-a2ml/scripts/list-existing-a2ml.sh "$RUNNER_TEMP/"
           rm -rf .standards-list-a2ml
           bash "$RUNNER_TEMP/list-existing-a2ml.sh" . || echo "::warning::the existing-A2ML listing could not run (exit $?)"
+
+  # Nested DEED and K9 conformance lanes (owner ruling 2026-11-14: option A, both
+  # here and in the template's inline governance). Each is the standards
+  # reusable at an immutable commit; `advisory` follows `conformance-mode`.
+  # Skipped in standards itself: fork-governance already runs both lanes there.
+  # A job that calls a reusable workflow cannot set runs-on, and the called
+  # workflows run on ubuntu-latest.
+  deed-conformance:
+    name: Deed conformance
+    if: ${{ github.repository_id != 1116521501 && inputs.conformance-mode != 'off' }}
+    permissions:
+      contents: read
+    uses: metadatastician/standards/.github/workflows/deed-conformance.yml@bfa851f5291edd82d01dfb33cb8d81b3002d2f89
+    with:
+      advisory: ${{ inputs.conformance-mode != 'enforce' }}
+
+  k9-conformance:
+    name: K9 conformance
+    if: ${{ github.repository_id != 1116521501 && inputs.conformance-mode != 'off' }}
+    permissions:
+      contents: read
+    uses: metadatastician/standards/.github/workflows/k9-conformance.yml@bfa851f5291edd82d01dfb33cb8d81b3002d2f89
+    with:
+      advisory: ${{ inputs.conformance-mode != 'enforce' }}
 
   allowlist-preflight:
     name: Allowlist Preflight
