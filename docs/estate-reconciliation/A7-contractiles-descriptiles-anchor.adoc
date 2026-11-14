@@ -18,7 +18,7 @@ Specification A7 of the Estate Reconciliation Plan. It defines how a repository'
 | [O] | Owner ruling. Rulings Q1 to Q16 are of 2026-10-20, W1 to W10 of 2026-11-13, S1 to S4 of 2026-11-14. The others are named where cited.
 |===
 
-Identifiers are local to this specification, as in A1 to A6. Rulings of 2026-11-13 are `W1` to `W10`; rulings of 2026-11-14 are `S1` to `S4`; decisions are `J1` to `J29`, with `J13a` amending J13. Test ids use the two-letter prefixes `YN`, `YP`, `YA`, `YD`, `YC`, `YK`, `YR`, `YE`, `YS`, `YB`, `YF` and `YH`, which no other specification in the set uses [M].
+Identifiers are local to this specification, as in A1 to A6. Rulings of 2026-11-13 are `W1` to `W10`; rulings of 2026-11-14 are `S1` to `S4`; decisions are `J1` to `J32`, with `J13a` amending J13. Test ids use the two-letter prefixes `YN`, `YP`, `YA`, `YD`, `YC`, `YK`, `YR`, `YE`, `YS`, `YB`, `YF` and `YH`, which no other specification in the set uses [M].
 
 == 1. Summary
 

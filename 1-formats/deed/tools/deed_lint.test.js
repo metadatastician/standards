@@ -1523,3 +1523,19 @@ describe("meta fixtures", () => {
     expect(cli("--meta", join(FIX_META, "valid", "minimal", "META.deed"), "--root").code).toBe(2);
   });
 });
+
+// Names that are properties of Object.prototype are not members (#1594 review):
+// each profile refuses them as unknown, and none crashes.
+describe("prototype-named members are unknown, not crashes", () => {
+  test("(constructor …) in META.deed and STATE.deed, and :constructor in an RSR criterion", () => {
+    const meta = join(FIX_META, "valid", "minimal", "META.deed");
+    const mt = readFileSync(meta, "utf8").replace(/\)\s*$/, ' (constructor :a "b") (toString :c "d"))\n');
+    expect(() => checkMeta(mt, meta, { today: FIXTURE_TODAY })).toThrow(/has no clause \(constructor …\)/);
+    const st = join(FIX, "state", "valid", "minimal", "STATE.deed");
+    const stt = readFileSync(st, "utf8").replace(/\)\s*$/, ' (constructor :a "b"))\n');
+    expect(() => checkState(stt, st, { today: FIXTURE_TODAY })).toThrow(/has no clause \(constructor …\)/);
+    const rsr = join(FIX, "rsr-scorecard", "valid", "minimal_praxis.deed");
+    const rt = readFileSync(rsr, "utf8").replace('(criterion :id "1.1.2"', '(criterion :constructor "x" :id "1.1.2"');
+    expect(() => checkRsrScorecard(rt, rsr)).toThrow(/has no field :constructor/);
+  });
+});

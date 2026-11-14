@@ -490,7 +490,7 @@ for (const { c, text } of edictCases("valid")) {
   const statusRejects = ["aliases-not-list", "ended-not-date", "entry-phase-unknown", "entry-unknown-field", "history-field",
     "phase-string", "phase-unknown", "present-string", "since-not-date", "status-unknown-field"];
   const maturityRejects = ["level-string", "level-unknown", "maturity-unknown-field"];
-  const semanticOnly = ["beholding-chora", "entry-missing-since", "expired", "history-twice", "maturity-in-chora-strict", "maturity-twice",
+  const semanticOnly = ["beholding-chora", "clause-constructor", "entry-missing-since", "expired", "history-twice", "maturity-in-chora-strict", "maturity-twice",
     "missing-affirmed", "missing-level", "missing-phase", "missing-status", "of-chora-mismatch", "phase-twice", "rule-in-descriptile",
     "since-impossible", "state-clause", "status-in-chora-strict", "status-twice", "unknown-clause", "unknown-field"];
   for (const k of cases("invalid")) {
@@ -544,10 +544,10 @@ for (const { c, text } of edictCases("valid")) {
     for (const [r, c] of clausesOf(k.text)) if (!grammarAccepts(grammar, r, c)) fail(`meta.abnf refuses a valid clause as ${r}`, `${k.c}: ${c.slice(0, 60)}`);
   }
   const grammarRejects = ["adr-date-not-date", "adr-inline-decision", "adr-status-unknown", "languages-strings", "last-updated-not-date",
-    "license-string", "practices-tool-string", "practices-unknown", "scoping-first-string", "scoping-unknown", "ssg-trigger-string",
+    "license-string", "practices-empty", "practices-tool-string", "practices-unknown", "scoping-empty", "scoping-first-string", "scoping-unknown", "ssg-trigger-string",
     "ssg-unknown", "tool-at-top", "type-string", "type-unknown"];
   const semanticOnly = ["adr-date-impossible", "adr-duplicate-id", "adr-missing-ref", "adr-ref-absolute", "adr-ref-dotdot", "adr-twice-status",
-    "beholding-chora", "empty-author", "meta-clause", "meta-in-chora-strict", "missing-affirmed", "of-chora-mismatch",
+    "beholding-chora", "clause-constructor", "empty-author", "meta-clause", "meta-in-chora-strict", "missing-affirmed", "of-chora-mismatch",
     "practices-twice", "rule-in-descriptile", "ssg-twice", "unknown-clause", "unknown-field", "version-twice"];
   for (const k of cases("invalid")) {
     if (!gateVerdict(k.text).ok) fail("meta invalid fixture is not a valid deed (YD01)", k.c);

@@ -47,30 +47,34 @@ A7 §7.1 that the hypatia migration (#1113) recorded as open.
 
 == 3. Field tables
 
-=== META.a2ml (clause `(meta …)` unless noted)
+=== META.a2ml (into `META.deed`, J30 to J32)
+
+Each row names the `META.deed` member it becomes (`deed_lint.js --meta`). A
+member written `:x` is a top-level member of `META.deed`; a clause is named.
 
 [cols="2,3,4"]
 |===
-| a2ml surface | deed path | transform / type
+| a2ml surface | META.deed path | transform / type
 
-| `[metadata] version` | `(meta :version "0.1.0")` | verbatim STRING — versions of the *content*, not the format (the format's version is `:schema-version` on the head, set by the translator, never copied from a field)
-| `[metadata] last-updated` | `(meta :last-updated "…")` | verbatim STRING
-| `[project-info] type` | `(meta :type library)` | enum → SYMBOL; closed set `library binary service website monorepo` (inline comment geography; other values fail closed)
-| `[project-info] languages` | `(meta :languages (rust zig))` | list of SYMBOLs (identifiers, not prose)
-| `[project-info] license` | `(meta :license MPL-2.0)` | SPDX id → SYMBOL (machine-checked against the estate licence corpus)
-| `[project-info] author` | `(meta :author "Jonathan D.A. Jewell (hyperpolymath)")` | verbatim STRING
-| `[development-practices] build-tool` | `(meta :build-tool just)` | SYMBOL
-| `… container-runtime` | `(meta :container-runtime podman)` | SYMBOL
-| `… ci-platform` | `(meta :ci-platform github-actions)` | SYMBOL
-| `… package-manager` | `(meta :package-manager guix)` | enum → SYMBOL; seen set `guix cargo mix`
-| `[maintenance-axes] scoping-first` | `(meta :scoping-first #t)` | BOOLEAN → `#t`/`#f`
-| `… execution-order`,`axis-1`,`axis-2`,`axis-3` | `(meta :execution-order "…" …)` | verbatim STRINGs (contain spaces → can never be symbols)
-| `[scoping] sources` / `marker-scan` / `idris-unsound-scan` | `(meta :scoping (sources "…") …)` | verbatim STRINGs
-| `[axis-2-maintenance-rules] *-first/second/third` | `(meta :corrective-first #t …)` | BOOLEAN → `#t`/`#f`
-| `… adaptive-focus`, `perfective-source` | `(meta :adaptive-focus "…" …)` | verbatim STRINGs
-| `[axis-3-audit-rules] audit-focus` / `compliance-focus` / `drift-risk-example` / `effects-evidence` | `(meta (axis-3 :audit-focus "…" :compliance-focus "…" :drift-risk-example "…" :effects-evidence "…"))` | verbatim STRINGs (populated in the rsr instance — tabled accordingly)
-| `[architecture-decisions]` (ADR inline-table array, when populated) | repeated `(adr :id "ADR-001" :title "…" :status accepted :date "…")` clauses | status enum → SYMBOL, closed set `proposed accepted deprecated superseded rejected`; id/title/date STRINGs. Empty → dropped (prose-section doctrine)
-| `[design-rationale]` | free-form; populated → fail-closed for table extension | —
+| `[metadata] version` | `:version "0.1.0"` | verbatim STRING — versions of the *content*, not the format (the format's version is `:schema-version` on the head, set by the translator, never copied from a field)
+| `[metadata] last-updated` | `:last-updated "…"` | STRING, a real `YYYY-MM-DD` date
+| `[project-info] type` | `:type library` | enum → SYMBOL; closed set `library binary service website monorepo` (other values fail closed)
+| `[project-info] languages` | `:languages (rust zig)` | list of SYMBOLs: what the repo is written in, not an allow or ban list (YL3)
+| `[project-info] license` | `:license MPL-2.0` | SPDX id → SYMBOL, verbatim; never edited by a translator (licence policy)
+| `[project-info] author` | `:author "…"` | verbatim STRING
+| `[development-practices] build-tool` | `(development-practices :build-tool just)` | SYMBOL (J32)
+| `… container-runtime` | `(development-practices :container-runtime podman)` | SYMBOL (J32)
+| `… ci-platform` | `(development-practices :ci-platform github-actions)` | SYMBOL (J32)
+| `… package-manager` | `(development-practices :package-manager guix)` | SYMBOL; seen set `guix cargo mix` (J32)
+| `[development-practices] code-style` / `security` / `testing` / `versioning` / `documentation` / `branching` (DESCRIPTILE-SPEC) | `(development-practices :code-style "…" …)` | verbatim STRINGs (J32)
+| `[maintenance-axes] scoping-first` | `:scoping-first #t` | BOOLEAN → `#t`/`#f`
+| `… execution-order`,`axis-1`,`axis-2`,`axis-3` | `:execution-order "…"`, `:axis-1 "…"` … | verbatim STRINGs (contain spaces → can never be symbols)
+| `[scoping] sources` / `marker-scan` / `idris-unsound-scan` | `(scoping :sources "…" :marker-scan "…" :idris-unsound-scan "…")` | verbatim STRINGs
+| `[axis-2-maintenance-rules] *-first/second/third` | `:corrective-first #t`, `:adaptive-second #t`, `:perfective-third #t` | BOOLEAN → `#t`/`#f`
+| `… adaptive-focus`, `perfective-source` | `:adaptive-focus "…"`, `:perfective-source "…"` | verbatim STRINGs
+| `[axis-3-audit-rules] audit-focus` / `compliance-focus` / `drift-risk-example` / `effects-evidence` | `(axis-3 :audit-focus "…" :compliance-focus "…" :drift-risk-example "…" :effects-evidence "…")` | verbatim STRINGs
+| `[architecture-decisions]` (ADR array, when populated) | repeated `(adr :id "ADR-001" :status accepted :date "…" :ref "docs/…" [:title "…"])` | status enum → SYMBOL, closed set `proposed accepted deprecated superseded rejected`; `:ref`, the repo-relative path of the ADR document, is required (J31). An ADR with no document is not translated: its body never moves inline, and the translation is reported incomplete. Empty → dropped
+| `[design-rationale]` | `:design-rationale "…"` | verbatim STRING (A7 7.2)
 |===
 
 === ECOSYSTEM.a2ml (clause `(ecosystem …)`)

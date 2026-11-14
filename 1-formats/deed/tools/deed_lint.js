@@ -856,7 +856,7 @@ export function readProofReceipt(text, filename = null) {
     for (const m of members) {
       if (m[0] === "field") {
         const [, key, value] = m;
-        if (!(key in spec)) fail(`unknown field :${key} in ${where}`);
+        if (!Object.hasOwn(spec, key)) fail(`unknown field :${key} in ${where}`);
         if (fields.has(key)) fail(`duplicate field :${key} in ${where}`);
         if (!spec[key].types.includes(value[0])) fail(`:${key} in ${where} must be a ${spec[key].types.join(" or ")}`);
         if (value[0] === "string" && value[1].trim() === "") fail(`empty :${key} in ${where}`);
@@ -2389,7 +2389,7 @@ function rsrFields(members, specs, where, E) {
   for (const m of members) {
     if (m[0] !== "field") continue;
     if (m[3]) throw E(`'!' belongs only on a rule's :id in a contractile-deed, not on ${where} :${m[1]}`);
-    if (!(m[1] in specs)) throw E(`${where} has no field :${m[1]}`);
+    if (!Object.hasOwn(specs, m[1])) throw E(`${where} has no field :${m[1]}`);
     if (out.has(m[1])) throw E(`${where} repeats :${m[1]}`);
     out.set(m[1], rsrValue(m[2], specs[m[1]], `${where} :${m[1]}`, E));
   }
@@ -2751,7 +2751,7 @@ export function checkState(text, filename, opts = {}) {
     }
     if (it[1] === "rule") throw E("a descriptile states what is; a (rule …) belongs in an edict (YF02, YL3)");
     if (it[1] === "state") throw E("there is no (state …) clause: the journal stays in docs/status/ROADMAP.adoc (J3)");
-    if (!(it[1] in clauses)) throw E(`STATE.deed has no clause (${it[1]} …); its clauses are (status …) and (maturity …) (A7 7.2)`);
+    if (!Object.hasOwn(clauses, it[1])) throw E(`STATE.deed has no clause (${it[1]} …); its clauses are (status …) and (maturity …) (A7 7.2)`);
     clauses[it[1]].push(it[2]);
   }
   const warnings = checkDescriptileHeader(fields, "STATE.deed", E, opts.repoUuid, opts.today ?? todayUtc());
@@ -2941,8 +2941,9 @@ export function checkMeta(text, filename, opts = {}) {
       adrs.push(it[2]);
       continue;
     }
-    if (!(it[1] in META_SUBCLAUSES)) throw E(`META.deed has no clause (${it[1]} …)`);
+    if (!Object.hasOwn(META_SUBCLAUSES, it[1])) throw E(`META.deed has no clause (${it[1]} …)`);
     if (sub.has(it[1])) throw E(`META.deed carries (${it[1]} …) at most once`);
+    if (it[2].length === 0) throw E(`(${it[1]}) is empty: it takes at least one member, or is left out`);
     sub.set(it[1], stateMembers(it[2], `(${it[1]} …)`, META_SUBCLAUSES[it[1]], E));
   }
   const warnings = checkDescriptileHeader(fields, "META.deed", E, opts.repoUuid, opts.today ?? todayUtc());
