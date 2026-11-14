@@ -1326,9 +1326,17 @@ describe("ecosystem fixtures", () => {
     const t = readFileSync(join(FIX_ECO, "valid", "minimal", "ECOSYSTEM.deed"), "utf8");
     expect(checkEcosystem(t, "STATE.deed")).toBeNull();
   });
-  test("the closed relationship list has the 7 mapped terms and DESCRIPTILE-SPEC's 4", () => {
-    expect(ECOSYSTEM_RELATIONSHIPS.size).toBe(11);
+  test("the closed relationship list has the 7 mapped terms, DESCRIPTILE-SPEC's 4 and the 5 ruled 2026-11-14", () => {
+    expect(ECOSYSTEM_RELATIONSHIPS.size).toBe(16);
     for (const t of ["standard-source", "minted-from", "registry", "parent", "downstream-consumer"]) expect(ECOSYSTEM_RELATIONSHIPS.has(t)).toBe(true);
+    for (const t of ["sibling-standard", "data-dependency", "dispatch-target", "scanner-source", "mcp-host"]) expect(ECOSYSTEM_RELATIONSHIPS.has(t)).toBe(true);
+  });
+  test("each 2026-11-14 term is accepted, and a near miss of one is still refused", () => {
+    const p = join(FIX_ECO, "valid", "operational-edges", "ECOSYSTEM.deed");
+    const r = checkEcosystem(readFileSync(p, "utf8"), p, { today: FIXTURE_TODAY });
+    expect(r.related.map((x) => x.relationship)).toEqual(["sibling-standard", "data-dependency", "dispatch-target", "scanner-source", "mcp-host"]);
+    const q = join(FIX_ECO, "invalid", "relationship-near-miss", "ECOSYSTEM.deed");
+    expect(() => checkEcosystem(readFileSync(q, "utf8"), q, { today: FIXTURE_TODAY })).toThrow(/:relationship must be one of/);
   });
   test("the summary lists project and related entries", () => {
     const p = join(FIX_ECO, "valid", "template-model", "ECOSYSTEM.deed");

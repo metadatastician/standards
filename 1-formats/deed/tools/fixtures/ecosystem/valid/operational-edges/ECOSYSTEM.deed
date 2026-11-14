@@ -1,0 +1,17 @@
+;; SPDX-License-Identifier: CC-BY-SA-4.0
+;; The five :relationship terms the owner ruled on 2026-11-14
+;; (clauses/ecosystem.abnf v1.1.0), one entry each.
+(descriptile-deed
+  :schema-version "1.0.0"
+  :canonical-name "example-game"
+  :of-chora #uuid"00000000-0000-8000-8000-0000000000a1"
+  :affirmed "2026-11-14" :affirmed-by agent
+  :project "example-game"
+  :ecosystem "hyperpolymath"
+  :position-type "component"
+  :purpose "A small example game used by the deed fixtures."
+  (related :name "peer-checker" :relationship sibling-standard :notes "A peer tool under the same standard.")
+  (related :name "flat-store" :relationship data-dependency :notes "Reads the store this repo hosts.")
+  (related :name "bot-fleet" :relationship dispatch-target :notes "Receives this repo's dispatches.")
+  (related :name "scanner" :relationship scanner-source :notes "Produces the scan reports this repo reads.")
+  (related :name "mcp-server" :relationship mcp-host :notes "Serves this repo's capabilities over MCP."))
