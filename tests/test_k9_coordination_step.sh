@@ -15,7 +15,8 @@ ok()  { echo "PASS: $1"; pass=$((pass+1)); }
 bad() { echo "FAIL: $1"; fail=$((fail+1)); }
 WORK="$(mktemp -d)"; trap 'rm -rf "$WORK"' EXIT
 
-ruby -ryaml -e 'puts YAML.load_file(ARGV[0])["jobs"]["validate"]["steps"].find{|s| s["name"].to_s.start_with?("Validate coordination.k9 files")}["run"]' "$K" > "$WORK/step.sh"
+# The coordination step is scripts/conformance-k9.sh coord (one implementation, shared with the template).
+printf 'exec bash "%s" coord\n' "$ROOT/scripts/conformance-k9.sh" > "$WORK/step.sh"
 [ -s "$WORK/step.sh" ] && ok "the coordination step is present" || { bad "no coordination step found"; exit 1; }
 
 mkdir -p "$WORK/bin" "$WORK/repo/canon/2-protocols/k9-coordination/tools/validate"
