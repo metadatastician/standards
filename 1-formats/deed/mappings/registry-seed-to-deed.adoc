@@ -157,7 +157,7 @@ Counts are those at conversion; `N` is the file's `:total-repos`.
 | `grep -c '(scheme :id clade-12' FILE` | 1
 | `grep -c '(category :id' FILE` | 12, one per `clades.a2ml` category
 | `grep -c '^  (repo ' FILE` | N (327 at conversion)
-| `grep -cE '^ +:uuid #uuid"[0-9a-f-]{36}" :minted-in (gv-clade-index\|chora-registry)$' FILE` | N
+| `grep -cE -e '^ +:uuid #uuid"[0-9a-f-]{36}" :minted-in gv-clade-index$' -e '^ +:uuid #uuid"[0-9a-f-]{36}" :minted-in chora-registry$' FILE` | N
 | `grep -c '(placement :scheme clade-12 :category [a-z]* :primary #t)' FILE` | N: one primary placement per repo
 | `grep -c '#u5"' FILE` | 0
 | `ls verisim/seed/repos.a2ml` | not found
