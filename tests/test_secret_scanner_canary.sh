@@ -225,13 +225,17 @@ SHV=PLANTED_CANARY_VALUE_NOT_REAL
   printf "ENCRYPTION_KEY='%s_7'\n" "$SHV"
   printf 'SIGNING_KEY="%s_8"\n' "$SHV"
   printf 'API_KEY="%s_9"\n' "$SHV"
+  # A location assignment and a real credential on ONE line: the path exemption
+  # is per match, so this line must still be reported (a per-line exemption
+  # skipped it: the false negative Codex found on #1570).
+  printf 'SIGNING_KEY_PATH="/tmp/key.pem"; AUTH_KEY="%s_10"\n' "$SHV"
 } > "$WORK/shreal/deploy.sh"
 shexpect shreal 1 "AUTH/ENCRYPTION/SIGNING/API *_KEY literals -> BLOCKS"
 shfound=$( cd "$WORK/shreal" && bash "$SHELL_SCAN" 2>&1 | grep -c '^::warning::' )
-if [ "${shfound:-0}" -eq 4 ]; then
-  echo "  PASS  all 4 planted shell *_KEY secrets reported"; pass=$((pass+1))
+if [ "${shfound:-0}" -eq 5 ]; then
+  echo "  PASS  all 5 planted shell *_KEY secrets reported (incl. one beside a path assignment)"; pass=$((pass+1))
 else
-  echo "  FAIL  only ${shfound:-0}/4 planted shell *_KEY secrets reported — blind spot"; fail=$((fail+1))
+  echo "  FAIL  only ${shfound:-0}/5 planted shell *_KEY secrets reported — blind spot"; fail=$((fail+1))
 fi
 
 mk shclean ok.sh <<'EOF'
