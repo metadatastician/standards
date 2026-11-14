@@ -1,0 +1,22 @@
+;; SPDX-License-Identifier: CC-BY-SA-4.0
+(praxis-deed
+  :schema-version "1.0.0"
+  :canonical-name "rsr-scorecard"
+  :profile rsr-scorecard
+  (rsr-scorecard
+    :repo "example-game"
+    :spec rsr-criteria-v2
+    :spec-version "2.1.0-draft"
+    :tier rhodium
+    :score "70.59"
+    :provisional #t
+    :automatable-coverage "0.7391"
+    :applicable-weight "11.5"
+    :verified-weight "8.5"
+    :profile-present #t
+    (criterion :id "1.1.2" :name "justfile" :tier bronze :gate "universal" :weight "2.5" :verdict pass)
+    (criterion :id "1.1.3" :name "no-makefile" :tier bronze :gate "universal" :weight "2.5" :verdict pass)
+    (criterion :id "2.1.1" :name "readme" :tier bronze :gate "universal" :weight "2" :verdict partial)
+    (criterion :id "3.1.1" :name "descriptiles-dir" :tier gold :gate "universal" :weight "1.5" :verdict fail)
+    (criterion :id "4.2.1" :name "scorecard" :tier silver :gate "universal" :weight "3" :verdict unverified)
+    (criterion :id "5.2.3" :name "julia-project" :tier silver :gate "julia" :weight "1" :verdict na)))

@@ -51,6 +51,10 @@ Usage: deed_lint.js FILE...     exit 0 iff all files conform
                                               ECOSYSTEM.deed (DRAFT, A7 7.2, YD07); --root checks :project and
                                               :of-chora against the chora deed; --strict requires (related :uuid) (J12)
        deed_lint.js --ecosystem-fixtures DIR  DIR/{valid,invalid}/<case>/ECOSYSTEM.deed [+ <repo>_chora.deed, STRICT]
+       deed_lint.js --rsr-scorecard FILE...   an RSR scorecard: the (rsr-scorecard …) clause of a praxis-deed of
+                                              :profile rsr-scorecard (DRAFT, owner ruling 2026-11-14); the score and
+                                              coverage must be what the criteria give
+       deed_lint.js --rsr-scorecard-fixtures DIR DIR/valid pass the profile, DIR/invalid fail it (both required)
        deed_lint.js --state FILE... [--root DIR] [--strict]
                                               STATE.deed (DRAFT, A7 7.2, J3, J15); --root checks :of-chora against the
                                               chora deed (YD08) and warns on a chora (status …) or (maturity …), which
@@ -2308,6 +2312,162 @@ function verbDescriptileFixtures(d) {
 }
 
 // ---------------------------------------------------------------------------
+// RSR scorecard (DRAFT; clauses/rsr-scorecard.abnf v0.1.0; owner ruling
+// 2026-11-14; prose: mappings/scorecard-corpus-decision.adoc section 6).
+
+export class RsrScorecardError extends LintError {
+  constructor(msg) {
+    super(msg, null);
+    this.name = "RsrScorecardError";
+  }
+
+  toString() {
+    return this.msg;
+  }
+}
+
+export const RSR_TIERS = ["none", "bronze", "silver", "gold", "rhodium"];
+export const RSR_VERDICTS = ["pass", "partial", "fail", "unverified", "na"];
+const RSR_DECIMAL = /^[0-9]+(\.[0-9]+)?$/;
+const RSR_CRIT_ID = /^[0-9]+(\.[0-9]+)+$/;
+const RSR_FIELDS = {
+  repo: { type: "string", required: true },
+  spec: { type: "symbol", required: true, oneOf: ["rsr-criteria-v2"] },
+  "spec-version": { type: "string", required: true },
+  tier: { type: "symbol", required: true, oneOf: RSR_TIERS },
+  score: { type: "decimal", required: true },
+  provisional: { type: "boolean", required: true },
+  "automatable-coverage": { type: "decimal", required: true },
+  "applicable-weight": { type: "decimal" },
+  "verified-weight": { type: "decimal" },
+  "profile-present": { type: "boolean" },
+  "source-commit": { type: "commit" },
+};
+const RSR_CRIT_FIELDS = {
+  id: { type: "crit-id" },
+  name: { type: "string" },
+  tier: { type: "symbol", oneOf: ["bronze", "silver", "gold", "rhodium"] },
+  gate: { type: "string" },
+  weight: { type: "decimal" },
+  verdict: { type: "symbol", oneOf: RSR_VERDICTS },
+};
+
+/** One field value against its kind; returns the JS value. */
+function rsrValue(v, spec, where, E) {
+  const want = { decimal: "string", "crit-id": "string", commit: "string" }[spec.type] || spec.type;
+  if (v[0] !== want) throw E(`${where} must be a ${spec.type === "decimal" ? 'decimal string such as "84.08"' : spec.type}`);
+  if (spec.type === "decimal" && !RSR_DECIMAL.test(v[1])) throw E(`${where} must be a decimal string such as "84.08", not ${JSON.stringify(v[1])}`);
+  if (spec.type === "crit-id" && !RSR_CRIT_ID.test(v[1])) throw E(`${where} must be a criterion id such as "3.1.1"`);
+  if (spec.type === "commit" && !/^[0-9a-f]{40}$/.test(v[1])) throw E(`${where} must be the full 40-character lowercase commit`);
+  if (spec.type === "string" && v[1].trim() === "") throw E(`${where} must not be empty`);
+  if (spec.oneOf && !spec.oneOf.includes(v[1])) throw E(`${where} must be one of ${spec.oneOf.join(" ")}`);
+  if (spec.type === "decimal") return Number(v[1]);
+  if (spec.type === "boolean") return v[1] === "#t";
+  return v[1];
+}
+
+/** Fields of one clause, each known, typed and at most once. */
+function rsrFields(members, specs, where, E) {
+  const out = new Map();
+  for (const m of members) {
+    if (m[0] !== "field") continue;
+    if (m[3]) throw E(`'!' belongs only on a rule's :id in a contractile-deed, not on ${where} :${m[1]}`);
+    if (!(m[1] in specs)) throw E(`${where} has no field :${m[1]}`);
+    if (out.has(m[1])) throw E(`${where} repeats :${m[1]}`);
+    out.set(m[1], rsrValue(m[2], specs[m[1]], `${where} :${m[1]}`, E));
+  }
+  return out;
+}
+
+/**
+ * Check an RSR scorecard. Returns null when the deed carries no
+ * (rsr-scorecard …) clause and is not a praxis-deed of :profile rsr-scorecard;
+ * otherwise {repo, tier, score, provisional, criteria: [{id, verdict, weight}]},
+ * or throws RsrScorecardError. The score and the coverage are derived from the
+ * criteria and a recorded value they do not support is refused.
+ */
+export function checkRsrScorecard(text, filename = null) {
+  const [head, items] = validate(text, filename);
+  const E = (m) => new RsrScorecardError(m);
+  const nested = (list) => list.some((it) => it[0] === "clause" && it[2].some((c) => (c[0] === "clause" && c[1] === "rsr-scorecard") || nested([c])));
+  const top = items.filter((it) => it[0] === "clause" && it[1] === "rsr-scorecard");
+  if (nested(items.filter((it) => !(it[0] === "clause" && it[1] === "rsr-scorecard")))) {
+    throw E("(rsr-scorecard …) may appear only at the top level of its praxis-deed, not inside another clause");
+  }
+  const profile = items.find((it) => it[0] === "field" && it[1] === "profile");
+  const isCard = profile && profile[2][0] === "symbol" && profile[2][1] === "rsr-scorecard";
+  if (top.length === 0 && !isCard) return null;
+  if (head !== "praxis-deed") {
+    throw E(`(rsr-scorecard …) belongs in a praxis-deed of :profile rsr-scorecard, not a ${head}: a scorecard is an assessment, not identity (the chora deed), content organisation or registry`);
+  }
+  if (!isCard) throw E("a praxis-deed carrying (rsr-scorecard …) must declare :profile rsr-scorecard");
+  if (top.length !== 1) throw E(`an RSR scorecard carries exactly one (rsr-scorecard …) clause, not ${top.length}`);
+  const allowedTop = ["schema-version", "canonical-name", "beholding-chora", "profile"];
+  for (const it of items) {
+    if (it[0] === "field" && !allowedTop.includes(it[1])) throw E(`an RSR scorecard has no top-level field :${it[1]}`);
+    if (it[0] === "clause" && it[1] !== "rsr-scorecard") throw E(`an RSR scorecard has no top-level clause (${it[1]} …)`);
+  }
+  for (const k of ["canonical-name", "profile"]) {
+    if (items.filter((it) => it[0] === "field" && it[1] === k).length !== 1) throw E(`an RSR scorecard carries :${k} exactly once`);
+  }
+
+  const members = top[0][2];
+  const f = rsrFields(members, RSR_FIELDS, "(rsr-scorecard …)", E);
+  for (const [k, s] of Object.entries(RSR_FIELDS)) if (s.required && !f.has(k)) throw E(`(rsr-scorecard …) is missing :${k}`);
+  const criteria = [];
+  const ids = new Set();
+  for (const m of members) {
+    if (m[0] !== "clause") continue;
+    if (m[1] !== "criterion") throw E(`(rsr-scorecard …) has no clause (${m[1]} …); its clause is (criterion …)`);
+    if (m[2].some((x) => x[0] === "clause")) throw E("(criterion …) takes fields only");
+    const c = rsrFields(m[2], RSR_CRIT_FIELDS, "(criterion …)", E);
+    for (const k of Object.keys(RSR_CRIT_FIELDS)) if (!c.has(k)) throw E(`(criterion${c.has("id") ? ` :id "${c.get("id")}"` : ""} …) is missing :${k}`);
+    if (ids.has(c.get("id"))) throw E(`(criterion :id "${c.get("id")}") appears twice`);
+    ids.add(c.get("id"));
+    criteria.push({ id: c.get("id"), verdict: c.get("verdict"), weight: c.get("weight") });
+  }
+  if (criteria.length === 0) throw E("(rsr-scorecard …) needs at least one (criterion …)");
+
+  const score = f.get("score");
+  const coverage = f.get("automatable-coverage");
+  const provisional = f.get("provisional");
+  const tier = f.get("tier");
+  if (score > 100) throw E(`:score ${score} is above 100`);
+  if (coverage > 1) throw E(`:automatable-coverage ${coverage} is above 1`);
+  if (coverage < 1 && !provisional) throw E(`:automatable-coverage ${coverage} is below 1, so :provisional must be #t (RSR-SPEC-v2 section 10)`);
+  if (provisional && tier === "rhodium") throw E("a provisional scorecard is never rhodium (RSR-SPEC-v2 section 10)");
+
+  // Derived, not asserted.
+  const sum = (vs) => criteria.filter((c) => vs.includes(c.verdict)).reduce((a, c) => a + c.weight, 0);
+  const applicable = sum(["pass", "partial", "fail", "unverified"]);
+  const verified = sum(["pass", "partial", "fail"]);
+  const passed = sum(["pass"]) + sum(["partial"]) / 2;
+  const wantScore = verified > 0 ? (passed / verified) * 100 : 0;
+  const wantCoverage = applicable > 0 ? verified / applicable : 0;
+  if (Math.abs(score - wantScore) > 0.02) throw E(`:score ${score} is not what the criteria give (${wantScore.toFixed(2)}): a score is derived, not asserted`);
+  if (Math.abs(coverage - wantCoverage) > 0.001) throw E(`:automatable-coverage ${coverage} is not what the criteria give (${wantCoverage.toFixed(4)})`);
+  if (f.has("applicable-weight") && Math.abs(f.get("applicable-weight") - applicable) > 0.01) throw E(`:applicable-weight ${f.get("applicable-weight")} is not the criteria's (${applicable.toFixed(4)})`);
+  if (f.has("verified-weight") && Math.abs(f.get("verified-weight") - verified) > 0.01) throw E(`:verified-weight ${f.get("verified-weight")} is not the criteria's (${verified.toFixed(4)})`);
+  return { repo: f.get("repo"), tier, score, provisional, criteria };
+}
+
+/** --rsr-scorecard FILE...: profile-check each file; returns exit code. */
+function rsrScorecardFiles(files) {
+  let bad = 0;
+  for (const f of files) {
+    try {
+      const r = checkRsrScorecard(readFileSync(f, "utf8"), f);
+      console.log(`OK   ${f} (${r === null ? "not an RSR scorecard" : `${r.repo}: tier ${r.tier}, score ${r.score}, ${r.criteria.length} criteria${r.provisional ? ", provisional" : ""}`})`);
+    } catch (e) {
+      if (!(e instanceof LintError) && e.code === undefined) throw e;
+      bad += 1;
+      console.log(`FAIL ${f}: ${e instanceof LintError ? e.toString() : e.message}`);
+    }
+  }
+  return bad ? 1 : 0;
+}
+
+// ---------------------------------------------------------------------------
 // ECOSYSTEM.deed (A7 7.2, YD07; clauses/ecosystem.abnf).
 
 export class EcosystemError extends LintError {
@@ -2322,14 +2482,16 @@ export class EcosystemError extends LintError {
 }
 
 /**
- * The closed :relationship vocabulary (A7 7.2): the seven terms owner-ruled
- * 2026-09-19 in mappings/meta-ecosystem-to-repo-deed.adoc, and the four
- * DESCRIPTILE-SPEC observed (parent among them).
+ * The closed :relationship vocabulary (A7 7.2; clauses/ecosystem.abnf
+ * v1.1.0): the seven terms owner-ruled 2026-09-19 in
+ * mappings/meta-ecosystem-to-repo-deed.adoc, the four DESCRIPTILE-SPEC
+ * observed (parent among them), and the five owner-ruled 2026-11-14.
  */
 export const ECOSYSTEM_RELATIONSHIPS = new Set([
   "standard-source", "build-tooling", "validation-tooling", "signing-tooling",
   "verification-tooling", "minted-from", "registry",
   "downstream-consumer", "sibling-language", "code-dependency", "parent",
+  "sibling-standard", "data-dependency", "dispatch-target", "scanner-source", "mcp-host",
 ]);
 const ECOSYSTEM_STRINGS = ["project", "ecosystem", "position-type", "purpose", "pipeline-position", "chain", "pipeline-notes"];
 const ECOSYSTEM_FIELDS = [...DESCRIPTILE_HEADER, ...ECOSYSTEM_STRINGS, "not", "coordination"];
@@ -3114,6 +3276,26 @@ function main(argv) {
     return rc;
   }
   if (argv.includes("--contractile-registry")) return registryMain(argv.filter((a) => a !== "--contractile-registry"));
+  if (argv.includes("--rsr-scorecard-fixtures")) {
+    const d = argv[argv.indexOf("--rsr-scorecard-fixtures") + 1];
+    if (d === undefined) {
+      console.log("--rsr-scorecard-fixtures requires a DIR argument");
+      return 2;
+    }
+    const rc = profileFixtures(d, (t, f) => {
+      if (checkRsrScorecard(t, f) === null) throw new RsrScorecardError("not an RSR scorecard");
+    });
+    console.log("RSR SCORECARD FIXTURES " + (rc === 0 ? "OK" : rc === 2 ? "NOT CHECKED" : "FAILED"));
+    return rc;
+  }
+  if (argv.includes("--rsr-scorecard")) {
+    const files = argv.filter((a) => !a.startsWith("-"));
+    if (files.length === 0) {
+      console.log(DOC);
+      return 2;
+    }
+    return rsrScorecardFiles(files);
+  }
   if (argv.includes("--ecosystem-fixtures")) {
     const d = argv[argv.indexOf("--ecosystem-fixtures") + 1];
     if (d === undefined) {
