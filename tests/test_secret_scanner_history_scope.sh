@@ -3,7 +3,7 @@
 #
 # test_secret_scanner_history_scope.sh — the history pass of the secret
 # scanner is bounded on pull requests and full everywhere else, and it can
-# still FAIL in both modes. (standards#1586)
+# still FAIL in both modes. (standards#1587)
 #
 # WHY THIS EXISTS
 #
