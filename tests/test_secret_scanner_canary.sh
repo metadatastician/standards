@@ -212,12 +212,20 @@ shexpect() {
   fi
 }
 
-mk shreal deploy.sh <<'EOF'
-export AUTH_KEY="PLANTED_CANARY_VALUE_NOT_REAL_6"
-ENCRYPTION_KEY='PLANTED_CANARY_VALUE_NOT_REAL_7'
-SIGNING_KEY="PLANTED_CANARY_VALUE_NOT_REAL_8"
-API_KEY="PLANTED_CANARY_VALUE_NOT_REAL_9"
-EOF
+# The planted file is BUILT at run time, not written as a heredoc: this test is
+# itself a .sh file that the shell-secrets gate scans, and a literal
+# `API_KEY="PLANTED_…"` line here is a true positive for that gate (it failed
+# standards#1570's own CI). A pragma in the source would be copied into the
+# fixture and make the canary skip its own plants, so the literals must not
+# exist in this file at all.
+mkdir -p "$WORK/shreal"
+SHV=PLANTED_CANARY_VALUE_NOT_REAL
+{
+  printf 'export AUTH_KEY="%s_6"\n' "$SHV"
+  printf "ENCRYPTION_KEY='%s_7'\n" "$SHV"
+  printf 'SIGNING_KEY="%s_8"\n' "$SHV"
+  printf 'API_KEY="%s_9"\n' "$SHV"
+} > "$WORK/shreal/deploy.sh"
 shexpect shreal 1 "AUTH/ENCRYPTION/SIGNING/API *_KEY literals -> BLOCKS"
 shfound=$( cd "$WORK/shreal" && bash "$SHELL_SCAN" 2>&1 | grep -c '^::warning::' )
 if [ "${shfound:-0}" -eq 4 ]; then
