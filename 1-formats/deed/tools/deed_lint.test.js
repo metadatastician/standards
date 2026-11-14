@@ -145,6 +145,28 @@ describe("extra rules", () => {
   test("filename matching no pattern", () => {
     expect(verdict(HDR + '(repo-deed :schema-version "1")\n', "x.deed")).toMatch(/no deed dispatch pattern/);
   });
+  // deed.abnf: praxis-file = stem "_praxis.deed", stem = 1*( ALPHA / DIGIT /
+  // "-" / "." / "_" ). The praxis stem takes the same rule as the chora stem;
+  // the "estate" exclusion is repo-file only, so estate_praxis.deed is legal.
+  test("praxis filename stem follows the grammar's stem rule", () => {
+    const praxis = HDR + '(praxis-deed :schema-version "1")\n';
+    for (const name of ["x_praxis.deed", "my.tool-v2_praxis.deed", "contractile_rules_praxis.deed", "estate_praxis.deed", "dir/sub/A9_praxis.deed"]) {
+      expect(verdict(praxis, name)).toBeNull();
+    }
+    for (const [name, stem] of [["_praxis.deed", "''"], ["my tool_praxis.deed", "'my tool'"], ["a+b_praxis.deed", "'a+b'"], ["café_praxis.deed", "'café'"]]) {
+      const err = verdict(praxis, name);
+      expect(err).toMatch(/illegal deed filename stem/);
+      expect(err).toContain(`${stem} in ${name}`);
+      expect(err).toMatch(/one or more ASCII letters, digits/);
+      let line;
+      try { validate(praxis, name); } catch (e) { line = e.line; }
+      expect(line).toBe(1);
+    }
+  });
+  test("chora filename stem refusal names the file too", () => {
+    expect(verdict(HDR + '(repo-deed :schema-version "1")\n', "a+b_chora.deed")).toContain("'a+b' in a+b_chora.deed");
+    expect(verdict(HDR + '(repo-deed :schema-version "1")\n', "_chora.deed")).toMatch(/illegal deed filename stem '' in _chora\.deed/);
+  });
   test("canonical machine manifest selects repo-deed", () => {
     expect(verdict(HDR + '(repo-deed :schema-version "1")\n', "0-AI-MANIFEST.deed")).toBeNull();
     for (const head of ["estate-deed", "estate-atlas-deed", "praxis-deed"]) {

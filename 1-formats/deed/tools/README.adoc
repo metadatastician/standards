@@ -27,7 +27,8 @@ Enforced rules:
 * `:schema-version` STRING exactly once (validator-level semantic, per grammar)
 * filename ↔ doc-head dispatch with the exact-stem-first side condition
   (`estate_chora.deed` can never be a repo-deed; stems may contain dots —
-  split on the final suffix only)
+  split on the final suffix only; a `_praxis.deed` or `_chora.deed` stem is
+  one or more ASCII letters, digits, `-`, `.` or `_`, as deed.abnf `stem`)
 * booleans ONLY `#t`/`#f`; bare `true/false/yes/no` values rejected
 * uuid5 literals `#u5"name"` — body is the RFC 4122 §4.3 name input, never hex
 * uuid8 literals `#u8"domain:name"` — body is the ADR-008 profile C preimage;
