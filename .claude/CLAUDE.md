@@ -353,7 +353,7 @@ receipts from a pinned, headless checker for every witness.
 **NOTE:** Python is fully banned. V-lang is fully banned (2026-04-10). ATS2 is
 fully banned in favour of Idris2 + Rust. ReScript is fully banned in new
 code as of 2026-04-30 (use AffineScript). All four bans are enforced by
-`.github/workflows/language-policy.yml`.
+the `language-policy` job of `.github/workflows/governance-reusable.yml`.
 
 ### Build System
 

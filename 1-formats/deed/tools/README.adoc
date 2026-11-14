@@ -7,21 +7,17 @@ Campaign: standards#837 · Grammar: link:../spec/abnf/deed.abnf[spec/abnf/deed.a
 *Nothing invalid ever lands.* Every emitted deed passes the validator before
 it may be written; every `.deed` committed in this repo is linted in CI.
 
-== `deed_lint.js` / `deed_lint.py` — the validator
+== `deed_lint.js` — the validator
 
-Two implementations; only the bun one is current:
+`deed_lint.js` runs under bun with zero dependencies, and it is the CI gate
+(`.github/workflows/deed-conformance.yml`, callable from other repos via
+`workflow_call`). Unit tests: `bun test 1-formats/deed/tools/`.
 
-* `deed_lint.js` — bun, zero dependencies. **This is the CI gate**
-  (`.github/workflows/deed-conformance.yml`, callable from other repos via
-  `workflow_call`). Unit tests: `bun test 1-formats/deed/tools/`.
-* `deed_lint.py` — stdlib-only, **frozen at deed.abnf v1.0.0** (no `#u8`).
-  Kept only because `a2ml_to_deed.py` imports it in-process; retire it with
-  the translator. Do not extend it (Python is banned estate-wide).
-
-The python/bun parity step was retired when `#u8` landed (deed.abnf
-v1.1.0, owner ruling D323, 2026-10-07): the frozen Python linter rejects `#u8`, so
-parity could only be kept by extending Python. `deed_lint.js` is the sole
-authority.
+The Python linter `deed_lint.py` (frozen at deed.abnf v1.0.0) and the
+Python translator `a2ml_to_deed.py` were deleted on 2026-11-13 (owner
+ruling; D313, Python banned). Conversion of A2ML is kyX's first front end,
+and the mapping specs in `../mappings/` stay the authority for where each
+family's content goes.
 
 Enforced rules:
 
@@ -255,40 +251,12 @@ estate's count of hand-authored JavaScript does not grow
 Until `standards` has its own edicts (A7 M4), CI runs `--check` against the
 fixture repo `fixtures/edict/registry/root/`.
 
-== `a2ml_to_deed.py` — the translator
-
-Implements ONE authoritative mapping: the specs in `../mappings/`. It is
-deliberately unable to invent mappings — untabled fields fail closed:
-
-* P-1 uuid: re-derived (RFC 4122 §4.3, URL namespace) and compared against
-  the instance; mismatch → no output. Never copied.
-* `--beholding-chora NAME` required: refuse-to-emit otherwise (no invented
-  identifiers).
-* Booleans `true/false → #t/#f`; enums → symbols against closed sets;
-  empty slots kept as greppable `""` / `()` per slot doctrine.
-* SPDX headers pass through (translation changes grammar, not licence).
-* POST-CONDITION: emitted text is linted; failure writes nothing.
-
-    a2ml_to_deed.py full <repo-root> --canonical-name NAME --beholding-chora C [--out F]
-    a2ml_to_deed.py clade|agentic|neurosym|playbook FILE.a2ml --canonical-name N --beholding-chora C
-    a2ml_to_deed.py state-scan FILE...        # family-3 classification (no translation; ruling pending #843)
-    a2ml_to_deed.py scorecard-scan DIR        # family-5 corpus census + absolute-path leak TSV
-
-Reference translation of the estate's canonical template passes the lane
-(six instance files → one deed, uuid oracle verified).
-
-Working estate instances surfaced *live* during development and fixed by
-table extension, exactly as the frame prescribes (fail → review → extend):
-`[axis-3-audit-rules]`, `[methodology]`, `[rsr-repo-skeleton]`, plus one
-genuine registry deficiency flagged, not patched (standards' own CLADE
-lacks `primary-name` — CLADE-006 territory, reported on #837).
-
 == Fixtures
 
 `fixtures/valid/` and `fixtures/invalid/` mirror the embedded self-test
 corpus plus one real translated deed (`valid/rsr-template-repo_chora.deed`).
 The fixtures that mirror the self-test corpus were generated from the
-`_FIXTURES` table in `deed_lint.py`; the `#u8`/`#u7` fixtures (`uuid8-clade`,
+`_FIXTURES` table of the since-deleted `deed_lint.py`; the `#u8`/`#u7` fixtures (`uuid8-clade`,
 `inu8-*`, `inu7`) are hand-written. Every invalid fixture must have an entry in
 the `RULE` table of `deed_lint.test.js` naming the error it fails with.
 
