@@ -543,7 +543,7 @@ and nowhere else. Every other deed references it. This is the owner’s
 ruling of 2026-09-04, verbatim: "it should be referrring to the chora".
 
 Both praxis deeds and repo choras name that vocabulary via
-`:beholding-chora <uuid>`. The value is a UUID5, never a bare filename.
+`:beholding-chora <uuid>`. The value is the estate chora's v8 id, written `#uuid"…"` or `#u8"domain:name"`, never a bare filename and never `#u5` (owner ruling Q2, 2026-11-14).
 
 This rule exists because the first draft declared its own parallel type
 universe in a tool deed, and the dependency then ran backwards: a lattice

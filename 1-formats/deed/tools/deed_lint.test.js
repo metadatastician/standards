@@ -73,6 +73,7 @@ const RULE = {
   "intrailing_chora.deed": /trailing content/,
   "intrue-literal_chora.deed": /bare symbol 'true' is forbidden/,
   "inunbalanced_chora.deed": /unbalanced parens/,
+  "inu5-identity_chora.deed": /identity field :repo-uuid carries a #u5 literal/,
   "inu7_chora.deed": /unrecognised #-form/,
   "inu8-empty-domain_chora.deed": /uuid8 domain '' must be non-empty/,
   "inu8-no-colon_chora.deed": /has no ":"/,
@@ -288,7 +289,11 @@ describe("Mustfile check profile", () => {
     // The literal is assembled at runtime so scripts/check-uuid-v8.sh does not
     // read this test as a deed.
     const u5 = "#" + 'u5"estate/chora"';
-    expect(() => readMustfileChecks(doc(':canonical-name "must" :beholding-chora ' + u5 + ' ' + one), "test_praxis.deed")).toThrow(/invalid type/);
+    expect(() => readMustfileChecks(doc(':canonical-name "must" :beholding-chora ' + u5 + ' ' + one), "test_praxis.deed")).toThrow(/identity field :beholding-chora carries a #u5 literal/);
+    // Outside an identity field #u5 stays legal, and a line break between the
+    // field and its value does not hide it.
+    expect(() => validate(HDR + '(praxis-deed :schema-version "1" :canonical-name "x" :alias ' + u5 + ')')).not.toThrow();
+    expect(() => validate(HDR + '(praxis-deed :schema-version "1" :canonical-name "x" :beholding-chora\n  ' + u5 + ')')).toThrow(/carries a #u5 literal/);
   });
   test("multiline critical check survives parsing and has an executable body", () => {
     const checks = readMustfileChecks(doc('(check\n :id alpha\n :severity critical\n :discharge run\n :body "false")'), "test_praxis.deed");
@@ -687,7 +692,6 @@ const ANCHOR_WHY = {
   "parent-no-uuid_chora.deed": "is missing :uuid",
   "parent-relation-string_chora.deed": ":relation must be a symbol",
   "parent-self_chora.deed": "the deed's own :repo-uuid",
-  "parent-self-u5_chora.deed": "the deed's own :repo-uuid",
   "parent-self-u8_chora.deed": "the deed's own :repo-uuid",
   "parent-string_chora.deed": "got string",
   "parents-stray_chora.deed": "takes (parent …) clauses only",

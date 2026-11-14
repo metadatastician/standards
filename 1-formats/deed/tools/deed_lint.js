@@ -286,6 +286,12 @@ function checkOpaqueUuid(body, line) {
   }
 }
 
+/** Identity fields (CHORA-SPEC 7.1): a #u5 literal in any of them is an error (owner ruling Q2). */
+export const IDENTITY_FIELDS = new Set([
+  "repo-uuid", "estate-uuid", "forge-uuid", "beholding-chora", "of-chora",
+  "uuid", "estate", "base", "forge", "repo",
+]);
+
 /** #-forms: #u5"name" (uuid5), #u8"domain:name" (uuid8), #uuid"<id>" (uuid) or #t / #f (boolean); anything else is a parse error. */
 function lexHashForm(lx) {
   if (lx.t.startsWith("#uuid", lx.i)) {
@@ -414,6 +420,15 @@ function lexFieldOrClause(lx) {
       // ban is enforced here as a value-level semantic rule.
       throw new LintError(
         `boolean meaning must use #t/#f — bare symbol ${pyRepr(val[1])} is forbidden as a value`,
+        lx.line(),
+      );
+    }
+    // Owner ruling Q2 (2026-11-14, CHORA-SPEC 7.1): a #u5 literal in an
+    // identity field is an error in every mode; #u8 and #uuid are accepted.
+    // The same field names as scripts/check-uuid-v8.sh.
+    if (val[0] === "uuid5" && IDENTITY_FIELDS.has(kw[1])) {
+      throw new LintError(
+        `identity field :${kw[1]} carries a #u5 literal; write #uuid"<v8 id>" or #u8"domain:name" (owner ruling Q2, CHORA-SPEC 7.1)`,
         lx.line(),
       );
     }
