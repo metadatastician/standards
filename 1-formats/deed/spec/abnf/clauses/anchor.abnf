@@ -8,11 +8,12 @@
 ; docs/ULTRAPLAN-DEED-K9-CONTRACTILES-2026-10-19.adoc): the anchor is a clause
 ; of the chora deed; there is no ANCHOR.deed and no grammar change.
 ;
-; CHANGELOG (v1.0.0 → v2.0.0, A7 rulings J8, J26 and J27, 2026-11-14):
+; CHANGELOG (v1.0.0 → v2.0.0, A7 rulings J8, J26, J27 and J29, 2026-11-14):
 ;   - :schema may be "hyperpolymath.anchor/2". A /2 clause names the subject
 ;     of its authority with (subject …), not (identity …) (J8), and carries
 ;     no (parents …): a parent is an ECOSYSTEM.deed (related … :relationship
-;     parent) entry (J26).
+;     parent) entry (J26), and no (ssg …): site-build configuration is
+;     META.deed's (J29).
 ;   - Both majors are read (J27). Each clause is checked against the major
 ;     its :schema declares: /1 under the v1.0.0 rules, reported as legacy,
 ;     /2 under the v2.0.0 rules. Every v1.0.0 clause is still accepted.
@@ -76,7 +77,8 @@ metadata-clause = "(" %s"metadata" 1*(token-sep metadata-member) [token-sep] ")"
 metadata-member = ( %s":version" token-sep string )
                   ; SEMANTIC: three-segment MAJOR.MINOR.PATCH. The version of
                   ; this anchor's content (the legacy `version`), not of the
-                  ; format: the format major is :schema's "/1" (ultraplan Q5).
+                  ; format: the format major is the one :schema names, "/1"
+                  ; or "/2" (ultraplan Q5; A7 J27).
                 / ( %s":last-updated" token-sep string )
                   ; SEMANTIC: a real calendar date YYYY-MM-DD (2026-02-31 is
                   ; refused), or a mint placeholder {{NAME}} in the template's
@@ -130,7 +132,8 @@ ssg-member      = ( %s":engine" token-sep string )
                 / ( %s":boj-trigger" token-sep boolean )
                 / ( %s":cartridge" token-sep string )
                 ; The site-build configuration that standards' legacy
-                ; ANCHOR.a2ml carries (A7 migration table).
+                ; ANCHOR.a2ml carries. /1 only: under /2 it is META.deed's
+                ; (ssg …) (A7 J29).
 
 parents-clause  = "(" %s"parents" 1*(token-sep parent-clause) [token-sep] ")"
                 ; /1 only. Under /2 a parent is an ECOSYSTEM.deed

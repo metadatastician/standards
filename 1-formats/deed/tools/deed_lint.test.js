@@ -702,7 +702,8 @@ const ANCHOR_WHY = {
   "two-anchors_chora.deed": "at most one (anchor …)",
   "v1-subject_chora.deed": "needs hyperpolymath.anchor/2",
   "v2-identity_chora.deed": "is (subject …) in hyperpolymath.anchor/2",
-  "v2-parents_chora.deed": "is gone in hyperpolymath.anchor/2",
+  "v2-parents_chora.deed": "is gone in hyperpolymath.anchor/2: a parent",
+  "v2-ssg_chora.deed": "is gone in hyperpolymath.anchor/2: site-build",
   "version-two-segment_chora.deed": "is not MAJOR.MINOR.PATCH",
   "wrong-schema_chora.deed": '"hyperpolymath.anchor/1"',
 };

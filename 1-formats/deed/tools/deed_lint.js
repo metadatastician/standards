@@ -1342,6 +1342,7 @@ const ANCHOR_CLAUSES = new Set([
 const ANCHOR_ONLY_IN = {
   identity: [1, "is (subject …) in hyperpolymath.anchor/2 (A7 J8)"],
   parents: [1, "is gone in hyperpolymath.anchor/2: a parent is an ECOSYSTEM.deed (related … :relationship parent) entry (A7 J26)"],
+  ssg: [1, "is gone in hyperpolymath.anchor/2: site-build configuration is META.deed's (ssg …) (A7 J29)"],
   subject: [2, "needs hyperpolymath.anchor/2; under /1 it is (identity …) (A7 J8)"],
 };
 // Fixed-member sub-clauses: clause -> {field: kind}. Every member at most once.
