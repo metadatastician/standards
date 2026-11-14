@@ -8,7 +8,7 @@
 //
 // deed.abnf is normative (D308); deed_lint.js is the gate that CI runs. This
 // harness keeps them from drifting apart. It compiles deed.abnf (with the
-// (egress …), (anchor …), (contractiles …), edict, verb-descriptile and ecosystem clause profiles and the shared rules of
+// (egress …), (anchor …), (contractiles …), edict, verb-descriptile, ecosystem and state clause profiles and the shared rules of
 // clauses/common.abnf) using apg-js, mutates every
 // committed deed with a seeded generator, and asks both the grammar and the
 // gate for a verdict on each variant:
@@ -26,7 +26,7 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import apg from "apg-js";
-import { checkEcosystem, checkVerbDescriptile, choraRepoUuid, edictRuleIdsAt, FIXTURE_TODAY, LintError, rootChora, validate, verbOfDescriptile } from "../../1-formats/deed/tools/deed_lint.js";
+import { checkEcosystem, checkState, checkVerbDescriptile, choraRepoUuid, edictRuleIdsAt, FIXTURE_TODAY, LintError, rootChora, validate, verbOfDescriptile } from "../../1-formats/deed/tools/deed_lint.js";
 
 const { apgApi, apgLib } = apg;
 const ROOT = resolve(import.meta.dir, "../..");
@@ -72,7 +72,8 @@ function compileGrammar() {
       readFileSync(join(ABNF, "clauses/contractiles.abnf"), "utf8") + "\n" +
       readFileSync(join(ABNF, "clauses/edict.abnf"), "utf8") + "\n" +
       readFileSync(join(ABNF, "clauses/verb-descriptile.abnf"), "utf8") + "\n" +
-      readFileSync(join(ABNF, "clauses/ecosystem.abnf"), "utf8")).replace(/[^\x00-\x7f]/g, "?") +
+      readFileSync(join(ABNF, "clauses/ecosystem.abnf"), "utf8") + "\n" +
+      readFileSync(join(ABNF, "clauses/state.abnf"), "utf8")).replace(/[^\x00-\x7f]/g, "?") +
     "\nSP = %x20\nDQUOTE = %x22\nALPHA = %x41-5A / %x61-7A\nDIGIT = %x30-39\n" +
     "VCHAR = %x21-7E\nCR = %x0D\nLF = %x0A\nCRLF = CR LF\n";
   const api = new apgApi(src);
@@ -192,7 +193,7 @@ function topLevelFields(t, names) {
 // deed_lint.js --anchor checks.
 const ANCHOR_GRAMMAR_REJECTS = [
   "clade-in-anchor_chora.deed", "empty-authority_chora.deed", "empty-subclause_chora.deed",
-  "id-in-anchor_chora.deed", "metadata-unknown_chora.deed", "parent-legacy-literal_chora.deed",
+  "id-in-anchor_chora.deed", "metadata-unknown_chora.deed",
   "parent-relation-string_chora.deed", "parent-string_chora.deed", "parents-stray_chora.deed",
   "purpose-empty_chora.deed", "purpose-symbols_chora.deed", "satellite-string_chora.deed",
   "schema-symbol_chora.deed", "sem-files-boolean_chora.deed", "status-in-anchor_chora.deed",
@@ -309,7 +310,7 @@ for (const { c, text } of edictCases("valid")) {
   const envelopeRejects = ["envelope-empty"];
   const grammarRejects = ["always-with-field", "clade-selector", "rule-extra-field", "two-selectors", "unknown-selector"];
   const semanticOnly = ["beholding-chora", "duplicate-id", "empty-text", "envelope-not-bust", "id-space", "intend-bang",
-    "missing-requires", "missing-text", "no-comparator", "of-chora-legacy", "requires-other-verb", "selector-bang",
+    "missing-requires", "missing-text", "no-comparator", "requires-other-verb", "selector-bang",
     "two-comparators", "unknown-clause", "verb-filename-mismatch", "witness-other"];
   for (const { c, text } of edictCases("invalid")) {
     const rule = clauseText(text, "rule");
@@ -356,7 +357,7 @@ for (const { c, text } of edictCases("valid")) {
   const grammarRejects = ["bust-grade-letter", "bust-grade-zero", "evidence-numeric", "evidence-unknown", "fact-clause-member", "fact-extra-field"];
   const semanticOnly = ["affirmed-by-string", "affirmed-impossible", "beholding-chora", "bust-missing-residual", "bust-value",
     "duplicate-witness", "edict-other-chora", "expired", "expires-before-affirmed", "inherent-outside-bust", "missing-affirmed", "missing-affirmed-by",
-    "missing-evidence", "missing-value", "missing-witnesses", "of-chora-legacy", "of-chora-mismatch", "repo-uuid-twice", "rule-in-descriptile", "schema-major", "schema-not-version", "source-absolute",
+    "missing-evidence", "missing-value", "missing-witnesses", "of-chora-mismatch", "of-chora-u8-mismatch", "repo-uuid-twice", "rule-in-descriptile", "schema-major", "schema-not-version", "source-absolute",
     "unknown-clause", "witness-space", "witness-too-long", "witness-unknown"];
   for (const k of cases("invalid")) {
     if (!gateVerdict(k.text).ok) fail("verb descriptile invalid fixture is not a valid deed (YD01)", k.c);
@@ -400,7 +401,7 @@ for (const { c, text } of edictCases("valid")) {
     for (const r of allClauses(k.text, "related")) if (!grammarAccepts(grammar, "eco-related", r)) fail("ecosystem.abnf refuses a valid (related …)", `${k.c}: ${r.slice(0, 60)}`);
     for (const f of fieldsOf(k.text)) if (!grammarAccepts(grammar, "ecosystem-field", f)) fail("ecosystem.abnf refuses a valid field", `${k.c}: ${f.slice(0, 60)}`);
   }
-  const relatedRejects = ["related-clause-member", "related-extra-field", "related-uuid-legacy", "relationship-string", "relationship-unknown"];
+  const relatedRejects = ["related-clause-member", "related-extra-field", "relationship-string", "relationship-unknown"];
   const fieldRejects = ["coordination-string", "not-not-list"];
   const semanticOnly = ["beholding-chora", "chora-no-name", "empty-purpose", "expired", "missing-affirmed", "missing-project", "missing-purpose",
     "of-chora-mismatch", "project-mismatch", "project-not-chora", "related-duplicate", "related-missing-notes",
@@ -417,6 +418,56 @@ for (const { c, text } of edictCases("valid")) {
       if (r !== null && !grammarAccepts(grammar, "eco-related", r)) fail("ecosystem.abnf refuses a (related …) listed as semantic only", k.c);
       for (const f of fieldsOf(k.text)) if (!grammarAccepts(grammar, "ecosystem-field", f)) fail("ecosystem.abnf refuses a field listed as semantic only", `${k.c}: ${f.slice(0, 60)}`);
     } else fail("ecosystem invalid fixture is in neither list", k.c);
+  }
+}
+
+// STATE.deed (A7 7.2, J3, J15, YF03; clauses/state.abnf). One case per
+// directory: DIR/{valid,invalid}/<case>/STATE.deed, with an optional chora deed
+// (YD08, YF03) and STRICT marker beside it. Every valid case is a valid deed
+// for both, passes the profile, and its (status …) parses as state-status and
+// its (maturity …) as state-maturity. Each invalid case is filed in one of
+// three exhaustive lists: the grammar refuses its first (status …), the
+// grammar refuses its first (maturity …), or only the profile refuses it.
+{
+  const cases = (sub) => readdirSync(join(FIXTURES, "state", sub)).sort().map((c) => {
+    const dir = join(FIXTURES, "state", sub, c);
+    return { c, dir, file: join(dir, "STATE.deed"), text: readFileSync(join(dir, "STATE.deed"), "utf8") };
+  });
+  const profile = ({ dir, file, text }) => {
+    try {
+      const ch = rootChora(dir);
+      const strict = readdirSync(dir).includes("STRICT");
+      return checkState(text, file, { repoUuid: ch && ch.uuid, choraClauses: ch && ch.clauses, strict, today: FIXTURE_TODAY }) !== null;
+    } catch (e) {
+      if (!(e instanceof LintError)) throw e;
+      return false;
+    }
+  };
+  for (const k of cases("valid")) {
+    if (!grammarAccepts(grammar, "deed", k.text)) fail("state valid fixture rejected by deed.abnf", k.c);
+    if (!profile(k)) fail("state valid fixture rejected by deed_lint.js --state", k.c);
+    for (const r of allClauses(k.text, "status")) if (!grammarAccepts(grammar, "state-status", r)) fail("state.abnf refuses a valid (status …)", `${k.c}: ${r.slice(0, 60)}`);
+    for (const r of allClauses(k.text, "maturity")) if (!grammarAccepts(grammar, "state-maturity", r)) fail("state.abnf refuses a valid (maturity …)", `${k.c}: ${r.slice(0, 60)}`);
+  }
+  const statusRejects = ["aliases-not-list", "ended-not-date", "entry-phase-unknown", "entry-unknown-field", "history-field",
+    "phase-string", "phase-unknown", "present-string", "since-not-date", "status-unknown-field"];
+  const maturityRejects = ["level-string", "level-unknown", "maturity-unknown-field"];
+  const semanticOnly = ["beholding-chora", "entry-missing-since", "expired", "history-twice", "maturity-in-chora-strict", "maturity-twice",
+    "missing-affirmed", "missing-level", "missing-phase", "missing-status", "of-chora-mismatch", "phase-twice", "rule-in-descriptile",
+    "since-impossible", "state-clause", "status-in-chora-strict", "status-twice", "unknown-clause", "unknown-field"];
+  for (const k of cases("invalid")) {
+    if (!gateVerdict(k.text).ok) fail("state invalid fixture is not a valid deed (YD01)", k.c);
+    if (profile(k)) fail("deed_lint.js --state accepts an invalid fixture", k.c);
+    const st = clauseText(k.text, "status");
+    const mt = clauseText(k.text, "maturity");
+    if (statusRejects.includes(k.c)) {
+      if (st === null || grammarAccepts(grammar, "state-status", st)) fail("state.abnf accepts a (status …) it must refuse", k.c);
+    } else if (maturityRejects.includes(k.c)) {
+      if (mt === null || grammarAccepts(grammar, "state-maturity", mt)) fail("state.abnf accepts a (maturity …) it must refuse", k.c);
+    } else if (semanticOnly.includes(k.c)) {
+      for (const r of allClauses(k.text, "status")) if (!grammarAccepts(grammar, "state-status", r)) fail("state.abnf refuses a (status …) listed as semantic only", k.c);
+      for (const r of allClauses(k.text, "maturity")) if (!grammarAccepts(grammar, "state-maturity", r)) fail("state.abnf refuses a (maturity …) listed as semantic only", k.c);
+    } else fail("state invalid fixture is in neither list", k.c);
   }
 }
 
@@ -468,7 +519,7 @@ for (const { c, text } of edictCases("valid")) {
 {
   const names = [
     ["Mustfile.deed", true], ["Bustfile.deed", true], ["Intentfile.deed", true], ["STATE.deed", true],
-    ["CLADE.deed", true], ["MUST.deed", true], ["ANCHOR.deed", true], ["mustfile.deed", false],
+    ["CLADE.deed", true], ["MUST.deed", true], ["ANCHOR.deed", false], ["mustfile.deed", false],
     ["MUSTFILE.deed", false], ["Meta.deed", false], ["State.deed", false], ["anchor.deed", false],
     ["Clade.deed", false], ["Statefile.deed", false], ["ATLAS.deed", true],
   ];

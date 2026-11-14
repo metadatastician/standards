@@ -48,9 +48,17 @@
 #   OWNER-ID-UNREAD (own row, WORKFLOW column `actions.lock`) the tree lists an
 #              actions.lock that could not be read as text, so it was not judged.
 #              Never read as "this repository has no lock".
-#   STAMPED-PIN-HELD (--fix only) a stamped proven-cicd copy whose pins are BEHIND
-#              or MOVED. Its hashed body is proven-cicd's, so a re-pin would make
-#              it drift from its stamp: it is held, and --fix-content refreshes it.
+#   DEED-OVERCAP (own row, WORKFLOW column = the deed's file name) a ROOT deed
+#              (any `<stem>_chora.deed` but `estate`; the stem need not be the
+#              repository's name) has a line longer than 998 OCTETS (the deed grammar's
+#              limit). Census only, in every mode: reported, never rewritten. DETAIL
+#              gives the count and each offending line as L<line>=<octets>. Deeds
+#              under .machine_readable/ are not read. A repository with no root
+#              deed gets no row.
+#   DEED-OVERCAP-UNREAD  a root deed exists but could not be read whole (a blob
+#              without text, truncated, too large for the raw endpoint), or, in the
+#              REST fallback, the repository root could not be listed (WORKFLOW column
+#              `(root listing)`): not judged, and never read as "no over-cap line".
 #
 # SAFETY PROPERTIES (do not weaken any of these):
 #   * READ-ONLY by default. --fix is required to write anything.
@@ -321,6 +329,22 @@ content_state() {
 # metadatastician; a lock record for a standards commit that still carries this
 # owner_id was written before the move (or copied from a lock that was).
 STALE_OWNER_ID=6759885
+
+# DEED_LINE_CAP — the deed grammar's line limit, in OCTETS (not characters).
+DEED_LINE_CAP=998
+
+# deed_overcap <deed file> — echo ONE line `DEED-OVERCAP<TAB>DETAIL` when any line is
+# longer than DEED_LINE_CAP octets, else nothing. DETAIL is the count and every
+# offending line as `L<line>=<octets>`. LC_ALL=C makes awk's length() count bytes,
+# so a multi-byte character cannot hide an over-cap line. The line terminator is
+# not counted.
+deed_overcap() {
+  LC_ALL=C awk -v cap="$DEED_LINE_CAP" '
+    { line = $0; sub(/\r$/, "", line); n = length(line)
+      if (n > cap) { out = out (out == "" ? "" : " ") "L" NR "=" n; cnt++ } }
+    END { if (cnt > 0) printf "DEED-OVERCAP\t%d line(s) over %d octets: %s\n", cnt, cap, out }
+  ' "$1"
+}
 
 # lock_owner_state <actions.lock> — echo ONE line `OWNER-ID-STALE<TAB>DETAIL` when a
 # record keyed `<owner>/standards@<ref>` carries owner_id STALE_OWNER_ID, else
@@ -872,6 +896,31 @@ JSON
   ocheck owner-tag-key.lock      1
   ocheck owner-mixed-case.lock   1
 
+  echo "control: deed_overcap counts OCTETS, excludes the terminator, and reports every over-cap line"
+  rep() { head -c "$1" /dev/zero | tr '\0' "$2"; }
+  { printf 'ok line\n'; printf 'ok line\n'; } > "$d/deed-ok.deed"
+  { printf 'a\n'; printf 'b\n'; rep 1159 a; printf '\n'; printf 'c\n'; rep 999 b; printf '\n'; } > "$d/deed-over.deed"
+  { rep 998 a; printf '\n'; } > "$d/deed-exact.deed"
+  { rep 999 a; printf '\n'; } > "$d/deed-exact-plus1.deed"
+  # 500 two-octet characters = 1000 octets but only 500 characters.
+  { i=0; while [ $i -lt 500 ]; do printf '\303\251'; i=$((i+1)); done; printf '\n'; } > "$d/deed-multibyte.deed"
+  { rep 998 a; printf '\r\n'; } > "$d/deed-crlf.deed"
+  dcheck() {
+    local file="$1" want="$2" got
+    got=$(deed_overcap "$d/$file" | cut -f2)
+    if [ "$got" = "$want" ]; then
+      echo "  PASS $file -> ${got:-no row}"
+    else
+      echo "  FAIL $file -> got '${got}' want '${want}'" >&2; rc=1
+    fi
+  }
+  dcheck deed-ok.deed           ""
+  dcheck deed-over.deed         "2 line(s) over 998 octets: L3=1159 L5=999"
+  dcheck deed-exact.deed        ""
+  dcheck deed-exact-plus1.deed  "1 line(s) over 998 octets: L1=999"
+  dcheck deed-multibyte.deed    "1 line(s) over 998 octets: L1=1000"
+  dcheck deed-crlf.deed         ""
+
   echo "control: the lock relock is present"
   if [ -f "$RELOCK" ] && bash -n "$RELOCK"; then
     echo "  PASS $(basename "$RELOCK") present and parses"
@@ -990,6 +1039,25 @@ list_repos() {
   rm -f "$all" "$part"
 }
 
+# DEED_NAME_RE — a root deed file name: any non-empty stem but `estate` (the deed
+# grammar's filename rule), in a safe character set. The stem is NOT assumed to equal
+# the GitHub repository name (a renamed repository keeps its deed's name).
+DEED_NAME_JQ='select(test("^[A-Za-z0-9._-]+_chora\\.deed$")) | select(. != "estate_chora.deed")'
+
+# fetch_root_deed_rest <owner/repo> <file name> <destdir> — read one root deed through
+# REST (raw) into <destdir>/.deed-<name>. A read that fails (a file too large for the
+# raw endpoint, an error) leaves <destdir>/.deed-<name>.unread instead: not judged,
+# and never read as "no over-cap line".
+fetch_root_deed_rest() {
+  local repo="$1" fname="$2" dest="$3"
+  if gh api "repos/${repo}/contents/${fname}" -H 'Accept: application/vnd.github.raw' \
+       > "${dest}/.deed-${fname}" 2>/dev/null; then
+    return 0
+  fi
+  rm -f "${dest}/.deed-${fname}"
+  : > "${dest}/.deed-${fname}.unread"
+}
+
 # fetch_workflows <owner/repo> <destdir> — download .github/workflows/*.yml,
 # *.yaml and actions.lock, when present, into destdir.
 # The REMOTE content is the only evidence: a local checkout can be arbitrarily
@@ -1013,16 +1081,40 @@ fetch_workflows() {
   # and roughly two hours; this is ~438 calls and minutes. The estate has a hard
   # 5,000/hour ceiling, so the cheaper shape is not an optimisation, it is what
   # makes an estate-wide census affordable at all.
+  # The repository's root deed rides in the SAME call: the root tree's file NAMES
+  # (`rootnames`) say which `*_chora.deed` exist (the stem is not assumed to be the
+  # repository name), and the conventional `<name>_chora.deed` is read in the same
+  # call (alias `deed`), so the usual case costs no second request. Only a deed whose
+  # name differs from the repository's is read with one extra REST request.
   if gh api graphql \
-       -f query='query($owner:String!,$name:String!){
+       -f query='query($owner:String!,$name:String!,$deed:String!){
          repository(owner:$owner,name:$name){
            object(expression:"HEAD:.github/workflows"){
              ... on Tree { entries { name type object { ... on Blob { text } } } }
            }
+           rootnames: object(expression:"HEAD:"){
+             ... on Tree { entries { name type } }
+           }
+           deed: object(expression:$deed){
+             ... on Blob { text isTruncated }
+           }
          }
        }' \
-       -F owner="$owner" -F name="$name" > "$resp" 2>/dev/null; then
-    local n b64
+       -F owner="$owner" -F name="$name" -f deed="HEAD:${name}_chora.deed" > "$resp" 2>/dev/null; then
+    local n b64 dn
+    # Every root deed: written when its text came back whole. A deed that exists but
+    # came back without text, or truncated, is not a repository without one (and a
+    # truncated read would under-count over-cap lines): leave a marker.
+    while IFS= read -r dn; do
+      [ -n "$dn" ] || continue
+      if [ "$dn" = "${name}_chora.deed" ] \
+         && jq -e '.data.repository.deed.text != null and ((.data.repository.deed.isTruncated // false) | not)' "$resp" >/dev/null 2>&1; then
+        jq -r '.data.repository.deed.text' "$resp" > "${dest}/.deed-${dn}" 2>/dev/null \
+          || { rm -f "${dest}/.deed-${dn}"; : > "${dest}/.deed-${dn}.unread"; }
+      else
+        fetch_root_deed_rest "$repo" "$dn" "$dest"
+      fi
+    done < <(jq -r "(.data.repository.rootnames.entries // [])[] | select(.type == \"blob\") | .name | ${DEED_NAME_JQ}" "$resp" 2>/dev/null)
     while IFS=$'\t' read -r n b64; do
       [ -n "$n" ] || continue
       printf '%s' "$b64" | base64 -d > "${dest}/${n}" 2>/dev/null || rm -f "${dest}/${n}"
@@ -1051,6 +1143,20 @@ fetch_workflows() {
   # reading a local checkout is what produced a false "285 callers track main"
   # census on 2026-09-15.
   local fname listing
+  # The root deeds, through REST: one listing of the root, then each `*_chora.deed`
+  # (non-estate) raw. A repository with none gets no marker and no row. A root
+  # listing that cannot be read leaves `.deed-LISTING.unread`, so the census says it
+  # could not look, rather than reading the gap as "no deed".
+  local rootlist dn
+  if rootlist=$(gh api "repos/${repo}/contents" --jq '.[] | select(.type == "file") | .name' 2>/dev/null); then
+    while IFS= read -r dn; do
+      [ -n "$dn" ] || continue
+      printf '%s\n' "$dn" | jq -R -e "${DEED_NAME_JQ}" >/dev/null 2>&1 || continue
+      fetch_root_deed_rest "$repo" "$dn" "$dest"
+    done <<< "$rootlist"
+  else
+    : > "${dest}/.deed-LISTING.unread"
+  fi
   if ! listing=$(gh api "repos/${repo}/contents/.github/workflows" \
                    --jq '.[] | select(.type == "file") | .name' 2>&1); then
     case "$listing" in *"HTTP 404"*) return 0 ;; esac
@@ -1258,6 +1364,18 @@ main() {
   WORKDIR=$(mktemp -d); trap 'rm -rf "${WORKDIR:-}"' EXIT
   local repos n=0
   if [ -n "$ONLY_REPO" ]; then
+    # An explicit repository must exist and be readable with this credential. Without
+    # this, a typo, a rename or an inaccessible repository reaches fetch_workflows,
+    # whose GraphQL answer for a null repository is an EMPTY tree (a valid answer for
+    # a repo with no workflows): one repository "walked", a header-only census, exit 0.
+    if [[ ! "$ONLY_REPO" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]]; then
+      log "FATAL: --only must be owner/name, got '${ONLY_REPO}'."
+      exit 1
+    fi
+    if ! gh api "repos/${ONLY_REPO}" --jq '.default_branch' >/dev/null 2>&1; then
+      log "FATAL: --only ${ONLY_REPO}: repository not found or not accessible with this credential. Refusing to report a clean run that walked nothing."
+      exit 1
+    fi
     repos="$ONLY_REPO"
   elif ! repos=$(list_repos); then
     log "FATAL: repository enumeration failed for ${OWNERS}. Refusing to report a partial census."
@@ -1327,6 +1445,24 @@ main() {
     elif [ -f "$rdir/.actions.lock.unread" ]; then
       printf '%s\tactions.lock\tOWNER-ID-UNREAD\tlisted in the tree but not materialised (blob without text, or undecodable); not judged\n' "$repo" >> "$tsv"
     fi
+    # A deed line over the grammar's octet cap is reported, never rewritten (census
+    # only, in every mode). An unreadable deed is reported as such, not as clean.
+    # Every root `*_chora.deed` is judged under its OWN file name (the stem need not
+    # be the repository's name).
+    local dfile dbase dst
+    for dfile in "$rdir"/.deed-*; do
+      [ -e "$dfile" ] || continue
+      dbase="${dfile##*/.deed-}"
+      case "$dbase" in
+        LISTING.unread)
+          printf '%s\t(root listing)\tDEED-OVERCAP-UNREAD\tthe repository root could not be listed, so its deeds were not looked for; not judged\n' "$repo" >> "$tsv" ;;
+        *.unread)
+          printf '%s\t%s\tDEED-OVERCAP-UNREAD\tthe deed could not be read whole (a blob without text, truncated, or too large to read); not judged\n' "$repo" "${dbase%.unread}" >> "$tsv" ;;
+        *)
+          dst=$(deed_overcap "$dfile")
+          [ -n "$dst" ] && printf '%s\t%s\t%s\n' "$repo" "$dbase" "$dst" >> "$tsv" ;;
+      esac
+    done
     [ "$found" -eq 0 ] && [ "$ENSURE_SQUABBLER" -eq 0 ] && continue
 
     # The squabbler gate rides with the re-pin (see ENSURE-SQUABBLER above).

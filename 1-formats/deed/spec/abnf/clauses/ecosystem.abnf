@@ -12,13 +12,13 @@
 ; A CLAUSE PROFILE, not a new grammar. Every rule below is also a `field` or
 ; `clause` of deed.abnf v1.5.0, so ECOSYSTEM.deed still passes deed_lint
 ; unchanged. Rules it borrows: string, symbol and token-sep are deed.abnf's;
-; str-list and chora-uuid8 are common.abnf's. Requires RFC 7405 (%s"..."
+; str-list and chora-id are common.abnf's. Requires RFC 7405 (%s"..."
 ; case-sensitive literals).
 ;
 ; Where it applies: ECOSYSTEM.deed (head descriptile-deed, J14), at the top
 ; level of the form. SEMANTIC (validator-enforced, deed_lint.js --ecosystem):
 ;   * the descriptile header: :schema-version, :canonical-name and a version 8
-;     :of-chora (J20) once each, no :beholding-chora, and the affirmation
+;     :of-chora (#uuid or #u8; J20, J28) once each, no :beholding-chora, and the affirmation
 ;     members, required by default (J4, YD06), as for every descriptile;
 ;   * :project, :ecosystem, :position-type and :purpose once each (required),
 ;     the other ecosystem-field members at most once;
@@ -49,7 +49,7 @@ eco-related     = "(" %s"related" 1*(token-sep related-member) [token-sep] ")"
 related-member  = ( %s":name"         token-sep string )
                 / ( %s":relationship" token-sep relationship )
                 / ( %s":notes"        token-sep string )
-                / ( %s":uuid"         token-sep chora-uuid8 )
+                / ( %s":uuid"         token-sep chora-id )
 
 relationship    = %s"standard-source" / %s"build-tooling" / %s"validation-tooling"
                 / %s"signing-tooling" / %s"verification-tooling" / %s"minted-from"

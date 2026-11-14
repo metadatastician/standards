@@ -1,0 +1,6 @@
+;; SPDX-License-Identifier: CC-BY-SA-4.0
+(descriptile-deed
+  :schema-version "1.0.0"
+  :canonical-name "example-game"
+  :of-chora #u8"chora-registry:github.com/example/example-game"
+  :affirmed "2026-11-12" :affirmed-by agent)

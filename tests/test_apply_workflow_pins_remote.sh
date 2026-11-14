@@ -186,6 +186,11 @@ kill_mutant owner_case_sensitive \
   's@tolower\(a\[1\]\) ~ /\^@a[1] ~ /^@' \
   "FAIL owner-mixed-case.lock"
 
+# M12b, M12c — the deed over-cap function: the cap is a strict greater-than on
+# OCTETS (a 998-octet line is legal), and the line terminator is not counted.
+kill_mutant deed_cap_off_by_one 's@if \(n > cap\)@if (n >= cap)@' "FAIL deed-exact.deed"
+kill_mutant deed_counts_terminator 's@sub\(/\\r\$/, "", line\);@@' "FAIL deed-crlf.deed"
+
 # M12 — drop the owner_id test. Every standards record would then read stale,
 # including one that already carries the current owner's id.
 kill_mutant owner_id_unchecked \
@@ -212,6 +217,12 @@ cat > "$STUB/gh" <<'EOF'
 #!/usr/bin/env bash
 case "$*" in
   "api graphql"*) exit 1 ;;   # force the REST fallback
+  "api repos/o/r/contents --jq"*)
+    [ "${ROOT_FAIL:-}" = 1 ] && { echo "gh: API rate limit exceeded (HTTP 403)" >&2; exit 1; }
+    for f in ${ROOT:-}; do echo "$f"; done; exit 0 ;;
+  *contents/*_chora.deed*)
+    [ "${DEED_FAIL:-}" = 1 ] && { echo "gh: file too large (HTTP 403)" >&2; exit 1; }
+    printf '(deed)\n'; exit 0 ;;
   *contents/.github/workflows/*)
     [ "${FILE_FAIL:-}" = 1 ] && { echo "gh: rate limit (HTTP 403)" >&2; exit 1; }
     echo 'on: push'; exit 0 ;;
@@ -239,6 +250,23 @@ fetch_case "no workflows dir (404)" 0 LIST=404
 fetch_case "rate-limited listing"   1 LIST=403
 fetch_case "file download fails"    1 LIST=200 FILE_FAIL=1
 [ -s "$TMP/fetch.listing ok/ci.yml" ] && pass "fetch: file content written" || fail "fetch: ci.yml not written"
+
+# The REST fallback reads the root deeds too: one root listing, then each non-estate
+# `*_chora.deed` under its OWN name. A repository with none leaves no marker (no row);
+# a listing or a read that fails leaves an .unread marker, never a silent "no deed".
+deed_files() { ( cd "$1" 2>/dev/null && ls -A | grep '^\.deed-' | sort | tr '\n' ' ' ); }
+deed_case() {
+  local label="$1" want="$2"; shift 2
+  local dir="$TMP/fetchd.$label"
+  env PATH="$STUB:$PATH" "$@" bash -c 'source "$1"; fetch_workflows o/r "$2"' _ \
+      "${APPLIER_UNDER_TEST:-$APPLIER}" "$dir" >/dev/null 2>&1
+  local got; got=$(deed_files "$dir")
+  if [ "$got" = "$want" ]; then pass "REST deeds: $label"; else fail "REST deeds: $label — expected '$want', got '$got'"; fi
+}
+deed_case "a deed under any stem is read; estate_chora.deed is ignored" ".deed-old-name_chora.deed " LIST=200 ROOT="old-name_chora.deed estate_chora.deed README.adoc"
+deed_case "no root deed leaves no marker" "" LIST=200 ROOT="README.adoc"
+deed_case "a failed root listing leaves a LISTING marker" ".deed-LISTING.unread " LIST=200 ROOT_FAIL=1
+deed_case "a deed that cannot be read leaves an .unread marker" ".deed-x_chora.deed.unread " LIST=200 ROOT="x_chora.deed" DEED_FAIL=1
 
 # Mutant: restore the old `return 0` on a failed listing. It must turn red.
 M="$TMP/mutant_fail_open.sh"; cp "$APPLIER" "$M"
@@ -271,12 +299,13 @@ echo "$*" >> "$GH_FIX/calls.log"
 [ "${1:-} ${2:-}" = "pr create" ] && { echo "https://github.com/stub/pull/1"; exit 0; }
 [ "${1:-}" = api ] || exit 64
 shift
-path="" jqx="" gql=0 inp=0
+path="" jqx="" gql=0 inp=0 qname=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --jq|-q)     jqx="$2"; shift ;;
     --input)     inp=1 ;;
-    -F|-f|-H)    shift ;;
+    -F)          case "${2:-}" in name=*) qname="${2#name=}" ;; esac; shift ;;
+    -f|-H)       shift ;;
     -*)          ;;
     graphql)     gql=1 ;;
     *)           [ -n "$path" ] || path="$1" ;;
@@ -303,7 +332,22 @@ if [ "$gql" = 1 ]; then
   [ -f "$GH_FIX/own_lock_unread" ] && extra=$(printf '%s' "$extra" | jq '. + [{name: "actions.lock", type: "blob", object: {text: null}}]')
   # $GH_FIX/own_stamped: each repository also holds that stamped proven-cicd copy.
   [ -f "$GH_FIX/own_stamped" ] && extra=$(printf '%s' "$extra" | jq --rawfile s "$GH_FIX/own_stamped" '. + [{name: "proven-lock-gate.yml", type: "blob", object: {text: $s}}]')
-  jq -n --arg sha "$TARGET" --argjson extra "$extra" '{data: {repository: {object: {entries: ([{name: "ci.yml", type: "blob",
+  # $GH_FIX/own_deed: each repository has that root deed (named <repo>_chora.deed, or
+  # the name in own_deed_name: a deed kept under a former repository name; the
+  # conventional-name alias then reads null, as GitHub answers for a missing file).
+  # own_deed_unread: the deed blob came back without text. own_estate_deed: the root
+  # also holds estate_chora.deed (which the census must ignore).
+  rootnames='[]'; deed_json=null
+  deed_name="${qname}_chora.deed"; [ -f "$GH_FIX/own_deed_name" ] && deed_name=$(cat "$GH_FIX/own_deed_name")
+  if [ -f "$GH_FIX/own_deed" ] || [ -f "$GH_FIX/own_deed_unread" ]; then
+    rootnames=$(jq -n --arg n "$deed_name" '[{name: $n, type: "blob"}]')
+    if [ "$deed_name" = "${qname}_chora.deed" ]; then
+      [ -f "$GH_FIX/own_deed" ] && deed_json=$(jq -Rs '{text: ., isTruncated: false}' "$GH_FIX/own_deed")
+      [ -f "$GH_FIX/own_deed_unread" ] && deed_json=$(jq -n '{text: null, isTruncated: false}')
+    fi
+  fi
+  [ -f "$GH_FIX/own_estate_deed" ] && rootnames=$(printf '%s' "$rootnames" | jq '. + [{name: "estate_chora.deed", type: "blob"}]')
+  jq -n --arg sha "$TARGET" --argjson extra "$extra" --argjson deed "$deed_json" --argjson rn "$rootnames" '{data: {repository: {deed: $deed, rootnames: {entries: $rn}, object: {entries: ([{name: "ci.yml", type: "blob",
     object: {text: ("jobs:\n  a:\n    uses: hyperpolymath/standards/.github/workflows/x.yml@" + $sha + "\n")}}] + $extra)}}}}'
   exit 0
 fi
@@ -311,6 +355,9 @@ p="${path%%\?*}"
 # repos/<owner>/<name> (exactly three segments): the repository itself, for
 # --ensure-squabbler's fork test. fork_<name> in $GH_FIX makes it a fork.
 if [[ "$p" =~ ^repos/[^/]+/[^/]+$ ]]; then
+  # missing_<name> in $GH_FIX: that repository does not exist (404), as for a typo,
+  # a rename or a repository this credential cannot see.
+  [ -f "$GH_FIX/missing_${p##*/}" ] && refuse 404 "Not Found"
   f=false; [ -f "$GH_FIX/fork_${p##*/}" ] && f=true
   j="{\"fork\": $f, \"default_branch\": \"main\"}"
   if [ -n "$jqx" ]; then printf '%s' "$j" | jq -r "$jqx"; else printf '%s' "$j"; fi
@@ -320,9 +367,9 @@ case "$p" in
   # The published proven-cicd manifest, served raw from $GH_FIX/proven_manifest.json.
   repos/hyperpolymath/proven-cicd-and-workflows/contents/proven/manifest.json)
     body="$GH_FIX/proven_manifest.json" ;;
-  # The template --fix-content installs, served raw from $GH_FIX/proven_template.yml.
-  repos/hyperpolymath/proven-cicd-and-workflows/contents/templates/proven-lock-gate.yml)
-    body="$GH_FIX/proven_template.yml" ;;
+  repos/*/contents/*_chora.deed)
+    [ -f "$GH_FIX/own_deed_rest_fail" ] && refuse 403 "This API returns blobs up to 1 MB in size. The requested blob is too large"
+    body="$GH_FIX/own_deed" ;;
   repos/*/commits/*)
     j='{"sha": "cccccccccccccccccccccccccccccccccccccccc"}'
     if [ -n "$jqx" ]; then printf '%s' "$j" | jq -r "$jqx"; else printf '%s' "$j"; fi; exit 0 ;;
@@ -808,6 +855,122 @@ case_main_owner_unread() {
   fi
 }
 
+# case_main_deed_overcap <applier> — a root deed with a line over 998 octets gets its
+# own DEED-OVERCAP row (count, line number, octet size) and the pin row of the same
+# repository is unchanged.
+case_main_deed_overcap() {
+  local d; d=$(new_case deedover)
+  { printf '(deed\n'; head -c 1159 /dev/zero | tr '\0' 'a'; printf '\n)\n'; } > "$d/own_deed"
+  run_content "$d" "$1"
+  if [ "$(cat "$d/rc")" = 0 ] \
+     && grep -qF "$(printf 'hyperpolymath/pub-a\tpub-a_chora.deed\tDEED-OVERCAP\t1 line(s) over 998 octets: L2=1159')" "$d/out" \
+     && grep -qF "$(printf 'hyperpolymath/pub-a\tci.yml\tFRESH')" "$d/out"; then
+    pass "main: a root deed line over 998 octets is reported DEED-OVERCAP (with line and size)"
+  else
+    fail "main: deed over-cap census wrong (rc=$(cat "$d/rc"))"
+    sed 's/^/    /' "$d/out" "$d/err" | tail -8 >&2
+  fi
+}
+
+# case_main_deed_clean <applier> — a root deed within the cap, and a repository with
+# no root deed at all, produce no deed row.
+case_main_deed_clean() {
+  local d; d=$(new_case deedclean)
+  printf '(deed\n  (identity))\n' > "$d/own_deed"
+  run_content "$d" "$1"
+  local ok=0
+  [ "$(cat "$d/rc")" = 0 ] && ! grep -qF "_chora.deed" "$d/out" && ok=1
+  rm -f "$d/own_deed"
+  run_content "$d" "$1"
+  { [ "$(cat "$d/rc")" = 0 ] && ! grep -qF "_chora.deed" "$d/out"; } || ok=0
+  if [ "$ok" = 1 ]; then
+    pass "main: an in-cap deed, and no deed at all, get no deed row"
+  else
+    fail "main: a clean or absent deed produced a row"
+    sed 's/^/    /' "$d/out" "$d/err" | tail -8 >&2
+  fi
+}
+
+# case_main_deed_unread <applier> — a deed blob that came back without text is
+# reported DEED-OVERCAP-UNREAD, never read as "no over-cap line".
+case_main_deed_unread() {
+  local d; d=$(new_case deedunread)
+  : > "$d/own_deed_unread"
+  run_content "$d" "$1"
+  if [ "$(cat "$d/rc")" = 0 ] \
+     && grep -qF "$(printf 'hyperpolymath/pub-a\tpub-a_chora.deed\tDEED-OVERCAP-UNREAD\t')" "$d/out"; then
+    pass "main: a deed that could not be read whole is reported DEED-OVERCAP-UNREAD"
+  else
+    fail "main: an unreadable deed was not reported (rc=$(cat "$d/rc"))"
+    sed 's/^/    /' "$d/out" "$d/err" | tail -8 >&2
+  fi
+}
+
+# case_main_deed_renamed <applier> — a root deed that is NOT named after the repository
+# (a repository renamed after its deed was minted) is still found and judged under its
+# own file name; estate_chora.deed is ignored.
+case_main_deed_renamed() {
+  local d; d=$(new_case deedrenamed)
+  { printf '(deed\n'; head -c 1159 /dev/zero | tr '\0' 'a'; printf '\n)\n'; } > "$d/own_deed"
+  printf 'former-name_chora.deed' > "$d/own_deed_name"
+  : > "$d/own_estate_deed"
+  run_content "$d" "$1"
+  if [ "$(cat "$d/rc")" = 0 ] \
+     && grep -qF "$(printf 'hyperpolymath/pub-a\tformer-name_chora.deed\tDEED-OVERCAP\t1 line(s) over 998 octets: L2=1159')" "$d/out" \
+     && ! grep -qF 'estate_chora.deed' "$d/out"; then
+    pass "main: a root deed under a former repository name is judged under its own name; estate_chora.deed is ignored"
+  else
+    fail "main: a differently named root deed was missed or estate_chora.deed was read (rc=$(cat "$d/rc"))"
+    sed 's/^/    /' "$d/out" "$d/err" | tail -8 >&2
+  fi
+}
+
+# case_main_deed_rest_fail <applier> — a differently named deed that cannot be read is
+# reported DEED-OVERCAP-UNREAD under its own name, not skipped.
+case_main_deed_rest_fail() {
+  local d; d=$(new_case deedrestfail)
+  printf '(deed)\n' > "$d/own_deed"
+  printf 'former-name_chora.deed' > "$d/own_deed_name"
+  : > "$d/own_deed_rest_fail"
+  run_content "$d" "$1"
+  if [ "$(cat "$d/rc")" = 0 ] \
+     && grep -qF "$(printf 'hyperpolymath/pub-a\tformer-name_chora.deed\tDEED-OVERCAP-UNREAD\t')" "$d/out"; then
+    pass "main: a differently named deed that could not be read is reported DEED-OVERCAP-UNREAD under its own name"
+  else
+    fail "main: an unreadable differently named deed was not reported (rc=$(cat "$d/rc"))"
+    sed 's/^/    /' "$d/out" "$d/err" | tail -8 >&2
+  fi
+}
+
+# case_main_only_missing <applier> — `--only` naming a repository that does not
+# exist (or is not accessible) is a FATAL error, never a clean run that walked
+# nothing; a malformed value is refused too; an existing repository is walked.
+case_main_only_missing() {
+  local d; d=$(new_case onlymissing)
+  : > "$d/missing_nope"
+  run_content "$d" "$1" --only hyperpolymath/nope
+  local rc1; rc1=$(cat "$d/rc"); local e1="$d/err"
+  if [ "$rc1" != 0 ] && grep -q 'not found or not accessible' "$e1" && ! grep -q 'ci.yml' "$d/out"; then
+    pass "main: --only naming a nonexistent repository fails loudly (rc=$rc1), no census"
+  else
+    fail "main: --only on a nonexistent repository did not fail loudly (rc=$rc1)"
+    sed 's/^/    /' "$d/out" "$d/err" | tail -6 >&2
+  fi
+  run_content "$d" "$1" --only not-a-slug
+  if [ "$(cat "$d/rc")" != 0 ] && grep -q 'must be owner/name' "$d/err"; then
+    pass "main: --only that is not owner/name is refused"
+  else
+    fail "main: a malformed --only was not refused (rc=$(cat "$d/rc"))"
+  fi
+  run_content "$d" "$1" --only hyperpolymath/pub-a
+  if [ "$(cat "$d/rc")" = 0 ] && grep -qF "$(printf 'hyperpolymath/pub-a\tci.yml\tFRESH')" "$d/out"; then
+    pass "main: --only on an existing repository walks exactly that repository"
+  else
+    fail "main: --only on an existing repository was not walked (rc=$(cat "$d/rc"))"
+    sed 's/^/    /' "$d/out" "$d/err" | tail -6 >&2
+  fi
+}
+
 # Planted positives: the stub must be able to say no, or every fail-closed case
 # above could pass because nothing ever failed.
 d=$(new_case planted)
@@ -839,6 +1002,12 @@ case_main_content_off "$APPLIER"
 case_main_owner_stale "$APPLIER"
 case_main_owner_clean "$APPLIER"
 case_main_owner_unread "$APPLIER"
+case_main_deed_overcap "$APPLIER"
+case_main_deed_clean "$APPLIER"
+case_main_deed_unread "$APPLIER"
+case_main_deed_renamed "$APPLIER"
+case_main_deed_rest_fail "$APPLIER"
+case_main_only_missing "$APPLIER"
 case_main_content_fix "$APPLIER"
 case_main_content_refresh "$APPLIER"
 case_main_content_refused "$APPLIER" "a template that does not match its own stamp" \
@@ -1039,6 +1208,16 @@ list_mutant content_row_writes 's@\[ -n "\$cst" \] \&\& printf@[ -n "$cst" ] \&\
 # say nothing when there is nothing to say.
 list_mutant owner_row_dropped 's@ost=\$\(lock_owner_state "\$rdir/actions\.lock"\)@ost=""@' case_main_owner_stale
 list_mutant owner_row_always 's@\[ -n "\$ost" \] && printf@true \&\& printf@' case_main_owner_clean
+# Deed over-cap census: the row must be written, must not be written for a clean
+# deed, and an unreadable deed must be said, not skipped.
+list_mutant deed_row_dropped 's@dst=\$\(deed_overcap "\$dfile"\)@dst=""@' case_main_deed_overcap
+list_mutant deed_row_always 's@\[ -n "\$dst" \] && printf@true \&\& printf@' case_main_deed_clean
+list_mutant deed_unread_silent 's@^        \*\.unread\)$@        *.unread-never)@' case_main_deed_unread
+# estate_chora.deed is not a repository deed: dropping its exclusion must be caught.
+list_mutant deed_estate_not_excluded 's@ \| select\(\. != "estate_chora\.deed"\)@@' case_main_deed_renamed
+# An explicit --only repository must be checked for existence: this is what stops a
+# typo from becoming a header-only census and a clean exit.
+list_mutant only_existence_unchecked 's@if ! gh api "repos/\$\{ONLY_REPO\}"@if false \&\& gh api "repos/${ONLY_REPO}"@' case_main_only_missing
 }
 
 echo

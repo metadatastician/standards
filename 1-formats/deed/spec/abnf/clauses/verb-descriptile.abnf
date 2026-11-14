@@ -20,7 +20,7 @@
 ; table), the others are their own verb. SEMANTIC (validator-enforced,
 ; deed_lint.js --verb-descriptile):
 ;   * the form carries :schema-version, :canonical-name (a string) and
-;     :of-chora (the repo's opaque version 8 #uuid chora id, J20), each exactly
+;     :of-chora (the repo's version 8 chora id, #uuid or #u8, J20, J28), each exactly
 ;     once, and no :beholding-chora (J20);
 ;   * the affirmation members: :affirmed and :affirmed-by exactly once each,
 ;     :expires at most once and not before :affirmed (J4: required by default;

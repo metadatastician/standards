@@ -95,7 +95,7 @@ jobs:
       - name: fixture corpus (valid must pass, invalid must fail)
         if: github.repository_id == 1116521501 && steps.bun.outcome == 'success'
         run: bun "$T/deed_lint.js" --fixtures "$T/fixtures"
-      - name: J14 file-name head fixtures (contractile-deed, descriptile-deed, anchor-deed)
+      - name: J14 file-name head fixtures (contractile-deed, descriptile-deed)
         if: github.repository_id == 1116521501 && steps.bun.outcome == 'success'
         run: bun "$T/deed_lint.js" --fixtures "$T/fixtures/heads"
       - name: J17 bang fixtures ("!" only after a rule's :id in a contractile-deed)
@@ -129,6 +129,10 @@ jobs:
       - name: ecosystem fixtures (DRAFT, A7)
         if: github.repository_id == 1116521501 && steps.bun.outcome == 'success'
         run: bun "$T/deed_lint.js" --ecosystem-fixtures "$T/fixtures/ecosystem"
+      # STATE.deed (A7 7.2, J15, YF03): a DRAFT profile, gated on its own fixtures until ratified.
+      - name: state fixtures (DRAFT, A7)
+        if: github.repository_id == 1116521501 && steps.bun.outcome == 'success'
+        run: bun "$T/deed_lint.js" --state-fixtures "$T/fixtures/state"
       - name: grammar-vs-gate differential (deed.abnf through apg-js, against deed_lint.js)
         # Mutates every committed deed and valid fixture with a seeded generator
         # and fails when the gate and the normative grammar disagree, other than
