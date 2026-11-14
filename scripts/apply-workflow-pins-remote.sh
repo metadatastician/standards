@@ -48,6 +48,9 @@
 #   OWNER-ID-UNREAD (own row, WORKFLOW column `actions.lock`) the tree lists an
 #              actions.lock that could not be read as text, so it was not judged.
 #              Never read as "this repository has no lock".
+#   STAMPED-PIN-HELD (--fix only) a stamped proven-cicd copy whose pins are BEHIND
+#              or MOVED. Its hashed body is proven-cicd's, so a re-pin would make
+#              it drift from its stamp: it is held, and --fix-content refreshes it.
 #
 # SAFETY PROPERTIES (do not weaken any of these):
 #   * READ-ONLY by default. --fix is required to write anything.
@@ -88,10 +91,17 @@
 #     --proven-sha <sha>  also report stamped proven-cicd content (see below)
 #                         against proven/manifest.json of
 #                         hyperpolymath/proven-cicd-and-workflows at this
-#                         40-hex commit. READ-ONLY in every mode.
+#                         40-hex commit. READ-ONLY unless --fix-content.
+#     --fix-content       CONTENT-ONLY write mode: refresh each BEHIND-CONTENT
+#                         copy from its template at --proven-sha and open a PR
+#                         with only those files. Never re-points a standards pin,
+#                         never relocks, never adds a squabbler caller; refuses
+#                         to combine with --fix or --ensure-squabbler, and needs
+#                         --proven-sha. (Owner ruling 2026-11-14: content-only,
+#                         so the hold on pin moves is untouched.)
 #     --self-test         run the pure-function controls and exit
 #
-# PROVEN CONTENT (--proven-sha; census only, never rewritten here):
+# PROVEN CONTENT (--proven-sha):
 #   proven-cicd-and-workflows publishes stamped workflow bodies. A stamped copy's
 #   first line is `# proven-cicd: <artifact>@<MAJOR.MINOR.PATCH> sha256:<hex>`.
 #   The copy itself detects edits (drift); only a sweep against the published
@@ -106,11 +116,22 @@
 #   census still runs, one CONTENT-CENSUS-FAILED row replaces the content rows,
 #   and the run exits 1 at the end. A content census with no manifest is not
 #   evidence, and an outage at proven-cicd must not blind the pin census.
-#   Rewriting a stale copy is a separate mode, not built here.
+#   Under --fix-content a BEHIND-CONTENT copy is refreshed and gets one more row:
+#     CONTENT-REFRESHED        <artifact>@<have> -> <want>; it lands in the PR
+#     CONTENT-REFRESH-REFUSED  <why>; left exactly as it was
+#   The refresh takes the template at --proven-sha (its stamp must name the
+#   manifest's artifact and version, and its body must match that stamp),
+#   carries the copy's local lines over one for one (the lines after each
+#   `proven-cicd:local-next` marker, e.g. a `uses:` SHA Dependabot moved), and
+#   moves only the suite pin `PROVEN_SHA:` to --proven-sha. It is refused when
+#   the marker counts or the local-line keys differ, or when the workflow is in
+#   the repository's actions.lock and its `uses:` set would change (content mode
+#   never relocks). The result's stamp line and hashed body are checked equal to
+#   the template's before anything is written.
 #   A stamped copy detects edits to its hashed body by sha256. proven-cicd's
 #   stamped bodies carry no standards reusable pins in that region; if one ever
-#   did, a --fix re-pin here would trip the copy's own drift check, so the
-#   rewrite mode must skip stamped files and report them with a status of its own.
+#   did, a --fix re-pin here would trip the copy's own drift check, so stamped
+#   files are refreshed only by --fix-content, never re-pinned by --fix.
 #
 # ENSURE-SQUABBLER (why it rides with the re-pin, never ahead of it):
 #   The squabbler's `chains` job FAILS on a dead upstream. Added to a repo that
@@ -136,6 +157,8 @@ STANDARDS_REPO="metadatastician/standards"
 FORMER_OWNER="hyperpolymath"
 TARGET_SHA="${STANDARDS_TARGET_SHA:-}"
 DO_FIX=0
+# --fix-content: rewrite stale stamped proven-cicd copies only (never pins).
+DO_FIX_CONTENT=0
 REPAIR_ILLEGAL=0
 OWNERS="hyperpolymath,metadatastician,catachresis-colloquium"
 ONLY_REPO=""
@@ -152,6 +175,8 @@ RELOCK="$(dirname "${BASH_SOURCE[0]}")/relock-standards-pin.sh"
 PROVEN_REPO="hyperpolymath/proven-cicd-and-workflows"
 PROVEN_SHA=""
 PROVEN_MANIFEST=""
+# Templates fetched at --proven-sha, one file per artifact (--fix-content).
+PROVEN_TEMPLATES=""
 
 log() { printf '%s\n' "$*" >&2; }
 
@@ -250,16 +275,18 @@ version_cmp() {
 }
 
 # manifest_tsv <manifest.json> — validate a proven-cicd/manifest/v1 document
-# and echo `artifact<TAB>version` per artifact. Non-zero, and nothing on
+# and echo `artifact<TAB>version<TAB>template` per artifact (the template is a
+# path under templates/ in proven-cicd-and-workflows). Non-zero, and nothing on
 # stdout, when the document is not a valid manifest: the caller fails closed.
 manifest_tsv() {
   jq -er '
     if .schema == "proven-cicd/manifest/v1"
        and (.artifacts | type == "array" and length > 0)
        and all(.artifacts[]; (.artifact | type == "string" and test("^[a-z0-9][a-z0-9-]*$"))
-                             and (.version | type == "string" and test("^[0-9]{1,9}\\.[0-9]{1,9}\\.[0-9]{1,9}$")))
+                             and (.version | type == "string" and test("^[0-9]{1,9}\\.[0-9]{1,9}\\.[0-9]{1,9}$"))
+                             and (.template | type == "string" and test("^templates/[A-Za-z0-9._-]+\\.ya?ml$")))
        and ([.artifacts[].artifact] | length == (unique | length))
-    then .artifacts[] | "\(.artifact)\t\(.version)"
+    then .artifacts[] | "\(.artifact)\t\(.version)\t\(.template)"
     else error("not a valid proven-cicd/manifest/v1") end' "$1" 2>/dev/null
 }
 
@@ -313,6 +340,110 @@ lock_owner_state() {
     }
     END { if (cnt > 0) printf "OWNER-ID-STALE\t%d standards record(s) carry owner_id %s: %s\n", cnt, old, recs }
   ' "$1"
+}
+
+# --- proven content refresh (pure; --fix-content) -----------------------------
+
+# A line that marks the next line as local (outside the stamp's hash).
+MARKER_ERE='^[[:space:]]*# proven-cicd:local-next[[:space:]]*$'
+
+# stamp_region_sha <file> — sha256 of the stamp's hashed region, exactly as
+# proven-cicd-and-workflows scripts/proven-stamp.sh computes it: every line
+# except the stamp line and each line directly after a local-next marker.
+stamp_region_sha() {
+  awk 'NR == 1 && /^# proven-cicd: / { next }
+       skip { skip = 0; next }
+       /^[[:space:]]*# proven-cicd:local-next[[:space:]]*$/ { print; skip = 1; next }
+       { print }' "$1" | sha256sum | cut -d' ' -f1
+}
+
+# template_ok <template> <artifact> <version> — true when the template's first
+# line is the stamp `<artifact>@<version> sha256:<h>` and its hashed region
+# hashes to <h>. Echoes the reason when it is not.
+template_ok() {
+  local t="$1" a="$2" v="$3" first want
+  first=$(head -n 1 "$t" 2>/dev/null) || { echo "template unreadable"; return 1; }
+  [[ $first =~ $STAMP_RE ]] || { echo "template has no valid stamp line"; return 1; }
+  [ "${BASH_REMATCH[1]}" = "$a" ] && [ "${BASH_REMATCH[2]}.${BASH_REMATCH[3]}.${BASH_REMATCH[4]}" = "$v" ] ||
+    { echo "template is ${BASH_REMATCH[1]}@${BASH_REMATCH[2]}.${BASH_REMATCH[3]}.${BASH_REMATCH[4]}, manifest says $a@$v"; return 1; }
+  want=${first##*sha256:}
+  [ "$(stamp_region_sha "$t")" = "$want" ] || { echo "template body does not match its own stamp"; return 1; }
+}
+
+# refresh_body <copy> <template> <proven_sha> <out> — write to <out> the
+# template with the copy's local lines carried over, one for one, in marker
+# order: those are the values that legitimately differ per repository (for
+# example a third-party `uses:` SHA that Dependabot moved). The one exception is
+# the suite pin `PROVEN_SHA:`, which moves to <proven_sha>, the commit whose
+# manifest and template are being installed. Refuses (exit 1, reason on stdout)
+# when the copy and the template have different numbers of markers, or when a
+# local line does not name the same key as the template's line (`uses: owner/x`
+# against `uses: owner/x`, `PROVEN_SHA:` against `PROVEN_SHA:`). On success the
+# result's hashed region is the template's, byte for byte, and its stamp line
+# is the template's; both are checked, not assumed. (The region check cannot
+# fire while the merge copies every hashed line from the template verbatim;
+# a mutant that removes it survives the suite for that reason. It stays as the
+# assertion a future edit to the merge must still satisfy.)
+refresh_body() {
+  local copy="$1" tpl="$2" sha="$3" out="$4" cm tm why
+  cm=$(grep -cE "$MARKER_ERE" "$copy" || true); tm=$(grep -cE "$MARKER_ERE" "$tpl" || true)
+  [ "$cm" = "$tm" ] || { echo "local-region markers differ: copy has $cm, template has $tm"; return 1; }
+  if ! why=$(awk -v sha="$sha" '
+      function key(s,   k) { k = s; if (match(k, /@/)) k = substr(k, 1, RSTART - 1); else if (match(k, /:/)) k = substr(k, 1, RSTART); sub(/[[:space:]]+$/, "", k); return k }
+      NR == FNR { if (take) { loc[++n] = $0; take = 0; next }
+                  if ($0 ~ /^[[:space:]]*# proven-cicd:local-next[[:space:]]*$/) take = 1
+                  next }
+      take { i++; take = 0
+             if (key(loc[i]) != key($0)) { print "local line " i " is \"" key(loc[i]) "\", the template has \"" key($0) "\"" > "/dev/stderr"; bad = 1; exit 1 }
+             if ($0 ~ /^[[:space:]]*PROVEN_SHA: "/) { t = $0; sub(/"[^"]*"/, "\"" sha "\"", t); print t } else print loc[i]
+             next }
+      /^[[:space:]]*# proven-cicd:local-next[[:space:]]*$/ { take = 1 }
+      { print }' "$copy" "$tpl" 2>&1 >"$out"); then
+    echo "${why:-could not merge the local lines}"; return 1
+  fi
+  [ "$(head -n 1 "$out")" = "$(head -n 1 "$tpl")" ] || { echo "refreshed stamp line differs from the template's"; return 1; }
+  [ "$(stamp_region_sha "$out")" = "$(stamp_region_sha "$tpl")" ] || { echo "refreshed body differs from the template's"; return 1; }
+}
+
+# uses_set <file> — the sorted, distinct `uses:` references in a workflow.
+uses_set() {
+  grep -oE "uses:[[:space:]]*['\"]?[^[:space:]'\"#]+" "$1" 2>/dev/null \
+    | sed -E "s/uses:[[:space:]]*['\"]?//" | LC_ALL=C sort -u
+}
+
+# refresh_copy <repo-dir> <workflow> — --fix-content's step for one
+# BEHIND-CONTENT copy. Echo ONE line `CONTENT-REFRESHED<TAB>detail` after
+# rewriting the copy in place, or `CONTENT-REFRESH-REFUSED<TAB>why` leaving it
+# untouched. The template is read once per run from PROVEN_REPO at PROVEN_SHA,
+# at the path the manifest names (manifest_tsv admits only templates/*.yml).
+refresh_copy() {
+  local rdir="$1" wf="$2" first artifact have want tpl_path tpl out why
+  refused() { printf 'CONTENT-REFRESH-REFUSED\t%s\n' "$1"; }
+  first=$(head -n 1 "$wf")
+  [[ $first =~ $STAMP_RE ]] || { refused "no valid stamp line"; return 0; }
+  artifact="${BASH_REMATCH[1]}"; have="${BASH_REMATCH[2]}.${BASH_REMATCH[3]}.${BASH_REMATCH[4]}"
+  IFS=$'\t' read -r _ want tpl_path < <(awk -F'\t' -v a="$artifact" '$1 == a { print; exit }' "$PROVEN_MANIFEST")
+  [ -n "${tpl_path:-}" ] || { refused "the manifest does not list $artifact"; return 0; }
+  tpl="${WORKDIR}/proven-templates/$(basename "$tpl_path")"
+  if [ ! -s "$tpl" ]; then
+    mkdir -p "${WORKDIR}/proven-templates"
+    if ! gh api "repos/${PROVEN_REPO}/contents/${tpl_path}?ref=${PROVEN_SHA}" \
+           -H 'Accept: application/vnd.github.raw' > "$tpl.part" 2>/dev/null; then
+      rm -f "$tpl.part"; refused "${tpl_path} unreadable at ${PROVEN_REPO}@${PROVEN_SHA}"; return 0
+    fi
+    mv "$tpl.part" "$tpl"
+  fi
+  why=$(template_ok "$tpl" "$artifact" "$want") || { refused "${tpl_path}: $why"; return 0; }
+  out=$(mktemp)
+  if ! why=$(refresh_body "$wf" "$tpl" "$PROVEN_SHA" "$out"); then rm -f "$out"; refused "$why"; return 0; fi
+  # Content mode never relocks: a refresh that changes the `uses:` set of a
+  # repository that carries actions.lock would start with a lock that no longer
+  # matches, so it is left for the pin mode (or a human) to land with a relock.
+  if [ -f "$rdir/actions.lock" ] && [ "$(uses_set "$wf")" != "$(uses_set "$out")" ]; then
+    rm -f "$out"; refused "the refresh changes the uses: set and the repository carries actions.lock; content mode never relocks"; return 0
+  fi
+  mv "$out" "$wf"
+  printf 'CONTENT-REFRESHED\t%s@%s -> %s\n' "$artifact" "$have" "$want"
 }
 
 # needs_rewrite <classification> — true when fix mode must re-point the file's
@@ -601,24 +732,29 @@ self_test() {
   local h; h=$(printf 'c%.0s' $(seq 64))
   cat > "$d/manifest.json" <<'JSON'
 {"schema":"proven-cicd/manifest/v1","artifacts":[
- {"artifact":"proven-lock-gate","version":"0.1.0","sha256":"x","template":"t","install_path":"p"},
- {"artifact":"wide-gate","version":"0.10.0","sha256":"x","template":"t","install_path":"p"}]}
+ {"artifact":"proven-lock-gate","version":"0.1.0","sha256":"x","template":"templates/x.yml","install_path":"p"},
+ {"artifact":"wide-gate","version":"0.10.0","sha256":"x","template":"templates/x.yml","install_path":"p"}]}
 JSON
   if manifest_tsv "$d/manifest.json" > "$d/manifest.tsv" \
-     && [ "$(cat "$d/manifest.tsv")" = "$(printf 'proven-lock-gate\t0.1.0\nwide-gate\t0.10.0')" ]; then
+     && [ "$(cat "$d/manifest.tsv")" = "$(printf 'proven-lock-gate\t0.1.0\ttemplates/x.yml\nwide-gate\t0.10.0\ttemplates/x.yml')" ]; then
     echo "  PASS manifest.json -> 2 artifacts"
   else
     echo "  FAIL manifest.json was not read as 2 artifacts" >&2; rc=1
   fi
-  printf '{"schema":"proven-cicd/manifest/v2","artifacts":[{"artifact":"a","version":"1.0.0"}]}' > "$d/bad-schema.json"
-  printf '{"schema":"proven-cicd/manifest/v1","artifacts":[{"artifact":"a","version":"1.0"}]}' > "$d/bad-version.json"
-  printf '{"schema":"proven-cicd/manifest/v1","artifacts":[{"artifact":"a","version":"1.0.0"},{"artifact":"a","version":"1.0.1"}]}' > "$d/bad-dup.json"
+  printf '{"schema":"proven-cicd/manifest/v2","artifacts":[{"artifact":"a","version":"1.0.0","template":"templates/x.yml"}]}' > "$d/bad-schema.json"
+  printf '{"schema":"proven-cicd/manifest/v1","artifacts":[{"artifact":"a","version":"1.0","template":"templates/x.yml"}]}' > "$d/bad-version.json"
+  printf '{"schema":"proven-cicd/manifest/v1","artifacts":[{"artifact":"a","version":"1.0.0","template":"templates/x.yml"},{"artifact":"a","version":"1.0.1","template":"templates/x.yml"}]}' > "$d/bad-dup.json"
   printf '{"schema":"proven-cicd/manifest/v1","artifacts":[]}' > "$d/bad-empty.json"
   printf 'not json' > "$d/bad-json.json"
   # 2^64 + 1: a shell integer wraps to 1, so an unbounded component compares equal.
-  printf '{"schema":"proven-cicd/manifest/v1","artifacts":[{"artifact":"a","version":"18446744073709551617.0.0"}]}' > "$d/bad-huge.json"
+  printf '{"schema":"proven-cicd/manifest/v1","artifacts":[{"artifact":"a","version":"18446744073709551617.0.0","template":"templates/x.yml"}]}' > "$d/bad-huge.json"
+  # A template outside templates/ (or not YAML) could make --fix-content fetch
+  # and install an arbitrary file of proven-cicd's, so it is not a manifest.
+  printf '{"schema":"proven-cicd/manifest/v1","artifacts":[{"artifact":"a","version":"1.0.0","template":"scripts/x.sh"}]}' > "$d/bad-template.json"
+  printf '{"schema":"proven-cicd/manifest/v1","artifacts":[{"artifact":"a","version":"1.0.0","template":"templates/../x.yml"}]}' > "$d/bad-traversal.json"
+  printf '{"schema":"proven-cicd/manifest/v1","artifacts":[{"artifact":"a","version":"1.0.0"}]}' > "$d/bad-no-template.json"
   local bad
-  for bad in bad-schema bad-version bad-dup bad-empty bad-json bad-huge; do
+  for bad in bad-schema bad-version bad-dup bad-empty bad-json bad-huge bad-template bad-traversal bad-no-template; do
     if manifest_tsv "$d/$bad.json" >/dev/null; then
       echo "  FAIL $bad.json was accepted as a manifest" >&2; rc=1
     else
@@ -653,6 +789,61 @@ JSON
   # Only the first line is a stamp; a pin-only workflow has no content row.
   ccheck content-not-first.yml ""
   ccheck fresh.yml             ""
+
+  # Content refresh: the template's body comes in whole, the copy's local lines
+  # (one per local-next marker) are carried over, PROVEN_SHA moves to the
+  # installed commit, and the result's stamp and hashed body are the template's.
+  echo "control: proven content refresh"
+  local A B C P0 P1 PN
+  A=$(printf 'a%.0s' $(seq 40)); B=$(printf 'b%.0s' $(seq 40)); C=$(printf 'c%.0s' $(seq 40))
+  P0=$(printf '0%.0s' $(seq 40)); P1=$(printf '1%.0s' $(seq 40)); PN=$(printf 'e%.0s' $(seq 40))
+  mkstamped() { # OUT ARTIFACT VERSION BODY
+    printf '%s' "$4" > "$1.body"
+    printf '# proven-cicd: %s@%s sha256:%s\n' "$2" "$3" "$(stamp_region_sha "$1.body")" > "$1"
+    cat "$1.body" >> "$1"; rm -f "$1.body"
+  }
+  local tbody cbody
+  tbody=$(printf 'name: gate\nenv:\n  # proven-cicd:local-next\n  PROVEN_SHA: "%s"\njobs:\n  x:\n    steps:\n      # proven-cicd:local-next\n      - uses: actions/checkout@%s # v4\n      - run: echo new\n' "$P0" "$A")
+  cbody=$(printf 'name: gate\nenv:\n  # proven-cicd:local-next\n  PROVEN_SHA: "%s"\njobs:\n  x:\n    steps:\n      # proven-cicd:local-next\n      - uses: actions/checkout@%s # v5\n      - run: echo old\n' "$P1" "$B")
+  mkstamped "$d/tpl.yml" proven-lock-gate 0.2.0 "$tbody"$'\n'
+  mkstamped "$d/copy.yml" proven-lock-gate 0.1.0 "$cbody"$'\n'
+  local why
+  if why=$(template_ok "$d/tpl.yml" proven-lock-gate 0.2.0); then echo "  PASS template_ok accepts a template that matches its stamp"
+  else echo "  FAIL template_ok refused a good template: $why" >&2; rc=1; fi
+  if why=$(template_ok "$d/tpl.yml" proven-lock-gate 0.3.0); then echo "  FAIL template_ok accepted a template for another version" >&2; rc=1
+  else echo "  PASS template_ok refuses another version: $why"; fi
+  { cat "$d/tpl.yml"; echo '      - run: injected'; } > "$d/tpl-edited.yml"
+  if why=$(template_ok "$d/tpl-edited.yml" proven-lock-gate 0.2.0); then echo "  FAIL template_ok accepted an edited body" >&2; rc=1
+  else echo "  PASS template_ok refuses an edited body: $why"; fi
+  if why=$(refresh_body "$d/copy.yml" "$d/tpl.yml" "$PN" "$d/out.yml") \
+     && grep -qxF "      - uses: actions/checkout@$B # v5" "$d/out.yml" \
+     && grep -qxF "  PROVEN_SHA: \"$PN\"" "$d/out.yml" \
+     && grep -qxF '      - run: echo new' "$d/out.yml" && ! grep -q 'echo old' "$d/out.yml" \
+     && [ "$(head -n 1 "$d/out.yml")" = "$(head -n 1 "$d/tpl.yml")" ] \
+     && [ "$(stamp_region_sha "$d/out.yml")" = "$(stamp_region_sha "$d/tpl.yml")" ]; then
+    echo "  PASS refresh_body: template body, the copy's local uses: kept, PROVEN_SHA moved, stamp holds"
+  else
+    echo "  FAIL refresh_body did not produce the refreshed copy (${why:-no reason}):" >&2; sed 's/^/      /' "$d/out.yml" >&2; rc=1
+  fi
+  # Mutants: each must be refused, and must leave nothing it claims is good.
+  rmut() { # NAME COPY
+    if why=$(refresh_body "$2" "$d/tpl.yml" "$PN" "$d/mut.yml"); then
+      echo "  FAIL refresh_body accepted $1" >&2; rc=1
+    else
+      echo "  PASS refresh_body refuses $1: $why"
+    fi
+  }
+  sed '0,/# proven-cicd:local-next/{/# proven-cicd:local-next/d}' "$d/copy.yml" > "$d/copy-fewer.yml"
+  rmut 'a copy with fewer markers' "$d/copy-fewer.yml"
+  sed "s#actions/checkout@$B#evil/checkout@$C#" "$d/copy.yml" > "$d/copy-otherkey.yml"
+  rmut 'a local line naming another action' "$d/copy-otherkey.yml"
+  sed 's#^  PROVEN_SHA: .*#  OTHER_SHA: "x"#' "$d/copy.yml" > "$d/copy-otherenv.yml"
+  rmut 'a local line naming another key' "$d/copy-otherenv.yml"
+  if [ "$(uses_set "$d/out.yml")" = "actions/checkout@$B" ] && [ "$(uses_set "$d/copy.yml")" = "$(uses_set "$d/out.yml")" ]; then
+    echo "  PASS uses_set: the refresh keeps the copy's uses: set"
+  else
+    echo "  FAIL uses_set: got '$(uses_set "$d/out.yml")'" >&2; rc=1
+  fi
 
   # Lock owner ids: only a standards record with the former owner's id is
   # stale. Another action's record with that same id is the same account's own
@@ -901,7 +1092,9 @@ land_pr() {
   for f in "$@"; do
     case "$f" in "$SQUABBLER_FILE") sq=1 ;; actions.lock) ;; *) pins=1 ;; esac
   done
-  if [ "$sq" -eq 1 ] && [ "$pins" -eq 1 ]; then
+  if [ "$DO_FIX_CONTENT" -eq 1 ]; then
+    msg_head="chore(ci): refresh proven-cicd content to ${PROVEN_SHA:0:12}"
+  elif [ "$sq" -eq 1 ] && [ "$pins" -eq 1 ]; then
     msg_head="chore(ci): re-point standards pins to ${TARGET_SHA:0:12}; add the CICD Squabbler gate"
   elif [ "$sq" -eq 1 ]; then
     msg_head="chore(ci): add the CICD Squabbler gate (standards ${TARGET_SHA:0:12})"
@@ -911,6 +1104,11 @@ land_pr() {
   [ -n "${GITHUB_RUN_ID:-}" ] && run_line=$(printf '\n\nRun: %s/%s/actions/runs/%s' \
     "${GITHUB_SERVER_URL:-https://github.com}" "${GITHUB_REPOSITORY:-$STANDARDS_REPO}" "$GITHUB_RUN_ID")
   msg_body="Opened by the standards pin applier (scripts/apply-workflow-pins-remote.sh)."
+  if [ "$DO_FIX_CONTENT" -eq 1 ]; then
+    pins=0
+    msg_body=$(printf '%s\n\nContent-only refresh (--fix-content): each stamped copy below takes its\ntemplate from %s at %s, keeps this repository'"'"'s\nlocal lines (the ones after a proven-cicd:local-next marker) and moves\nPROVEN_SHA to that commit. Its stamp and hashed body were checked equal to\nthe template'"'"'s before commit. No standards pin and no lock is changed.\n\n%s' \
+      "$msg_body" "$PROVEN_REPO" "$PROVEN_SHA" "$(printf -- '- .github/workflows/%s\n' "$@")")
+  fi
   [ "$pins" -eq 1 ] && msg_body=$(printf '%s\n\nRe-points this repository'"'"'s pinned references to %s reusable\nworkflows at %s, which is proven reachable from standards main and passes\nlock-selfcheck.sh.' "$msg_body" "$STANDARDS_REPO" "$TARGET_SHA")
   [ "$sq" -eq 1 ] && msg_body=$(printf '%s\n\nAdds .github/workflows/%s, the CICD Squabbler gate, pinned to the same\ncommit. Its chains job fails on a dependency cycle or a dead upstream.' "$msg_body" "$SQUABBLER_FILE")
   printf '%s\n' "$@" | grep -qx actions.lock && msg_body=$(printf '%s\n\nactions.lock is relocked in the same commit (scripts/relock-standards-pin.sh),\nso no workflow starts with a lock that does not match its pins.' "$msg_body")
@@ -978,12 +1176,24 @@ main() {
       --limit) LIMIT="$2"; shift ;;
       --ensure-squabbler) ENSURE_SQUABBLER=1 ;;
       --proven-sha) PROVEN_SHA="$2"; shift ;;
+      --fix-content) DO_FIX_CONTENT=1 ;;
       --self-test) self_test; exit $? ;;
       -h|--help) sed -n '2,/^set -uo pipefail$/p' "$0" | sed '$d'; exit 0 ;;
       *) log "unknown option: $1"; exit 2 ;;
     esac
     shift
   done
+
+  # --fix-content is its own write mode: it touches stamped copies only, and
+  # never a pin, a lock or a squabbler caller. Mixing it with the pin modes
+  # would let one PR carry both, which is what the owner's hold forbids.
+  if [ "$DO_FIX_CONTENT" -eq 1 ]; then
+    if [ "$DO_FIX" -eq 1 ] || [ "$ENSURE_SQUABBLER" -eq 1 ] || [ "$REPAIR_ILLEGAL" -eq 1 ]; then
+      log "--fix-content is content-only; it cannot be combined with --fix, --ensure-squabbler or --repair-illegal."; exit 2
+    fi
+    [ -n "$PROVEN_SHA" ] || { log "--fix-content needs --proven-sha <40-hex>: the commit whose templates are installed."; exit 2; }
+    BRANCH_NAME="chore/refresh-proven-cicd-content"
+  fi
 
   # The controls run on EVERY invocation, not just --self-test. A census whose
   # classifier is broken is worse than no census, because it looks like data.
@@ -1012,7 +1222,9 @@ main() {
       || { log "FATAL: ${TARGET_SHA} is not in ${STANDARDS_ROOT} and could not be fetched; the lock relock needs it."; exit 1; }
   fi
   log "== target: ${TARGET_SHA} (reachable from ${STANDARDS_REPO} main; lock self-consistent) =="
-  [ "$DO_FIX" -eq 1 ] && log "== MODE: --fix (will open PRs) ==" || log "== MODE: audit (writes nothing) =="
+  if [ "$DO_FIX" -eq 1 ]; then log "== MODE: --fix (will open PRs) =="
+  elif [ "$DO_FIX_CONTENT" -eq 1 ]; then log "== MODE: --fix-content (will open content-only PRs; pins untouched) =="
+  else log "== MODE: audit (writes nothing) =="; fi
 
   # Proven content census: the manifest at the pinned commit. Without it the
   # content census DEGRADES LOUDLY: the pin census still runs, the census gets
@@ -1035,7 +1247,7 @@ main() {
       rm -f "$PROVEN_MANIFEST"; PROVEN_MANIFEST=""
       log "ERROR: ${content_failed}. No content census; the pin census continues and the run will end red."
     else
-      log "== proven content: $(wc -l < "$PROVEN_MANIFEST") artifact(s) at ${PROVEN_REPO}@${PROVEN_SHA} (census only) =="
+      log "== proven content: $(wc -l < "$PROVEN_MANIFEST") artifact(s) at ${PROVEN_REPO}@${PROVEN_SHA} $([ "$DO_FIX_CONTENT" -eq 1 ] && echo "(refresh)" || echo "(census only)") =="
     fi
   fi
 
@@ -1055,9 +1267,9 @@ main() {
 
   local repo walked=0
   for repo in $repos; do
-    # Audit: n counts repos walked. Fix: n counts repos a PR is attempted in.
+    # Audit: n counts repos walked. Fix (either mode): n counts repos a PR is attempted in.
     [ "$LIMIT" -gt 0 ] && [ "$n" -ge "$LIMIT" ] && break
-    walked=$((walked+1)); [ "$DO_FIX" -eq 1 ] || n=$((n+1))
+    walked=$((walked+1)); [ "$DO_FIX" -eq 1 ] || [ "$DO_FIX_CONTENT" -eq 1 ] || n=$((n+1))
     local rdir="${WORKDIR}/$(echo "$repo" | tr '/' '_')"
     if ! fetch_workflows "$repo" "$rdir"; then
       log "  FETCH-FAILED ${repo}: workflows could not be read; NOT classified"
@@ -1069,11 +1281,17 @@ main() {
     for wf in "$rdir"/*.yml "$rdir"/*.yaml; do
       found=1
       base=$(basename "$wf")
-      # A stamped proven-cicd copy gets its own row; it is never rewritten here.
+      # A stamped proven-cicd copy gets its own row. Only --fix-content rewrites
+      # one, and only from a BEHIND-CONTENT state.
       if [ -n "$PROVEN_MANIFEST" ]; then
         local cst
         cst=$(content_state "$wf" "$PROVEN_MANIFEST")
         [ -n "$cst" ] && printf '%s\t%s\t%s\n' "$repo" "$base" "$cst" >> "$tsv"
+        if [ "$DO_FIX_CONTENT" -eq 1 ] && [ "${cst%%$'\t'*}" = BEHIND-CONTENT ]; then
+          local rst; rst=$(refresh_copy "$rdir" "$wf")
+          printf '%s\t%s\t%s\n' "$repo" "$base" "$rst" >> "$tsv"
+          [ "${rst%%$'\t'*}" = CONTENT-REFRESHED ] && changed+=("$base")
+        fi
       fi
       st=$(classify_file "$wf" "$TARGET_SHA" | sort | tr '\n' ',' ); st="${st%,}"
       [ "$st" = "NONE" ] && continue
@@ -1084,6 +1302,13 @@ main() {
       ;; esac
       printf '%s\t%s\t%s\t%s\n' "$repo" "$base" "$st" "$detail" >> "$tsv"
 
+      # A stamped copy's hashed body is proven-cicd's, not this applier's: a
+      # re-pin would make it drift from its own stamp. It is held and named.
+      if [ "$DO_FIX" -eq 1 ] && head -n 1 "$wf" | grep -q '^# proven-cicd: '; then
+        needs_rewrite "$st" && printf '%s\t%s\tSTAMPED-PIN-HELD\t%s\n' "$repo" "$base" \
+          "stamped proven-cicd copy; refreshed by --fix-content, never re-pinned" >> "$tsv"
+        continue
+      fi
       if [ "$DO_FIX" -eq 1 ]; then
         local before; before=$(cat "$wf")
         if needs_rewrite "$st"; then rewrite_pins "$wf" "$TARGET_SHA"; fi
@@ -1154,7 +1379,7 @@ main() {
       [ "$lock_before" != "$(cat "$rdir/actions.lock")" ] && changed+=("actions.lock")
     fi
 
-    if [ "$DO_FIX" -eq 1 ] && [ "${#changed[@]}" -gt 0 ]; then
+    if { [ "$DO_FIX" -eq 1 ] || [ "$DO_FIX_CONTENT" -eq 1 ]; } && [ "${#changed[@]}" -gt 0 ]; then
       n=$((n+1))
       local url
       if url=$(land_pr "$repo" "$rdir" "${changed[@]}"); then

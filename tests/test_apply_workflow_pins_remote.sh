@@ -320,6 +320,9 @@ case "$p" in
   # The published proven-cicd manifest, served raw from $GH_FIX/proven_manifest.json.
   repos/hyperpolymath/proven-cicd-and-workflows/contents/proven/manifest.json)
     body="$GH_FIX/proven_manifest.json" ;;
+  # The template --fix-content installs, served raw from $GH_FIX/proven_template.yml.
+  repos/hyperpolymath/proven-cicd-and-workflows/contents/templates/proven-lock-gate.yml)
+    body="$GH_FIX/proven_template.yml" ;;
   repos/*/commits/*)
     j='{"sha": "cccccccccccccccccccccccccccccccccccccccc"}'
     if [ -n "$jqx" ]; then printf '%s' "$j" | jq -r "$jqx"; else printf '%s' "$j"; fi; exit 0 ;;
@@ -551,7 +554,7 @@ STAMP_HEX="cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
 # of the same repository is unchanged.
 case_main_content() {
   local d; d=$(new_case content)
-  printf '{"schema":"proven-cicd/manifest/v1","artifacts":[{"artifact":"proven-lock-gate","version":"0.1.0","sha256":"x","template":"t","install_path":"p"}]}' \
+  printf '{"schema":"proven-cicd/manifest/v1","artifacts":[{"artifact":"proven-lock-gate","version":"0.1.0","sha256":"x","template":"templates/proven-lock-gate.yml","install_path":"p"}]}' \
     > "$d/proven_manifest.json"
   printf '# proven-cicd: proven-lock-gate@0.0.9 sha256:%s\nname: g\n' "$STAMP_HEX" > "$d/own_stamped"
   run_content "$d" "$1" --proven-sha "$P"
@@ -616,7 +619,7 @@ case_main_content_fix() {
   git -C "$root" init -q
   git -C "$root" -c user.name=t -c user.email=t@t -c commit.gpgsign=false commit -q --allow-empty -m target
   sha=$(git -C "$root" rev-parse HEAD)
-  printf '{"schema":"proven-cicd/manifest/v1","artifacts":[{"artifact":"proven-lock-gate","version":"0.1.0","sha256":"x","template":"t","install_path":"p"}]}' \
+  printf '{"schema":"proven-cicd/manifest/v1","artifacts":[{"artifact":"proven-lock-gate","version":"0.1.0","sha256":"x","template":"templates/proven-lock-gate.yml","install_path":"p"}]}' \
     > "$d/proven_manifest.json"
   printf '# proven-cicd: proven-lock-gate@0.0.9 sha256:%s\nname: g\n' "$STAMP_HEX" > "$d/own_stamped"
   : > "$d/calls.log"
@@ -636,6 +639,124 @@ case_main_content_fix() {
     fail "main: --fix acted on a content row (rc=$(cat "$d/rc"))"
     sed 's/^/    /' "$d/out" >&2; tail -5 "$d/err" | sed 's/^/    /' >&2
   fi
+}
+
+# stamp_into <applier> <out> <artifact> <version> <body> — write <out> as <body>
+# under a valid stamp, hashed by the applier's own stamp_region_sha (the mirror
+# of proven-cicd's scripts/proven-stamp.sh, itself under the self-test).
+stamp_into() {
+  local a="$1" out="$2" art="$3" ver="$4" body="$5" h
+  printf '%s' "$body" > "$out.body"
+  # shellcheck disable=SC2016  # $1 and $2 are expanded by the inner shell
+  h=$(bash -c 'source "$1"; stamp_region_sha "$2"' _ "$a" "$out.body")
+  { printf '# proven-cicd: %s@%s sha256:%s\n' "$art" "$ver" "$h"; cat "$out.body"; } > "$out"; rm -f "$out.body"
+}
+CO_OLD="1111111111111111111111111111111111111111"; CO_NEW="2222222222222222222222222222222222222222"
+# content_fixture <applier> <dir> [extra template line] — manifest at 0.2.0, the
+# template at 0.2.0, and a 0.1.0 copy in every repository whose local lines
+# differ from the template's (an older suite pin, a checkout SHA Dependabot moved).
+content_fixture() {
+  local a="$1" d="$2" extra="${3:-}"
+  printf '{"schema":"proven-cicd/manifest/v1","artifacts":[{"artifact":"proven-lock-gate","version":"0.2.0","sha256":"x","template":"templates/proven-lock-gate.yml","install_path":"p"}]}' \
+    > "$d/proven_manifest.json"
+  stamp_into "$a" "$d/proven_template.yml" proven-lock-gate 0.2.0 "$(printf 'name: gate\nenv:\n  # proven-cicd:local-next\n  PROVEN_SHA: "%s"\njobs:\n  g:\n    steps:\n      # proven-cicd:local-next\n      - uses: actions/checkout@%s # v4\n%s      - run: echo new\n' "$CO_NEW" "$CO_NEW" "$extra")"
+  stamp_into "$a" "$d/own_stamped" proven-lock-gate 0.1.0 "$(printf 'name: gate\nenv:\n  # proven-cicd:local-next\n  PROVEN_SHA: "%s"\njobs:\n  g:\n    steps:\n      # proven-cicd:local-next\n      - uses: actions/checkout@%s # v5\n      - run: echo old\n' "$CO_OLD" "$CO_OLD")"
+}
+
+# case_main_content_refresh <applier> — --fix-content end to end: each stale copy
+# is refreshed and lands in a PR on its own branch that holds ONLY that file.
+# The copy keeps its local checkout SHA, takes the template body, moves
+# PROVEN_SHA to --proven-sha, and carries the template's stamp. ci.yml, whose
+# pin sits under the former owner (MOVED), is NOT re-pinned: pins are held.
+case_main_content_refresh() {
+  local d paths body; d=$(new_case contentrefresh)
+  content_fixture "$1" "$d"
+  run_content "$d" "$1" --fix-content --proven-sha "$P"
+  paths=$(jq -r '.variables.input.fileChanges.additions[]?.path' "$d/commit.json" 2>/dev/null)
+  body=$(jq -r '.variables.input.fileChanges.additions[0].contents' "$d/commit.json" 2>/dev/null | base64 -d 2>/dev/null)
+  if [ "$(cat "$d/rc")" = 0 ] \
+     && grep -qF "$(printf 'hyperpolymath/pub-a\tproven-lock-gate.yml\tBEHIND-CONTENT\tproven-lock-gate@0.1.0 -> 0.2.0')" "$d/out" \
+     && grep -qF "$(printf 'hyperpolymath/pub-a\tproven-lock-gate.yml\tCONTENT-REFRESHED\tproven-lock-gate@0.1.0 -> 0.2.0')" "$d/out" \
+     && grep -qF "$(printf 'hyperpolymath/pub-a\t-\tPR-OPENED\t')" "$d/out" \
+     && [ "$paths" = ".github/workflows/proven-lock-gate.yml" ] \
+     && [ "$(printf '%s\n' "$body" | head -n 1)" = "$(head -n 1 "$d/proven_template.yml")" ] \
+     && printf '%s\n' "$body" | grep -qxF "      - uses: actions/checkout@${CO_OLD} # v5" \
+     && printf '%s\n' "$body" | grep -qxF "  PROVEN_SHA: \"${P}\"" \
+     && printf '%s\n' "$body" | grep -qxF '      - run: echo new' \
+     && grep -qF 'refs/heads/chore/refresh-proven-cicd-content' "$d/calls.log" \
+     && grep -qF 'chore(ci): refresh proven-cicd content to dddddddddddd' "$d/calls.log" \
+     && [ "$(grep -c "contents/templates/proven-lock-gate.yml?ref=${P}" "$d/calls.log")" = 1 ] \
+     && ! grep -qF 'chore/re-point-standards-workflow-pins' "$d/calls.log" \
+     && ! grep -qF 'STAMPED-PIN-HELD' "$d/out"; then
+    pass "main: --fix-content refreshes the stale copy alone (local SHA kept, PROVEN_SHA moved, template stamp), pins untouched, template read once"
+  else
+    fail "main: --fix-content refresh wrong (rc=$(cat "$d/rc")); committed: [${paths//$'\n'/ }]"
+    sed 's/^/    /' "$d/out" >&2; tail -5 "$d/err" | sed 's/^/    /' >&2
+  fi
+}
+
+# case_main_content_refused <applier> <label> <setup> — a refresh that cannot be
+# proven equal to the template is refused with a row, and nothing is committed.
+case_main_content_refused() {
+  local d; d=$(new_case contentrefused)
+  content_fixture "$1" "$d" "${4:-}"
+  eval "$3"
+  run_content "$d" "$1" --fix-content --proven-sha "$P"
+  if [ "$(cat "$d/rc")" = 0 ] \
+     && grep -qF "$(printf 'hyperpolymath/pub-a\tproven-lock-gate.yml\tCONTENT-REFRESH-REFUSED\t')" "$d/out" \
+     && ! grep -q 'CONTENT-REFRESHED' "$d/out" && [ ! -e "$d/commit.json" ] && ! grep -q 'PR-OPENED' "$d/out"; then
+    pass "main: --fix-content refuses $2 and commits nothing"
+  else
+    fail "main: --fix-content did not refuse $2 (rc=$(cat "$d/rc"))"
+    sed 's/^/    /' "$d/out" >&2
+  fi
+}
+
+# case_main_stamped_held <applier> — --fix never re-pins a stamped copy, even
+# one whose standards pin is MOVED: its body is proven-cicd's, so a re-pin would
+# make it drift from its stamp. It is held with a STAMPED-PIN-HELD row, and the
+# commit carries ci.yml alone.
+case_main_stamped_held() {
+  local d root sha paths
+  d=$(new_case stampedheld)
+  root=$(mktemp -d "$TMP/stampedheld-root.XXXX")
+  git -C "$root" init -q
+  git -C "$root" -c user.name=t -c user.email=t@t -c commit.gpgsign=false commit -q --allow-empty -m target
+  sha=$(git -C "$root" rev-parse HEAD)
+  printf '# proven-cicd: proven-lock-gate@0.1.0 sha256:%s\njobs:\n  a:\n    uses: hyperpolymath/standards/.github/workflows/x.yml@%s\n' "$STAMP_HEX" "$sha" > "$d/own_stamped"
+  : > "$d/calls.log"
+  # shellcheck disable=SC2016  # $1 and $2 are expanded by the inner shell
+  env PATH="$LSTUB:$PATH" GH_FIX="$d" GH_TOKEN=ghs_app GITHUB_TOKEN= TARGET="$sha" \
+    bash -c 'source "$1"; STANDARDS_ROOT="$2"; validate_target() { return 0; }; shift 2; main "$@"' _ "$1" "$root" \
+      --to "$sha" --owners hyperpolymath,metadatastician --fix > "$d/out" 2> "$d/err"
+  echo $? > "$d/rc"
+  paths=$(jq -r '.variables.input.fileChanges.additions[]?.path' "$d/commit.json" 2>/dev/null)
+  if [ "$(cat "$d/rc")" = 0 ] \
+     && grep -qF "$(printf 'hyperpolymath/pub-a\tproven-lock-gate.yml\tSTAMPED-PIN-HELD\t')" "$d/out" \
+     && [ "$paths" = ".github/workflows/ci.yml" ]; then
+    pass "main: --fix holds a stamped copy's MOVED pin (STAMPED-PIN-HELD) and commits ci.yml alone"
+  else
+    fail "main: --fix re-pinned a stamped copy (rc=$(cat "$d/rc")); committed: [${paths//$'\n'/ }]"
+    sed 's/^/    /' "$d/out" >&2
+  fi
+}
+
+# case_main_content_flags <applier> — --fix-content is content-only: combined
+# with a pin mode, or without the commit to install, it refuses to start.
+case_main_content_flags() {
+  local d args label
+  for args in "--fix-content --fix --proven-sha $P" "--fix-content --ensure-squabbler --proven-sha $P" \
+              "--fix-content --repair-illegal --proven-sha $P" "--fix-content"; do
+    d=$(new_case contentflags)
+    # shellcheck disable=SC2086  # word splitting of $args is intended
+    run_content "$d" "$1" $args
+    label="main: '$args' refuses to start (exit 2, no census, no write)"
+    if [ "$(cat "$d/rc")" = 2 ] && ! grep -q '^REPO' "$d/out" && [ ! -e "$d/commit.json" ]; then
+      pass "$label"
+    else
+      fail "$label — rc=$(cat "$d/rc")"
+    fi
+  done
 }
 
 # case_main_owner_stale <applier> — a standards lock record that still carries the
@@ -719,6 +840,19 @@ case_main_owner_stale "$APPLIER"
 case_main_owner_clean "$APPLIER"
 case_main_owner_unread "$APPLIER"
 case_main_content_fix "$APPLIER"
+case_main_content_refresh "$APPLIER"
+case_main_content_refused "$APPLIER" "a template that does not match its own stamp" \
+  'printf "      - run: injected\n" >> "$d/proven_template.yml"'
+case_main_content_refused "$APPLIER" "a template stamped for another version than the manifest's" \
+  'jq ".artifacts[0].version = \"0.3.0\"" "$d/proven_manifest.json" > "$d/m" && mv "$d/m" "$d/proven_manifest.json"'
+case_main_content_refused "$APPLIER" "an unreadable template" 'rm "$d/proven_template.yml"'
+case_main_content_refused "$APPLIER" "a copy whose local lines name another action" \
+  'sed -i "s#actions/checkout@${CO_OLD}#evil/checkout@${CO_OLD}#" "$d/own_stamped"'
+case_main_content_refused "$APPLIER" "a uses: change in a repository that carries actions.lock (content mode never relocks)" \
+  'printf "version: v0.0.3\ndependencies: {}\n" > "$d/own_lock"' \
+  '      - uses: actions/cache@3333333333333333333333333333333333333333 # v4\n'
+case_main_content_flags "$APPLIER"
+case_main_stamped_held "$APPLIER"
 
 # Mutant: the census stays silent about an unreadable lock (the defect Codex found
 # on #1565: it read as "this repository has no lock"). It must turn red.

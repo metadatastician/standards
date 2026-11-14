@@ -16,6 +16,11 @@
 # chosen explicitly via workflow_dispatch, because the first thing this needs to
 # produce is an honest census — how many repos are BEHIND, DEAD-REF or ILLEGAL —
 # and a census is evidence only while nothing is mutating underneath it.
+#
+# `mode: content` is the content-only write mode (--fix-content): it refreshes
+# stale stamped proven-cicd copies from their templates at `proven_sha` and
+# opens PRs holding only those files. It never moves a standards pin, so the
+# hold on pin moves is untouched by it. Narrow a canary with `only:`.
 
 name: apply workflow pins
 
@@ -27,9 +32,9 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: 'audit (default, writes nothing) or fix (opens PRs)'
+        description: 'audit (default, writes nothing), fix (re-pins; opens PRs) or content (refreshes stale proven-cicd copies only; opens PRs)'
         type: choice
-        options: [audit, fix]
+        options: [audit, fix, content]
         default: audit
       repair_illegal:
         description: 'Also repair unparseable `uses: ../../` refs (issue #808)'
@@ -45,6 +50,9 @@ on:
         description: 'Also add the CICD Squabbler gate where a repo has none (same PR as the re-pin)'
         type: boolean
         default: false
+      only:
+        description: 'Walk this one repository (owner/name) instead of every owner; its owner token is used'
+        default: ''
       proven_sha:
         description: 'proven-cicd-and-workflows commit whose proven/manifest.json the content census reads (40-hex; empty = the pin below; off = no content census)'
         default: ''
@@ -128,8 +136,13 @@ jobs:
           TOK_CATACHRESIS_COLLOQUIUM: ${{ steps.tok-cc.outputs.token }}
           MODE: ${{ inputs.mode || 'audit' }}
           OWNERS: ${{ inputs.owners || 'hyperpolymath,metadatastician,catachresis-colloquium' }}
+          ONLY: ${{ inputs.only || '' }}
         run: |
           set -euo pipefail
+          if [ -n "$ONLY" ]; then
+            [[ $ONLY =~ ^[A-Za-z0-9-]+/[A-Za-z0-9._-]+$ ]] || { echo "::error::only must be owner/name, got '${ONLY}'" >&2; exit 1; }
+            OWNERS="${ONLY%%/*}"
+          fi
           # Every owner walked needs its OWN installation token: a token for one
           # owner cannot write to another owner's repositories. Until 2026-11-10
           # this step checked only the hyperpolymath token, and the run step used
@@ -145,8 +158,8 @@ jobs:
             exit 0
           fi
           echo "have_app=false" >> "$GITHUB_OUTPUT"
-          if [ "$MODE" = "fix" ]; then
-            echo "::error::fix mode was requested but there is no App installation token for:${missing}." >&2
+          if [ "$MODE" = "fix" ] || [ "$MODE" = "content" ]; then
+            echo "::error::${MODE} mode was requested but there is no App installation token for:${missing}." >&2
             cat >&2 <<'MSG'
           FATAL: vars.APP_ID and secrets.APP_PRIVATE_KEY must both be set, and the
             App must be installed on every owner walked (an installation token
@@ -171,8 +184,11 @@ jobs:
           LIMIT: ${{ inputs.limit || '0' }}
           ENSURE_SQUABBLER: ${{ inputs.ensure_squabbler || false }}
           PROVEN_SHA_INPUT: ${{ inputs.proven_sha || '' }}
+          ONLY: ${{ inputs.only || '' }}
         run: |
           set -euo pipefail
+          # `only:` walks one repository with its owner's token (validated above).
+          if [ -n "$ONLY" ]; then OWNERS="${ONLY%%/*}"; fi
           # Proven content census (read-only in every mode; see the script's
           # PROVEN CONTENT header). The scheduled run reads proven/manifest.json
           # of hyperpolymath/proven-cicd-and-workflows at this pinned commit;
@@ -192,7 +208,11 @@ jobs:
           for owner in ${OWNERS//,/ }; do
             var="TOK_$(printf '%s' "$owner" | tr 'a-z-' 'A-Z_')"
             args=(--owners "$owner" --limit "$LIMIT" --out "census-${owner}.tsv")
+            [ -n "$ONLY" ] && args+=(--only "$ONLY")
             [ "$MODE" = "fix" ] && args+=(--fix)
+            # content: the script refuses it with a pin mode, or without a
+            # proven_sha (`off`), before writing anything.
+            [ "$MODE" = "content" ] && args+=(--fix-content)
             [ "$REPAIR" = "true" ] && args+=(--repair-illegal)
             [ "$ENSURE_SQUABBLER" = "true" ] && args+=(--ensure-squabbler)
             [ -n "$PROVEN_SHA" ] && args+=(--proven-sha "$PROVEN_SHA")
