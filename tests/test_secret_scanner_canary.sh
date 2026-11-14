@@ -240,8 +240,10 @@ SORT_KEY="created_at_descending_then_id_ascending"
 CACHE_KEY="v1-linux-x64-0123456789abcdef0123456789"
 AUTH_KEY="${AUTH_KEY:?set AUTH_KEY from a secret}"
 ENCRYPTION_KEY="$ENCRYPTION_KEY"
+SSH_PRIVATE_KEY_FILE="/home/runner/work/project/.ssh/id_ed25519"
+SIGNING_KEY_PATH="/var/lib/application/keys/signing.pem"
 EOF
-shexpect shclean 0 "non-secret key names and variable references -> clean"
+shexpect shclean 0 "non-secret key names, variable references and *_KEY_FILE/_PATH locations -> clean"
 
 echo
 echo "  === $pass passed, $fail failed ==="
