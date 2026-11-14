@@ -9,21 +9,25 @@
 # repository's gate and every consumer that catalogues PWG-1 (such as
 # Mathesis) run it, so that each one checks in the same way.
 #
-# Usage: check-proof-receipt.sh [--branch REF] RECEIPT REPO
+# Usage: check-proof-receipt.sh [--branch REF] [--import OWNER/REPO=DIR]... RECEIPT REPO
 #
 #   RECEIPT  the *_praxis.deed proof receipt
-#   REPO     a clone of the receipt's :repository. Every commit the receipt
+#   REPO     a full (not shallow) clone of the receipt's :repository. Every commit the receipt
 #            names must be present: fetch a squashed or rebased source by
 #            the reference the forge keeps (on GitHub refs/pull/<n>/head).
 #   --branch the default-branch ref in REPO (default: HEAD)
+#   --import a clone of a repository that a receipt's (import …) names; give
+#            one for each imported repository
 #
 # Checks, each reported by name:
 #   1. the reader accepts the receipt;
 #   2. the :source-commit is REF or an ancestor of REF;
-#   3. for each current receipt, every (inputs-manifest …) entry is a file
-#      at the receipt's :commit, and the SHA-256 of its git blob is the
-#      recorded :sha256 (so :inputs-sha256 holds there, because the reader
-#      derived it from the manifest);
+#   3. for each current receipt, of a leg or of a negative control, every
+#      (inputs-manifest …) entry is a file at the receipt's :commit, and the
+#      SHA-256 of its git blob is the recorded :sha256 (so :inputs-sha256
+#      holds there, because the reader derived it from the manifest); and
+#      every (import …) holds in the same way in its --import clone at its
+#      :commit;
 #   4. for each (echo …):
 #      * inputs-sha256: for each prover, a manifest in the receipt has the
 #        echo's digest, and that manifest holds at the source and at the
@@ -40,20 +44,30 @@ READER="$HERE/../1-formats/deed/tools/deed_lint.js"
 DIGEST="$HERE/proof-inputs-sha256.sh"
 
 branch=HEAD
+declare -A import_dir=()
 while [ $# -gt 0 ]; do
   case $1 in
     --branch) [ $# -ge 2 ] || { echo "usage: --branch needs a ref" >&2; exit 2; }; branch=$2; shift 2 ;;
+    --import)
+      [ $# -ge 2 ] && [[ $2 == */*=* ]] || { echo "usage: --import needs OWNER/REPO=DIR" >&2; exit 2; }
+      key=${2%%=*}; import_dir[${key,,}]=${2#*=}; shift 2 ;;
     --) shift; break ;;
     -*) echo "unknown option: $1" >&2; exit 2 ;;
     *) break ;;
   esac
 done
-[ $# -eq 2 ] || { echo "usage: check-proof-receipt.sh [--branch REF] RECEIPT REPO" >&2; exit 2; }
+[ $# -eq 2 ] || { echo "usage: check-proof-receipt.sh [--branch REF] [--import OWNER/REPO=DIR]... RECEIPT REPO" >&2; exit 2; }
 receipt=$1 repo=$2
 for tool in bun jq git sha256sum; do
   command -v "$tool" >/dev/null || { echo "cannot run: $tool is not installed" >&2; exit 2; }
 done
 git -C "$repo" rev-parse --git-dir >/dev/null 2>&1 || { echo "cannot run: $repo is not a git clone" >&2; exit 2; }
+# The checks need the home history whole: the ancestry check of the
+# :source-commit, and the refusal of an import whose pinned commit is home
+# history. A shallow home clone hides both, so it cannot be checked.
+if [ "$(git -C "$repo" rev-parse --is-shallow-repository)" = true ]; then
+  echo "cannot run: $repo is a shallow clone; fetch its full history (git fetch --unshallow)" >&2; exit 2
+fi
 git -C "$repo" rev-parse --verify --quiet "$branch^{commit}" >/dev/null \
   || { echo "cannot run: $branch is not a commit in $repo" >&2; exit 2; }
 
@@ -68,7 +82,7 @@ if ! json=$(bun "$READER" --proof-receipt-json "$receipt" 2>&1); then
 fi
 ok "reader accepts $receipt"
 
-have_commit() { git -C "$repo" cat-file -e "$1^{commit}" 2>/dev/null; }
+have_commit() { git -C "${2:-$repo}" cat-file -e "$1^{commit}" 2>/dev/null; }
 
 # 2. The :source-commit is on the default branch.
 src=$(jq -r .source_commit <<<"$json")
@@ -81,20 +95,20 @@ else
 fi
 
 # The manifest a commit really holds for PATHs, in the §8.5.1 form.
-manifest_at() { # COMMIT PATH...
-  local commit=$1; shift
-  bash "$DIGEST" -C "$repo" --manifest "$commit" "$@" 2>&1
+manifest_at() { # DIR COMMIT PATH...
+  local dir=$1 commit=$2; shift 2
+  bash "$DIGEST" -C "$dir" --manifest "$commit" "$@" 2>&1
 }
 # The manifest a receipt records, in the same form.
 manifest_text() { # JSON array of {path, sha256}
   jq -r '.[] | "\(.sha256)  \(.path)"' <<<"$1"
 }
-check_manifest() { # LABEL COMMIT MANIFEST-JSON
-  local label=$1 commit=$2 mj=$3 want got
-  if ! have_commit "$commit"; then fail "$label: commit $commit is not in $repo"; return; fi
+check_manifest() { # LABEL COMMIT MANIFEST-JSON [DIR]
+  local label=$1 commit=$2 mj=$3 dir=${4:-$repo} want got
+  if ! have_commit "$commit" "$dir"; then fail "$label: commit $commit is not in $dir"; return; fi
   mapfile -t paths < <(jq -r '.[].path' <<<"$mj")
   want=$(manifest_text "$mj")
-  if ! got=$(manifest_at "$commit" "${paths[@]}"); then fail "$label: at $commit: $got"; return; fi
+  if ! got=$(manifest_at "$dir" "$commit" "${paths[@]}"); then fail "$label: at $commit: $got"; return; fi
   if [ "$got" = "$want" ]; then
     ok "$label: the manifest holds at $commit"
   else
@@ -103,13 +117,36 @@ check_manifest() { # LABEL COMMIT MANIFEST-JSON
   fi
 }
 
-# 3. Each current receipt's manifest holds at its :commit.
+# 3. Each current receipt's manifest holds at its :commit, and so does each
+# of its imports, in the clone given for it.
 while IFS= read -r r; do
-  check_manifest "$(jq -r '"claim \(.claim) \(.prover) receipt"' <<<"$r")" \
-    "$(jq -r .commit <<<"$r")" "$(jq -c .manifest <<<"$r")"
-done < <(jq -c '.claims[] as $c | $c.legs[] as $l | $l.receipts[]
+  label=$(jq -r '"claim \(.claim) \(.what) receipt"' <<<"$r")
+  check_manifest "$label" "$(jq -r .commit <<<"$r")" "$(jq -c .manifest <<<"$r")"
+  while IFS= read -r i; do
+    irepo=$(jq -r .repository <<<"$i"); ikey=${irepo,,}; icommit=$(jq -r .commit <<<"$i")
+    if [ -z "${import_dir[$ikey]+x}" ]; then
+      fail "$label: import $irepo: no clone given (--import $irepo=DIR)"
+      continue
+    fi
+    # The home repository (or a fork of it) under another name: its files
+    # belong in (inputs-manifest …). A full clone holds the home :source-commit;
+    # a shallow one may not, but its pinned commit is then home history.
+    if have_commit "$src" "${import_dir[$ikey]}"; then
+      fail "$label: import $irepo: its clone holds the home :source-commit $src, so it is the home repository"
+      continue
+    fi
+    if have_commit "$icommit" "$repo"; then
+      fail "$label: import $irepo: its pinned commit $icommit is in the home repository, so it is the home repository"
+      continue
+    fi
+    check_manifest "$label: import $irepo" "$icommit" "$(jq -c .files <<<"$i")" "${import_dir[$ikey]}"
+  done < <(jq -c '.imports[]' <<<"$r")
+done < <(jq -c '.claims[] as $c
+  | ( ($c.legs[] | {what: .prover, receipts}),
+      ($c.controls[] | {what: "\(.prover) control \(.path)", receipts}) ) as $l
+  | $l.receipts[]
   | select(.state == "current" and .inputs_manifest != null)
-  | {claim: $c.id, prover: $l.prover, commit, manifest: .inputs_manifest}' <<<"$json")
+  | {claim: $c.id, what: $l.what, commit, manifest: .inputs_manifest, imports}' <<<"$json")
 
 # 4. Each echo's witness holds at its source and its image.
 while IFS= read -r e; do

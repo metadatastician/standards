@@ -19,11 +19,15 @@
 # minted elsewhere: for a repository, ruling V8 makes it the profile C UUIDv8
 # of its birth path. Inside that literal, version 5 or 8 with variant 10 is accepted in
 # both modes, exactly as deed.abnf's uuid-hex allows; the body must be lower
-# case, as the grammar requires. In an identity field (CHORA-SPEC 7.1: :repo-uuid,
-# :estate-uuid, :forge-uuid, :beholding-chora, and the clause fields :uuid,
+# case, as the grammar requires. In an identity field (CHORA-SPEC 7.1: the
+# deed's own id :repo-uuid, :estate-uuid, :forge-uuid and the clause field
+# :uuid, and the references :beholding-chora, :of-chora and the clause fields
 # :estate, :base, :forge and :repo) only version 8 is accepted, in both modes
-# (owner ruling, 2026-11-13; A1 V8, T30). A version 5 stays legal in #uuid
-# outside identity, as the registry alias. Every other version is still rejected there,
+# (owner ruling, 2026-11-13; A1 V8, T30). A #u5"…" literal in an identity field
+# is rejected in both modes, and a #u8"…" literal there is accepted: it is
+# computed to a v8 (owner ruling Q2, 2026-11-14; A1 T30). A version 5 stays
+# legal in #uuid outside identity, as the registry alias. Every other version
+# is still rejected there,
 # and a bare v5 anywhere else is still rejected. Anything that looks like the
 # literal but is not exactly it (an upper- or mixed-case body, or space before
 # the string) is rejected as malformed in both modes; it never falls through
@@ -112,6 +116,35 @@ scannable_text() {
   esac
 }
 
+# Print two one-line views of a file's scannable text, for the identity
+# rules: the text with line breaks folded to spaces (so a field and its value
+# on separate lines meet), and the same with ';' comments removed first (so a
+# comment used as the separator between them cannot hide the value). A ';'
+# inside a double-quoted string is not a comment, so strings are tracked,
+# across lines, with backslash escapes. The raw
+# view keeps comments, so a comment that quotes a field and a #u5 is still
+# flagged (owner ruling of 2026-11-14: the rule is lexical). The views read
+# the whole file, not scannable_text: the Julia dependency tables and
+# manifests that the UUID scan skips hold registry ids, not identity fields,
+# and a field written there is still an error.
+folded_views() {
+  tr '\n\r' '  ' < "$1"
+  printf '\n'
+  awk '
+    { out = ""; n = length($0)
+      for (i = 1; i <= n; i++) {
+        c = substr($0, i, 1)
+        if (q) { out = out c
+                 if (c == "\\") { i++; out = out substr($0, i, 1) }
+                 else if (c == "\"") q = 0 }
+        else if (c == "\"") { q = 1; out = out c }
+        else if (c == ";") break
+        else out = out c
+      }
+      print out }' "$1" | tr '\n\r' '  '
+  printf '\n'
+}
+
 # Exit 0 when a version:variant pair is acceptable in the current mode.
 # Keep this POSIX so it can run in every estate checkout.
 acceptable() {
@@ -128,7 +161,10 @@ TYPED_RE='#uuid"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"'
 # Anything that looks like the literal: any case in the body, optional space.
 APPARENT_RE='#uuid[[:space:]]*"[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}"'
 # A #uuid literal written as the value of an identity field (CHORA-SPEC 7.1).
-IDENT_RE='(:repo-uuid|:estate-uuid|:forge-uuid|:beholding-chora|:uuid|:estate|:base|:forge|:repo)[[:space:]]+#uuid"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"'
+IDENT_RE='(:repo-uuid|:estate-uuid|:forge-uuid|:beholding-chora|:of-chora|:uuid|:estate|:base|:forge|:repo)[[:space:]]+#uuid"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"'
+# A #u5"…" literal written as the value of an identity field (owner ruling Q2,
+# 2026-11-14). It is checked in every file, not only those holding a bare UUID.
+U5_IDENT_RE='(:repo-uuid|:estate-uuid|:forge-uuid|:beholding-chora|:of-chora|:uuid|:estate|:base|:forge|:repo)[[:space:]]+#u5"[^"]*"'
 
 # Exit 0 when a version:variant pair is legal inside #uuid"…" (deed.abnf
 # uuid-hex: version 5 or 8, variant 10). The mode does not change this.
@@ -148,6 +184,21 @@ while IFS= read -r file; do
     */.git/*|*/check-uuid-v7.sh|*/check-uuid-v8.sh|*.a2ml|*.a2ml.in) continue ;;
   esac
   if exempt "$file"; then continue; fi
+  # A #u5"…" in an identity field is an error in both modes (owner ruling Q2,
+  # 2026-11-14). #u8"…" there is accepted: it computes to a v8. Binary files
+  # are skipped, as for every other rule here. Line breaks are folded to
+  # spaces first, because a deed may put a field and its value on separate
+  # lines. The rule is lexical, like IDENT_RE: a field followed by #u5 fails
+  # wherever it appears, prose and comments included. A file without "#u5"
+  # cannot match, so it is skipped before the views are built.
+  while IFS= read -r pair; do
+    [ -n "$pair" ] || continue
+    key=${pair%%[[:space:]]*}
+    printf '%s: identity field %s carries a #u5 literal; write #uuid"<v8 id>" (%s)\n' "$file" "$key" "$pair" >&2
+    status=1
+  done <<EOF
+$(grep -Iq -- '#u5"' "$file" 2>/dev/null && folded_views "$file" | grep -oE -- "$U5_IDENT_RE" | sort -u || true)
+EOF
   if grep -IEni -- "$UUID_RE" "$file" >/dev/null 2>&1; then
     # Typed literals first: each #uuid"<id>" must be exactly the literal, and
     # version 5 or 8.
@@ -179,7 +230,7 @@ EOF
         status=1
       fi
     done <<EOF
-$(scannable_text "$file" | grep -oE -- "$IDENT_RE" || true)
+$(grep -q -- '#uuid"' "$file" 2>/dev/null && folded_views "$file" | grep -oE -- "$IDENT_RE" | sort -u || true)
 EOF
     # Then every other UUID, with the typed literals removed. Every UUID on a
     # line is checked, not only the last one (grep -o).

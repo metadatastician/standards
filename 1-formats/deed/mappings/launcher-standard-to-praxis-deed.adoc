@@ -85,7 +85,7 @@ this standard survives translation intact.
 (praxis-deed
   :schema-version   "1.0.0"                 ; REQUIRED, structurally FIRST
   :canonical-name   "launcher-standard"     ; REQUIRED
-  :beholding-chora  #u5"estate/chora"       ; REQUIRED — a UUID, never a bare filename
+  :beholding-chora  #uuid"<estate v8 id>"   ; REQUIRED — a UUID, never a bare filename
   :standard-version "0.4.0"
   :standard-date    "2026-09-22"
   :compliance       (...))
@@ -130,7 +130,7 @@ to the search surface, not a re-encoding.
 | `[spec] compliance` | `:compliance (...)` | list of STRINGs — a *set*, unordered, so **no `:priority`**
 | — (new) | `:schema-version` | STRING `"1.0.0"`, structurally first
 | — (new) | `:canonical-name` | STRING `"launcher-standard"`
-| — (new) | `:beholding-chora` | `#u5` literal; body is the NAME input, never hex
+| — (new) | `:beholding-chora` | the estate chora's v8 id, written `#uuid"…"`, or `#u8"chora:estate/<host>/<owner>"`. Never `#u5` (owner ruling Q2, CHORA-SPEC 7.1)
 
 4+| *Ordered ladders — `:priority`-bearing clauses*
 

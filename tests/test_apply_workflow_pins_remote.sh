@@ -544,18 +544,29 @@ case_main_content() {
   fi
 }
 
-# case_main_content_fail <applier> — an unreadable manifest stops the run
-# before any census: no REPO header, and the refusal is named.
+# case_main_content_fail <applier> — a lost manifest degrades loudly: the pin
+# census completes, one CONTENT-CENSUS-FAILED row, no content rows, exit 1.
 case_main_content_fail() {
-  local d; d=$(new_case contentfail)
-  printf '# proven-cicd: proven-lock-gate@0.0.9 sha256:%s\nname: g\n' "$STAMP_HEX" > "$d/own_stamped"
-  run_content "$d" "$1" --proven-sha "$P"
-  if [ "$(cat "$d/rc")" = 1 ] && ! grep -q '^REPO' "$d/out" \
-     && grep -q 'Refusing a content census' "$d/err"; then
-    pass "main: an unreadable manifest stops the run before any census"
-  else
-    fail "main: unreadable manifest did not fail closed (rc=$(cat "$d/rc"))"
-  fi
+  local d bad label
+  # Two ways to lose the manifest: unreadable (404) and not a valid manifest.
+  for bad in missing invalid; do
+    d=$(new_case "contentfail-$bad")
+    printf '# proven-cicd: proven-lock-gate@0.0.9 sha256:%s\nname: g\n' "$STAMP_HEX" > "$d/own_stamped"
+    [ "$bad" = invalid ] && printf 'not json' > "$d/proven_manifest.json"
+    run_content "$d" "$1" --proven-sha "$P"
+    label="main: a manifest that is $bad degrades loudly (pin census complete, one CONTENT-CENSUS-FAILED row, exit 1)"
+    if [ "$(cat "$d/rc")" = 1 ] && grep -q '^REPO' "$d/out" \
+       && [ "$(grep -c 'CONTENT-CENSUS-FAILED' "$d/out")" = 1 ] \
+       && grep -qF "$(printf 'hyperpolymath/pub-a\tci.yml\tFRESH')" "$d/out" \
+       && grep -qF "$(printf 'metadatastician/pub-c\tci.yml\tFRESH')" "$d/out" \
+       && ! grep -qE 'BEHIND-CONTENT|CONTENT-CURRENT|CONTENT-UNLISTED' "$d/out" \
+       && grep -q 'the content census did not run' "$d/err"; then
+      pass "$label"
+    else
+      fail "$label — rc=$(cat "$d/rc")"
+      sed 's/^/    /' "$d/out" >&2
+    fi
+  done
 }
 
 # case_main_content_off <applier> — without --proven-sha nothing changes: no
@@ -794,7 +805,9 @@ list_mutant fork_not_checked 's@^          true\) sqst=FORK ;;$@          true) 
 # Proven content: the census must fail closed without its manifest, must read
 # the manifest at the pinned commit (not at whatever main is now), and must
 # write the content row it computed.
-list_mutant content_fail_open '/Refusing a content census without it/{n;s@exit 1@:@}' case_main_content_fail
+list_mutant content_fail_quiet '/the content census did not run/{n;s@exit 1@:@}' case_main_content_fail
+list_mutant content_fail_row_dropped '/printf -- .-.t-.tCONTENT-CENSUS-FAILED/d' case_main_content_fail
+list_mutant content_fail_stops_pin_census 's@^      log "ERROR: \$\{content_failed\}.*@&; exit 1@' case_main_content_fail
 list_mutant content_manifest_unpinned 's@\?ref=\$\{PROVEN_SHA\}@@' case_main_content
 list_mutant content_row_dropped 's@cst=\$\(content_state "\$wf" "\$PROVEN_MANIFEST"\)@cst=""@' case_main_content
 list_mutant content_row_writes 's@\[ -n "\$cst" \] \&\& printf@[ -n "$cst" ] \&\& changed+=("$base"); [ -n "$cst" ] \&\& printf@' case_main_content_fix

@@ -6,7 +6,7 @@ import { cpSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, writ
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { validate, LintError, SELF_TEST_CASES, checkEgress, EgressError, checkAnchor, AnchorError, profileCOfBody, readMustfileChecks, MustfileError, readProofReceipt, ProofReceiptError, checkContractiles, ContractilesError, contractilePaths, CONTRACTILE_VERBS, checkEdict, EdictError, verbOfFilename, checkVerbDescriptile, VerbDescriptileError, verbOfDescriptile, choraRepoUuid } from "./deed_lint.js";
+import { validate, blankComments, LintError, SELF_TEST_CASES, checkEgress, EgressError, checkAnchor, AnchorError, profileCOfBody, readMustfileChecks, MustfileError, readProofReceipt, ProofReceiptError, checkContractiles, ContractilesError, contractilePaths, CONTRACTILE_VERBS, checkEdict, EdictError, verbOfFilename, checkVerbDescriptile, VerbDescriptileError, verbOfDescriptile, choraRepoUuid } from "./deed_lint.js";
 import { generateContractileRegistry as generateRegistry } from "./deed_lint.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -73,6 +73,7 @@ const RULE = {
   "intrailing_chora.deed": /trailing content/,
   "intrue-literal_chora.deed": /bare symbol 'true' is forbidden/,
   "inunbalanced_chora.deed": /unbalanced parens/,
+  "inu5-identity_chora.deed": /identity field :repo-uuid carries a #u5 literal/,
   "inu7_chora.deed": /unrecognised #-form/,
   "inu8-empty-domain_chora.deed": /uuid8 domain '' must be non-empty/,
   "inu8-no-colon_chora.deed": /has no ":"/,
@@ -283,7 +284,27 @@ describe("Mustfile check profile", () => {
     expect(() => readMustfileChecks(doc(':typo-check "false" ' + one), "test_praxis.deed")).toThrow(/unknown top-level/);
     expect(() => readMustfileChecks(doc(':canonical-name #t ' + one), "test_praxis.deed")).toThrow(/invalid type/);
     expect(() => readMustfileChecks(doc(':canonical-name "x" :canonical-name "y" ' + one), "test_praxis.deed")).toThrow(/duplicate top-level/);
-    expect(() => readMustfileChecks(doc(':canonical-name "must" :beholding-chora #u5"estate/chora" ' + one), "test_praxis.deed")).not.toThrow();
+    expect(() => readMustfileChecks(doc(':canonical-name "must" :beholding-chora #u8"chora:estate/github.com/o" ' + one), "test_praxis.deed")).not.toThrow();
+    // Owner ruling Q2 (CHORA-SPEC 7.1): #u5 in an identity field is an error.
+    // The literal is assembled at runtime so scripts/check-uuid-v8.sh does not
+    // read this test as a deed.
+    const u5 = "#" + 'u5"estate/chora"';
+    expect(() => readMustfileChecks(doc(':canonical-name "must" :beholding-chora ' + u5 + ' ' + one), "test_praxis.deed")).toThrow(/identity field :beholding-chora carries a #u5 literal/);
+    // Outside an identity field #u5 stays legal, and a line break between the
+    // field and its value does not hide it.
+    expect(() => validate(HDR + '(praxis-deed :schema-version "1" :canonical-name "x" :alias ' + u5 + ')')).not.toThrow();
+    expect(() => validate(HDR + '(praxis-deed :schema-version "1" :canonical-name "x" :beholding-chora\n  ' + u5 + ')')).toThrow(/carries a #u5 literal/);
+    // The rule is lexical, as in check-uuid-v8.sh (owner ruling of 2026-11-14,
+    // "by name"): a field name and #u5 in a comment or a string fail too, and a
+    // comment between a field and its value does not hide the value.
+    expect(() => validate(HDR + '(praxis-deed :schema-version "1" :canonical-name "x") ; :repo-uuid ' + u5 + '\n')).toThrow(/identity field :repo-uuid carries a #u5 literal/);
+    // A string that only mentions the field, with escaped quotes, holds no #u5 literal.
+    const u5Quoted = "#" + 'u5\\"estate/chora\\"';
+    expect(() => validate(HDR + '(praxis-deed :schema-version "1" :canonical-name "x" :note ":estate ' + u5Quoted + '")')).not.toThrow();
+    expect(() => validate(HDR + '(praxis-deed :schema-version "1" :canonical-name "x" :beholding-chora ; note\n  ' + u5 + ')')).toThrow(/carries a #u5 literal/);
+    // A ';' inside a string is not a comment, so stripping comments invents no field.
+    expect(() => validate(HDR + '(praxis-deed :schema-version "1" :canonical-name "x" :alias (":repo-uuid ; example" ' + u5 + '))')).not.toThrow();
+    expect(blankComments('a "b;c" ; d\ne')).toBe('a "b;c"    \ne');
   });
   test("multiline critical check survives parsing and has an executable body", () => {
     const checks = readMustfileChecks(doc('(check\n :id alpha\n :severity critical\n :discharge run\n :body "false")'), "test_praxis.deed");
@@ -440,6 +461,56 @@ describe("proof-receipt profile (PROOF-POLICY §8.5)", () => {
   test("§8.5.2: two manifests for one commit and one prover cannot differ", () => {
     const other = rcpt({ rstate: "superseded", reason: "rerun", digest: D2 });
     expect(() => read(doc(claim("PWG-3", agda({ receipts: rcpt() + " " + other }) + " " + none)))).toThrow(/two different input digests/);
+  });
+  test("§8.5.1: an (import …) records a pinned repository with its own derived manifest", () => {
+    const IC = "9".repeat(40), h = "5".repeat(64);
+    const IFILES = [["src/Algebra.agda", h], ["x.agda-lib", "6".repeat(64)]];
+    const imp = (o = {}) => `\n  (import :repository "${o.repo ?? "o/sibling"}" :commit "${o.commit ?? IC}" :inputs-sha256 "${o.digest ?? digestOf(o.files ?? IFILES)}"`
+      + (o.files ?? IFILES).map(([p, x]) => `\n    (file :path "${p}" :sha256 "${x}")`).join("") + ")";
+    const one = (imports) => read(doc(claim("PWG-3", agda({ manifest: manifest(FILES) + imports }) + " " + none)));
+    const r = one(imp()).claims[0].legs[0].receipts[0];
+    expect(r.imports).toEqual([{ repository: "o/sibling", commit: IC, "inputs-sha256": digestOf(IFILES),
+      files: IFILES.map(([path, sha256]) => ({ path, sha256 })) }]);
+    expect(one("").claims[0].legs[0].receipts[0].imports).toEqual([]);
+    expect(() => one(imp({ digest: D }))).toThrow(/import o\/sibling: :inputs-sha256 is not the SHA-256 of its files/);
+    expect(() => one(imp({ repo: "nope" }))).toThrow(/:repository must be OWNER\/REPO/);
+    expect(() => one(imp({ repo: "hyperpolymath/x" }))).toThrow(/does not import itself/);
+    // Names are case-insensitive, and §8.6's alias names the same repository.
+    expect(() => one(imp({ repo: "HyperPolymath/X" }))).toThrow(/does not import itself/);
+    expect(() => one(imp({ repo: "o/sibling" }) + imp({ repo: "O/Sibling" }))).toThrow(/listed twice/);
+    const std = (repo) => read(doc(claim("PWG-3", agda({ manifest: manifest(FILES) + imp({ repo }) }) + " " + none), { repo: "metadatastician/standards" }));
+    expect(() => std("hyperpolymath/standards")).toThrow(/does not import itself/);
+    expect(() => std("Metadatastician/Standards")).toThrow(/does not import itself/);
+    expect(std("hyperpolymath/standards-other").claims[0].legs[0].receipts[0].imports).toHaveLength(1);
+    expect(() => one(imp() + imp())).toThrow(/listed twice \(one pin per repository\)/);
+    expect(() => one(imp({ commit: "abc" }))).toThrow(/:commit must be the full 40-character/);
+    expect(() => one(imp({ files: [["b", h], ["a", h]] }))).toThrow(/import o\/sibling manifest path "a" is out of order/);
+    expect(() => one(imp({ files: [["../a", h]] }))).toThrow(/no empty/);
+    expect(() => one(imp({ files: [] }))).toThrow(/lists no \(file/);
+    expect(() => one('\n  (import :repository "o/s" :commit "' + IC + '" (file :path "a" :sha256 "' + h + '"))')).toThrow(/missing :inputs-sha256/);
+  });
+  test("§8.5.4: a negative control is recorded, checked for form and never graded", () => {
+    const REJ = [["src/A.agda", "1".repeat(64)], ["tests/reject/Bad.agda", "7".repeat(64)], ["x.agda-lib", "3".repeat(64)]];
+    const ctl = (o = {}) => `\n  (control :path "${o.path ?? "tests/reject/Bad.agda"}" :prover ${o.prover ?? "agda"} :expect ${o.expect ?? "refused"}`
+      + (o.receipts ?? rcpt({ digest: digestOf(o.files ?? REJ), manifest: manifest(o.files ?? REJ) })) + ")";
+    const one = (controls, pwg = "PWG-3") => read(doc(claim(pwg, agda() + " " + none + controls)));
+    const r = one(ctl()).claims[0];
+    expect(r.pwg).toBe("PWG-3");
+    expect(r.controls.map((c) => [c.path, c.prover, c.expect])).toEqual([["tests/reject/Bad.agda", "agda", "refused"]]);
+    expect(one("").claims[0].controls).toEqual([]);
+    // Never graded: a control does not raise or lower the grade.
+    expect(() => one(ctl(), "PWG-2i")).toThrow(/support PWG-3/);
+    // Its digest stays out of the per-commit agreement: same commit and prover, other inputs.
+    expect(one(ctl()).claims[0].legs[0].receipts[0]["inputs-sha256"]).toBe(D);
+    expect(() => one(ctl({ expect: "accepted" }))).toThrow(/:expect accepted .* not one of refused/);
+    expect(() => one(ctl({ path: "./x.agda" }))).toThrow(/no empty/);
+    expect(() => one(ctl() + ctl())).toThrow(/is listed twice/);
+    expect(() => one(ctl({ receipts: "" }))).toThrow(/has no \(receipt/);
+    expect(() => one(ctl({ files: FILES }))).toThrow(/the refused file is not in its current receipt/);
+    expect(() => one(ctl({ receipts: rcpt({ digest: digestOf(REJ), manifest: manifest(REJ) }) + rcpt({ digest: digestOf(REJ), manifest: manifest(REJ) }) })))
+      .toThrow(/more than one current receipt/);
+    expect(() => one(ctl({ receipts: rcpt({ manifest: null }) }))).toThrow(/is missing \(inputs-manifest/);
+    expect(() => one('\n  (control :path "tests/reject/Bad.agda" :expect refused)')).toThrow(/missing :prover/);
   });
   test("§8.4: every current receipt lists its axioms, and only disposition (c) counts", () => {
     const one = (axioms, pwg = "PWG-3") => read(doc(claim(pwg, agda({ axioms }) + " " + none)));
@@ -682,7 +753,6 @@ const ANCHOR_WHY = {
   "parent-no-uuid_chora.deed": "is missing :uuid",
   "parent-relation-string_chora.deed": ":relation must be a symbol",
   "parent-self_chora.deed": "the deed's own :repo-uuid",
-  "parent-self-u5_chora.deed": "the deed's own :repo-uuid",
   "parent-self-u8_chora.deed": "the deed's own :repo-uuid",
   "parent-string_chora.deed": "got string",
   "parents-stray_chora.deed": "takes (parent …) clauses only",
@@ -771,8 +841,22 @@ describe("checkAnchor result", () => {
   (identity :primary-forge github :owner "o")
   (anchor :schema "hyperpolymath.anchor/1" :authority "a" (parents (parent :uuid #uuid"${v5}"))))
 `;
-    expect(() => validate(src)).not.toThrow();
-    expect(() => checkAnchor(src)).toThrow(/not a version 8 chora id/);
+    // :uuid is an identity field (CHORA-SPEC 7.1), so the grammar pass already
+    // refuses a version 5 there (T30), before the anchor profile looks at it.
+    expect(() => validate(src)).toThrow(/identity field :uuid carries a version 5 id \(v5-identity\)/);
+    expect(() => checkAnchor(src)).toThrow();
+  });
+  test("a version 5 #uuid in any identity field is v5-identity; version 8 is accepted (A1 T30)", () => {
+    const v5 = "00000000-0000-" + "5" + "000-8000-0000000000b1";
+    const deed = (id) => `;; SPDX-License-Identifier: CC-BY-SA-4.0
+(repo-deed :schema-version "1.0.0" :canonical-name "x" :repo-uuid #uuid"${id}" :beholding-chora #uuid"00000000-0000-8000-8000-00000000e57a")
+`;
+    expect(() => validate(deed(v5))).toThrow(/identity field :repo-uuid carries a version 5 id/);
+    expect(() => validate(deed("00000000-0000-8000-8000-0000000000a7"))).not.toThrow();
+    // Outside an identity field a version 5 #uuid stays legal (the registry alias).
+    expect(() => validate(`;; SPDX-License-Identifier: CC-BY-SA-4.0
+(praxis-deed :schema-version "1" :canonical-name "x" (alias :registry-v5 #uuid"${v5}"))
+`)).not.toThrow();
   });
   test("profile C of a #u8 body matches scripts/uuid-v8.js", () => {
     expect(profileCOfBody("gv-clade-index:github.com/hyperpolymath/standards")).toBe("b32d6be4-73ba-873e-9d61-e57f43c75cd1");
