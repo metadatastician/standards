@@ -700,6 +700,9 @@ const ANCHOR_WHY = {
   "status-in-anchor_chora.deed": "has no clause (status …)",
   "sub-nested-clause_chora.deed": "takes fields only",
   "two-anchors_chora.deed": "at most one (anchor …)",
+  "v1-subject_chora.deed": "needs hyperpolymath.anchor/2",
+  "v2-identity_chora.deed": "is (subject …) in hyperpolymath.anchor/2",
+  "v2-parents_chora.deed": "is gone in hyperpolymath.anchor/2",
   "version-two-segment_chora.deed": "is not MAJOR.MINOR.PATCH",
   "wrong-schema_chora.deed": '"hyperpolymath.anchor/1"',
 };
@@ -753,7 +756,16 @@ describe("checkAnchor result", () => {
       authority: "upstream-canonical",
       members: ["(golden-path", "(implementation-policy", "(metadata", "(parents", "(semantic-authority-files", "(ssg", ":authority", ":schema"],
       parents: ["00000000-0000-8000-8000-0000000000b1", "00000000-0000-8000-8000-0000000000b2"],
+      schema: "hyperpolymath.anchor/1",
+      legacy: true,
     });
+  });
+  test("a /2 clause is read under v2.0.0 and is not legacy (A7 J27)", () => {
+    const f = join(FIX_ANCHOR, "valid", "v2-subject_chora.deed");
+    const a = checkAnchor(readFileSync(f, "utf8"), f);
+    expect(a.schema).toBe("hyperpolymath.anchor/2");
+    expect(a.legacy).toBe(false);
+    expect(a.members).toContain("(subject");
   });
   test("the template's own clause, mint tokens included, passes in template mode", () => {
     const f = join(FIX_ANCHOR, "valid", "template-a55669e_chora.deed");
