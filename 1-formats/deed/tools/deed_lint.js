@@ -671,6 +671,26 @@ export const DESCRIPTILE_FILES = new Set(
     "INTENT", "MUST", "TRUST", "ADJUST", "DUST", "BUST"].map((n) => `${n}.deed`),
 );
 
+// deed.abnf: praxis-file = stem "_praxis.deed"; repo-file = stem "_chora.deed";
+// stem = 1*( ALPHA / DIGIT / "-" / "." / "_" ). ABNF ALPHA is ASCII only.
+const FILENAME_STEM = /^[A-Za-z0-9\-._]+$/;
+
+/**
+ * Refuse a _praxis.deed or _chora.deed basename whose stem (everything before
+ * the final suffix) breaks the grammar's stem rule.
+ * @throws {LintError} At line 1, naming the stem and the file.
+ */
+function checkFilenameStem(base, suffix) {
+  const stem = base.slice(0, -suffix.length);
+  if (!FILENAME_STEM.test(stem)) {
+    throw new LintError(
+      `illegal deed filename stem ${pyRepr(stem)} in ${base}: the stem before ${suffix} must be ` +
+        "one or more ASCII letters, digits, '-', '.' or '_' (deed.abnf stem)",
+      1,
+    );
+  }
+}
+
 /**
  * Check a parsed doc-head against the case-sensitive basename of `filename`.
  * Exact names take precedence: estate_chora.deed requires estate-deed,
@@ -683,7 +703,7 @@ export const DESCRIPTILE_FILES = new Set(
  * (split on the final suffix).
  * Returns undefined on success.
  * @throws {LintError} At line 1 for an unrecognised filename, an empty or
- * illegal _chora.deed stem (only ASCII letters, digits, hyphens, dots and
+ * illegal _praxis.deed or _chora.deed stem (only ASCII letters, digits, hyphens, dots and
  * underscores are allowed), or a doc-head mismatch.
  */
 export function checkFilenameDispatch(filename, head) {
@@ -700,11 +720,12 @@ export function checkFilenameDispatch(filename, head) {
   } else if (DESCRIPTILE_FILES.has(base)) {
     want = "descriptile-deed";
   } else if (base.endsWith("_praxis.deed")) {
+    checkFilenameStem(base, "_praxis.deed");
     want = "praxis-deed";
   } else if (base.endsWith("_chora.deed")) {
     const stem = base.slice(0, -"_chora.deed".length);
     if (stem === "estate") return;
-    if (!/^[A-Za-z0-9\-._]+$/.test(stem)) throw new LintError(`illegal deed filename stem ${pyRepr(stem)}`, 1);
+    checkFilenameStem(base, "_chora.deed");
     want = "repo-deed";
   } else {
     throw new LintError(

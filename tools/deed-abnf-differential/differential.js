@@ -550,7 +550,7 @@ for (const { c, text } of edictCases("valid")) {
 // before parsing, so deed-filename is held to the same names as
 // checkFilenameDispatch, case variants included. The heads/ fixtures must be
 // deeds by deed.abnf, and the gate must accept heads/valid and refuse
-// heads/invalid under their own names. <stem>_chora.deed and _praxis.deed are
+// heads/invalid under their own names. Legal <stem>_chora.deed and _praxis.deed are
 // not probed here: apg-js repeats possessively, so `stem` (which admits "_"
 // and ".") swallows the suffix; RFC 5234 ABNF backtracks and accepts them.
 {
@@ -559,6 +559,9 @@ for (const { c, text } of edictCases("valid")) {
     ["CLADE.deed", true], ["MUST.deed", true], ["ANCHOR.deed", false], ["mustfile.deed", false],
     ["MUSTFILE.deed", false], ["Meta.deed", false], ["State.deed", false], ["anchor.deed", false],
     ["Clade.deed", false], ["Statefile.deed", false], ["ATLAS.deed", true],
+    // Stem refusals are probed: a name with no legal split is refused under
+    // backtracking and possessive matching alike, so apg-js agrees here.
+    ["_praxis.deed", false], ["a+b_praxis.deed", false], ["my tool_praxis.deed", false], ["_chora.deed", false],
   ];
   for (const [name, want] of names) {
     if (grammarAccepts(grammar, "deed-filename", name) !== want) fail(want ? "deed.abnf refuses a file name it must accept" : "deed.abnf accepts a file name it must refuse", name);
