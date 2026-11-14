@@ -1,3 +1,0 @@
-;; SPDX-License-Identifier: MPL-2.0
-; A7 J14 fixture: ANCHOR.deed dispatches to anchor-deed
-(anchor-deed :schema-version "1.0.0")

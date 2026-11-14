@@ -423,7 +423,7 @@ for (const { c, text } of edictCases("valid")) {
 {
   const names = [
     ["Mustfile.deed", true], ["Bustfile.deed", true], ["Intentfile.deed", true], ["STATE.deed", true],
-    ["CLADE.deed", true], ["MUST.deed", true], ["ANCHOR.deed", true], ["mustfile.deed", false],
+    ["CLADE.deed", true], ["MUST.deed", true], ["ANCHOR.deed", false], ["mustfile.deed", false],
     ["MUSTFILE.deed", false], ["Meta.deed", false], ["State.deed", false], ["anchor.deed", false],
     ["Clade.deed", false], ["Statefile.deed", false], ["ATLAS.deed", true],
   ];

@@ -2,7 +2,7 @@
 ; SPDX-License-Identifier: MPL-2.0
 ; SPDX-License-Identifier: CC-BY-SA-4.0
 ;
-; DEED grammar, v1.5.0
+; DEED grammar, v2.0.0
 ; Normative for parsing. Prose and rationale: ../DEED-GRAMMAR-SPEC.adoc
 ;
 ; NOTICE (standards#837): OWNER RULING 2026-09-19 — the grammar files have
@@ -16,6 +16,15 @@
 ; NOTE: there is no "key = value" production and no "[section]" production.
 ; The only bracket is "(". A file using "=" as a field separator is not a deed.
 ; ("=" MAY appear INSIDE a symbol, e.g., a comparison operator.)
+;
+; CHANGELOG (v1.5.0 → v2.0.0, A7 rulings S1 and J24, 2026-11-14; SysArch R-01):
+;   - Removed the doc-head anchor-deed and the file name ANCHOR.deed. The
+;     anchor is the (anchor …) clause of the chora deed (A7 Q11, restored by
+;     S1), grammared by clauses/anchor.abnf. ANCHOR.deed now dispatches to
+;     nothing. NOT additive, so a major version: a v1.5.0 deed headed
+;     anchor-deed, or named ANCHOR.deed, is not a v2.0.0 deed. Every other
+;     v1.5.0 deed is a v2.0.0 deed. Estate files still named ANCHOR.deed are
+;     folded into their repo's chora deed in that repo's own PR (A7 J25).
 ;
 ; CHANGELOG (v1.4.0 → v1.5.0, A7 ruling J17, 2026-11-13; SysArch R-03):
 ;   - A field may end in the bang token "!", after a separator:
@@ -101,7 +110,6 @@ doc-head      = %s"estate-deed"
               / %s"praxis-deed"
               / %s"contractile-deed"
               / %s"descriptile-deed"
-              / %s"anchor-deed"
                 ; SEMANTIC CONSTRAINT: The doc-head MUST match the
                 ; filename dispatch (see deed-filename below).
                 ; estate_chora.deed → estate-deed
@@ -111,7 +119,6 @@ doc-head      = %s"estate-deed"
                 ; *_chora.deed      → repo-deed
                 ; <Verb>file.deed   → contractile-deed (J14)
                 ; <NAME>.deed       → descriptile-deed (J14)
-                ; ANCHOR.deed       → anchor-deed (J14)
                 ; A mismatch is a validation error.
 
 ; --- Filename dispatch -------------------------------------------------
@@ -122,12 +129,11 @@ doc-head      = %s"estate-deed"
 ; ("_chora.deed", "_praxis.deed", etc.). Do NOT split on "." — the
 ; stem may contain dots (e.g., "my.project_chora.deed" → stem "my.project").
 
-deed-filename = estate-file / atlas-file / manifest-file / anchor-file
+deed-filename = estate-file / atlas-file / manifest-file
               / contractile-file / descriptile-file / praxis-file / repo-file
 estate-file   = %s"estate_chora.deed"     ; -> estate-deed
 atlas-file    = %s"ATLAS.deed"            ; -> estate-atlas-deed
 manifest-file = %s"0-AI-MANIFEST.deed"    ; -> repo-deed
-anchor-file   = %s"ANCHOR.deed"           ; -> anchor-deed (J14)
 contractile-file = verb-cap %s"file.deed" ; -> contractile-deed (J14)
 verb-cap      = %s"Intent" / %s"Must" / %s"Trust" / %s"Adjust" / %s"Dust" / %s"Bust"
 descriptile-file = descriptile-name %s".deed" ; -> descriptile-deed (J14)
