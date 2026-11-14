@@ -1996,8 +1996,13 @@ export function rootChora(dir) {
   if (id === null) {
     throw new VerbDescriptileError(`${choras[0]} has no version 8 :repo-uuid (#uuid or #u8), so :of-chora cannot be checked against it (YD08)`);
   }
-  const n = items.find((it) => it[0] === "field" && it[1] === "canonical-name");
-  return { uuid: id, name: n && n[2][0] === "string" ? n[2][1] : undefined };
+  // YD07 compares against the chora's name, so a chora without exactly one
+  // string :canonical-name fails here rather than skipping that check.
+  const ns = items.filter((it) => it[0] === "field" && it[1] === "canonical-name");
+  if (ns.length !== 1 || ns[0][2][0] !== "string") {
+    throw new VerbDescriptileError(`${choras[0]} must carry exactly one string :canonical-name to check against (YD07)`);
+  }
+  return { uuid: id, name: ns[0][2][1] };
 }
 
 /**
