@@ -1,0 +1,198 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+= Mapping spec — the chora-registry seed (`repos.a2ml`) → `praxis-deed`
+Campaign: standards#837 · Frame: link:README.adoc[mappings/README] ·
+Status: DRAFT, keyed to the conversion in hyperpolymath/gv-clade-index#114
+(head `5eedb08`). The deed form is A1's (CHORA-SPEC); this spec is A7's.
+
+== 0. Authority and the D313 exception
+
+Owner rulings of 2026-11-14:
+
+* The registry seed is converted to a deed first, and the late-registered
+  repos are added to the converted file afterwards, in a separate change.
+* *This conversion is a single recorded exception to D313.* D313 makes A2ML
+  conversion kyX's first front end and forbids hand conversion. This one
+  file, and no other, may be converted without kyX, by a plain JavaScript or
+  shell script (never Python), under this spec, gated on parity (section 5).
+  Every other `.a2ml` file still waits for kyX.
+* The seed becomes chora-registry *identity* content, not a CLADE form.
+  CLADE files are deprecated; `CLADE.deed` is a repo's own content
+  organisation and nothing here translates into it (A7 7.2, W10).
+* Rulings on the form, recorded by A1: a `praxis-deed` head, as the A5
+  registries; clade codes become placements in a named `judgement` scheme;
+  each repo stores its version 8 id opaquely with the domain that minted it;
+  `completion` and `julia` do not translate.
+
+== 1. Source surface
+
+* `hyperpolymath/gv-clade-index` `verisim/seed/repos.a2ml`: a `[meta]` table
+  and one `[repo.<name>]` table per registered repo (327 at conversion).
+* Its readers at conversion: `sync/parse-repos.sh`, `sync/export-json.sh`
+  (which writes `worker/data/*.json`) and `scripts/check-registry.sh`.
+* Not covered: `verisim/seed/clades.a2ml` (the category names) stays A2ML
+  until its own conversion. The scheme's categories must match it, code and
+  name, until then.
+
+== 2. Target form
+
+`verisim/seed/chora-registry_praxis.deed`, head `praxis-deed`. The file name
+follows `deed.abnf`'s dispatch, under which `*_praxis.deed` selects
+`praxis-deed`, as for the A5 registries. The `<stem>_chora.deed` reminder in
+the mappings README is the rule for the `repo-deed` head and does not apply
+here. The stem is `chora-registry`, and the `:canonical-name` is
+`chora-registry-seed`.
+
+[source]
+----
+;; SPDX-License-Identifier: MPL-2.0
+;; SPDX-FileCopyrightText: <year> <author>
+(praxis-deed
+  :schema-version  "1.0.0"
+  :canonical-name  "chora-registry-seed"
+  :beholding-chora #uuid"<v8 id of the estate chora>"
+  :created         "<meta.created>"
+  :total-repos     <meta.total-repos>
+  (scheme :id clade-12 :kind judgement :membership multiple :link see-also
+    (category :id <code> :name "<name>") …)
+  (repo :name "<name>" :owner "<owner>"
+        :uuid #uuid"<v8 id>" :minted-in gv-clade-index
+        :description "<description>"
+        (lineage :type <lineage> [:parent "<parent>"] [:evolved-from "<path>"])
+        (placement :scheme clade-12 :category <primary> :primary #t)
+        (placement :scheme clade-12 :category <secondary> :rank <n>) …
+        (former :generation <n> :path "<owner>/<name>" :until "<date>") …
+        (retired :path "<owner>/<name>" :until "<date>") …)
+  …)
+----
+
+The `(scheme …)`, `(category …)` and `(placement …)` member names are the
+ones A7 7.2 gives `CLADE.deed`, with `:scheme` in place of `:path` on a
+registry placement, so one vocabulary serves both. `clade-12` is
+`judgement`, not `strict`: 144 placements were made by best fit or heuristic
+and await ratification, so its categories carry no `:criterion` and the
+scheme no `:grounding` (A7 7.2 requires both only under `strict`).
+
+*Open gap.* The seed holds no criterion text: `clades.a2ml` carries only a
+description and keywords for each category. A later move of `clade-12` to
+`strict` needs a `:grounding` and twelve `:criterion` texts that do not exist
+yet; they are the owner's to write, never inferred from the descriptions.
+
+== 3. Field table
+
+`→` left: the a2ml surface. Right: the deed path, its type and the transform.
+Anything not in this table does not translate.
+
+[cols="2,3,4",options="header"]
+|===
+| a2ml surface | deed path | type / transform
+
+3+| *`[meta]`*
+| `created` | `:created` | verbatim STRING
+| `total-repos` | `:total-repos` | INTEGER. It must equal the number of `(repo …)` clauses; `check-registry.sh` section 1 refuses a mismatch.
+| `project`, `version`, `format` | — | Not translated: they describe the retired A2ML file, not the registry.
+| `author` | — | Not translated as a field. The author is the `SPDX-FileCopyrightText` line.
+| — (new) | `:canonical-name` | `"chora-registry-seed"`
+| — (new) | `:beholding-chora` | The estate chora's version 8 id, as an opaque `#uuid` (CHORA-SPEC 9).
+
+3+| *One `(repo …)` per `[repo.<name>]`, in source order*
+| the table name | `:name` | verbatim STRING; quoted table names (`"X.jl"`, `".github"`) keep their text
+| `owner` | `:owner` | verbatim STRING, always written. The a2ml default when absent was `hyperpolymath`; the deed has no default.
+| — (derived) | `:uuid` | The opaque `#uuid"<v8 id>"` (U4): the ADR-008 profile C id of the repo's *birth path*, in the domain `:minted-in` names (section 4). It is never copied from a source v5 id, and the deed stores no v5 id.
+| — (new) | `:minted-in` | SYMBOL: `gv-clade-index` for every repo born before owner ruling V9 (late registrations included); `chora-registry` for one born after it.
+| `description` | `:description` | verbatim STRING
+| `lineage` | `(lineage :type …)` | enum → SYMBOL, verbatim
+| `parent` | `(lineage … :parent "…")` | verbatim STRING; omitted when the source is `""`
+| `evolved-from` | `(lineage … :evolved-from "…")` | verbatim STRING
+| `primary` | `(placement :scheme clade-12 :category … :primary #t)` | enum → SYMBOL; exactly one per repo
+| `secondary` | `(placement :scheme clade-12 :category … :rank n)` | one per element, in order; `:rank` counts from 1
+| `former` | `(former :generation n :path "…" :until "…")` | one per element of `"<path>@<date>"`, in order; `:generation` counts from 1
+| `retired` | `(retired :path "…" :until "…")` | one per element of `"<path>@<date>"`, in order
+| `completion` | — | Not translated (owner ruling): completion is state, not identity.
+| `julia` | — | Not translated (owner ruling): the `.jl` name already shows it.
+|===
+
+Comments carry over as `;;` comments. A comment that described the A2ML
+form (the header, and the notes on the retired v5 derivation) is rewritten,
+not copied; no full v5 id appears in the deed.
+
+== 4. Identity (A1's rules)
+
+* *Birth path.* The path of `(former :generation 1 …)` when the repo has
+  moved, else `:owner`/`:name`.
+* *P-1.* `:uuid` is bytes 0..15 of `SHA-256("<minted-in>:github.com/<birth
+  path>")`, with version nibble 8 and the RFC 9562 variant (D320). It is
+  minted once and never re-derived from a later name or path (U1); a move
+  adds a `(former …)` and changes `:owner` or `:name`, never `:uuid`.
+* *P-2.* A `#u8` literal is read in an identity field but not written, and a
+  `#u5` is an error in every mode (Q2). The served v5 field of the exported
+  JSON is derived by the export for parity; it is not stored.
+* *P-3.* `(retired …)` paths name ids that were served and withdrawn (ADR
+  0007's remints, now superseded); they are never minted again.
+
+== 5. Parity gate and acceptance
+
+The conversion is honest only if all of these hold on the converting PR:
+
+* The deed passes `deed_lint.js` as a `praxis-deed`.
+* `sync/parse-repos.sh` emits the same rows before and after (327).
+* `sync/export-json.sh` writes `repos.json`, `clades.json` and
+  `archive.json` byte-identical before and after; `index.json` differs only
+  in its `generated` stamp.
+* `scripts/check-registry.sh` passes, its never-removed check run against
+  the pre-conversion `repos.json` (`GV_BASE_REPOS_JSON`). Its section 1 also
+  holds the scheme to `clades.a2ml`: the code and name of every `(category …)`
+  in `clade-12` must equal `worker/data/clades.json`, which is built from
+  `clades.a2ml`, so a misspelt or missing category fails the gate even though
+  the export parity cannot see it.
+* An independent comparison, field by field, of every `[repo.<name>]`
+  against its `(repo …)` finds no difference other than the two
+  untranslated fields, and every `:uuid` re-derives from its birth path.
+* `repos.a2ml` is deleted in the same PR, and no reader still opens it.
+
+=== Acceptance greps (deed era)
+
+These hold on `verisim/seed/chora-registry_praxis.deed` after the A2ML
+source is gone, and are how a later reader knows this family is preserved.
+Counts are those at conversion; `N` is the file's `:total-repos`.
+
+[cols="3,1",options="header"]
+|===
+| Grep | Expect
+
+| `grep -c '(scheme :id clade-12' FILE` | 1
+| `grep -c '(category :id' FILE` | 12, one per `clades.a2ml` category
+| `grep -c '^  (repo ' FILE` | N (327 at conversion)
+| `grep -cE -e '^ +:uuid #uuid"[0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}" :minted-in gv-clade-index$' -e '^ +:uuid #uuid"[0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}" :minted-in chora-registry$' FILE` | N: version nibble 8 and the RFC 9562 variant, so a version 5 id does not count
+| `awk '/^  \(repo /{if(n&&p!=1)b++;n++;p=0} {p+=gsub(/:primary #t\)/,"&")} END{if(n&&p!=1)b++;print b+0}' FILE` | 0: the number of repos without exactly one primary placement
+| `grep -c '#u5"' FILE` | 0
+| `ls verisim/seed/repos.a2ml` | not found
+|===
+
+`verisim/seed/` still holds `clades.a2ml` and `forges.a2ml`. Neither is in
+this mapping's scope, and each waits for its own conversion.
+
+=== Review record (gv-clade-index#114 at `5eedb08`)
+
+Checked by A7 on 2026-11-14, each step run, not taken from the PR text:
+
+* `deed_lint.js`: OK.
+* Field-by-field comparison (a separate Bun script against the a2ml source):
+  327 repos on both sides, 0 discrepancies; every `:uuid` equals profile C of
+  its birth path in `gv-clade-index`; no unmapped source key.
+* Export before and after: `repos.json`, `clades.json`, `archive.json`
+  identical; `index.json` differs in `generated` only.
+* `check-registry.sh`: PASS on both sides; with `GV_BASE_REPOS_JSON` set to
+  the old `repos.json`, all 327 repos still registered, ids unchanged.
+* `tests/check-registry-test.sh`: PASS, 19 planted failures fire and a
+  `chora-registry` mint passes; planted case 3 is the `:total-repos`
+  mismatch, and case 20 a placement in an unknown category.
+* Rechecked at `7b7d70a`: the deed is byte-identical to `5eedb08`; the
+  export (with its escape fix) still gives byte-identical `repos.json`,
+  `clades.json` and `archive.json`; `check-registry.sh` and its test pass.
+* Every acceptance check above gives its expected result on the converted
+  deed. Planted copies fail as they should: a repo with its primary placement
+  removed, and a repo given a second primary, each make the awk check print 1;
+  one `:uuid` changed to version 5 drops the uuid count to 326.
+* Follow-up from the review, in the same PR: the two stale mentions of
+  `repos.a2ml` (the portal spec, and a token deleted from
+  `0-AI-MANIFEST.a2ml` with nothing added) are corrected.
