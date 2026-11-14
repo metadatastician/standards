@@ -184,6 +184,80 @@ expect clean 1 "malformed cutoff -> REFUSES TO RUN" ENFORCE_RUST_WIDE_SCAN_FROM=
 mkdir -p "$WORK/norust"; echo 'hello' > "$WORK/norust/README.md"
 expect norust 0 "no Cargo.toml -> skips cleanly" RUST_TODAY=2026-07-21
 
+# ---------------------------------------------------------------------------
+# 7. SHELL SECRETS: credential-style *_KEY names must be caught, not only
+#    API_KEY. `AUTH_KEY="…"` and `ENCRYPTION_KEY="…"` read clean when the
+#    pattern was API_KEY-only (Codex, zig-unorm#7), although the step's own
+#    comment says *_KEY. Non-secret key names and variable references must NOT
+#    trip it, or the widening would be a false-positive source.
+# ---------------------------------------------------------------------------
+extract_shell_step() {
+  local src=$1 dst=$2 sel body
+  sel='[.jobs["shell-secrets"].steps[] | select((.name // "") | test("^Check for hardcoded"))][0]'
+  body=$(yq -e "$sel | .run" "$src") || return 1
+  { printf '#!/usr/bin/env bash\nset -uo pipefail\n'; printf '%s\n' "$body"; } > "$dst"
+  echo "extracted shell-secrets step"
+}
+extract_shell_step "$REUSABLE" "$WORK/shell-secrets.sh" || { echo "::error::canary: could not extract the shell-secrets step from the reusable"; exit 1; }
+SHELL_SCAN="$WORK/shell-secrets.sh"; chmod +x "$SHELL_SCAN"
+
+shexpect() {
+  local dir="$1" want="$2" label="$3"
+  ( cd "$WORK/$dir" && bash "$SHELL_SCAN" >"$WORK/out.txt" 2>&1 )
+  local rc=$?
+  if [ "$rc" = "$want" ]; then
+    echo "  PASS  $label"; pass=$((pass+1))
+  else
+    echo "  FAIL  $label (exit $rc, expected $want)"; sed 's/^/          /' "$WORK/out.txt" | head -6; fail=$((fail+1))
+  fi
+}
+
+# The planted file is BUILT at run time, not written as a heredoc: this test is
+# itself a .sh file that the shell-secrets gate scans, and a literal
+# `API_KEY="PLANTED_…"` line here is a true positive for that gate (it failed
+# standards#1570's own CI). A pragma in the source would be copied into the
+# fixture and make the canary skip its own plants, so the literals must not
+# exist in this file at all.
+mkdir -p "$WORK/shreal"
+SHV=PLANTED_CANARY_VALUE_NOT_REAL
+{
+  printf 'export AUTH_KEY="%s_6"\n' "$SHV"
+  printf "ENCRYPTION_KEY='%s_7'\n" "$SHV"
+  printf 'SIGNING_KEY="%s_8"\n' "$SHV"
+  printf 'API_KEY="%s_9"\n' "$SHV"
+  # A location assignment and a real credential on ONE line: the path exemption
+  # is per match, so this line must still be reported (a per-line exemption
+  # skipped it: the false negative Codex found on #1570).
+  printf 'SIGNING_KEY_PATH="/tmp/key.pem"; AUTH_KEY="%s_10"\n' "$SHV"
+  # Likewise a real credential followed by a variable assignment on the same line:
+  # the param-expansion exemption is per match too (the next Codex finding).
+  printf 'AUTH_KEY="%s_11"; FALLBACK="$FALLBACK"\n' "$SHV"
+} > "$WORK/shreal/deploy.sh"
+shexpect shreal 1 "AUTH/ENCRYPTION/SIGNING/API *_KEY literals -> BLOCKS"
+shfound=$( cd "$WORK/shreal" && bash "$SHELL_SCAN" 2>&1 | grep -c '^::warning::' )
+if [ "${shfound:-0}" -eq 6 ]; then
+  echo "  PASS  all 6 planted shell *_KEY secrets reported (incl. beside a path assignment and beside a variable assignment)"; pass=$((pass+1))
+else
+  echo "  FAIL  only ${shfound:-0}/6 planted shell *_KEY secrets reported — blind spot"; fail=$((fail+1))
+fi
+
+mk shclean ok.sh <<'EOF'
+PUBLIC_KEY="AAAAB3NzaC1yc2EAAAADAQABAAABgQC0000000000"
+SORT_KEY="created_at_descending_then_id_ascending"
+CACHE_KEY="v1-linux-x64-0123456789abcdef0123456789"
+AUTH_KEY="${AUTH_KEY:?set AUTH_KEY from a secret}"
+ENCRYPTION_KEY="$ENCRYPTION_KEY"
+SSH_PRIVATE_KEY_FILE="/home/runner/work/project/.ssh/id_ed25519"
+SIGNING_KEY_PATH="/var/lib/application/keys/signing.pem"
+EOF
+# A password-named variable that holds a VARIABLE REFERENCE (the param-expansion
+# exemption, judged per match). The name is assembled at run time from fragments: a
+# contiguous password-assignment line in this file is flagged by secret scanners as a
+# generic password whatever the value, and the scanner sees this file's text, not its output.
+pwname=DB_PASS; pwname+=WORD
+printf '%s="${%s:?set it from a secret}"\n' "${pwname#DB_}" "$pwname" >> "$WORK/shclean/ok.sh"
+shexpect shclean 0 "non-secret key names, variable references and *_KEY_FILE/_PATH locations -> clean"
+
 echo
 echo "  === $pass passed, $fail failed ==="
 if [ "$fail" -gt 0 ]; then
