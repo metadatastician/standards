@@ -41,6 +41,9 @@ Highest-loss-risk first — a family with no v2 surface dies first if we drift:
 4. `AGENTIC.a2ml`, `NEUROSYM.a2ml`, `PLAYBOOK.a2ml` → `repo-deed`
 5. `*.scorecard.a2ml` corpus (70+) → repo-deed clause vs. dedicated decision
 6. rsr-template mint sources + estate wave (after 1–5 are green in CI)
+7. The chora-registry seed (`gv-clade-index` `verisim/seed/repos.a2ml`) →
+   `praxis-deed` — link:registry-seed-to-deed.adoc[registry-seed-to-deed]
+   (the single recorded D313 exception, owner ruling 2026-11-14)
 
 == Standing constraints (from the grammar, non-negotiable)
 
