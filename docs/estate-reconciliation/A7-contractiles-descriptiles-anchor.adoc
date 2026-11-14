@@ -18,7 +18,7 @@ Specification A7 of the Estate Reconciliation Plan. It defines how a repository'
 | [O] | Owner ruling. Rulings Q1 to Q16 are of 2026-10-20, W1 to W10 of 2026-11-13. The others are named where cited.
 |===
 
-Identifiers are local to this specification, as in A1 to A6. Rulings of 2026-11-13 are `W1` to `W10`; decisions are `J1` to `J20`, with `J13a` amending J13. Test ids use the two-letter prefixes `YN`, `YP`, `YA`, `YD`, `YC`, `YK`, `YR`, `YE`, `YS`, `YB`, `YF` and `YH`, which no other specification in the set uses [M].
+Identifiers are local to this specification, as in A1 to A6. Rulings of 2026-11-13 are `W1` to `W10`; decisions are `J1` to `J22`, with `J13a` amending J13. Test ids use the two-letter prefixes `YN`, `YP`, `YA`, `YD`, `YC`, `YK`, `YR`, `YE`, `YS`, `YB`, `YF` and `YH`, which no other specification in the set uses [M].
 
 == 1. Summary
 
@@ -614,7 +614,7 @@ These tests cover the semantic-authority clause module merged in #1490. Under W3
 
 === 14.1 Ruled on 2026-11-13 [O]
 
-The owner ruled J1 to J17 on 2026-11-13 in the A1 thread, J18 the same day in both the A1 and A7 threads, and J19, J20 and J13a the same day in the A7 thread. Where a ruling changed the proposal, the column says how. W1 to W9 (section 2.3) were given in the same session.
+The owner ruled J1 to J17 on 2026-11-13 in the A1 thread, J18 the same day in both the A1 and A7 threads, and J19, J20, J13a, J21 and J22 the same day in the A7 thread. Where a ruling changed the proposal, the column says how. W1 to W9 (section 2.3) were given in the same session.
 
 [cols="1,4,2"]
 |===
