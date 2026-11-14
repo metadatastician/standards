@@ -6,7 +6,7 @@ import { cpSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, writ
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { validate, LintError, SELF_TEST_CASES, checkEgress, EgressError, checkAnchor, AnchorError, profileCOfBody, readMustfileChecks, MustfileError, readProofReceipt, ProofReceiptError, checkContractiles, ContractilesError, contractilePaths, CONTRACTILE_VERBS, checkEdict, EdictError, verbOfFilename, checkVerbDescriptile, VerbDescriptileError, verbOfDescriptile, choraRepoUuid } from "./deed_lint.js";
+import { validate, blankComments, LintError, SELF_TEST_CASES, checkEgress, EgressError, checkAnchor, AnchorError, profileCOfBody, readMustfileChecks, MustfileError, readProofReceipt, ProofReceiptError, checkContractiles, ContractilesError, contractilePaths, CONTRACTILE_VERBS, checkEdict, EdictError, verbOfFilename, checkVerbDescriptile, VerbDescriptileError, verbOfDescriptile, choraRepoUuid } from "./deed_lint.js";
 import { generateContractileRegistry as generateRegistry } from "./deed_lint.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -73,6 +73,7 @@ const RULE = {
   "intrailing_chora.deed": /trailing content/,
   "intrue-literal_chora.deed": /bare symbol 'true' is forbidden/,
   "inunbalanced_chora.deed": /unbalanced parens/,
+  "inu5-identity_chora.deed": /identity field :repo-uuid carries a #u5 literal/,
   "inu7_chora.deed": /unrecognised #-form/,
   "inu8-empty-domain_chora.deed": /uuid8 domain '' must be non-empty/,
   "inu8-no-colon_chora.deed": /has no ":"/,
@@ -283,7 +284,27 @@ describe("Mustfile check profile", () => {
     expect(() => readMustfileChecks(doc(':typo-check "false" ' + one), "test_praxis.deed")).toThrow(/unknown top-level/);
     expect(() => readMustfileChecks(doc(':canonical-name #t ' + one), "test_praxis.deed")).toThrow(/invalid type/);
     expect(() => readMustfileChecks(doc(':canonical-name "x" :canonical-name "y" ' + one), "test_praxis.deed")).toThrow(/duplicate top-level/);
-    expect(() => readMustfileChecks(doc(':canonical-name "must" :beholding-chora #u5"estate/chora" ' + one), "test_praxis.deed")).not.toThrow();
+    expect(() => readMustfileChecks(doc(':canonical-name "must" :beholding-chora #u8"chora:estate/github.com/o" ' + one), "test_praxis.deed")).not.toThrow();
+    // Owner ruling Q2 (CHORA-SPEC 7.1): #u5 in an identity field is an error.
+    // The literal is assembled at runtime so scripts/check-uuid-v8.sh does not
+    // read this test as a deed.
+    const u5 = "#" + 'u5"estate/chora"';
+    expect(() => readMustfileChecks(doc(':canonical-name "must" :beholding-chora ' + u5 + ' ' + one), "test_praxis.deed")).toThrow(/identity field :beholding-chora carries a #u5 literal/);
+    // Outside an identity field #u5 stays legal, and a line break between the
+    // field and its value does not hide it.
+    expect(() => validate(HDR + '(praxis-deed :schema-version "1" :canonical-name "x" :alias ' + u5 + ')')).not.toThrow();
+    expect(() => validate(HDR + '(praxis-deed :schema-version "1" :canonical-name "x" :beholding-chora\n  ' + u5 + ')')).toThrow(/carries a #u5 literal/);
+    // The rule is lexical, as in check-uuid-v8.sh (owner ruling of 2026-11-14,
+    // "by name"): a field name and #u5 in a comment or a string fail too, and a
+    // comment between a field and its value does not hide the value.
+    expect(() => validate(HDR + '(praxis-deed :schema-version "1" :canonical-name "x") ; :repo-uuid ' + u5 + '\n')).toThrow(/identity field :repo-uuid carries a #u5 literal/);
+    // A string that only mentions the field, with escaped quotes, holds no #u5 literal.
+    const u5Quoted = "#" + 'u5\\"estate/chora\\"';
+    expect(() => validate(HDR + '(praxis-deed :schema-version "1" :canonical-name "x" :note ":estate ' + u5Quoted + '")')).not.toThrow();
+    expect(() => validate(HDR + '(praxis-deed :schema-version "1" :canonical-name "x" :beholding-chora ; note\n  ' + u5 + ')')).toThrow(/carries a #u5 literal/);
+    // A ';' inside a string is not a comment, so stripping comments invents no field.
+    expect(() => validate(HDR + '(praxis-deed :schema-version "1" :canonical-name "x" :alias (":repo-uuid ; example" ' + u5 + '))')).not.toThrow();
+    expect(blankComments('a "b;c" ; d\ne')).toBe('a "b;c"    \ne');
   });
   test("multiline critical check survives parsing and has an executable body", () => {
     const checks = readMustfileChecks(doc('(check\n :id alpha\n :severity critical\n :discharge run\n :body "false")'), "test_praxis.deed");
@@ -725,7 +746,6 @@ const ANCHOR_WHY = {
   "parent-no-uuid_chora.deed": "is missing :uuid",
   "parent-relation-string_chora.deed": ":relation must be a symbol",
   "parent-self_chora.deed": "the deed's own :repo-uuid",
-  "parent-self-u5_chora.deed": "the deed's own :repo-uuid",
   "parent-self-u8_chora.deed": "the deed's own :repo-uuid",
   "parent-string_chora.deed": "got string",
   "parents-stray_chora.deed": "takes (parent …) clauses only",
@@ -814,8 +834,22 @@ describe("checkAnchor result", () => {
   (identity :primary-forge github :owner "o")
   (anchor :schema "hyperpolymath.anchor/1" :authority "a" (parents (parent :uuid #uuid"${v5}"))))
 `;
-    expect(() => validate(src)).not.toThrow();
-    expect(() => checkAnchor(src)).toThrow(/not a version 8 chora id/);
+    // :uuid is an identity field (CHORA-SPEC 7.1), so the grammar pass already
+    // refuses a version 5 there (T30), before the anchor profile looks at it.
+    expect(() => validate(src)).toThrow(/identity field :uuid carries a version 5 id \(v5-identity\)/);
+    expect(() => checkAnchor(src)).toThrow();
+  });
+  test("a version 5 #uuid in any identity field is v5-identity; version 8 is accepted (A1 T30)", () => {
+    const v5 = "00000000-0000-" + "5" + "000-8000-0000000000b1";
+    const deed = (id) => `;; SPDX-License-Identifier: CC-BY-SA-4.0
+(repo-deed :schema-version "1.0.0" :canonical-name "x" :repo-uuid #uuid"${id}" :beholding-chora #uuid"00000000-0000-8000-8000-00000000e57a")
+`;
+    expect(() => validate(deed(v5))).toThrow(/identity field :repo-uuid carries a version 5 id/);
+    expect(() => validate(deed("00000000-0000-8000-8000-0000000000a7"))).not.toThrow();
+    // Outside an identity field a version 5 #uuid stays legal (the registry alias).
+    expect(() => validate(`;; SPDX-License-Identifier: CC-BY-SA-4.0
+(praxis-deed :schema-version "1" :canonical-name "x" (alias :registry-v5 #uuid"${v5}"))
+`)).not.toThrow();
   });
   test("profile C of a #u8 body matches scripts/uuid-v8.js", () => {
     expect(profileCOfBody("gv-clade-index:github.com/hyperpolymath/standards")).toBe("b32d6be4-73ba-873e-9d61-e57f43c75cd1");
