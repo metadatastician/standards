@@ -367,6 +367,9 @@ case "$p" in
   # The published proven-cicd manifest, served raw from $GH_FIX/proven_manifest.json.
   repos/hyperpolymath/proven-cicd-and-workflows/contents/proven/manifest.json)
     body="$GH_FIX/proven_manifest.json" ;;
+  # The template --fix-content installs, served raw from $GH_FIX/proven_template.yml.
+  repos/hyperpolymath/proven-cicd-and-workflows/contents/templates/proven-lock-gate.yml)
+    body="$GH_FIX/proven_template.yml" ;;
   repos/*/contents/*_chora.deed)
     [ -f "$GH_FIX/own_deed_rest_fail" ] && refuse 403 "This API returns blobs up to 1 MB in size. The requested blob is too large"
     body="$GH_FIX/own_deed" ;;
