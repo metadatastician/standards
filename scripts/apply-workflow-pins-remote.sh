@@ -111,7 +111,9 @@
 #
 # PROVEN CONTENT (--proven-sha):
 #   proven-cicd-and-workflows publishes stamped workflow bodies. A stamped copy's
-#   first line is `# proven-cicd: <artifact>@<MAJOR.MINOR.PATCH> sha256:<hex>`.
+#   stamp is `# proven-cicd: <artifact>@<MAJOR.MINOR.PATCH> sha256:<hex>`, on line
+#   2 under the SPDX line (proven-cicd #116), or on line 1 in the legacy layout
+#   (stamp_line_of, mirroring proven-cicd scripts/proven-stamp.sh).
 #   The copy itself detects edits (drift); only a sweep against the published
 #   manifest can see that a copy is STALE. Each stamped file gets its own census
 #   row, with a status of its own, never joined to the pin status column:
@@ -119,7 +121,9 @@
 #     CONTENT-CURRENT    stamp version equal to the manifest's
 #     CONTENT-AHEAD      stamp version newer than the manifest at --proven-sha
 #     CONTENT-UNLISTED   the manifest does not list the artifact
-#     CONTENT-MALFORMED  a `# proven-cicd:` first line that is not a valid stamp
+#     CONTENT-MALFORMED  a stamp-position line that is not a valid stamp, a stamp on any
+#                        other line, or a "Stamped copy of" header with no stamp (never
+#                        silence: only a file with none of these has no content row)
 #   An unreadable or invalid manifest at --proven-sha degrades loudly: the pin
 #   census still runs, one CONTENT-CENSUS-FAILED row replaces the content rows,
 #   and the run exits 1 at the end. A content census with no manifest is not
@@ -299,12 +303,26 @@ manifest_tsv() {
 }
 
 # content_state <file> <manifest-tsv-file> — for a stamped file, echo ONE line
-# `STATUS<TAB>DETAIL`; for a file with no `# proven-cicd:` first line, echo
-# nothing. Statuses are listed under PROVEN CONTENT in the header.
+# `STATUS<TAB>DETAIL`. A file whose stamp is missing from its line is never
+# passed over in silence: a `# proven-cicd:` stamp line anywhere else, or a
+# copy's own "Stamped copy of hyperpolymath/proven-cicd-and-workflows" header
+# with no stamp, is CONTENT-MALFORMED with the reason. Only a file with neither
+# (a pin-only workflow) echoes nothing. Statuses are listed under PROVEN CONTENT
+# in the header.
 content_state() {
-  local f="$1" m="$2" first artifact have want
-  first=$(head -n 1 "$f" 2>/dev/null) || return 0
-  case "$first" in "# proven-cicd:"*) ;; *) return 0 ;; esac
+  local f="$1" m="$2" first artifact have want stray
+  first=$(stamp_text "$f")
+  case "$first" in
+    "# proven-cicd:"*) ;;
+    *)
+      stray=$(grep -n -m1 '^# proven-cicd: ' "$f" 2>/dev/null | cut -d: -f1 || true)
+      if [ -n "$stray" ]; then
+        printf 'CONTENT-MALFORMED\tstamp on line %s, not on line 2 under the SPDX line (or legacy line 1)\n' "$stray"
+      elif grep -q '^# Stamped copy of hyperpolymath/proven-cicd-and-workflows ' "$f" 2>/dev/null; then
+        printf 'CONTENT-MALFORMED\ta stamped copy with no stamp on line 2 under the SPDX line (or legacy line 1)\n'
+      fi
+      return 0 ;;
+  esac
   if ! [[ $first =~ $STAMP_RE ]]; then
     printf 'CONTENT-MALFORMED\t-\n'; return 0
   fi
@@ -371,22 +389,49 @@ lock_owner_state() {
 # A line that marks the next line as local (outside the stamp's hash).
 MARKER_ERE='^[[:space:]]*# proven-cicd:local-next[[:space:]]*$'
 
+# The SPDX line that heads a stamped copy in the current layout.
+SPDX_ERE='^# SPDX-License-Identifier: [^[:space:]].*$'
+
+# stamp_line_of <file> — the line that carries the proven-cicd stamp, found as
+# proven-cicd-and-workflows scripts/proven-stamp.sh finds it: 2 when line 1 is
+# an SPDX line and line 2 starts `# proven-cicd:` (the layout since proven-cicd
+# #116, which keeps `head -1` the SPDX line for consumer linters), 1 when line 1
+# starts it (the legacy layout), 0 for neither.
+stamp_line_of() {
+  local l1 l2
+  l1=$(sed -n 1p "$1" 2>/dev/null) || { echo 0; return 0; }
+  case "$l1" in "# proven-cicd:"*) echo 1; return 0 ;; esac
+  l2=$(sed -n 2p "$1" 2>/dev/null)
+  if [[ $l1 =~ $SPDX_ERE ]]; then
+    case "$l2" in "# proven-cicd:"*) echo 2; return 0 ;; esac
+  fi
+  echo 0
+}
+
+# stamp_text <file> — the stamp line itself (see stamp_line_of), or nothing.
+stamp_text() {
+  local sl; sl=$(stamp_line_of "$1")
+  if [ "$sl" -gt 0 ]; then sed -n "${sl}p" "$1"; fi
+}
+
 # stamp_region_sha <file> — sha256 of the stamp's hashed region, exactly as
 # proven-cicd-and-workflows scripts/proven-stamp.sh computes it: every line
-# except the stamp line and each line directly after a local-next marker.
+# except the stamp line (line 2, or line 1 in the legacy layout) and each line
+# directly after a local-next marker.
 stamp_region_sha() {
-  awk 'NR == 1 && /^# proven-cicd: / { next }
+  awk -v sl="$(stamp_line_of "$1")" 'NR == sl { next }
        skip { skip = 0; next }
        /^[[:space:]]*# proven-cicd:local-next[[:space:]]*$/ { print; skip = 1; next }
        { print }' "$1" | sha256sum | cut -d' ' -f1
 }
 
-# template_ok <template> <artifact> <version> — true when the template's first
-# line is the stamp `<artifact>@<version> sha256:<h>` and its hashed region
-# hashes to <h>. Echoes the reason when it is not.
+# template_ok <template> <artifact> <version> — true when the template's stamp
+# line (stamp_line_of) is `<artifact>@<version> sha256:<h>` and its hashed
+# region hashes to <h>. Echoes the reason when it is not.
 template_ok() {
   local t="$1" a="$2" v="$3" first want
-  first=$(head -n 1 "$t" 2>/dev/null) || { echo "template unreadable"; return 1; }
+  [ -r "$t" ] || { echo "template unreadable"; return 1; }
+  first=$(stamp_text "$t")
   [[ $first =~ $STAMP_RE ]] || { echo "template has no valid stamp line"; return 1; }
   [ "${BASH_REMATCH[1]}" = "$a" ] && [ "${BASH_REMATCH[2]}.${BASH_REMATCH[3]}.${BASH_REMATCH[4]}" = "$v" ] ||
     { echo "template is ${BASH_REMATCH[1]}@${BASH_REMATCH[2]}.${BASH_REMATCH[3]}.${BASH_REMATCH[4]}, manifest says $a@$v"; return 1; }
@@ -425,7 +470,7 @@ refresh_body() {
       { print }' "$copy" "$tpl" 2>&1 >"$out"); then
     echo "${why:-could not merge the local lines}"; return 1
   fi
-  [ "$(head -n 1 "$out")" = "$(head -n 1 "$tpl")" ] || { echo "refreshed stamp line differs from the template's"; return 1; }
+  { [ "$(stamp_line_of "$out")" = "$(stamp_line_of "$tpl")" ] && [ "$(stamp_text "$out")" = "$(stamp_text "$tpl")" ]; } || { echo "refreshed stamp line differs from the template's"; return 1; }
   [ "$(stamp_region_sha "$out")" = "$(stamp_region_sha "$tpl")" ] || { echo "refreshed body differs from the template's"; return 1; }
 }
 
@@ -443,7 +488,7 @@ uses_set() {
 refresh_copy() {
   local rdir="$1" wf="$2" first artifact have want tpl_path tpl out why
   refused() { printf 'CONTENT-REFRESH-REFUSED\t%s\n' "$1"; }
-  first=$(head -n 1 "$wf")
+  first=$(stamp_text "$wf")
   [[ $first =~ $STAMP_RE ]] || { refused "no valid stamp line"; return 0; }
   artifact="${BASH_REMATCH[1]}"; have="${BASH_REMATCH[2]}.${BASH_REMATCH[3]}.${BASH_REMATCH[4]}"
   IFS=$'\t' read -r _ want tpl_path < <(awk -F'\t' -v a="$artifact" '$1 == a { print; exit }' "$PROVEN_MANIFEST")
@@ -793,6 +838,13 @@ JSON
   printf '# proven-cicd: proven-lock-gate@0.1 sha256:%s\nname: g\n' "$h" > "$d/content-malformed.yml"
   printf 'name: g\n# proven-cicd: proven-lock-gate@0.0.9 sha256:%s\n' "$h" > "$d/content-not-first.yml"
   printf '# proven-cicd: proven-lock-gate@18446744073709551617.0.0 sha256:%s\nname: g\n' "$h" > "$d/content-huge.yml"
+  # The current layout (proven-cicd #116): the stamp is line 2, under the SPDX line.
+  printf '# SPDX-License-Identifier: MPL-2.0\n# proven-cicd: proven-lock-gate@0.0.9 sha256:%s\nname: g\n' "$h" > "$d/content-l2-behind.yml"
+  printf '# SPDX-License-Identifier: MPL-2.0\n# proven-cicd: proven-lock-gate@0.1.0 sha256:%s\nname: g\n' "$h" > "$d/content-l2-current.yml"
+  printf '# SPDX-License-Identifier: MPL-2.0\n# proven-cicd: proven-lock-gate@0.1 sha256:%s\nname: g\n' "$h" > "$d/content-l2-malformed.yml"
+  # Line 2 is a stamp only under an SPDX line, and line 3 is never one.
+  printf '# a comment\n# proven-cicd: proven-lock-gate@0.0.9 sha256:%s\nname: g\n' "$h" > "$d/content-l2-no-spdx.yml"
+  printf '# SPDX-License-Identifier: MPL-2.0\nname: g\n# proven-cicd: proven-lock-gate@0.0.9 sha256:%s\n' "$h" > "$d/content-l3.yml"
   ccheck() {
     local file="$1" want="$2" got
     got=$(content_state "$d/$file" "$d/manifest.tsv" | cut -f1)
@@ -810,9 +862,23 @@ JSON
   ccheck content-malformed.yml CONTENT-MALFORMED
   # A component past nine digits would wrap in version_cmp and read CURRENT.
   ccheck content-huge.yml      CONTENT-MALFORMED
-  # Only the first line is a stamp; a pin-only workflow has no content row.
-  ccheck content-not-first.yml ""
-  ccheck fresh.yml             ""
+  ccheck content-l2-behind.yml    BEHIND-CONTENT
+  ccheck content-l2-current.yml   CONTENT-CURRENT
+  ccheck content-l2-malformed.yml CONTENT-MALFORMED
+  # A stamp sits on line 1, or on line 2 under the SPDX line, and nowhere else.
+  # A stamp anywhere else, or a copy header with no stamp, is said, not skipped;
+  # only a pin-only workflow has no content row.
+  printf '# SPDX-License-Identifier: MPL-2.0\n# Stamped copy of hyperpolymath/proven-cicd-and-workflows templates/proven-lock-gate.yml.\nname: g\n' > "$d/content-unstamped-copy.yml"
+  ccheck content-not-first.yml      CONTENT-MALFORMED
+  ccheck content-l2-no-spdx.yml     CONTENT-MALFORMED
+  ccheck content-l3.yml             CONTENT-MALFORMED
+  ccheck content-unstamped-copy.yml CONTENT-MALFORMED
+  if [ "$(content_state "$d/content-l3.yml" "$d/manifest.tsv" | cut -f2)" = "stamp on line 3, not on line 2 under the SPDX line (or legacy line 1)" ]; then
+    echo "  PASS content-l3.yml names the line its stamp is on"
+  else
+    echo "  FAIL content-l3.yml: the MALFORMED row does not name the stamp's line" >&2; rc=1
+  fi
+  ccheck fresh.yml                  ""
 
   # Content refresh: the template's body comes in whole, the copy's local lines
   # (one per local-next marker) are carried over, PROVEN_SHA moves to the
@@ -843,7 +909,7 @@ JSON
      && grep -qxF "      - uses: actions/checkout@$B # v5" "$d/out.yml" \
      && grep -qxF "  PROVEN_SHA: \"$PN\"" "$d/out.yml" \
      && grep -qxF '      - run: echo new' "$d/out.yml" && ! grep -q 'echo old' "$d/out.yml" \
-     && [ "$(head -n 1 "$d/out.yml")" = "$(head -n 1 "$d/tpl.yml")" ] \
+     && [ "$(stamp_text "$d/out.yml")" = "$(stamp_text "$d/tpl.yml")" ] \
      && [ "$(stamp_region_sha "$d/out.yml")" = "$(stamp_region_sha "$d/tpl.yml")" ]; then
     echo "  PASS refresh_body: template body, the copy's local uses: kept, PROVEN_SHA moved, stamp holds"
   else
@@ -867,6 +933,40 @@ JSON
     echo "  PASS uses_set: the refresh keeps the copy's uses: set"
   else
     echo "  FAIL uses_set: got '$(uses_set "$d/out.yml")'" >&2; rc=1
+  fi
+
+  # The current layout (proven-cicd #116): an SPDX line 1, the stamp on line 2,
+  # and the SPDX line inside the hashed region. A template in this layout must
+  # be accepted, and a legacy copy refreshes into it.
+  echo "control: proven content, stamp on line 2"
+  mkstamped2() { # OUT ARTIFACT VERSION BODY (the body's first line is the SPDX line)
+    printf '%s' "$4" > "$1.body"
+    { sed -n 1p "$1.body"
+      printf '# proven-cicd: %s@%s sha256:%s\n' "$2" "$3" "$(stamp_region_sha "$1.body")"
+      sed -n '2,$p' "$1.body"; } > "$1"
+    rm -f "$1.body"
+  }
+  local sl
+  for sl in "copy.yml:1" "tpl.yml:1" "content-not-first.yml:0" "content-l2-behind.yml:2" "content-l2-no-spdx.yml:0" "content-l3.yml:0"; do
+    if [ "$(stamp_line_of "$d/${sl%%:*}")" = "${sl##*:}" ]; then echo "  PASS stamp_line_of ${sl%%:*} -> ${sl##*:}"
+    else echo "  FAIL stamp_line_of ${sl%%:*} -> $(stamp_line_of "$d/${sl%%:*}"), want ${sl##*:}" >&2; rc=1; fi
+  done
+  mkstamped2 "$d/tpl2.yml" proven-lock-gate 0.3.0 "# SPDX-License-Identifier: MPL-2.0"$'\n'"$tbody"$'\n'
+  if why=$(template_ok "$d/tpl2.yml" proven-lock-gate 0.3.0); then echo "  PASS template_ok accepts a line-2 template that matches its stamp"
+  else echo "  FAIL template_ok refused a good line-2 template: $why" >&2; rc=1; fi
+  sed '1s/MPL-2.0/AGPL-3.0-or-later/' "$d/tpl2.yml" > "$d/tpl2-spdx.yml"
+  if why=$(template_ok "$d/tpl2-spdx.yml" proven-lock-gate 0.3.0); then echo "  FAIL template_ok accepted a line-2 template whose SPDX line changed" >&2; rc=1
+  else echo "  PASS template_ok refuses a changed SPDX line (it is hashed): $why"; fi
+  if why=$(refresh_body "$d/copy.yml" "$d/tpl2.yml" "$PN" "$d/out2.yml") \
+     && [ "$(stamp_line_of "$d/out2.yml")" = 2 ] \
+     && [ "$(sed -n 1p "$d/out2.yml")" = "# SPDX-License-Identifier: MPL-2.0" ] \
+     && grep -qxF "      - uses: actions/checkout@$B # v5" "$d/out2.yml" \
+     && grep -qxF "  PROVEN_SHA: \"$PN\"" "$d/out2.yml" \
+     && [ "$(stamp_region_sha "$d/out2.yml")" = "$(stamp_region_sha "$d/tpl2.yml")" ] \
+     && [ "$(stamp_text "$d/out2.yml")" = "# proven-cicd: proven-lock-gate@0.3.0 sha256:$(stamp_region_sha "$d/tpl2.yml")" ]; then
+    echo "  PASS refresh_body: a legacy copy refreshes into the line-2 layout, local lines kept, stamp holds"
+  else
+    echo "  FAIL refresh_body legacy -> line-2 (${why:-no reason}):" >&2; sed 's/^/      /' "$d/out2.yml" >&2; rc=1
   fi
 
   # Lock owner ids: only a standards record with the former owner's id is
@@ -1422,7 +1522,7 @@ main() {
 
       # A stamped copy's hashed body is proven-cicd's, not this applier's: a
       # re-pin would make it drift from its own stamp. It is held and named.
-      if [ "$DO_FIX" -eq 1 ] && head -n 1 "$wf" | grep -q '^# proven-cicd: '; then
+      if [ "$DO_FIX" -eq 1 ] && [ "$(stamp_line_of "$wf")" -gt 0 ]; then
         needs_rewrite "$st" && printf '%s\t%s\tSTAMPED-PIN-HELD\t%s\n' "$repo" "$base" \
           "stamped proven-cicd copy; refreshed by --fix-content, never re-pinned" >> "$tsv"
         continue
