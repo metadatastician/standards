@@ -20,7 +20,7 @@ esac
 GIT
 chmod +x "$tmp/bin/git"
 export PATH="$tmp/bin:$PATH" GITHUB_ENV="$tmp/env"
-panic=410a8f821ea8297833162565b50a298f787815da
+panic=cbf2b935ef4260cc3ae66010f4ffc91385ff8f8c
 pons=bca1ea289a4f8a86bac6212731e6f8ec15c67ad4
 : > "$GITHUB_ENV"
 PANIC_REF="$panic" PONS_REF="$pons" bash "$tmp/resolve.sh" >/dev/null
