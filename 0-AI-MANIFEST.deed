@@ -4,7 +4,7 @@
   :schema-version "1.0.0"
   :canonical-name "standards"
   :repo-uuid #uuid"b32d6be4-73ba-873e-9d61-e57f43c75cd1"
-  :beholding-chora #u5"estate/chora"
+  :beholding-chora #uuid"0889b37b-defb-831f-973c-e119500db00e"
 
   (purpose
     :text "The organization-wide standards monorepo: ~30 specs that govern every Hyperpolymath project — K9 self-validating components, the protocols, the readiness-grading frameworks (ARG/FRG/CRG/TRG), RSR compliance, and the enforcement/CI that makes them stick.")

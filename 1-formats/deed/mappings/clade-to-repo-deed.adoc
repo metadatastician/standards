@@ -46,7 +46,7 @@ Head-level scaffolding follows the grammar's required identity table
   :schema-version  "1.0.0"        ; structurally FIRST
   :canonical-name  "<repo>"
   :repo-uuid       #u8"gv-clade-index:github.com/<owner>/<repo>"
-  :beholding-chora #u5"<estate chora>"
+  :beholding-chora #uuid"<estate v8 id>"
   ...)
 ----
 
@@ -66,8 +66,8 @@ bare filename would resolve against nothing (grammar rationale).
 4+| *Head identity*
 
 | `[identity] canonical-name` | `:canonical-name` | verbatim STRING
-| `[identity] uuid` | `:repo-uuid` | UUIDv8 literal whose BODY IS THE NAME INPUT (`#u8"gv-clade-index:github.com/<owner>/<name>"`), not the derived hex: ADR-008 profile C per P-1 (owner ruling D320). A `#u5"github.com/<owner>/<name>"` literal stays legal until the uuid5 cutover (grammar v1.1.0), but a translation emits the v8 form. Translator **re-derives the expected UUIDv8 from the repository name, and never copies or compares it with the legacy source UUID** (§5 P-1)
-| — (new) | `:beholding-chora` | resolved from registry — uuid5 literal
+| `[identity] uuid` | `:repo-uuid` | UUIDv8 literal whose BODY IS THE NAME INPUT (`#u8"gv-clade-index:github.com/<owner>/<name>"`), not the derived hex: ADR-008 profile C per P-1 (owner ruling D320). A `#u5` literal is not legal here: owner ruling Q2 (2026-11-14) makes `#u5` in an identity field an error in every mode (CHORA-SPEC 7.1). Translator **re-derives the expected UUIDv8 from the repository name, and never copies or compares it with the legacy source UUID** (§5 P-1)
+| — (new) | `:beholding-chora` | resolved from the registry: the estate chora's v8 id, written `#uuid"…"` (`#u8"chora:estate/<host>/<owner>"` is also accepted). Never `#u5` (Q2)
 
 4+| *Clauses*
 
@@ -163,7 +163,7 @@ Emitted `rsr-template-repo_chora.deed`:
   :schema-version  "1.0.0"
   :canonical-name  "rsr-template-repo"
   :repo-uuid       #u8"gv-clade-index:github.com/hyperpolymath/rsr-template-repo"
-  :beholding-chora #u5"<estate chora NAME — resolved from gv-clade-index at emit time>"
+  :beholding-chora #uuid"<estate v8 id — resolved from the registry at emit time>"
 
   (identity :primary-forge github
             :owner          "hyperpolymath"

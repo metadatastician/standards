@@ -286,6 +286,12 @@ function checkOpaqueUuid(body, line) {
   }
 }
 
+/** Identity fields (CHORA-SPEC 7.1): a #u5 literal in any of them is an error (owner ruling Q2). */
+export const IDENTITY_FIELDS = new Set([
+  "repo-uuid", "estate-uuid", "forge-uuid", "beholding-chora", "of-chora",
+  "uuid", "estate", "base", "forge", "repo",
+]);
+
 /** #-forms: #u5"name" (uuid5), #u8"domain:name" (uuid8), #uuid"<id>" (uuid) or #t / #f (boolean); anything else is a parse error. */
 function lexHashForm(lx) {
   if (lx.t.startsWith("#uuid", lx.i)) {
@@ -414,6 +420,23 @@ function lexFieldOrClause(lx) {
       // ban is enforced here as a value-level semantic rule.
       throw new LintError(
         `boolean meaning must use #t/#f — bare symbol ${pyRepr(val[1])} is forbidden as a value`,
+        lx.line(),
+      );
+    }
+    // Owner ruling Q2 (2026-11-14, CHORA-SPEC 7.1): a #u5 literal in an
+    // identity field is an error in every mode; #u8 and #uuid are accepted.
+    // The same field names as scripts/check-uuid-v8.sh.
+    if (val[0] === "uuid5" && IDENTITY_FIELDS.has(kw[1])) {
+      throw new LintError(
+        `identity field :${kw[1]} carries a #u5 literal; write #uuid"<v8 id>" or #u8"domain:name" (owner ruling Q2, CHORA-SPEC 7.1)`,
+        lx.line(),
+      );
+    }
+    // A1 V8 and T30: an identity field carries version 8; a version 5 inside
+    // #uuid there is v5-identity, an error in every mode (as check-uuid-v8.sh).
+    if (val[0] === "uuid" && IDENTITY_FIELDS.has(kw[1]) && val[1][14] !== "8") {
+      throw new LintError(
+        `identity field :${kw[1]} carries a version ${val[1][14]} id (v5-identity); an identity field carries version 8 (CHORA-SPEC 7.1, T30)`,
         lx.line(),
       );
     }
@@ -555,6 +578,58 @@ function checkLineLength(text) {
   }
 }
 
+/**
+ * The text with each ';' comment blanked to spaces, outside strings only. Line
+ * breaks and offsets are kept, so a match index still gives its line.
+ */
+export function blankComments(text) {
+  let out = "", inStr = false;
+  for (let k = 0; k < text.length; k++) {
+    const c = text[k];
+    if (inStr) {
+      out += c;
+      if (c === "\\" && k + 1 < text.length) out += text[++k];
+      else if (c === '"') inStr = false;
+    } else if (c === '"') { inStr = true; out += c; }
+    else if (c === ";") {
+      while (k < text.length && text[k] !== "\n") { out += " "; k++; }
+      if (k < text.length) out += "\n";
+    } else out += c;
+  }
+  return out;
+}
+
+const FIELD_ALT = [...IDENTITY_FIELDS].join("|");
+const U5_LEXICAL = new RegExp(`:(${FIELD_ALT})\\s+#u5"[^"]*"`, "g");
+const UUID_LEXICAL = new RegExp(`:(${FIELD_ALT})\\s+#uuid"[0-9a-f]{8}-[0-9a-f]{4}-([0-9a-f])[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}"`, "g");
+
+/**
+ * The identity rule read lexically, as scripts/check-uuid-v8.sh reads it (owner
+ * rulings Q2 and "by name", 2026-11-14, CHORA-SPEC 7.1): an identity field name
+ * followed by #u5, or by a #uuid that is not version 8, is an error wherever it
+ * appears, comments and strings included. Two views are read: the raw text, and
+ * the text with comments blanked, so a comment between a field and its value
+ * cannot hide the value.
+ */
+export function checkIdentityLexical(text) {
+  const lineOf = (i) => { let ln = 1; for (let k = 0; k < i; k++) if (text[k] === "\n") ln++; return ln; };
+  for (const view of [text, blankComments(text)]) {
+    for (const m of view.matchAll(U5_LEXICAL)) {
+      throw new LintError(
+        `identity field :${m[1]} carries a #u5 literal; write #uuid"<v8 id>" or #u8"domain:name" (owner ruling Q2, CHORA-SPEC 7.1)`,
+        lineOf(m.index),
+      );
+    }
+    for (const m of view.matchAll(UUID_LEXICAL)) {
+      if (m[2] === "8") continue;
+      throw new LintError(
+        `identity field :${m[1]} carries a version ${m[2]} id (v5-identity); an identity field carries version 8 (CHORA-SPEC 7.1, T30)`,
+        lineOf(m.index),
+      );
+    }
+  }
+}
+
 /** Validate DEED source text. Returns [head, items] on success; throws LintError. */
 export function validate(text, filename = null) {
   const tab = text.indexOf("\t");
@@ -568,6 +643,7 @@ export function validate(text, filename = null) {
   parseHeader(lx);
   lx.skipSep();
   const [head, items] = parseForm(lx);
+  checkIdentityLexical(text);
   if (filename) checkFilenameDispatch(filename, head);
   return [head, items];
 }
@@ -655,7 +731,7 @@ export function readMustfileChecks(text, filename = null) {
   const topLevelFields = new Map([
     ["schema-version", new Set(["string"])],
     ["canonical-name", new Set(["string"])],
-    ["beholding-chora", new Set(["uuid5", "uuid8", "uuid"])],
+    ["beholding-chora", new Set(["uuid8", "uuid"])],
   ]);
   const seenTopLevel = new Set();
   const severities = new Set(["critical", "high", "medium", "low"]);
@@ -785,7 +861,7 @@ export function readProofReceipt(text, filename = null) {
   const top = fieldsOf("the receipt", items, {
     "schema-version": { types: ["string"], required: true },
     "canonical-name": { types: ["string"], required: true },
-    "beholding-chora": { types: ["uuid5", "uuid8", "uuid"] },
+    "beholding-chora": { types: ["uuid8", "uuid"] },
     profile: { types: ["symbol"], required: true, oneOf: ["proof-receipt"] },
     repository: { types: ["string"], required: true },
     "source-commit": { types: ["string"], required: true },
@@ -1061,7 +1137,7 @@ const H = ";; SPDX-License-Identifier: CC-BY-SA-4.0\n";
 /** The embedded self-test corpus (same 14 cases, order and expectations as the Python). */
 export const SELF_TEST_CASES = [
   ["valid-minimal", true,
-    H + '(repo-deed :schema-version "1.0.0" :canonical-name "x" :repo-uuid #u5"github.com/o/x" :beholding-chora #u5"estate/chora")\n'],
+    H + '(repo-deed :schema-version "1.0.0" :canonical-name "x" :repo-uuid #u8"gv-clade-index:github.com/o/x" :beholding-chora #u8"chora:estate/github.com/o")\n'],
   ["valid-nested", true,
     H + '(repo-deed\n  :schema-version "1.0.0"\n:canonical-name "x" ; comment between\n  (lineage :type hub :parent "" :previous-names ()) )\n'],
   ["valid-booleans-uuid", true,

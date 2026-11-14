@@ -133,6 +133,40 @@ for mode in "" --strict; do
     fresh; printf '(x %s #uuid"%s")\n' "$key" "$V5" > "$WORK/t/a_chora.deed"
     expect 1 "a v5 in the identity field $key is rejected ${mode:-(default)}" $mode
   done
+  fresh; printf '(x :of-chora #uuid"%s")\n' "$V5" > "$WORK/t/a_chora.deed"
+  expect 1 "a v5 in the identity field :of-chora is rejected ${mode:-(default)}" $mode
+  # Owner ruling Q2 (2026-11-14): #u5 in an identity field is an error in every
+  # mode; #u8 is accepted. Neither file holds a bare UUID, so this also checks
+  # that the #u5 rule runs on files the UUID scan would skip.
+  for key in :repo-uuid :estate-uuid :forge-uuid :beholding-chora :of-chora :uuid :estate :base :forge :repo; do
+    fresh; printf '(x %s #u5"estate/chora")\n' "$key" > "$WORK/t/a_chora.deed"
+    expect 1 "#u5 in the identity field $key is rejected ${mode:-(default)}" $mode
+  done
+  names "identity field :repo carries a #u5 literal" "the #u5 rejection names the field ${mode:-(default)}"
+  fresh; printf '(repo-deed\n  :repo-uuid\n  #u5"github.com/o/x")\n' > "$WORK/t/a_chora.deed"
+  expect 1 "#u5 on the line after its identity field is rejected ${mode:-(default)}" $mode
+  fresh; printf '(repo-deed\n  :repo-uuid ; a note\n  #u5"github.com/o/x")\n' > "$WORK/t/a_chora.deed"
+  expect 1 "#u5 after a comment used as the separator is rejected ${mode:-(default)}" $mode
+  fresh; printf '(repo-deed\n  :repo-uuid ; a note\n  #uuid"%s")\n' "$V5" > "$WORK/t/a_chora.deed"
+  expect 1 "a v5 #uuid after a comment used as the separator is rejected ${mode:-(default)}" $mode
+  fresh; printf '(repo-deed :note (":repo-uuid ; example" \043u5"ordinary-name"))\n' > "$WORK/t/a_chora.deed"
+  expect 0 "a ';' inside a string is not a comment, so no identity field is invented ${mode:-(default)}" $mode
+  fresh; printf '(repo-deed :note ":repo-uuid \\" ; still a string" \043u5"ordinary-name")\n' > "$WORK/t/a_chora.deed"
+  expect 0 "an escaped quote does not end the string before a ';' ${mode:-(default)}" $mode
+  fresh; printf '(repo-deed) ; :repo-uuid \043u5"github.com/o/x"\n' > "$WORK/t/a_chora.deed"
+  expect 1 "a comment that quotes a field with #u5 is rejected (lexical rule) ${mode:-(default)}" $mode
+  fresh; printf '[deps]\n# :repo-uuid \043u5"github.com/o/x"\n' > "$WORK/t/Project.toml"
+  expect 1 "an identity field inside a skipped Julia [deps] table is still rejected ${mode:-(default)}" $mode
+  fresh; printf '# :repo-uuid \043u5"github.com/o/x"\n' > "$WORK/t/Manifest.toml"
+  expect 1 "an identity field inside a skipped Julia manifest is still rejected ${mode:-(default)}" $mode
+  fresh; printf '(repo-deed\n  :repo-uuid\n  #uuid"%s")\n' "$V5" > "$WORK/t/a_chora.deed"
+  expect 1 "a v5 #uuid on the line after its identity field is rejected ${mode:-(default)}" $mode
+  fresh; printf '\000\001:repo-uuid \043u5"github.com/o/x"\000' > "$WORK/t/blob.bin"
+  expect 0 "a binary file is not read for #u5 identity fields ${mode:-(default)}" $mode
+  fresh; printf '(repo-deed :repo-uuid #u8"gv-clade-index:github.com/o/x" :beholding-chora #u8"chora:estate/github.com/o")\n' > "$WORK/t/a_chora.deed"
+  expect 0 "#u8 in identity fields is accepted ${mode:-(default)}" $mode
+  fresh; printf '(praxis-deed (alias :registry-name #u5"github.com/o/x"))\n' > "$WORK/t/a_praxis.deed"
+  expect 0 "#u5 outside an identity field is not this rule's business ${mode:-(default)}" $mode
   fresh; printf '(praxis-deed (alias :registry-v5 #uuid"%s"))\n' "$V5" > "$WORK/t/a_praxis.deed"
   expect 0 "a v5 inside #uuid\"…\" outside an identity field is accepted ${mode:-(default)}" $mode
   fresh; printf '(repo-deed :repo-uuid #uuid"%s")\n' "$LOWER_V8_B" > "$WORK/t/a_chora.deed"
