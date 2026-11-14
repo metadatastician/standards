@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 = A7: Contractiles, Descriptiles and Anchor (edicts, reality, course correction)
 :version: 0.2.8-draft
-:status: DRAFT v0.2.8. Owner rulings W1 to W10 of 2026-11-13 recorded (section 2.3; W10 amends W1); they supersede Q12 (in its form) and Q13 for this subject. S1 to S3 of 2026-11-14 (section 2.4) answer SysArch Q1, Q2 and Q6: S1 restores Q11 and withdraws W6 and the anchor sentence of W3. J1 to J3, J5 to J8 and J10 to J12 approved 2026-11-13; J9 and J13 approved as amended; J4, J14 to J17 and J18 ruled 2026-11-13. W10 and J15 are synchronised with A1 v0.4.1 and A2 v0.2.4. J19 (the settings interface J4 calls for), J20 (`:of-chora` in the J14 heads), J13a (the `contractile` registry lands with the edict form), J21 and J22 ruled 2026-11-13, and J23 ruled 2026-11-14 (14.1). v0.2.8 records S1 to S3: the anchor is the `(anchor …)` clause of the chora deed, `anchor.abnf` stands and the `anchor-deed` head and `ANCHOR.deed` file are withdrawn (S1, SysArch R-01); a `#u5` id in an identity field is an error in every mode, and `#uuid` and `#u8` are accepted (S2, R-02); the A2ML checks go in both `governance-reusable.yml` and the template's inline governance (S3, R-09). v0.2.7 records J23 (the `ecosystem` module goes ahead of `anchor-deed` while R-01 is open) and corrects the 7.2 ECOSYSTEM.deed row against the mapping spec. v0.2.6 records J21 and J22 and cites A5 v0.2.3 for the bot denylist cutover. v0.2.5 brings 8.4 and YC10 into line with A3 v0.2.8 (G64, G65), encodes changes to the J19 policy, orders the template files after their modules, and records that the bot denylist cutover waits on A5 globs (review of standards#1532). v0.2.4 applies the A7 findings of the SysArch A1 to A7 consistency review that need no owner answer (14.3); R-01, R-02 and R-06 wait on the owner; R-07 is ruled as J20. Builds on A1 v0.4.1, A2 v0.2.4, A3 v0.2.8 and A5 v0.2.3. Supersedes, for its subject, docs/ULTRAPLAN-DEED-K9-CONTRACTILES-2026-10-19.adoc v0.3.3 (J1). Not ratified.
+:status: DRAFT v0.2.8. Owner rulings W1 to W10 of 2026-11-13 recorded (section 2.3; W10 amends W1); they supersede Q12 (in its form) and Q13 for this subject. S1 to S3 of 2026-11-14 (section 2.4) answer SysArch Q1, Q2 and Q6: S1 restores Q11 and withdraws W6 and the anchor sentence of W3. J1 to J3, J5 to J8 and J10 to J12 approved 2026-11-13; J9 and J13 approved as amended; J4, J14 to J17 and J18 ruled 2026-11-13. W10 and J15 are synchronised with A1 v0.4.1 and A2 v0.2.4. J19 (the settings interface J4 calls for), J20 (`:of-chora` in the J14 heads), J13a (the `contractile` registry lands with the edict form), J21 and J22 ruled 2026-11-13, and J23 to J26 ruled 2026-11-14 (14.1). v0.2.8 records S1 to S3 and J24 to J26: the anchor is the `(anchor …)` clause of the chora deed, `anchor.abnf` stands and the `anchor-deed` head and `ANCHOR.deed` file are withdrawn (S1, SysArch R-01); a `#u5` id in an identity field is an error in every mode, and `#uuid` and `#u8` are accepted (S2, R-02); the A2ML checks go in both `governance-reusable.yml` and the template's inline governance (S3, R-09); `deed.abnf` goes to v2.0.0 without `anchor-deed` (J24); estate `ANCHOR.deed` files migrate in per-repo M7 PRs (J25); a parent's one home is `ECOSYSTEM.deed` (J26). v0.2.7 records J23 (the `ecosystem` module goes ahead of `anchor-deed` while R-01 is open) and corrects the 7.2 ECOSYSTEM.deed row against the mapping spec. v0.2.6 records J21 and J22 and cites A5 v0.2.3 for the bot denylist cutover. v0.2.5 brings 8.4 and YC10 into line with A3 v0.2.8 (G64, G65), encodes changes to the J19 policy, orders the template files after their modules, and records that the bot denylist cutover waits on A5 globs (review of standards#1532). v0.2.4 applies the A7 findings of the SysArch A1 to A7 consistency review that need no owner answer (14.3); R-01, R-02 and R-06 wait on the owner; R-07 is ruled as J20. Builds on A1 v0.4.1, A2 v0.2.4, A3 v0.2.8 and A5 v0.2.3. Supersedes, for its subject, docs/ULTRAPLAN-DEED-K9-CONTRACTILES-2026-10-19.adoc v0.3.3 (J1). Not ratified.
 :toc:
 
 Specification A7 of the Estate Reconciliation Plan. It defines how a repository's edicts (the contractiles) are checked against its identity (the chora) and its audited reality (the descriptiles), how the anchor states a repo's semantic authority and golden path, and the order in which the estate leaves A2ML behind.
@@ -18,7 +18,7 @@ Specification A7 of the Estate Reconciliation Plan. It defines how a repository'
 | [O] | Owner ruling. Rulings Q1 to Q16 are of 2026-10-20, W1 to W10 of 2026-11-13, S1 to S3 of 2026-11-14. The others are named where cited.
 |===
 
-Identifiers are local to this specification, as in A1 to A6. Rulings of 2026-11-13 are `W1` to `W10`; rulings of 2026-11-14 are `S1` to `S3`; decisions are `J1` to `J23`, with `J13a` amending J13. Test ids use the two-letter prefixes `YN`, `YP`, `YA`, `YD`, `YC`, `YK`, `YR`, `YE`, `YS`, `YB`, `YF` and `YH`, which no other specification in the set uses [M].
+Identifiers are local to this specification, as in A1 to A6. Rulings of 2026-11-13 are `W1` to `W10`; rulings of 2026-11-14 are `S1` to `S3`; decisions are `J1` to `J26`, with `J13a` amending J13. Test ids use the two-letter prefixes `YN`, `YP`, `YA`, `YD`, `YC`, `YK`, `YR`, `YE`, `YS`, `YB`, `YF` and `YH`, which no other specification in the set uses [M].
 
 == 1. Summary
 
@@ -174,8 +174,7 @@ The grammar is `1-formats/deed/spec/abnf/clauses/anchor.abnf` v1.0.0 (standards#
     (semantic-authority :policy "Satellites extend the engine API, never redefine it."
                         :owns ("engine/api/"))
     (golden-path :smoke-test-command ("just test-a11y")
-                 :success-criteria ("Every image in dev-ui/ has alt text."))
-    (parents (parent :uuid #uuid"00000000-0000-8000-8000-0000000000b2" :relation fork-of))))
+                 :success-criteria ("Every image in dev-ui/ has alt text."))))
 ----
 
 === 6.3 Rules beyond the grammar
@@ -183,7 +182,7 @@ The grammar is `1-formats/deed/spec/abnf/clauses/anchor.abnf` v1.0.0 (standards#
 * `anchor.abnf`'s SEMANTIC rules hold: `:schema` and `:authority` exactly once, every other member at most once, one clause at the top level of a repo deed, a parent named only by an opaque `#uuid`, never the deed itself.
 * The anchor never restates a contractile. A rule that satellites must obey (`(satellite-policy …)`, `(semantic-authority …)` read as a constraint) is an edict in `Mustfile.deed` (8.1); the anchor's members are informative and no runner gates on them.
 * `(golden-path :success-criteria)` items are prose. Where one must be enforced, it is written as an edict too.
-* J8 applies: the nested `(identity …)` member, which names the subject of the authority and not the repo, is renamed `(subject …)` in `anchor.abnf` v2.0.0.
+* `anchor.abnf` v2.0.0 makes two changes. J8: the nested `(identity …)` member, which names the subject of the authority and not the repo, is renamed `(subject …)`. J26: `(parents …)` is dropped, because a parent is an `ECOSYSTEM.deed` `(related … :relationship parent)` entry. Until v2.0.0 lands, a v1.0.0 `(parents …)` is still read.
 
 === 6.4 Translating a legacy anchor
 
@@ -200,12 +199,12 @@ The legacy `ANCHOR.a2ml` described semantic authority and a golden path, which i
 | `semantic_authority.*`, `satellite_policy.*`, `implementation_policy.*` | `(anchor (semantic-authority …))`, `(anchor (satellite-policy …))` and `(anchor (implementation-policy …))`. Any of them that must be enforced is also written as an edict in `Mustfile.deed` (6.3).
 | `clade`, `status` | Dropped from the anchor. Clade placements are identity facts in the chora (W10, A1 §11); status is `STATE.deed` (J15).
 | `ssg.*` | `(anchor (ssg …))`.
-| `parents` (reverse-DNS names) | `(anchor (parents (parent :uuid #uuid"…")))`, using each parent's chora id. A parent with no registered id is left out, and the translation is reported incomplete: a warning in lax mode, an error in strict (J12).
+| `parents` (reverse-DNS names) | `ECOSYSTEM.deed` `(related :uuid #uuid"…" :relationship parent)`, using each parent's chora id (J26). A parent with no registered id is left out, and the translation is reported incomplete: a warning in lax mode, an error in strict (J12).
 |===
 
 === 6.5 The `(anchor …)` clause module
 
-`clauses/anchor.abnf` v1.0.0 is the module (S1). It is already on main with its linter profile, fixtures and differential entry (YA01 to YA07), so section 11's M3 step for the anchor is done. A grammar PR removes the `ANCHOR.deed` dispatch from `deed.abnf` and the R-01 hold note from `anchor.abnf`'s header.
+`clauses/anchor.abnf` v1.0.0 is the module (S1). It is already on main with its linter profile, fixtures and differential entry (YA01 to YA07), so section 11's M3 step for the anchor is done. `deed.abnf` v2.0.0 drops the `anchor-deed` head and the `ANCHOR.deed` dispatch (J24), and the R-01 hold note leaves `anchor.abnf`'s header. A later module PR brings `anchor.abnf` to v2.0.0 (6.3).
 
 == 7. The descriptiles: ALL-CAPS deeds [O: W3, W4, Q12, D312]
 
@@ -468,7 +467,7 @@ Each step is one draft PR per repository, made only after the owner approves it.
 . *M4, standards converts itself.* In this order: add `(contractiles …)`; rewire the must gate and verb discovery (section 10, rows 1 and 2); translate `ANCHOR.a2ml` into the chora deed's `(anchor …)` clause by 6.4; move the four all-caps `.contractile` files field by field into `INTENT.deed`, `MUST.deed`, `TRUST.deed` and `ADJUST.deed` [O: Q12, W3]; move the Debtfile into `debt_praxis.deed` (J9); make `0-AI-MANIFEST.deed` pointer-only [O: Q15]; then delete each A2ML file in the same PR that removes its last reader, which shrinks the ledger.
 . *M5, the shared readers*, each with a new-input-first fallback: readme-derive, the debt ratchet, the RSR profile checker. Then hypatia (rules and `HYP-S005`), the contractile CLI and the gitbot-fleet bots (they read the root `bot/write` deviations, each in its own repo; then a separate `standards` PR deletes `bot_exclusion_registry.a2ml`, section 10).
 . *M6, pilot.* Three repos of different shapes: one panoply-class, one deed-clean, one with live A2ML gates [R: ultraplan P3].
-. *M7, the wave.* One PR per repo, worst first, from the census (ultraplan X1). Each renamed file is translated where a mapping spec exists and deleted where none does [O: Q7]. A repo is done when its lanes are green and no `.a2ml` file remains outside an archive. `CLAUDE.md` and other agent files are corrected in the same per-repo PR, never in a sweep.
+. *M7, the wave.* One PR per repo, worst first. A repo that carries an `ANCHOR.deed` (code search on 2026-11-14 found `hyperpolymath/affinescript` and `hyperpolymath/panoply`) folds it into its chora deed's `(anchor …)` clause and deletes the file in its own PR (J25). Until then, `deed_lint` refuses the file, because it dispatches to nothing. from the census (ultraplan X1). Each renamed file is translated where a mapping spec exists and deleted where none does [O: Q7]. A repo is done when its lanes are green and no `.a2ml` file remains outside an archive. `CLAUDE.md` and other agent files are corrected in the same per-repo PR, never in a sweep.
 
 == 12. Acceptance tests
 
@@ -516,7 +515,7 @@ These tests cover the `(anchor …)` clause module merged in #1490, which is the
 | YA03 | No identity in the anchor: `:id`, `:clade` and `(status …)` are refused. | `id-in-anchor`, `clade-in-anchor`, `status-in-anchor` [done]
 | YA04 | One clause, at the top level of a repo deed. | `two-anchors`, `nested-anchor`, `praxis-head` [done]
 | YA05 | Sub-clause members and types: semver, date, boolean, string lists, no nesting, no empty sub-clause. | `version-two-segment`, `date-bad`, `metadata-unknown`, `satellite-string`, `purpose-empty`, `purpose-symbols`, `sub-nested-clause`, `empty-subclause`, `sem-files-boolean`, `repeated-clause` [done]
-| YA06 | A parent is named only by an opaque `#uuid`, appears once, and is never the deed itself. | `parent-legacy-literal`, `parent-string`, `parent-no-uuid`, `parent-duplicate`, `parent-self`, `parent-relation-string`, `parents-stray` [done]
+| YA06 | A parent is named only by an opaque `#uuid`, appears once, and is never the deed itself. Retired with `(parents …)` in `anchor.abnf` v2.0.0 (J26); the `ecosystem` profile checks a parent there. | `parent-legacy-literal`, `parent-string`, `parent-no-uuid`, `parent-duplicate`, `parent-self`, `parent-relation-string`, `parents-stray` [done]
 | YA07 | `anchor.abnf` accepts every valid fixture's clause and refuses the 17 grammar-expressible invalid fixtures. | `tools/deed-abnf-differential` [done]
 | YA08 | The translation of standards' `ANCHOR.a2ml` by table 6.4 keeps every field, sends it to the named destination, or records it as dropped. | step M4
 |===
@@ -614,7 +613,7 @@ These tests cover the `(anchor …)` clause module merged in #1490, which is the
 
 === 14.1 Ruled on 2026-11-13 [O]
 
-The owner ruled J1 to J17 on 2026-11-13 in the A1 thread, J18 the same day in both the A1 and A7 threads, and J19, J20, J13a, J21 and J22 the same day in the A7 thread. J23 was ruled on 2026-11-14 in the A7 thread. S1 (2.4) amends J7, J8, J14, J20 and J23 as their rows say. Where a ruling changed the proposal, the column says how. W1 to W9 (section 2.3) were given in the same session.
+The owner ruled J1 to J17 on 2026-11-13 in the A1 thread, J18 the same day in both the A1 and A7 threads, and J19, J20, J13a, J21 and J22 the same day in the A7 thread. J23 to J26 were ruled on 2026-11-14 in the A7 thread. S1 (2.4) amends J7, J8, J14, J20 and J23 as their rows say. Where a ruling changed the proposal, the column says how. W1 to W9 (section 2.3) were given in the same session.
 
 [cols="1,4,2"]
 |===
@@ -644,6 +643,9 @@ The owner ruled J1 to J17 on 2026-11-13 in the A1 thread, J18 the same day in bo
 | J21 | The selector vocabulary of `applies-when` (8.1): exactly one of `(always)`, `(identity …)`, `(profile …)`, `(capabilities …)` and `(context …)`, with no combinators; `(clade …)` stays refused (W10). Combinators, if ever needed, come as a grammar version step with fixtures. As implemented in `clauses/edict.abnf` (standards#1537). | Approved 2026-11-13
 | J22 | A Bust rule's registry entry carries `:floor "A7 8.5"`, the estate floor no deviation lowers (J13, 8.5). A5 4.2 gains a `:floor` row (0..1, STRING, the section that sets the floor), through the A1 thread. | Approved 2026-11-13
 | J23 | The M3 order of section 11 may skip a module held on an open owner question: `ecosystem`, and the modules after it, go ahead while `anchor-deed` waits on SysArch R-01, and `anchor-deed` lands when R-01 is answered. The modules do not depend on each other. S1 answered R-01 the same day: the anchor needs no module beyond `anchor.abnf`, so nothing waits. | Approved 2026-11-14
+| J24 | `deed.abnf` drops the `anchor-deed` head and the `ANCHOR.deed` dispatch (S1) and goes to v2.0.0. Removing a head refuses input that was accepted, so the change is a major one, not a minor one. | Approved 2026-11-14 (major, not minor)
+| J25 | Each estate `ANCHOR.deed` is folded into its repo's chora `(anchor …)` clause and deleted in that repo's own M7 PR. There is no sweep and no temporary allowance in the lint. | Approved 2026-11-14
+| J26 | A parent repo has one home: `ECOSYSTEM.deed` `(related :uuid … :relationship parent)`. `anchor.abnf` v2.0.0 drops `(parents …)`, together with J8's `(subject …)` rename. | Approved 2026-11-14
 |===
 
 === 14.2 J19, the settings interface (ruled 2026-11-13)
