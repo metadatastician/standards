@@ -49,7 +49,8 @@ STATE=red ADVISORY=false FAIL_ON_INDETERMINATE=false bash -e -o pipefail "$WORK/
 STATE= ADVISORY=true FAIL_ON_INDETERMINATE=false bash -e -o pipefail "$WORK/gate.sh" > "$WORK/o" 2>&1; { [ $? -eq 0 ] && grep -q 'no verdict' "$WORK/o"; } && ok "gate: no verdict + advisory warns, exits 0" || bad "gate: empty verdict + advisory"
 
 # deed warning step
-rb 'puts YAML.load_file(ARGV[0])["jobs"]["lint"]["steps"].find{|s| s["name"]=="Advisory findings as warnings"}["run"]' "$D" > "$WORK/deedwarn.sh"
+# The warning step is scripts/conformance-deed.sh warn (one implementation, shared with the template).
+printf 'exec bash "%s" warn\n' "$ROOT/scripts/conformance-deed.sh" > "$WORK/deedwarn.sh"
 export RUNNER_TEMP="$WORK"
 printf 'PASS ./a_chora.deed\nFAIL ./b_chora.deed: line 1: deed must begin with an SPDX header\nFAIL ./b_chora.deed: line 1: deed must begin with an SPDX header\n' > "$WORK/deed-lint.log"
 bash -e -o pipefail "$WORK/deedwarn.sh" > "$WORK/o" 2>&1; rc=$?
@@ -67,7 +68,8 @@ grep -q '^::warning file=a%2Cb%3Ac_chora.deed::deed conformance (advisory): line
 # No error-severity annotation in advisory mode (the runner keeps ::error:: even under continue-on-error).
 for spec in "$K:validate:Enumerate the committed K9 files, the changed files and ledger growth" "$D:lint:lint every committed deed"; do
   file="${spec%%:*}"; rest="${spec#*:}"; job="${rest%%:*}"; step="${rest#*:}"
-  body=$(rb 'puts YAML.load_file(ARGV[0])["jobs"][ARGV[1]]["steps"].find{|s| s["name"]==ARGV[2]}["run"]' "$file" "$job" "$step")
+  if [ "$file" = "$D" ]; then body=$(cat "$ROOT/scripts/conformance-deed.sh")  # the lint body lives in the shared script
+  else body=$(rb 'puts YAML.load_file(ARGV[0])["jobs"][ARGV[1]]["steps"].find{|s| s["name"]==ARGV[2]}["run"]' "$file" "$job" "$step"); fi
   # every ::error:: line must be switched on ADVISORY via the ${sev} variable
   bare=$(printf '%s\n' "$body" | grep -c '::error::' || true)
   [ "$bare" = 0 ] && grep -q 'sev=error; \[ "\$ADVISORY" = "true" \] && sev=warning' <<<"$body" \
