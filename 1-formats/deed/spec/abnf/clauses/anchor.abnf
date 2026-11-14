@@ -22,8 +22,8 @@
 ; `clause` of deed.abnf v2.0.0, so a deed carrying one still passes deed_lint
 ; unchanged. This profile narrows that clause. Rules it borrows (string,
 ; boolean, symbol, token-sep, DQUOTE, DIGIT, ALPHA, hex-lc, str-char, escape)
-; are deed.abnf's, unchanged; str-list, str-list1, chora-uuid8 and lc-variant
-; are common.abnf's. Requires RFC 7405 (%s"..." case-sensitive string literals).
+; are deed.abnf's, unchanged; str-list, str-list1, chora-uuid8, lc-variant and
+; ssg-clause are common.abnf's. Requires RFC 7405 (%s"..." case-sensitive string literals).
 ;
 ; What the anchor is: the repo's semantic authority and golden path — what a
 ; downstream or satellite repo may extend but not redefine, and how to bring
@@ -127,14 +127,8 @@ sem-files-clause = "(" %s"semantic-authority-files"
                 ; drive letter, no "\" and no empty, "." or ".." segment, so
                 ; no reader resolves an authority file outside the repo.
 
-ssg-clause      = "(" %s"ssg" 1*(token-sep ssg-member) [token-sep] ")"
-ssg-member      = ( %s":engine" token-sep string )
-                / ( %s":output-dir" token-sep string )
-                / ( %s":boj-trigger" token-sep boolean )
-                / ( %s":cartridge" token-sep string )
-                ; The site-build configuration that standards' legacy
-                ; ANCHOR.a2ml carries. /1 only: under /2 it is META.deed's
-                ; (ssg …) (A7 J29).
+; ssg-clause is common.abnf's: /1 only here, and under /2 it is META.deed's
+; (ssg …) (A7 J29).
 
 parents-clause  = "(" %s"parents" 1*(token-sep parent-clause) [token-sep] ")"
                 ; /1 only. Under /2 a parent is an ECOSYSTEM.deed
@@ -149,5 +143,5 @@ parent-member   = ( %s":uuid" token-sep chora-id )
                 ; which a legacy #u8 or #u5 :repo-uuid is compared by the id it
                 ; names (A1 rule V8).
 
-; chora-uuid8, lc-variant, str-list and str-list1 are common.abnf's (A7 M3:
+; chora-uuid8, lc-variant, str-list, str-list1 and ssg-clause are common.abnf's (A7 M3:
 ; the shared rules have one definition, borrowed by every clause module).

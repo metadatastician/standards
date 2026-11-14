@@ -1,0 +1,99 @@
+; SPDX-FileCopyrightText: © 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+; SPDX-License-Identifier: MPL-2.0
+; SPDX-License-Identifier: CC-BY-SA-4.0
+;
+; DEED clause profile: META.deed, v1.0.0 (DRAFT)
+; Prose and rationale: docs/estate-reconciliation/A7-contractiles-descriptiles-anchor.adoc
+; sections 7.1 and 7.2 (the META.deed row); rulings J14, J20, J29, and J30 to
+; J32 of 2026-11-14: the chora's (meta …) moves here whole (J30), an ADR is
+; referenced, never restated (J31), and (development-practices …) takes both
+; source member sets (J32). Field sources: 1-formats/deed/mappings/
+; meta-ecosystem-to-repo-deed.adoc section 3 and docs/DESCRIPTILE-SPEC.adoc
+; (META). M3 module order: section 11.
+;
+; A CLAUSE PROFILE, not a new grammar. Every rule below is also a `field` or
+; `clause` of deed.abnf v2.0.0, so META.deed still passes deed_lint unchanged.
+; Rules it borrows: string, symbol, boolean and token-sep are deed.abnf's;
+; date-string and ssg-clause are common.abnf's. Requires RFC 7405 (%s"..."
+; case-sensitive literals).
+;
+; Where it applies: META.deed (head descriptile-deed, J14), at the top level of
+; the form. Every member is optional. SEMANTIC (validator-enforced,
+; deed_lint.js --meta):
+;   * the descriptile header, as for every descriptile (J20, J28, J4, YD06,
+;     A7 Q5);
+;   * each meta-field at most once; at most one each of (development-practices …),
+;     (scoping …), (axis-3 …) and (ssg …); any number of meta-adr, ids unique;
+;   * no other top-level field or clause, and no (rule …) (YF02);
+;   * with the chora deed read alongside, a chora (meta …) is warned, and
+;     refused in strict mode (J30, YF04).
+
+meta-field      = ( %s":version"           token-sep string )
+                / ( %s":last-updated"      token-sep date-string )
+                / ( %s":type"              token-sep project-type )
+                / ( %s":languages"         token-sep symbol-list )
+                / ( %s":license"           token-sep symbol )
+                / ( %s":author"            token-sep string )
+                / ( %s":design-rationale"  token-sep string )
+                / ( %s":scoping-first"     token-sep boolean )
+                / ( %s":execution-order"   token-sep string )
+                / ( %s":axis-1"            token-sep string )
+                / ( %s":axis-2"            token-sep string )
+                / ( %s":axis-3"            token-sep string )
+                / ( %s":corrective-first"  token-sep boolean )
+                / ( %s":adaptive-second"   token-sep boolean )
+                / ( %s":adaptive-focus"    token-sep string )
+                / ( %s":perfective-third"  token-sep boolean )
+                / ( %s":perfective-source" token-sep string )
+                ; The chora (meta …) members, carried over unchanged (J30;
+                ; mapping section 3), and :design-rationale (A7 7.2). The
+                ; four tool members are (development-practices …)'s (J32).
+                ; :license is the SPDX id the source holds, verbatim: this
+                ; profile checks its shape only and never edits it.
+                ; :languages describes what the repo is written in; it is not
+                ; an allow or ban list (YL3, YD04), which is the Mustfile's.
+                ; SEMANTIC: the strings are not empty.
+project-type    = %s"library" / %s"binary" / %s"service" / %s"website" / %s"monorepo"
+                ; The mapping's closed set. SEMANTIC: the whole symbol.
+symbol-list     = "(" [token-sep] [symbol *(token-sep symbol)] [token-sep] ")"
+
+meta-practices  = "(" %s"development-practices" 1*(token-sep practice-member) [token-sep] ")"
+                ; SEMANTIC: each member at most once.
+practice-member = ( %s":code-style"        token-sep string )
+                / ( %s":security"          token-sep string )
+                / ( %s":testing"           token-sep string )
+                / ( %s":versioning"        token-sep string )
+                / ( %s":documentation"     token-sep string )
+                / ( %s":branching"         token-sep string )
+                / ( %s":build-tool"        token-sep symbol )
+                / ( %s":container-runtime" token-sep symbol )
+                / ( %s":ci-platform"       token-sep symbol )
+                / ( %s":package-manager"   token-sep symbol )
+                ; J32: DESCRIPTILE-SPEC's six prose members and the mapping's
+                ; four tool symbols.
+
+meta-scoping    = "(" %s"scoping" 1*(token-sep scoping-member) [token-sep] ")"
+scoping-member  = ( %s":sources"            token-sep string )
+                / ( %s":marker-scan"        token-sep string )
+                / ( %s":idris-unsound-scan" token-sep string )
+meta-axis-3     = "(" %s"axis-3" 1*(token-sep axis3-member) [token-sep] ")"
+axis3-member    = ( %s":audit-focus"        token-sep string )
+                / ( %s":compliance-focus"   token-sep string )
+                / ( %s":drift-risk-example" token-sep string )
+                / ( %s":effects-evidence"   token-sep string )
+                ; Both carried over from the chora (meta …) (J30).
+                ; SEMANTIC: each member at most once.
+
+meta-adr        = "(" %s"adr" 1*(token-sep adr-member) [token-sep] ")"
+                ; SEMANTIC: :id, :status, :date and :ref exactly once each,
+                ; :title at most once. :ref is the repo-relative POSIX path of
+                ; the ADR document: no leading "/", no "\" and no empty, "."
+                ; or ".." segment. An ADR is referenced, never restated (J31):
+                ; there is no :context, :decision or :consequences.
+adr-member      = ( %s":id"     token-sep string )
+                / ( %s":status" token-sep adr-status )
+                / ( %s":date"   token-sep date-string )
+                / ( %s":ref"    token-sep string )
+                / ( %s":title"  token-sep string )
+adr-status      = %s"proposed" / %s"accepted" / %s"deprecated" / %s"superseded" / %s"rejected"
+                ; The mapping's closed set. SEMANTIC: the whole symbol.

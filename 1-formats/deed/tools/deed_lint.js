@@ -61,6 +61,11 @@ Usage: deed_lint.js FILE...     exit 0 iff all files conform
                                               chora deed (YD08) and warns on a chora (status …) or (maturity …), which
                                               --strict refuses (YF03)
        deed_lint.js --state-fixtures DIR      DIR/{valid,invalid}/<case>/STATE.deed [+ <repo>_chora.deed, STRICT]
+       deed_lint.js --meta FILE... [--root DIR] [--strict]
+                                              META.deed (DRAFT, A7 7.2, J29 to J32); --root checks :of-chora against
+                                              the chora deed (YD08) and warns on a chora (meta …), which --strict
+                                              refuses (YF04)
+       deed_lint.js --meta-fixtures DIR       DIR/{valid,invalid}/<case>/META.deed [+ <repo>_chora.deed, STRICT]
        deed_lint.js --contractile-registry --root DIR [--owner O/N] [--out FILE] [--check]
                                               generate the A5 contractile rule registry from the six edicts (A7 J13)
        deed_lint.js --ast-json FILE           emit the validated AST as JSON (integer lexemes stay strings)
@@ -872,7 +877,7 @@ export function readProofReceipt(text, filename = null) {
     for (const m of members) {
       if (m[0] === "field") {
         const [, key, value] = m;
-        if (!(key in spec)) fail(`unknown field :${key} in ${where}`);
+        if (!Object.hasOwn(spec, key)) fail(`unknown field :${key} in ${where}`);
         if (fields.has(key)) fail(`duplicate field :${key} in ${where}`);
         if (!spec[key].types.includes(value[0])) fail(`:${key} in ${where} must be a ${spec[key].types.join(" or ")}`);
         if (value[0] === "string" && value[1].trim() === "") fail(`empty :${key} in ${where}`);
@@ -2405,7 +2410,7 @@ function rsrFields(members, specs, where, E) {
   for (const m of members) {
     if (m[0] !== "field") continue;
     if (m[3]) throw E(`'!' belongs only on a rule's :id in a contractile-deed, not on ${where} :${m[1]}`);
-    if (!(m[1] in specs)) throw E(`${where} has no field :${m[1]}`);
+    if (!Object.hasOwn(specs, m[1])) throw E(`${where} has no field :${m[1]}`);
     if (out.has(m[1])) throw E(`${where} repeats :${m[1]}`);
     out.set(m[1], rsrValue(m[2], specs[m[1]], `${where} :${m[1]}`, E));
   }
@@ -2767,7 +2772,7 @@ export function checkState(text, filename, opts = {}) {
     }
     if (it[1] === "rule") throw E("a descriptile states what is; a (rule …) belongs in an edict (YF02, YL3)");
     if (it[1] === "state") throw E("there is no (state …) clause: the journal stays in docs/status/ROADMAP.adoc (J3)");
-    if (!(it[1] in clauses)) throw E(`STATE.deed has no clause (${it[1]} …); its clauses are (status …) and (maturity …) (A7 7.2)`);
+    if (!Object.hasOwn(clauses, it[1])) throw E(`STATE.deed has no clause (${it[1]} …); its clauses are (status …) and (maturity …) (A7 7.2)`);
     clauses[it[1]].push(it[2]);
   }
   const warnings = checkDescriptileHeader(fields, "STATE.deed", E, opts.repoUuid, opts.today ?? todayUtc());
@@ -2810,8 +2815,17 @@ export function checkState(text, filename, opts = {}) {
   return { phase, maturity, warnings };
 }
 
-/** --state FILE... [--root DIR] [--strict]: returns exit code. */
-function stateFiles(files, root, strict) {
+// ---------------------------------------------------------------------------
+// The per-file and fixture runners shared by the descriptile profiles that
+// read the chora alongside (--state, --meta): YD08, and the chora clauses that
+// moved out (YF03, YF04).
+
+/**
+ * --<form> FILE... [--root DIR] [--strict]: check(text, file, opts) returns
+ * the profile's result or null; summary(result) words the OK line. Returns
+ * the exit code.
+ */
+function descriptileFiles(files, root, strict, { name, Err, check, summary }) {
   let bad = 0;
   for (const f of files) {
     try {
@@ -2819,10 +2833,10 @@ function stateFiles(files, root, strict) {
       let chora;
       if (root) {
         chora = rootChora(root);
-        if (chora === undefined) throw new StateError(`--root ${root} holds no <repo>_chora.deed to check against (YD08, YF03)`);
+        if (chora === undefined) throw new Err(`--root ${root} holds no <repo>_chora.deed to check against`);
       }
-      const r = checkState(text, f, { repoUuid: chora && chora.uuid, choraClauses: chora && chora.clauses, strict });
-      console.log(`OK   ${f} (${r === null ? "not STATE.deed" : `phase ${r.phase}, maturity ${r.maturity ?? "unstated"}${chora ? ", checked against the chora" : ""}${strict ? ", strict" : ""}`})`);
+      const r = check(text, f, { repoUuid: chora && chora.uuid, choraClauses: chora && chora.clauses, strict });
+      console.log(`OK   ${f} (${r === null ? `not ${name}` : `${summary(r)}${chora ? ", checked against the chora" : ""}${strict ? ", strict" : ""}`})`);
       for (const w of (r && r.warnings) || []) console.log(`WARN ${f}: ${w}`);
     } catch (e) {
       if (!(e instanceof LintError) && !e.code) throw e;
@@ -2834,12 +2848,12 @@ function stateFiles(files, root, strict) {
 }
 
 /**
- * --state-fixtures DIR: DIR/{valid,invalid}/<case>/STATE.deed, with an
- * optional <repo>_chora.deed beside it (then YD08 and YF03 are checked
- * against it) and an optional file named STRICT (then the case runs in
- * strict mode).
+ * --<form>-fixtures DIR: DIR/{valid,invalid}/<case>/<name>, with an optional
+ * <repo>_chora.deed beside it (then YD08 and the moved-clause checks run
+ * against it) and an optional file named STRICT (then the case runs in strict
+ * mode). Returns the exit code.
  */
-function stateFixtures(d) {
+function descriptileFixtures(d, { name, Err, check }) {
   let bad = 0;
   for (const [sub, expect] of [["valid", true], ["invalid", false]]) {
     let cases;
@@ -2855,19 +2869,19 @@ function stateFixtures(d) {
     }
     for (const c of cases) {
       const dir = join(d, sub, c);
-      const f = join(dir, "STATE.deed");
+      const f = join(dir, name);
       if (!existsSync(f)) {
-        console.log(`ERROR ${dir}: a case holds STATE.deed`);
+        console.log(`ERROR ${dir}: a case holds ${name}`);
         return 2;
       }
       let got = true;
       let err = "";
       try {
         const chora = rootChora(dir);
-        const r = checkState(readFileSync(f, "utf8"), f, {
+        const r = check(readFileSync(f, "utf8"), f, {
           repoUuid: chora && chora.uuid, choraClauses: chora && chora.clauses, strict: existsSync(join(dir, "STRICT")), today: FIXTURE_TODAY,
         });
-        if (r === null) throw new StateError("not STATE.deed");
+        if (r === null) throw new Err(`not ${name}`);
       } catch (e) {
         if (!(e instanceof LintError)) throw e;
         got = false;
@@ -2879,6 +2893,139 @@ function stateFixtures(d) {
   }
   return bad ? 1 : 0;
 }
+
+const STATE_PROFILE = {
+  name: "STATE.deed", Err: StateError, check: checkState,
+  summary: (r) => `phase ${r.phase}, maturity ${r.maturity ?? "unstated"}`,
+};
+
+// ---------------------------------------------------------------------------
+// META.deed (A7 7.2, J29 to J32, YF04; clauses/meta.abnf).
+
+export class MetaError extends LintError {
+  constructor(msg) {
+    super(msg, null);
+    this.name = "MetaError";
+  }
+
+  toString() {
+    return this.msg;
+  }
+}
+
+/** The closed sets of meta.abnf (mappings/meta-ecosystem-to-repo-deed.adoc section 3). */
+export const META_PROJECT_TYPES = new Set(["library", "binary", "service", "website", "monorepo"]);
+export const ADR_STATUSES = new Set(["proposed", "accepted", "deprecated", "superseded", "rejected"]);
+
+const META_STRINGS = ["version", "author", "design-rationale", "execution-order", "axis-1", "axis-2", "axis-3", "adaptive-focus", "perfective-source"];
+const META_BOOLEANS = ["scoping-first", "corrective-first", "adaptive-second", "perfective-third"];
+const META_FIELDS = [...DESCRIPTILE_HEADER, ...META_STRINGS, ...META_BOOLEANS, "last-updated", "type", "languages", "license"];
+const PRACTICE_STRINGS = ["code-style", "security", "testing", "versioning", "documentation", "branching"];
+const PRACTICE_SYMBOLS = ["build-tool", "container-runtime", "ci-platform", "package-manager"];
+const META_SUBCLAUSES = {
+  "development-practices": [...PRACTICE_STRINGS, ...PRACTICE_SYMBOLS],
+  scoping: ["sources", "marker-scan", "idris-unsound-scan"],
+  "axis-3": ["audit-focus", "compliance-focus", "drift-risk-example", "effects-evidence"],
+  ssg: ["engine", "output-dir", "boj-trigger", "cartridge"],
+};
+
+function metaString(v, where, E) {
+  if (v[0] !== "string" || v[1] === "") throw E(`${where} must be a non-empty string`);
+}
+
+/**
+ * Check META.deed source text. Returns {adrs, warnings}, or null for any other
+ * file or head. opts.repoUuid comes from the repo's chora deed (YD08);
+ * opts.choraClauses (the chora's top-level clause names) turns on YF04: a
+ * chora (meta …) is warned, and refused when opts.strict (J30).
+ */
+export function checkMeta(text, filename, opts = {}) {
+  const [head, items] = validate(text, filename);
+  if (head !== "descriptile-deed" || basename(filename || "") !== "META.deed") return null;
+  const E = (m) => new MetaError(m);
+  const fields = new Map();
+  const sub = new Map();
+  const adrs = [];
+  for (const it of items) {
+    if (it[0] === "field") {
+      if (it[3]) throw E(`'!' belongs only on a rule's :id in a contractile-deed, not on :${it[1]}`);
+      if (it[1] === "beholding-chora") throw E(":beholding-chora names an estate chora; a descriptile-deed names its repo with :of-chora (J20)");
+      if (PRACTICE_SYMBOLS.includes(it[1])) throw E(`:${it[1]} belongs in (development-practices …) (J32)`);
+      if (!META_FIELDS.includes(it[1])) throw E(`META.deed has no field :${it[1]}`);
+      if (fields.has(it[1])) throw E(`META.deed carries :${it[1]} once`);
+      fields.set(it[1], it[2]);
+      continue;
+    }
+    if (it[1] === "rule") throw E("a descriptile states what is; a (rule …) belongs in an edict (YF02, YL3)");
+    if (it[1] === "meta") throw E("META.deed has no (meta …) clause: the chora's (meta …) members are its own top-level members (J30)");
+    if (it[1] === "adr") {
+      adrs.push(it[2]);
+      continue;
+    }
+    if (!Object.hasOwn(META_SUBCLAUSES, it[1])) throw E(`META.deed has no clause (${it[1]} …)`);
+    if (sub.has(it[1])) throw E(`META.deed carries (${it[1]} …) at most once`);
+    if (it[2].length === 0) throw E(`(${it[1]}) is empty: it takes at least one member, or is left out`);
+    sub.set(it[1], stateMembers(it[2], `(${it[1]} …)`, META_SUBCLAUSES[it[1]], E));
+  }
+  const warnings = checkDescriptileHeader(fields, "META.deed", E, opts.repoUuid, opts.today ?? todayUtc());
+  for (const k of META_STRINGS) if (fields.has(k)) metaString(fields.get(k), `:${k}`, E);
+  for (const k of META_BOOLEANS) if (fields.has(k) && fields.get(k)[0] !== "boolean") throw E(`:${k} must be #t or #f`);
+  stateDate(fields, "last-updated", "META.deed", E);
+  if (fields.has("type")) stateSymbol(fields, "type", META_PROJECT_TYPES, "META.deed", E);
+  if (fields.has("languages")) {
+    const v = fields.get("languages");
+    if (v[0] !== "list" || !v[1].every((x) => x[0] === "symbol")) throw E(":languages must be a list of symbols");
+  }
+  if (fields.has("license") && fields.get("license")[0] !== "symbol") throw E(":license must be the SPDX id as a symbol");
+
+  for (const [name, f] of sub) {
+    for (const [k, v] of f) {
+      const where = `(${name} :${k})`;
+      if (PRACTICE_SYMBOLS.includes(k)) {
+        if (v[0] !== "symbol") throw E(`${where} must be a symbol`);
+      } else if (name === "ssg" && k === "boj-trigger") {
+        if (v[0] !== "boolean") throw E(`${where} must be #t or #f`);
+      } else {
+        metaString(v, where, E);
+      }
+    }
+  }
+
+  const ids = new Set();
+  const out = [];
+  for (const members of adrs) {
+    for (const m of members) {
+      if (m[0] === "field" && ["context", "decision", "consequences"].includes(m[1])) {
+        throw E(`an ADR is referenced, never restated: (adr :${m[1]}) is refused; its body lives in the document :ref names (J31)`);
+      }
+    }
+    const f = stateMembers(members, "(adr …)", ["id", "status", "date", "ref", "title"], E);
+    for (const k of ["id", "status", "date", "ref"]) if (!f.has(k)) throw E(`(adr …) is missing :${k} (J31)`);
+    metaString(f.get("id"), "(adr :id)", E);
+    const id = f.get("id")[1];
+    const where = `(adr :id ${JSON.stringify(id)})`;
+    if (ids.has(id)) throw E(`${where} appears twice`);
+    ids.add(id);
+    const status = stateSymbol(f, "status", ADR_STATUSES, where, E);
+    stateDate(f, "date", where, E);
+    const ref = f.get("ref");
+    if (ref[0] !== "string" || !isRepoRelative(ref[1])) throw E(`${where} :ref must be the repo-relative path of the ADR document (no leading "/", no "\\", no "." or ".." segment) (J31)`);
+    if (f.has("title")) metaString(f.get("title"), `${where} :title`, E);
+    out.push({ id, status, ref: ref[1] });
+  }
+
+  if ((opts.choraClauses || []).includes("meta")) {
+    const msg = "the chora deed still carries (meta …), which moved to META.deed (J30, YF04)";
+    if (opts.strict) throw E(`${msg}; refused in strict mode`);
+    warnings.push(`${msg}; read as a fallback for one release`);
+  }
+  return { adrs: out, warnings };
+}
+
+const META_PROFILE = {
+  name: "META.deed", Err: MetaError, check: checkMeta,
+  summary: (r) => `${r.adrs.length} ADR${r.adrs.length === 1 ? "" : "s"}`,
+};
 
 /** --edict FILE...: profile-check each file; returns exit code. */
 function edictFiles(files) {
@@ -3353,13 +3500,37 @@ function main(argv) {
     }
     return ecosystemFiles(files, root, argv.includes("--strict"));
   }
+  if (argv.includes("--meta-fixtures")) {
+    const d = argv[argv.indexOf("--meta-fixtures") + 1];
+    if (d === undefined) {
+      console.log("--meta-fixtures requires a DIR argument");
+      return 2;
+    }
+    const rc = descriptileFixtures(d, META_PROFILE);
+    console.log("META FIXTURES " + (rc === 0 ? "OK" : rc === 2 ? "NOT CHECKED" : "FAILED"));
+    return rc;
+  }
+  if (argv.includes("--meta")) {
+    const ri = argv.indexOf("--root");
+    const root = ri >= 0 ? argv[ri + 1] : null;
+    if (ri >= 0 && (root === undefined || root === "" || root.startsWith("-"))) {
+      console.log("--root requires a DIR argument");
+      return 2;
+    }
+    const files = argv.filter((a, i) => !a.startsWith("-") && !(ri >= 0 && i === ri + 1));
+    if (files.length === 0) {
+      console.log(DOC);
+      return 2;
+    }
+    return descriptileFiles(files, root, argv.includes("--strict"), META_PROFILE);
+  }
   if (argv.includes("--state-fixtures")) {
     const d = argv[argv.indexOf("--state-fixtures") + 1];
     if (d === undefined) {
       console.log("--state-fixtures requires a DIR argument");
       return 2;
     }
-    const rc = stateFixtures(d);
+    const rc = descriptileFixtures(d, STATE_PROFILE);
     console.log("STATE FIXTURES " + (rc === 0 ? "OK" : rc === 2 ? "NOT CHECKED" : "FAILED"));
     return rc;
   }
@@ -3375,7 +3546,7 @@ function main(argv) {
       console.log(DOC);
       return 2;
     }
-    return stateFiles(files, root, argv.includes("--strict"));
+    return descriptileFiles(files, root, argv.includes("--strict"), STATE_PROFILE);
   }
   if (argv.includes("--verb-descriptile-fixtures")) {
     const d = argv[argv.indexOf("--verb-descriptile-fixtures") + 1];
