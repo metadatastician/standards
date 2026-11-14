@@ -372,6 +372,10 @@ oracle (`mix hypatia.rsr_score --write`) writes in place of
     bun deed_lint.js --rsr-scorecard rsr-scorecard_praxis.deed
     bun deed_lint.js --rsr-scorecard-fixtures fixtures/rsr-scorecard/
 
+`scripts/conformance-deed.sh lint`, the caller-wide lane, runs the profile
+over every committed deed (a deed without the clause passes), leaving out
+`fixtures/rsr-scorecard/invalid/`.
+
 The fixtures are flat, `fixtures/rsr-scorecard/{valid,invalid}/*.deed`; the
 differential sorts each invalid one into those the grammar refuses and those
 only the profile does.

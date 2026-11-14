@@ -6,7 +6,8 @@ For the RSR scorecard, R5 option B is superseded by the owner's ruling of
 2026-11-14 (§6).
 Increment 1 (§4 leak clean + archive) is done; increments 2 and 3 are
 pending. See §5.
-§6, the RSR scorecard clause (owner ruling 2026-11-14), is DRAFT.
+§6, the RSR scorecard clause, is RULED (owner, 2026-11-14, ratified with
+`:assessor` and `:assessed-at`).
 
 Scorecards are the wrong shape for the naïve "translate each file" move:
 they are **time-stamped assessment records**, not repo state. Translating

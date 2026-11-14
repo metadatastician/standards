@@ -134,7 +134,7 @@ jobs:
         if: github.repository_id == 1116521501 && steps.bun.outcome == 'success'
         run: bun "$T/deed_lint.js" --state-fixtures "$T/fixtures/state"
       # RSR scorecard (owner ruling 2026-11-14, ratified that day with :assessor and :assessed-at;
-      # rsr-scorecard.abnf v0.2.0): gated on its own fixtures. It is not yet part of the caller-wide lint below.
+      # rsr-scorecard.abnf v0.2.0): gated on its own fixtures. The caller-wide lint below also runs the profile.
       - name: rsr-scorecard fixtures
         if: github.repository_id == 1116521501 && steps.bun.outcome == 'success'
         run: bun "$T/deed_lint.js" --rsr-scorecard-fixtures "$T/fixtures/rsr-scorecard"
