@@ -25,6 +25,8 @@ on:
       - '**.deed'
       - '1-formats/deed/**'
       - '.github/workflows/deed-conformance.yml'
+      - 'scripts/conformance-deed.sh'
+      - 'scripts/tests/conformance-deed-test.sh'
       - 'scripts/uuid-v8.js'
       - 'scripts/tests/bun/**'
       - 'tools/uuid-v8/**'
@@ -154,4 +156,11 @@ jobs:
         # workspace that lints as "nothing to lint" and would otherwise go green.
         if: ${{ always() && inputs.advisory == true && (steps.lint.outcome == 'failure' || steps.checkout.outcome == 'failure' || steps.canon.outcome == 'failure' || steps.bun.outcome == 'failure') }}
         continue-on-error: true
-        run: bash "$LANE" warn
+        run: |
+          # The script lives in the canon checkout this step may be reporting on, so
+          # the fallback for its absence is inline: a failed checkout must still warn.
+          if [ -f "$LANE" ]; then
+            bash "$LANE" warn
+          else
+            echo "::warning::deed conformance (advisory): the conformance script could not be staged (a checkout step failed), so conformance did not run; not enforced."
+          fi
