@@ -123,11 +123,14 @@ scannable_text() {
 # inside a double-quoted string is not a comment, so strings are tracked,
 # across lines, with backslash escapes. The raw
 # view keeps comments, so a comment that quotes a field and a #u5 is still
-# flagged (owner ruling of 2026-11-14: the rule is lexical).
+# flagged (owner ruling of 2026-11-14: the rule is lexical). The views read
+# the whole file, not scannable_text: the Julia dependency tables and
+# manifests that the UUID scan skips hold registry ids, not identity fields,
+# and a field written there is still an error.
 folded_views() {
-  scannable_text "$1" | tr '\n\r' '  '
+  tr '\n\r' '  ' < "$1"
   printf '\n'
-  scannable_text "$1" | awk '
+  awk '
     { out = ""; n = length($0)
       for (i = 1; i <= n; i++) {
         c = substr($0, i, 1)
@@ -138,7 +141,7 @@ folded_views() {
         else if (c == ";") break
         else out = out c
       }
-      print out }' | tr '\n\r' '  '
+      print out }' "$1" | tr '\n\r' '  '
   printf '\n'
 }
 

@@ -155,6 +155,10 @@ for mode in "" --strict; do
   expect 0 "an escaped quote does not end the string before a ';' ${mode:-(default)}" $mode
   fresh; printf '(repo-deed) ; :repo-uuid \043u5"github.com/o/x"\n' > "$WORK/t/a_chora.deed"
   expect 1 "a comment that quotes a field with #u5 is rejected (lexical rule) ${mode:-(default)}" $mode
+  fresh; printf '[deps]\n# :repo-uuid \043u5"github.com/o/x"\n' > "$WORK/t/Project.toml"
+  expect 1 "an identity field inside a skipped Julia [deps] table is still rejected ${mode:-(default)}" $mode
+  fresh; printf '# :repo-uuid \043u5"github.com/o/x"\n' > "$WORK/t/Manifest.toml"
+  expect 1 "an identity field inside a skipped Julia manifest is still rejected ${mode:-(default)}" $mode
   fresh; printf '(repo-deed\n  :repo-uuid\n  #uuid"%s")\n' "$V5" > "$WORK/t/a_chora.deed"
   expect 1 "a v5 #uuid on the line after its identity field is rejected ${mode:-(default)}" $mode
   fresh; printf '\000\001:repo-uuid \043u5"github.com/o/x"\000' > "$WORK/t/blob.bin"

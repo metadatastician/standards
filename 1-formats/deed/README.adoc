@@ -619,23 +619,26 @@ onto a `BaseRecord` field is the typed-core bridge, not a parse rule.)
 | Head | Required identity | Required reference
 
 | `estate-deed`
-| `:canonical-name` STRING, `:estate-uuid` UUID5
+| `:canonical-name` STRING, `:estate-uuid` ID
 | — (this file *is* the vocabulary)
 
 | `repo-deed`
-| `:canonical-name` STRING, `:repo-uuid` UUID: the registry's `uuid_v8`,
-  written opaque (owner ruling U4). UUID8 (domain `gv-clade-index`) and
-  UUID5 stay legal until each repo moves to the opaque form
-| `:beholding-chora` UUID5
+| `:canonical-name` STRING, `:repo-uuid` ID: the registry's `uuid_v8`,
+  written opaque (owner ruling U4)
+| `:beholding-chora` ID
 
 | `praxis-deed`
 | `:canonical-name` STRING
-| `:beholding-chora` UUID5
+| `:beholding-chora` ID
 
 | `estate-atlas-deed`
 | `:canonical-name` STRING
-| `:beholding-chora` UUID5; `:registry-version` STRING optional
+| `:beholding-chora` ID; `:registry-version` STRING optional
 |===
+
+ID is the opaque `#uuid"<v8 id>"` literal; `#u8"domain:name"`, which computes to
+a v8, is also accepted. A `#u5"…"` literal, or a version 5 id inside `#uuid`, in
+any of these fields is an error (owner ruling Q2, 2026-11-14; CHORA-SPEC 7.1).
 
 Plus, on every head: `:schema-version` STRING, exactly once (any position).
 
