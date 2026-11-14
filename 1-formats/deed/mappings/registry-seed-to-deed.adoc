@@ -67,6 +67,11 @@ registry placement, so one vocabulary serves both. `clade-12` is
 and await ratification, so its categories carry no `:criterion` and the
 scheme no `:grounding` (A7 7.2 requires both only under `strict`).
 
+*Open gap.* The seed holds no criterion text: `clades.a2ml` carries only a
+description and keywords for each category. A later move of `clade-12` to
+`strict` needs a `:grounding` and twelve `:criterion` texts that do not exist
+yet; they are the owner's to write, never inferred from the descriptions.
+
 == 3. Field table
 
 `→` left: the a2ml surface. Right: the deed path, its type and the transform.
@@ -78,7 +83,7 @@ Anything not in this table does not translate.
 
 3+| *`[meta]`*
 | `created` | `:created` | verbatim STRING
-| `total-repos` | `:total-repos` | INTEGER. It must equal the number of `(repo …)` clauses.
+| `total-repos` | `:total-repos` | INTEGER. It must equal the number of `(repo …)` clauses; `check-registry.sh` section 1 refuses a mismatch.
 | `project`, `version`, `format` | — | Not translated: they describe the retired A2ML file, not the registry.
 | `author` | — | Not translated as a field. The author is the `SPDX-FileCopyrightText` line.
 | — (new) | `:canonical-name` | `"chora-registry-seed"`
@@ -148,4 +153,8 @@ Checked by A7 on 2026-11-14, each step run, not taken from the PR text:
 * `check-registry.sh`: PASS on both sides; with `GV_BASE_REPOS_JSON` set to
   the old `repos.json`, all 327 repos still registered, ids unchanged.
 * `tests/check-registry-test.sh`: PASS, 19 planted failures fire and a
-  `chora-registry` mint passes.
+  `chora-registry` mint passes; planted case 3 is the `:total-repos`
+  mismatch.
+* Follow-up from the review, in the same PR: the two stale mentions of
+  `repos.a2ml` (the portal spec, and a token deleted from
+  `0-AI-MANIFEST.a2ml` with nothing added) are corrected.
