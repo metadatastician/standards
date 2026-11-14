@@ -18,7 +18,7 @@
 ; Where it applies: ECOSYSTEM.deed (head descriptile-deed, J14), at the top
 ; level of the form. SEMANTIC (validator-enforced, deed_lint.js --ecosystem):
 ;   * the descriptile header: :schema-version, :canonical-name and a version 8
-;     :of-chora (J20) once each, no :beholding-chora, and the affirmation
+;     :of-chora (#uuid or #u8; J20, J28) once each, no :beholding-chora, and the affirmation
 ;     members, required by default (J4, YD06), as for every descriptile;
 ;   * :project, :ecosystem, :position-type and :purpose once each (required),
 ;     the other ecosystem-field members at most once;
