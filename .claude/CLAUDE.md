@@ -189,7 +189,7 @@ Each has a normative grammar in this repository:
   front end (D313), and Python is banned.
 - **A deed is not TOML.** A file containing `key = value` or `[section]` is not
   a deed. `(` is the only bracket. Booleans are `#t`/`#f`. Enums are symbols
-  (`:primary fv`, not `:primary "fv"`). UUIDs are `#u5"…"` literals.
+  (`:primary fv`, not `:primary "fv"`). An id is the opaque `#uuid"<v8 id>"` literal; in an identity field a `#u8"domain:name"` literal is also accepted and `#u5"…"` is an error (CHORA-SPEC 7.1, owner ruling Q2, 2026-11-14).
   `:schema-version` appears exactly once at the top level.
 - **Existing `.a2ml` files**, here and in other repos, are legacy awaiting
   migration. You may delete content from one; never add a fact to one.

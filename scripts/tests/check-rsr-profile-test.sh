@@ -143,7 +143,7 @@ echo "=== the deed form: (rsr-profile …) in the one <repo>_chora.deed ==="
 # The header is the minimal valid repo-deed; the clause body is the caller's.
 repo_deed() {
   local d; d="$(repo "$1")"; rm -f "$d/.machine_readable/rsr-profile.a2ml"
-  printf ';; SPDX-License-Identifier: CC-BY-SA-4.0\n(repo-deed\n  :schema-version "1.0.0"\n  :canonical-name "%s"\n  :repo-uuid #u5"github.com/o/%s"\n  :beholding-chora #u5"estate/chora"\n%b)\n' "$1" "$1" "$2" > "$d/${1}_chora.deed"
+  printf ';; SPDX-License-Identifier: CC-BY-SA-4.0\n(repo-deed\n  :schema-version "1.0.0"\n  :canonical-name "%s"\n  :repo-uuid #u8"gv-clade-index:github.com/o/%s"\n  :beholding-chora #u8"chora:estate/github.com/o"\n%b)\n' "$1" "$1" "$2" > "$d/${1}_chora.deed"
   printf '%s' "$d"
 }
 d=$(repo_deed deedonly '  (rsr-profile :version "1.0.0" :capabilities ("rust"))')
@@ -182,7 +182,7 @@ cp "$d/deedtwo_chora.deed" "$d/other_chora.deed"
 assert "two *_chora.deed files is a defect (one deed per repo, D312)" 2 "expects exactly 1" bash "$CHECK" "$d"
 
 d=$(repo_deed deedestate '  (rsr-profile :version "1.0.0" :capabilities ("rust"))')
-printf ';; SPDX-License-Identifier: CC-BY-SA-4.0\n(estate-deed :schema-version "1.0.0" :canonical-name "estate" :estate-uuid #u5"estate/chora")\n' > "$d/estate_chora.deed"
+printf ';; SPDX-License-Identifier: CC-BY-SA-4.0\n(estate-deed :schema-version "1.0.0" :canonical-name "estate" :estate-uuid #u8"chora:estate/github.com/o")\n' > "$d/estate_chora.deed"
 assert "estate_chora.deed beside the repo deed is the estate-deed, not a second repo deed" 0 "deedestate_chora.deed (rsr-profile …)" bash "$CHECK" "$d"
 
 d=$(repo_deed deedprose '  (notes :example "a profile looks like (rsr-profile :capabilities (\\"rust\\"))")')
@@ -211,7 +211,7 @@ assert "a clause head at line end and a list across lines resolve" 0 "effective 
 
 d=$(repo dotdeed)
 rm -f "$d/.machine_readable/rsr-profile.a2ml"
-printf ';; SPDX-License-Identifier: CC-BY-SA-4.0\n(repo-deed :schema-version "1.0.0" :canonical-name ".github" :repo-uuid #u5"github.com/o/.github" :beholding-chora #u5"estate/chora"\n  (rsr-profile :version "1.0.0" :capabilities ("rust")))\n' > "$d/.github_chora.deed"
+printf ';; SPDX-License-Identifier: CC-BY-SA-4.0\n(repo-deed :schema-version "1.0.0" :canonical-name ".github" :repo-uuid #u8"gv-clade-index:github.com/o/.github" :beholding-chora #u8"chora:estate/github.com/o"\n  (rsr-profile :version "1.0.0" :capabilities ("rust")))\n' > "$d/.github_chora.deed"
 assert "a dot-prefixed repo deed (.github_chora.deed) is found" 0 ".github_chora.deed (rsr-profile …)" bash "$CHECK" "$d"
 
 # Escapes and typed atoms (CodeRabbit and Codex on #1361).
@@ -266,7 +266,7 @@ assert "a uuid literal in a list is not a capability" 2 "-" bash "$CHECK" "$d"
 
 d=$(repo dotglob)
 rm -f "$d/.machine_readable/rsr-profile.a2ml"
-printf ';; SPDX-License-Identifier: CC-BY-SA-4.0\n(repo-deed :schema-version "1.0.0" :canonical-name ".github" :repo-uuid #u5"github.com/o/.github" :beholding-chora #u5"estate/chora"\n  (rsr-profile :version "1.0.0" :capabilities ("rust")))\n' > "$d/.github_chora.deed"
+printf ';; SPDX-License-Identifier: CC-BY-SA-4.0\n(repo-deed :schema-version "1.0.0" :canonical-name ".github" :repo-uuid #u8"gv-clade-index:github.com/o/.github" :beholding-chora #u8"chora:estate/github.com/o"\n  (rsr-profile :version "1.0.0" :capabilities ("rust")))\n' > "$d/.github_chora.deed"
 assert "with dotglob on, a dot-led deed is still one deed" 0 ".github_chora.deed (rsr-profile …)" bash -O dotglob "$CHECK" "$d"
 
 d=$(repo_deed deedfailglob '  (rsr-profile :version "1.0.0" :capabilities ("rust"))')
