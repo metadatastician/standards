@@ -8,7 +8,7 @@
 //
 // deed.abnf is normative (D308); deed_lint.js is the gate that CI runs. This
 // harness keeps them from drifting apart. It compiles deed.abnf (with the
-// (egress …), (anchor …), (contractiles …), edict and verb-descriptile clause profiles and the shared rules of
+// (egress …), (anchor …), (contractiles …), edict, verb-descriptile and ecosystem clause profiles and the shared rules of
 // clauses/common.abnf) using apg-js, mutates every
 // committed deed with a seeded generator, and asks both the grammar and the
 // gate for a verdict on each variant:
@@ -26,7 +26,7 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import apg from "apg-js";
-import { checkVerbDescriptile, choraRepoUuid, edictRuleIdsAt, LintError, validate, verbOfDescriptile } from "../../1-formats/deed/tools/deed_lint.js";
+import { checkEcosystem, checkVerbDescriptile, choraRepoUuid, edictRuleIdsAt, FIXTURE_TODAY, LintError, rootChora, validate, verbOfDescriptile } from "../../1-formats/deed/tools/deed_lint.js";
 
 const { apgApi, apgLib } = apg;
 const ROOT = resolve(import.meta.dir, "../..");
@@ -71,7 +71,8 @@ function compileGrammar() {
       readFileSync(join(ABNF, "clauses/anchor.abnf"), "utf8") + "\n" +
       readFileSync(join(ABNF, "clauses/contractiles.abnf"), "utf8") + "\n" +
       readFileSync(join(ABNF, "clauses/edict.abnf"), "utf8") + "\n" +
-      readFileSync(join(ABNF, "clauses/verb-descriptile.abnf"), "utf8")).replace(/[^\x00-\x7f]/g, "?") +
+      readFileSync(join(ABNF, "clauses/verb-descriptile.abnf"), "utf8") + "\n" +
+      readFileSync(join(ABNF, "clauses/ecosystem.abnf"), "utf8")).replace(/[^\x00-\x7f]/g, "?") +
     "\nSP = %x20\nDQUOTE = %x22\nALPHA = %x41-5A / %x61-7A\nDIGIT = %x30-39\n" +
     "VCHAR = %x21-7E\nCR = %x0D\nLF = %x0A\nCRLF = CR LF\n";
   const api = new apgApi(src);
@@ -137,6 +138,51 @@ function clauseText(t, name) {
     }
   }
   return null;
+}
+
+// The source text of each top-level field of the form whose keyword is in
+// `names`, from its ":" to the end of its value, comments between them kept.
+// Strings and comments are skipped, so a ":project" inside a string or a
+// comment, or inside a nested clause, is never taken for a field.
+function topLevelFields(t, names) {
+  const out = [];
+  const skipString = (k) => { for (k++; k < t.length && t[k] !== '"'; k++) if (t[k] === "\\") k++; return k; };
+  const skipComment = (k) => { while (k < t.length && t[k] !== "\n") k++; return k; };
+  let depth = 0;
+  for (let k = 0; k < t.length; k++) {
+    const c = t[k];
+    if (c === '"') k = skipString(k);
+    else if (c === ";") k = skipComment(k);
+    else if (c === "(") depth++;
+    else if (c === ")") depth--;
+    else if (c === ":" && depth === 1 && /[\s(]/.test(t[k - 1] ?? " ")) {
+      const m = /^:([a-z][a-z0-9-]*)/.exec(t.slice(k));
+      if (!m || !names.has(m[1])) continue;
+      let v = k + m[0].length;
+      // separators and comments before the value
+      for (;;) {
+        if (/\s/.test(t[v] ?? "")) v++;
+        else if (t[v] === ";") v = skipComment(v) + 1;
+        else break;
+      }
+      let end;
+      if (t[v] === '"') end = skipString(v) + 1;
+      else if (t[v] === "(") {
+        let d = 0;
+        for (end = v; end < t.length; end++) {
+          if (t[end] === '"') end = skipString(end);
+          else if (t[end] === ";") end = skipComment(end);
+          else if (t[end] === "(") d++;
+          else if (t[end] === ")" && --d === 0) { end++; break; }
+        }
+      } else {
+        for (end = v; end < t.length && !/[\s);]/.test(t[end]); end++);
+      }
+      out.push(t.slice(k, end));
+      k = end - 1;
+    }
+  }
+  return out;
 }
 
 // Invalid anchor fixtures whose defect the grammar itself expresses. Each must
@@ -296,7 +342,7 @@ for (const { c, text } of edictCases("valid")) {
     try {
       const repoUuid = choraRepoUuid(dir);
       const ruleIds = edict ? edictRuleIdsAt(edict, repoUuid) : undefined;
-      return checkVerbDescriptile(text, file, { ruleIds, repoUuid }) !== null;
+      return checkVerbDescriptile(text, file, { ruleIds, repoUuid, today: FIXTURE_TODAY }) !== null;
     } catch (e) {
       if (!(e instanceof LintError)) throw e;
       return false;
@@ -309,8 +355,8 @@ for (const { c, text } of edictCases("valid")) {
   }
   const grammarRejects = ["bust-grade-letter", "bust-grade-zero", "evidence-numeric", "evidence-unknown", "fact-clause-member", "fact-extra-field"];
   const semanticOnly = ["affirmed-by-string", "affirmed-impossible", "beholding-chora", "bust-missing-residual", "bust-value",
-    "duplicate-witness", "edict-other-chora", "expires-before-affirmed", "inherent-outside-bust", "missing-affirmed", "missing-affirmed-by",
-    "missing-evidence", "missing-value", "missing-witnesses", "of-chora-legacy", "of-chora-mismatch", "repo-uuid-twice", "rule-in-descriptile", "source-absolute",
+    "duplicate-witness", "edict-other-chora", "expired", "expires-before-affirmed", "inherent-outside-bust", "missing-affirmed", "missing-affirmed-by",
+    "missing-evidence", "missing-value", "missing-witnesses", "of-chora-legacy", "of-chora-mismatch", "repo-uuid-twice", "rule-in-descriptile", "schema-major", "schema-not-version", "source-absolute",
     "unknown-clause", "witness-space", "witness-too-long", "witness-unknown"];
   for (const k of cases("invalid")) {
     if (!gateVerdict(k.text).ok) fail("verb descriptile invalid fixture is not a valid deed (YD01)", k.c);
@@ -321,6 +367,56 @@ for (const { c, text } of edictCases("valid")) {
     } else if (semanticOnly.includes(k.c)) {
       if (fact !== null && !grammarAccepts(grammar, "verb-fact", fact)) fail("verb-descriptile.abnf refuses a fact listed as semantic only", k.c);
     } else fail("verb descriptile invalid fixture is in neither list", k.c);
+  }
+}
+
+// ECOSYSTEM.deed (A7 7.2, clauses/ecosystem.abnf). One case per directory:
+// DIR/{valid,invalid}/<case>/ECOSYSTEM.deed, with an optional chora deed (YD07,
+// YD08) and STRICT marker (J12) beside it. Every valid case is a valid deed for
+// both, passes the profile, and each (related …) parses as eco-related and
+// each ecosystem field as ecosystem-field. Each invalid case is filed in one of
+// three exhaustive lists: the grammar refuses its first (related …), the
+// grammar refuses one of its ecosystem fields, or only the profile refuses it.
+{
+  const ECO_FIELDS = new Set(["project", "ecosystem", "position-type", "purpose", "not", "pipeline-position", "chain", "pipeline-notes", "coordination"]);
+  const fieldsOf = (t) => topLevelFields(t, ECO_FIELDS);
+  const cases = (sub) => readdirSync(join(FIXTURES, "ecosystem", sub)).sort().map((c) => {
+    const dir = join(FIXTURES, "ecosystem", sub, c);
+    return { c, dir, file: join(dir, "ECOSYSTEM.deed"), text: readFileSync(join(dir, "ECOSYSTEM.deed"), "utf8") };
+  });
+  const profile = ({ dir, file, text }) => {
+    try {
+      const ch = rootChora(dir, { needName: true });
+      const strict = readdirSync(dir).includes("STRICT");
+      return checkEcosystem(text, file, { repoUuid: ch && ch.uuid, choraName: ch && ch.name, strict, today: FIXTURE_TODAY }) !== null;
+    } catch (e) {
+      if (!(e instanceof LintError)) throw e;
+      return false;
+    }
+  };
+  for (const k of cases("valid")) {
+    if (!grammarAccepts(grammar, "deed", k.text)) fail("ecosystem valid fixture rejected by deed.abnf", k.c);
+    if (!profile(k)) fail("ecosystem valid fixture rejected by deed_lint.js --ecosystem", k.c);
+    for (const r of allClauses(k.text, "related")) if (!grammarAccepts(grammar, "eco-related", r)) fail("ecosystem.abnf refuses a valid (related …)", `${k.c}: ${r.slice(0, 60)}`);
+    for (const f of fieldsOf(k.text)) if (!grammarAccepts(grammar, "ecosystem-field", f)) fail("ecosystem.abnf refuses a valid field", `${k.c}: ${f.slice(0, 60)}`);
+  }
+  const relatedRejects = ["related-clause-member", "related-extra-field", "related-uuid-legacy", "relationship-string", "relationship-unknown"];
+  const fieldRejects = ["coordination-string", "not-not-list"];
+  const semanticOnly = ["beholding-chora", "chora-no-name", "empty-purpose", "expired", "missing-affirmed", "missing-project", "missing-purpose",
+    "of-chora-mismatch", "project-mismatch", "project-not-chora", "related-duplicate", "related-missing-notes",
+    "rule-in-descriptile", "strict-no-uuid", "unknown-clause", "unknown-field"];
+  for (const k of cases("invalid")) {
+    if (!gateVerdict(k.text).ok) fail("ecosystem invalid fixture is not a valid deed (YD01)", k.c);
+    if (profile(k)) fail("deed_lint.js --ecosystem accepts an invalid fixture", k.c);
+    const r = clauseText(k.text, "related");
+    if (relatedRejects.includes(k.c)) {
+      if (r === null || grammarAccepts(grammar, "eco-related", r)) fail("ecosystem.abnf accepts a (related …) it must refuse", k.c);
+    } else if (fieldRejects.includes(k.c)) {
+      if (fieldsOf(k.text).every((f) => grammarAccepts(grammar, "ecosystem-field", f))) fail("ecosystem.abnf accepts every field of a case it must refuse", k.c);
+    } else if (semanticOnly.includes(k.c)) {
+      if (r !== null && !grammarAccepts(grammar, "eco-related", r)) fail("ecosystem.abnf refuses a (related …) listed as semantic only", k.c);
+      for (const f of fieldsOf(k.text)) if (!grammarAccepts(grammar, "ecosystem-field", f)) fail("ecosystem.abnf refuses a field listed as semantic only", `${k.c}: ${f.slice(0, 60)}`);
+    } else fail("ecosystem invalid fixture is in neither list", k.c);
   }
 }
 
