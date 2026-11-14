@@ -1984,8 +1984,13 @@ export function rootChora(dir) {
   if (!u || u[2][0] !== "uuid") {
     throw new VerbDescriptileError(`${choras[0]} has no opaque #uuid :repo-uuid, so :of-chora cannot be checked against it (YD08)`);
   }
-  const n = items.find((it) => it[0] === "field" && it[1] === "canonical-name");
-  return { uuid: u[2][1], name: n && n[2][0] === "string" ? n[2][1] : undefined };
+  // YD07 compares against the chora's name, so a chora without exactly one
+  // string :canonical-name fails here rather than skipping that check.
+  const ns = items.filter((it) => it[0] === "field" && it[1] === "canonical-name");
+  if (ns.length !== 1 || ns[0][2][0] !== "string") {
+    throw new VerbDescriptileError(`${choras[0]} must carry exactly one string :canonical-name to check against (YD07)`);
+  }
+  return { uuid: u[2][1], name: ns[0][2][1] };
 }
 
 /**
