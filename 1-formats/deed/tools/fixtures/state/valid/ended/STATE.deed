@@ -1,0 +1,11 @@
+;; SPDX-License-Identifier: CC-BY-SA-4.0
+(descriptile-deed
+  :schema-version "1.0.0"
+  :canonical-name "example-game"
+  :of-chora #uuid"00000000-0000-8000-8000-0000000000a1"
+  :affirmed "2026-11-14" :affirmed-by agent
+  (status :phase archived :since "2026-10-01" :present #f :ended "2026-10-01"
+    (history
+      (entry :phase active :since "2026-03-16")
+      (entry :phase archived :since "2026-10-01" :note "superseded by its successor")))
+  (maturity :level lts :since "2026-05-01"))

@@ -299,6 +299,41 @@ The fixtures are one case per directory, `fixtures/ecosystem/{valid,invalid}/<ca
 A case may hold a `<repo>_chora.deed`, which is then checked against, and a
 `STRICT` marker file, which runs it in strict mode.
 
+== `deed_lint.js --state` — STATE.deed (DRAFT)
+
+Checks `STATE.deed` (head `descriptile-deed`) against
+`spec/abnf/clauses/state.abnf` (A7 7.2, J3, J15). J15 moves the chora's
+`(status …)` and `(maturity …)` here unchanged, so the vocabularies are the
+chora's: `../mappings/clade-to-repo-deed.adoc` §3 for `(status …)` and
+`../vocabulary/maturity.adoc` for `(maturity …)`. The rules it adds to the
+grammar:
+
+* the descriptile header, as for the other descriptiles (J20, J28, J4, YD06,
+  A7 Q5);
+* exactly one `(status …)` and at most one `(maturity …)`. No other top-level
+  field or clause, no `(rule …)` (YF02), and no `(state …)`: the journal stays
+  in `docs/status/ROADMAP.adoc` (J3);
+* `(status …)` requires `:phase`, one of `reserved`, `incubating`, `active`,
+  `dormant`, `merged`, `superseded`, `archived` or `extinct`, as a symbol.
+  `:since`, `:present`, `:aliases`, `:merged-into`, `:superseded-by`,
+  `:successors`, `:ended` and one `(history (entry :phase :since [:note]) …)`
+  are optional, each at most once. `:ended` is `""` or a date;
+* `(maturity …)` requires `:level`, one of `experimental`, `alpha`, `beta`,
+  `production` or `lts`, as a symbol, and takes an optional `:since`. With no
+  clause the maturity is unstated, never a default;
+* every date is a real calendar date;
+* with `--root DIR`, `:of-chora` must equal the `:repo-uuid` of the chora deed
+  in `DIR` (YD08). A `(status …)` or `(maturity …)` still in that chora is
+  warned, as a fallback read for one release, and `--strict` refuses it
+  (YF03, J15).
+
+    bun deed_lint.js --state STATE.deed [--root REPO] [--strict]
+    bun deed_lint.js --state-fixtures fixtures/state/
+
+The fixtures are one case per directory, `fixtures/state/{valid,invalid}/<case>/STATE.deed`.
+A case may hold a `<repo>_chora.deed`, which is then checked against, and a
+`STRICT` marker file, which runs it in strict mode.
+
 == `deed_lint.js --contractile-registry` — the `contractile` rule registry (A7 J13)
 
 Generates the A5 registry `contractile_rules_praxis.deed` from a repo's six
