@@ -1149,6 +1149,11 @@ describe("verb descriptile fixtures", () => {
     expect(r.code).toBe(2);
     expect(r.out).toContain("--root requires a DIR argument");
   });
+  test("an empty --root is a usage error too", () => {
+    const r = cli("--verb-descriptile", join(FIX_VD, "valid", "intent-basic", "INTENT.deed"), "--root", "");
+    expect(r.code).toBe(2);
+    expect(r.out).toContain("--root requires a DIR argument");
+  });
   test("a Bust fact carries grades, not a value (8.5)", () => {
     const p = join(FIX_VD, "invalid", "bust-value", "BUST.deed");
     expect(() => checkVerbDescriptile(readFileSync(p, "utf8"), p)).toThrow(/no :value/);

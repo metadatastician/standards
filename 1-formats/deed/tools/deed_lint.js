@@ -2480,7 +2480,7 @@ function main(argv) {
   if (argv.includes("--verb-descriptile")) {
     const ri = argv.indexOf("--root");
     const root = ri >= 0 ? argv[ri + 1] : null;
-    if (ri >= 0 && (root === undefined || root.startsWith("-"))) {
+    if (ri >= 0 && (root === undefined || root === "" || root.startsWith("-"))) {
       console.log("--root requires a DIR argument");
       return 2;
     }
