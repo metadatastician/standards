@@ -12,6 +12,7 @@ permissions:
   checks: read
   actions: read
   id-token: write
+  attestations: write
 jobs:
   gate:
     uses: hyperpolymath/proven-cicd/.github/workflows/estate-gate.yml@0123456789abcdef0123456789abcdef01234567

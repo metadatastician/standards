@@ -186,6 +186,7 @@ A sensor that cannot emit SARIF directly is wrapped by an adapter. The adapter i
 ** `basis`: for `mode: publish`. It is `{state, runId, runAttempt}`. `state` is `accepted`, `none`, `in_progress`, `missing` or `rejected`. With `none` (no gating caller run exists yet) `runId` and `runAttempt` are absent; with every other state they are required. With `accepted` it also carries `sha256`, the digest of the `evaluate` envelope the verdict is based on. With `rejected` it carries `reason`. Absent for `mode: evaluate`.
 ** `runId` and `runAttempt`: for `mode: evaluate`, the workflow run and attempt that produced the envelope. Required. The A3 publisher accepts the envelope only for that run and attempt.
 ** `labelUnauthenticated`: for `mode: publish`, the check ids whose state label came from an unsigned row and was checked only by verdict class (A3 4.4). Empty when none.
+** `findingsUnauthenticated` and `unauthenticatedEvidence`: for `mode: publish`, the check ids whose findings and warnings came from an unsigned row, and those findings and warnings as claimed. The signature covers only that they were claimed. A consumer never reads them as evidence of what the check found. Both empty when none.
 ** `executedAt`: for `mode: evaluate` from a `pull_request` run, the 40-hex synthetic merge commit the run executed at (5.2). Absent otherwise.
 
 The status posted to GitHub (A3 section 3.3) has `target_url` pointing to the DSSE envelope of the `gate-verdict`. Storage is in section 5.7.
@@ -198,7 +199,7 @@ An envelope is *valid* when: the DSSE signature verifies for a listed publisher,
 
 * An envelope is evidence about one commit and is never committed to the repo that it concerns [M: the verdict grid and the lane spec both say so].
 * A finding-set, check-verdict and outcome envelope is stored by the office in an envelope store outside git history of any estate repo. Until a store exists, the farm keeps them in a directory the office reads, addressed by sha256 of the envelope. The office repo holds the ledger (section 6), not the envelopes.
-* A gate-verdict envelope is reachable from the status `target_url`. The retention of envelopes is the owner's decision (decision F14). A3 requires that the envelope of a merged head be kept for as long as the observer may verify it.
+* A gate-verdict envelope is reachable from the status `target_url`. A `publish` envelope whose `basis` is `accepted` is stored together with the `evaluate` envelope its `basis.sha256` names, under the same retention, so a verifier can always fetch the bytes the digest identifies. An Actions artifact is not that store: it expires. The retention of envelopes is the owner's decision (decision F14). A3 requires that the envelope of a merged head be kept for as long as the observer may verify it.
 * VeriSimDB is the planned store [M: Wave 4] and is not deployed [R]. The store's API is behind the interface of this section so that it can replace the directory later.
 
 == 6. The ledger
