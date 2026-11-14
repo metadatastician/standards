@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 = A3: The Single Gate (one required check, the caller contract, the check table)
-:version: 0.2.8-draft
-:status: DRAFT v0.2.8 (an adopted entry must resolve in chora-registry, and the G65 pin floor follows the last change to an entry; earlier: `contractiles-adopted` entries are unique per chora id and carry a valid date, and a listed repo cannot pin the aggregate or table before its entry, G65; earlier: each `contractiles-adopted` entry carries `:from`, the date from which the repo is held to its clause, since the adopting repo cannot edit the table in its own PR, A7 YR04; earlier: the check table gains the append-only `contractiles-adopted` list, so a repo that deletes its clause after first adopting it is not `not_applicable`, A7 YC10; earlier: SysArch review R-04 and R-19: the `contractiles` row is `not_applicable`, reported, until a repo first adopts the clause (M4 for `standards`, M7 for a migrated repo, registration for a template-born repo); the open-anchor failure is cited from A7 YS03; warnings go in the verdict envelope). Decisions E1 to E11 approved by the owner on 2026-11-10, and E12 on 2026-11-13 (contractiles become a required check, with A7 v0.2.3). Not yet ratified as a whole. Builds on A1 v0.4.1 and A2 v0.2.4. Consistency pass applied 2026-11-10. Proposed in standards#1474; bot-review fixes applied 2026-11-12.
+:version: 0.2.9-draft
+:status: DRAFT v0.2.9 (owner ruling Q6 of 2026-11-14: the governance, Hypatia and secret-scan checks are read from the template's inline jobs under an input contract (5.3, G66), and A3 no longer builds on the deprecated reusables; an open anchor no longer fails `contractiles` (A7 S1 withdrew W6); earlier: v0.2.8, an adopted entry must resolve in chora-registry, and the G65 pin floor follows the last change to an entry; earlier: `contractiles-adopted` entries are unique per chora id and carry a valid date, and a listed repo cannot pin the aggregate or table before its entry, G65; earlier: each `contractiles-adopted` entry carries `:from`, the date from which the repo is held to its clause, since the adopting repo cannot edit the table in its own PR, A7 YR04; earlier: the check table gains the append-only `contractiles-adopted` list, so a repo that deletes its clause after first adopting it is not `not_applicable`, A7 YC10; earlier: SysArch review R-04 and R-19: the `contractiles` row is `not_applicable`, reported, until a repo first adopts the clause (M4 for `standards`, M7 for a migrated repo, registration for a template-born repo); the open-anchor failure is cited from A7 YS03; warnings go in the verdict envelope). Decisions E1 to E11 approved by the owner on 2026-11-10, and E12 on 2026-11-13 (contractiles become a required check, with A7 v0.2.3). Not yet ratified as a whole. Builds on A1 v0.4.1 and A2 v0.2.4. Consistency pass applied 2026-11-10. Proposed in standards#1474; bot-review fixes applied 2026-11-12.
 :toc:
 
 Specification A3 of the Estate Reconciliation Plan. It defines the one required status check of a repo, the one caller workflow, the table from profile to checks, and the rules by which a verdict is computed.
@@ -203,9 +203,9 @@ A3 does not widen the required set. The first table reproduces the checks requir
 |===
 | `:when` | Check (`:id`) | Today's home [M] | Note
 
-| baseline | `governance` | `standards` `governance-reusable.yml` (19 jobs) | Not in the `proven-cicd` catalogue. Needs a home (E4).
-| baseline | `secret-scan` | `proven-cicd` (enforcing) and `standards` `secret-scanner-reusable.yml` | 2 implementations today.
-| baseline | `hypatia-scan` | `standards` `hypatia-scan-reusable.yml` | Not in the catalogue. Needs a home (E4).
+| baseline | `governance` | The template's inline job `governance` in `.github/workflows/governance.yml` (`rsr-template-repo`), and the deprecated `standards` `governance-reusable.yml` (19 jobs, #1523) for existing callers | Both hold the checks (Q6). The aggregate reads the inline job as an input (inline-job contract below) and never calls the deprecated reusable.
+| baseline | `secret-scan` | `proven-cicd` (enforcing); the template's inline jobs `scan / gitleaks`, `scan / rust-secrets` and `scan / shell-secrets` in `.github/workflows/secret-scanner.yml`; and the deprecated `standards` `secret-scanner-reusable.yml` (#1523) for existing callers | The aggregate reads the inline jobs as inputs (inline-job contract below).
+| baseline | `hypatia-scan` | The template's inline job `hypatia` in `.github/workflows/hypatia-scan.yml`, and `standards` `hypatia-scan-reusable.yml`, deprecated for new repos (#1523) | The aggregate reads the inline job as an input (inline-job contract below).
 | baseline | `codeql` | `standards` `codeql-reusable.yml` | `gates.json` lists it as base gate and as never required. Table lists it advisory until ruled (E5).
 | baseline | `contractiles` | `standards` `k9-contractile.yml` (job `K9-SVC contractile validation`, already a required context in `standards`) | Not in the catalogue. Needs a home (E4). Required by E12; what fails it is A7 section 8.4.
 | `rust` | `rust-ci` | `proven-cicd` (enforcing) and `standards` `rust-ci-reusable.yml` | 2 implementations today.
@@ -216,7 +216,14 @@ A3 does not widen the required set. The first table reproduces the checks requir
 | none yet | `ada-ci`, `bun-ci`, `host` | repo-local files named in `gates.json` | The 28 capabilities of A2 have no `ada`, `bun` or `host` term (E3).
 |===
 
-The `contractiles` row is the one deliberate widening (E12, an owner ruling of 2026-11-13). It fails on a `Must` violation, on a violated clause marked `!`, on a Bust finding graded `X1`, on a blocking unresolved verdict (A7 8.4), and on an open anchor as A7 6.3 and YS03 define it. A violation the verb grades as a warning is reported in the verdict envelope (3.4) and does not fail it. Until a repo carries the `(contractiles ...)` clause, or its `contractiles-adopted` entry's `:from` date passes (5.1), the probe finds no subject and the row is `not_applicable`, with that reason in the envelope. From `:from` on, A7 YC01 applies, and deleting the clause does not make the row `not_applicable` again.
+*Inline-job contract (Q6 [O], 2026-11-14).* The checks of `governance`, `hypatia-scan` and `secret-scan` live in two places: the template's inline jobs, and the deprecated `standards` reusables, which stay for the callers that already pin them. A3 builds on neither reusable. The aggregate reads each inline job as an input, in the way section 8 reads an owned-compute input:
+
+. The input is the check run that the job emitted on the head commit. It counts only if the GitHub Actions app (integration 15368) created it, its name equals the job name in the row's note, and its workflow run's file path equals the path named there. A check run with another name, app, path or head SHA is not the input.
+. While the input has not completed and the row's `:timeout` has not passed, the check is `pending`. After the timeout it is `not_run` and the gate fails.
+. A conclusion of `success` gives `passed`. `failure`, `cancelled`, `timed_out` and `action_required` give `failed`. `skipped` and `neutral` give `not_run`, because an inline job that skips has not checked anything. A check with several jobs, such as `secret-scan`, is `passed` only when every one of its jobs is.
+. The findings the job reports are copied into the envelope (3.4). The contract names only the inline jobs. A repo that still calls a deprecated reusable takes the template's inline form as part of its cutover (section 11), before the gate is required there.
+
+The `contractiles` row is the one deliberate widening (E12, an owner ruling of 2026-11-13). It fails on a `Must` violation, on a violated clause marked `!`, on a Bust finding graded `X1`, and on a blocking unresolved verdict (A7 8.4). An open anchor no longer fails it: A7 S1 withdrew W6, the open-anchor course correction (A7 v0.2.8). A violation the verb grades as a warning is reported in the verdict envelope (3.4) and does not fail it. Until a repo carries the `(contractiles ...)` clause, or its `contractiles-adopted` entry's `:from` date passes (5.1), the probe finds no subject and the row is `not_applicable`, with that reason in the envelope. From `:from` on, A7 YC01 applies, and deleting the clause does not make the row `not_applicable` again.
 
 All other catalogue capabilities are `advisory` in the first table. Promoting one to `required` is an owner ruling and a table change. The enforcing checks of the original audit (14 of its 26 actions [M: README]) are not required by `gates.json` today (finding 7) and A3 does not require them.
 
@@ -324,6 +331,7 @@ Detection after merge is weaker than a bound context. A forged `success` merges 
 . After the cutover the only required status context of a repo is `estate-gate`. A required list with any other entry is a ruleset defect. The one exception is a context that an app owns and that the owner has ruled to keep (the design spec's bypass and context rulings [R]). Such a context is listed by name in the applier's kept-context list, next to `never_required_contexts`. A context in neither list is obsolete and is removed.
 . A repo that cannot satisfy `estate-gate` is reported `UNSATISFIABLE` with the failing check, and is never fixed by a bypass. Doctrine 5 forbids the bypass [R: plan P4].
 . A caller that has been generated from a chora whose `(generation)` is absent is `unstamped` (A2 section 8).
+. A repo whose governance, Hypatia scan or secret scan still runs through a deprecated `standards` reusable takes the template's inline jobs (5.3, Q6) in the PR that adds its caller. Until then those inputs are absent, the checks are `not_run`, and `estate-gate` cannot be witnessed green, so the first rule keeps it from being required there.
 
 == 12. Laws
 
@@ -384,7 +392,7 @@ Every test is new work unless stated. A fixture is valid unless marked `-bad`.
 | G24 | An `owned` or `either` row without `:timeout` uses 900 seconds (5.4); a `github` row with `:timeout` is rejected. | `table-no-timeout-default`, `table-github-timeout-bad`
 | G25 | A row with `:obligation advisory` never changes a verdict. | `advisory-fail`
 | G26 | Every `:rule` equals `check/<id>`. | `table-rule-bad`
-| G27 | The baseline row `contractiles` is `required`. A fixture with one violated `Must` clause, one with a violated `!` clause, one with an `X1` Bust finding, one with an open anchor (A7 YS03) and one with an unwitnessed `Must` clause each give `failed`; a fixture whose only finding is a warning-level `Adjust` violation gives `passed` with the finding reported. A repo with no `(contractiles ...)` clause that is not in `contractiles-adopted`, or whose entry's `:from` is after the verdict's date, gives `not_applicable`, with the reason in the envelope; a listed repo with no clause gives `failed` once `:from` has passed. | `contractiles-must-bad`, `contractiles-bang-bad`, `contractiles-x1-bad`, `contractiles-unwitnessed-bad`, `contractiles-warn-ok`, `contractiles-open-anchor-bad`, `contractiles-pre-m7-na`, `contractiles-adopted-missing-bad`, `adopted-before-from-na`, `adopted-after-from-missing-bad`
+| G27 | The baseline row `contractiles` is `required`. A fixture with one violated `Must` clause, one with a violated `!` clause, one with an `X1` Bust finding and one with an unwitnessed `Must` clause each give `failed`; a fixture whose only finding is a warning-level `Adjust` violation gives `passed` with the finding reported, and an open anchor alone does not give `failed` (A7 S1 withdrew W6). A repo with no `(contractiles ...)` clause that is not in `contractiles-adopted`, or whose entry's `:from` is after the verdict's date, gives `not_applicable`, with the reason in the envelope; a listed repo with no clause gives `failed` once `:from` has passed. | `contractiles-must-bad`, `contractiles-bang-bad`, `contractiles-x1-bad`, `contractiles-unwitnessed-bad`, `contractiles-warn-ok`, `contractiles-open-anchor-not-failed`, `contractiles-pre-m7-na`, `contractiles-adopted-missing-bad`, `adopted-before-from-na`, `adopted-after-from-missing-bad`
 |===
 
 === 13.4 Applicability and verdict
@@ -446,11 +454,12 @@ Every test is new work unless stated. A fixture is valid unless marked `-bad`.
 | G63 | An unsigned envelope from the Actions aggregate is reported `unsigned`, and is not an error until A4 F3 is in place. | `merged-unsigned`
 | G64 | `contractiles-adopted` is append-only and well formed: a check-table change that removes an entry, moves an entry's `:from` later, adds an entry without `:from` or with a `:from` that is not a valid `YYYY-MM-DD` date, adds a second entry for a chora id, or adds an entry whose chora id does not resolve in chora-registry, fails; one that adds a new, well-formed entry passes. | `adopted-removed-bad`, `adopted-from-later-bad`, `adopted-no-from-bad`, `adopted-from-malformed-bad`, `adopted-from-impossible-bad`, `adopted-duplicate-bad`, `adopted-unresolved-bad`, `adopted-added-ok`
 | G65 | A repo listed in `contractiles-adopted` whose caller pins the aggregate or the table at a commit before its entry was last added or changed fails, whatever its `(contractiles ...)` clause says. Moving `:from` earlier therefore advances the floor. | `adopted-pin-rollback-bad`, `adopted-pin-before-from-change-bad`, `adopted-pin-current-ok`
+| G66 | The inline-job contract (5.3, Q6). For `governance`, `hypatia-scan` and `secret-scan`, the aggregate reads the check run of the named inline job on the head commit, created by integration 15368 from the named workflow file. A `success` conclusion gives `passed`; `failure` gives `failed`; `skipped` gives `not_run`; a check run with the right name from another workflow file, another app or another head SHA is not the input, so the check stays `pending` and is `not_run` after the timeout; `secret-scan` is `passed` only when all 3 of its jobs succeed. The aggregate never calls a deprecated `standards` reusable. | `inline-success-ok`, `inline-failure-bad`, `inline-skipped-not-run`, `inline-wrong-path-not-run`, `inline-wrong-app-not-run`, `inline-other-sha-not-run`, `inline-secret-one-of-three-bad`, `aggregate-calls-deprecated-bad`
 |===
 
-== 14. Decisions approved on 2026-11-10 and 2026-11-13 [O]
+== 14. Decisions approved on 2026-11-10, 2026-11-13 and 2026-11-14 [O]
 
-The owner approved E1 to E11 as recommended on 2026-11-10, and ruled E12 on 2026-11-13. The text of this document is the recommendation in each case.
+The owner approved E1 to E11 as recommended on 2026-11-10, ruled E12 on 2026-11-13, and ruled Q6 on 2026-11-14. The text of this document is the recommendation in each case.
 
 [cols="1,4,1"]
 |===
@@ -459,7 +468,7 @@ The owner approved E1 to E11 as recommended on 2026-11-10, and ruled E12 on 2026
 | E1 | The publisher list (ed25519 public keys) lives in the federation root as `(publishers ...)`. A1 amended (v0.3.2): a new optional root clause. | Approved
 | E2 | The suite coordinate in the caller is `hyperpolymath/proven-cicd`. The other 2 names are historical. | Approved
 | E3 | New root capability terms `ada`, `bun` and `desktop-host`, to cover the `gates.json` profiles that A2 has no term for. | Approved
-| E4 | `governance` and `hypatia-scan` get a home in `proven-cicd` (or the table names `standards` as their home until A6). | Approved
+| E4 | `governance` and `hypatia-scan` get a home in `proven-cicd` (or the table names `standards` as their home until A6). Amended by Q6: their checks live in the template's inline jobs and, for existing callers, in the deprecated `standards` reusables; A3 reads the inline jobs as inputs (5.3) and A6 retires the reusables instead of moving them. | Approved; amended 2026-11-14
 | E5 | `codeql` is `advisory` in the first table until the owner rules on the `gates.json` contradiction. | Approved
 | E6 | Caller file `estate-gate.yml`, job id `gate`, both frozen. | Approved
 | E7 | Default owned-compute timeout 900 seconds. | Approved
@@ -468,6 +477,7 @@ The owner approved E1 to E11 as recommended on 2026-11-10, and ruled E12 on 2026
 | E10 | The reserved rule namespace `check/` for waivers. | Approved
 | E11 | The `proven-cicd` stubs and advisory checks are not required until the owner rules. A3 does not widen the required set. | Approved
 | E12 | A `baseline` check row `contractiles`, `:obligation required`, carries the contractiles runner into `estate-gate`. It fails as A7 8.4 says. Owner ruling of 2026-11-13; it amends E11 for this one check. | Approved 2026-11-13
+| Q6 | The checks of `governance`, `hypatia-scan` and `secret-scan` live both in the deprecated `standards` reusables (for existing callers) and in the template's inline jobs. A3 reads the inline jobs as inputs under the contract of 5.3 (G66). Owner ruling of 2026-11-14 (SysArch Q6, finding R-08). | Approved 2026-11-14
 |===
 
 Open after approval: A3 as a whole is not ratified. No file, ruleset or workflow is changed in any repo until the owner approves.
@@ -491,4 +501,4 @@ I did not read: `hypatia` (the scan itself), `cicd-squabbler` (the satisfiabilit
 
 == 16. Out of scope
 
-A4 (the office and farm boundary, the envelope format and storage, the Actions signing key, the post-merge observer). A5 (the deviation store beyond the clause, canon rule identifiers, `debt` waivers). A6 (where `governance-reusable` and the other reusable workflows live after the `standards` carve-out). Widening the required set beyond E12. Any change to a ruleset, a workflow or a caller in any repo. The trope format. Any `.a2ml` file: A3 creates none.
+A4 (the office and farm boundary, the envelope format and storage, the Actions signing key, the post-merge observer). A5 (the deviation store beyond the clause, canon rule identifiers, `debt` waivers). A6 (retiring the deprecated reusables, and where the other reusable workflows live after the `standards` carve-out). Widening the required set beyond E12. Any change to a ruleset, a workflow or a caller in any repo. The trope format. Any `.a2ml` file: A3 creates none.
