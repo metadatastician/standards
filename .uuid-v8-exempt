@@ -8,3 +8,12 @@
 # assembled at runtime, so they need no entry.
 1-formats/deed/tools/fixtures/invalid/inuuid-uppercase_chora.deed
 1-formats/deed/tools/fixtures/invalid/inuuid-no-string_chora.deed
+
+# Owner ruling Q2 (2026-11-14) makes #u5 in an identity field an error. These
+# files hold one on purpose and are not live deeds:
+# a deed_lint negative control: a #u5 :repo-uuid, which the linter must reject;
+1-formats/deed/tools/fixtures/invalid/inu5-identity_chora.deed
+# the superseded v0.1 grammar spec, kept as written;
+1-formats/deed/spec/DEED-GRAMMAR-SPEC_v0.1.adoc
+# a dated triage report that quotes a file as it stood on 2026-10-14.
+docs/reorg/2026-10-14-tidy/issue-triage-1049-1234.adoc

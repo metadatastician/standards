@@ -17,7 +17,7 @@
 (praxis-deed
   :schema-version   "1.0.0"
   :canonical-name   "launcher-standard"
-  :beholding-chora  #u5"estate/chora"
+  :beholding-chora  #uuid"0889b37b-defb-831f-973c-e119500db00e"
 
   ;; The standard's OWN version, distinct from :schema-version (the DEED
   ;; format). Bumped 0.3.0 -> 0.4.0 because the resolution ladders below now

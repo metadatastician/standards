@@ -11,7 +11,7 @@
 (praxis-deed
   :schema-version "1.0.0"
   :canonical-name "example-echo-receipt"
-  :beholding-chora #u5"estate/chora"
+  :beholding-chora #u8"chora:estate/github.com/o"
   :profile proof-receipt
   :repository "hyperpolymath/example"
   :source-commit "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
