@@ -311,6 +311,9 @@ p="${path%%\?*}"
 # repos/<owner>/<name> (exactly three segments): the repository itself, for
 # --ensure-squabbler's fork test. fork_<name> in $GH_FIX makes it a fork.
 if [[ "$p" =~ ^repos/[^/]+/[^/]+$ ]]; then
+  # missing_<name> in $GH_FIX: that repository does not exist (404), as for a typo,
+  # a rename or a repository this credential cannot see.
+  [ -f "$GH_FIX/missing_${p##*/}" ] && refuse 404 "Not Found"
   f=false; [ -f "$GH_FIX/fork_${p##*/}" ] && f=true
   j="{\"fork\": $f, \"default_branch\": \"main\"}"
   if [ -n "$jqx" ]; then printf '%s' "$j" | jq -r "$jqx"; else printf '%s' "$j"; fi
@@ -687,6 +690,35 @@ case_main_owner_unread() {
   fi
 }
 
+# case_main_only_missing <applier> — `--only` naming a repository that does not
+# exist (or is not accessible) is a FATAL error, never a clean run that walked
+# nothing; a malformed value is refused too; an existing repository is walked.
+case_main_only_missing() {
+  local d; d=$(new_case onlymissing)
+  : > "$d/missing_nope"
+  run_content "$d" "$1" --only hyperpolymath/nope
+  local rc1; rc1=$(cat "$d/rc"); local e1="$d/err"
+  if [ "$rc1" != 0 ] && grep -q 'not found or not accessible' "$e1" && ! grep -q 'ci.yml' "$d/out"; then
+    pass "main: --only naming a nonexistent repository fails loudly (rc=$rc1), no census"
+  else
+    fail "main: --only on a nonexistent repository did not fail loudly (rc=$rc1)"
+    sed 's/^/    /' "$d/out" "$d/err" | tail -6 >&2
+  fi
+  run_content "$d" "$1" --only not-a-slug
+  if [ "$(cat "$d/rc")" != 0 ] && grep -q 'must be owner/name' "$d/err"; then
+    pass "main: --only that is not owner/name is refused"
+  else
+    fail "main: a malformed --only was not refused (rc=$(cat "$d/rc"))"
+  fi
+  run_content "$d" "$1" --only hyperpolymath/pub-a
+  if [ "$(cat "$d/rc")" = 0 ] && grep -qF "$(printf 'hyperpolymath/pub-a\tci.yml\tFRESH')" "$d/out"; then
+    pass "main: --only on an existing repository walks exactly that repository"
+  else
+    fail "main: --only on an existing repository was not walked (rc=$(cat "$d/rc"))"
+    sed 's/^/    /' "$d/out" "$d/err" | tail -6 >&2
+  fi
+}
+
 # Planted positives: the stub must be able to say no, or every fail-closed case
 # above could pass because nothing ever failed.
 d=$(new_case planted)
@@ -718,6 +750,7 @@ case_main_content_off "$APPLIER"
 case_main_owner_stale "$APPLIER"
 case_main_owner_clean "$APPLIER"
 case_main_owner_unread "$APPLIER"
+case_main_only_missing "$APPLIER"
 case_main_content_fix "$APPLIER"
 
 # Mutant: the census stays silent about an unreadable lock (the defect Codex found
@@ -905,6 +938,9 @@ list_mutant content_row_writes 's@\[ -n "\$cst" \] \&\& printf@[ -n "$cst" ] \&\
 # say nothing when there is nothing to say.
 list_mutant owner_row_dropped 's@ost=\$\(lock_owner_state "\$rdir/actions\.lock"\)@ost=""@' case_main_owner_stale
 list_mutant owner_row_always 's@\[ -n "\$ost" \] && printf@true \&\& printf@' case_main_owner_clean
+# An explicit --only repository must be checked for existence: this is what stops a
+# typo from becoming a header-only census and a clean exit.
+list_mutant only_existence_unchecked 's@if ! gh api "repos/\$\{ONLY_REPO\}"@if false \&\& gh api "repos/${ONLY_REPO}"@' case_main_only_missing
 }
 
 echo
