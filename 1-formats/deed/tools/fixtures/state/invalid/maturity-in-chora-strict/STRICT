@@ -1,0 +1,2 @@
+;; SPDX-License-Identifier: CC-BY-SA-4.0
+;; Marker: this fixture case runs deed_lint.js --state in strict mode (YF03).

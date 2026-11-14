@@ -8,7 +8,7 @@
 //
 // deed.abnf is normative (D308); deed_lint.js is the gate that CI runs. This
 // harness keeps them from drifting apart. It compiles deed.abnf (with the
-// (egress …), (anchor …), (contractiles …), edict, verb-descriptile and ecosystem clause profiles and the shared rules of
+// (egress …), (anchor …), (contractiles …), edict, verb-descriptile, ecosystem and state clause profiles and the shared rules of
 // clauses/common.abnf) using apg-js, mutates every
 // committed deed with a seeded generator, and asks both the grammar and the
 // gate for a verdict on each variant:
@@ -26,7 +26,7 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import apg from "apg-js";
-import { checkEcosystem, checkVerbDescriptile, choraRepoUuid, edictRuleIdsAt, FIXTURE_TODAY, LintError, rootChora, validate, verbOfDescriptile } from "../../1-formats/deed/tools/deed_lint.js";
+import { checkEcosystem, checkState, checkVerbDescriptile, choraRepoUuid, edictRuleIdsAt, FIXTURE_TODAY, LintError, rootChora, validate, verbOfDescriptile } from "../../1-formats/deed/tools/deed_lint.js";
 
 const { apgApi, apgLib } = apg;
 const ROOT = resolve(import.meta.dir, "../..");
@@ -72,7 +72,8 @@ function compileGrammar() {
       readFileSync(join(ABNF, "clauses/contractiles.abnf"), "utf8") + "\n" +
       readFileSync(join(ABNF, "clauses/edict.abnf"), "utf8") + "\n" +
       readFileSync(join(ABNF, "clauses/verb-descriptile.abnf"), "utf8") + "\n" +
-      readFileSync(join(ABNF, "clauses/ecosystem.abnf"), "utf8")).replace(/[^\x00-\x7f]/g, "?") +
+      readFileSync(join(ABNF, "clauses/ecosystem.abnf"), "utf8") + "\n" +
+      readFileSync(join(ABNF, "clauses/state.abnf"), "utf8")).replace(/[^\x00-\x7f]/g, "?") +
     "\nSP = %x20\nDQUOTE = %x22\nALPHA = %x41-5A / %x61-7A\nDIGIT = %x30-39\n" +
     "VCHAR = %x21-7E\nCR = %x0D\nLF = %x0A\nCRLF = CR LF\n";
   const api = new apgApi(src);
@@ -417,6 +418,56 @@ for (const { c, text } of edictCases("valid")) {
       if (r !== null && !grammarAccepts(grammar, "eco-related", r)) fail("ecosystem.abnf refuses a (related …) listed as semantic only", k.c);
       for (const f of fieldsOf(k.text)) if (!grammarAccepts(grammar, "ecosystem-field", f)) fail("ecosystem.abnf refuses a field listed as semantic only", `${k.c}: ${f.slice(0, 60)}`);
     } else fail("ecosystem invalid fixture is in neither list", k.c);
+  }
+}
+
+// STATE.deed (A7 7.2, J3, J15, YF03; clauses/state.abnf). One case per
+// directory: DIR/{valid,invalid}/<case>/STATE.deed, with an optional chora deed
+// (YD08, YF03) and STRICT marker beside it. Every valid case is a valid deed
+// for both, passes the profile, and its (status …) parses as state-status and
+// its (maturity …) as state-maturity. Each invalid case is filed in one of
+// three exhaustive lists: the grammar refuses its first (status …), the
+// grammar refuses its first (maturity …), or only the profile refuses it.
+{
+  const cases = (sub) => readdirSync(join(FIXTURES, "state", sub)).sort().map((c) => {
+    const dir = join(FIXTURES, "state", sub, c);
+    return { c, dir, file: join(dir, "STATE.deed"), text: readFileSync(join(dir, "STATE.deed"), "utf8") };
+  });
+  const profile = ({ dir, file, text }) => {
+    try {
+      const ch = rootChora(dir);
+      const strict = readdirSync(dir).includes("STRICT");
+      return checkState(text, file, { repoUuid: ch && ch.uuid, choraClauses: ch && ch.clauses, strict, today: FIXTURE_TODAY }) !== null;
+    } catch (e) {
+      if (!(e instanceof LintError)) throw e;
+      return false;
+    }
+  };
+  for (const k of cases("valid")) {
+    if (!grammarAccepts(grammar, "deed", k.text)) fail("state valid fixture rejected by deed.abnf", k.c);
+    if (!profile(k)) fail("state valid fixture rejected by deed_lint.js --state", k.c);
+    for (const r of allClauses(k.text, "status")) if (!grammarAccepts(grammar, "state-status", r)) fail("state.abnf refuses a valid (status …)", `${k.c}: ${r.slice(0, 60)}`);
+    for (const r of allClauses(k.text, "maturity")) if (!grammarAccepts(grammar, "state-maturity", r)) fail("state.abnf refuses a valid (maturity …)", `${k.c}: ${r.slice(0, 60)}`);
+  }
+  const statusRejects = ["aliases-not-list", "ended-not-date", "entry-phase-unknown", "entry-unknown-field", "history-field",
+    "phase-string", "phase-unknown", "present-string", "since-not-date", "status-unknown-field"];
+  const maturityRejects = ["level-string", "level-unknown", "maturity-unknown-field"];
+  const semanticOnly = ["beholding-chora", "entry-missing-since", "expired", "history-twice", "maturity-in-chora-strict", "maturity-twice",
+    "missing-affirmed", "missing-level", "missing-phase", "missing-status", "of-chora-mismatch", "phase-twice", "rule-in-descriptile",
+    "since-impossible", "state-clause", "status-in-chora-strict", "status-twice", "unknown-clause", "unknown-field"];
+  for (const k of cases("invalid")) {
+    if (!gateVerdict(k.text).ok) fail("state invalid fixture is not a valid deed (YD01)", k.c);
+    if (profile(k)) fail("deed_lint.js --state accepts an invalid fixture", k.c);
+    const st = clauseText(k.text, "status");
+    const mt = clauseText(k.text, "maturity");
+    if (statusRejects.includes(k.c)) {
+      if (st === null || grammarAccepts(grammar, "state-status", st)) fail("state.abnf accepts a (status …) it must refuse", k.c);
+    } else if (maturityRejects.includes(k.c)) {
+      if (mt === null || grammarAccepts(grammar, "state-maturity", mt)) fail("state.abnf accepts a (maturity …) it must refuse", k.c);
+    } else if (semanticOnly.includes(k.c)) {
+      for (const r of allClauses(k.text, "status")) if (!grammarAccepts(grammar, "state-status", r)) fail("state.abnf refuses a (status …) listed as semantic only", k.c);
+      for (const r of allClauses(k.text, "maturity")) if (!grammarAccepts(grammar, "state-maturity", r)) fail("state.abnf refuses a (maturity …) listed as semantic only", k.c);
+    } else fail("state invalid fixture is in neither list", k.c);
   }
 }
 

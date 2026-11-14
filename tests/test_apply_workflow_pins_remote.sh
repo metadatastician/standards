@@ -186,6 +186,11 @@ kill_mutant owner_case_sensitive \
   's@tolower\(a\[1\]\) ~ /\^@a[1] ~ /^@' \
   "FAIL owner-mixed-case.lock"
 
+# M12b, M12c — the deed over-cap function: the cap is a strict greater-than on
+# OCTETS (a 998-octet line is legal), and the line terminator is not counted.
+kill_mutant deed_cap_off_by_one 's@if \(n > cap\)@if (n >= cap)@' "FAIL deed-exact.deed"
+kill_mutant deed_counts_terminator 's@sub\(/\\r\$/, "", line\);@@' "FAIL deed-crlf.deed"
+
 # M12 — drop the owner_id test. Every standards record would then read stale,
 # including one that already carries the current owner's id.
 kill_mutant owner_id_unchecked \
@@ -212,6 +217,12 @@ cat > "$STUB/gh" <<'EOF'
 #!/usr/bin/env bash
 case "$*" in
   "api graphql"*) exit 1 ;;   # force the REST fallback
+  "api repos/o/r/contents --jq"*)
+    [ "${ROOT_FAIL:-}" = 1 ] && { echo "gh: API rate limit exceeded (HTTP 403)" >&2; exit 1; }
+    for f in ${ROOT:-}; do echo "$f"; done; exit 0 ;;
+  *contents/*_chora.deed*)
+    [ "${DEED_FAIL:-}" = 1 ] && { echo "gh: file too large (HTTP 403)" >&2; exit 1; }
+    printf '(deed)\n'; exit 0 ;;
   *contents/.github/workflows/*)
     [ "${FILE_FAIL:-}" = 1 ] && { echo "gh: rate limit (HTTP 403)" >&2; exit 1; }
     echo 'on: push'; exit 0 ;;
@@ -239,6 +250,23 @@ fetch_case "no workflows dir (404)" 0 LIST=404
 fetch_case "rate-limited listing"   1 LIST=403
 fetch_case "file download fails"    1 LIST=200 FILE_FAIL=1
 [ -s "$TMP/fetch.listing ok/ci.yml" ] && pass "fetch: file content written" || fail "fetch: ci.yml not written"
+
+# The REST fallback reads the root deeds too: one root listing, then each non-estate
+# `*_chora.deed` under its OWN name. A repository with none leaves no marker (no row);
+# a listing or a read that fails leaves an .unread marker, never a silent "no deed".
+deed_files() { ( cd "$1" 2>/dev/null && ls -A | grep '^\.deed-' | sort | tr '\n' ' ' ); }
+deed_case() {
+  local label="$1" want="$2"; shift 2
+  local dir="$TMP/fetchd.$label"
+  env PATH="$STUB:$PATH" "$@" bash -c 'source "$1"; fetch_workflows o/r "$2"' _ \
+      "${APPLIER_UNDER_TEST:-$APPLIER}" "$dir" >/dev/null 2>&1
+  local got; got=$(deed_files "$dir")
+  if [ "$got" = "$want" ]; then pass "REST deeds: $label"; else fail "REST deeds: $label — expected '$want', got '$got'"; fi
+}
+deed_case "a deed under any stem is read; estate_chora.deed is ignored" ".deed-old-name_chora.deed " LIST=200 ROOT="old-name_chora.deed estate_chora.deed README.adoc"
+deed_case "no root deed leaves no marker" "" LIST=200 ROOT="README.adoc"
+deed_case "a failed root listing leaves a LISTING marker" ".deed-LISTING.unread " LIST=200 ROOT_FAIL=1
+deed_case "a deed that cannot be read leaves an .unread marker" ".deed-x_chora.deed.unread " LIST=200 ROOT="x_chora.deed" DEED_FAIL=1
 
 # Mutant: restore the old `return 0` on a failed listing. It must turn red.
 M="$TMP/mutant_fail_open.sh"; cp "$APPLIER" "$M"
@@ -271,12 +299,13 @@ echo "$*" >> "$GH_FIX/calls.log"
 [ "${1:-} ${2:-}" = "pr create" ] && { echo "https://github.com/stub/pull/1"; exit 0; }
 [ "${1:-}" = api ] || exit 64
 shift
-path="" jqx="" gql=0 inp=0
+path="" jqx="" gql=0 inp=0 qname=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --jq|-q)     jqx="$2"; shift ;;
     --input)     inp=1 ;;
-    -F|-f|-H)    shift ;;
+    -F)          case "${2:-}" in name=*) qname="${2#name=}" ;; esac; shift ;;
+    -f|-H)       shift ;;
     -*)          ;;
     graphql)     gql=1 ;;
     *)           [ -n "$path" ] || path="$1" ;;
@@ -303,7 +332,22 @@ if [ "$gql" = 1 ]; then
   [ -f "$GH_FIX/own_lock_unread" ] && extra=$(printf '%s' "$extra" | jq '. + [{name: "actions.lock", type: "blob", object: {text: null}}]')
   # $GH_FIX/own_stamped: each repository also holds that stamped proven-cicd copy.
   [ -f "$GH_FIX/own_stamped" ] && extra=$(printf '%s' "$extra" | jq --rawfile s "$GH_FIX/own_stamped" '. + [{name: "proven-lock-gate.yml", type: "blob", object: {text: $s}}]')
-  jq -n --arg sha "$TARGET" --argjson extra "$extra" '{data: {repository: {object: {entries: ([{name: "ci.yml", type: "blob",
+  # $GH_FIX/own_deed: each repository has that root deed (named <repo>_chora.deed, or
+  # the name in own_deed_name: a deed kept under a former repository name; the
+  # conventional-name alias then reads null, as GitHub answers for a missing file).
+  # own_deed_unread: the deed blob came back without text. own_estate_deed: the root
+  # also holds estate_chora.deed (which the census must ignore).
+  rootnames='[]'; deed_json=null
+  deed_name="${qname}_chora.deed"; [ -f "$GH_FIX/own_deed_name" ] && deed_name=$(cat "$GH_FIX/own_deed_name")
+  if [ -f "$GH_FIX/own_deed" ] || [ -f "$GH_FIX/own_deed_unread" ]; then
+    rootnames=$(jq -n --arg n "$deed_name" '[{name: $n, type: "blob"}]')
+    if [ "$deed_name" = "${qname}_chora.deed" ]; then
+      [ -f "$GH_FIX/own_deed" ] && deed_json=$(jq -Rs '{text: ., isTruncated: false}' "$GH_FIX/own_deed")
+      [ -f "$GH_FIX/own_deed_unread" ] && deed_json=$(jq -n '{text: null, isTruncated: false}')
+    fi
+  fi
+  [ -f "$GH_FIX/own_estate_deed" ] && rootnames=$(printf '%s' "$rootnames" | jq '. + [{name: "estate_chora.deed", type: "blob"}]')
+  jq -n --arg sha "$TARGET" --argjson extra "$extra" --argjson deed "$deed_json" --argjson rn "$rootnames" '{data: {repository: {deed: $deed, rootnames: {entries: $rn}, object: {entries: ([{name: "ci.yml", type: "blob",
     object: {text: ("jobs:\n  a:\n    uses: hyperpolymath/standards/.github/workflows/x.yml@" + $sha + "\n")}}] + $extra)}}}}'
   exit 0
 fi
@@ -311,6 +355,9 @@ p="${path%%\?*}"
 # repos/<owner>/<name> (exactly three segments): the repository itself, for
 # --ensure-squabbler's fork test. fork_<name> in $GH_FIX makes it a fork.
 if [[ "$p" =~ ^repos/[^/]+/[^/]+$ ]]; then
+  # missing_<name> in $GH_FIX: that repository does not exist (404), as for a typo,
+  # a rename or a repository this credential cannot see.
+  [ -f "$GH_FIX/missing_${p##*/}" ] && refuse 404 "Not Found"
   f=false; [ -f "$GH_FIX/fork_${p##*/}" ] && f=true
   j="{\"fork\": $f, \"default_branch\": \"main\"}"
   if [ -n "$jqx" ]; then printf '%s' "$j" | jq -r "$jqx"; else printf '%s' "$j"; fi
@@ -320,6 +367,9 @@ case "$p" in
   # The published proven-cicd manifest, served raw from $GH_FIX/proven_manifest.json.
   repos/hyperpolymath/proven-cicd-and-workflows/contents/proven/manifest.json)
     body="$GH_FIX/proven_manifest.json" ;;
+  repos/*/contents/*_chora.deed)
+    [ -f "$GH_FIX/own_deed_rest_fail" ] && refuse 403 "This API returns blobs up to 1 MB in size. The requested blob is too large"
+    body="$GH_FIX/own_deed" ;;
   repos/*/commits/*)
     j='{"sha": "cccccccccccccccccccccccccccccccccccccccc"}'
     if [ -n "$jqx" ]; then printf '%s' "$j" | jq -r "$jqx"; else printf '%s' "$j"; fi; exit 0 ;;
@@ -551,7 +601,7 @@ STAMP_HEX="cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
 # of the same repository is unchanged.
 case_main_content() {
   local d; d=$(new_case content)
-  printf '{"schema":"proven-cicd/manifest/v1","artifacts":[{"artifact":"proven-lock-gate","version":"0.1.0","sha256":"x","template":"t","install_path":"p"}]}' \
+  printf '{"schema":"proven-cicd/manifest/v1","artifacts":[{"artifact":"proven-lock-gate","version":"0.1.0","sha256":"x","template":"templates/proven-lock-gate.yml","install_path":"p"}]}' \
     > "$d/proven_manifest.json"
   printf '# proven-cicd: proven-lock-gate@0.0.9 sha256:%s\nname: g\n' "$STAMP_HEX" > "$d/own_stamped"
   run_content "$d" "$1" --proven-sha "$P"
@@ -616,7 +666,7 @@ case_main_content_fix() {
   git -C "$root" init -q
   git -C "$root" -c user.name=t -c user.email=t@t -c commit.gpgsign=false commit -q --allow-empty -m target
   sha=$(git -C "$root" rev-parse HEAD)
-  printf '{"schema":"proven-cicd/manifest/v1","artifacts":[{"artifact":"proven-lock-gate","version":"0.1.0","sha256":"x","template":"t","install_path":"p"}]}' \
+  printf '{"schema":"proven-cicd/manifest/v1","artifacts":[{"artifact":"proven-lock-gate","version":"0.1.0","sha256":"x","template":"templates/proven-lock-gate.yml","install_path":"p"}]}' \
     > "$d/proven_manifest.json"
   printf '# proven-cicd: proven-lock-gate@0.0.9 sha256:%s\nname: g\n' "$STAMP_HEX" > "$d/own_stamped"
   : > "$d/calls.log"
@@ -636,6 +686,124 @@ case_main_content_fix() {
     fail "main: --fix acted on a content row (rc=$(cat "$d/rc"))"
     sed 's/^/    /' "$d/out" >&2; tail -5 "$d/err" | sed 's/^/    /' >&2
   fi
+}
+
+# stamp_into <applier> <out> <artifact> <version> <body> — write <out> as <body>
+# under a valid stamp, hashed by the applier's own stamp_region_sha (the mirror
+# of proven-cicd's scripts/proven-stamp.sh, itself under the self-test).
+stamp_into() {
+  local a="$1" out="$2" art="$3" ver="$4" body="$5" h
+  printf '%s' "$body" > "$out.body"
+  # shellcheck disable=SC2016  # $1 and $2 are expanded by the inner shell
+  h=$(bash -c 'source "$1"; stamp_region_sha "$2"' _ "$a" "$out.body")
+  { printf '# proven-cicd: %s@%s sha256:%s\n' "$art" "$ver" "$h"; cat "$out.body"; } > "$out"; rm -f "$out.body"
+}
+CO_OLD="1111111111111111111111111111111111111111"; CO_NEW="2222222222222222222222222222222222222222"
+# content_fixture <applier> <dir> [extra template line] — manifest at 0.2.0, the
+# template at 0.2.0, and a 0.1.0 copy in every repository whose local lines
+# differ from the template's (an older suite pin, a checkout SHA Dependabot moved).
+content_fixture() {
+  local a="$1" d="$2" extra="${3:-}"
+  printf '{"schema":"proven-cicd/manifest/v1","artifacts":[{"artifact":"proven-lock-gate","version":"0.2.0","sha256":"x","template":"templates/proven-lock-gate.yml","install_path":"p"}]}' \
+    > "$d/proven_manifest.json"
+  stamp_into "$a" "$d/proven_template.yml" proven-lock-gate 0.2.0 "$(printf 'name: gate\nenv:\n  # proven-cicd:local-next\n  PROVEN_SHA: "%s"\njobs:\n  g:\n    steps:\n      # proven-cicd:local-next\n      - uses: actions/checkout@%s # v4\n%s      - run: echo new\n' "$CO_NEW" "$CO_NEW" "$extra")"
+  stamp_into "$a" "$d/own_stamped" proven-lock-gate 0.1.0 "$(printf 'name: gate\nenv:\n  # proven-cicd:local-next\n  PROVEN_SHA: "%s"\njobs:\n  g:\n    steps:\n      # proven-cicd:local-next\n      - uses: actions/checkout@%s # v5\n      - run: echo old\n' "$CO_OLD" "$CO_OLD")"
+}
+
+# case_main_content_refresh <applier> — --fix-content end to end: each stale copy
+# is refreshed and lands in a PR on its own branch that holds ONLY that file.
+# The copy keeps its local checkout SHA, takes the template body, moves
+# PROVEN_SHA to --proven-sha, and carries the template's stamp. ci.yml, whose
+# pin sits under the former owner (MOVED), is NOT re-pinned: pins are held.
+case_main_content_refresh() {
+  local d paths body; d=$(new_case contentrefresh)
+  content_fixture "$1" "$d"
+  run_content "$d" "$1" --fix-content --proven-sha "$P"
+  paths=$(jq -r '.variables.input.fileChanges.additions[]?.path' "$d/commit.json" 2>/dev/null)
+  body=$(jq -r '.variables.input.fileChanges.additions[0].contents' "$d/commit.json" 2>/dev/null | base64 -d 2>/dev/null)
+  if [ "$(cat "$d/rc")" = 0 ] \
+     && grep -qF "$(printf 'hyperpolymath/pub-a\tproven-lock-gate.yml\tBEHIND-CONTENT\tproven-lock-gate@0.1.0 -> 0.2.0')" "$d/out" \
+     && grep -qF "$(printf 'hyperpolymath/pub-a\tproven-lock-gate.yml\tCONTENT-REFRESHED\tproven-lock-gate@0.1.0 -> 0.2.0')" "$d/out" \
+     && grep -qF "$(printf 'hyperpolymath/pub-a\t-\tPR-OPENED\t')" "$d/out" \
+     && [ "$paths" = ".github/workflows/proven-lock-gate.yml" ] \
+     && [ "$(printf '%s\n' "$body" | head -n 1)" = "$(head -n 1 "$d/proven_template.yml")" ] \
+     && printf '%s\n' "$body" | grep -qxF "      - uses: actions/checkout@${CO_OLD} # v5" \
+     && printf '%s\n' "$body" | grep -qxF "  PROVEN_SHA: \"${P}\"" \
+     && printf '%s\n' "$body" | grep -qxF '      - run: echo new' \
+     && grep -qF 'refs/heads/chore/refresh-proven-cicd-content' "$d/calls.log" \
+     && grep -qF 'chore(ci): refresh proven-cicd content to dddddddddddd' "$d/calls.log" \
+     && [ "$(grep -c "contents/templates/proven-lock-gate.yml?ref=${P}" "$d/calls.log")" = 1 ] \
+     && ! grep -qF 'chore/re-point-standards-workflow-pins' "$d/calls.log" \
+     && ! grep -qF 'STAMPED-PIN-HELD' "$d/out"; then
+    pass "main: --fix-content refreshes the stale copy alone (local SHA kept, PROVEN_SHA moved, template stamp), pins untouched, template read once"
+  else
+    fail "main: --fix-content refresh wrong (rc=$(cat "$d/rc")); committed: [${paths//$'\n'/ }]"
+    sed 's/^/    /' "$d/out" >&2; tail -5 "$d/err" | sed 's/^/    /' >&2
+  fi
+}
+
+# case_main_content_refused <applier> <label> <setup> — a refresh that cannot be
+# proven equal to the template is refused with a row, and nothing is committed.
+case_main_content_refused() {
+  local d; d=$(new_case contentrefused)
+  content_fixture "$1" "$d" "${4:-}"
+  eval "$3"
+  run_content "$d" "$1" --fix-content --proven-sha "$P"
+  if [ "$(cat "$d/rc")" = 0 ] \
+     && grep -qF "$(printf 'hyperpolymath/pub-a\tproven-lock-gate.yml\tCONTENT-REFRESH-REFUSED\t')" "$d/out" \
+     && ! grep -q 'CONTENT-REFRESHED' "$d/out" && [ ! -e "$d/commit.json" ] && ! grep -q 'PR-OPENED' "$d/out"; then
+    pass "main: --fix-content refuses $2 and commits nothing"
+  else
+    fail "main: --fix-content did not refuse $2 (rc=$(cat "$d/rc"))"
+    sed 's/^/    /' "$d/out" >&2
+  fi
+}
+
+# case_main_stamped_held <applier> — --fix never re-pins a stamped copy, even
+# one whose standards pin is MOVED: its body is proven-cicd's, so a re-pin would
+# make it drift from its stamp. It is held with a STAMPED-PIN-HELD row, and the
+# commit carries ci.yml alone.
+case_main_stamped_held() {
+  local d root sha paths
+  d=$(new_case stampedheld)
+  root=$(mktemp -d "$TMP/stampedheld-root.XXXX")
+  git -C "$root" init -q
+  git -C "$root" -c user.name=t -c user.email=t@t -c commit.gpgsign=false commit -q --allow-empty -m target
+  sha=$(git -C "$root" rev-parse HEAD)
+  printf '# proven-cicd: proven-lock-gate@0.1.0 sha256:%s\njobs:\n  a:\n    uses: hyperpolymath/standards/.github/workflows/x.yml@%s\n' "$STAMP_HEX" "$sha" > "$d/own_stamped"
+  : > "$d/calls.log"
+  # shellcheck disable=SC2016  # $1 and $2 are expanded by the inner shell
+  env PATH="$LSTUB:$PATH" GH_FIX="$d" GH_TOKEN=ghs_app GITHUB_TOKEN= TARGET="$sha" \
+    bash -c 'source "$1"; STANDARDS_ROOT="$2"; validate_target() { return 0; }; shift 2; main "$@"' _ "$1" "$root" \
+      --to "$sha" --owners hyperpolymath,metadatastician --fix > "$d/out" 2> "$d/err"
+  echo $? > "$d/rc"
+  paths=$(jq -r '.variables.input.fileChanges.additions[]?.path' "$d/commit.json" 2>/dev/null)
+  if [ "$(cat "$d/rc")" = 0 ] \
+     && grep -qF "$(printf 'hyperpolymath/pub-a\tproven-lock-gate.yml\tSTAMPED-PIN-HELD\t')" "$d/out" \
+     && [ "$paths" = ".github/workflows/ci.yml" ]; then
+    pass "main: --fix holds a stamped copy's MOVED pin (STAMPED-PIN-HELD) and commits ci.yml alone"
+  else
+    fail "main: --fix re-pinned a stamped copy (rc=$(cat "$d/rc")); committed: [${paths//$'\n'/ }]"
+    sed 's/^/    /' "$d/out" >&2
+  fi
+}
+
+# case_main_content_flags <applier> — --fix-content is content-only: combined
+# with a pin mode, or without the commit to install, it refuses to start.
+case_main_content_flags() {
+  local d args label
+  for args in "--fix-content --fix --proven-sha $P" "--fix-content --ensure-squabbler --proven-sha $P" \
+              "--fix-content --repair-illegal --proven-sha $P" "--fix-content"; do
+    d=$(new_case contentflags)
+    # shellcheck disable=SC2086  # word splitting of $args is intended
+    run_content "$d" "$1" $args
+    label="main: '$args' refuses to start (exit 2, no census, no write)"
+    if [ "$(cat "$d/rc")" = 2 ] && ! grep -q '^REPO' "$d/out" && [ ! -e "$d/commit.json" ]; then
+      pass "$label"
+    else
+      fail "$label — rc=$(cat "$d/rc")"
+    fi
+  done
 }
 
 # case_main_owner_stale <applier> — a standards lock record that still carries the
@@ -687,6 +855,122 @@ case_main_owner_unread() {
   fi
 }
 
+# case_main_deed_overcap <applier> — a root deed with a line over 998 octets gets its
+# own DEED-OVERCAP row (count, line number, octet size) and the pin row of the same
+# repository is unchanged.
+case_main_deed_overcap() {
+  local d; d=$(new_case deedover)
+  { printf '(deed\n'; head -c 1159 /dev/zero | tr '\0' 'a'; printf '\n)\n'; } > "$d/own_deed"
+  run_content "$d" "$1"
+  if [ "$(cat "$d/rc")" = 0 ] \
+     && grep -qF "$(printf 'hyperpolymath/pub-a\tpub-a_chora.deed\tDEED-OVERCAP\t1 line(s) over 998 octets: L2=1159')" "$d/out" \
+     && grep -qF "$(printf 'hyperpolymath/pub-a\tci.yml\tFRESH')" "$d/out"; then
+    pass "main: a root deed line over 998 octets is reported DEED-OVERCAP (with line and size)"
+  else
+    fail "main: deed over-cap census wrong (rc=$(cat "$d/rc"))"
+    sed 's/^/    /' "$d/out" "$d/err" | tail -8 >&2
+  fi
+}
+
+# case_main_deed_clean <applier> — a root deed within the cap, and a repository with
+# no root deed at all, produce no deed row.
+case_main_deed_clean() {
+  local d; d=$(new_case deedclean)
+  printf '(deed\n  (identity))\n' > "$d/own_deed"
+  run_content "$d" "$1"
+  local ok=0
+  [ "$(cat "$d/rc")" = 0 ] && ! grep -qF "_chora.deed" "$d/out" && ok=1
+  rm -f "$d/own_deed"
+  run_content "$d" "$1"
+  { [ "$(cat "$d/rc")" = 0 ] && ! grep -qF "_chora.deed" "$d/out"; } || ok=0
+  if [ "$ok" = 1 ]; then
+    pass "main: an in-cap deed, and no deed at all, get no deed row"
+  else
+    fail "main: a clean or absent deed produced a row"
+    sed 's/^/    /' "$d/out" "$d/err" | tail -8 >&2
+  fi
+}
+
+# case_main_deed_unread <applier> — a deed blob that came back without text is
+# reported DEED-OVERCAP-UNREAD, never read as "no over-cap line".
+case_main_deed_unread() {
+  local d; d=$(new_case deedunread)
+  : > "$d/own_deed_unread"
+  run_content "$d" "$1"
+  if [ "$(cat "$d/rc")" = 0 ] \
+     && grep -qF "$(printf 'hyperpolymath/pub-a\tpub-a_chora.deed\tDEED-OVERCAP-UNREAD\t')" "$d/out"; then
+    pass "main: a deed that could not be read whole is reported DEED-OVERCAP-UNREAD"
+  else
+    fail "main: an unreadable deed was not reported (rc=$(cat "$d/rc"))"
+    sed 's/^/    /' "$d/out" "$d/err" | tail -8 >&2
+  fi
+}
+
+# case_main_deed_renamed <applier> — a root deed that is NOT named after the repository
+# (a repository renamed after its deed was minted) is still found and judged under its
+# own file name; estate_chora.deed is ignored.
+case_main_deed_renamed() {
+  local d; d=$(new_case deedrenamed)
+  { printf '(deed\n'; head -c 1159 /dev/zero | tr '\0' 'a'; printf '\n)\n'; } > "$d/own_deed"
+  printf 'former-name_chora.deed' > "$d/own_deed_name"
+  : > "$d/own_estate_deed"
+  run_content "$d" "$1"
+  if [ "$(cat "$d/rc")" = 0 ] \
+     && grep -qF "$(printf 'hyperpolymath/pub-a\tformer-name_chora.deed\tDEED-OVERCAP\t1 line(s) over 998 octets: L2=1159')" "$d/out" \
+     && ! grep -qF 'estate_chora.deed' "$d/out"; then
+    pass "main: a root deed under a former repository name is judged under its own name; estate_chora.deed is ignored"
+  else
+    fail "main: a differently named root deed was missed or estate_chora.deed was read (rc=$(cat "$d/rc"))"
+    sed 's/^/    /' "$d/out" "$d/err" | tail -8 >&2
+  fi
+}
+
+# case_main_deed_rest_fail <applier> — a differently named deed that cannot be read is
+# reported DEED-OVERCAP-UNREAD under its own name, not skipped.
+case_main_deed_rest_fail() {
+  local d; d=$(new_case deedrestfail)
+  printf '(deed)\n' > "$d/own_deed"
+  printf 'former-name_chora.deed' > "$d/own_deed_name"
+  : > "$d/own_deed_rest_fail"
+  run_content "$d" "$1"
+  if [ "$(cat "$d/rc")" = 0 ] \
+     && grep -qF "$(printf 'hyperpolymath/pub-a\tformer-name_chora.deed\tDEED-OVERCAP-UNREAD\t')" "$d/out"; then
+    pass "main: a differently named deed that could not be read is reported DEED-OVERCAP-UNREAD under its own name"
+  else
+    fail "main: an unreadable differently named deed was not reported (rc=$(cat "$d/rc"))"
+    sed 's/^/    /' "$d/out" "$d/err" | tail -8 >&2
+  fi
+}
+
+# case_main_only_missing <applier> — `--only` naming a repository that does not
+# exist (or is not accessible) is a FATAL error, never a clean run that walked
+# nothing; a malformed value is refused too; an existing repository is walked.
+case_main_only_missing() {
+  local d; d=$(new_case onlymissing)
+  : > "$d/missing_nope"
+  run_content "$d" "$1" --only hyperpolymath/nope
+  local rc1; rc1=$(cat "$d/rc"); local e1="$d/err"
+  if [ "$rc1" != 0 ] && grep -q 'not found or not accessible' "$e1" && ! grep -q 'ci.yml' "$d/out"; then
+    pass "main: --only naming a nonexistent repository fails loudly (rc=$rc1), no census"
+  else
+    fail "main: --only on a nonexistent repository did not fail loudly (rc=$rc1)"
+    sed 's/^/    /' "$d/out" "$d/err" | tail -6 >&2
+  fi
+  run_content "$d" "$1" --only not-a-slug
+  if [ "$(cat "$d/rc")" != 0 ] && grep -q 'must be owner/name' "$d/err"; then
+    pass "main: --only that is not owner/name is refused"
+  else
+    fail "main: a malformed --only was not refused (rc=$(cat "$d/rc"))"
+  fi
+  run_content "$d" "$1" --only hyperpolymath/pub-a
+  if [ "$(cat "$d/rc")" = 0 ] && grep -qF "$(printf 'hyperpolymath/pub-a\tci.yml\tFRESH')" "$d/out"; then
+    pass "main: --only on an existing repository walks exactly that repository"
+  else
+    fail "main: --only on an existing repository was not walked (rc=$(cat "$d/rc"))"
+    sed 's/^/    /' "$d/out" "$d/err" | tail -6 >&2
+  fi
+}
+
 # Planted positives: the stub must be able to say no, or every fail-closed case
 # above could pass because nothing ever failed.
 d=$(new_case planted)
@@ -718,7 +1002,26 @@ case_main_content_off "$APPLIER"
 case_main_owner_stale "$APPLIER"
 case_main_owner_clean "$APPLIER"
 case_main_owner_unread "$APPLIER"
+case_main_deed_overcap "$APPLIER"
+case_main_deed_clean "$APPLIER"
+case_main_deed_unread "$APPLIER"
+case_main_deed_renamed "$APPLIER"
+case_main_deed_rest_fail "$APPLIER"
+case_main_only_missing "$APPLIER"
 case_main_content_fix "$APPLIER"
+case_main_content_refresh "$APPLIER"
+case_main_content_refused "$APPLIER" "a template that does not match its own stamp" \
+  'printf "      - run: injected\n" >> "$d/proven_template.yml"'
+case_main_content_refused "$APPLIER" "a template stamped for another version than the manifest's" \
+  'jq ".artifacts[0].version = \"0.3.0\"" "$d/proven_manifest.json" > "$d/m" && mv "$d/m" "$d/proven_manifest.json"'
+case_main_content_refused "$APPLIER" "an unreadable template" 'rm "$d/proven_template.yml"'
+case_main_content_refused "$APPLIER" "a copy whose local lines name another action" \
+  'sed -i "s#actions/checkout@${CO_OLD}#evil/checkout@${CO_OLD}#" "$d/own_stamped"'
+case_main_content_refused "$APPLIER" "a uses: change in a repository that carries actions.lock (content mode never relocks)" \
+  'printf "version: v0.0.3\ndependencies: {}\n" > "$d/own_lock"' \
+  '      - uses: actions/cache@3333333333333333333333333333333333333333 # v4\n'
+case_main_content_flags "$APPLIER"
+case_main_stamped_held "$APPLIER"
 
 # Mutant: the census stays silent about an unreadable lock (the defect Codex found
 # on #1565: it read as "this repository has no lock"). It must turn red.
@@ -905,6 +1208,16 @@ list_mutant content_row_writes 's@\[ -n "\$cst" \] \&\& printf@[ -n "$cst" ] \&\
 # say nothing when there is nothing to say.
 list_mutant owner_row_dropped 's@ost=\$\(lock_owner_state "\$rdir/actions\.lock"\)@ost=""@' case_main_owner_stale
 list_mutant owner_row_always 's@\[ -n "\$ost" \] && printf@true \&\& printf@' case_main_owner_clean
+# Deed over-cap census: the row must be written, must not be written for a clean
+# deed, and an unreadable deed must be said, not skipped.
+list_mutant deed_row_dropped 's@dst=\$\(deed_overcap "\$dfile"\)@dst=""@' case_main_deed_overcap
+list_mutant deed_row_always 's@\[ -n "\$dst" \] && printf@true \&\& printf@' case_main_deed_clean
+list_mutant deed_unread_silent 's@^        \*\.unread\)$@        *.unread-never)@' case_main_deed_unread
+# estate_chora.deed is not a repository deed: dropping its exclusion must be caught.
+list_mutant deed_estate_not_excluded 's@ \| select\(\. != "estate_chora\.deed"\)@@' case_main_deed_renamed
+# An explicit --only repository must be checked for existence: this is what stops a
+# typo from becoming a header-only census and a clean exit.
+list_mutant only_existence_unchecked 's@if ! gh api "repos/\$\{ONLY_REPO\}"@if false \&\& gh api "repos/${ONLY_REPO}"@' case_main_only_missing
 }
 
 echo
