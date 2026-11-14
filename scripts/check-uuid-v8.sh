@@ -156,14 +156,18 @@ while IFS= read -r file; do
   esac
   if exempt "$file"; then continue; fi
   # A #u5"…" in an identity field is an error in both modes (owner ruling Q2,
-  # 2026-11-14). #u8"…" there is accepted: it computes to a v8.
+  # 2026-11-14). #u8"…" there is accepted: it computes to a v8. Binary files
+  # are skipped, as for every other rule here. Line breaks are folded to
+  # spaces first, because a deed may put a field and its value on separate
+  # lines. The rule is lexical, like IDENT_RE: a field followed by #u5 fails
+  # wherever it appears, prose and comments included.
   while IFS= read -r pair; do
     [ -n "$pair" ] || continue
     key=${pair%%[[:space:]]*}
     printf '%s: identity field %s carries a #u5 literal; write #uuid"<v8 id>" (%s)\n' "$file" "$key" "$pair" >&2
     status=1
   done <<EOF
-$(scannable_text "$file" 2>/dev/null | grep -aoE -- "$U5_IDENT_RE" || true)
+$(grep -Iq . "$file" 2>/dev/null && scannable_text "$file" | tr '\n\r' '  ' | grep -oE -- "$U5_IDENT_RE" || true)
 EOF
   if grep -IEni -- "$UUID_RE" "$file" >/dev/null 2>&1; then
     # Typed literals first: each #uuid"<id>" must be exactly the literal, and
@@ -196,7 +200,7 @@ EOF
         status=1
       fi
     done <<EOF
-$(scannable_text "$file" | grep -oE -- "$IDENT_RE" || true)
+$(scannable_text "$file" | tr '\n\r' '  ' | grep -oE -- "$IDENT_RE" || true)
 EOF
     # Then every other UUID, with the typed literals removed. Every UUID on a
     # line is checked, not only the last one (grep -o).

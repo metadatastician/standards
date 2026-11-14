@@ -143,6 +143,12 @@ for mode in "" --strict; do
     expect 1 "#u5 in the identity field $key is rejected ${mode:-(default)}" $mode
   done
   names "identity field :repo carries a #u5 literal" "the #u5 rejection names the field ${mode:-(default)}"
+  fresh; printf '(repo-deed\n  :repo-uuid\n  #u5"github.com/o/x")\n' > "$WORK/t/a_chora.deed"
+  expect 1 "#u5 on the line after its identity field is rejected ${mode:-(default)}" $mode
+  fresh; printf '(repo-deed\n  :repo-uuid\n  #uuid"%s")\n' "$V5" > "$WORK/t/a_chora.deed"
+  expect 1 "a v5 #uuid on the line after its identity field is rejected ${mode:-(default)}" $mode
+  fresh; printf '\000\001:repo-uuid \043u5"github.com/o/x"\000' > "$WORK/t/blob.bin"
+  expect 0 "a binary file is not read for #u5 identity fields ${mode:-(default)}" $mode
   fresh; printf '(repo-deed :repo-uuid #u8"gv-clade-index:github.com/o/x" :beholding-chora #u8"chora:estate/github.com/o")\n' > "$WORK/t/a_chora.deed"
   expect 0 "#u8 in identity fields is accepted ${mode:-(default)}" $mode
   fresh; printf '(praxis-deed (alias :registry-name #u5"github.com/o/x"))\n' > "$WORK/t/a_praxis.deed"

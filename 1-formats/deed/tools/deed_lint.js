@@ -655,7 +655,7 @@ export function readMustfileChecks(text, filename = null) {
   const topLevelFields = new Map([
     ["schema-version", new Set(["string"])],
     ["canonical-name", new Set(["string"])],
-    ["beholding-chora", new Set(["uuid5", "uuid8", "uuid"])],
+    ["beholding-chora", new Set(["uuid8", "uuid"])],
   ]);
   const seenTopLevel = new Set();
   const severities = new Set(["critical", "high", "medium", "low"]);
@@ -785,7 +785,7 @@ export function readProofReceipt(text, filename = null) {
   const top = fieldsOf("the receipt", items, {
     "schema-version": { types: ["string"], required: true },
     "canonical-name": { types: ["string"], required: true },
-    "beholding-chora": { types: ["uuid5", "uuid8", "uuid"] },
+    "beholding-chora": { types: ["uuid8", "uuid"] },
     profile: { types: ["symbol"], required: true, oneOf: ["proof-receipt"] },
     repository: { types: ["string"], required: true },
     "source-commit": { types: ["string"], required: true },

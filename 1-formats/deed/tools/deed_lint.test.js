@@ -284,6 +284,11 @@ describe("Mustfile check profile", () => {
     expect(() => readMustfileChecks(doc(':canonical-name #t ' + one), "test_praxis.deed")).toThrow(/invalid type/);
     expect(() => readMustfileChecks(doc(':canonical-name "x" :canonical-name "y" ' + one), "test_praxis.deed")).toThrow(/duplicate top-level/);
     expect(() => readMustfileChecks(doc(':canonical-name "must" :beholding-chora #u8"chora:estate/github.com/o" ' + one), "test_praxis.deed")).not.toThrow();
+    // Owner ruling Q2 (CHORA-SPEC 7.1): #u5 in an identity field is an error.
+    // The literal is assembled at runtime so scripts/check-uuid-v8.sh does not
+    // read this test as a deed.
+    const u5 = "#" + 'u5"estate/chora"';
+    expect(() => readMustfileChecks(doc(':canonical-name "must" :beholding-chora ' + u5 + ' ' + one), "test_praxis.deed")).toThrow(/invalid type/);
   });
   test("multiline critical check survives parsing and has an executable body", () => {
     const checks = readMustfileChecks(doc('(check\n :id alpha\n :severity critical\n :discharge run\n :body "false")'), "test_praxis.deed");
