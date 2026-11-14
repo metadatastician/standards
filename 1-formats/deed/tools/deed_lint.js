@@ -2120,8 +2120,13 @@ export function choraRepoUuid(dir) {
   return c === undefined ? undefined : c.uuid;
 }
 
-/** The one <repo>_chora.deed directly in dir: {uuid, name}, or undefined. */
-export function rootChora(dir) {
+/**
+ * The one <repo>_chora.deed directly in dir: {uuid, name}, or undefined.
+ * needName (the ecosystem profile, YD07) also requires exactly one string
+ * :canonical-name; the YD08 id lookup alone does not, and name is then null
+ * when the chora has none.
+ */
+export function rootChora(dir, { needName = false } = {}) {
   const choras = readdirSync(dir).filter((n) => n.endsWith("_chora.deed") && n !== "estate_chora.deed");
   if (choras.length === 0) return undefined;
   if (choras.length > 1) throw new VerbDescriptileError(`${dir} holds ${choras.length} chora deeds; YD08 needs exactly one`);
@@ -2134,13 +2139,15 @@ export function rootChora(dir) {
   if (id === null) {
     throw new VerbDescriptileError(`${choras[0]} has no version 8 :repo-uuid (#uuid or #u8), so :of-chora cannot be checked against it (YD08)`);
   }
-  // YD07 compares against the chora's name, so a chora without exactly one
-  // string :canonical-name fails here rather than skipping that check.
+  // YD07 compares against the chora's name, so when it is needed a chora
+  // without exactly one string :canonical-name fails here rather than
+  // skipping that check.
   const ns = items.filter((it) => it[0] === "field" && it[1] === "canonical-name");
-  if (ns.length !== 1 || ns[0][2][0] !== "string") {
+  const named = ns.length === 1 && ns[0][2][0] === "string";
+  if (needName && !named) {
     throw new VerbDescriptileError(`${choras[0]} must carry exactly one string :canonical-name to check against (YD07)`);
   }
-  return { uuid: id, name: ns[0][2][1] };
+  return { uuid: id, name: named ? ns[0][2][1] : null };
 }
 
 /**
@@ -2351,7 +2358,7 @@ function ecosystemFiles(files, root, strict) {
       const text = readFileSync(f, "utf8");
       let chora;
       if (root) {
-        chora = rootChora(root);
+        chora = rootChora(root, { needName: true });
         if (chora === undefined) throw new EcosystemError(`--root ${root} holds no <repo>_chora.deed to check against (YD07, YD08)`);
       }
       const r = checkEcosystem(text, f, { repoUuid: chora && chora.uuid, choraName: chora && chora.name, strict });
@@ -2394,7 +2401,7 @@ function ecosystemFixtures(d) {
       let got = true;
       let err = "";
       try {
-        const chora = rootChora(dir);
+        const chora = rootChora(dir, { needName: true });
         const r = checkEcosystem(readFileSync(f, "utf8"), f, {
           repoUuid: chora && chora.uuid, choraName: chora && chora.name, strict: existsSync(join(dir, "STRICT")),
         });
