@@ -145,7 +145,8 @@ under `/2`; `(identity …)`, `(parents …)` and `(ssg …)` under `/1`; A7 J8,
 `(semantic-authority-files …)` paths, parents named only by a
 version 8 chora id, an opaque `#uuid` or a `#u8` literal, never `#u5` (A1 rule V8, A7 S2), no parent twice and never the deed
 itself (a `#u8` `:repo-uuid` is compared by the profile C id
-it names; a `#u5` one is refused, A7 S2), and the clause only at the top level of a repo deed. A deed with
+it names), and the clause only at the top level of a repo deed. A deed whose
+`(anchor …)` sits beside a `#u5` `:repo-uuid` fails, with or without parents (A7 S2). A deed with
 no `(anchor …)` clause passes. Prose: `docs/estate-reconciliation/A7-contractiles-descriptiles-anchor.adoc`,
 proposed in standards#1489; ruling Q11 of the 2026-10-19 ultraplan.
 

@@ -1471,6 +1471,11 @@ export function checkAnchor(text, filename = null, opts = {}) {
   // is reported after the members, as before; members are then read as /1.
   const schemaItem = clauses[0][2].find((it) => it[0] === "field" && it[1] === "schema");
   const major = (schemaItem && schemaItem[2][0] === "string" && ANCHOR_MAJOR[schemaItem[2][1]]) || 1;
+  // A7 S2: a #u5 in an identity field is an error in every mode, so a #u5
+  // :repo-uuid is refused before anything else, with or without (parents …).
+  if (ownUuid === "u5") {
+    throw new AnchorError("the deed's :repo-uuid is a #u5 literal; a version 5 id in an identity field is an error in every mode (A7 S2)");
+  }
   const seen = new Set();
   const parents = [];
   for (const it of clauses[0][2]) {
@@ -1496,11 +1501,6 @@ export function checkAnchor(text, filename = null, opts = {}) {
       if (it[2].length === 0) throw new AnchorError(`${where} is empty`);
       // "A parent never names the deed itself" needs an id to compare with:
       // with none, every parent would pass that check unexamined.
-      // A7 S2: a #u5 in an identity field is an error in every mode, so a
-      // #u5 :repo-uuid is refused here, not converted to compare with.
-      if (ownUuid === "u5") {
-        throw new AnchorError("the deed's :repo-uuid is a #u5 literal; a version 5 id in an identity field is an error in every mode (A7 S2)");
-      }
       if (ownUuid === null) {
         throw new AnchorError(`${where} needs the deed's own :repo-uuid (#uuid or #u8) to check that no parent names the deed itself`);
       }
