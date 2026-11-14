@@ -1155,6 +1155,18 @@ main() {
   WORKDIR=$(mktemp -d); trap 'rm -rf "${WORKDIR:-}"' EXIT
   local repos n=0
   if [ -n "$ONLY_REPO" ]; then
+    # An explicit repository must exist and be readable with this credential. Without
+    # this, a typo, a rename or an inaccessible repository reaches fetch_workflows,
+    # whose GraphQL answer for a null repository is an EMPTY tree (a valid answer for
+    # a repo with no workflows): one repository "walked", a header-only census, exit 0.
+    if [[ ! "$ONLY_REPO" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]]; then
+      log "FATAL: --only must be owner/name, got '${ONLY_REPO}'."
+      exit 1
+    fi
+    if ! gh api "repos/${ONLY_REPO}" --jq '.default_branch' >/dev/null 2>&1; then
+      log "FATAL: --only ${ONLY_REPO}: repository not found or not accessible with this credential. Refusing to report a clean run that walked nothing."
+      exit 1
+    fi
     repos="$ONLY_REPO"
   elif ! repos=$(list_repos); then
     log "FATAL: repository enumeration failed for ${OWNERS}. Refusing to report a partial census."
