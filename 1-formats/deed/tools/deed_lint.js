@@ -1813,7 +1813,7 @@ export function checkEdict(text, filename = null) {
     }
     out.push({ id: id[1], bang, text: f.get("text")[1] });
   }
-  return { verb, rules: out };
+  return { verb, ofChora: of[1], rules: out };
 }
 
 // ---------------------------------------------------------------------------
@@ -1911,6 +1911,9 @@ export function checkVerbDescriptile(text, filename, opts = {}) {
     if (!w) throw E("(fact …) is missing :witnesses, the :id of the rule it witnesses (J5)");
     if (w[0] !== "string" || !EDICT_ID.test(w[1])) throw E("(fact :witnesses …) must be a rule :id: a string of letters, digits, \".\", \"_\" and \"-\"");
     const where = `(fact :witnesses ${JSON.stringify(w[1])})`;
+    if (`contractile/${verb}/${w[1]}`.length > 200) {
+      throw E(`${where}: contractile/${verb}/${w[1]} is longer than 200 characters, so no rule can carry that id (A5 3.1)`);
+    }
     if (seen.has(w[1])) throw E(`${where} appears twice; one fact per rule`);
     seen.add(w[1]);
     if (opts.ruleIds && !opts.ruleIds.has(w[1])) {
@@ -1953,17 +1956,25 @@ export function choraRepoUuid(dir) {
   if (choras.length > 1) throw new VerbDescriptileError(`${dir} holds ${choras.length} chora deeds; YD08 needs exactly one`);
   const f = join(dir, choras[0]);
   const [, items] = validate(readFileSync(f, "utf8"), f);
-  const u = items.find((it) => it[0] === "field" && it[1] === "repo-uuid");
+  const us = items.filter((it) => it[0] === "field" && it[1] === "repo-uuid");
+  if (us.length > 1) throw new VerbDescriptileError(`${choras[0]} carries :repo-uuid ${us.length} times; YD08 needs exactly one`);
+  const u = us[0];
   if (!u || u[2][0] !== "uuid") {
     throw new VerbDescriptileError(`${choras[0]} has no opaque #uuid :repo-uuid, so :of-chora cannot be checked against it (YD08)`);
   }
   return u[2][1];
 }
 
-/** The rule ids of the verb's edict under root, for YD02. */
-function edictRuleIds(root, verb) {
-  const p = join(root, contractilePaths(verb).declaration);
+/**
+ * The rule ids of the verb's edict at path, for YD02. When repoUuid is given,
+ * the edict's own :of-chora must equal it (YD08): facts are never joined
+ * against another repo's rules.
+ */
+export function edictRuleIdsAt(p, repoUuid) {
   const r = checkEdict(readFileSync(p, "utf8"), p);
+  if (repoUuid !== undefined && r.ofChora !== repoUuid) {
+    throw new VerbDescriptileError(`${basename(p)} has :of-chora ${r.ofChora}, not this repo's chora id ${repoUuid} (YD08)`);
+  }
   return new Set(r.rules.map((x) => x.id));
 }
 
@@ -1974,12 +1985,12 @@ function verbDescriptileFiles(files, root) {
     try {
       const text = readFileSync(f, "utf8");
       const verb = verbOfDescriptile(f);
-      const ruleIds = root && verb ? edictRuleIds(root, verb) : undefined;
       let repoUuid;
       if (root) {
         repoUuid = choraRepoUuid(root);
         if (repoUuid === undefined) throw new VerbDescriptileError(`--root ${root} holds no <repo>_chora.deed to check :of-chora against (YD08)`);
       }
+      const ruleIds = root && verb ? edictRuleIdsAt(join(root, contractilePaths(verb).declaration), repoUuid) : undefined;
       const r = checkVerbDescriptile(text, f, { ruleIds, repoUuid });
       console.log(`OK   ${f} (${r === null ? "not a verb descriptile" : `${r.verb} descriptile, ${r.facts.length} fact${r.facts.length === 1 ? "" : "s"}${ruleIds ? ", witnesses and :of-chora checked against the repo" : ""}`})`);
     } catch (e) {
@@ -2024,8 +2035,8 @@ function verbDescriptileFixtures(d) {
       let got = true;
       let err = "";
       try {
-        const ruleIds = existsSync(edict) ? new Set(checkEdict(readFileSync(edict, "utf8"), edict).rules.map((x) => x.id)) : undefined;
         const repoUuid = choraRepoUuid(dir);
+        const ruleIds = existsSync(edict) ? edictRuleIdsAt(edict, repoUuid) : undefined;
         if (checkVerbDescriptile(readFileSync(f, "utf8"), f, { ruleIds, repoUuid }) === null) throw new VerbDescriptileError("not a verb descriptile");
       } catch (e) {
         if (!(e instanceof LintError)) throw e;

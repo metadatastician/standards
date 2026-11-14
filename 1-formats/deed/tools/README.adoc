@@ -240,7 +240,8 @@ Checks `INTENT.deed`, `MUST.deed`, `TRUST.deed`, `ADJUST.deed`, `DUST.deed` and
   `:expires` is still in the future is the runner's check (YD06);
 * the only clause is `(fact …)`: a `(rule …)` belongs in the verb's
   `<Verb>file.deed` (YF02);
-* each fact has `:witnesses` (a rule `:id`, once per file) and `:evidence`
+* each fact has `:witnesses` (a rule `:id`, once per file, with
+  `contractile/<verb>/<id>` at most 200 characters, A5 3.1) and `:evidence`
   (A2 D2's seven symbols), and an optional repo-relative `:source`;
 * outside `BUST.deed` a fact has `:value`; in `BUST.deed` it has `:inherent`
   and `:residual` grades (`[ABCDEX][1-5]`), an optional `:justification`, and
@@ -248,8 +249,10 @@ Checks `INTENT.deed`, `MUST.deed`, `TRUST.deed`, `ADJUST.deed`, `DUST.deed` and
 * with `--root DIR`, every `:witnesses` names a rule of the verb's edict at
   `DIR/.machine_readable/contractiles/<verb>/<Verb>file.deed` (YD02), and
   `:of-chora` equals the `:repo-uuid` of the one `<repo>_chora.deed` in `DIR`
-  (YD08). A `--root` with no directory, or a `DIR` with no chora deed, is an
-  error, never a skipped check.
+  (YD08). The chora deed carries `:repo-uuid` exactly once, and the edict's own
+  `:of-chora` must equal it too, so facts are never joined against another
+  repo's rules. A `--root` with no directory, or a `DIR` with no chora deed,
+  is an error, never a skipped check;
 
     bun deed_lint.js --verb-descriptile MUST.deed [--root REPO]
     bun deed_lint.js --verb-descriptile-fixtures fixtures/verb-descriptile/
