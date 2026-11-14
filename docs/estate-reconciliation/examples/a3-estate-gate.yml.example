@@ -9,6 +9,8 @@ on:
     branches: ["main"]
 permissions:
   contents: read
+  checks: read
+  actions: read
   statuses: write
   id-token: write
 jobs:
