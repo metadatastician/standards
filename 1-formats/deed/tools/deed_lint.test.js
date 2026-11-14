@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MPL-2.0
-// bun test for deed_lint.js (port of deed_lint.py). Run: bun test 1-formats/deed/tools/
+// bun test for deed_lint.js. Run: bun test 1-formats/deed/tools/
 import { describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
 import { cpSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";

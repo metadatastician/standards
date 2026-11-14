@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 // SPDX-License-Identifier: MPL-2.0
-// Port of deed_lint.py to plain JavaScript (bun, zero dependencies).
+// The DEED conformance validator, plain JavaScript (bun, zero dependencies).
+// It began as a port of deed_lint.py, which was deleted on 2026-11-13.
 const DOC = String.raw`deed-lint — conformance validator for the DEED grammar (deed.abnf v1.5.0).
 
 Stdlib-only. Implements the normative grammar faithfully:

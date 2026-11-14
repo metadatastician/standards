@@ -43,7 +43,7 @@ launcher-standard_praxis.deed
 **There is no such file as `launcher-standard.deed`.** DEED filenames are a
 closed dispatch set of four shapes, and the in-file head must match the
 filename. A file named `launcher-standard.deed` matches no row and is rejected
-by `deed_lint.py` **at line 1** — verified by mutant, not read off the spec.
+by the deed validator (then `deed_lint.py`, now `deed_lint.js`) **at line 1** — verified by mutant, not read off the spec.
 "Convert X to `.deed`" therefore never produces `X.deed`.
 ====
 
@@ -208,8 +208,8 @@ is total over the source: all 18 sections are accounted for.
   `[aliases]` quoted keys and the inline-table arrays were encoded correctly
   rather than line-scraped.
 * **P-2 (output must parse as DEED):** the emitted deed is validated by
-  `1-formats/deed/tools/deed_lint.py`, the estate's own conformance tool —
-  stdlib-only, and the same one `deed-conformance.yml` runs over every committed
+  the estate's own conformance tool, at the time `1-formats/deed/tools/deed_lint.py`
+  (since deleted; `deed_lint.js` replaced it), the same one `deed-conformance.yml` runs over every committed
   `*.deed`. **Result: `OK`**, with `--self-test` (14-case corpus) and
   `--fixtures` green in the same run as positive controls, so a pass is
   attributable to the file and not to a broken validator.
@@ -235,7 +235,7 @@ said so — reading the dispatch table is not the same as testing it.
   and dispatch is **exact-stem-first** — `estate_chora.deed` is tested before
   `*_chora.deed`. This file's stem is `launcher-standard_praxis`, matching the
   `<stem>_praxis.deed` row, and the in-file head `(praxis-deed` agrees.
-* **P-5 (`a2ml_to_deed.py` was NOT used, deliberately):** the estate's
+* **P-5 (`a2ml_to_deed.py`, since deleted, was NOT used, deliberately):** the estate's
   translator **fails closed on untabled fields** by design, and
   `launcher-standard` is not in its table. This translation is hand-encoded
   against this spec. ⚠ Adding a table entry that made the generic translator
@@ -268,7 +268,7 @@ said so — reading the dispatch table is not the same as testing it.
 [source,bash]
 ----
 # 1. The deed exists and validates under the estate's own tool.
-python3 1-formats/deed/tools/deed_lint.py launcher/launcher-standard_praxis.deed   # ⇒ OK
+bun 1-formats/deed/tools/deed_lint.js launcher/launcher-standard_praxis.deed   # ⇒ OK
 
 # 2. The a2ml source is GONE, not moved aside (A2ML doctrine: do not push it around).
 test ! -e launcher/launcher-standard.a2ml
