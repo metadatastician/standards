@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 = A6: The Carve-out Map for standards (by change rate)
-:version: 0.2.4-draft
-:status: DRAFT v0.2.4 (owner ruling Q6 of 2026-11-14: deprecated reusables are retired, not moved, and CR5 excludes them). Decisions H1 to H12 approved by the owner on 2026-11-10. Not yet ratified as a whole. Builds on A1 v0.4.1, A2 v0.2.4, A3 v0.2.9, A4 v0.2.3 and A5 v0.2.4. Consistency pass applied 2026-11-10. Proposed in standards#1474; bot-review fixes applied 2026-11-12.
+:version: 0.2.5-draft
+:status: DRAFT v0.2.5 (CR5 also leaves out the 2 fork-governance reusables that C18 keeps, so it moves 14 and CR0 keeps 1,519; earlier: owner ruling Q6 of 2026-11-14: deprecated reusables are retired, not moved, and CR5 excludes them). Decisions H1 to H12 approved by the owner on 2026-11-10. Not yet ratified as a whole. Builds on A1 v0.4.1, A2 v0.2.4, A3 v0.2.9, A4 v0.2.3 and A5 v0.2.4. Consistency pass applied 2026-11-10. Proposed in standards#1474; bot-review fixes applied 2026-11-12.
 :toc:
 
 Specification A6 of the Estate Reconciliation Plan. R3 rules that `standards` is carved out by change rate (campaign #479). A6 defines the metric, the ordered rules that give every file one destination, the mechanism of a move, and the tests. It moves no file.
@@ -25,7 +25,7 @@ Identifiers. Every decision, law and test id in this specification is local to i
 * The metric is the number of commits that touch a unit in the last 90 days, in 4 bands: hot (20 or more), warm (5 to 19), cool (at least 1 in 180 days) and cold (none in 180 days) [O]. The unit is a `standards-map.toml` entry, with `mixed` entries split by subdirectory.
 * Every one of the 3,146 tracked files already falls under a map entry [M]. A6 does not add a map. It adds a rate and a destination to the one that exists.
 * Hot machinery goes to the homes that A3 to A5 name: checks and reusable workflows to `proven-cicd`; ruleset, settings and apply tooling to `git-logistics-office`; rules to `hypatia` (held, see H11); deed and k9 specifications to their own repos [O]. The operations diary goes to `metadatastician-governance` [O].
-* A first-pass set of 10 ordered rules assigns 438 files to a destination outside `standards` and keeps 1,517 files as canon and as the repo's own working files, the 3 deprecated reusables among them until they are retired. The 1,191 archive files stay (section 6.1).
+* A first-pass set of 10 ordered rules assigns 436 files to a destination outside `standards` and keeps 1,519 files as canon and as the repo's own working files, the 3 deprecated reusables among them until they are retired. The 1,191 archive files stay (section 6.1).
 * The first pass does not make `standards` quiet. 75% of the commits of the last 90 days still touch a file that stays [M]. The activity that stays is mainly the repo's own working files, not the canon (section 5).
 * Only 2 of the 70 canonical entries move: `1-formats/deed` and `2-protocols/k9-coordination`, both already ruled in the plan [M].
 * A move is one rule group per PR: a signed squash-import into the destination with a link back to the `standards` commit, a pointer left behind, the map and `canon.lock` updated in the same commit. No sweep, no bulk move.
@@ -88,15 +88,15 @@ Each tracked file takes the destination of the first rule that matches it. The l
 | CR2b | `1-formats/k9/**` and `2-protocols/k9-coordination/**` | `k9-ecosystem` (H2) | 114
 | CR3 | `config/**` (ruleset, settings, autolinks, gitleaks, canon JSON) | `git-logistics-office` | 20
 | CR4 | `hypatia-rules/**` | `hypatia`, held (H11): 10 of the 11 files are `.a2ml` | 11
-| CR5 | `.github/workflows/*-reusable.yml`, except the 3 deprecated ones (4.3, Q6), which fall through to CR0 | `proven-cicd` (resolves A3 E4) | 16
+| CR5 | `.github/workflows/*-reusable.yml`, except the 3 deprecated ones (Q6) and the 2 that implement a `standards` specification (4.3, C18), which fall through to CR0 | `proven-cicd` (resolves A3 E4) | 14
 | CR6 | `scripts/**/check-*`, `verify-*`, `filter-*`, `verdict-*` | `proven-cicd` (H5) | 87
 | CR7 | `scripts/**/apply-*`, `set-*`, `widen-*`, `propagate-*`, `relock-*`, `fix-*`, `remove-*` | `git-logistics-office` as order classes and farm leaves (A4 section 9) | 30
 | CR8 | `scripts/**/triage-*`, `estate-*` | `metadatastician-governance` | 11
 | CR9 | `docs/reorg/**`, `docs/triage/**`, `docs/audits/**`, `docs/superpowers/**`, `docs/reports/**`, `docs/archive/**`, `audits/**`, and `docs/*` files named `ULTRAPLAN*`, `RECONCILIATION*`, `tech-debt-*` or containing a date | `metadatastician-governance` [O] | 61
-| CR0 | everything else, including the 3 deprecated reusables until they are retired | stays in `standards` | 1,517
+| CR0 | everything else, including the 2 fork-governance reusables and the 3 deprecated reusables until they are retired | stays in `standards` | 1,519
 |===
 
-Totals [M]: 438 files leave (88 + 114 + 20 + 11 + 16 + 87 + 30 + 11 + 61, before the held files of H11 and the exceptions of section 5 reduce it); 1,517 stay as live files, the 3 deprecated reusables among them until each is retired and deleted (4.3); 1,191 stay as archive. The repo tracks 223 `.a2ml` files. The rules send 149 to stay, 63 to the archive, 10 to `hypatia` (rule CR4) and 1 to `metadatastician-governance`. The estate rule is that no `.a2ml` file is created or extended in any repo [M: `standards/.claude/CLAUDE.md`]. A copy of an `.a2ml` file into another repo is a new file there, so those 11 are held until the owner rules (H11).
+Totals [M]: 436 files leave (88 + 114 + 20 + 11 + 14 + 87 + 30 + 11 + 61, before the held files of H11 and the exceptions of section 5 reduce it); 1,519 stay as live files, the 3 deprecated reusables among them until each is retired and deleted (4.3); 1,191 stay as archive. The repo tracks 223 `.a2ml` files. The rules send 149 to stay, 63 to the archive, 10 to `hypatia` (rule CR4) and 1 to `metadatastician-governance`. The estate rule is that no `.a2ml` file is created or extended in any repo [M: `standards/.claude/CLAUDE.md`]. A copy of an `.a2ml` file into another repo is a new file there, so those 11 are held until the owner rules (H11).
 
 === 4.2 Things the rules deliberately keep
 
