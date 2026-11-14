@@ -229,13 +229,16 @@ SHV=PLANTED_CANARY_VALUE_NOT_REAL
   # is per match, so this line must still be reported (a per-line exemption
   # skipped it: the false negative Codex found on #1570).
   printf 'SIGNING_KEY_PATH="/tmp/key.pem"; AUTH_KEY="%s_10"\n' "$SHV"
+  # Likewise a real credential followed by a variable assignment on the same line:
+  # the param-expansion exemption is per match too (the next Codex finding).
+  printf 'AUTH_KEY="%s_11"; FALLBACK="$FALLBACK"\n' "$SHV"
 } > "$WORK/shreal/deploy.sh"
 shexpect shreal 1 "AUTH/ENCRYPTION/SIGNING/API *_KEY literals -> BLOCKS"
 shfound=$( cd "$WORK/shreal" && bash "$SHELL_SCAN" 2>&1 | grep -c '^::warning::' )
-if [ "${shfound:-0}" -eq 5 ]; then
-  echo "  PASS  all 5 planted shell *_KEY secrets reported (incl. one beside a path assignment)"; pass=$((pass+1))
+if [ "${shfound:-0}" -eq 6 ]; then
+  echo "  PASS  all 6 planted shell *_KEY secrets reported (incl. beside a path assignment and beside a variable assignment)"; pass=$((pass+1))
 else
-  echo "  FAIL  only ${shfound:-0}/5 planted shell *_KEY secrets reported — blind spot"; fail=$((fail+1))
+  echo "  FAIL  only ${shfound:-0}/6 planted shell *_KEY secrets reported — blind spot"; fail=$((fail+1))
 fi
 
 mk shclean ok.sh <<'EOF'
@@ -246,6 +249,7 @@ AUTH_KEY="${AUTH_KEY:?set AUTH_KEY from a secret}"
 ENCRYPTION_KEY="$ENCRYPTION_KEY"
 SSH_PRIVATE_KEY_FILE="/home/runner/work/project/.ssh/id_ed25519"
 SIGNING_KEY_PATH="/var/lib/application/keys/signing.pem"
+PASSWORD="${DB_PASSWORD:?set it from a secret}"
 EOF
 shexpect shclean 0 "non-secret key names, variable references and *_KEY_FILE/_PATH locations -> clean"
 
