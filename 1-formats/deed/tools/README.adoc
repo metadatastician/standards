@@ -142,7 +142,7 @@ each sub-clause, `:schema "hyperpolymath.anchor/1"` and a non-empty
 `:last-updated` that is a real calendar date, repo-relative
 `(semantic-authority-files …)` paths, parents named only by a
 version 8 chora id, an opaque `#uuid` or a `#u8` literal, never `#u5` (A1 rule V8, A7 S2), no parent twice and never the deed
-itself (a legacy `#u8` or `#u5` `:repo-uuid` is compared by the profile C id
+itself (a `#u8` `:repo-uuid` is compared by the profile C id; a `#u5` one is refused, A7 S2
 it names), and the clause only at the top level of a repo deed. A deed with
 no `(anchor …)` clause passes. Prose: `docs/estate-reconciliation/A7-contractiles-descriptiles-anchor.adoc`,
 proposed in standards#1489; ruling Q11 of the 2026-10-19 ultraplan.
