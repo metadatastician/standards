@@ -276,6 +276,12 @@ kill_mutant envpin_flow_value_silent 's@if \(tracked\) printf "ENV-PIN-UNJUDGED\
 # structure, so it must not end (or open) a flow collection early.
 kill_mutant envpin_flow_comment_counted 's@else if \(ch == "#" && prev ~ /\[\[:space:\]\]/\) break@else if (0) break@' "FAIL envpin-rows"
 kill_mutant envpin_flow_quote_counted 's@else if \(ch == "\\047" \|\| ch == "\\""\) q = ch@else if (0) q = ch@' "FAIL envpin-rows"
+# Seventh Codex round on #1602: an anchor or tag on a mapping key, a CR or trailing
+# whitespace after a block-scalar header, and a quote that stays open across the lines
+# of a flow collection must each be handled.
+kill_mutant envpin_key_props_kept 's@if \(!match\(bp, @if (!match(body, @' "FAIL envpin-rows"
+kill_mutant envpin_trailing_space_kept 's@^    \{ sub\(/\[\[:space:\]\]\+\$/, ""\) \}$@    { }@' "FAIL envpin-rows"
+kill_mutant envpin_flow_quote_reset 's@n = length\(line\); q = fq; d = 0@n = length(line); q = ""; d = 0@' "FAIL envpin-rows"
 
 # --- 3. fetch_workflows fails CLOSED -----------------------------------------
 # A rate-limited repo used to come back as "no workflows": fetch_workflows

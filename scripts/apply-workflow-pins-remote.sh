@@ -81,7 +81,9 @@
 # a same-named key under `with:` or `inputs:`, the body of a `run: |` block, a flow
 # style `env: {…}` and a quoted key get no row. A flow collection (also one
 # that runs over several lines) is tracked to its closing bracket and never read as
-# keys; a tracked key whose own value is one gets an ENV-PIN-UNJUDGED row. A `#` inside a quoted value is part of
+# keys; a tracked key whose own value is one gets an ENV-PIN-UNJUDGED row. Node
+# properties on a key (`&pin CANON_REF:`) are dropped before the key is read; trailing
+# whitespace and CR are ignored; the quote state of a flow collection carries across lines. A `#` inside a quoted value is part of
 # the value. The target is compared case-insensitively. A tracked key with a block
 # scalar or multi-line quoted value gets an ENV-PIN-UNJUDGED row; the lines of a
 # multi-line quoted scalar are not read as keys.
@@ -483,9 +485,10 @@ env_pin_rows() {
     # depth: net open flow brackets in a line (a flow collection `{...}` or `[...]` may
     # run over several lines). Scanned character by character: a bracket inside a quoted
     # scalar, or after a `#` that starts a comment (at the line start or after
-    # whitespace), is text, not structure.
+    # whitespace), is text, not structure. The quote still open at the end of the line
+    # is kept in fq, so a quoted scalar that runs over several lines is followed.
     function depth(line,   i, n, ch, q, d, prev) {
-      n = length(line); q = ""; d = 0; prev = " "
+      n = length(line); q = fq; d = 0; prev = " "
       for (i = 1; i <= n; i++) {
         ch = substr(line, i, 1)
         if (q != "") { if (ch == "\\" && q == "\"") i++; else if (ch == q) q = "" }
@@ -495,11 +498,13 @@ env_pin_rows() {
         else if (ch == "}" || ch == "]") d--
         prev = ch
       }
+      fq = q
       return d
     }
-    BEGIN { tgt = tolower(target); top = 0; skip = -1; inq = "" ; flow = 0 }
+    BEGIN { tgt = tolower(target); top = 0; skip = -1; inq = "" ; flow = 0; fq = "" }
+    { sub(/[[:space:]]+$/, "") }
     inq != "" { if (qclose($0, inq)) inq = ""; next }
-    flow > 0 { flow += depth($0); next }
+    flow > 0 { flow += depth($0); if (flow <= 0) { flow = 0; fq = "" } next }
     /^[[:space:]]*$/ { next }
     /^[[:space:]]*#/ { next }
     {
@@ -509,19 +514,19 @@ env_pin_rows() {
       body = substr(s, n + 1)
       while (match(body, /^-[[:space:]]+/)) { n += RLENGTH; body = substr(body, RLENGTH + 1) }
       bp = props(body); c0 = substr(bp, 1, 1)
-      if (c0 == "{" || c0 == "[") { d = depth(bp); if (d > 0) flow = d; next }
+      if (c0 == "{" || c0 == "[") { fq = ""; d = depth(bp); if (d > 0) flow = d; else fq = ""; next }
       if ((c0 == "\047" || c0 == "\"") && !qclose(substr(bp, 2), c0)) { inq = c0; next }
-      if (!match(body, /^[A-Za-z_][A-Za-z0-9_.-]*[[:space:]]*:([[:space:]]|$)/)) next
+      if (!match(bp, /^[A-Za-z_][A-Za-z0-9_.-]*[[:space:]]*:([[:space:]]|$)/)) next
       kl = RLENGTH
-      key = substr(body, 1, kl); sub(/[[:space:]]*:.*$/, "", key)
-      rest = substr(body, kl + 1); sub(/^[[:space:]]+/, "", rest); rest = props(rest)
+      key = substr(bp, 1, kl); sub(/[[:space:]]*:.*$/, "", key)
+      rest = substr(bp, kl + 1); sub(/^[[:space:]]+/, "", rest); rest = props(rest)
       while (top > 0 && ind[top] >= n) top--
       parent = (top > 0) ? knm[top] : ""
       top++; ind[top] = n; knm[top] = key
       tracked = (key ~ ("^(" names ")$") && parent == "env")
       if (rest ~ /^[\{\[]/) {
         if (tracked) printf "ENV-PIN-UNJUDGED\t%s L%d value is a flow collection; not judged\n", key, NR
-        d = depth(rest); if (d > 0) flow = d
+        fq = ""; d = depth(rest); if (d > 0) flow = d; else fq = ""
         next
       }
       r2 = rest; sub(/[[:space:]]+#.*$/, "", r2)
@@ -1337,6 +1342,20 @@ JSON
     printf '  STANDARDS_PIN: %s }\n' "$t"
     printf 'env: { A: "}", # note\n'
     printf '  CANON_REF: %s }\n' "$eb"
+    printf 'env:\n'
+    printf '  &pin CANON_REF: %s\n' "$eb"
+    printf '&e env:\n'
+    printf '  STANDARDS_PIN: %s\n' "$t"
+    printf 'run: |   \n'
+    printf '  env:\n'
+    printf '    CANON_REF: %s\n' "$eb"
+    printf 'run: >\r\n'
+    printf '  env:\n'
+    printf '    CANON_REF: %s\n' "$eb"
+    printf 'env:\n'
+    printf '  OTHER: { A: "first\n'
+    printf '    } text",\n'
+    printf '  CANON_REF: %s }\n' "$eb"
   } > "$d/envpin.yml"
   local ep; ep=$(env_pin_rows "$d/envpin.yml" "$t" | tr '\t' '|')
   local epw="ENV-PIN-FRESH|STANDARDS_PIN L2 ${t:0:8}
@@ -1357,7 +1376,9 @@ ENV-PIN-FRESH|STANDARDS_PIN L37 ${t:0:8}
 ENV-PIN-BEHIND|CANON_REF L38 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here
 ENV-PIN-UNJUDGED|STANDARDS_PIN L39 value is a block scalar; not judged
 ENV-PIN-UNJUDGED|STANDARDS_PIN L49 value is a flow collection; not judged
-ENV-PIN-BEHIND|CANON_REF L50 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here"
+ENV-PIN-BEHIND|CANON_REF L50 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here
+ENV-PIN-BEHIND|CANON_REF L57 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here
+ENV-PIN-FRESH|STANDARDS_PIN L59 ${t:0:8}"
   if [ "$ep" = "$epw" ]; then echo "  PASS envpin-rows -> $(printf '%s\n' "$ep" | wc -l) row(s)"
   else echo "  FAIL envpin-rows -> got:
 $ep
