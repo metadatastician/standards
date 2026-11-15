@@ -271,6 +271,38 @@ check "an @-mention in an id or a reason is not live" no "$(grep -q '@hyperpolym
 check "missing --results exits 2" 2 "$(bash "$GRID" render --out "$WORK/o12" >/dev/null 2>&1; echo $?)"
 check "unknown subcommand exits 2" 2 "$(bash "$GRID" frobnicate >/dev/null 2>&1; echo $?)"
 
+# 12. Comparison with the PR's base (a grid of the base tree, same checker): no
+# profile, PR or commit gate; failure modes are said, never blank.
+render "$WORK/o12base-bad" --results "$WORK/r-fail" --expected "$WORK/expected" "${good_evidence[@]}" --sha 3333333333333333333333333333333333333333
+render "$WORK/o12base-ok" --results "$WORK/r-clean" --expected "$WORK/expected" "${good_evidence[@]}" --sha 4444444444444444444444444444444444444444
+col() { grep "$2" "$1/report.md" | head -1; }
+render "$WORK/o12a" --results "$WORK/r-clean" --expected "$WORK/expected" "${good_evidence[@]}" --pr 9 --base-report "$WORK/o12base-bad/report.json"
+check "base: header is renamed" yes "$(grep -q '| This PR vs its base |' "$WORK/o12a/report.md" && echo yes || echo no)"
+check "base: a fixed row is improved" yes "$(col "$WORK/o12a" 'K9 live corpus' | grep -q '↑ improved (1 fewer blocking failures)' && echo yes || echo no)"
+check "base: typecheck and self-test are checker-only" 2 "$(grep -c '— checker only; same toolchain as base' "$WORK/o12a/report.md")"
+check "base: names the base commit" yes "$(grep -q '^Base: 333333333333' "$WORK/o12a/report.md" && echo yes || echo no)"
+check "base: the marker and lane comment are unchanged" yes "$(head -1 "$WORK/o12a/report.md" | grep -qx '<!-- verdict-grid:k9 regenerated on every run -->' && grep -q '<!-- k9-baseline:' "$WORK/o12a/report.md" && echo yes || echo no)"
+render "$WORK/o12b" --results "$WORK/r-fail" --expected "$WORK/expected" "${good_evidence[@]}" --pr 9 --base-report "$WORK/o12base-ok/report.json"
+check "base: a new failure is regressed" yes "$(col "$WORK/o12b" 'K9 live corpus' | grep -q '↓ regressed (1 more blocking failures)' && echo yes || echo no)"
+render "$WORK/o12c" --results "$WORK/r-clean" --expected "$WORK/expected" "${good_evidence[@]}" --pr 9 --base-report "$WORK/o12base-ok/report.json"
+check "base: no movement is unchanged" yes "$(col "$WORK/o12c" 'K9 live corpus' | grep -q '↔ unchanged' && echo yes || echo no)"
+render "$WORK/o12d" --results "$WORK/r-clean" --expected "$WORK/expected" "${good_evidence[@]}" --pr 9 --base-error "cannot check out abc123 | <x>"
+check "base: an unproducible base is said, escaped" yes "$(col "$WORK/o12d" 'K9 live corpus' | grep -q '— base not checkable: cannot check out abc123 &#124; &lt;x&gt;' && echo yes || echo no)"
+check "base: error rows are never blank" 0 "$(grep '^| K9' "$WORK/o12d/report.md" | awk -F'|' '{gsub(/ /,"",$8); print $8}' | grep -c '^$')"
+jq '.categories |= map(if .id == "corpus" then .counts.indeterminate = 1 else . end)' "$WORK/o12base-ok/report.json" > "$WORK/base-indet.json"
+render "$WORK/o12e" --results "$WORK/r-clean" --expected "$WORK/expected" "${good_evidence[@]}" --pr 9 --base-report "$WORK/base-indet.json"
+check "base: indeterminate on the base side is not graded" yes "$(col "$WORK/o12e" 'K9 live corpus' | grep -q '| — indeterminate |' && echo yes || echo no)"
+jq '.categories |= map(if .id == "corpus" then .counts.not_applicable = 3 else . end)' "$WORK/o12base-ok/report.json" > "$WORK/base-scope.json"
+render "$WORK/o12f" --results "$WORK/r-clean" --expected "$WORK/expected" "${good_evidence[@]}" --pr 9 --base-report "$WORK/base-scope.json"
+check "base: a changed N/A count is a scope change" yes "$(col "$WORK/o12f" 'K9 live corpus' | grep -q '| — scope changed |' && echo yes || echo no)"
+echo '{"categories": "nope"}' > "$WORK/base-bad.json"
+render "$WORK/o12g" --results "$WORK/r-clean" --expected "$WORK/expected" "${good_evidence[@]}" --pr 9 --base-report "$WORK/base-bad.json"
+check "base: a malformed base report is an error, not a fallback" yes "$(col "$WORK/o12g" 'K9 live corpus' | grep -q 'base not checkable: the base grid report is malformed' && echo yes || echo no)"
+render "$WORK/o12h" --results "$WORK/r-clean" --expected "$WORK/expected" "${good_evidence[@]}" --pr 9 --base-report "$WORK/does-not-exist.json"
+check "base: an unreadable base report is an error" yes "$(col "$WORK/o12h" 'K9 live corpus' | grep -q 'base not checkable: the base grid report could not be read' && echo yes || echo no)"
+render "$WORK/o12i" --results "$WORK/r-clean" --expected "$WORK/expected" "${good_evidence[@]}" --sha 2222222222222222222222222222222222222222 --pr 7 --previous "$WORK/o11a/report.md"
+check "no base given: the previous-revision column and header are unchanged" yes "$(grep -q '| Since previous revision |' "$WORK/o12i/report.md" && col "$WORK/o12i" 'K9 live corpus' | grep -q '↑ improved' && echo yes || echo no)"
+
 echo
 echo "k9-grid-test: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

@@ -38,7 +38,7 @@ Every grid has exactly these parts, in this order.
 |The overall state label, the commit (12 hex), the run link, the scanner commits where a tool is pinned, and `working tree modified` when rendered locally on a dirty tree.
 
 |Grid
-|One table. Conformance lanes: `Category · Status · Pass · Fail · Indeterminate · N/A · Since previous revision`. Findings lanes: `Reporter · Gate · Status · Critical · High · Medium · Minor · Since previous revision`, where `Gate` is `gating` or `advisory` (fork-governance SPEC §3.1). Counts are results, files or findings, never lines of log.
+|One table. Conformance lanes: `Category · Status · Pass · Fail · Indeterminate · N/A · This PR vs its base` (a lane that cannot grade a base tree keeps `Since previous revision`). Findings lanes: `Reporter · Gate · Status · Critical · High · Medium · Minor · Since previous revision`, where `Gate` is `gating` or `advisory` (fork-governance SPEC §3.1). Counts are results, files or findings, never lines of log.
 
 |Accordion
 |One `<details>` block per row that has anything to show: every non-passing item or finding, worst first, at most 20, with a count of the rest. A row whose evidence is missing shows its reason here too.
@@ -237,7 +237,20 @@ advisory.
 
 == Comparison
 
-"Since previous revision" compares the current grid with the baseline
+*Conformance lanes (K9): "This PR vs its base".* The lane runs its own validator and
+renderer on the base tree (a pull request's merge base; a push's `before`) and
+renders that grid with the identical toolchain, so the comparison is like-for-like by
+construction. There is no profile, PR or commit gate and no comment is read. Rows
+grade as below (blocking failures first, then failures, advisories and warnings);
+`typecheck` and `selftest` grade the checker, not the tree, and read
+`— checker only; same toolchain as base`. A side with indeterminate evidence reads
+`— indeterminate`, a changed N/A count `— scope changed`, and a base that could not
+be graded `— base not checkable: <why>`; the column is never blank. The
+`<!-- k9-baseline:… -->` blob is still embedded, for consumers that parse it, but is
+not read for comparison. A lane that has no base grid (an older pinned
+`conformance-k9.sh`) keeps the previous-revision comparison below.
+
+*Other lanes: "Since previous revision".* "Since previous revision" compares the current grid with the baseline
 embedded in the lane's previous bot-authored comment on the same PR, and only when the
 schema and the *profile* match and the commit differs. This is a comparison of
 *PR revisions*, not repository history across PRs, and it is different from the

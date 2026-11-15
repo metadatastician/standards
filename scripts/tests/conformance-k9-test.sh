@@ -47,6 +47,30 @@ grep -qx 'SELFTEST_CODE=0' "$T/env" && ok "selftest records SELFTEST_CODE" || ba
 { grep -qx 'CORPUS_CODE=3' "$T/env" && [ "$(wc -l < "$W/.tmp/results.jsonl")" -eq 2 ]; } \
   && ok "validate runs every enumerated file and records the worst exit status" || bad "validate: $(cat "$T/env") results=$(cat "$W/.tmp/results.jsonl" 2>/dev/null)"
 
+# base: the lane's own checker on the base tree. A real renderer, a stub validator.
+mkdir -p "$C/scripts/lib"; cp "$ROOT/scripts/k9-grid.sh" "$C/scripts/"; cp "$ROOT/scripts/lib/k9-grid.jq" "$C/scripts/lib/"
+B="$T/b"; mkdir -p "$B"; git -C "$B" init -q -b main; git -C "$B" config user.email t@t; git -C "$B" config user.name t
+: > "$B/a.k9.ncl"; git -C "$B" add -A; git -C "$B" commit -q -m one; B1=$(git -C "$B" rev-parse HEAD)
+: > "$B/b.k9.ncl"; git -C "$B" add -A; git -C "$B" commit -q -m two; B2=$(git -C "$B" rev-parse HEAD)
+mkdir -p "$B/.tmp"; : > "$B/.tmp/selftest.log"; : > "$B/.tmp/typecheck.log"
+base() { # base BASE_SHA [EVENT]
+  rm -rf "$B/.tmp/k9-base-grid" "$B/.tmp/base-error"; : > "$T/env"
+  (cd "$B" && env CANON="$C" RUNNER_TEMP="$B/.tmp" GITHUB_ENV="$T/env" GITHUB_EVENT_NAME="${2:-pull_request}" BASE_SHA="$1" HEAD_SHA="$B2" \
+      LEDGER=.machine_readable/k9-contract-debt.txt ADVISORY=false GITHUB_RUN_ID=1 GITHUB_REPOSITORY=x/y SELFTEST_CODE=0 TYPECHECK_CODE=0 \
+      bash "$LANE" base >"$T/base.out" 2>&1); rc=$?
+}
+base ""
+{ [ $rc -eq 0 ] && grep -q 'no base commit' "$B/.tmp/base-error"; } && ok "base: no base commit is said, not blank" || bad "base none: rc=$rc $(cat "$B/.tmp/base-error" 2>&1)"
+base deadbeefdeadbeefdeadbeefdeadbeefdeadbeef
+{ [ $rc -eq 0 ] && grep -q 'cannot resolve the base commit' "$B/.tmp/base-error" && [ ! -d "$B/.tmp/k9-base-grid" ]; } && ok "base: an unresolvable base reports an error and no grid" || bad "base unresolvable: rc=$rc $(cat "$B/.tmp/base-error" 2>&1)"
+base "$B1"
+{ [ $rc -eq 0 ] && [ -s "$B/.tmp/k9-base-grid/report.json" ] && [ ! -e "$B/.tmp/base-error" ] && [ "$(jq -r .sha "$B/.tmp/k9-base-grid/report.json")" = "$B1" ]; } \
+  && ok "base: a good base is graded with this checker and leaves its report" || bad "base good: rc=$rc $(cat "$T/base.out")"
+[ "$(wc -l < "$B/.tmp/base/results.jsonl")" -eq 1 ] && ok "base: it validates the base tree's files (one), not the head's (two)" || bad "base tree files: $(cat "$B/.tmp/base/results.jsonl")"
+[ -z "$(git -C "$B" worktree list | sed 1d)" ] && ok "base: the temporary worktree is removed" || bad "worktree left behind"
+base "$B1" push
+[ -s "$B/.tmp/k9-base-grid/report.json" ] && ok "base: a push compares with the commit it replaced" || bad "base push: $(cat "$B/.tmp/base-error" 2>&1)"
+
 bash "$LANE" bogus >/dev/null 2>&1; [ $? -eq 2 ] && ok "an unknown subcommand is a usage error (2)" || bad "usage exit status"
 
 # mutant: without the .standards-checkout exclusion the selection control must fail
