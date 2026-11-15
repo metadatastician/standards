@@ -291,7 +291,7 @@ kill_mutant envpin_quote_escape_first 's@q = qend\(val\)@q = index(substr(val, 2
 # Ninth round on #1602: a block scalar as a sequence item, a plain scalar that continues on
 # the next line, and YAML explicit mapping keys (not parsed, and said so).
 kill_mutant envpin_seq_blockscalar_read 's@skip = n0; next@next@' "FAIL envpin-rows"
-kill_mutant envpin_plain_continuation_ignored 's@if \(n > pn\) outr\(pcont, pv\); else outr\(pend, pv\)@outr(pend, pv)@' "FAIL envpin-rows"
+kill_mutant envpin_plain_continuation_ignored 's@if \(n > pn\) flushp\(pcont\); else flushp\(pend\)@flushp(pend)@' "FAIL envpin-rows"
 kill_mutant envpin_explicit_key_silent 's@if \(!xwarn\) \{ xwarn = 1; outr@if (0) { xwarn = 1; outr@' "FAIL envpin-explicit-key"
 # Tenth round on #1602: a doubled single quote inside a flow scalar, and escapes in a
 # double-quoted key.
@@ -903,6 +903,33 @@ case_main_content_refresh_envpin() {
   done
 }
 
+# case_main_content_refresh_envpin_swap <applier> — the comparison keeps each assignment's
+# mapping path and the document order. A refresh that EXCHANGES two env pins between two
+# jobs (same values, same count) is reported, and so is one that moves the same pins under
+# different job names; an identical layout is not.
+case_main_content_refresh_envpin_swap() {
+  local d scen oa ob ta tb want label
+  local -a scens=(
+    "a|b|a|b|release|main|main|release|3|exchanged between two jobs"
+    "a|b|x|y|main|release|main|release|3|moved under other job names"
+    "a|b|a|b|main|release|main|release|0|laid out identically"
+  )
+  for scen in "${scens[@]}"; do
+    IFS='|' read -r oa ob ta tb ova ovb tva tvb want label <<< "$scen"
+    d=$(new_case contentrefreshswap)
+    content_fixture "$1" "$d"
+    stamp_into "$1" "$d/proven_template.yml" proven-lock-gate 0.2.0 "$(printf 'name: gate\nenv:\n  # proven-cicd:local-next\n  PROVEN_SHA: "%s"\njobs:\n  %s:\n    env:\n      CANON_REF: %s\n  %s:\n    env:\n      CANON_REF: %s\n' "$CO_NEW" "$ta" "$tva" "$tb" "$tvb")"
+    stamp_into "$1" "$d/own_stamped" proven-lock-gate 0.1.0 "$(printf 'name: gate\nenv:\n  # proven-cicd:local-next\n  PROVEN_SHA: "%s"\njobs:\n  %s:\n    env:\n      CANON_REF: %s\n  %s:\n    env:\n      CANON_REF: %s\n' "$CO_OLD" "$oa" "$ova" "$ob" "$ovb")"
+    run_content "$d" "$1" --fix-content --proven-sha "$P"
+    if [ "$(cat "$d/rc")" = 0 ] && [ "$(grep -c 'ENV-PIN-REFRESH-MOVED' "$d/out")" = "$want" ]; then
+      pass "main: a refresh with env pins ${label} gives ${want} ENV-PIN-REFRESH-MOVED row(s)"
+    else
+      fail "main: refresh with env pins ${label}: want ${want} row(s), got $(grep -c 'ENV-PIN-REFRESH-MOVED' "$d/out") (rc=$(cat "$d/rc"))"
+      sed 's/^/    /' "$d/out" >&2; tail -5 "$d/err" | sed 's/^/    /' >&2
+    fi
+  done
+}
+
 # case_main_content_refused <applier> <label> <setup> — a refresh that cannot be
 # proven equal to the template is refused with a row, and nothing is committed.
 case_main_content_refused() {
@@ -1350,6 +1377,7 @@ case_main_health_paged "$APPLIER"
 case_main_content_fix "$APPLIER"
 case_main_content_refresh "$APPLIER"
 case_main_content_refresh_envpin "$APPLIER"
+case_main_content_refresh_envpin_swap "$APPLIER"
 case_main_content_refused "$APPLIER" "a template that does not match its own stamp" \
   'printf "      - run: injected\n" >> "$d/proven_template.yml"'
 case_main_content_refused "$APPLIER" "a template stamped for another version than the manifest's" \
@@ -1560,6 +1588,7 @@ list_mutant content_manifest_unpinned 's@\?ref=\$\{PROVEN_SHA\}@@' case_main_con
 list_mutant content_row_dropped 's@cst=\$\(content_state "\$wf" "\$PROVEN_MANIFEST"\)@cst=""@' case_main_content
 list_mutant content_row_writes 's@\[ -n "\$cst" \] \&\& printf@[ -n "$cst" ] \&\& changed+=("$base"); [ -n "$cst" ] \&\& printf@' case_main_content_fix
 list_mutant envpin_flow_value_marker 's@"\(flow\) " rest@"(flow)"@' case_main_content_refresh_envpin
+list_mutant envpin_refresh_path_dropped 's@row "\\t" cp "\\034" fv@row "\\t" "\\034" fv@' case_main_content_refresh_envpin_swap
 list_mutant envpin_refresh_value_dropped 's@a\[1\], st, \$3@a[1], st, "-"@' case_main_content_refresh_envpin
 list_mutant envpin_refresh_move_silent 's@\[ "\$epb" = "\$epa" \] \|\|@true ||@' case_main_content_refresh_envpin
 # A stamped copy in the current layout (stamp on line 2) is still held by --fix:
