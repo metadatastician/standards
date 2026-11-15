@@ -64,7 +64,8 @@ for want in "fresh.yml" "behind.yml" "illegal.yml" "tracking.yml" "none.yml" "sh
             "content-wide.yml" "content-unlisted.yml" "content-malformed.yml" "content-not-first.yml" \
             "bad-huge.json" "content-huge.yml" \
             "dot-local.yml" "dollar-managed.yml" "dollar-unmanaged.yml" "dollar-managed-parent.yml" \
-            "owner-stale.lock" "owner-clean.lock" "owner-nonstandards.lock" "owner-tag-key.lock"; do
+            "owner-stale.lock" "owner-clean.lock" "owner-nonstandards.lock" "owner-tag-key.lock" \
+            "envpin-rows" "envpin-not-rewritten"; do
   grep -q "PASS $want" "$TMP/base.out" && pass "control present: $want" \
     || fail "control MISSING from baseline: $want (a control that never runs is not a control)"
 done
@@ -376,6 +377,8 @@ if [ "$gql" = 1 ]; then
   [ -f "$GH_FIX/own_lock_unread" ] && extra=$(printf '%s' "$extra" | jq '. + [{name: "actions.lock", type: "blob", object: {text: null}}]')
   # $GH_FIX/own_stamped: each repository also holds that stamped proven-cicd copy.
   [ -f "$GH_FIX/own_stamped" ] && extra=$(printf '%s' "$extra" | jq --rawfile s "$GH_FIX/own_stamped" '. + [{name: "proven-lock-gate.yml", type: "blob", object: {text: $s}}]')
+  # $GH_FIX/own_envpin: each repository also holds that workflow, named env-pin.yml.
+  [ -f "$GH_FIX/own_envpin" ] && extra=$(printf '%s' "$extra" | jq --rawfile s "$GH_FIX/own_envpin" '. + [{name: "env-pin.yml", type: "blob", object: {text: $s}}]')
   # $GH_FIX/own_deed: each repository has that root deed (named <repo>_chora.deed, or
   # the name in own_deed_name: a deed kept under a former repository name; the
   # conventional-name alias then reads null, as GitHub answers for a missing file).
@@ -922,6 +925,58 @@ case_main_deed_overcap() {
   fi
 }
 
+# case_main_envpin <applier> — env-var pins are counted for a workflow that has no
+# `uses:` pin at all, judged against the target, and never rewritten.
+case_main_envpin() {
+  local d; d=$(new_case envpin)
+  { printf 'jobs:\n  g:\n    runs-on: ubuntu-latest\n    env:\n'
+    printf "      STANDARDS_PIN: '%s'\n" "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    printf '      CANON_REF: %s\n' "$T"
+    printf '      # STANDARDS_PIN: %s\n' "$T"
+  } > "$d/own_envpin"
+  run_content "$d" "$1" --only hyperpolymath/pub-a
+  if [ "$(cat "$d/rc")" = 0 ] \
+     && grep -qF "$(printf 'hyperpolymath/pub-a\tenv-pin.yml\tENV-PIN-BEHIND\tSTANDARDS_PIN L5 bbbbbbbb (target aaaaaaaa)')" "$d/out" \
+     && grep -qF "$(printf 'hyperpolymath/pub-a\tenv-pin.yml\tENV-PIN-FRESH\tCANON_REF L6 aaaaaaaa')" "$d/out" \
+     && [ "$(grep -c 'ENV-PIN-' "$d/out")" = 2 ] \
+     && ! grep -qE "$(printf '\t')env-pin\.yml$(printf '\t')(FRESH|BEHIND|NONE)" "$d/out"; then
+    pass "main: env-var pins get their own rows (BEHIND/FRESH), commented lines are skipped, and the pin-free workflow gets no uses: row"
+  else
+    fail "main: env-var pin census wrong (rc=$(cat "$d/rc"))"
+    sed 's/^/    /' "$d/out" "$d/err" | tail -8 >&2
+  fi
+}
+
+# case_main_envpin_fix_untouched <applier> — under --fix the env-var pin is only
+# reported. The stub's ci.yml still sits under the former owner (MOVED), so fix mode
+# lands a re-pin commit for ci.yml; it must NOT carry the workflow whose only stale
+# pin is an env var, and that workflow stays ENV-PIN-BEHIND.
+case_main_envpin_fix_untouched() {
+  local d root sha paths
+  d=$(new_case envpinfix)
+  root=$(mktemp -d "$TMP/envpinfix-root.XXXX")
+  git -C "$root" init -q
+  git -C "$root" -c user.name=t -c user.email=t@t -c commit.gpgsign=false commit -q --allow-empty -m target
+  sha=$(git -C "$root" rev-parse HEAD)
+  printf 'jobs:\n  g:\n    env:\n      STANDARDS_PIN: %s\n' "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" > "$d/own_envpin"
+  : > "$d/calls.log"
+  # shellcheck disable=SC2016  # $1 and $2 are expanded by the inner shell
+  env PATH="$LSTUB:$PATH" GH_FIX="$d" GH_TOKEN=ghs_app GITHUB_TOKEN= TARGET="$sha" \
+    bash -c 'source "$1"; STANDARDS_ROOT="$2"; validate_target() { return 0; }; shift 2; main "$@"' _ "$1" "$root" \
+      --to "$sha" --owners hyperpolymath,metadatastician --only hyperpolymath/pub-a --fix > "$d/out" 2> "$d/err"
+  echo $? > "$d/rc"
+  paths=$(jq -r '.variables.input.fileChanges.additions[]?.path' "$d/commit.json" 2>/dev/null)
+  if [ "$(cat "$d/rc")" = 0 ] \
+     && grep -q 'ENV-PIN-BEHIND' "$d/out" \
+     && printf '%s\n' "$paths" | grep -qxF '.github/workflows/ci.yml' \
+     && ! printf '%s\n' "$paths" | grep -qF 'env-pin.yml'; then
+    pass "main: --fix never moves an env-var pin (the commit carries ci.yml only; env-pin.yml stays ENV-PIN-BEHIND)"
+  else
+    fail "main: --fix touched or mishandled an env-var pin (rc=$(cat "$d/rc"), paths: $(echo $paths))"
+    sed 's/^/    /' "$d/out" >&2; tail -5 "$d/err" | sed 's/^/    /' >&2
+  fi
+}
+
 # case_main_deed_clean <applier> — a root deed within the cap, and a repository with
 # no root deed at all, produce no deed row.
 case_main_deed_clean() {
@@ -1058,6 +1113,8 @@ case_main_deed_unread "$APPLIER"
 case_main_deed_renamed "$APPLIER"
 case_main_deed_rest_fail "$APPLIER"
 case_main_only_missing "$APPLIER"
+case_main_envpin "$APPLIER"
+case_main_envpin_fix_untouched "$APPLIER"
 case_main_content_fix "$APPLIER"
 case_main_content_refresh "$APPLIER"
 case_main_content_refused "$APPLIER" "a template that does not match its own stamp" \
@@ -1273,6 +1330,12 @@ list_mutant deed_estate_not_excluded 's@ \| select\(\. != "estate_chora\.deed"\)
 # An explicit --only repository must be checked for existence: this is what stops a
 # typo from becoming a header-only census and a clean exit.
 list_mutant only_existence_unchecked 's@if ! gh api "repos/\$\{ONLY_REPO\}"@if false \&\& gh api "repos/${ONLY_REPO}"@' case_main_only_missing
+# Env-var pins: rows must be written (even for a pin-free workflow), BEHIND must be
+# told from FRESH, commented lines must not count, and --fix must not move them.
+list_mutant envpin_row_dropped 's@done < <\(env_pin_rows "\$wf" "\$TARGET_SHA"\)@done < <(true)@' case_main_envpin
+list_mutant envpin_behind_as_fresh 's@if \(low == target\) printf "ENV-PIN-FRESH@if (1) printf "ENV-PIN-FRESH@' case_main_envpin
+list_mutant envpin_comment_counted 's@^    /\^\[\[:space:\]\]\*#/ \{ next \}$@    /^NEVER$/ { next }@' case_main_envpin
+list_mutant envpin_before_none_skip_lost 's@^      done < <\(env_pin_rows "\$wf" "\$TARGET_SHA"\)$@      done < <(classify_file "$wf" "$TARGET_SHA" | grep -qx NONE || env_pin_rows "$wf" "$TARGET_SHA")@' case_main_envpin
 }
 
 echo

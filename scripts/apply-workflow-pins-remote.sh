@@ -64,6 +64,20 @@
 #              REST fallback, the repository root could not be listed (WORKFLOW column
 #              `(root listing)`): not judged, and never read as "no over-cap line".
 #
+# ENV-VAR PINS (own rows, WORKFLOW column = the workflow file; census only, every
+# mode, READ-ONLY by design). A literal `STANDARDS_PIN:` or `CANON_REF:` assignment
+# is counted beside the `uses:` pins, one row per assignment, DETAIL = NAME, line,
+# first 8 hex. Such a pin names the commit a script is fetched from; the applier
+# never moves it (that is the repository's decision, not a re-point). It does not
+# count as a BEHIND pin for --fix, and no lock is touched for it.
+#   ENV-PIN-FRESH    a 40-hex commit equal to the target
+#   ENV-PIN-BEHIND   a 40-hex commit that is not the target
+#   ENV-PIN-DYNAMIC  an expression (`${{ ... }}`): not judged
+#   ENV-PIN-UNJUDGED any other value (branch name, short SHA, empty): never read as
+#                    FRESH or BEHIND
+# Comment lines are skipped. A `CANON_REF=...` written to $GITHUB_ENV inside a run:
+# step is not an assignment of the env: map and is not read.
+#
 # SAFETY PROPERTIES (do not weaken any of these):
 #   * READ-ONLY by default. --fix is required to write anything.
 #   * The target SHA is proven REACHABLE FROM standards' main before any write.
@@ -384,6 +398,42 @@ deed_overcap() {
     { line = $0; sub(/\r$/, "", line); n = length(line)
       if (n > cap) { out = out (out == "" ? "" : " ") "L" NR "=" n; cnt++ } }
     END { if (cnt > 0) printf "DEED-OVERCAP\t%d line(s) over %d octets: %s\n", cnt, cap, out }
+  ' "$1"
+}
+
+# env_pin_rows <file> <target_sha> — one `STATUS<TAB>DETAIL` line per literal
+# `STANDARDS_PIN:` / `CANON_REF:` assignment (a workflow env: entry), so a pin held
+# in an environment variable is COUNTED beside the `uses:` pins. READ-ONLY by
+# design: nothing here is ever rewritten (such a pin names the commit a script is
+# fetched from, so moving it is a decision for the repository, not a re-point).
+#   ENV-PIN-FRESH    a 40-hex commit equal to the target
+#   ENV-PIN-BEHIND   a 40-hex commit that is not the target
+#   ENV-PIN-DYNAMIC  an expression (`${{ ... }}`); not judged
+#   ENV-PIN-UNJUDGED any other value (a branch name, a short SHA, an empty value);
+#                    never read as FRESH or BEHIND
+# Comment lines are skipped; quotes and a trailing `# comment` are stripped.
+ENV_PIN_NAMES='STANDARDS_PIN|CANON_REF'
+env_pin_rows() {
+  LC_ALL=C awk -v target="$2" -v names="$ENV_PIN_NAMES" '
+    /^[[:space:]]*#/ { next }
+    {
+      s = $0
+      if (!match(s, "^[[:space:]]*(" names ")[[:space:]]*:([[:space:]]+|$)")) next
+      head = substr(s, 1, RLENGTH); val = substr(s, RLENGTH + 1)
+      name = head; gsub(/[[:space:]:]/, "", name)
+      sub(/[[:space:]]+#.*$/, "", val); sub(/[[:space:]]+$/, "", val)
+      gsub(/^[\047"]|[\047"]$/, "", val)
+      low = tolower(val)
+      if (length(low) == 40 && low ~ /^[0-9a-f]+$/) {
+        if (low == target) printf "ENV-PIN-FRESH\t%s L%d %s\n", name, NR, substr(low, 1, 8)
+        else printf "ENV-PIN-BEHIND\t%s L%d %s (target %s); read-only: never re-pointed here\n", name, NR, substr(low, 1, 8), substr(target, 1, 8)
+      } else if (val ~ /\$\{\{/) {
+        printf "ENV-PIN-DYNAMIC\t%s L%d is an expression; not judged\n", name, NR
+      } else {
+        gsub(/[\t]/, " ", val)
+        printf "ENV-PIN-UNJUDGED\t%s L%d value is not a 40-hex commit: %s\n", name, NR, (val == "" ? "(empty)" : substr(val, 1, 24))
+      }
+    }
   ' "$1"
 }
 
@@ -1076,6 +1126,40 @@ JSON
   dcheck deed-multibyte.deed    "1 line(s) over 998 octets: L1=1000"
   dcheck deed-crlf.deed         ""
 
+  echo "control: env_pin_rows counts literal STANDARDS_PIN / CANON_REF assignments and never judges what it cannot read"
+  local eb="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  {
+    printf 'env:\n'
+    printf "  STANDARDS_PIN: '%s'\n" "$t"
+    printf '  CANON_REF: "%s" # pinned\n' "$eb"
+    printf '  # STANDARDS_PIN: %s\n' "$eb"
+    printf '  STANDARDS_PIN: ${{ inputs.pin }}\n'
+    printf '  CANON_REF: main\n'
+    printf '  STANDARDS_PIN: %s\n' "${eb:0:12}"
+    printf '  OTHER_STANDARDS_PIN: %s\n' "$eb"
+    printf '    run: echo "CANON_REF=%s" >> "$GITHUB_ENV"\n' "$eb"
+    printf '  CANON_REF:\n'
+    printf '  STANDARDS_PIN: %s\n' "${t^^}"
+  } > "$d/envpin.yml"
+  local ep; ep=$(env_pin_rows "$d/envpin.yml" "$t" | tr '\t' '|')
+  local epw="ENV-PIN-FRESH|STANDARDS_PIN L2 ${t:0:8}
+ENV-PIN-BEHIND|CANON_REF L3 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here
+ENV-PIN-DYNAMIC|STANDARDS_PIN L5 is an expression; not judged
+ENV-PIN-UNJUDGED|CANON_REF L6 value is not a 40-hex commit: main
+ENV-PIN-UNJUDGED|STANDARDS_PIN L7 value is not a 40-hex commit: ${eb:0:12}
+ENV-PIN-UNJUDGED|CANON_REF L10 value is not a 40-hex commit: (empty)
+ENV-PIN-FRESH|STANDARDS_PIN L11 ${t:0:8}"
+  if [ "$ep" = "$epw" ]; then echo "  PASS envpin-rows -> $(printf '%s\n' "$ep" | wc -l) row(s)"
+  else echo "  FAIL envpin-rows -> got:
+$ep
+want:
+$epw" >&2; rc=1; fi
+  # The env pin sits in a standards-pin-looking line, but it is NOT a `uses:` pin:
+  # the rewrite must leave it exactly as it was.
+  cp "$d/envpin.yml" "$d/envpin-rw.yml"; rewrite_pins "$d/envpin-rw.yml" "$t"
+  if cmp -s "$d/envpin.yml" "$d/envpin-rw.yml"; then echo "  PASS envpin-not-rewritten"
+  else echo "  FAIL envpin-not-rewritten (rewrite_pins changed an env: pin)" >&2; rc=1; fi
+
   echo "control: the lock relock is present"
   if [ -f "$RELOCK" ] && bash -n "$RELOCK"; then
     echo "  PASS $(basename "$RELOCK") present and parses"
@@ -1566,6 +1650,12 @@ main() {
           [ "${rst%%$'\t'*}" = CONTENT-REFRESHED ] && changed+=("$base")
         fi
       fi
+      # Env-var pins (STANDARDS_PIN, CANON_REF) are counted for every workflow, even
+      # one with no `uses:` pin (so before the NONE skip). Census only, every mode.
+      local epl
+      while IFS= read -r epl; do
+        [ -n "$epl" ] && printf '%s\t%s\t%s\n' "$repo" "$base" "$epl" >> "$tsv"
+      done < <(env_pin_rows "$wf" "$TARGET_SHA")
       st=$(classify_file "$wf" "$TARGET_SHA" | sort | tr '\n' ',' ); st="${st%,}"
       [ "$st" = "NONE" ] && continue
       detail=""
