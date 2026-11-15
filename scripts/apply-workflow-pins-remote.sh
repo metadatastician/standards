@@ -492,6 +492,30 @@ env_pin_rows() {
       }
       return 0
     }
+    # hexv: value of a hex string, or -1. unesc: decode the escapes of a double-quoted key
+    # that matter for a NAME (\xHH, \uHHHH in the ASCII range, \\, \", \/); others stay as
+    # written, so a key that cannot be decoded simply does not equal a tracked name.
+    function hexv(h,   i, c, v) {
+      v = 0; h = tolower(h)
+      for (i = 1; i <= length(h); i++) { c = index("0123456789abcdef", substr(h, i, 1)); if (c == 0) return -1; v = v * 16 + c - 1 }
+      return v
+    }
+    function unesc(s,   o, i, n, ch, h, v) {
+      o = ""; n = length(s)
+      for (i = 1; i <= n; i++) {
+        ch = substr(s, i, 1)
+        if (ch != "\\") { o = o ch; continue }
+        ch = substr(s, ++i, 1)
+        if (ch == "x" || ch == "u") {
+          h = substr(s, i + 1, (ch == "x") ? 2 : 4); v = hexv(h)
+          if (v > 0 && v < 128) o = o sprintf("%c", v); else o = o "?"
+          i += length(h)
+        }
+        else if (ch == "\\" || ch == "\"" || ch == "/") o = o ch
+        else o = o "\\" ch
+      }
+      return o
+    }
     # props: drop YAML node properties (an anchor `&name`, a tag `!tag` / `!!str`) that
     # precede a scalar, so the scalar style underneath is what gets tested.
     function props(s) {
@@ -508,7 +532,10 @@ env_pin_rows() {
       for (i = 1; i <= n; i++) {
         ch = substr(line, i, 1)
         isb = (prev ~ /[[:space:]{,:[]/)
-        if (q != "") { if (ch == "\\" && q == "\"") i++; else if (ch == q) q = "" }
+        if (q != "") {
+          if (ch == "\\" && q == "\"") i++
+          else if (ch == q) { if (q == "\047" && substr(line, i + 1, 1) == "\047") i++; else q = "" }
+        }
         else if ((ch == "\047" || ch == "\"") && isb) q = ch
         else if (ch == "#" && prev ~ /[[:space:]]/) break
         else if (ch == "{" || ch == "[") d++
@@ -545,9 +572,11 @@ env_pin_rows() {
       if (n > n0 && bq ~ /^[|>][-+0-9]*$/) { skip = n0; next }
       if (c0 == "{" || c0 == "[") { fq = ""; d = depth(bp); if (d > 0) flow = d; else fq = ""; next }
       if ((c0 == "\047" || c0 == "\"") && !qclose(substr(bp, 2), c0)) { inq = c0; next }
-      if (!(match(bp, /^"[^"]*"[[:space:]]*:([[:space:]]|$)/) || match(bp, /^\047[^\047]*\047[[:space:]]*:([[:space:]]|$)/) || match(bp, /^[A-Za-z_][A-Za-z0-9_.-]*[[:space:]]*:([[:space:]]|$)/))) next
+      if (!(match(bp, /^"([^"\\]|\\.)*"[[:space:]]*:([[:space:]]|$)/) || match(bp, /^\047([^\047]|\047\047)*\047[[:space:]]*:([[:space:]]|$)/) || match(bp, /^[A-Za-z_][A-Za-z0-9_.-]*[[:space:]]*:([[:space:]]|$)/))) next
       kl = RLENGTH
-      key = substr(bp, 1, kl); sub(/[[:space:]]*:[[:space:]]*$/, "", key); gsub(/^["\047]|["\047]$/, "", key)
+      key = substr(bp, 1, kl); sub(/[[:space:]]*:[[:space:]]*$/, "", key)
+      if (substr(key, 1, 1) == "\"") key = unesc(substr(key, 2, length(key) - 2))
+      else if (substr(key, 1, 1) == "\047") { key = substr(key, 2, length(key) - 2); gsub(/\047\047/, "\047", key) }
       rest = substr(bp, kl + 1); sub(/^[[:space:]]+/, "", rest); rest = props(rest)
       while (top > 0 && ind[top] >= n) top--
       parent = (top > 0) ? knm[top] : ""
@@ -1414,6 +1443,11 @@ JSON
     printf 'env:\n'
     printf '  CANON_REF: %s\n' "$eb"
     printf 'done: x\n'
+    printf 'env: {\n'
+    printf "  OTHER: 'it''s } text',\n"
+    printf '  CANON_REF: %s }\n' "$eb"
+    printf '"e\\x6ev":\n'
+    printf '  "CANON\\u005fREF": %s\n' "$eb"
   } > "$d/envpin.yml"
   local ep; ep=$(env_pin_rows "$d/envpin.yml" "$t" | tr '\t' '|')
   local epw="ENV-PIN-FRESH|STANDARDS_PIN L2 ${t:0:8}
@@ -1441,7 +1475,8 @@ ENV-PIN-FRESH|STANDARDS_PIN L72 ${t:0:8}
 ENV-PIN-BEHIND|CANON_REF L79 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here
 ENV-PIN-DYNAMIC|CANON_REF L81 is an expression; not judged
 ENV-PIN-UNJUDGED|STANDARDS_PIN L87 value continues on the next line (a folded plain scalar); not judged
-ENV-PIN-BEHIND|CANON_REF L90 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here"
+ENV-PIN-BEHIND|CANON_REF L90 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here
+ENV-PIN-BEHIND|CANON_REF L96 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here"
   if [ "$ep" = "$epw" ]; then echo "  PASS envpin-rows -> $(printf '%s\n' "$ep" | wc -l) row(s)"
   else echo "  FAIL envpin-rows -> got:
 $ep

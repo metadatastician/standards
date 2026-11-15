@@ -286,13 +286,17 @@ kill_mutant envpin_flow_quote_reset 's@n = length\(line\); q = fq; d = 0@n = len
 # flow collection, a quoted structural key, and the closing quote of a quoted value.
 kill_mutant envpin_bom_kept 's@^    NR == 1 \{ sub\("\^\\357\\273\\277", ""\) \}$@    NR == 1 { }@' "FAIL envpin-bom"
 kill_mutant envpin_apostrophe_quote 's@ && isb\) q = ch@) q = ch@' "FAIL envpin-rows"
-kill_mutant envpin_quoted_key_ignored 's@match\(bp, /\^"\[\^"\]\*"\[\[:space:\]\]@match(bp, /^NEVER"[[:space:]]@' "FAIL envpin-rows"
+kill_mutant envpin_quoted_key_ignored 's@match\(bp, /\^"\(@match(bp, /^NEVER"(@' "FAIL envpin-rows"
 kill_mutant envpin_quote_escape_first 's@q = qend\(val\)@q = index(substr(val, 2), c) + 1@' "FAIL envpin-rows"
 # Ninth round on #1602: a block scalar as a sequence item, a plain scalar that continues on
 # the next line, and YAML explicit mapping keys (not parsed, and said so).
 kill_mutant envpin_seq_blockscalar_read 's@skip = n0; next@next@' "FAIL envpin-rows"
 kill_mutant envpin_plain_continuation_ignored 's@if \(n > pn\) print pcont; else print pend@print pend@' "FAIL envpin-rows"
 kill_mutant envpin_explicit_key_silent 's@if \(!xwarn\) \{ xwarn = 1; printf@if (0) { xwarn = 1; printf@' "FAIL envpin-explicit-key"
+# Tenth round on #1602: a doubled single quote inside a flow scalar, and escapes in a
+# double-quoted key.
+kill_mutant envpin_flow_doubled_quote 's@if \(q == "\\047" && substr\(line, i \+ 1, 1\) == "\\047"\) i\+\+; else q = ""@q = ""@' "FAIL envpin-rows"
+kill_mutant envpin_key_escape_literal 's@key = unesc\(substr\(key, 2, length\(key\) - 2\)\)@key = substr(key, 2, length(key) - 2)@' "FAIL envpin-rows"
 
 # --- 3. fetch_workflows fails CLOSED -----------------------------------------
 # A rate-limited repo used to come back as "no workflows": fetch_workflows
