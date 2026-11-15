@@ -198,7 +198,10 @@ assert ".clusterfuzzlite/Containerfile alone does not satisfy" 1 "Package policy
 
 r=$(mkrepo pkg-bad-profile README.adoc)
 mkdir -p "$r/.machine_readable"; printf '[rsr-profile]\nrole = "x"\n' > "$r/.machine_readable/rsr-profile.a2ml"
-assert "unresolvable profile is NAMED in a warning, read as undeclared" 0 "could not be resolved" \
+# An unresolvable profile fails closed and is named: reading it as "no
+# capabilities" would let a repo that declares packaging pass with none
+# shipped (Codex on #1608; this case used to warn and pass).
+assert "unresolvable profile fails closed and is NAMED" 1 "cannot resolve the legacy profile .machine_readable/rsr-profile.a2ml" \
   env PKG_TODAY="$AFTER" "$PKG" "$r"
 # A profile defect must never redden a repo whose packaging is real.
 : > "$r/guix.scm"
