@@ -267,6 +267,11 @@ kill_mutant envpin_block_scalar_silent 's@if \(tracked\) printf "ENV-PIN-UNJUDGE
 # style (a multi-line quote, a block scalar) nor the value itself.
 kill_mutant envpin_anchor_value_kept 's@; rest = props\(rest\)@@' "FAIL envpin-rows"
 kill_mutant envpin_anchor_hides_quote 's@bp = props\(body\);@bp = body;@' "FAIL envpin-rows"
+# Fourth Codex round on #1602: a flow collection that runs over several lines must be
+# tracked to its closing bracket (its lines are not keys), and a tracked key whose own
+# value is one must be reported, not skipped.
+kill_mutant envpin_flow_multiline_read 's@^    flow > 0 \{ flow@    flow > 99 { flow@' "FAIL envpin-rows"
+kill_mutant envpin_flow_value_silent 's@if \(tracked\) printf "ENV-PIN-UNJUDGED\\t%s L%d value is a flow collection@if (0) printf "ENV-PIN-UNJUDGED\\t%s L%d value is a flow collection@' "FAIL envpin-rows"
 
 # --- 3. fetch_workflows fails CLOSED -----------------------------------------
 # A rate-limited repo used to come back as "no workflows": fetch_workflows

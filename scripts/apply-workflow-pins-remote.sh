@@ -79,7 +79,9 @@
 # step is not an assignment of the env: map and is not read.
 # Only a direct child of a block-style `env:` mapping counts (found by indentation):
 # a same-named key under `with:` or `inputs:`, the body of a `run: |` block, a flow
-# style `env: {…}` and a quoted key get no row. A `#` inside a quoted value is part of
+# style `env: {…}` and a quoted key get no row. A flow collection (also one
+# that runs over several lines) is tracked to its closing bracket and never read as
+# keys; a tracked key whose own value is one gets an ENV-PIN-UNJUDGED row. A `#` inside a quoted value is part of
 # the value. The target is compared case-insensitively. A tracked key with a block
 # scalar or multi-line quoted value gets an ENV-PIN-UNJUDGED row; the lines of a
 # multi-line quoted scalar are not read as keys.
@@ -478,8 +480,16 @@ env_pin_rows() {
       while (match(s, /^(&[^[:space:]]+|![^[:space:]]*)[[:space:]]+/)) s = substr(s, RLENGTH + 1)
       return s
     }
-    BEGIN { tgt = tolower(target); top = 0; skip = -1; inq = "" }
+    # depth: net open flow brackets in a line, quoted text ignored (a flow collection
+    # `{...}` or `[...]` may run over several lines).
+    function depth(line,   t, o, c) {
+      t = line; gsub(/"([^"\\]|\\.)*"/, "", t); gsub(/\047[^\047]*\047/, "", t)
+      o = gsub(/[\{\[]/, "", t); c = gsub(/[\}\]]/, "", t)
+      return o - c
+    }
+    BEGIN { tgt = tolower(target); top = 0; skip = -1; inq = "" ; flow = 0 }
     inq != "" { if (qclose($0, inq)) inq = ""; next }
+    flow > 0 { flow += depth($0); next }
     /^[[:space:]]*$/ { next }
     /^[[:space:]]*#/ { next }
     {
@@ -489,6 +499,7 @@ env_pin_rows() {
       body = substr(s, n + 1)
       while (match(body, /^-[[:space:]]+/)) { n += RLENGTH; body = substr(body, RLENGTH + 1) }
       bp = props(body); c0 = substr(bp, 1, 1)
+      if (c0 == "{" || c0 == "[") { d = depth(bp); if (d > 0) flow = d; next }
       if ((c0 == "\047" || c0 == "\"") && !qclose(substr(bp, 2), c0)) { inq = c0; next }
       if (!match(body, /^[A-Za-z_][A-Za-z0-9_.-]*[[:space:]]*:([[:space:]]|$)/)) next
       kl = RLENGTH
@@ -498,6 +509,11 @@ env_pin_rows() {
       parent = (top > 0) ? knm[top] : ""
       top++; ind[top] = n; knm[top] = key
       tracked = (key ~ ("^(" names ")$") && parent == "env")
+      if (rest ~ /^[\{\[]/) {
+        if (tracked) printf "ENV-PIN-UNJUDGED\t%s L%d value is a flow collection; not judged\n", key, NR
+        d = depth(rest); if (d > 0) flow = d
+        next
+      }
       r2 = rest; sub(/[[:space:]]+#.*$/, "", r2)
       if (r2 ~ /^[|>][-+0-9]*$/) {
         if (tracked) printf "ENV-PIN-UNJUDGED\t%s L%d value is a block scalar; not judged\n", key, NR
@@ -1300,6 +1316,12 @@ JSON
     printf '  - &s "multi\n'
     printf '    env:\n'
     printf '      CANON_REF: %s"\n' "$eb"
+    printf 'env: {\n'
+    printf '  CANON_REF: %s,\n' "$eb"
+    printf '  STANDARDS_PIN: %s }\n' "$t"
+    printf 'env:\n'
+    printf '  STANDARDS_PIN: {a: b}\n'
+    printf '  CANON_REF: %s\n' "$eb"
   } > "$d/envpin.yml"
   local ep; ep=$(env_pin_rows "$d/envpin.yml" "$t" | tr '\t' '|')
   local epw="ENV-PIN-FRESH|STANDARDS_PIN L2 ${t:0:8}
@@ -1318,7 +1340,9 @@ ENV-PIN-UNJUDGED|STANDARDS_PIN L29 value is a multi-line quoted scalar; not judg
 ENV-PIN-BEHIND|CANON_REF L32 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here
 ENV-PIN-FRESH|STANDARDS_PIN L37 ${t:0:8}
 ENV-PIN-BEHIND|CANON_REF L38 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here
-ENV-PIN-UNJUDGED|STANDARDS_PIN L39 value is a block scalar; not judged"
+ENV-PIN-UNJUDGED|STANDARDS_PIN L39 value is a block scalar; not judged
+ENV-PIN-UNJUDGED|STANDARDS_PIN L49 value is a flow collection; not judged
+ENV-PIN-BEHIND|CANON_REF L50 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here"
   if [ "$ep" = "$epw" ]; then echo "  PASS envpin-rows -> $(printf '%s\n' "$ep" | wc -l) row(s)"
   else echo "  FAIL envpin-rows -> got:
 $ep
