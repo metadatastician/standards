@@ -65,7 +65,7 @@ for want in "fresh.yml" "behind.yml" "illegal.yml" "tracking.yml" "none.yml" "sh
             "bad-huge.json" "content-huge.yml" \
             "dot-local.yml" "dollar-managed.yml" "dollar-unmanaged.yml" "dollar-managed-parent.yml" \
             "owner-stale.lock" "owner-clean.lock" "owner-nonstandards.lock" "owner-tag-key.lock" \
-            "envpin-rows" "envpin-target-case" "envpin-bom" "envpin-not-rewritten" \
+            "envpin-rows" "envpin-target-case" "envpin-bom" "envpin-explicit-key" "envpin-not-rewritten" \
             "health-startup" "health-zero-shape" "health-healthy" "health-ref-suffix" "health-inprogress-ignored" "health-tie-break" "health-pathless"; do
   grep -q "PASS $want" "$TMP/base.out" && pass "control present: $want" \
     || fail "control MISSING from baseline: $want (a control that never runs is not a control)"
@@ -288,6 +288,11 @@ kill_mutant envpin_bom_kept 's@^    NR == 1 \{ sub\("\^\\357\\273\\277", ""\) \}
 kill_mutant envpin_apostrophe_quote 's@ && isb\) q = ch@) q = ch@' "FAIL envpin-rows"
 kill_mutant envpin_quoted_key_ignored 's@match\(bp, /\^"\[\^"\]\*"\[\[:space:\]\]@match(bp, /^NEVER"[[:space:]]@' "FAIL envpin-rows"
 kill_mutant envpin_quote_escape_first 's@q = qend\(val\)@q = index(substr(val, 2), c) + 1@' "FAIL envpin-rows"
+# Ninth round on #1602: a block scalar as a sequence item, a plain scalar that continues on
+# the next line, and YAML explicit mapping keys (not parsed, and said so).
+kill_mutant envpin_seq_blockscalar_read 's@skip = n0; next@next@' "FAIL envpin-rows"
+kill_mutant envpin_plain_continuation_ignored 's@if \(n > pn\) print pcont; else print pend@print pend@' "FAIL envpin-rows"
+kill_mutant envpin_explicit_key_silent 's@if \(!xwarn\) \{ xwarn = 1; printf@if (0) { xwarn = 1; printf@' "FAIL envpin-explicit-key"
 
 # --- 3. fetch_workflows fails CLOSED -----------------------------------------
 # A rate-limited repo used to come back as "no workflows": fetch_workflows
@@ -1519,7 +1524,7 @@ list_mutant only_existence_unchecked 's@if ! gh api "repos/\$\{ONLY_REPO\}"@if f
 # Env-var pins: rows must be written (even for a pin-free workflow), BEHIND must be
 # told from FRESH, commented lines must not count, and --fix must not move them.
 list_mutant envpin_row_dropped 's@done < <\(env_pin_rows "\$wf" "\$TARGET_SHA"\)@done < <(true)@' case_main_envpin
-list_mutant envpin_behind_as_fresh 's@if \(low == tgt\) printf "ENV-PIN-FRESH@if (1) printf "ENV-PIN-FRESH@' case_main_envpin
+list_mutant envpin_behind_as_fresh 's@if \(low == tgt\) row = sprintf\("ENV-PIN-FRESH@if (1) row = sprintf("ENV-PIN-FRESH@' case_main_envpin
 # (No mutant for the comment-line guard: the key regex already rejects a line that starts
 # with #, so removing the guard changes nothing observable. The commented fixture lines
 # stay as a regression check, not a mutation target.)

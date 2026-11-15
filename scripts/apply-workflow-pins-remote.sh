@@ -84,6 +84,11 @@
 # keys; a tracked key whose own value is one gets an ENV-PIN-UNJUDGED row. Node
 # properties on a key (`&pin CANON_REF:`) are dropped before the key is read; trailing
 # whitespace and CR are ignored; the quote state of a flow collection carries across lines. A `#` inside a quoted value is part of
+# A sequence item that is a block scalar (`- |`) is skipped like a mapping value. A pin
+# value is held until the next significant line: a more indented line continues the plain
+# scalar (folded), so it is reported ENV-PIN-UNJUDGED ("value continues on the next
+# line"), never FRESH or BEHIND. YAML explicit mapping keys (`? key`) are NOT parsed: one
+# ENV-PIN-UNJUDGED row, with `(explicit key)` in place of a name, says so for the file.
 # the value. The target is compared case-insensitively. A tracked key with a block
 # scalar or multi-line quoted value gets an ENV-PIN-UNJUDGED row; the lines of a
 # multi-line quoted scalar are not read as keys.
@@ -513,7 +518,7 @@ env_pin_rows() {
       fq = q
       return d
     }
-    BEGIN { tgt = tolower(target); top = 0; skip = -1; inq = "" ; flow = 0; fq = "" }
+    BEGIN { tgt = tolower(target); top = 0; skip = -1; inq = "" ; flow = 0; fq = ""; pend = ""; xwarn = 0 }
     NR == 1 { sub("^\357\273\277", "") }
     { sub(/[[:space:]]+$/, "") }
     inq != "" { if (qclose($0, inq)) inq = ""; next }
@@ -523,10 +528,21 @@ env_pin_rows() {
     {
       s = $0
       match(s, /^[[:space:]]*/); n = RLENGTH
+      # A classified pin value is held until the next significant line: a more indented
+      # line continues the plain scalar (folded), so the value is not what it looked like.
+      if (pend != "") { if (n > pn) print pcont; else print pend; pend = "" }
       if (skip >= 0) { if (n > skip) next; skip = -1 }
-      body = substr(s, n + 1)
+      body = substr(s, n + 1); n0 = n
       while (match(body, /^-[[:space:]]+/)) { n += RLENGTH; body = substr(body, RLENGTH + 1) }
       bp = props(body); c0 = substr(bp, 1, 1)
+      # Explicit mapping keys (? key / : value) are not parsed: say so once, never silently.
+      if (bp ~ /^\?([[:space:]]|$)/) {
+        if (!xwarn) { xwarn = 1; printf "ENV-PIN-UNJUDGED\t(explicit key) L%d YAML explicit mapping keys (? key) are not parsed; env pins in this file may be missed\n", NR }
+        next
+      }
+      # A block scalar as a sequence item (- | or - >): skip its body.
+      bq = bp; sub(/[[:space:]]+#.*$/, "", bq)
+      if (n > n0 && bq ~ /^[|>][-+0-9]*$/) { skip = n0; next }
       if (c0 == "{" || c0 == "[") { fq = ""; d = depth(bp); if (d > 0) flow = d; else fq = ""; next }
       if ((c0 == "\047" || c0 == "\"") && !qclose(substr(bp, 2), c0)) { inq = c0; next }
       if (!(match(bp, /^"[^"]*"[[:space:]]*:([[:space:]]|$)/) || match(bp, /^\047[^\047]*\047[[:space:]]*:([[:space:]]|$)/) || match(bp, /^[A-Za-z_][A-Za-z0-9_.-]*[[:space:]]*:([[:space:]]|$)/))) next
@@ -569,8 +585,10 @@ env_pin_rows() {
       }
       low = tolower(val)
       if (!bad && length(low) == 40 && low ~ /^[0-9a-f]+$/) {
-        if (low == tgt) printf "ENV-PIN-FRESH\t%s L%d %s\n", key, NR, substr(low, 1, 8)
-        else printf "ENV-PIN-BEHIND\t%s L%d %s (target %s); read-only: never re-pointed here\n", key, NR, substr(low, 1, 8), substr(tgt, 1, 8)
+        if (low == tgt) row = sprintf("ENV-PIN-FRESH\t%s L%d %s", key, NR, substr(low, 1, 8))
+        else row = sprintf("ENV-PIN-BEHIND\t%s L%d %s (target %s); read-only: never re-pointed here", key, NR, substr(low, 1, 8), substr(tgt, 1, 8))
+        if (c == "\047" || c == "\"") print row
+        else { pend = row; pn = n; pcont = sprintf("ENV-PIN-UNJUDGED\t%s L%d value continues on the next line (a folded plain scalar); not judged", key, NR) }
       } else if (!bad && val ~ /\$\{\{/) {
         printf "ENV-PIN-DYNAMIC\t%s L%d is an expression; not judged\n", key, NR
       } else {
@@ -578,6 +596,7 @@ env_pin_rows() {
         printf "ENV-PIN-UNJUDGED\t%s L%d value is not a 40-hex commit: %s\n", key, NR, (val == "" ? "(empty)" : substr(val, 1, 24))
       }
     }
+    END { if (pend != "") print pend }
   ' "$1"
 }
 
@@ -1385,6 +1404,16 @@ JSON
     printf '  "CANON_REF": %s\n' "$eb"
     printf 'env:\n'
     printf "  CANON_REF: '\${{ inputs.pin || ''main'' }}'\n"
+    printf 'steps:\n'
+    printf '  - |\n'
+    printf '    env:\n'
+    printf '      CANON_REF: %s\n' "$eb"
+    printf 'env:\n'
+    printf '  STANDARDS_PIN: %s\n' "$t"
+    printf '    folded\n'
+    printf 'env:\n'
+    printf '  CANON_REF: %s\n' "$eb"
+    printf 'done: x\n'
   } > "$d/envpin.yml"
   local ep; ep=$(env_pin_rows "$d/envpin.yml" "$t" | tr '\t' '|')
   local epw="ENV-PIN-FRESH|STANDARDS_PIN L2 ${t:0:8}
@@ -1410,7 +1439,9 @@ ENV-PIN-BEHIND|CANON_REF L57 ${eb:0:8} (target ${t:0:8}); read-only: never re-po
 ENV-PIN-FRESH|STANDARDS_PIN L59 ${t:0:8}
 ENV-PIN-FRESH|STANDARDS_PIN L72 ${t:0:8}
 ENV-PIN-BEHIND|CANON_REF L79 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here
-ENV-PIN-DYNAMIC|CANON_REF L81 is an expression; not judged"
+ENV-PIN-DYNAMIC|CANON_REF L81 is an expression; not judged
+ENV-PIN-UNJUDGED|STANDARDS_PIN L87 value continues on the next line (a folded plain scalar); not judged
+ENV-PIN-BEHIND|CANON_REF L90 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here"
   if [ "$ep" = "$epw" ]; then echo "  PASS envpin-rows -> $(printf '%s\n' "$ep" | wc -l) row(s)"
   else echo "  FAIL envpin-rows -> got:
 $ep
@@ -1422,6 +1453,10 @@ $epw" >&2; rc=1; fi
   if [ "$epu" = "$epw" ]; then echo "  PASS envpin-target-case"
   else echo "  FAIL envpin-target-case -> an uppercase target changed the rows:
 $epu" >&2; rc=1; fi
+  # YAML explicit mapping keys are not parsed: that must be said (one row), never silence.
+  printf 'env:\n  ? CANON_REF\n  : %s\n' "$eb" > "$d/explicit.yml"
+  if [ "$(env_pin_rows "$d/explicit.yml" "$t" | tr '\t' '|')" = "ENV-PIN-UNJUDGED|(explicit key) L2 YAML explicit mapping keys (? key) are not parsed; env pins in this file may be missed" ]; then echo "  PASS envpin-explicit-key"
+  else echo "  FAIL envpin-explicit-key -> an explicit key was silently skipped" >&2; rc=1; fi
   # A UTF-8 byte-order mark before the first key must not hide it.
   printf '\357\273\277env:\n  STANDARDS_PIN: %s\n' "$t" > "$d/bom.yml"
   if [ "$(env_pin_rows "$d/bom.yml" "$t" | tr '\t' '|')" = "ENV-PIN-FRESH|STANDARDS_PIN L2 ${t:0:8}" ]; then echo "  PASS envpin-bom"
