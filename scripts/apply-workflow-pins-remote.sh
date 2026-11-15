@@ -91,6 +91,8 @@
 # ENV-PIN-UNJUDGED row, with `(explicit key)` in place of a name, says so for the file.
 # A key under `strategy: matrix:` is matrix data (a job that is merely named `matrix` is not), not an environment map, and gets no row. A
 # double-quoted pin value is decoded (\xHH, \uHHHH in ASCII, \\ \" \/) before it is judged.
+# An empty `KEY:` whose value is an indented node on the next line is reported UNJUDGED ("value is on the
+# next line"), never as an empty value.
 # --fix-content replaces a stale stamped copy with the template, so an env pin may move
 # with it: the census reads the refreshed copy, and one ENV-PIN-REFRESH-MOVED row per
 # such file gives before and after (NAME STATUS value, shortened for the row only), so the
@@ -636,6 +638,10 @@ env_pin_rows() {
         else { pend = row; pv = low; pn = n; pcont = sprintf("ENV-PIN-UNJUDGED\t%s L%d value continues on the next line (a folded plain scalar); not judged", key, NR) }
       } else if (!bad && val ~ /\$\{\{/) {
         outr(sprintf("ENV-PIN-DYNAMIC\t%s L%d is an expression; not judged", key, NR), val)
+      } else if (val == "" && !bad && c != "\047" && c != "\"") {
+        # An empty value may be completed by an indented node on the next line: hold the row.
+        pend = sprintf("ENV-PIN-UNJUDGED\t%s L%d value is not a 40-hex commit: (empty)", key, NR); pv = ""; pn = n
+        pcont = sprintf("ENV-PIN-UNJUDGED\t%s L%d value is on the next line (an indented node); not judged", key, NR)
       } else {
         gsub(/[\t]/, " ", val)
         outr(sprintf("ENV-PIN-UNJUDGED\t%s L%d value is not a 40-hex commit: %s", key, NR, (val == "" ? "(empty)" : substr(val, 1, 24))), val)
@@ -1497,6 +1503,9 @@ JSON
     printf '  matrix:\n'
     printf '    env:\n'
     printf '      CANON_REF: %s\n' "$eb"
+    printf 'env:\n'
+    printf '  CANON_REF:\n'
+    printf '    %s\n' "$eb"
   } > "$d/envpin.yml"
   local ep; ep=$(env_pin_rows "$d/envpin.yml" "$t" | tr '\t' '|')
   local epw="ENV-PIN-FRESH|STANDARDS_PIN L2 ${t:0:8}
@@ -1527,7 +1536,8 @@ ENV-PIN-UNJUDGED|STANDARDS_PIN L87 value continues on the next line (a folded pl
 ENV-PIN-BEHIND|CANON_REF L90 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here
 ENV-PIN-BEHIND|CANON_REF L96 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here
 ENV-PIN-BEHIND|STANDARDS_PIN L102 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here
-ENV-PIN-BEHIND|CANON_REF L110 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here"
+ENV-PIN-BEHIND|CANON_REF L110 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here
+ENV-PIN-UNJUDGED|CANON_REF L112 value is on the next line (an indented node); not judged"
   if [ "$ep" = "$epw" ]; then echo "  PASS envpin-rows -> $(printf '%s\n' "$ep" | wc -l) row(s)"
   else echo "  FAIL envpin-rows -> got:
 $ep

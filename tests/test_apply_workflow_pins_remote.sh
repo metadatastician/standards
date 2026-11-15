@@ -306,6 +306,8 @@ kill_mutant envpin_value_escape_literal 's@if \(c == "\\""\) val = unesc\(val\)@
 kill_mutant envpin_matrix_job_name 's@ && k > 1 && knm\[k - 1\] == "strategy"@@' "FAIL envpin-rows"
 kill_mutant envpin_explicit_value_read 's@if \(bq ~ /\^:\[\[:space:\]\]\+\[\|>\]\[-\+0-9\]\*\$/\) \{ skip = n0; next \}@@' "FAIL envpin-explicit-block"
 kill_mutant envpin_nextline_indicator_read 's@if \(n == n0 && bq ~ /\^\[\|>\]\[-\+0-9\]\*\$/ && top > 0 && ind\[top\] < n\) \{ skip = ind\[top\]; next \}@@' "FAIL envpin-rows"
+# Thirteenth round: an empty KEY: completed by an indented node on the next line.
+kill_mutant envpin_empty_value_nextline 's@\} else if \(val == "" && !bad && c != "\\047" && c != "\\""\) \{@} else if (0) {@' "FAIL envpin-rows"
 
 # --- 3. fetch_workflows fails CLOSED -----------------------------------------
 # A rate-limited repo used to come back as "no workflows": fetch_workflows
