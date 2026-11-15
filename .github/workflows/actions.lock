@@ -4,242 +4,238 @@
 version: 'v0.0.3'
 workflows:
     '.github/workflows/actions-lock-gate.yml':
-        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
+        - 'actions/checkout@v7.0.1'
     '.github/workflows/affinescript-verify.yml':
-        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'ocaml/setup-ocaml@ff66428f72b64472e749b22e0ad4dded4b2ddca6'
+        - 'actions/checkout@v7.0.1'
+        - 'ocaml/setup-ocaml@v3.9.1'
     '.github/workflows/allowlist-preflight-reusable.yml':
-        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
+        - 'actions/checkout@v7.0.1'
     '.github/workflows/apply-workflow-pins.yml':
-        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510'
-        - 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9'
-        - 'step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a'
+        - 'actions/checkout@v7.0.1'
+        - 'actions/create-github-app-token@v3.3.0'
+        - 'actions/upload-artifact@v7.0.2'
+        - 'step-security/harden-runner@v2.22.4'
     '.github/workflows/boj-build.yml':
-        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
+        - 'actions/checkout@v7.0.1'
     '.github/workflows/canon-spine-lockstep.yml':
-        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
+        - 'actions/checkout@v7.0.1'
     '.github/workflows/casket-pages.yml':
-        - 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9'
-        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d'
-        - 'actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346'
-        - 'actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9'
-        - 'haskell-actions/setup@0f8e8c99d88aeb3fbfd523f1ef2c6f762d10d64d'
+        - 'actions/cache@v6.1.0'
+        - 'actions/checkout@v7.0.1'
+        - 'actions/configure-pages@v6.0.0'
+        - 'actions/deploy-pages@v5.0.1'
+        - 'actions/upload-pages-artifact@v5.0.0'
+        - 'haskell-actions/setup@v2.12.1'
     '.github/workflows/changelog-reusable.yml':
-        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
+        - 'actions/checkout@v7.0.1'
     '.github/workflows/changelog.yml': []
     '.github/workflows/check-suite-monitor.yml':
-        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3'
+        - 'actions/checkout@v7.0.1'
+        - 'actions/github-script@v9.0.0'
     '.github/workflows/ci-pipeline.yml':
-        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'haskell-actions/setup@0f8e8c99d88aeb3fbfd523f1ef2c6f762d10d64d'
-        - 'metadatastician/standards@d55304a01b5260b0511aae0d14ed8b8770b00293'
-        - 'oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6'
+        - 'actions/checkout@v7.0.1'
+        - 'haskell-actions/setup@v2.12.1'
+        - 'oven-sh/setup-bun@v2.2.0'
     '.github/workflows/cicd-squabbler-reusable.yml':
-        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'hyperpolymath/cicd-squabbler@d04055f4a26c4a0a5fa4f5149d40f0c42aeac274'
-        - 'step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a'
+        - 'actions/checkout@v7.0.1'
+        - 'hyperpolymath/cicd-squabbler@main'
+        - 'step-security/harden-runner@v2.22.4'
     '.github/workflows/cicd-squabbler.yml': []
     '.github/workflows/code-coverage.yml':
-        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'actions/upload-code-coverage@2b21a77928be8d5168c2b9581a67f2adbebacc52'
-        - 'dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8'
+        - 'actions/checkout@v7.0.1'
+        - 'actions/upload-code-coverage@v1.4.4'
+        - 'dtolnay/rust-toolchain@v1'
     '.github/workflows/codeql-reusable.yml':
-        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'github/codeql-action@b96794f015dfd88f77b49b1c93e0fa7110f94c63'
+        - 'actions/checkout@v7.0.1'
+        - 'github/codeql-action@v4.38.0'
     '.github/workflows/codeql.yml': []
     '.github/workflows/debt-measure.yml':
-        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
+        - 'actions/checkout@v7.0.1'
     '.github/workflows/deed-conformance.yml':
-        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6'
+        - 'actions/checkout@v7.0.1'
+        - 'oven-sh/setup-bun@v2.2.0'
     '.github/workflows/deep-recon-reusable.yml':
-        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9'
-        - 'github/codeql-action@b96794f015dfd88f77b49b1c93e0fa7110f94c63'
+        - 'actions/checkout@v7.0.1'
+        - 'actions/upload-artifact@v7.0.2'
+        - 'github/codeql-action@v4.38.0'
     '.github/workflows/deep-recon.yml': []
     '.github/workflows/dependabot-lock-regen.yml':
-        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510'
-        - 'step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a'
+        - 'actions/checkout@v7.0.1'
+        - 'actions/create-github-app-token@v3.3.0'
+        - 'step-security/harden-runner@v2.22.4'
     '.github/workflows/doc-format.yml':
-        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
+        - 'actions/checkout@v7.0.1'
     '.github/workflows/dyadt-verify.yml':
-        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
+        - 'actions/checkout@v7.0.1'
     '.github/workflows/echidna-verify.yml':
-        - 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9'
-        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9'
+        - 'actions/cache@v6.1.0'
+        - 'actions/checkout@v7.0.1'
+        - 'actions/upload-artifact@v7.0.2'
     '.github/workflows/elixir-ci-reusable.yml':
-        - 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9'
-        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124'
+        - 'actions/cache@v6.1.0'
+        - 'actions/checkout@v7.0.1'
+        - 'erlef/setup-beam@v1.24.1'
     '.github/workflows/elixir-ci.yml': []
     '.github/workflows/fork-governance-publish-reusable.yml':
-        - 'actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333'
+        - 'actions/download-artifact@v8.0.2'
     '.github/workflows/fork-governance-publish.yml': []
     '.github/workflows/fork-governance-reusable.yml':
-        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333'
-        - 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9'
+        - 'actions/checkout@v7.0.1'
+        - 'actions/download-artifact@v8.0.2'
+        - 'actions/upload-artifact@v7.0.2'
     '.github/workflows/fork-governance.yml':
-        - 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9'
-        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9'
+        - 'actions/cache@v6.1.0'
+        - 'actions/checkout@v7.0.1'
+        - 'actions/upload-artifact@v7.0.2'
     '.github/workflows/github-backup-mirror-reusable.yml':
-        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
+        - 'actions/checkout@v7.0.1'
     '.github/workflows/governance-reusable.yml':
-        - 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9'
-        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed'
-        - 'editorconfig-checker/action-editorconfig-checker@51f63319f592f97930c73d9c46184d20bd206393'
-        - 'erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124'
-        - 'metadatastician/standards@bfa851f5291edd82d01dfb33cb8d81b3002d2f89'
-        - 'oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6'
+        - 'actions/cache@v6.1.0'
+        - 'actions/checkout@v7.0.1'
+        - 'denoland/setup-deno@v2.0.5'
+        - 'erlef/setup-beam@v1.24.1'
+        - 'oven-sh/setup-bun@v2.2.0'
     '.github/workflows/governance.yml': []
     '.github/workflows/hypatia-scan-reusable.yml':
-        - 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9'
-        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333'
-        - 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9'
-        - 'erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124'
-        - 'github/codeql-action@b96794f015dfd88f77b49b1c93e0fa7110f94c63'
+        - 'actions/cache@v6.1.0'
+        - 'actions/checkout@v7.0.1'
+        - 'actions/download-artifact@v8.0.2'
+        - 'actions/upload-artifact@v7.0.2'
+        - 'erlef/setup-beam@v1.24.1'
+        - 'github/codeql-action@v4.38.0'
     '.github/workflows/hypatia-scan.yml': []
     '.github/workflows/ijson-jcs.yml':
-        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
+        - 'actions/checkout@v7.0.1'
     '.github/workflows/instant-sync.yml':
-        - 'peter-evans/repository-dispatch@28959ce8df70de7be546dd1250a005dd32156697'
+        - 'peter-evans/repository-dispatch@v4.0.1'
     '.github/workflows/js-runtimes-reusable.yml':
-        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed'
-        - 'oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6'
+        - 'actions/checkout@v7.0.1'
+        - 'denoland/setup-deno@v2.0.5'
+        - 'oven-sh/setup-bun@v2.2.0'
     '.github/workflows/k9-conformance.yml':
-        - 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9'
-        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9'
-        - 'oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6'
+        - 'actions/cache@v6.1.0'
+        - 'actions/checkout@v7.0.1'
+        - 'actions/upload-artifact@v7.0.2'
+        - 'oven-sh/setup-bun@v2.2.0'
     '.github/workflows/k9-contractile.yml':
-        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9'
-        - 'oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6'
+        - 'actions/checkout@v7.0.1'
+        - 'actions/upload-artifact@v7.0.2'
+        - 'oven-sh/setup-bun@v2.2.0'
     '.github/workflows/label-triage.yml': []
     '.github/workflows/labels.yml': []
     '.github/workflows/launcher-standard-lockstep.yml':
-        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
+        - 'actions/checkout@v7.0.1'
     '.github/workflows/lock-selfcheck.yml':
-        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
+        - 'actions/checkout@v7.0.1'
     '.github/workflows/lock-sync-contract.yml':
-        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
+        - 'actions/checkout@v7.0.1'
     '.github/workflows/lock-sync-gate.yml': []
     '.github/workflows/lockfile-drift-detect.yml':
-        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9'
-        - 'step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a'
+        - 'actions/checkout@v7.0.1'
+        - 'actions/upload-artifact@v7.0.2'
+        - 'step-security/harden-runner@v2.22.4'
     '.github/workflows/makefile-blocker.yml':
-        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
+        - 'actions/checkout@v7.0.1'
     '.github/workflows/mirror-reusable.yml':
-        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8'
-        - 'webfactory/ssh-agent@e83874834305fe9a4a2997156cb26c5de65a8555'
-    '.github/workflows/mirror.yml':
-        - 'metadatastician/standards@70019048f862250c04346f27e6ca196ff7aa187a'
+        - 'actions/checkout@v7.0.1'
+        - 'dtolnay/rust-toolchain@v1'
+        - 'webfactory/ssh-agent@v0.10.0'
+    '.github/workflows/mirror.yml': []
     '.github/workflows/no-js-scan.yml':
-        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
+        - 'actions/checkout@v7.0.1'
     '.github/workflows/pages-archive.yml':
-        - 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9'
-        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d'
-        - 'actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346'
-        - 'actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9'
-        - 'haskell-actions/setup@0f8e8c99d88aeb3fbfd523f1ef2c6f762d10d64d'
+        - 'actions/cache@v6.1.0'
+        - 'actions/checkout@v7.0.1'
+        - 'actions/configure-pages@v6.0.0'
+        - 'actions/deploy-pages@v5.0.1'
+        - 'actions/upload-pages-artifact@v5.0.0'
+        - 'haskell-actions/setup@v2.12.1'
     '.github/workflows/pages.yml':
-        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346'
-        - 'actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9'
+        - 'actions/checkout@v7.0.1'
+        - 'actions/deploy-pages@v5.0.1'
+        - 'actions/upload-pages-artifact@v5.0.0'
     '.github/workflows/propagate-hooks.yml':
-        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a'
+        - 'actions/checkout@v7.0.1'
+        - 'step-security/harden-runner@v2.22.4'
     '.github/workflows/provisioning-check-reusable.yml':
-        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
+        - 'actions/checkout@v7.0.1'
     '.github/workflows/readme-derive-reusable.yml':
-        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
+        - 'actions/checkout@v7.0.1'
     '.github/workflows/readme-derive.yml': []
     '.github/workflows/required-contexts.yml':
-        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
+        - 'actions/checkout@v7.0.1'
     '.github/workflows/rust-ci-reusable.yml':
-        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8'
-        - 'goto-bus-stop/setup-zig@abea47f85e598557f500fa1fd2ab7464fcb39406'
-        - 'swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0'
+        - 'actions/checkout@v7.0.1'
+        - 'dtolnay/rust-toolchain@v1'
+        - 'goto-bus-stop/setup-zig@v2.2.1'
+        - 'swatinem/rust-cache@v2.9.3'
     '.github/workflows/scorecard-enforcer.yml':
-        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333'
-        - 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9'
-        - 'ossf/scorecard-action@fa7117db83c52d787ae5a89f350999701505d78e'
+        - 'actions/checkout@v7.0.1'
+        - 'actions/download-artifact@v8.0.2'
+        - 'actions/upload-artifact@v7.0.2'
+        - 'ossf/scorecard-action@v2.5.0'
     '.github/workflows/scorecard-reusable.yml':
-        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9'
-        - 'github/codeql-action@b96794f015dfd88f77b49b1c93e0fa7110f94c63'
-        - 'ossf/scorecard-action@fa7117db83c52d787ae5a89f350999701505d78e'
+        - 'actions/checkout@v7.0.1'
+        - 'actions/upload-artifact@v7.0.2'
+        - 'github/codeql-action@v4.38.0'
+        - 'ossf/scorecard-action@v2.5.0'
     '.github/workflows/scorecard.yml': []
     '.github/workflows/secret-scanner-reusable.yml':
-        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
+        - 'actions/checkout@v7.0.1'
     '.github/workflows/secret-scanner.yml': []
     '.github/workflows/self-ci.yml': []
     '.github/workflows/self-test.yml':
-        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed'
-        - 'erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124'
-        - 'oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6'
+        - 'actions/checkout@v7.0.1'
+        - 'denoland/setup-deno@v2.0.5'
+        - 'erlef/setup-beam@v1.24.1'
+        - 'oven-sh/setup-bun@v2.2.0'
     '.github/workflows/settings-drift-detect.yml':
-        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9'
-        - 'step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a'
+        - 'actions/checkout@v7.0.1'
+        - 'actions/upload-artifact@v7.0.2'
+        - 'step-security/harden-runner@v2.22.4'
     '.github/workflows/spark-theatre-gate.yml':
-        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
+        - 'actions/checkout@v7.0.1'
     '.github/workflows/tag-ruleset-canon.yml':
-        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510'
-        - 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9'
-        - 'step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a'
+        - 'actions/checkout@v7.0.1'
+        - 'actions/create-github-app-token@v3.3.0'
+        - 'actions/upload-artifact@v7.0.2'
+        - 'step-security/harden-runner@v2.22.4'
     '.github/workflows/tailscale-connect-reusable.yml':
-        - 'tailscale/github-action@064b10558093f38325e838ddea35486bdc6b1d5c'
+        - 'tailscale/github-action@v4.4.0'
     '.github/workflows/uuid-v8.yml':
-        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
+        - 'actions/checkout@v7.0.1'
 dependencies:
-    'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9':
+    'actions/cache@v6.1.0':
         ref: 'v6.1.0'
         commit: 'sha1-55cc8345863c7cc4c66a329aec7e433d2d1c52a9'
         owner_id: 44036562
         repo_id: 215566462
-    'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1':
+    'actions/checkout@v7.0.1':
         ref: 'v7.0.1'
         commit: 'sha1-3d3c42e5aac5ba805825da76410c181273ba90b1'
         owner_id: 44036562
         repo_id: 197814629
-    'actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d':
+    'actions/configure-pages@v6.0.0':
         ref: 'v6.0.0'
         commit: 'sha1-45bfe0192ca1faeb007ade9deae92b16b8254a0d'
         owner_id: 44036562
         repo_id: 513659658
-    'actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510':
+    'actions/create-github-app-token@v3.3.0':
         ref: 'v3.3.0'
         commit: 'sha1-64ab729a6294000f5aa4a4bc0b73d1f32bc45510'
         owner_id: 44036562
         repo_id: 642580244
-    'actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346':
+    'actions/deploy-pages@v5.0.1':
         ref: 'v5.0.1'
         commit: 'sha1-368f82528645a54fb793d4d04e342629a3f51346'
         owner_id: 44036562
         repo_id: 438112499
-    'actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333':
+    'actions/download-artifact@v8.0.2':
         ref: 'v8.0.2'
         commit: 'sha1-9000827ccba6bdab643e8b6fd33ac0654aef8333'
         owner_id: 44036562
         repo_id: 192626254
-    'actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3':
+    'actions/github-script@v9.0.0':
         ref: 'v9.0.0'
         commit: 'sha1-3a2844b7e9c422d3c10d287c895573f7108da1b3'
         owner_id: 44036562
@@ -249,133 +245,94 @@ dependencies:
         commit: 'sha1-bbbca2ddaa5d8feaa63e36b76fdaad77386f024f'
         owner_id: 44036562
         repo_id: 192625955
-    'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9':
+    'actions/upload-artifact@v7.0.2':
         ref: 'v7.0.2'
         commit: 'sha1-cf430e030ddbb5b0abf93d22962f4752f3646cd9'
         owner_id: 44036562
         repo_id: 192625955
-    'actions/upload-code-coverage@2b21a77928be8d5168c2b9581a67f2adbebacc52':
+    'actions/upload-code-coverage@v1.4.4':
         ref: 'v1.4.4'
         commit: 'sha1-2b21a77928be8d5168c2b9581a67f2adbebacc52'
         owner_id: 44036562
         repo_id: 1220171870
-    'actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9':
+    'actions/upload-pages-artifact@v5.0.0':
         ref: 'v5.0.0'
         commit: 'sha1-fc324d3547104276b827a68afc52ff2a11cc49c9'
         owner_id: 44036562
         repo_id: 496012378
         uses:
             - 'actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f'
-    'denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed':
+    'denoland/setup-deno@v2.0.5':
         ref: 'v2.0.5'
         commit: 'sha1-22d081ff2d3a40755e97629de92e3bcbfa7cf2ed'
         owner_id: 42048915
         repo_id: 356423100
-    'dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8':
+    'dtolnay/rust-toolchain@v1':
         ref: 'v1'
         commit: 'sha1-683b588c487a69d01f6c6ddf40f036ff682cc2c8'
         owner_id: 1940490
         repo_id: 260749683
-    'editorconfig-checker/action-editorconfig-checker@51f63319f592f97930c73d9c46184d20bd206393':
-        ref: 'v3.0.0'
-        commit: 'sha1-51f63319f592f97930c73d9c46184d20bd206393'
-        owner_id: 26415196
-        repo_id: 297874902
-    'erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124':
+    'erlef/setup-beam@v1.24.1':
         ref: 'v1.24.1'
         commit: 'sha1-54075bcc5e249e4758d363f27d099f55d843f124'
         owner_id: 47606891
         repo_id: 331103973
-    'github/codeql-action@b96794f015dfd88f77b49b1c93e0fa7110f94c63':
+    'github/codeql-action@v4.38.0':
         ref: 'v4.38.0'
         commit: 'sha1-b96794f015dfd88f77b49b1c93e0fa7110f94c63'
         owner_id: 9919
         repo_id: 259445878
-    'goto-bus-stop/setup-zig@abea47f85e598557f500fa1fd2ab7464fcb39406':
+    'goto-bus-stop/setup-zig@v2.2.1':
         ref: 'v2.2.1'
         commit: 'sha1-abea47f85e598557f500fa1fd2ab7464fcb39406'
         owner_id: 1006268
         repo_id: 212984112
-    'haskell-actions/setup@0f8e8c99d88aeb3fbfd523f1ef2c6f762d10d64d':
+    'haskell-actions/setup@v2.12.1':
         ref: 'v2.12.1'
         commit: 'sha1-0f8e8c99d88aeb3fbfd523f1ef2c6f762d10d64d'
         owner_id: 75048950
         repo_id: 623796603
-    'hyperpolymath/cicd-squabbler@d04055f4a26c4a0a5fa4f5149d40f0c42aeac274':
+    'hyperpolymath/cicd-squabbler@main':
         ref: 'main'
         commit: 'sha1-d04055f4a26c4a0a5fa4f5149d40f0c42aeac274'
         owner_id: 6759885
         repo_id: 1284026967
-    'metadatastician/standards@70019048f862250c04346f27e6ca196ff7aa187a':
-        ref: '70019048f862250c04346f27e6ca196ff7aa187a'
-        commit: 'sha1-70019048f862250c04346f27e6ca196ff7aa187a'
-        owner_id: 297579217
-        repo_id: 1116521501
-        uses:
-            - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-            - 'dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8'
-            - 'webfactory/ssh-agent@e83874834305fe9a4a2997156cb26c5de65a8555'
-    'metadatastician/standards@bfa851f5291edd82d01dfb33cb8d81b3002d2f89':
-        ref: 'bfa851f5291edd82d01dfb33cb8d81b3002d2f89'
-        commit: 'sha1-bfa851f5291edd82d01dfb33cb8d81b3002d2f89'
-        owner_id: 297579217
-        repo_id: 1116521501
-        uses:
-            - 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9'
-            - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-            - 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9'
-            - 'oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6'
-    'metadatastician/standards@d55304a01b5260b0511aae0d14ed8b8770b00293':
-        ref: 'd55304a01b5260b0511aae0d14ed8b8770b00293'
-        commit: 'sha1-d55304a01b5260b0511aae0d14ed8b8770b00293'
-        owner_id: 297579217
-        repo_id: 1116521501
-        uses:
-            - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-            - 'dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8'
-            - 'goto-bus-stop/setup-zig@abea47f85e598557f500fa1fd2ab7464fcb39406'
-            - 'swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6'
-    'ocaml/setup-ocaml@ff66428f72b64472e749b22e0ad4dded4b2ddca6':
+    'ocaml/setup-ocaml@v3.9.1':
         ref: 'v3.9.1'
         commit: 'sha1-ff66428f72b64472e749b22e0ad4dded4b2ddca6'
         owner_id: 1841483
         repo_id: 220799100
-    'ossf/scorecard-action@fa7117db83c52d787ae5a89f350999701505d78e':
+    'ossf/scorecard-action@v2.5.0':
         ref: 'v2.5.0'
         commit: 'sha1-fa7117db83c52d787ae5a89f350999701505d78e'
         owner_id: 67707773
         repo_id: 421101922
-    'oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6':
+    'oven-sh/setup-bun@v2.2.0':
         ref: 'v2.2.0'
         commit: 'sha1-0c5077e51419868618aeaa5fe8019c62421857d6'
         owner_id: 108928776
         repo_id: 512644635
-    'peter-evans/repository-dispatch@28959ce8df70de7be546dd1250a005dd32156697':
+    'peter-evans/repository-dispatch@v4.0.1':
         ref: 'v4.0.1'
         commit: 'sha1-28959ce8df70de7be546dd1250a005dd32156697'
         owner_id: 18365890
         repo_id: 220359305
-    'step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a':
+    'step-security/harden-runner@v2.22.4':
         ref: 'v2.22.4'
         commit: 'sha1-1d88384fd173af6ecb012dfd0264a306b711241a'
         owner_id: 88700172
         repo_id: 422287306
-    'swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6':
-        ref: 'v2.9.2'
-        commit: 'sha1-6323deb102c322ba6fcbdcafc7e3dddab59af2b6'
-        owner_id: 580492
-        repo_id: 298565987
-    'swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0':
+    'swatinem/rust-cache@v2.9.3':
         ref: 'v2.9.3'
         commit: 'sha1-d1527c8f67ef9af357290475d4af4b0fab8f12e0'
         owner_id: 580492
         repo_id: 298565987
-    'tailscale/github-action@064b10558093f38325e838ddea35486bdc6b1d5c':
+    'tailscale/github-action@v4.4.0':
         ref: 'v4.4.0'
         commit: 'sha1-064b10558093f38325e838ddea35486bdc6b1d5c'
         owner_id: 48932923
         repo_id: 360548653
-    'webfactory/ssh-agent@e83874834305fe9a4a2997156cb26c5de65a8555':
+    'webfactory/ssh-agent@v0.10.0':
         ref: 'v0.10.0'
         commit: 'sha1-e83874834305fe9a4a2997156cb26c5de65a8555'
         owner_id: 135788
