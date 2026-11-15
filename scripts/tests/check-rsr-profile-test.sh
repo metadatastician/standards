@@ -203,7 +203,7 @@ d=$(repo_deed deednestedrole '  (rsr-profile :version "1.0.0" (notes :role "spin
 rm -f "$d/Cargo.toml" "$d/Cargo.lock" "$d/src/main.rs"
 assert "a :role inside a nested clause does not make the repo a spine" 1 "VESTIGIAL" bash "$CHECK" "$d"
 
-d=$(repo_deed deedstrfield '  (rsr-profile :version "1.0.0" :description "write :capabilities (bash) and :role \\"spine\\" here" :capabilities ("rust"))')
+d=$(repo_deed deedstrfield '  (rsr-profile :version "1.0.0" :declares-against "write :capabilities (bash) and :role \\"spine\\" here" :capabilities ("rust"))')
 assert "field-shaped text inside a top-level string is not a field" 0 "effective capabilities: rust" bash "$CHECK" "$d"
 
 d=$(repo_deed deedmultiline '  (rsr-profile\n    :version "1.0.0" ; a comment\n    :capabilities (\n      "rust"))\n')
@@ -225,14 +225,14 @@ assert "an escaped \\t in :remove does not remove rust" 0 "effective capabilitie
 # A string whose escapes decode to a newline then a field-shaped tail must
 # stay one field (Codex and GitHub Advanced Security on #1411). The AST
 # decodes \n and \t; written back raw, the tail would forge a record.
-d=$(repo_deed deedforgerole '  (rsr-profile :version "1.0.0" :description "x\\nS\\trole\\tspine" :capabilities ("bash"))')
+d=$(repo_deed deedforgerole '  (rsr-profile :version "1.0.0" :declares-against "x\\nS\\trole\\tspine" :capabilities ("bash"))')
 rm -f "$d/Cargo.toml" "$d/Cargo.lock" "$d/src/main.rs"
 assert "a \\n-led field-shaped tail in a string does not forge :role spine" 1 "VESTIGIAL" bash "$CHECK" "$d"
 
-d=$(repo_deed deedforgeremove '  (rsr-profile :version "1.0.0" :description "x\\nL\\tremove\\trust" :capabilities ("rust"))')
+d=$(repo_deed deedforgeremove '  (rsr-profile :version "1.0.0" :declares-against "x\\nL\\tremove\\trust" :capabilities ("rust"))')
 assert "a \\n-led field-shaped tail in a string does not forge a :remove item" 0 "effective capabilities: rust" bash "$CHECK" "$d"
 
-d=$(repo_deed deedforgecount '  (rsr-profile :version "1.0.0" :description "x\\nCOUNT\\t2" :capabilities ("rust"))')
+d=$(repo_deed deedforgecount '  (rsr-profile :version "1.0.0" :declares-against "x\\nCOUNT\\t2" :capabilities ("rust"))')
 assert "a \\n-led COUNT tail in a string does not forge a second clause" 0 "rsr-profile check: OK" bash "$CHECK" "$d"
 
 # The caller's tree is untrusted: a bunfig.toml preload in the working
@@ -271,6 +271,35 @@ assert "with dotglob on, a dot-led deed is still one deed" 0 ".github_chora.deed
 
 d=$(repo_deed deedfailglob '  (rsr-profile :version "1.0.0" :capabilities ("rust"))')
 assert "with failglob on, one unmatched deed pattern does not abort the scan" 0 "deedfailglob_chora.deed (rsr-profile …)" bash -O failglob "$CHECK" "$d"
+
+# One grammar owns the clause's keys (A7 J39): an unknown field or clause
+# refuses the clause, in both parser modes, and the awk path's copy of the key
+# set is the module's.
+d=$(repo_deed deedunkfield '  (rsr-profile :version "1.0.0" :description "x" :capabilities ("rust"))')
+assert "an unknown (rsr-profile …) field refuses the clause" 2 "J39" bash "$CHECK" "$d"
+d=$(repo_deed deedunkclause '  (rsr-profile :version "1.0.0" :capabilities ("rust") (extras :x "y"))')
+assert "an unknown (rsr-profile …) sub-clause refuses the clause" 2 "J39" bash "$CHECK" "$d"
+d=$(repo_deed deedunkparen '  (rsr-profile :version "1.0.0" :declares-against "(extras)" :capabilities ("rust"))')
+assert "a parenthesis inside a string is not a sub-clause" 0 "rsr-profile check: OK" bash "$CHECK" "$d"
+# A list after a :keyword is the field's value, never a sub-clause, even when
+# its items are symbols. The module wants strings, which only the AST path
+# can check; the awk path checks keys alone.
+d=$(repo_deed deedsymlist '  (rsr-profile :version "1.0.0" :capabilities (rust))')
+if [ "$MODE" = ast ]; then
+  assert "a symbol capability list is refused by the module (strings only)" 2 "list of non-empty strings" bash "$CHECK" "$d"
+else
+  assert "a symbol capability list is a list, not a (rust) sub-clause" 0 "effective capabilities: rust" bash "$CHECK" "$d"
+fi
+_lint="${DEED_LINT:-$SCRIPT_DIR/../../1-formats/deed/tools/deed_lint.js}"
+if command -v bun >/dev/null 2>&1 && [ -f "$_lint" ]; then
+  _module="$(bun "$_lint" --rsr-profile-keys | tr '\n' ' ' | sed 's/ $//')"
+  _script="$(sed -n 's/^RSR_PROFILE_KEYS="\(.*\)"$/\1/p' "$CHECK")"
+  if [ -n "$_script" ] && [ "$_module" = "$_script" ]; then
+    echo "PASS: the checker's key set is the module's (deed_lint.js --rsr-profile-keys)"; pass=$((pass + 1))
+  else
+    echo "FAIL: the checker's key set differs from the module's: script '$_script', module '$_module'"; fail=$((fail + 1))
+  fi
+fi
 
 echo "=== setup errors ==="
 assert "no profile → 2" 2 "no profile at" bash "$CHECK" "$WORK/does-not-exist"
