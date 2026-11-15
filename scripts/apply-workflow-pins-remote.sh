@@ -64,6 +64,31 @@
 #              REST fallback, the repository root could not be listed (WORKFLOW column
 #              `(root listing)`): not judged, and never read as "no over-cap line".
 #
+# HEALTH BLOCK (own rows, WORKFLOW column = the workflow file; read-only, every
+# mode, on by default, --no-health turns it off). For EVERY repository walked,
+# whether or not it has a standards pin, the applier reads that repository's last
+# HEALTH_WINDOW completed Actions runs (ONE request) and lists the workflow files
+# whose recent runs never started a job. It LISTS; it never skips, defers or
+# excludes a repository because of what it finds (a repo that cannot start its
+# workflows is exactly the one a pin move must not be judged blind about).
+#   HEALTH-STARTUP-FAILURE  one or more recent runs of the file ended with the
+#              conclusion `startup_failure`. DETAIL: how many of the window, the
+#              latest such run, and what the latest completed run of that file was.
+#   HEALTH-ZERO-JOB  the latest FAILED run of the file has name == path (the shape
+#              GitHub gives a run it could not plan) AND the jobs endpoint says it
+#              ran 0 jobs. The shape alone is not the cause (a dead pin, a
+#              forbidden ref, a bot-authored run all look the same): the row says
+#              what was SEEN, not why.
+#   HEALTH-LOCK-FAILURE  the latest failed run of the file has a failed job whose
+#              NAME contains "lock" (case-insensitive). Matched by job name only:
+#              no log is read, so this is a pointer, not a diagnosis.
+#   HEALTH-UNREAD  the run list (WORKFLOW column `(actions runs)`) or one run's jobs
+#              could not be read, or the per-repository jobs-read cap
+#              (HEALTH_JOBS_CAP) was reached. Never read as "healthy".
+# A repository with no such row had no startup failure, no 0-job failure and no
+# lock-named job failure among those runs: NOT "all green". Cost: one request per
+# repository plus one per workflow file whose latest run failed, up to the cap.
+#
 # SAFETY PROPERTIES (do not weaken any of these):
 #   * READ-ONLY by default. --fix is required to write anything.
 #   * The target SHA is proven REACHABLE FROM standards' main before any write.
@@ -111,6 +136,8 @@
 #                         to combine with --fix or --ensure-squabbler, and needs
 #                         --proven-sha. (Owner ruling 2026-11-14: content-only,
 #                         so the hold on pin moves is untouched.)
+#     --no-health         do not read Actions runs (see HEALTH BLOCK); saves the
+#                         per-repository requests when the API budget is short
 #     --self-test         run the pure-function controls and exit
 #
 # PROVEN CONTENT (--proven-sha):
@@ -181,6 +208,11 @@ ONLY_REPO=""
 OUT_FILE=""
 LIMIT=0
 ENSURE_SQUABBLER=0
+# Health block (see HEALTH BLOCK): on by default; the window of completed runs read
+# per repository and the cap on per-run jobs reads.
+HEALTH=1
+HEALTH_WINDOW=30
+HEALTH_JOBS_CAP=6
 SQUABBLER_FILE="cicd-squabbler.yml"
 BRANCH_NAME="chore/re-point-standards-workflow-pins"
 # The standards checkout this script runs from: the relock reads reusables and
@@ -384,6 +416,35 @@ deed_overcap() {
     { line = $0; sub(/\r$/, "", line); n = length(line)
       if (n > cap) { out = out (out == "" ? "" : " ") "L" NR "=" n; cnt++ } }
     END { if (cnt > 0) printf "DEED-OVERCAP\t%d line(s) over %d octets: %s\n", cnt, cap, out }
+  ' "$1"
+}
+
+# health_summary <runs.json> — one TAB-separated line per workflow file seen in a
+# `actions/runs` response, newest run first within the file (empty fields are `-`,
+# never empty, so `read` cannot collapse them):
+#   file total nstart start_id start_at start_sha nzs fail_id fail_at fail_sha fail_zs last
+# total = completed runs of the file in the window; nstart = those with conclusion
+# startup_failure (start_* = the latest); nzs = failures whose name equals the path
+# (the unplannable-run shape); fail_* = the latest conclusion `failure`; fail_zs = 1
+# when that run has the unplannable shape; last = the latest run's conclusion.
+# Only the `path` suffix after `@` (a ref) is dropped when comparing name to path.
+health_summary() {
+  jq -r '
+    def d: if . == null or . == "" then "-" else . end;
+    def base: (.path // "") | sub("@.*$"; "") | sub("^.*/"; "");
+    def full: (.path // "") | sub("@.*$"; "");
+    [.workflow_runs[]? | select(.status == "completed") | . + {f: base}]
+    | map(select(.f != ""))
+    | group_by(.f)[]
+    | (sort_by(.created_at) | reverse) as $r
+    | ($r | map(select(.conclusion == "startup_failure"))) as $s
+    | ($r | map(select(.conclusion == "failure"))) as $fl
+    | ($fl | map(select((.name // "") == full))) as $z
+    | [ $r[0].f, ($r | length), ($s | length), ($s[0].id | d), ($s[0].created_at | d),
+        (($s[0].head_sha // "")[0:8] | d), ($z | length), ($fl[0].id | d),
+        ($fl[0].created_at | d), (($fl[0].head_sha // "")[0:8] | d),
+        (if ($fl[0] != null and (($fl[0].name // "") == ($fl[0] | full))) then 1 else 0 end),
+        ($r[0].conclusion | d) ] | @tsv
   ' "$1"
 }
 
@@ -1076,6 +1137,31 @@ JSON
   dcheck deed-multibyte.deed    "1 line(s) over 998 octets: L1=1000"
   dcheck deed-crlf.deed         ""
 
+  echo "control: health_summary reads startup failures, the unplannable-run shape, and the latest conclusion"
+  local sh1="1111111111111111111111111111111111111111" sh2="2222222222222222222222222222222222222222" sh5="5555555555555555555555555555555555555555" sh7="7777777777777777777777777777777777777777"
+  jq -n --arg s1 "$sh1" --arg s2 "$sh2" --arg s5 "$sh5" --arg s7 "$sh7" '{workflow_runs: [
+    {id: 1, status: "completed", conclusion: "startup_failure", name: "A", path: ".github/workflows/a.yml", created_at: "2026-11-10T00:00:00Z", head_sha: $s1},
+    {id: 2, status: "completed", conclusion: "startup_failure", name: "A", path: ".github/workflows/a.yml", created_at: "2026-11-12T00:00:00Z", head_sha: $s2},
+    {id: 3, status: "completed", conclusion: "success", name: "A", path: ".github/workflows/a.yml", created_at: "2026-11-13T00:00:00Z", head_sha: $s1},
+    {id: 4, status: "completed", conclusion: "failure", name: ".github/workflows/b.yml", path: ".github/workflows/b.yml", created_at: "2026-11-11T00:00:00Z", head_sha: $s1},
+    {id: 5, status: "completed", conclusion: "failure", name: "B", path: ".github/workflows/b.yml", created_at: "2026-11-12T00:00:00Z", head_sha: $s5},
+    {id: 6, status: "completed", conclusion: "success", name: "C", path: ".github/workflows/c.yml", created_at: "2026-11-12T00:00:00Z", head_sha: $s1},
+    {id: 7, status: "completed", conclusion: "failure", name: ".github/workflows/d.yml", path: ".github/workflows/d.yml@refs/heads/main", created_at: "2026-11-12T00:00:00Z", head_sha: $s7},
+    {id: 8, status: "in_progress", conclusion: null, name: "E", path: ".github/workflows/e.yml", created_at: "2026-11-14T00:00:00Z", head_sha: $s1}
+  ]}' > "$d/runs.json"
+  local hs; hs=$(health_summary "$d/runs.json")
+  hcheck() {
+    local label="$1" file="$2" want="$3" got
+    got=$(printf '%s\n' "$hs" | awk -F'\t' -v f="$file" '$1 == f' | tr '\t' '|')
+    if [ "$got" = "$want" ]; then echo "  PASS $label -> ${got:-no line}"
+    else echo "  FAIL $label -> got '${got}' want '${want}'" >&2; rc=1; fi
+  }
+  hcheck health-startup      a.yml "a.yml|3|2|2|2026-11-12T00:00:00Z|22222222|0|-|-|-|0|success"
+  hcheck health-zero-shape   b.yml "b.yml|2|0|-|-|-|1|5|2026-11-12T00:00:00Z|55555555|0|failure"
+  hcheck health-healthy      c.yml "c.yml|1|0|-|-|-|0|-|-|-|0|success"
+  hcheck health-ref-suffix   d.yml "d.yml|1|0|-|-|-|1|7|2026-11-12T00:00:00Z|77777777|1|failure"
+  hcheck health-inprogress-ignored e.yml ""
+
   echo "control: the lock relock is present"
   if [ -f "$RELOCK" ] && bash -n "$RELOCK"; then
     echo "  PASS $(basename "$RELOCK") present and parses"
@@ -1325,6 +1411,58 @@ fetch_workflows() {
   return 0
 }
 
+# repo_health <repo> <tsv> — append HEALTH-* rows (see HEALTH BLOCK) for one
+# repository. READ-ONLY: it only issues GET requests, and it never changes what
+# the caller does with the repository. Every failure to read is a HEALTH-UNREAD row.
+repo_health() {
+  local repo="$1" tsv="$2" resp lines jresp
+  [ "$HEALTH" -eq 1 ] || return 0
+  resp=$(mktemp)
+  if ! gh api "repos/${repo}/actions/runs?status=completed&per_page=${HEALTH_WINDOW}" > "$resp" 2>/dev/null \
+     || ! jq -e '(.workflow_runs | type) == "array"' "$resp" >/dev/null 2>&1; then
+    printf '%s\t(actions runs)\tHEALTH-UNREAD\tthe repository'"'"'s recent Actions runs could not be read (no permission, rate limit, or a non-JSON answer); not judged\n' "$repo" >> "$tsv"
+    rm -f "$resp"; return 0
+  fi
+  if ! lines=$(health_summary "$resp"); then
+    printf '%s\t(actions runs)\tHEALTH-UNREAD\tthe Actions runs answer could not be summarised; not judged\n' "$repo" >> "$tsv"
+    rm -f "$resp"; return 0
+  fi
+  rm -f "$resp"
+  local f total nst sid sat ssha nzs fid fat fsha fzs last njobs=0 names jt
+  while IFS=$'\t' read -r f total nst sid sat ssha nzs fid fat fsha fzs last; do
+    [ -n "$f" ] || continue
+    if [ "$nst" -gt 0 ]; then
+      printf '%s\t%s\tHEALTH-STARTUP-FAILURE\t%s of the last %s completed run(s) of this file ended startup_failure; latest run %s at %s (%s); latest completed run of this file: %s\n' \
+        "$repo" "$f" "$nst" "$total" "$sid" "$sat" "$ssha" "$last" >> "$tsv"
+    fi
+    [ "$fid" = "-" ] && continue
+    if [ "$njobs" -ge "$HEALTH_JOBS_CAP" ]; then
+      printf '%s\t%s\tHEALTH-UNREAD\tlatest failed run %s not inspected: the jobs-read cap (%s per repository) was reached\n' \
+        "$repo" "$f" "$fid" "$HEALTH_JOBS_CAP" >> "$tsv"
+      continue
+    fi
+    njobs=$((njobs+1))
+    jresp=$(mktemp)
+    if ! gh api "repos/${repo}/actions/runs/${fid}/jobs?per_page=100" > "$jresp" 2>/dev/null \
+       || ! jq -e '(.jobs | type) == "array"' "$jresp" >/dev/null 2>&1; then
+      printf '%s\t%s\tHEALTH-UNREAD\tthe jobs of latest failed run %s could not be read; not judged\n' "$repo" "$f" "$fid" >> "$tsv"
+      rm -f "$jresp"; continue
+    fi
+    jt=$(jq -r '.total_count // (.jobs | length)' "$jresp")
+    if [ "$fzs" = 1 ] && [ "$jt" = 0 ]; then
+      printf '%s\t%s\tHEALTH-ZERO-JOB\t%s of the last %s completed run(s) of this file failed with name == path; latest failed run %s at %s (%s) ran 0 jobs; latest completed run of this file: %s\n' \
+        "$repo" "$f" "$nzs" "$total" "$fid" "$fat" "$fsha" "$last" >> "$tsv"
+    fi
+    names=$(jq -r '[.jobs[]? | select(.conclusion == "failure" and ((.name // "") | test("lock"; "i"))) | .name | gsub("[\t\n]"; " ")] | join(", ")' "$jresp")
+    if [ -n "$names" ]; then
+      printf '%s\t%s\tHEALTH-LOCK-FAILURE\tfailed job(s) with "lock" in the name in latest failed run %s at %s (%s): %s (matched by job NAME; no log was read); latest completed run of this file: %s\n' \
+        "$repo" "$f" "$fid" "$fat" "$fsha" "$names" "$last" >> "$tsv"
+    fi
+    rm -f "$jresp"
+  done <<< "$lines"
+  return 0
+}
+
 # land_pr <repo> <dir> <files...> — create branch, commit VERIFIED, open PR.
 # Uses createCommitOnBranch: it is cross-repo by construction and the resulting
 # commit is GitHub-"Verified", which required_signatures rulesets demand.
@@ -1436,6 +1574,7 @@ main() {
       --out) OUT_FILE="$2"; shift ;;
       --limit) LIMIT="$2"; shift ;;
       --ensure-squabbler) ENSURE_SQUABBLER=1 ;;
+      --no-health) HEALTH=0 ;;
       --proven-sha) PROVEN_SHA="$2"; shift ;;
       --fix-content) DO_FIX_CONTENT=1 ;;
       --self-test) self_test; exit $? ;;
@@ -1544,6 +1683,9 @@ main() {
     [ "$LIMIT" -gt 0 ] && [ "$n" -ge "$LIMIT" ] && break
     walked=$((walked+1)); [ "$DO_FIX" -eq 1 ] || [ "$DO_FIX_CONTENT" -eq 1 ] || n=$((n+1))
     local rdir="${WORKDIR}/$(echo "$repo" | tr '/' '_')"
+    # Health rows come first and for EVERY repository walked: nothing below (a
+    # failed fetch, no workflows, a pin-free repo) can hide them.
+    repo_health "$repo" "$tsv"
     if ! fetch_workflows "$repo" "$rdir"; then
       log "  FETCH-FAILED ${repo}: workflows could not be read; NOT classified"
       printf '%s\t-\tFETCH-FAILED\t-\n' "$repo" >> "$tsv"
