@@ -295,7 +295,7 @@ kill_mutant envpin_plain_continuation_ignored 's@if \(n > pn\) flushp\(pcont\); 
 kill_mutant envpin_explicit_key_silent 's@if \(!xwarn\) \{ xwarn = 1; outr@if (0) { xwarn = 1; outr@' "FAIL envpin-explicit-key"
 # Tenth round on #1602: a doubled single quote inside a flow scalar, and escapes in a
 # double-quoted key.
-kill_mutant envpin_flow_doubled_quote 's@if \(q == "\\047" && substr\(line, i \+ 1, 1\) == "\\047"\) i\+\+; else q = ""@q = ""@' "FAIL envpin-rows"
+kill_mutant envpin_flow_doubled_quote 's@if \(q == "\\047" && substr\(line, i \+ 1, 1\) == "\\047"\) i\+\+; else \{ q = ""; pl = 0 \}@q = ""; pl = 0@' "FAIL envpin-rows"
 kill_mutant envpin_key_escape_literal 's@key = unesc\(substr\(key, 2, length\(key\) - 2\)\)@key = substr(key, 2, length(key) - 2)@' "FAIL envpin-rows"
 # Eleventh round on #1602: a matrix axis named env is not an environment map, and
 # escapes in a double-quoted pin value are decoded.
@@ -308,6 +308,8 @@ kill_mutant envpin_explicit_value_read 's@if \(bq ~ /\^:\[\[:space:\]\]\+/\) \{ 
 kill_mutant envpin_nextline_indicator_read 's@if \(n == n0 && bq ~ /\^\[\|>\]\[-\+0-9\]\*\$/ && top > 0 && ind\[top\] < n\) \{ skip = ind\[top\]; next \}@@' "FAIL envpin-rows"
 # Thirteenth round: an empty KEY: completed by an indented node on the next line.
 kill_mutant envpin_empty_value_nextline 's@\} else if \(val == "" && !bad && c != "\\047" && c != "\\""\) \{@} else if (0) {@' "FAIL envpin-rows"
+# Fifteenth round: a plain scalar left open across the lines of a flow collection.
+kill_mutant envpin_flow_plain_carry 's@pl = fpl@pl = 0@' "FAIL envpin-rows"
 # Fourteenth round: \U escapes, a flow value compared in full, node properties after an explicit
 # key's colon, alias keys said aloud, and a quote right after `?` inside a flow collection.
 kill_mutant envpin_big_u_escape 's@ \|\| ch == "U"@@' "FAIL envpin-rows"
@@ -938,6 +940,7 @@ case_main_content_refresh_envpin_multiline() {
   local -a scens=(
     $'|-\n        main@@|-\n        release@@3@@a block scalar that changed'
     $'|-\n        main@@|-\n        main@@0@@a block scalar that did not change'
+    $'|-\n        # main@@|-\n        # release@@3@@a block scalar whose body is a hash line that changed'
     $'"ma\n        in"@@"re\n        lease"@@3@@a multi-line quoted value that changed'
   )
   for scen in "${scens[@]}"; do
@@ -1645,6 +1648,7 @@ list_mutant envpin_flow_value_marker 's@"\(flow\) " rest@"(flow)"@' case_main_co
 list_mutant envpin_refresh_path_dropped 's@row "\\t" cp "\\034" fv@row "\\t" "\\034" fv@' case_main_content_refresh_envpin_swap
 list_mutant envpin_block_text_dropped 's@function capadd\(t\) \{ gsub@function capadd(t) { return; gsub@' case_main_content_refresh_envpin_multiline
 list_mutant envpin_seq_position_dropped 's@if \(n > n0\) \{@if (0) {@' case_main_content_refresh_envpin_seq
+list_mutant envpin_block_hash_line_dropped 's@if \(RLENGTH > skip && capk != ""\) capadd\(\$0\)@if (0) capadd($0)@' case_main_content_refresh_envpin_multiline
 list_mutant envpin_refresh_value_dropped 's@a\[1\], st, \$3@a[1], st, "-"@' case_main_content_refresh_envpin
 list_mutant envpin_refresh_move_silent 's@\[ "\$epb" = "\$epa" \] \|\|@true ||@' case_main_content_refresh_envpin
 # A stamped copy in the current layout (stamp on line 2) is still held by --fix:
