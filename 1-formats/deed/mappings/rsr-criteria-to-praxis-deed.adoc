@@ -2,7 +2,7 @@
 = Mapping spec — `rsr-criteria-v2.a2ml` → `praxis-deed` (`:profile rsr-criteria`)
 Campaign: standards#837 · Frame: link:README.adoc[mappings/README] ·
 Clause grammar: link:../spec/abnf/clauses/rsr-criteria.abnf[`clauses/rsr-criteria.abnf`] (DRAFT v0.1.0) ·
-Status: **PROPOSAL pending owner review.** Nothing is translated by this spec yet.
+Status: **RULED (owner, 2026-11-15; §10).** Nothing is translated by this spec yet.
 
 This spec is the authority under which kyX's A2ML front end (D313; ULTRAPLAN
 P2.5) translates the RSR v2 criteria catalogue, the last canon artefact still
@@ -143,7 +143,7 @@ and never mints or re-derives it (U1). A `#u5` literal is refused (S2).
 | number | what it versions | value
 
 | `:schema-version` | the DEED format | `"1.0.0"`, set by the translator
-| `:spec-version` (source `[meta] version`) | the catalogue's criteria set | `"2.1.0-draft"`, carried verbatim (Q5)
+| `:spec-version` (source `[meta] version`) | the catalogue's criteria set | `"2.1.1-draft"`: the source's "2.1.0-draft" moves one pre-release step for the format change (Q5)
 | `:supersedes` | the prior catalogue major | `"1.0.0"`, verbatim
 | `canon.lock` `[canon].version` | the canon release | `2.1.5` today; bumped by the change that lands the deed (§7)
 |===
@@ -170,7 +170,7 @@ head fields.
 3+| *`[meta]` → fields of `(rsr-criteria …)`*
 
 | `spec` | `:spec-family` | enum → SYMBOL `rhodium-standard-repositories` (closed set of one). ⚠ **renamed**: the scorecard's `:spec` names the catalogue (`rsr-criteria-v2`), so carrying `spec` under that keyword would give it a second meaning. `spec-family` is canon.lock's own name for this value
-| `version` | `:spec-version` | STRING verbatim, semver with optional pre-release (`rc-semver`). The scorecard copies this string into its own `:spec-version`
+| `version` | `:spec-version` | STRING, semver with optional pre-release (`rc-semver`); written "2.1.1-draft" for this translation (Q5). The scorecard copies this string into its own `:spec-version`
 | `status` | `:status` | enum → SYMBOL, closed set `draft stable`
 | `supersedes` | `:supersedes` | STRING verbatim (`rc-semver`)
 | `date` | `:date` | STRING, `date-string` (common.abnf): a real calendar date
@@ -343,7 +343,7 @@ grammar, and is not the translation.
   :beholding-chora #uuid"0889b37b-defb-831f-973c-e119500db00e"
   (rsr-criteria
     :spec-family rhodium-standard-repositories
-    :spec-version "2.1.0-draft"
+    :spec-version "2.1.1-draft"
     :status draft
     :supersedes "1.0.0"
     :date "2026-09-19"
@@ -521,59 +521,17 @@ A2ML file. Each needs an owner decision and a canon bump of its own (Q4).
 * *The header cites RSR-SPEC-v2 §7 for the generation rule*; the rule is in
   §4 (§7 is traceability).
 
-== 10. Open questions for the owner
+== 10. Owner rulings (2026-11-15)
 
-Each names the option this spec takes as the default arm (the elegant,
-long-term-correct one) and what each option causes.
-
-. **Q1 — File stem.** (a) *Default:* `rsr-criteria-v2_praxis.deed`; the major
-  stays in the name, so §8's per-major archive and the scorecard's
-  `:spec rsr-criteria-v2` keep one string. (b) `rsr-criteria_praxis.deed`,
-  major only in `:spec-version`: shorter, but a second major cannot sit
-  beside the first, and `:spec` stops matching any file.
-. **Q2 — Which comments are carried** (§4 lists them). (a) *Default:* keep the
-  four rule-bearing comments as `;` comments and drop the rest. (b) Drop every
-  comment: a pure record, losing the inclusive-threshold and rhodium rules
-  except in RSR-SPEC-v2 prose. (c) Promote the four to `:note` fields: they
-  become greppable and checked, but `rsr-criteria.abnf` grows four fields the
-  source never had.
-. **Q3 — The SSOT and "generated from" claim** (source header; RSR-SPEC-v2 §4
-  and §7). (a) *Default:* RSR-SPEC-v2 §4 is amended to name the deed as the
-  single source, the deed header carries a one-line `;;` pointer to §4, and
-  every generator reads the deed through one parser (`deed_lint.js
-  --ast-json`). (b) Promote the claim to a field listing the generated
-  artefacts: machine-checkable, but most it would list do not exist today
-  (the checklist is archived; there are no badge files), which is an
-  overclaim. (c) Drop it from the deed and rely on §4 alone.
-. **Q4 — Departures of §9.** (a) *Default:* translate verbatim, then a separate
-  canon change, owned by the owner, corrects them in the deed (most are
-  PATCH wording; removing or re-gating 3.2.1 is a MAJOR or at least a ruling).
-  (b) Correct them during translation: kyX becomes an author of law, and the
-  round-trip check P-3 is lost. (c) Fold the corrections into the same canon
-  release as the format change: one release, but two kinds of change in it.
-. **Q5 — Versions.** `canon.lock`: (a) *Default:* PATCH 2.1.5 → 2.1.6 (no
-  criteria-set change); (b) MINOR, because the oracle's input format changes.
-  The catalogue's `:spec-version`: (a) *Default:* stays `"2.1.0-draft"`, so
-  existing scorecards stay valid; (b) bump to `"2.1.1-draft"`, as the launcher
-  standard did for a consumer-visible change, which invalidates every
-  scorecard's `:spec-version` until rescoring.
-. **Q6 — The 2.1.0-draft change note** (lines 28–38, with the owner ruling of
-  2026-09-19). (a) *Default:* drop; canon.lock's 2.1.0 entry keeps it. (b) Keep
-  as a `;` comment. (c) Add a `(change …)` clause to the profile: the
-  catalogue then carries its own history, and RSR-SPEC Appendix B (which has
-  no 2.1.0 entry) could be generated from it.
-. **Q7 — `:name`, `:gate`, `:detect` as strings.** (a) *Default:* strings,
-  matching the ratified scorecard profile, so a scorecard row is a projection
-  of a catalogue row. (b) Symbols (the frame's enum-as-symbol default): typed,
-  but the catalogue and the scorecard then disagree in type for the same
-  value, and the scorecard profile needs a major bump to follow.
-. **Q8 — `dialect`.** (a) *Default:* checked and consumed, not emitted.
-  (b) Carry as `:translated-from a2ml-record`: provenance in the record, at
-  the cost of a live A2ML name in a deed.
-. **Q9 — `:template-ref` comma lists** (2.1.2, 2.1.10). (a) *Default:* the
-  string verbatim. (b) Split into a list of strings: cleaner for the
-  template-satisfaction check of RSR-SPEC-v2 §7, but a value-type transform,
-  and `"-"` would become `()`.
+. *Q1 File stem:* `rsr-criteria-v2_praxis.deed`.
+. *Q2 Comments:* the four rule-bearing comments are carried as `;` comments; the rest are dropped.
+. *Q3 Single source:* RSR-SPEC-v2 §4 is amended to name the deed; the deed carries a one-line `;;` pointer to §4, and every generator reads it through `deed_lint.js --ast-json`.
+. *Q4 Departures (§9):* translated verbatim; a separate canon change corrects them.
+. *Q5 Versions:* both move: `canon.lock` 2.1.5 → 2.1.6, and `:spec-version` "2.1.1-draft" (scorecards are rescored).
+. *Q6 2.1.0 change note:* dropped; `canon.lock` keeps it.
+. *Q7 `:name`, `:gate`, `:detect`:* strings, as in the scorecard profile.
+. *Q8 `dialect`:* checked, not emitted.
+. *Q9 `:template-ref`:* the string verbatim.
 
 == 11. What this spec does not claim
 
