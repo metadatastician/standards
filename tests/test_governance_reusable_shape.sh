@@ -54,6 +54,8 @@ UUID v7 conformance
 UUID v8 conformance
 No new A2ML
 Existing A2ML (advisory)
+Touched deeds pass deed_lint
+Failing deeds (advisory)
 Deed conformance
 K9 conformance
 JS runtimes — environment provisions Bun first
@@ -92,7 +94,7 @@ done
 [ "$viol" -eq 0 ] && ok "continue-on-error confined to {$ALLOWED}" || bad "continue-on-error leaked into a gate job"
 
 # 6. advisory jobs excluded from derivation
-for n in "Live Actions policy (credentialed advisory)" "Code quality + docs" "Allowlist Preflight" "Existing A2ML (advisory)" "Deed conformance" "K9 conformance" "Deed conformance / lint" "K9 conformance / validate"; do
+for n in "Live Actions policy (credentialed advisory)" "Code quality + docs" "Allowlist Preflight" "Existing A2ML (advisory)" "Failing deeds (advisory)" "Deed conformance" "K9 conformance" "Deed conformance / lint" "K9 conformance / validate"; do
   jq -e --arg n "$n" '.never_required_contexts | index($n)' "$G" >/dev/null && ok "gates.json never_required_contexts has '$n'" || bad "gates.json never_required_contexts lacks '$n'"
 done
 
