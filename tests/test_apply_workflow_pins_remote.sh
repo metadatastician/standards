@@ -279,7 +279,7 @@ kill_mutant envpin_flow_quote_counted 's@else if \(\(ch == "\\047" \|\| ch == "\
 # Seventh Codex round on #1602: an anchor or tag on a mapping key, a CR or trailing
 # whitespace after a block-scalar header, and a quote that stays open across the lines
 # of a flow collection must each be handled.
-kill_mutant envpin_key_props_kept 's@match\(bp, /\^\[A-Za-z_\]@match(body, /^[A-Za-z_]@' "FAIL envpin-rows"
+kill_mutant envpin_key_props_kept 's@match\(bp, /\^\(<<\|\[A-Za-z_\]\[A-Za-z0-9_\.-\]\*\)@match(body, /^([A-Za-z_][A-Za-z0-9_.-]*)@' "FAIL envpin-rows"
 kill_mutant envpin_trailing_space_kept 's@^    \{ sub\(/\[\[:space:\]\]\+\$/, ""\) \}$@    { }@' "FAIL envpin-rows"
 kill_mutant envpin_flow_quote_reset 's@n = length\(line\); q = fq; d = 0@n = length(line); q = ""; d = 0@' "FAIL envpin-rows"
 # Eighth Codex/CodeRabbit round on #1602: a BOM, an apostrophe inside a plain scalar of a
@@ -310,6 +310,9 @@ kill_mutant envpin_nextline_indicator_read 's@if \(n == n0 && bq ~ /\^\[\|>\]\[-
 kill_mutant envpin_empty_value_nextline 's@\} else if \(val == "" && !bad && c != "\\047" && c != "\\""\) \{@} else if (0) {@' "FAIL envpin-rows"
 # Fifteenth round: a plain scalar left open across the lines of a flow collection.
 kill_mutant envpin_flow_plain_carry 's@pl = fpl@pl = 0@' "FAIL envpin-rows"
+# Sixteenth round: an env map supplied by an alias is said aloud.
+kill_mutant envpin_alias_env_silent 's@if \(\(key == "env" \|\| \(key == "<<" && parent == "env"\)\) && rest@if (0 \&\& rest@' "FAIL envpin-rows"
+kill_mutant envpin_merge_key_unread 's@\(<<\|\[A-Za-z_\]@([A-Za-z_]@' "FAIL envpin-rows"
 # Fourteenth round: \U escapes, a flow value compared in full, node properties after an explicit
 # key's colon, alias keys said aloud, and a quote right after `?` inside a flow collection.
 kill_mutant envpin_big_u_escape 's@ \|\| ch == "U"@@' "FAIL envpin-rows"

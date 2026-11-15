@@ -90,7 +90,8 @@
 # line"), never FRESH or BEHIND. YAML explicit mapping keys (`? key`) are NOT parsed: one
 # ENV-PIN-UNJUDGED row, with `(explicit key)` in place of a name, says so for the file.
 # An alias key (`*pin: value`) is not resolved: one ENV-PIN-UNJUDGED row, `(alias key)` in place of a name,
-# says so for the file. A sequence item is its own place (`[i]`) in the path of the refresh
+# says so for the file; so does an env map supplied by an alias (`env: *pins`, `<<: *pins`).
+# A sequence item is its own place (`[i]`) in the path of the refresh
 # comparison. `\UXXXXXXXX` escapes are decoded like `\x` and `\u`.
 # A key under `strategy: matrix:` is matrix data (a job that is merely named `matrix` is not), not an environment map, and gets no row. A
 # double-quoted pin value is decoded (\xHH, \uHHHH in ASCII, \\ \" \/) before it is judged.
@@ -612,7 +613,7 @@ env_pin_rows() {
       if (n == n0 && bq ~ /^[|>][-+0-9]*$/ && top > 0 && ind[top] < n) { skip = ind[top]; next }
       if (c0 == "{" || c0 == "[") { fq = ""; fpl = 0; d = depth(bp); if (d > 0) flow = d; else fq = ""; next }
       if ((c0 == "\047" || c0 == "\"") && !qclose(substr(bp, 2), c0)) { inq = c0; next }
-      if (!(match(bp, /^"([^"\\]|\\.)*"[[:space:]]*:([[:space:]]|$)/) || match(bp, /^\047([^\047]|\047\047)*\047[[:space:]]*:([[:space:]]|$)/) || match(bp, /^[A-Za-z_][A-Za-z0-9_.-]*[[:space:]]*:([[:space:]]|$)/))) next
+      if (!(match(bp, /^"([^"\\]|\\.)*"[[:space:]]*:([[:space:]]|$)/) || match(bp, /^\047([^\047]|\047\047)*\047[[:space:]]*:([[:space:]]|$)/) || match(bp, /^(<<|[A-Za-z_][A-Za-z0-9_.-]*)[[:space:]]*:([[:space:]]|$)/))) next
       kl = RLENGTH
       key = substr(bp, 1, kl); sub(/[[:space:]]*:[[:space:]]*$/, "", key)
       if (substr(key, 1, 1) == "\"") key = unesc(substr(key, 2, length(key) - 2))
@@ -632,6 +633,10 @@ env_pin_rows() {
       top++; ind[top] = n; knm[top] = key
       cp = ""; for (kk = 1; kk < top; kk++) cp = cp "." knm[kk]
       tracked = (key ~ ("^(" names ")$") && parent == "env" && !inmx)
+      # An env map supplied by an alias (`env: *pins`, or `<<: *pins` inside `env:`) is not
+      # resolved: say so, never silently skip a map that may hold a pin.
+      if ((key == "env" || (key == "<<" && parent == "env")) && rest ~ /^\*[^[:space:]]+/)
+        outr(sprintf("ENV-PIN-UNJUDGED\t(alias env) L%d an env map supplied by an alias (*name) is not resolved; env pins in this file may be missed", NR), "(alias env)")
       if (rest ~ /^[\{\[]/) {
         if (tracked) outr(sprintf("ENV-PIN-UNJUDGED\t%s L%d value is a flow collection; not judged", key, NR), "(flow) " rest)
         fq = ""; fpl = 0; d = depth(rest); if (d > 0) flow = d; else fq = ""
@@ -1551,6 +1556,12 @@ JSON
     printf "  't, X: y }\n"
     printf 'env:\n'
     printf '  CANON_REF: %s\n' "$eb"
+    printf 'jobs:\n'
+    printf '  a:\n'
+    printf '    env: *pins\n'
+    printf '  b:\n'
+    printf '    env:\n'
+    printf '      <<: *pins\n'
   } > "$d/envpin.yml"
   local ep; ep=$(env_pin_rows "$d/envpin.yml" "$t" | tr '\t' '|')
   local epw="ENV-PIN-FRESH|STANDARDS_PIN L2 ${t:0:8}
@@ -1585,7 +1596,9 @@ ENV-PIN-BEHIND|CANON_REF L110 ${eb:0:8} (target ${t:0:8}); read-only: never re-p
 ENV-PIN-UNJUDGED|CANON_REF L112 value is on the next line (an indented node); not judged
 ENV-PIN-BEHIND|CANON_REF L115 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here
 ENV-PIN-BEHIND|STANDARDS_PIN L117 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here
-ENV-PIN-BEHIND|CANON_REF L124 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here"
+ENV-PIN-BEHIND|CANON_REF L124 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here
+ENV-PIN-UNJUDGED|(alias env) L127 an env map supplied by an alias (*name) is not resolved; env pins in this file may be missed
+ENV-PIN-UNJUDGED|(alias env) L130 an env map supplied by an alias (*name) is not resolved; env pins in this file may be missed"
   if [ "$ep" = "$epw" ]; then echo "  PASS envpin-rows -> $(printf '%s\n' "$ep" | wc -l) row(s)"
   else echo "  FAIL envpin-rows -> got:
 $ep
