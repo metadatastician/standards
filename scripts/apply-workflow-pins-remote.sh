@@ -93,7 +93,9 @@
 # says so for the file; so does an env map supplied by an alias (`env: *pins`, `<<: *pins`), and
 # any `<<:` merge written as a flow collection (`<<: [*a, *b]`, also over several lines).
 # A sequence item is its own place (`[i]`) in the path of the refresh
-# comparison. `\UXXXXXXXX` escapes are decoded like `\x` and `\u`.
+# comparison. `\UXXXXXXXX` escapes are decoded like `\x` and `\u`; a decoded character that is
+# not printable ASCII (or is a backslash) is kept as its own escape (`\x0a`), so a value stays
+# lossless and one row never spans two lines.
 # A key under `strategy: matrix:` is matrix data (a job that is merely named `matrix` is not), not an environment map, and gets no row. A
 # double-quoted pin value is decoded (\xHH, \uHHHH in ASCII, \\ \" \/) before it is judged.
 # An empty `KEY:` whose value is an indented node on the next line is reported UNJUDGED ("value is on the
@@ -532,10 +534,13 @@ env_pin_rows() {
         ch = substr(s, ++i, 1)
         if (ch == "x" || ch == "u" || ch == "U") {
           h = substr(s, i + 1, (ch == "x") ? 2 : (ch == "u") ? 4 : 8); v = hexv(h)
-          if (v >= 32 && v < 127) o = o sprintf("%c", v); else o = o "?"
+          if (v < 0) o = o "\\" ch h
+          else if (v >= 32 && v < 127 && v != 92) o = o sprintf("%c", v)
+          else o = o ((v > 255) ? sprintf("\\u%04x", v) : sprintf("\\x%02x", v))
           i += length(h)
         }
-        else if (ch == "\\" || ch == "\"" || ch == "/") o = o ch
+        else if (ch == "\\") o = o "\\x5c"
+        else if (ch == "\"" || ch == "/") o = o ch
         else o = o "\\" ch
       }
       return o
@@ -619,7 +624,8 @@ env_pin_rows() {
       }
       # An alias node on its own line under `env:` (or `<<:`): the env map is the anchored one,
       # which is not resolved. Say so, never silently.
-      if (bp ~ /^\*[^[:space:]]+$/ && top > 0 && ind[top] < n && (knm[top] == "env" || knm[top] == "<<")) {
+      ab = bp; sub(/[[:space:]]+#.*$/, "", ab)
+      if (ab ~ /^\*[^[:space:]]+$/ && top > 0 && ind[top] < n && (knm[top] == "env" || knm[top] == "<<")) {
         outr(sprintf("ENV-PIN-UNJUDGED\t(alias env) L%d an env map supplied by an alias (*name) is not resolved; env pins in this file may be missed", NR), "(alias env)")
         next
       }
@@ -1609,6 +1615,8 @@ JSON
     printf '    include:\n'
     printf '      - x: &pin CANON_REF\n'
     printf '        *pin: %s\n' "$eb"
+    printf 'env:\n'
+    printf '  *pins # inherited\n'
   } > "$d/envpin.yml"
   local ep; ep=$(env_pin_rows "$d/envpin.yml" "$t" | tr '\t' '|')
   local epw="ENV-PIN-FRESH|STANDARDS_PIN L2 ${t:0:8}
@@ -1651,8 +1659,9 @@ ENV-PIN-BEHIND|CANON_REF L134 ${eb:0:8} (target ${t:0:8}); read-only: never re-p
 ENV-PIN-UNJUDGED|(alias env) L140 an env map supplied by an alias (*name) is not resolved; env pins in this file may be missed
 ENV-PIN-UNJUDGED|(alias env) L142 an env map supplied by an alias (*name) is not resolved; env pins in this file may be missed
 ENV-PIN-BEHIND|CANON_REF L147 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here
-ENV-PIN-UNJUDGED|CANON_REF L149 value is not a 40-hex commit: main?release
-ENV-PIN-UNJUDGED|(alias env) L151 an env map supplied by an alias (*name) is not resolved; env pins in this file may be missed"
+ENV-PIN-UNJUDGED|CANON_REF L149 value is not a 40-hex commit: main\\x0arelease
+ENV-PIN-UNJUDGED|(alias env) L151 an env map supplied by an alias (*name) is not resolved; env pins in this file may be missed
+ENV-PIN-UNJUDGED|(alias env) L158 an env map supplied by an alias (*name) is not resolved; env pins in this file may be missed"
   if [ "$ep" = "$epw" ]; then echo "  PASS envpin-rows -> $(printf '%s\n' "$ep" | wc -l) row(s)"
   else echo "  FAIL envpin-rows -> got:
 $ep

@@ -22,6 +22,7 @@ APPLIER="${SCRIPT_DIR}/../scripts/apply-workflow-pins-remote.sh"
 
 TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
 rc=0
+MUT_RAN=0   # mutant invocations that actually started (checked against the call lines at the end)
 pass() { echo "  PASS $*"; }
 fail() { echo "  FAIL $*" >&2; rc=1; }
 
@@ -74,6 +75,7 @@ done
 # --- 2. mutants --------------------------------------------------------------
 # kill <name> <sed-expr> <expected-substring-in-red-output>
 kill_mutant() {
+  MUT_RAN=$((MUT_RAN+1))
   # NOTE: `local a="$1" m="${a}"` does NOT work — bash expands every word of the
   # `local` builtin's argument list BEFORE assigning any of them, so `${a}` is
   # unset there. Assign on separate lines. (Cost one red herring to find.)
@@ -322,11 +324,13 @@ kill_mutant envpin_folded_line_is_structure 's@pend = ""; skip = pn; next \}@pen
 kill_mutant envpin_embedded_colon_ends_scalar 's@pl = \(nx == "" \|\| nx ~ /\[\[:space:\],\\\]\}\]/ \|\| prev ~ /\["\\047\]/\) \? 0 : 1@pl = 0@' "FAIL envpin-rows"
 # Nineteenth round: a next-line alias under env, alias keys inside matrix data, a multi-line quoted
 # value of an explicit key, and a refresh that only reorders jobs.
-kill_mutant envpin_nextline_alias_silent 's@bp ~ /\^\\\*\[\^\[:space:\]\]\+\$/ && top > 0@0 \&\& top > 0@' "FAIL envpin-rows"
+kill_mutant envpin_nextline_alias_silent 's@ab ~ /\^\\\*\[\^\[:space:\]\]\+\$/ && top > 0@0 \&\& top > 0@' "FAIL envpin-rows"
+# Twentieth round: a comment after a next-line alias, and escapes kept lossless.
+kill_mutant envpin_alias_comment_unstripped 's@ab = bp; sub\(/\[\[:space:\]\]\+#\.\*\$/, "", ab\)@ab = bp@' "FAIL envpin-rows"
+kill_mutant envpin_escape_flattened 's@else o = o \(\(v > 255\) \? sprintf\("\\\\u%04x", v\) : sprintf\("\\\\x%02x", v\)\)@else o = o "?"@' "FAIL envpin-rows"
 kill_mutant envpin_alias_key_in_matrix 's@if \(!awarn && !am\)@if (!awarn)@' "FAIL envpin-rows"
 kill_mutant envpin_explicit_quoted_read 's@if \(eb ~ /\^\["\\047\]/ && !qclose@if (0 \&\& !qclose@' "FAIL envpin-explicit-quoted"
-list_mutant envpin_refresh_order_matters 's@ \| LC_ALL=C sort$@@' case_main_content_refresh_envpin_swap
-kill_mutant envpin_decoded_line_feed 's@if \(v >= 32 && v < 127\) o = o sprintf@if (v > 0 \&\& v < 128) o = o sprintf@' "FAIL envpin-rows"
+kill_mutant envpin_decoded_line_feed 's@else if \(v >= 32 && v < 127 && v != 92\)@else if (v > 0 \&\& v < 128)@' "FAIL envpin-rows"
 # Fourteenth round: \U escapes, a flow value compared in full, node properties after an explicit
 # key's colon, alias keys said aloud, and a quote right after `?` inside a flow collection.
 kill_mutant envpin_big_u_escape 's@ \|\| ch == "U"@@' "FAIL envpin-rows"
@@ -903,6 +907,7 @@ case_main_content_refresh_envpin() {
     "\${{ inputs.a }}|\${{ inputs.b }}|3|an expression that changed"
     "${c1}|${c2}|3|two commits that share their first 12 hex"
     "[main]|[release]|3|a flow value that changed"
+    "\"main\\x0arelease\"|\"main?release\"|3|an escaped line feed that became a question mark"
     "main|main|0|an unchanged value"
   )
   for pair in "${pairs[@]}"; do
@@ -1617,6 +1622,7 @@ declare -A LM_CTL
 # a green case look red and a no-op mutant look killed.
 lm_red() { printf '%s\n' "$1" | grep -Eq '^[[:space:]]*FAIL[[:space:]]'; }
 list_mutant() {
+  MUT_RAN=$((MUT_RAN+1))
   local name="$1" expr="$2" fn="$3"
   local m="$MUT/mutant_${name}.sh" out
   if [ -z "${LM_CTL[$fn]:-}" ]; then
@@ -1667,6 +1673,7 @@ list_mutant envpin_refresh_path_dropped 's@row "\\t" cp "\\034" fv@row "\\t" "\\
 list_mutant envpin_block_text_dropped 's@function capadd\(t\) \{ gsub@function capadd(t) { return; gsub@' case_main_content_refresh_envpin_multiline
 list_mutant envpin_seq_position_dropped 's@if \(n > n0\) \{@if (0) {@' case_main_content_refresh_envpin_seq
 list_mutant envpin_block_hash_line_dropped 's@if \(RLENGTH > skip && capk != ""\) capadd\(\$0\)@if (0) capadd($0)@' case_main_content_refresh_envpin_multiline
+list_mutant envpin_refresh_order_matters 's@ \| LC_ALL=C sort$@@' case_main_content_refresh_envpin_swap
 list_mutant envpin_refresh_value_dropped 's@a\[1\], st, \$3@a[1], st, "-"@' case_main_content_refresh_envpin
 list_mutant envpin_refresh_move_silent 's@\[ "\$epb" = "\$epa" \] \|\|@true ||@' case_main_content_refresh_envpin
 # A stamped copy in the current layout (stamp on line 2) is still held by --fix:
@@ -1713,5 +1720,11 @@ kill_mutant health_pathless_dropped 's@then "\(unknown workflow\)" else \. end@t
 }
 
 echo
+# A mutant call placed before its function exists fails silently (no `set -e`) and would leave the
+# suite green: every call line must have started.
+MUT_WANT=$(grep -cE '^(kill_mutant|list_mutant) [a-z0-9_]+ ' "$0")
+if [ "$MUT_RAN" -ne "$MUT_WANT" ]; then
+  echo "  FAIL mutants: $MUT_RAN mutant calls started but $MUT_WANT are written (one ran before its function existed?)" >&2; rc=1
+fi
 if [ "$rc" -ne 0 ]; then echo "RESULT: FAILED" >&2; else echo "RESULT: all checks passed"; fi
 exit $rc
