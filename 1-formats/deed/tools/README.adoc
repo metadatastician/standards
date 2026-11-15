@@ -459,6 +459,37 @@ whole (J33). Every member is optional. The rules it adds to the grammar:
 The fixtures are one case per directory, `fixtures/agentic/{valid,invalid}/<case>/AGENTIC.deed`,
 with an optional `<repo>_chora.deed` and `STRICT` marker, as for `--state`.
 
+== `deed_lint.js --neurosym` — NEUROSYM.deed (DRAFT)
+
+Checks `NEUROSYM.deed` (head `descriptile-deed`) against
+`spec/abnf/clauses/neurosym.abnf` (A7 7.2; owner rulings J35 to J37 of
+2026-11-15). The chora's `(neurosym …)` clause moves here whole (J35). The
+rules it adds to the grammar:
+
+* the descriptile header, as for the other descriptiles (J20, J28, J4, YD06);
+* `(hypatia :scan-enabled :scan-depth :report-format)` is required, once, with
+  all three members: `:scan-enabled` a boolean, `:scan-depth` one of `quick`,
+  `standard` and `deep` as a symbol, `:report-format` a non-empty string (the
+  mapping's ruled row; the source's `[hypatia-config]` is this clause);
+* `:version`, `:last-updated` (a real date) and `:rulesets`, each at most once.
+  `:rulesets` is a non-empty list of A5 rule domains as strings (A5 3.1, such
+  as `"hypatia"`), each once: it selects from the A5 registry by domain only
+  and never names or defines a rule (J38);
+* `(symbolic-rules)` holds no rule definition (YD05), and `(neural-config)`
+  holds no member until one is ruled (J37): each is empty or left out, and
+  appears at most once;
+* no `(neurosym …)`, no `(rule …)` (YF02), and no `@profile` marker as a
+  `(profile …)` clause or `:profile` field (J36);
+* with `--root DIR`, `:of-chora` must equal the chora's `:repo-uuid` (YD08). A
+  `(neurosym …)` still in the chora is warned for one release, and `--strict`
+  refuses it (J35, YF06).
+
+    bun deed_lint.js --neurosym NEUROSYM.deed [--root REPO] [--strict]
+    bun deed_lint.js --neurosym-fixtures fixtures/neurosym/
+
+The fixtures are one case per directory, `fixtures/neurosym/{valid,invalid}/<case>/NEUROSYM.deed`,
+with an optional `<repo>_chora.deed` and `STRICT` marker, as for `--state`.
+
 == `deed_lint.js --contractile-registry` — the `contractile` rule registry (A7 J13)
 
 Generates the A5 registry `contractile_rules_praxis.deed` from a repo's six

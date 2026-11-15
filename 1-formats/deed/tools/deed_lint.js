@@ -71,6 +71,11 @@ Usage: deed_lint.js FILE...     exit 0 iff all files conform
                                               checked, and no relaxation is accepted until a receipt can verify;
                                               --root warns on a chora (agentic …), which --strict refuses (YF05)
        deed_lint.js --agentic-fixtures DIR    DIR/{valid,invalid}/<case>/AGENTIC.deed [+ <repo>_chora.deed, STRICT]
+       deed_lint.js --neurosym FILE... [--root DIR] [--strict]
+                                              NEUROSYM.deed (DRAFT, A7 7.2, J35 to J37); (hypatia …) is required and
+                                              (symbolic-rules) and (neural-config) stay empty (YD05, J37);
+                                              --root warns on a chora (neurosym …), which --strict refuses (YF06)
+       deed_lint.js --neurosym-fixtures DIR   DIR/{valid,invalid}/<case>/NEUROSYM.deed [+ <repo>_chora.deed, STRICT]
        deed_lint.js --contractile-registry --root DIR [--owner O/N] [--out FILE] [--check]
                                               generate the A5 contractile rule registry from the six edicts (A7 J13)
        deed_lint.js --ast-json FILE           emit the validated AST as JSON (integer lexemes stay strings)
@@ -3208,6 +3213,100 @@ const AGENTIC_PROFILE = {
   summary: (r) => `affirmation ${r.affirmationRequired ? "required" : "relaxed"}`,
 };
 
+// NEUROSYM.deed (A7 7.2, J35 to J37, YD05, YF06; clauses/neurosym.abnf).
+
+export class NeurosymError extends LintError {
+  constructor(msg) {
+    super(msg, null);
+    this.name = "NeurosymError";
+  }
+
+  toString() {
+    return this.msg;
+  }
+}
+
+const NEUROSYM_FIELDS = [...DESCRIPTILE_HEADER, "version", "last-updated", "rulesets"];
+const HYPATIA_MEMBERS = ["scan-enabled", "scan-depth", "report-format"];
+/** The closed set of scan depths (the mapping's ruled row). */
+export const SCAN_DEPTHS = new Set(["quick", "standard", "deep"]);
+/** An A5 rule domain (A5 3.1): lower-alpha *(lower-alpha / DIGIT / "-"). */
+const A5_DOMAIN = /^[a-z][a-z0-9-]*$/;
+
+/**
+ * Check NEUROSYM.deed source text. Returns {scanEnabled, scanDepth, warnings},
+ * or null for any other file or head. opts.repoUuid comes from the repo's
+ * chora deed (YD08); opts.choraClauses turns on YF06: a chora (neurosym …) is
+ * warned, and refused when opts.strict (J35).
+ */
+export function checkNeurosym(text, filename, opts = {}) {
+  const [head, items] = validate(text, filename);
+  if (head !== "descriptile-deed" || basename(filename || "") !== "NEUROSYM.deed") return null;
+  const E = (m) => new NeurosymError(m);
+  const fields = new Map();
+  let hypatia = null;
+  const seen = new Set();
+  for (const it of items) {
+    if (it[0] === "field") {
+      if (it[3]) throw E(`'!' belongs only on a rule's :id in a contractile-deed, not on :${it[1]}`);
+      if (it[1] === "beholding-chora") throw E(":beholding-chora names an estate chora; a descriptile-deed names its repo with :of-chora (J20)");
+      if (it[1] === "profile") throw E("NEUROSYM.deed carries no :profile: the A2ML @profile marker does not translate (J36)");
+      if (!NEUROSYM_FIELDS.includes(it[1])) throw E(`NEUROSYM.deed has no field :${it[1]}`);
+      if (fields.has(it[1])) throw E(`NEUROSYM.deed carries :${it[1]} once`);
+      fields.set(it[1], it[2]);
+      continue;
+    }
+    const name = it[1];
+    if (name === "rule") throw E("a descriptile states what is; a (rule …) belongs in an edict (YF02, YL3)");
+    if (name === "neurosym") throw E("NEUROSYM.deed has no (neurosym …) clause: the chora's (neurosym …) members are its own (J35)");
+    if (name === "profile") throw E("NEUROSYM.deed carries no (profile …): the A2ML @profile marker does not translate (J36)");
+    if (name === "hypatia-config") throw E("the source's [hypatia-config] is the (hypatia …) clause (the mapping's ruled row)");
+    if (!["hypatia", "neural-config", "symbolic-rules"].includes(name)) throw E(`NEUROSYM.deed has no clause (${name} …)`);
+    if (seen.has(name)) throw E(`NEUROSYM.deed carries (${name} …) at most once`);
+    seen.add(name);
+    if (name === "symbolic-rules" && it[2].length > 0) {
+      throw E("(symbolic-rules) holds no rule definition: rules live in the A5 registry, which :rulesets selects from (YD05)");
+    }
+    if (name === "neural-config" && it[2].length > 0) {
+      throw E("(neural-config) holds no member until one is ruled, so it is empty or left out (J37)");
+    }
+    if (name === "hypatia") hypatia = stateMembers(it[2], "(hypatia …)", HYPATIA_MEMBERS, E);
+  }
+  const warnings = checkDescriptileHeader(fields, "NEUROSYM.deed", E, opts.repoUuid, opts.today ?? todayUtc());
+  if (fields.has("version")) metaString(fields.get("version"), ":version", E);
+  stateDate(fields, "last-updated", "NEUROSYM.deed", E);
+  if (fields.has("rulesets")) {
+    const v = fields.get("rulesets");
+    if (v[0] !== "list" || v[1].length === 0 || !v[1].every((x) => x[0] === "string")) {
+      throw E(":rulesets must be a non-empty list of A5 rule domains, as strings");
+    }
+    const doms = new Set();
+    for (const [, d] of v[1]) {
+      if (!A5_DOMAIN.test(d)) throw E(`:rulesets entry "${d}" is not an A5 rule domain (A5 3.1): it selects a domain only, never a rule (YD05, J38)`);
+      if (doms.has(d)) throw E(`:rulesets names "${d}" once`);
+      doms.add(d);
+    }
+  }
+
+  if (hypatia === null) throw E("NEUROSYM.deed carries (hypatia :scan-enabled :scan-depth :report-format) (A7 7.2)");
+  for (const k of HYPATIA_MEMBERS) if (!hypatia.has(k)) throw E(`(hypatia …) is missing :${k}`);
+  if (hypatia.get("scan-enabled")[0] !== "boolean") throw E("(hypatia :scan-enabled) must be #t or #f");
+  const scanDepth = stateSymbol(hypatia, "scan-depth", SCAN_DEPTHS, "(hypatia …)", E);
+  metaString(hypatia.get("report-format"), "(hypatia :report-format)", E);
+
+  if ((opts.choraClauses || []).includes("neurosym")) {
+    const msg = "the chora deed still carries (neurosym …), which moved to NEUROSYM.deed (J35, YF06)";
+    if (opts.strict) throw E(`${msg}; refused in strict mode`);
+    warnings.push(`${msg}; read as a fallback for one release`);
+  }
+  return { scanEnabled: hypatia.get("scan-enabled")[1] === "#t", scanDepth, warnings };
+}
+
+const NEUROSYM_PROFILE = {
+  name: "NEUROSYM.deed", Err: NeurosymError, check: checkNeurosym,
+  summary: (r) => `hypatia ${r.scanEnabled ? "on" : "off"}, ${r.scanDepth}`,
+};
+
 /** --edict FILE...: profile-check each file; returns exit code. */
 function edictFiles(files) {
   let bad = 0;
@@ -3680,6 +3779,30 @@ function main(argv) {
       return 2;
     }
     return ecosystemFiles(files, root, argv.includes("--strict"));
+  }
+  if (argv.includes("--neurosym-fixtures")) {
+    const d = argv[argv.indexOf("--neurosym-fixtures") + 1];
+    if (d === undefined) {
+      console.log("--neurosym-fixtures requires a DIR argument");
+      return 2;
+    }
+    const rc = descriptileFixtures(d, NEUROSYM_PROFILE);
+    console.log("NEUROSYM FIXTURES " + (rc === 0 ? "OK" : rc === 2 ? "NOT CHECKED" : "FAILED"));
+    return rc;
+  }
+  if (argv.includes("--neurosym")) {
+    const ri = argv.indexOf("--root");
+    const root = ri >= 0 ? argv[ri + 1] : null;
+    if (ri >= 0 && (root === undefined || root === "" || root.startsWith("-"))) {
+      console.log("--root requires a DIR argument");
+      return 2;
+    }
+    const files = argv.filter((a, i) => !a.startsWith("-") && !(ri >= 0 && i === ri + 1));
+    if (files.length === 0) {
+      console.log(DOC);
+      return 2;
+    }
+    return descriptileFiles(files, root, argv.includes("--strict"), NEUROSYM_PROFILE);
   }
   if (argv.includes("--agentic-fixtures")) {
     const d = argv[argv.indexOf("--agentic-fixtures") + 1];
