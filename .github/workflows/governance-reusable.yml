@@ -316,6 +316,111 @@ jobs:
           rm -rf .standards-list-a2ml
           bash "$RUNNER_TEMP/list-existing-a2ml.sh" . || echo "::warning::the existing-A2ML listing could not run (exit $?)"
 
+  # A .deed must be a deed (owner ruling 2026-11-14): every .deed a pull
+  # request adds, edits, renames or copies must pass deed_lint, so A2ML
+  # renamed to .deed cannot pass as one. Untouched files are not judged.
+  # The helpers are scripts/check-deed-lint-changed.sh and deed_lint.js at
+  # this reusable's own commit.
+  deed-lint-changed:
+    name: Touched deeds pass deed_lint
+    runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    if: ${{ github.event_name == 'pull_request' }}
+    steps:
+      - name: Checkout caller repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Assert this reusable's own commit resolved
+        env:
+          SELF_WORKFLOW_SHA: ${{ job.workflow_sha }}
+        run: |
+          if ! printf '%s' "$SELF_WORKFLOW_SHA" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "::error::job.workflow_sha resolved to '${SELF_WORKFLOW_SHA:-<empty>}', not a 40-hex commit, so the standards helper checkout below would follow the default branch."
+            exit 1
+          fi
+      - name: Checkout the deed gate and deed_lint
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: metadatastician/standards
+          ref: ${{ job.workflow_sha }}
+          path: .standards-deed-lint
+          sparse-checkout: |
+            scripts/check-deed-lint-changed.sh
+            1-formats/deed/tools/deed_lint.js
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: "1.4.2"
+
+      - name: Lint every touched .deed
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/deed-lint"
+          cp .standards-deed-lint/scripts/check-deed-lint-changed.sh "$RUNNER_TEMP/deed-lint/"
+          cp .standards-deed-lint/1-formats/deed/tools/deed_lint.js "$RUNNER_TEMP/deed-lint/"
+          rm -rf .standards-deed-lint
+          bash "$RUNNER_TEMP/deed-lint/check-deed-lint-changed.sh" "$BASE_SHA" "$HEAD_SHA" . "$RUNNER_TEMP/deed-lint/deed_lint.js"
+
+  # Advisory companion: every tracked .deed that deed_lint rejects, listed as
+  # ::warning:: annotations with an exact count. Always passes.
+  failing-deeds-warning:
+    name: Failing deeds (advisory)
+    runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout caller repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Assert this reusable's own commit resolved
+        env:
+          SELF_WORKFLOW_SHA: ${{ job.workflow_sha }}
+        run: |
+          if ! printf '%s' "$SELF_WORKFLOW_SHA" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "::warning::job.workflow_sha resolved to '${SELF_WORKFLOW_SHA:-<empty>}'; the failing-deed listing is skipped."
+            echo "SKIP_DEED_LIST=1" >> "$GITHUB_ENV"
+          fi
+      - name: Checkout the lister and deed_lint
+        if: env.SKIP_DEED_LIST != '1'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: metadatastician/standards
+          ref: ${{ job.workflow_sha }}
+          path: .standards-list-deeds
+          sparse-checkout: |
+            scripts/list-failing-deeds.sh
+            1-formats/deed/tools/deed_lint.js
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Set up Bun
+        if: env.SKIP_DEED_LIST != '1'
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: "1.4.2"
+
+      - name: List failing deeds (never fails)
+        if: env.SKIP_DEED_LIST != '1'
+        run: |
+          mkdir -p "$RUNNER_TEMP/list-deeds"
+          cp .standards-list-deeds/scripts/list-failing-deeds.sh .standards-list-deeds/1-formats/deed/tools/deed_lint.js "$RUNNER_TEMP/list-deeds/"
+          rm -rf .standards-list-deeds
+          bash "$RUNNER_TEMP/list-deeds/list-failing-deeds.sh" . "$RUNNER_TEMP/list-deeds/deed_lint.js" || echo "::warning::the failing-deed listing could not run (exit $?)"
+
   # Nested DEED and K9 conformance lanes (owner ruling 2026-11-14: option A, both
   # here and in the template's inline governance). Each is the standards
   # reusable at an immutable commit; `advisory` follows `conformance-mode`.
