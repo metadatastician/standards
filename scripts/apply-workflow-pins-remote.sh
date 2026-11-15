@@ -79,7 +79,7 @@
 # step is not an assignment of the env: map and is not read.
 # Only a direct child of a block-style `env:` mapping counts (found by indentation):
 # a same-named key under `with:` or `inputs:`, the body of a `run: |` block, a flow
-# style `env: {…}` and a quoted key get no row. A flow collection (also one
+# style `env: {…}` get no row. A quoted key (`"CANON_REF":`) is the same key and is read. A flow collection (also one
 # that runs over several lines) is tracked to its closing bracket and never read as
 # keys; a tracked key whose own value is one gets an ENV-PIN-UNJUDGED row. Node
 # properties on a key (`&pin CANON_REF:`) are dropped before the key is read; trailing
@@ -458,7 +458,7 @@ deed_overcap() {
 # Only a key that is a direct child of an `env:` mapping (block style) counts: the
 # parent is found by indentation, so `with:` / `inputs:` keys of the same name and
 # the body of a block scalar (`run: |`) are never read. Flow style (`env: {…}`) and
-# quoted keys are not read either, and so get no row. A `#` inside a quoted value is
+# quoted keys are the same keys (`"with":` still scopes its children). A `#` inside a quoted value is
 # part of the value, not a comment; a quoted value followed by anything but a
 # comment is UNJUDGED. The target is compared case-insensitively (a SHA is hex).
 # Whitespace after the colon is not part of the value. A tracked key whose value is a
@@ -476,6 +476,17 @@ env_pin_rows() {
       if (q == "\"") gsub(/\\./, "", t); else gsub(/\047\047/, "", t)
       return index(t, q) > 0
     }
+    # qend: position of the closing quote of the scalar that starts at s[1] (a quote), or
+    # 0. Escape-aware: a backslash escape in double quotes, a doubled quote in single quotes.
+    function qend(s,   i, n, c, ch) {
+      c = substr(s, 1, 1); n = length(s)
+      for (i = 2; i <= n; i++) {
+        ch = substr(s, i, 1)
+        if (c == "\"") { if (ch == "\\") i++; else if (ch == "\"") return i }
+        else if (ch == "\047") { if (substr(s, i + 1, 1) == "\047") i++; else return i }
+      }
+      return 0
+    }
     # props: drop YAML node properties (an anchor `&name`, a tag `!tag` / `!!str`) that
     # precede a scalar, so the scalar style underneath is what gets tested.
     function props(s) {
@@ -487,12 +498,13 @@ env_pin_rows() {
     # scalar, or after a `#` that starts a comment (at the line start or after
     # whitespace), is text, not structure. The quote still open at the end of the line
     # is kept in fq, so a quoted scalar that runs over several lines is followed.
-    function depth(line,   i, n, ch, q, d, prev) {
+    function depth(line,   i, n, ch, q, d, prev, isb) {
       n = length(line); q = fq; d = 0; prev = " "
       for (i = 1; i <= n; i++) {
         ch = substr(line, i, 1)
+        isb = (prev ~ /[[:space:]{,:[]/)
         if (q != "") { if (ch == "\\" && q == "\"") i++; else if (ch == q) q = "" }
-        else if (ch == "\047" || ch == "\"") q = ch
+        else if ((ch == "\047" || ch == "\"") && isb) q = ch
         else if (ch == "#" && prev ~ /[[:space:]]/) break
         else if (ch == "{" || ch == "[") d++
         else if (ch == "}" || ch == "]") d--
@@ -502,6 +514,7 @@ env_pin_rows() {
       return d
     }
     BEGIN { tgt = tolower(target); top = 0; skip = -1; inq = "" ; flow = 0; fq = "" }
+    NR == 1 { sub("^\357\273\277", "") }
     { sub(/[[:space:]]+$/, "") }
     inq != "" { if (qclose($0, inq)) inq = ""; next }
     flow > 0 { flow += depth($0); if (flow <= 0) { flow = 0; fq = "" } next }
@@ -516,9 +529,9 @@ env_pin_rows() {
       bp = props(body); c0 = substr(bp, 1, 1)
       if (c0 == "{" || c0 == "[") { fq = ""; d = depth(bp); if (d > 0) flow = d; else fq = ""; next }
       if ((c0 == "\047" || c0 == "\"") && !qclose(substr(bp, 2), c0)) { inq = c0; next }
-      if (!match(bp, /^[A-Za-z_][A-Za-z0-9_.-]*[[:space:]]*:([[:space:]]|$)/)) next
+      if (!(match(bp, /^"[^"]*"[[:space:]]*:([[:space:]]|$)/) || match(bp, /^\047[^\047]*\047[[:space:]]*:([[:space:]]|$)/) || match(bp, /^[A-Za-z_][A-Za-z0-9_.-]*[[:space:]]*:([[:space:]]|$)/))) next
       kl = RLENGTH
-      key = substr(bp, 1, kl); sub(/[[:space:]]*:.*$/, "", key)
+      key = substr(bp, 1, kl); sub(/[[:space:]]*:[[:space:]]*$/, "", key); gsub(/^["\047]|["\047]$/, "", key)
       rest = substr(bp, kl + 1); sub(/^[[:space:]]+/, "", rest); rest = props(rest)
       while (top > 0 && ind[top] >= n) top--
       parent = (top > 0) ? knm[top] : ""
@@ -543,9 +556,13 @@ env_pin_rows() {
       if (!tracked) next
       val = rest; bad = 0
       if (c == "\047" || c == "\"") {
-        q = index(substr(val, 2), c)
-        tail = substr(val, q + 2); val = substr(val, 2, q - 1)
-        if (tail !~ /^[[:space:]]*(#.*)?$/) bad = 1
+        q = qend(val)
+        if (q == 0) bad = 1
+        else {
+          tail = substr(val, q + 1); val = substr(val, 2, q - 2)
+          if (c == "\047") gsub(/\047\047/, "\047", val)
+          if (tail !~ /^[[:space:]]*(#.*)?$/) bad = 1
+        }
       } else {
         sub(/[[:space:]]+#.*$/, "", val); sub(/[[:space:]]+$/, "", val)
         if (val ~ /^#/) val = ""
@@ -1356,6 +1373,18 @@ JSON
     printf '  OTHER: { A: "first\n'
     printf '    } text",\n'
     printf '  CANON_REF: %s }\n' "$eb"
+    printf "env: { OTHER: don't }\n"
+    printf 'env:\n'
+    printf '  STANDARDS_PIN: %s\n' "$t"
+    printf 'steps:\n'
+    printf '  - env:\n'
+    printf '      A: b\n'
+    printf '    "with":\n'
+    printf '      CANON_REF: %s\n' "$eb"
+    printf 'env:\n'
+    printf '  "CANON_REF": %s\n' "$eb"
+    printf 'env:\n'
+    printf "  CANON_REF: '\${{ inputs.pin || ''main'' }}'\n"
   } > "$d/envpin.yml"
   local ep; ep=$(env_pin_rows "$d/envpin.yml" "$t" | tr '\t' '|')
   local epw="ENV-PIN-FRESH|STANDARDS_PIN L2 ${t:0:8}
@@ -1378,7 +1407,10 @@ ENV-PIN-UNJUDGED|STANDARDS_PIN L39 value is a block scalar; not judged
 ENV-PIN-UNJUDGED|STANDARDS_PIN L49 value is a flow collection; not judged
 ENV-PIN-BEHIND|CANON_REF L50 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here
 ENV-PIN-BEHIND|CANON_REF L57 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here
-ENV-PIN-FRESH|STANDARDS_PIN L59 ${t:0:8}"
+ENV-PIN-FRESH|STANDARDS_PIN L59 ${t:0:8}
+ENV-PIN-FRESH|STANDARDS_PIN L72 ${t:0:8}
+ENV-PIN-BEHIND|CANON_REF L79 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here
+ENV-PIN-DYNAMIC|CANON_REF L81 is an expression; not judged"
   if [ "$ep" = "$epw" ]; then echo "  PASS envpin-rows -> $(printf '%s\n' "$ep" | wc -l) row(s)"
   else echo "  FAIL envpin-rows -> got:
 $ep
@@ -1390,6 +1422,10 @@ $epw" >&2; rc=1; fi
   if [ "$epu" = "$epw" ]; then echo "  PASS envpin-target-case"
   else echo "  FAIL envpin-target-case -> an uppercase target changed the rows:
 $epu" >&2; rc=1; fi
+  # A UTF-8 byte-order mark before the first key must not hide it.
+  printf '\357\273\277env:\n  STANDARDS_PIN: %s\n' "$t" > "$d/bom.yml"
+  if [ "$(env_pin_rows "$d/bom.yml" "$t" | tr '\t' '|')" = "ENV-PIN-FRESH|STANDARDS_PIN L2 ${t:0:8}" ]; then echo "  PASS envpin-bom"
+  else echo "  FAIL envpin-bom -> a leading BOM hid the first key" >&2; rc=1; fi
   # The env pin sits in a standards-pin-looking line, but it is NOT a `uses:` pin:
   # the rewrite must leave it exactly as it was.
   cp "$d/envpin.yml" "$d/envpin-rw.yml"; rewrite_pins "$d/envpin-rw.yml" "$t"

@@ -65,7 +65,7 @@ for want in "fresh.yml" "behind.yml" "illegal.yml" "tracking.yml" "none.yml" "sh
             "bad-huge.json" "content-huge.yml" \
             "dot-local.yml" "dollar-managed.yml" "dollar-unmanaged.yml" "dollar-managed-parent.yml" \
             "owner-stale.lock" "owner-clean.lock" "owner-nonstandards.lock" "owner-tag-key.lock" \
-            "envpin-rows" "envpin-target-case" "envpin-not-rewritten" \
+            "envpin-rows" "envpin-target-case" "envpin-bom" "envpin-not-rewritten" \
             "health-startup" "health-zero-shape" "health-healthy" "health-ref-suffix" "health-inprogress-ignored" "health-tie-break" "health-pathless"; do
   grep -q "PASS $want" "$TMP/base.out" && pass "control present: $want" \
     || fail "control MISSING from baseline: $want (a control that never runs is not a control)"
@@ -275,13 +275,19 @@ kill_mutant envpin_flow_value_silent 's@if \(tracked\) printf "ENV-PIN-UNJUDGED\
 # Fifth Codex round on #1602: a bracket inside a comment or a quoted scalar is not flow
 # structure, so it must not end (or open) a flow collection early.
 kill_mutant envpin_flow_comment_counted 's@else if \(ch == "#" && prev ~ /\[\[:space:\]\]/\) break@else if (0) break@' "FAIL envpin-rows"
-kill_mutant envpin_flow_quote_counted 's@else if \(ch == "\\047" \|\| ch == "\\""\) q = ch@else if (0) q = ch@' "FAIL envpin-rows"
+kill_mutant envpin_flow_quote_counted 's@else if \(\(ch == "\\047" \|\| ch == "\\""\) && isb\) q = ch@else if (0) q = ch@' "FAIL envpin-rows"
 # Seventh Codex round on #1602: an anchor or tag on a mapping key, a CR or trailing
 # whitespace after a block-scalar header, and a quote that stays open across the lines
 # of a flow collection must each be handled.
-kill_mutant envpin_key_props_kept 's@if \(!match\(bp, @if (!match(body, @' "FAIL envpin-rows"
+kill_mutant envpin_key_props_kept 's@match\(bp, /\^\[A-Za-z_\]@match(body, /^[A-Za-z_]@' "FAIL envpin-rows"
 kill_mutant envpin_trailing_space_kept 's@^    \{ sub\(/\[\[:space:\]\]\+\$/, ""\) \}$@    { }@' "FAIL envpin-rows"
 kill_mutant envpin_flow_quote_reset 's@n = length\(line\); q = fq; d = 0@n = length(line); q = ""; d = 0@' "FAIL envpin-rows"
+# Eighth Codex/CodeRabbit round on #1602: a BOM, an apostrophe inside a plain scalar of a
+# flow collection, a quoted structural key, and the closing quote of a quoted value.
+kill_mutant envpin_bom_kept 's@^    NR == 1 \{ sub\("\^\\357\\273\\277", ""\) \}$@    NR == 1 { }@' "FAIL envpin-bom"
+kill_mutant envpin_apostrophe_quote 's@ && isb\) q = ch@) q = ch@' "FAIL envpin-rows"
+kill_mutant envpin_quoted_key_ignored 's@match\(bp, /\^"\[\^"\]\*"\[\[:space:\]\]@match(bp, /^NEVER"[[:space:]]@' "FAIL envpin-rows"
+kill_mutant envpin_quote_escape_first 's@q = qend\(val\)@q = index(substr(val, 2), c) + 1@' "FAIL envpin-rows"
 
 # --- 3. fetch_workflows fails CLOSED -----------------------------------------
 # A rate-limited repo used to come back as "no workflows": fetch_workflows
@@ -484,6 +490,10 @@ chmod +x "$LSTUB/gh"
 # Mutants are sourced, and the applier sources lib/ beside itself.
 MUT="$TMP/mut"; mkdir -p "$MUT"
 ln -s "$(cd "$(dirname "$APPLIER")" && pwd)/lib" "$MUT/lib"
+# The applier finds its relock script beside itself, and its startup controls fail when it
+# is missing. Without this link every case_main_* run against a mutant is red for that
+# reason alone, and a no-op mutant would count as killed (it did, for every list_mutant).
+ln -s "$(cd "$(dirname "$APPLIER")" && pwd)/relock-standards-pin.sh" "$MUT/relock-standards-pin.sh"
 
 # fixture_repos <file> <owner/name:archived>... — write a REST repository list.
 fixture_repos() {
@@ -1435,9 +1445,25 @@ case_target_selfcheck "$APPLIER" 0 0 "control: a self-consistent reachable targe
 # list_mutant <name> <sed-expr> <case-fn> — apply <sed-expr> to a copy of the
 # applier, prove the edit landed and still parses, then require <case-fn> to
 # report FAIL against it.
+# LM_CTL caches, per case function, whether an UNMUTATED copy of the applier passes it in
+# the mutant environment. A mutant is only meaningful against a case that is green there.
+declare -A LM_CTL
+# lm_red <output> — did a case report a failure? A line that STARTS with FAIL, not the bare
+# substring: a passing label can contain it (one CONTENT-CENSUS-FAILED row), which made
+# a green case look red and a no-op mutant look killed.
+lm_red() { printf '%s\n' "$1" | grep -Eq '^[[:space:]]*FAIL[[:space:]]'; }
 list_mutant() {
   local name="$1" expr="$2" fn="$3"
   local m="$MUT/mutant_${name}.sh" out
+  if [ -z "${LM_CTL[$fn]:-}" ]; then
+    local ctl="$MUT/control_${fn}.sh" outc
+    cp "$APPLIER" "$ctl"
+    outc=$("$fn" "$ctl" 2>&1)
+    if lm_red "$outc"; then LM_CTL[$fn]=red; else LM_CTL[$fn]=green; fi
+  fi
+  if [ "${LM_CTL[$fn]}" = red ]; then
+    fail "mutant '$name': the UNMUTATED copy is already red under $fn in the mutant environment, so a kill would prove nothing"; return
+  fi
   cp "$APPLIER" "$m"
   sed -E -i "$expr" "$m"
   if cmp -s "$APPLIER" "$m"; then
@@ -1448,10 +1474,8 @@ list_mutant() {
     sed 's/^/    /' "$MUT/${name}.parse" >&2; return
   fi
   out=$("$fn" "$m" 2>&1)
-  case "$out" in
-    *FAIL*) pass "mutant '$name' killed by $fn" ;;
-    *)      fail "mutant '$name' stayed GREEN under $fn" ;;
-  esac
+  if lm_red "$out"; then pass "mutant '$name' killed by $fn"
+  else fail "mutant '$name' stayed GREEN under $fn"; fi
 }
 
 # shellcheck disable=SC2016  # the ${…} and $(…) below are sed text to match
@@ -1496,7 +1520,9 @@ list_mutant only_existence_unchecked 's@if ! gh api "repos/\$\{ONLY_REPO\}"@if f
 # told from FRESH, commented lines must not count, and --fix must not move them.
 list_mutant envpin_row_dropped 's@done < <\(env_pin_rows "\$wf" "\$TARGET_SHA"\)@done < <(true)@' case_main_envpin
 list_mutant envpin_behind_as_fresh 's@if \(low == tgt\) printf "ENV-PIN-FRESH@if (1) printf "ENV-PIN-FRESH@' case_main_envpin
-list_mutant envpin_comment_counted 's@^    /\^\[\[:space:\]\]\*#/ \{ next \}$@    /^NEVER$/ { next }@' case_main_envpin
+# (No mutant for the comment-line guard: the key regex already rejects a line that starts
+# with #, so removing the guard changes nothing observable. The commented fixture lines
+# stay as a regression check, not a mutation target.)
 list_mutant envpin_before_none_skip_lost 's@^      done < <\(env_pin_rows "\$wf" "\$TARGET_SHA"\)$@      done < <(classify_file "$wf" "$TARGET_SHA" | grep -qx NONE || env_pin_rows "$wf" "$TARGET_SHA")@' case_main_envpin
 # Health block: each row kind must be written, a 0-job row needs the jobs endpoint's
 # agreement, an unreadable answer must be said, the cap must hold, and --no-health
