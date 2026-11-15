@@ -66,6 +66,11 @@ Usage: deed_lint.js FILE...     exit 0 iff all files conform
                                               the chora deed (YD08) and warns on a chora (meta …), which --strict
                                               refuses (YF04)
        deed_lint.js --meta-fixtures DIR       DIR/{valid,invalid}/<case>/META.deed [+ <repo>_chora.deed, STRICT]
+       deed_lint.js --agentic FILE... [--root DIR] [--strict]
+                                              AGENTIC.deed (DRAFT, A7 7.2, 14.2, J19, J33); the J19 journal is
+                                              checked, and no relaxation is accepted until a receipt can verify;
+                                              --root warns on a chora (agentic …), which --strict refuses (YF05)
+       deed_lint.js --agentic-fixtures DIR    DIR/{valid,invalid}/<case>/AGENTIC.deed [+ <repo>_chora.deed, STRICT]
        deed_lint.js --contractile-registry --root DIR [--owner O/N] [--out FILE] [--check]
                                               generate the A5 contractile rule registry from the six edicts (A7 J13)
        deed_lint.js --ast-json FILE           emit the validated AST as JSON (integer lexemes stay strings)
@@ -3027,6 +3032,182 @@ const META_PROFILE = {
   summary: (r) => `${r.adrs.length} ADR${r.adrs.length === 1 ? "" : "s"}`,
 };
 
+// ---------------------------------------------------------------------------
+// AGENTIC.deed (A7 7.2, 14.2, J19, J33, YD04, YD06, YF05; clauses/agentic.abnf).
+
+export class AgenticError extends LintError {
+  constructor(msg) {
+    super(msg, null);
+    this.name = "AgenticError";
+  }
+
+  toString() {
+    return this.msg;
+  }
+}
+
+/** The three settings a J19 relaxation entry may change (14.2). */
+export const J19_SETTINGS = new Set(["affirmation.required", "affirmation.may-change", "affirmation.report-to"]);
+
+const AGENTIC_FIELDS = [...DESCRIPTILE_HEADER, "version", "last-updated", "tools", "project-specific"];
+const AGENTIC_SUBCLAUSES = {
+  patterns: { members: ["code-review", "refactoring", "testing", "documentation"], type: "string" },
+  permissions: { members: ["source", "tests", "docs", "config", "create-files"], type: "boolean" },
+  integrity: {
+    members: ["fail-closed", "require-evidence-per-step", "allow-silent-skip", "require-rerun-after-fix", "release-claim-requires-hard-pass"],
+    type: "boolean",
+  },
+  methodology: { members: ["instructions-dir", "instructions-clause", "default-mode"], type: "mixed" },
+  hooks: { members: ["on-enter", "on-exit", "on-commit"], type: "string" },
+};
+/** Fields that would pin a model or carry a language list (YD04, YL3). */
+const AGENTIC_FORBIDDEN = {
+  model: "model", "model-pin": "model", models: "model", llm: "model",
+  languages: "language", "allowed-languages": "language", "banned-languages": "language",
+  "language-ban": "language", "language-allow": "language",
+};
+
+function symbolList(v) {
+  return v[0] === "list" && v[1].every((x) => x[0] === "symbol") ? v[1].map((x) => x[1]) : null;
+}
+
+/**
+ * Read the J19 journal (14.2). affirmation is the (affirmation …) clause's
+ * members, relaxations the (relaxation …) records in order. Returns
+ * {required, warnings}: required is always true until a channel receipt can
+ * verify (no interface exists yet), and every authorised, reported entry is
+ * reported as recorded but not accepted. Throws on a refused journal or entry.
+ */
+function readJ19(affirmation, relaxations, E) {
+  const a = stateMembers(affirmation, "(settings (affirmation …))", ["may-change", "report-to"], E);
+  for (const k of ["may-change", "report-to"]) if (!a.has(k)) throw E(`(settings (affirmation …)) is missing :${k} (J19)`);
+  const mayChange = symbolList(a.get("may-change"));
+  const reportTo = symbolList(a.get("report-to"));
+  if (mayChange === null) throw E("(affirmation :may-change) must be a list of parties, as symbols (J19)");
+  if (reportTo === null) throw E("(affirmation :report-to) must be a list of channels, as symbols (J19)");
+  // The state the next entry is judged against: the clause's starting values,
+  // changed only by an accepted entry. No entry can be accepted yet, so it
+  // stays the clause's.
+  const accepted = { "may-change": mayChange, "report-to": reportTo };
+  const warnings = [];
+  relaxations.forEach((members, i) => {
+    const f = stateMembers(members, "(relaxation …)", ["seq", "setting", "value", "changed-by", "changed-on", "reported-to", "receipt"], E);
+    for (const k of ["seq", "setting", "value", "changed-by", "changed-on", "reported-to", "receipt"]) {
+      if (!f.has(k)) throw E(`(relaxation …) entry ${i + 1} is missing :${k} (J19)`);
+    }
+    const seq = f.get("seq");
+    if (seq[0] !== "integer" || Number(seq[1]) !== i + 1) {
+      throw E(`the J19 journal is refused whole: entry ${i + 1} has :seq ${seq[1]}; :seq runs 1, 2, 3 … with no gap and no duplicate (14.2)`);
+    }
+    const where = `(relaxation :seq ${i + 1})`;
+    const setting = stateSymbol(f, "setting", J19_SETTINGS, where, E);
+    const value = f.get("value");
+    if (setting === "affirmation.required" ? value[0] !== "boolean" : symbolList(value) === null) {
+      throw E(`${where} :value must be ${setting === "affirmation.required" ? "#t or #f" : "a list of symbols"} for ${setting} (J19)`);
+    }
+    for (const k of ["changed-by", "reported-to"]) if (f.get(k)[0] !== "symbol") throw E(`${where} :${k} must be a symbol`);
+    stateDate(f, "changed-on", where, E);
+    metaString(f.get("receipt"), `${where} :receipt`, E);
+    const by = f.get("changed-by")[1];
+    const to = f.get("reported-to")[1];
+    if (!accepted["may-change"].includes(by)) {
+      throw E(`${where} is refused: :changed-by ${by} is not in :may-change (${accepted["may-change"].join(" ")}) as it stood at the last accepted state (J19)`);
+    }
+    if (!accepted["report-to"].includes(to)) {
+      throw E(`${where} is refused: :reported-to ${to} is not in :report-to (${accepted["report-to"].join(" ")}) as it stood at the last accepted state (J19)`);
+    }
+    warnings.push(`${where} (${setting}) is recorded but not accepted: no channel receipt can be verified yet, so affirmation stays required (J19, J4)`);
+  });
+  return { required: true, warnings };
+}
+
+/**
+ * Check AGENTIC.deed source text. Returns {affirmationRequired, warnings}, or
+ * null for any other file or head. opts.repoUuid comes from the repo's chora
+ * deed (YD08); opts.choraClauses turns on YF05: a chora (agentic …) is warned,
+ * and refused when opts.strict (J33).
+ */
+export function checkAgentic(text, filename, opts = {}) {
+  const [head, items] = validate(text, filename);
+  if (head !== "descriptile-deed" || basename(filename || "") !== "AGENTIC.deed") return null;
+  const E = (m) => new AgenticError(m);
+  const fields = new Map();
+  const sub = new Map();
+  let settings = null;
+  for (const it of items) {
+    if (it[0] === "field") {
+      if (it[3]) throw E(`'!' belongs only on a rule's :id in a contractile-deed, not on :${it[1]}`);
+      if (it[1] === "beholding-chora") throw E(":beholding-chora names an estate chora; a descriptile-deed names its repo with :of-chora (J20)");
+      if (Object.hasOwn(AGENTIC_FORBIDDEN, it[1])) {
+        throw E(AGENTIC_FORBIDDEN[it[1]] === "model"
+          ? `AGENTIC.deed carries no model pin (:${it[1]}): model selection is not a property of a repo (YD04)`
+          : `AGENTIC.deed carries no language list (:${it[1]}): a language allow or ban list is the Mustfile's (YD04, YL3)`);
+      }
+      if (!AGENTIC_FIELDS.includes(it[1])) throw E(`AGENTIC.deed has no field :${it[1]}`);
+      if (fields.has(it[1])) throw E(`AGENTIC.deed carries :${it[1]} once`);
+      fields.set(it[1], it[2]);
+      continue;
+    }
+    if (it[1] === "rule") throw E("a descriptile states what is; a (rule …) belongs in an edict (YF02, YL3)");
+    if (it[1] === "agentic") throw E("AGENTIC.deed has no (agentic …) clause: the chora's (agentic …) members are its own (J33)");
+    if (it[1] === "settings") {
+      if (settings !== null) throw E("AGENTIC.deed carries (settings …) at most once (J19)");
+      settings = it[2];
+      continue;
+    }
+    if (!Object.hasOwn(AGENTIC_SUBCLAUSES, it[1])) throw E(`AGENTIC.deed has no clause (${it[1]} …)`);
+    if (sub.has(it[1])) throw E(`AGENTIC.deed carries (${it[1]} …) at most once`);
+    if (it[2].length === 0) throw E(`(${it[1]}) is empty: it takes at least one member, or is left out`);
+    sub.set(it[1], stateMembers(it[2], `(${it[1]} …)`, AGENTIC_SUBCLAUSES[it[1]].members, E));
+  }
+  const warnings = checkDescriptileHeader(fields, "AGENTIC.deed", E, opts.repoUuid, opts.today ?? todayUtc());
+  for (const k of ["version", "project-specific"]) if (fields.has(k)) metaString(fields.get(k), `:${k}`, E);
+  stateDate(fields, "last-updated", "AGENTIC.deed", E);
+  if (fields.has("tools") && symbolList(fields.get("tools")) === null) throw E(":tools must be a list of tool classes, as symbols");
+
+  for (const [name, f] of sub) {
+    const { type } = AGENTIC_SUBCLAUSES[name];
+    for (const [k, v] of f) {
+      const where = `(${name} :${k})`;
+      if (type === "boolean") {
+        if (v[0] !== "boolean") throw E(`${where} must be #t or #f`);
+      } else if (name === "methodology" && k === "default-mode") {
+        if (v[0] !== "symbol") throw E(`${where} must be a symbol`);
+      } else {
+        metaString(v, where, E);
+      }
+    }
+    if (name === "methodology") {
+      if (f.has("instructions-dir") && f.has("instructions-clause")) throw E("(methodology …) names its instructions once: :instructions-dir or :instructions-clause, not both");
+      if (f.has("instructions-dir") && !isRepoRelative(f.get("instructions-dir")[1])) throw E("(methodology :instructions-dir) must be a repo-relative path");
+    }
+  }
+
+  let affirmationRequired = true;
+  if (settings !== null) {
+    const clauses = settings.filter((m) => m[0] === "clause");
+    if (settings.some((m) => m[0] === "field")) throw E("(settings …) holds clauses only: (affirmation …) and its (relaxation …) entries (J19)");
+    if (clauses.length === 0 || clauses[0][1] !== "affirmation") throw E("(settings …) starts with its (affirmation …) clause (J19)");
+    const other = clauses.slice(1).find((c) => c[1] !== "relaxation");
+    if (other) throw E(`(settings …) holds (affirmation …) once and then (relaxation …) entries, not (${other[1]} …) (J19)`);
+    const j = readJ19(clauses[0][2], clauses.slice(1).map((c) => c[2]), E);
+    affirmationRequired = j.required;
+    warnings.push(...j.warnings);
+  }
+
+  if ((opts.choraClauses || []).includes("agentic")) {
+    const msg = "the chora deed still carries (agentic …), which moved to AGENTIC.deed (J33, YF05)";
+    if (opts.strict) throw E(`${msg}; refused in strict mode`);
+    warnings.push(`${msg}; read as a fallback for one release`);
+  }
+  return { affirmationRequired, warnings };
+}
+
+const AGENTIC_PROFILE = {
+  name: "AGENTIC.deed", Err: AgenticError, check: checkAgentic,
+  summary: (r) => `affirmation ${r.affirmationRequired ? "required" : "relaxed"}`,
+};
+
 /** --edict FILE...: profile-check each file; returns exit code. */
 function edictFiles(files) {
   let bad = 0;
@@ -3499,6 +3680,30 @@ function main(argv) {
       return 2;
     }
     return ecosystemFiles(files, root, argv.includes("--strict"));
+  }
+  if (argv.includes("--agentic-fixtures")) {
+    const d = argv[argv.indexOf("--agentic-fixtures") + 1];
+    if (d === undefined) {
+      console.log("--agentic-fixtures requires a DIR argument");
+      return 2;
+    }
+    const rc = descriptileFixtures(d, AGENTIC_PROFILE);
+    console.log("AGENTIC FIXTURES " + (rc === 0 ? "OK" : rc === 2 ? "NOT CHECKED" : "FAILED"));
+    return rc;
+  }
+  if (argv.includes("--agentic")) {
+    const ri = argv.indexOf("--root");
+    const root = ri >= 0 ? argv[ri + 1] : null;
+    if (ri >= 0 && (root === undefined || root === "" || root.startsWith("-"))) {
+      console.log("--root requires a DIR argument");
+      return 2;
+    }
+    const files = argv.filter((a, i) => !a.startsWith("-") && !(ri >= 0 && i === ri + 1));
+    if (files.length === 0) {
+      console.log(DOC);
+      return 2;
+    }
+    return descriptileFiles(files, root, argv.includes("--strict"), AGENTIC_PROFILE);
   }
   if (argv.includes("--meta-fixtures")) {
     const d = argv[argv.indexOf("--meta-fixtures") + 1];

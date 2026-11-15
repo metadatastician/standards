@@ -65,7 +65,8 @@ for want in "fresh.yml" "behind.yml" "illegal.yml" "tracking.yml" "none.yml" "sh
             "bad-huge.json" "content-huge.yml" \
             "dot-local.yml" "dollar-managed.yml" "dollar-unmanaged.yml" "dollar-managed-parent.yml" \
             "owner-stale.lock" "owner-clean.lock" "owner-nonstandards.lock" "owner-tag-key.lock" \
-            "envpin-rows" "envpin-target-case" "envpin-not-rewritten"; do
+            "envpin-rows" "envpin-target-case" "envpin-not-rewritten" \
+            "health-startup" "health-zero-shape" "health-healthy" "health-ref-suffix" "health-inprogress-ignored" "health-tie-break" "health-pathless"; do
   grep -q "PASS $want" "$TMP/base.out" && pass "control present: $want" \
     || fail "control MISSING from baseline: $want (a control that never runs is not a control)"
 done
@@ -426,6 +427,16 @@ case "$p" in
   repos/*/contents/*_chora.deed)
     [ -f "$GH_FIX/own_deed_rest_fail" ] && refuse 403 "This API returns blobs up to 1 MB in size. The requested blob is too large"
     body="$GH_FIX/own_deed" ;;
+  # Actions runs (the health block). $GH_FIX/runs.json is the answer for EVERY
+  # repository (default: no runs); runs_fail makes the list refuse; jobs_<id>.json
+  # answers a run's jobs and jobs_fail_<id> makes that read refuse.
+  repos/*/actions/runs/*/jobs)
+    jid="${p%/jobs}"; jid="${jid##*/}"
+    [ -f "$GH_FIX/jobs_fail_$jid" ] && refuse 403 "Resource not accessible by integration"
+    body="$GH_FIX/jobs_$jid.json" ;;
+  repos/*/actions/runs)
+    [ -f "$GH_FIX/runs_fail" ] && refuse 403 "Resource not accessible by integration"
+    if [ -f "$GH_FIX/runs.json" ]; then body="$GH_FIX/runs.json"; else echo '{"workflow_runs": []}'; exit 0; fi ;;
   repos/*/commits/*)
     j='{"sha": "cccccccccccccccccccccccccccccccccccccccc"}'
     if [ -n "$jqx" ]; then printf '%s' "$j" | jq -r "$jqx"; else printf '%s' "$j"; fi; exit 0 ;;
@@ -983,6 +994,122 @@ case_main_envpin_fix_untouched() {
   fi
 }
 
+# health_fixture <dir> — the Actions runs every repository answers with, and the
+# jobs of each failed run. a.yml: startup_failure. b.yml: failed, name == path, 0
+# jobs. c.yml: failed, a job named "…lockfile verify" failed. e.yml: failed, no
+# lock job. f.yml: the unplannable SHAPE (name == path) but the run DID run jobs.
+health_fixture() {
+  local d="$1" sha="1111111111111111111111111111111111111111"
+  jq -n --arg s "$sha" '{workflow_runs: [
+    {id: 2,  status: "completed", conclusion: "startup_failure", name: "A", path: ".github/workflows/a.yml", created_at: "2026-11-12T00:00:00Z", head_sha: $s},
+    {id: 5,  status: "completed", conclusion: "failure", name: ".github/workflows/b.yml", path: ".github/workflows/b.yml", created_at: "2026-11-12T00:00:00Z", head_sha: $s},
+    {id: 6,  status: "completed", conclusion: "failure", name: "C", path: ".github/workflows/c.yml", created_at: "2026-11-12T00:00:00Z", head_sha: $s},
+    {id: 9,  status: "completed", conclusion: "failure", name: "E", path: ".github/workflows/e.yml", created_at: "2026-11-12T00:00:00Z", head_sha: $s},
+    {id: 10, status: "completed", conclusion: "failure", name: ".github/workflows/f.yml", path: ".github/workflows/f.yml", created_at: "2026-11-12T00:00:00Z", head_sha: $s}
+  ]}' > "$d/runs.json"
+  echo '{"total_count": 0, "jobs": []}' > "$d/jobs_5.json"
+  echo '{"total_count": 2, "jobs": [{"name": "Governance / lockfile verify", "conclusion": "failure"}, {"name": "build", "conclusion": "success"}]}' > "$d/jobs_6.json"
+  echo '{"total_count": 1, "jobs": [{"name": "build", "conclusion": "failure"}]}' > "$d/jobs_9.json"
+  echo '{"total_count": 3, "jobs": [{"name": "build", "conclusion": "failure"}, {"name": "test", "conclusion": "success"}, {"name": "lint", "conclusion": "success"}]}' > "$d/jobs_10.json"
+}
+
+# case_main_health <applier> — the health block lists startup failures, the
+# 0-job failure (only where the jobs endpoint agrees), and a lock-named job
+# failure, beside the pin row; a failed run with neither gets no row.
+case_main_health() {
+  local d; d=$(new_case health)
+  health_fixture "$d"
+  run_content "$d" "$1" --only hyperpolymath/pub-a
+  local ok=1 want
+  for want in \
+    'HEALTH-STARTUP-FAILURE	1 of the last 1 completed run(s) of this file ended startup_failure; latest run 2 at 2026-11-12T00:00:00Z (11111111)' \
+    'HEALTH-ZERO-JOB	1 of the last 1 completed run(s) of this file failed with name == path; latest failed run 5 at 2026-11-12T00:00:00Z (11111111) ran 0 jobs' \
+    'HEALTH-LOCK-FAILURE	failed job(s) with "lock" in the name in latest failed run 6 at 2026-11-12T00:00:00Z (11111111): Governance / lockfile verify (matched by job NAME; no log was read)' \
+    "$(printf 'hyperpolymath/pub-a\tci.yml\tFRESH')"; do
+    grep -qF "$want" "$d/out" || { ok=0; echo "    missing: $want" >&2; }
+  done
+  # e.yml failed without a lock job and f.yml has the 0-job SHAPE but ran jobs:
+  # neither may be reported.
+  if [ "$ok" = 1 ] && [ "$(cat "$d/rc")" = 0 ] \
+     && ! grep -qE "$(printf '\t')(e|f)\.yml$(printf '\t')HEALTH-" "$d/out"; then
+    pass "main: health block lists startup, 0-job (jobs-confirmed) and lock-named failures; no row for a plain failure or an unconfirmed shape"
+  else
+    fail "main: health block census wrong (rc=$(cat "$d/rc"))"
+    sed 's/^/    /' "$d/out" "$d/err" | tail -12 >&2
+  fi
+}
+
+# case_main_health_unread <applier> — a runs list that cannot be read is
+# HEALTH-UNREAD for every repository, never a clean bill, and the pin row is
+# unaffected. A jobs read that fails is HEALTH-UNREAD for that file, not a
+# 0-job row.
+case_main_health_unread() {
+  local d; d=$(new_case healthunread)
+  health_fixture "$d"; : > "$d/runs_fail"
+  run_content "$d" "$1"
+  local n; n=$(grep -cF "$(printf '\t(actions runs)\tHEALTH-UNREAD\t')" "$d/out")
+  local ok=0
+  [ "$(cat "$d/rc")" = 0 ] && [ "$n" = 3 ] \
+    && grep -qF "$(printf 'hyperpolymath/pub-a\tci.yml\tFRESH')" "$d/out" && ok=1
+  rm -f "$d/runs_fail"; : > "$d/jobs_fail_5"
+  run_content "$d" "$1" --only hyperpolymath/pub-a
+  if [ "$ok" = 1 ] && [ "$(cat "$d/rc")" = 0 ] \
+     && grep -qF "$(printf 'hyperpolymath/pub-a\tb.yml\tHEALTH-UNREAD\tthe jobs of latest failed run 5 could not be read; not judged')" "$d/out" \
+     && ! grep -q 'HEALTH-ZERO-JOB' "$d/out"; then
+    pass "main: unreadable runs / jobs are HEALTH-UNREAD (every repository listed), never healthy and never a guessed 0-job row"
+  else
+    fail "main: health unread handling wrong (rc=$(cat "$d/rc"), runs-unread rows=$n of 3)"
+    sed 's/^/    /' "$d/out" "$d/err" | tail -12 >&2
+  fi
+}
+
+# case_main_health_paged <applier> — a failed run with more jobs than the first page
+# (100) says so: the first page's lock failure is still listed, and a HEALTH-UNREAD
+# row names how many of the jobs were read.
+case_main_health_paged() {
+  local d; d=$(new_case healthpaged)
+  health_fixture "$d"
+  echo '{"total_count": 150, "jobs": [{"name": "Governance / lockfile verify", "conclusion": "failure"}, {"name": "build", "conclusion": "success"}]}' > "$d/jobs_6.json"
+  run_content "$d" "$1" --only hyperpolymath/pub-a
+  if [ "$(cat "$d/rc")" = 0 ] \
+     && grep -qF "$(printf 'hyperpolymath/pub-a\tc.yml\tHEALTH-UNREAD\tonly 2 of the 150 jobs of latest failed run 6 were read (first page)')" "$d/out" \
+     && grep -qF "$(printf 'hyperpolymath/pub-a\tc.yml\tHEALTH-LOCK-FAILURE\t')" "$d/out"; then
+    pass "main: a run with more jobs than one page is HEALTH-UNREAD (jobs read of total), and the first page's lock failure is still listed"
+  else
+    fail "main: paged jobs not reported (rc=$(cat "$d/rc"))"
+    sed 's/^/    /' "$d/out" "$d/err" | tail -10 >&2
+  fi
+}
+
+# case_main_health_off <applier> — --no-health reads no run and writes no health row.
+case_main_health_off() {
+  local d; d=$(new_case healthoff)
+  health_fixture "$d"
+  run_content "$d" "$1" --only hyperpolymath/pub-a --no-health
+  if [ "$(cat "$d/rc")" = 0 ] && ! grep -q 'HEALTH-' "$d/out" && ! grep -q 'actions/runs' "$d/calls.log" \
+     && grep -qF "$(printf 'hyperpolymath/pub-a\tci.yml\tFRESH')" "$d/out"; then
+    pass "main: --no-health reads no Actions runs and writes no health row"
+  else
+    fail "main: --no-health still read runs or wrote rows (rc=$(cat "$d/rc"))"
+  fi
+}
+
+# case_main_health_cap <applier> — more failed workflow files than HEALTH_JOBS_CAP
+# (6) are not all read: the rest are said, not dropped.
+case_main_health_cap() {
+  local d i; d=$(new_case healthcap)
+  jq -n '{workflow_runs: [range(1; 9) as $i | {id: (100 + $i), status: "completed", conclusion: "failure", name: "W\($i)", path: ".github/workflows/w\($i).yml", created_at: "2026-11-12T00:00:00Z", head_sha: "1111111111111111111111111111111111111111"}]}' > "$d/runs.json"
+  for i in 1 2 3 4 5 6 7 8; do echo '{"total_count": 1, "jobs": [{"name": "build", "conclusion": "failure"}]}' > "$d/jobs_$((100+i)).json"; done
+  run_content "$d" "$1" --only hyperpolymath/pub-a
+  local n; n=$(grep -c 'HEALTH-UNREAD.*jobs-read cap (6 per repository)' "$d/out")
+  if [ "$(cat "$d/rc")" = 0 ] && [ "$n" = 2 ] && [ "$(grep -c 'actions/runs/10[0-9]/jobs' "$d/calls.log")" = 6 ]; then
+    pass "main: the jobs-read cap holds at 6 and the two unread files are listed as HEALTH-UNREAD"
+  else
+    fail "main: jobs-read cap wrong (rc=$(cat "$d/rc"), unread rows=$n, jobs reads=$(grep -c 'actions/runs/10[0-9]/jobs' "$d/calls.log"))"
+    sed 's/^/    /' "$d/out" "$d/err" | tail -12 >&2
+  fi
+}
+
 # case_main_deed_clean <applier> — a root deed within the cap, and a repository with
 # no root deed at all, produce no deed row.
 case_main_deed_clean() {
@@ -1121,6 +1248,11 @@ case_main_deed_rest_fail "$APPLIER"
 case_main_only_missing "$APPLIER"
 case_main_envpin "$APPLIER"
 case_main_envpin_fix_untouched "$APPLIER"
+case_main_health "$APPLIER"
+case_main_health_unread "$APPLIER"
+case_main_health_off "$APPLIER"
+case_main_health_cap "$APPLIER"
+case_main_health_paged "$APPLIER"
 case_main_content_fix "$APPLIER"
 case_main_content_refresh "$APPLIER"
 case_main_content_refused "$APPLIER" "a template that does not match its own stamp" \
@@ -1342,6 +1474,21 @@ list_mutant envpin_row_dropped 's@done < <\(env_pin_rows "\$wf" "\$TARGET_SHA"\)
 list_mutant envpin_behind_as_fresh 's@if \(low == tgt\) printf "ENV-PIN-FRESH@if (1) printf "ENV-PIN-FRESH@' case_main_envpin
 list_mutant envpin_comment_counted 's@^    /\^\[\[:space:\]\]\*#/ \{ next \}$@    /^NEVER$/ { next }@' case_main_envpin
 list_mutant envpin_before_none_skip_lost 's@^      done < <\(env_pin_rows "\$wf" "\$TARGET_SHA"\)$@      done < <(classify_file "$wf" "$TARGET_SHA" | grep -qx NONE || env_pin_rows "$wf" "$TARGET_SHA")@' case_main_envpin
+# Health block: each row kind must be written, a 0-job row needs the jobs endpoint's
+# agreement, an unreadable answer must be said, the cap must hold, and --no-health
+# must read nothing.
+list_mutant health_startup_dropped 's@^    if \[ "\$nst" -gt 0 \]; then$@    if false; then@' case_main_health
+list_mutant health_zero_unconfirmed 's@if \[ "\$fzs" = 1 \] && \[ "\$jt" = 0 \]; then@if [ "$fzs" = 1 ]; then@' case_main_health
+list_mutant health_lock_dropped 's@^    if \[ -n "\$names" \]; then$@    if false; then@' case_main_health
+list_mutant health_runs_unread_silent '/Actions runs could not be read/s@>> "\$tsv"@>/dev/null@' case_main_health_unread
+list_mutant health_jobs_unread_silent '/the jobs of latest failed run/s@>> "\$tsv"@>/dev/null@' case_main_health_unread
+list_mutant health_cap_ignored 's@if \[ "\$njobs" -ge "\$HEALTH_JOBS_CAP" \]; then@if false; then@' case_main_health_cap
+list_mutant health_off_ignored 's@\[ "\$HEALTH" -eq 1 \] \|\| return 0@true@' case_main_health_off
+list_mutant health_page_unnoticed 's@if \[ "\$jt" -gt "\$jn" \] 2>/dev/null; then@if false; then@' case_main_health_paged
+# Codex findings on #1600: same-second runs pick the newest by id, and a run with no
+# path is kept under a placeholder. Each is killed by a known-answer control.
+kill_mutant health_tie_break_lost 's@sort_by\(\[\.created_at, \.id\]\)@sort_by(.created_at)@' "FAIL health-tie-break"
+kill_mutant health_pathless_dropped 's@then "\(unknown workflow\)" else \. end@then "" else . end@' "FAIL health-pathless"
 }
 
 echo

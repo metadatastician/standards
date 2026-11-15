@@ -14,7 +14,7 @@
 ; A CLAUSE PROFILE, not a new grammar. Every rule below is also a `field` or
 ; `clause` of deed.abnf v2.0.0, so META.deed still passes deed_lint unchanged.
 ; Rules it borrows: string, symbol, boolean and token-sep are deed.abnf's;
-; date-string and ssg-clause are common.abnf's. Requires RFC 7405 (%s"..."
+; date-string, ssg-clause and symbol-list are common.abnf's. Requires RFC 7405 (%s"..."
 ; case-sensitive literals).
 ;
 ; Where it applies: META.deed (head descriptile-deed, J14), at the top level of
@@ -55,7 +55,6 @@ meta-field      = ( %s":version"           token-sep string )
                 ; SEMANTIC: the strings are not empty.
 project-type    = %s"library" / %s"binary" / %s"service" / %s"website" / %s"monorepo"
                 ; The mapping's closed set. SEMANTIC: the whole symbol.
-symbol-list     = "(" [token-sep] [symbol *(token-sep symbol)] [token-sep] ")"
 
 meta-practices  = "(" %s"development-practices" 1*(token-sep practice-member) [token-sep] ")"
                 ; SEMANTIC: each member at most once.
