@@ -480,12 +480,22 @@ env_pin_rows() {
       while (match(s, /^(&[^[:space:]]+|![^[:space:]]*)[[:space:]]+/)) s = substr(s, RLENGTH + 1)
       return s
     }
-    # depth: net open flow brackets in a line, quoted text ignored (a flow collection
-    # `{...}` or `[...]` may run over several lines).
-    function depth(line,   t, o, c) {
-      t = line; gsub(/"([^"\\]|\\.)*"/, "", t); gsub(/\047[^\047]*\047/, "", t)
-      o = gsub(/[\{\[]/, "", t); c = gsub(/[\}\]]/, "", t)
-      return o - c
+    # depth: net open flow brackets in a line (a flow collection `{...}` or `[...]` may
+    # run over several lines). Scanned character by character: a bracket inside a quoted
+    # scalar, or after a `#` that starts a comment (at the line start or after
+    # whitespace), is text, not structure.
+    function depth(line,   i, n, ch, q, d, prev) {
+      n = length(line); q = ""; d = 0; prev = " "
+      for (i = 1; i <= n; i++) {
+        ch = substr(line, i, 1)
+        if (q != "") { if (ch == "\\" && q == "\"") i++; else if (ch == q) q = "" }
+        else if (ch == "\047" || ch == "\"") q = ch
+        else if (ch == "#" && prev ~ /[[:space:]]/) break
+        else if (ch == "{" || ch == "[") d++
+        else if (ch == "}" || ch == "]") d--
+        prev = ch
+      }
+      return d
     }
     BEGIN { tgt = tolower(target); top = 0; skip = -1; inq = "" ; flow = 0 }
     inq != "" { if (qclose($0, inq)) inq = ""; next }
@@ -1322,6 +1332,11 @@ JSON
     printf 'env:\n'
     printf '  STANDARDS_PIN: {a: b}\n'
     printf '  CANON_REF: %s\n' "$eb"
+    printf 'env: { OTHER: x, # } harmless comment\n'
+    printf '  CANON_REF: %s,\n' "$eb"
+    printf '  STANDARDS_PIN: %s }\n' "$t"
+    printf 'env: { A: "}", # note\n'
+    printf '  CANON_REF: %s }\n' "$eb"
   } > "$d/envpin.yml"
   local ep; ep=$(env_pin_rows "$d/envpin.yml" "$t" | tr '\t' '|')
   local epw="ENV-PIN-FRESH|STANDARDS_PIN L2 ${t:0:8}

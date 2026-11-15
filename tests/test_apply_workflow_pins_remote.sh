@@ -272,6 +272,10 @@ kill_mutant envpin_anchor_hides_quote 's@bp = props\(body\);@bp = body;@' "FAIL 
 # value is one must be reported, not skipped.
 kill_mutant envpin_flow_multiline_read 's@^    flow > 0 \{ flow@    flow > 99 { flow@' "FAIL envpin-rows"
 kill_mutant envpin_flow_value_silent 's@if \(tracked\) printf "ENV-PIN-UNJUDGED\\t%s L%d value is a flow collection@if (0) printf "ENV-PIN-UNJUDGED\\t%s L%d value is a flow collection@' "FAIL envpin-rows"
+# Fifth Codex round on #1602: a bracket inside a comment or a quoted scalar is not flow
+# structure, so it must not end (or open) a flow collection early.
+kill_mutant envpin_flow_comment_counted 's@else if \(ch == "#" && prev ~ /\[\[:space:\]\]/\) break@else if (0) break@' "FAIL envpin-rows"
+kill_mutant envpin_flow_quote_counted 's@else if \(ch == "\\047" \|\| ch == "\\""\) q = ch@else if (0) q = ch@' "FAIL envpin-rows"
 
 # --- 3. fetch_workflows fails CLOSED -----------------------------------------
 # A rate-limited repo used to come back as "no workflows": fetch_workflows
