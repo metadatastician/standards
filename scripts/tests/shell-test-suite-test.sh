@@ -14,7 +14,7 @@ WORK="$(mktemp -d)"; trap 'rm -rf "$WORK"' EXIT
 pass=0; fail=0
 expect() { # expect <wanted-exit> <label>   (runs the suite with cwd = $WORK/t)
   local want="$1" label="$2" got=0
-  (cd "$WORK/t" && bash "$SCRIPT") >"$WORK/out" 2>&1 || got=$?
+  (cd "$WORK/t" && SHELL_TEST_SHARD=all bash "$SCRIPT") >"$WORK/out" 2>&1 || got=$?
   if [ "$got" = "$want" ]; then pass=$((pass+1)); echo "  ok    $label"
   else fail=$((fail+1)); echo "  FAIL  $label (wanted exit $want, got $got)"; sed 's/^/        /' "$WORK/out"; fi
 }
