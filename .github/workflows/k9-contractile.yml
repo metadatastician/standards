@@ -132,24 +132,12 @@ jobs:
       - name: Reporting regression tests
         run: bun test 1-formats/k9/tools/conformance-report.test.mjs
 
-      - name: Read previous compact report
-        if: ${{ always() && github.event_name == 'pull_request' }}
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: |
-          set -euo pipefail
-          gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" \
-            | jq -r '[.[][] | select(.user.login == "github-actions[bot]" and (.body | contains("<!-- k9-contractile-report:")))] | last | .body // ""' \
-            > "$RUNNER_TEMP/k9-previous.md"
-
       - name: Collect DEED and K9 evidence
         if: ${{ always() }}
         env:
           PR_NUMBER: ${{ github.event.pull_request.number || 'local' }}
           K9_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           K9_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-          K9_PREVIOUS_REPORT: ${{ runner.temp }}/k9-previous.md
         run: |
           set -euo pipefail
           if command -v bun >/dev/null; then
