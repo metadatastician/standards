@@ -473,8 +473,8 @@ rules it adds to the grammar:
   mapping's ruled row; the source's `[hypatia-config]` is this clause);
 * `:version`, `:last-updated` (a real date) and `:rulesets`, each at most once.
   `:rulesets` is a non-empty list of A5 rule domains as strings (A5 3.1, such
-  as `"hypatia"`), each once: it selects from the A5 registry and never names
-  or defines a rule;
+  as `"hypatia"`), each once: it selects from the A5 registry by domain only
+  and never names or defines a rule (J38);
 * `(symbolic-rules)` holds no rule definition (YD05), and `(neural-config)`
   holds no member until one is ruled (J37): each is empty or left out, and
   appears at most once;

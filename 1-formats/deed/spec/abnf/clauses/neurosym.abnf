@@ -5,9 +5,9 @@
 ; DEED clause profile: NEUROSYM.deed, v1.0.0 (DRAFT)
 ; Prose and rationale: docs/estate-reconciliation/A7-contractiles-descriptiles-anchor.adoc
 ; sections 7.1 and 7.2 (the NEUROSYM.deed row); rulings J14, J20 and J35 to
-; J37 of 2026-11-15 (the chora's (neurosym …) moves here whole; its A2ML
+; J38 of 2026-11-15 (the chora's (neurosym …) moves here whole; its A2ML
 ; @profile marker does not translate; (neural-config) holds no member until
-; one is ruled). Field source: the ruled table of
+; one is ruled; :rulesets selects by domain only). Field source: the ruled table of
 ; 1-formats/deed/mappings/agentic-neurosym-playbook-to-repo-deed.adoc
 ; (NEUROSYM.a2ml), applied in standards_chora.deed. M3 module order: section 11.
 ;
@@ -31,7 +31,7 @@ neurosym-field  = ( %s":version"      token-sep string )
                 / ( %s":rulesets"     token-sep str-list1 )
                 ; :version and :last-updated come from the chora's
                 ; (neurosym …) (J35). :rulesets selects rules from the A5
-                ; registry: each entry is an A5 rule domain (A5 3.1, `domain`,
+                ; registry by domain only (J38): each entry is an A5 rule domain (A5 3.1, `domain`,
                 ; such as "hypatia" or "rsr"), never a rule definition (YD05).
                 ; SEMANTIC: the strings are not empty, and each :rulesets
                 ; entry matches the A5 domain form, once.

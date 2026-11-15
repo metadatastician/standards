@@ -3282,7 +3282,7 @@ export function checkNeurosym(text, filename, opts = {}) {
     }
     const doms = new Set();
     for (const [, d] of v[1]) {
-      if (!A5_DOMAIN.test(d)) throw E(`:rulesets entry "${d}" is not an A5 rule domain (A5 3.1): it selects a domain, never defines a rule (YD05)`);
+      if (!A5_DOMAIN.test(d)) throw E(`:rulesets entry "${d}" is not an A5 rule domain (A5 3.1): it selects a domain only, never a rule (YD05, J38)`);
       if (doms.has(d)) throw E(`:rulesets names "${d}" once`);
       doms.add(d);
     }
