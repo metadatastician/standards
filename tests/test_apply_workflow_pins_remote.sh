@@ -297,7 +297,7 @@ kill_mutant envpin_plain_continuation_ignored 's@if \(n > pn\) \{ flushp\(pcont\
 kill_mutant envpin_explicit_key_silent 's@if \(!xwarn\) \{ xwarn = 1; outr@if (0) { xwarn = 1; outr@' "FAIL envpin-explicit-key"
 # Tenth round on #1602: a doubled single quote inside a flow scalar, and escapes in a
 # double-quoted key.
-kill_mutant envpin_flow_doubled_quote 's@if \(q == "\\047" && substr\(line, i \+ 1, 1\) == "\\047"\) i\+\+; else \{ q = ""; pl = 0 \}@q = ""; pl = 0@' "FAIL envpin-rows"
+kill_mutant envpin_flow_doubled_quote 's@if \(q == "\\047" && substr\(line, i \+ 1, 1\) == "\\047"\) i\+\+; else \{ q = ""; pl = 0; cq = 1 \}@q = ""; pl = 0; cq = 1@' "FAIL envpin-rows"
 kill_mutant envpin_key_escape_literal 's@key = unesc\(substr\(key, 2, length\(key\) - 2\)\)@key = substr(key, 2, length(key) - 2)@' "FAIL envpin-rows"
 # Eleventh round on #1602: a matrix axis named env is not an environment map, and
 # escapes in a double-quoted pin value are decoded.
@@ -307,7 +307,7 @@ kill_mutant envpin_value_escape_literal 's@if \(c == "\\""\) val = unesc\(val\)@
 # explicit key's value or on the line after an empty `key:` are skipped.
 kill_mutant envpin_matrix_job_name 's@ && k > 1 && knm\[k - 1\] == "strategy"@@' "FAIL envpin-rows"
 kill_mutant envpin_explicit_value_read 's@if \(bq ~ /\^:\[\[:space:\]\]\+/\) \{ eb = bq;@if (0) { eb = bq;@' "FAIL envpin-explicit-block"
-kill_mutant envpin_nextline_indicator_read 's@if \(n == n0 && bq ~ /\^\[\|>\]\[-\+0-9\]\*\$/ && top > 0 && ind\[top\] < n\) \{ skip = ind\[top\]; next \}@@' "FAIL envpin-rows"
+kill_mutant envpin_nextline_indicator_read 's@if \(n == n0 && bq ~ /\^\[\|>\]\[-\+0-9\]\*\$/ && \(top == 0 \|\| ind\[top\] < n\)\) \{ skip = \(top > 0\) \? ind\[top\] : 0; next \}@@' "FAIL envpin-rows"
 # Thirteenth round: an empty KEY: completed by an indented node on the next line.
 kill_mutant envpin_empty_value_nextline 's@\} else if \(val == "" && !bad && c != "\\047" && c != "\\""\) \{@} else if (0) {@' "FAIL envpin-rows"
 # Fifteenth round: a plain scalar left open across the lines of a flow collection.
@@ -319,14 +319,19 @@ kill_mutant envpin_merge_key_unread 's@\(<<\|\[A-Za-z_\]@([A-Za-z_]@' "FAIL envp
 # the continuation lines of a folded pin are scalar text, never structure.
 kill_mutant envpin_alias_env_in_matrix 's@if \(!inmx && \(key == "env"@if ((key == "env"@' "FAIL envpin-rows"
 kill_mutant envpin_merge_sequence_silent 's@ \|\| \(key == "<<" && rest ~ /\^\[\\\[\\\{\]/\)@@' "FAIL envpin-rows"
-kill_mutant envpin_folded_line_is_structure 's@pend = ""; skip = pn; next \}@pend = "" }@' "FAIL envpin-rows"
+kill_mutant envpin_folded_line_is_structure 's@pend = ""; pc = -1; skip = pn; next \}@pend = ""; pc = -1 }@' "FAIL envpin-rows"
 # Eighteenth round: a colon inside a flow plain scalar, and a decoded line feed.
-kill_mutant envpin_embedded_colon_ends_scalar 's@pl = \(nx == "" \|\| nx ~ /\[\[:space:\],\\\]\}\]/ \|\| prev ~ /\["\\047\]/\) \? 0 : 1@pl = 0@' "FAIL envpin-rows"
+kill_mutant envpin_embedded_colon_ends_scalar 's@pl = \(nx == "" \|\| nx ~ /\[\[:space:\],\\\]\}\]/ \|\| jq\) \? 0 : 1@pl = 0@' "FAIL envpin-rows"
 # Nineteenth round: a next-line alias under env, alias keys inside matrix data, a multi-line quoted
 # value of an explicit key, and a refresh that only reorders jobs.
 kill_mutant envpin_nextline_alias_silent 's@ab ~ /\^\\\*\[\^\[:space:\]\]\+\$/ && top > 0@0 \&\& top > 0@' "FAIL envpin-rows"
 # Twentieth round: a comment after a next-line alias, and escapes kept lossless.
 kill_mutant envpin_alias_comment_unstripped 's@ab = bp; sub\(/\[\[:space:\]\]\+#\.\*\$/, "", ab\)@ab = bp@' "FAIL envpin-rows"
+# Twenty-first round: continuation lines of ordinary plain values, a property-only explicit value, and a
+# quote just before an embedded colon.
+kill_mutant envpin_plain_value_continuation 's@if \(n > pc\) \{ skip = pc; pc = -1; next \}@if (0) { skip = pc; pc = -1; next }@' "FAIL envpin-rows"
+kill_mutant envpin_explicit_propline_top 's@\(top == 0 \|\| ind\[top\] < n\)@(top > 0 \&\& ind[top] < n)@' "FAIL envpin-explicit-propline"
+kill_mutant envpin_quote_before_colon 's@ \|\| jq\) \? 0 : 1@ || prev ~ /["\\047]/) ? 0 : 1@' "FAIL envpin-rows"
 kill_mutant envpin_escape_flattened 's@else o = o \(\(v > 255\) \? sprintf\("\\\\u%04x", v\) : sprintf\("\\\\x%02x", v\)\)@else o = o "?"@' "FAIL envpin-rows"
 kill_mutant envpin_alias_key_in_matrix 's@if \(!awarn && !am\)@if (!awarn)@' "FAIL envpin-rows"
 kill_mutant envpin_explicit_quoted_read 's@if \(eb ~ /\^\["\\047\]/ && !qclose@if (0 \&\& !qclose@' "FAIL envpin-explicit-quoted"

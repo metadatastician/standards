@@ -556,10 +556,11 @@ env_pin_rows() {
     # scalar, or after a `#` that starts a comment (at the line start or after
     # whitespace), is text, not structure. The quote still open at the end of the line
     # is kept in fq, so a quoted scalar that runs over several lines is followed.
-    function depth(line,   i, n, ch, q, d, prev, isb, pl, nx) {
-      n = length(line); q = fq; d = 0; prev = " "; pl = fpl
+    function depth(line,   i, n, ch, q, d, prev, isb, pl, nx, jq) {
+      n = length(line); q = fq; d = 0; prev = " "; pl = fpl; cq = 0
       for (i = 1; i <= n; i++) {
         ch = substr(line, i, 1)
+        jq = cq; cq = 0
         # A quote opens a quoted scalar only at a scalar boundary: after whitespace, `{`, `,`,
         # `:`, `[` or `?`, and never while a plain scalar is still open (pl). pl survives
         # whitespace and the end of a line: a quote that starts a continuation line of a plain
@@ -567,7 +568,7 @@ env_pin_rows() {
         isb = (prev ~ /[[:space:]{,:[?]/) && !pl
         if (q != "") {
           if (ch == "\\" && q == "\"") i++
-          else if (ch == q) { if (q == "\047" && substr(line, i + 1, 1) == "\047") i++; else { q = ""; pl = 0 } }
+          else if (ch == q) { if (q == "\047" && substr(line, i + 1, 1) == "\047") i++; else { q = ""; pl = 0; cq = 1 } }
         }
         else if ((ch == "\047" || ch == "\"") && isb) q = ch
         else if (ch == "#" && prev ~ /[[:space:]]/) break
@@ -579,7 +580,7 @@ env_pin_rows() {
           # flow indicator or the end of the line, or right after a quoted key); inside a
           # plain scalar (`http:x`) it is content.
           nx = substr(line, i + 1, 1)
-          pl = (nx == "" || nx ~ /[[:space:],\]}]/ || prev ~ /["\047]/) ? 0 : 1
+          pl = (nx == "" || nx ~ /[[:space:],\]}]/ || jq) ? 0 : 1
         }
         else if (ch !~ /[[:space:]]/) pl = 1
         prev = ch
@@ -588,7 +589,7 @@ env_pin_rows() {
       fq = q
       return d
     }
-    BEGIN { tgt = tolower(target); top = 0; skip = -1; inq = "" ; flow = 0; fq = ""; pend = ""; xwarn = 0; awarn = 0; fpl = 0; cp = ""; pcp = ""; capk = ""; capv = ""; capcp = "" }
+    BEGIN { tgt = tolower(target); top = 0; skip = -1; inq = "" ; flow = 0; fq = ""; pend = ""; xwarn = 0; awarn = 0; fpl = 0; cp = ""; pcp = ""; capk = ""; capv = ""; capcp = ""; pc = -1; cq = 0 }
     NR == 1 { sub("^\357\273\277", "") }
     { sub(/[[:space:]]+$/, "") }
     inq != "" { if (capk != "") capadd($0); if (qclose($0, inq)) { inq = ""; capflush() } next }
@@ -604,9 +605,12 @@ env_pin_rows() {
       # line continues the plain scalar (folded), so the value is not what it looked like.
       if (pend != "") {
         # A more indented line is part of the scalar (folded), not structure: it is consumed.
-        if (n > pn) { flushp(pcont); pend = ""; skip = pn; next }
+        if (n > pn) { flushp(pcont); pend = ""; pc = -1; skip = pn; next }
         else { flushp(pend); pend = "" }
       }
+      # The value of any other key is a plain scalar: a more indented line continues it (YAML
+      # folds it), so it is text and is consumed, never read as structure.
+      if (pc >= 0) { if (n > pc) { skip = pc; pc = -1; next } pc = -1 }
       if (skip >= 0) { if (n > skip) { if (capk != "") capadd(s); next }; skip = -1; capflush() }
       body = substr(s, n + 1); n0 = n
       while (match(body, /^-[[:space:]]+/)) { n += RLENGTH; body = substr(body, RLENGTH + 1) }
@@ -636,7 +640,7 @@ env_pin_rows() {
       # an empty `key:`: the body is text, never keys.
       if (bq ~ /^:[[:space:]]+/) { eb = bq; sub(/^:[[:space:]]+/, "", eb); eb = props(eb); if (eb ~ /^[|>][-+0-9]*$/) { skip = n0; next }
         if (eb ~ /^["\047]/ && !qclose(substr(eb, 2), substr(eb, 1, 1))) { inq = substr(eb, 1, 1); next } }
-      if (n == n0 && bq ~ /^[|>][-+0-9]*$/ && top > 0 && ind[top] < n) { skip = ind[top]; next }
+      if (n == n0 && bq ~ /^[|>][-+0-9]*$/ && (top == 0 || ind[top] < n)) { skip = (top > 0) ? ind[top] : 0; next }
       if (c0 == "{" || c0 == "[") { fq = ""; fpl = 0; d = depth(bp); if (d > 0) flow = d; else fq = ""; next }
       if ((c0 == "\047" || c0 == "\"") && !qclose(substr(bp, 2), c0)) { inq = c0; next }
       if (!(match(bp, /^"([^"\\]|\\.)*"[[:space:]]*:([[:space:]]|$)/) || match(bp, /^\047([^\047]|\047\047)*\047[[:space:]]*:([[:space:]]|$)/) || match(bp, /^(<<|[A-Za-z_][A-Za-z0-9_.-]*)[[:space:]]*:([[:space:]]|$)/))) next
@@ -679,6 +683,7 @@ env_pin_rows() {
         if (tracked) { capk = sprintf("ENV-PIN-UNJUDGED\t%s L%d value is a multi-line quoted scalar; not judged", key, NR); capv = "(multiline) " rest; capcp = cp }
         next
       }
+      if (r2 != "" && c != "\047" && c != "\"") pc = n
       if (!tracked) next
       val = rest; bad = 0
       if (c == "\047" || c == "\"") {
@@ -1617,6 +1622,18 @@ JSON
     printf '        *pin: %s\n' "$eb"
     printf 'env:\n'
     printf '  *pins # inherited\n'
+    printf 'jobs:\n'
+    printf '  a:\n'
+    printf '    run: echo\n'
+    printf '      {literal\n'
+    printf '    env:\n'
+    printf '      CANON_REF: %s\n' "$eb"
+    printf "env: { OTHER: abc':'x, X: y }\n"
+    printf 'env:\n'
+    printf '  CANON_REF: %s\n' "$eb"
+    printf 'env:\n'
+    printf '  CANON_REF: |-  \n'
+    printf '    text\n'
   } > "$d/envpin.yml"
   local ep; ep=$(env_pin_rows "$d/envpin.yml" "$t" | tr '\t' '|')
   local epw="ENV-PIN-FRESH|STANDARDS_PIN L2 ${t:0:8}
@@ -1661,7 +1678,10 @@ ENV-PIN-UNJUDGED|(alias env) L142 an env map supplied by an alias (*name) is not
 ENV-PIN-BEHIND|CANON_REF L147 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here
 ENV-PIN-UNJUDGED|CANON_REF L149 value is not a 40-hex commit: main\\x0arelease
 ENV-PIN-UNJUDGED|(alias env) L151 an env map supplied by an alias (*name) is not resolved; env pins in this file may be missed
-ENV-PIN-UNJUDGED|(alias env) L158 an env map supplied by an alias (*name) is not resolved; env pins in this file may be missed"
+ENV-PIN-UNJUDGED|(alias env) L158 an env map supplied by an alias (*name) is not resolved; env pins in this file may be missed
+ENV-PIN-BEHIND|CANON_REF L164 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here
+ENV-PIN-BEHIND|CANON_REF L167 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here
+ENV-PIN-UNJUDGED|CANON_REF L169 value is a block scalar; not judged"
   if [ "$ep" = "$epw" ]; then echo "  PASS envpin-rows -> $(printf '%s\n' "$ep" | wc -l) row(s)"
   else echo "  FAIL envpin-rows -> got:
 $ep
@@ -1691,6 +1711,9 @@ $epu" >&2; rc=1; fi
   printf 'jobs:\n  ? run\n  : "echo\n    env:\n      CANON_REF: %s"\n' "$eb" > "$d/explicit4.yml"
   if [ "$(env_pin_rows "$d/explicit4.yml" "$t" | tr '\t' '|')" = "ENV-PIN-UNJUDGED|(explicit key) L2 YAML explicit mapping keys (? key) are not parsed; env pins in this file may be missed" ]; then echo "  PASS envpin-explicit-quoted"
   else echo "  FAIL envpin-explicit-quoted -> the body of an explicit key's multi-line quoted value was read as keys" >&2; rc=1; fi
+  printf '? run\n: &script\n  |\n  env:\n    CANON_REF: %s\n' "$eb" > "$d/explicit5.yml"
+  if [ "$(env_pin_rows "$d/explicit5.yml" "$t" | tr '\t' '|')" = "ENV-PIN-UNJUDGED|(explicit key) L1 YAML explicit mapping keys (? key) are not parsed; env pins in this file may be missed" ]; then echo "  PASS envpin-explicit-propline"
+  else echo "  FAIL envpin-explicit-propline -> a block scalar after a property-only explicit value was read as keys" >&2; rc=1; fi
   # A UTF-8 byte-order mark before the first key must not hide it.
   printf '\357\273\277env:\n  STANDARDS_PIN: %s\n' "$t" > "$d/bom.yml"
   if [ "$(env_pin_rows "$d/bom.yml" "$t" | tr '\t' '|')" = "ENV-PIN-FRESH|STANDARDS_PIN L2 ${t:0:8}" ]; then echo "  PASS envpin-bom"
