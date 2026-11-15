@@ -8,7 +8,7 @@
 //
 // deed.abnf is normative (D308); deed_lint.js is the gate that CI runs. This
 // harness keeps them from drifting apart. It compiles deed.abnf (with the
-// (egress …), (anchor …), (contractiles …), edict, verb-descriptile, ecosystem, state, meta, agentic and rsr-scorecard clause profiles and the shared rules of
+// (egress …), (anchor …), (contractiles …), edict, verb-descriptile, ecosystem, state, meta, agentic, neurosym, rsr-scorecard and rsr-profile clause profiles and the shared rules of
 // clauses/common.abnf) using apg-js, mutates every
 // committed deed with a seeded generator, and asks both the grammar and the
 // gate for a verdict on each variant:
@@ -26,7 +26,7 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import apg from "apg-js";
-import { checkAgentic, checkEcosystem, checkNeurosym, checkMeta, checkRsrScorecard, checkState, checkVerbDescriptile, choraRepoUuid, edictRuleIdsAt, FIXTURE_TODAY, LintError, rootChora, validate, verbOfDescriptile } from "../../1-formats/deed/tools/deed_lint.js";
+import { checkAgentic, checkEcosystem, checkNeurosym, checkRsrProfile, checkMeta, checkRsrScorecard, checkState, checkVerbDescriptile, choraRepoUuid, edictRuleIdsAt, FIXTURE_TODAY, LintError, rootChora, validate, verbOfDescriptile } from "../../1-formats/deed/tools/deed_lint.js";
 
 const { apgApi, apgLib } = apg;
 const ROOT = resolve(import.meta.dir, "../..");
@@ -77,6 +77,7 @@ function compileGrammar() {
       readFileSync(join(ABNF, "clauses/meta.abnf"), "utf8") + "\n" +
       readFileSync(join(ABNF, "clauses/agentic.abnf"), "utf8") + "\n" +
       readFileSync(join(ABNF, "clauses/neurosym.abnf"), "utf8") + "\n" +
+      readFileSync(join(ABNF, "clauses/rsr-profile.abnf"), "utf8") + "\n" +
       readFileSync(join(ABNF, "clauses/rsr-scorecard.abnf"), "utf8")).replace(/[^\x00-\x7f]/g, "?") +
     "\nSP = %x20\nDQUOTE = %x22\nALPHA = %x41-5A / %x61-7A\nDIGIT = %x30-39\n" +
     "VCHAR = %x21-7E\nCR = %x0D\nLF = %x0A\nCRLF = CR LF\n";
@@ -221,7 +222,7 @@ const fail = (kind, detail) => failures.push({ kind, detail });
 
 // 1. Fixtures: every valid fixture passes both; every valid egress or anchor
 //    fixture's clause parses as its clause rule.
-for (const [dir, clause] of [["valid", null], ["heads/valid", null], ["bang/valid", null], ["egress/valid", "egress"], ["anchor/valid", "anchor"], ["contractiles/valid", "contractiles"], ["rsr-scorecard/valid", "rsr-scorecard"]]) {
+for (const [dir, clause] of [["valid", null], ["heads/valid", null], ["bang/valid", null], ["egress/valid", "egress"], ["anchor/valid", "anchor"], ["contractiles/valid", "contractiles"], ["rsr-scorecard/valid", "rsr-scorecard"], ["rsr-profile/valid", "rsr-profile"]]) {
   for (const name of readdirSync(join(FIXTURES, dir)).sort()) {
     const text = readFileSync(join(FIXTURES, dir, name), "utf8");
     if (!grammarAccepts(grammar, "deed", text)) fail("fixture rejected by deed.abnf", `${dir}/${name}`);
@@ -286,6 +287,46 @@ for (const name of CONTRACTILES_GRAMMAR_REJECTS) {
     } else if (e !== null && !grammarAccepts(grammar, "rsr-scorecard-clause", e)) {
       fail("rsr-scorecard.abnf refuses a fixture listed as semantic only", name);
     }
+  }
+}
+// (rsr-profile …) (A7 10, J39; clauses/rsr-profile.abnf). Invalid fixtures whose
+// defect rsr-profile.abnf itself expresses: an unknown field or sub-clause, a
+// value of the wrong kind, a non-prose (notes …). The others break a SEMANTIC
+// side condition (presence, once-only, placement, empty or repeated items),
+// which only deed_lint.js --rsr-profile checks. Every invalid fixture is in
+// one list or the other.
+{
+  const RSR_PROFILE_GRAMMAR_REJECTS = [
+    "capabilities-symbols_chora.deed", "notes-clause_chora.deed", "notes-nonstring_chora.deed", "omitted-rationale-top_chora.deed",
+    "policy-field_chora.deed", "role-symbol_chora.deed", "unknown-clause_chora.deed", "unknown-field_chora.deed",
+  ];
+  const RSR_PROFILE_SEMANTIC_ONLY = [
+    "capabilities-duplicate_chora.deed", "capabilities-empty-string_chora.deed", "missing-version_chora.deed",
+    "no-capabilities-no-preset_chora.deed", "notes-twice_chora.deed", "preset-empty_chora.deed", "profile-nested_chora.deed",
+    "profile-twice_chora.deed", "version-twice_chora.deed",
+  ];
+  const profileOk = (text, name) => {
+    try {
+      return checkRsrProfile(text, name) !== null;
+    } catch (e) {
+      if (!(e instanceof LintError)) throw e;
+      return false;
+    }
+  };
+  for (const name of readdirSync(join(FIXTURES, "rsr-profile/valid")).sort()) {
+    if (!profileOk(readFileSync(join(FIXTURES, "rsr-profile/valid", name), "utf8"), name)) fail("rsr-profile valid fixture rejected by deed_lint.js --rsr-profile", name);
+  }
+  for (const name of readdirSync(join(FIXTURES, "rsr-profile/invalid")).sort()) {
+    const text = readFileSync(join(FIXTURES, "rsr-profile/invalid", name), "utf8");
+    if (!grammarAccepts(grammar, "deed", text)) fail("rsr-profile invalid fixture is not a valid deed", name);
+    if (!gateVerdict(text).ok) fail("rsr-profile invalid fixture is refused by deed_lint.js itself", name);
+    if (profileOk(text, name)) fail("deed_lint.js --rsr-profile accepts an invalid fixture", name);
+    const e = clauseText(text, "rsr-profile");
+    if (RSR_PROFILE_GRAMMAR_REJECTS.includes(name)) {
+      if (e === null || grammarAccepts(grammar, "rsr-profile-clause", e)) fail("rsr-profile.abnf accepts a fixture it must refuse", name);
+    } else if (RSR_PROFILE_SEMANTIC_ONLY.includes(name)) {
+      if (e === null || !grammarAccepts(grammar, "rsr-profile-clause", e)) fail("rsr-profile.abnf refuses a fixture listed as semantic only", name);
+    } else fail("rsr-profile invalid fixture is in neither list", name);
   }
 }
 // And the converse: every invalid fixture NOT listed breaks only a semantic

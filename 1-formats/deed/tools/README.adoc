@@ -490,6 +490,36 @@ rules it adds to the grammar:
 The fixtures are one case per directory, `fixtures/neurosym/{valid,invalid}/<case>/NEUROSYM.deed`,
 with an optional `<repo>_chora.deed` and `STRICT` marker, as for `--state`.
 
+== `deed_lint.js --rsr-profile` — the `(rsr-profile …)` clause (DRAFT)
+
+Checks the `(rsr-profile …)` clause of a `<repo>_chora.deed` against
+`spec/abnf/clauses/rsr-profile.abnf` (A7 section 10; owner ruling J39 of
+2026-11-15). That module is the one owner of the clause's keys:
+
+* `:version` is required; `:spec`, `:declares-against`, `:role` and `:preset`
+  are non-empty strings; `:capabilities`, `:add` and `:remove` are lists of
+  non-empty strings, each item once; at least one of `:capabilities` and
+  `:preset`;
+* `(notes …)`, at most once, holds prose only (`:<name> "…"` fields such as
+  `:omitted-rationale`): a `:role` inside it is never the profile's role;
+* any other field or clause refuses the clause. A reader never skips an
+  unknown key (J39);
+* the clause sits once, at the top level of a repo deed.
+
+Whether a capability or preset is known is the gate table's business, checked
+by `scripts/check-rsr-profile.sh`. That script refuses a clause with an unknown
+key on both of its parser paths: through this profile on the AST path, and
+against its copy of the key set on the awk path, which checks keys only.
+`scripts/tests/check-rsr-profile-test.sh` holds that copy equal to
+`--rsr-profile-keys`, and other readers should test theirs against it the same
+way.
+
+    bun deed_lint.js --rsr-profile REPO_chora.deed
+    bun deed_lint.js --rsr-profile-keys
+    bun deed_lint.js --rsr-profile-fixtures fixtures/rsr-profile/
+
+The fixtures are flat files, `fixtures/rsr-profile/{valid,invalid}/<case>_chora.deed`.
+
 == `deed_lint.js --contractile-registry` — the `contractile` rule registry (A7 J13)
 
 Generates the A5 registry `contractile_rules_praxis.deed` from a repo's six
