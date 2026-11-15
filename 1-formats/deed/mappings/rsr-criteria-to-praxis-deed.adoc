@@ -471,6 +471,11 @@ Nothing below is changed by this spec. The order is the canon's own,
 . **The dogfood gates drop the A2ML branch** (rsr-template-repo, then the
   copies in minted repos): `--ssot` names
   `0-canon/rsr/rsr-criteria-v2_praxis.deed` only.
+. **The deferred repoint, where the release deferred it**: a later PATCH
+  repoints `template-capability-gates.toml` line 145 and
+  `SCAFFOLD-LIFECYCLE.adoc` to the deed, and the spine adopts the new
+  `gates` and `lifecycle` hashes. When the release repointed both, this step
+  is empty.
 . **Prose follows** (owner-authored where it is normative): RSR-SPEC-v2 §4,
   §6, §8, Appendix B and the footer name the deed and its grammar instead of
   "the A2ML record dialect" (Q3); `canon.lock`'s WHO READS IT list and the
@@ -523,7 +528,7 @@ body | grep -o 'template_ref' | wc -l                        # ⇒ 1
 # 7. No live consumer names the dead file (dated records excluded by name).
 grep -rl 'rsr-criteria-v2\.a2ml' --exclude-dir=.git . \
   | grep -vE 'docs/affirmations/|docs/reorg/|9-archive/|3-practice/canon-spine/PROPOSAL|docs/estate-reconciliation/|ULTRAPLAN|rsr-criteria-to-praxis-deed\.adoc'
-# ⇒ empty, once §7 step 6 is done
+# ⇒ empty, once every step of §7 is done (the deferred repoint included)
 ----
 
 ⚠ Greps 5 and 6 are aids, not proofs. The validator (grep 1) and the round
