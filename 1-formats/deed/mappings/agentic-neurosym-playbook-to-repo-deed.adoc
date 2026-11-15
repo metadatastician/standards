@@ -39,7 +39,8 @@ modules land.
 |===
 | a2ml surface | deed path | transform
 
-| `@profile(id=a2ml/agentic)` etc. | `(profile :id "a2ml/agentic")` as FIRST clause inside the corresponding family clause | verbatim STRING. Kept as a string, not migrated into the BaseRecord `profileDecl` bridge — v0.1 conformance does not parse profileDecl through this surface, and silent re-homings are exactly the drift this campaign is against. Explicit revival decision rides with the typed-core bridge work, not this campaign.
+| `@profile(id=a2ml/neurosym)`, `@profile(id=a2ml/playbook)` | `(profile :id "a2ml/neurosym")` etc. as FIRST clause inside the corresponding family clause | verbatim STRING. Kept as a string, not migrated into the BaseRecord `profileDecl` bridge — v0.1 conformance does not parse profileDecl through this surface, and silent re-homings are exactly the drift this campaign is against. Explicit revival decision rides with the typed-core bridge work, not this campaign.
+| `@profile(id=a2ml/agentic)` | — | Not translated (owner ruling J34, 2026-11-15). `AGENTIC.deed` has no family clause to hold it: its file name and `descriptile-deed` head already name the family, and the marker named only the retired A2ML format. `--agentic` refuses a top-level `(profile …)` as an unknown clause.
 |===
 
 === AGENTIC.a2ml → `AGENTIC.deed` (J33)
@@ -105,9 +106,10 @@ Observed instance: all five sections (`deployment`, `incident-response`,
 
 * **P-9 (profile literal):** each emitted deed's profile string equals the
   source `@profile(id=…)` payload byte-for-byte inside the quotes — the
-  conformance lane greps for exactly three values estate-wide
-  (`a2ml/agentic`, `a2ml/neurosym`, `a2ml/playbook`) and any FOURTH string in
-  that position is a propagation bug, flagged automatically.
+  conformance lane greps for exactly two values estate-wide
+  (`a2ml/neurosym`, `a2ml/playbook`) and any THIRD string in that position is
+  a propagation bug, flagged automatically. `a2ml/agentic` is not translated
+  (J34), so it never appears in a deed.
 * **P-2a (table-closed):** applies per the frame; PLAYBOOK populated
   sections and NEUROSYM rule/config content fail closed for table
   extension rather than translate by guess.
@@ -124,7 +126,8 @@ Observed instance: all five sections (`deployment`, `incident-response`,
   `.machine_readable/descriptiles/AGENTIC.deed` (J33); the `*_chora.deed`
   pattern counts a repo whose `(agentic …)` is still in its chora during the
   YF05 window. A repo found in both is a defect, and counts once.
-* `@profile` strings: exactly three distinct `:id` values estate-wide.
+* `@profile` strings: exactly two distinct `:id` values estate-wide, and no
+  `AGENTIC.deed` carries one (J34).
 *`scan-depth` symbols are exactly from the closed three-set (validator,
   not eyeballs).
 
