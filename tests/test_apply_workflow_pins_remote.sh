@@ -301,6 +301,11 @@ kill_mutant envpin_key_escape_literal 's@key = unesc\(substr\(key, 2, length\(ke
 # escapes in a double-quoted pin value are decoded.
 kill_mutant envpin_matrix_env_read 's@ && !inmx\)@)@' "FAIL envpin-rows"
 kill_mutant envpin_value_escape_literal 's@if \(c == "\\""\) val = unesc\(val\)@@' "FAIL envpin-rows"
+# Twelfth round: a job named matrix is not matrix data, and block scalars written as an
+# explicit key's value or on the line after an empty `key:` are skipped.
+kill_mutant envpin_matrix_job_name 's@ && k > 1 && knm\[k - 1\] == "strategy"@@' "FAIL envpin-rows"
+kill_mutant envpin_explicit_value_read 's@if \(bq ~ /\^:\[\[:space:\]\]\+\[\|>\]\[-\+0-9\]\*\$/\) \{ skip = n0; next \}@@' "FAIL envpin-explicit-block"
+kill_mutant envpin_nextline_indicator_read 's@if \(n == n0 && bq ~ /\^\[\|>\]\[-\+0-9\]\*\$/ && top > 0 && ind\[top\] < n\) \{ skip = ind\[top\]; next \}@@' "FAIL envpin-rows"
 
 # --- 3. fetch_workflows fails CLOSED -----------------------------------------
 # A rate-limited repo used to come back as "no workflows": fetch_workflows

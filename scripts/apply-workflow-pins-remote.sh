@@ -89,7 +89,7 @@
 # scalar (folded), so it is reported ENV-PIN-UNJUDGED ("value continues on the next
 # line"), never FRESH or BEHIND. YAML explicit mapping keys (`? key`) are NOT parsed: one
 # ENV-PIN-UNJUDGED row, with `(explicit key)` in place of a name, says so for the file.
-# A key under any `matrix:` is matrix data, not an environment map, and gets no row. A
+# A key under `strategy: matrix:` is matrix data (a job that is merely named `matrix` is not), not an environment map, and gets no row. A
 # double-quoted pin value is decoded (\xHH, \uHHHH in ASCII, \\ \" \/) before it is judged.
 # --fix-content replaces a stale stamped copy with the template, so an env pin may move
 # with it: the census reads the refreshed copy, and one ENV-PIN-REFRESH-MOVED row per
@@ -580,6 +580,10 @@ env_pin_rows() {
       # A block scalar as a sequence item (- | or - >): skip its body.
       bq = bp; sub(/[[:space:]]+#.*$/, "", bq)
       if (n > n0 && bq ~ /^[|>][-+0-9]*$/) { skip = n0; next }
+      # The value half of an explicit key (`: |`), or an indicator alone on the line after
+      # an empty `key:`: the body is text, never keys.
+      if (bq ~ /^:[[:space:]]+[|>][-+0-9]*$/) { skip = n0; next }
+      if (n == n0 && bq ~ /^[|>][-+0-9]*$/ && top > 0 && ind[top] < n) { skip = ind[top]; next }
       if (c0 == "{" || c0 == "[") { fq = ""; d = depth(bp); if (d > 0) flow = d; else fq = ""; next }
       if ((c0 == "\047" || c0 == "\"") && !qclose(substr(bp, 2), c0)) { inq = c0; next }
       if (!(match(bp, /^"([^"\\]|\\.)*"[[:space:]]*:([[:space:]]|$)/) || match(bp, /^\047([^\047]|\047\047)*\047[[:space:]]*:([[:space:]]|$)/) || match(bp, /^[A-Za-z_][A-Za-z0-9_.-]*[[:space:]]*:([[:space:]]|$)/))) next
@@ -590,7 +594,7 @@ env_pin_rows() {
       rest = substr(bp, kl + 1); sub(/^[[:space:]]+/, "", rest); rest = props(rest)
       while (top > 0 && ind[top] >= n) top--
       parent = (top > 0) ? knm[top] : ""
-      inmx = 0; for (k = 1; k <= top; k++) if (knm[k] == "matrix") inmx = 1
+      inmx = 0; for (k = 1; k <= top; k++) if (knm[k] == "matrix" && k > 1 && knm[k - 1] == "strategy") inmx = 1
       top++; ind[top] = n; knm[top] = key
       tracked = (key ~ ("^(" names ")$") && parent == "env" && !inmx)
       if (rest ~ /^[\{\[]/) {
@@ -1485,6 +1489,14 @@ JSON
     printf '      CANON_REF: %s\n' "$eb"
     printf 'env:\n'
     printf '  STANDARDS_PIN: "%s\\x62"\n' "${eb:0:39}"
+    printf 'run:\n'
+    printf '  |\n'
+    printf '  env:\n'
+    printf '    CANON_REF: %s\n' "$eb"
+    printf 'jobs:\n'
+    printf '  matrix:\n'
+    printf '    env:\n'
+    printf '      CANON_REF: %s\n' "$eb"
   } > "$d/envpin.yml"
   local ep; ep=$(env_pin_rows "$d/envpin.yml" "$t" | tr '\t' '|')
   local epw="ENV-PIN-FRESH|STANDARDS_PIN L2 ${t:0:8}
@@ -1514,7 +1526,8 @@ ENV-PIN-DYNAMIC|CANON_REF L81 is an expression; not judged
 ENV-PIN-UNJUDGED|STANDARDS_PIN L87 value continues on the next line (a folded plain scalar); not judged
 ENV-PIN-BEHIND|CANON_REF L90 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here
 ENV-PIN-BEHIND|CANON_REF L96 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here
-ENV-PIN-BEHIND|STANDARDS_PIN L102 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here"
+ENV-PIN-BEHIND|STANDARDS_PIN L102 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here
+ENV-PIN-BEHIND|CANON_REF L110 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here"
   if [ "$ep" = "$epw" ]; then echo "  PASS envpin-rows -> $(printf '%s\n' "$ep" | wc -l) row(s)"
   else echo "  FAIL envpin-rows -> got:
 $ep
@@ -1530,6 +1543,10 @@ $epu" >&2; rc=1; fi
   printf 'env:\n  ? CANON_REF\n  : %s\n' "$eb" > "$d/explicit.yml"
   if [ "$(env_pin_rows "$d/explicit.yml" "$t" | tr '\t' '|')" = "ENV-PIN-UNJUDGED|(explicit key) L2 YAML explicit mapping keys (? key) are not parsed; env pins in this file may be missed" ]; then echo "  PASS envpin-explicit-key"
   else echo "  FAIL envpin-explicit-key -> an explicit key was silently skipped" >&2; rc=1; fi
+  # The value of an explicit key can be a block scalar: its body is text, never keys.
+  printf 'jobs:\n  ? run\n  : |\n    env:\n      CANON_REF: %s\n' "$eb" > "$d/explicit2.yml"
+  if [ "$(env_pin_rows "$d/explicit2.yml" "$t" | tr '\t' '|')" = "ENV-PIN-UNJUDGED|(explicit key) L2 YAML explicit mapping keys (? key) are not parsed; env pins in this file may be missed" ]; then echo "  PASS envpin-explicit-block"
+  else echo "  FAIL envpin-explicit-block -> the body of an explicit key's block scalar was read as keys" >&2; rc=1; fi
   # A UTF-8 byte-order mark before the first key must not hide it.
   printf '\357\273\277env:\n  STANDARDS_PIN: %s\n' "$t" > "$d/bom.yml"
   if [ "$(env_pin_rows "$d/bom.yml" "$t" | tr '\t' '|')" = "ENV-PIN-FRESH|STANDARDS_PIN L2 ${t:0:8}" ]; then echo "  PASS envpin-bom"
