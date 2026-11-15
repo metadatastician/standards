@@ -466,6 +466,17 @@ deed_overcap() {
   ' "$1"
 }
 
+#
+# Known limits (this is a line scanner, not a YAML parser; the owner has been asked whether to
+# replace it with a real parse). It is fail-loud for what it recognises (an UNJUDGED row rather
+# than silence) but, for these exotic shapes, a later real assignment can still go unreported
+# or a false row can appear: a terminal `&anchor` on `env:` with its mapping on the next line;
+# a plain scalar that begins on the line after its key and continues with a flow indicator; an
+# explicit `? key` inside `strategy.matrix`; a standalone block-scalar skip inside a nested
+# explicit key; an anchored quoted scalar in a flow collection (`[&a "[", b]`); and a `#` that
+# YAML itself would reject as a comment (no white space before it) after `]`, `}` or a quote.
+# Refresh comparison (ENV-PIN-REFRESH-MOVED, diagnostic only) also ignores alias values, folded
+# continuation text, blank lines inside block scalars and bare-dash sequence items.
 # env_pin_rows <file> <target_sha> — one `STATUS<TAB>DETAIL` line per literal
 # `STANDARDS_PIN:` / `CANON_REF:` assignment (a workflow env: entry), so a pin held
 # in an environment variable is COUNTED beside the `uses:` pins. READ-ONLY by
