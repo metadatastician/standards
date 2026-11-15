@@ -421,6 +421,44 @@ optional. The rules it adds to the grammar:
 The fixtures are one case per directory, `fixtures/meta/{valid,invalid}/<case>/META.deed`,
 with an optional `<repo>_chora.deed` and `STRICT` marker, as for `--state`.
 
+== `deed_lint.js --agentic` — AGENTIC.deed (DRAFT)
+
+Checks `AGENTIC.deed` (head `descriptile-deed`) against
+`spec/abnf/clauses/agentic.abnf` (A7 7.2 and 14.2; owner rulings J19 of
+2026-11-13 and J33 of 2026-11-14). The chora's `(agentic …)` clause moves here
+whole (J33). Every member is optional. The rules it adds to the grammar:
+
+* the descriptile header, as for the other descriptiles (J20, J28, J4, YD06);
+* `:version`, `:last-updated` (a real date), `:tools` (tool classes as
+  symbols) and `:project-specific`, each at most once;
+* `(patterns …)` (`:code-review`, `:refactoring`, `:testing`,
+  `:documentation`), `(permissions …)` and `(integrity …)` (booleans, carried
+  verbatim, `:allow-silent-skip #f` included), `(methodology …)`
+  (`:instructions-dir`, a repo-relative path, or `:instructions-clause`, not
+  both; `:default-mode` a symbol) and `(hooks …)`, each at most once and
+  never empty;
+* no model pin and no language allow or ban list (YD04, YL3), no `(agentic …)`
+  and no `(rule …)` (YF02);
+* the J19 journal, `(settings (affirmation :may-change (…) :report-to (…))
+  (relaxation …) …)`: each entry has all seven members; `:seq` runs 1, 2, 3 …
+  with no gap and no duplicate, or the journal is refused whole; `:value`
+  matches its `:setting`; an entry whose `:changed-by` is not in
+  `:may-change`, or whose `:reported-to` is not in `:report-to`, as they stood
+  at the last accepted state, is refused. An authorised, reported entry is
+  recorded and warned, but not accepted, because no channel receipt can be
+  verified yet: affirmation stays required everywhere (J4). The base-version
+  check that the `(affirmation …)` clause was never edited is outside this
+  profile;
+* with `--root DIR`, `:of-chora` must equal the chora's `:repo-uuid` (YD08). A
+  `(agentic …)` still in the chora is warned for one release, and `--strict`
+  refuses it (J33, YF05).
+
+    bun deed_lint.js --agentic AGENTIC.deed [--root REPO] [--strict]
+    bun deed_lint.js --agentic-fixtures fixtures/agentic/
+
+The fixtures are one case per directory, `fixtures/agentic/{valid,invalid}/<case>/AGENTIC.deed`,
+with an optional `<repo>_chora.deed` and `STRICT` marker, as for `--state`.
+
 == `deed_lint.js --contractile-registry` — the `contractile` rule registry (A7 J13)
 
 Generates the A5 registry `contractile_rules_praxis.deed` from a repo's six
