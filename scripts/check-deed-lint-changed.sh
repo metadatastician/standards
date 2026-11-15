@@ -60,11 +60,11 @@ fi
 
 failed=0
 for path in "${touched[@]}"; do
-  if out="$(cd "$ROOT" && bun "$LINT" "$path" 2>&1)"; then
+  if out="$(cd "$ROOT" && bun "$LINT" "./$path" 2>&1)"; then
     echo "ok   $path"
   else
     failed=$((failed + 1))
-    reason="$(printf '%s\n' "$out" | grep -m1 '^FAIL' | sed "s|^FAIL ${path}: ||")"
+    reason="$(printf '%s\n' "$out" | grep -m1 '^FAIL' | sed "s|^FAIL \./${path}: ||")"
     echo "::error file=${path}::not a deed: ${reason:-deed_lint failed}. A .deed must pass standards 1-formats/deed/tools/deed_lint.js; legacy A2ML content is translated by kyX under a mapping spec, never renamed."
   fi
 done

@@ -66,10 +66,13 @@ base delete; g rm -q .machine_readable/descriptiles/STATE.deed; change
 assert "deleting a failing deed passes" 0 "deed-lint-changed: OK" run
 base fixture; mkdir -p "$d/tools/fixtures/heads/invalid"; printf '%s' "$TOML" > "$d/tools/fixtures/heads/invalid/bad_chora.deed"; change
 assert "a negative fixture under fixtures/…/invalid/ is not judged" 0 "no .deed touched" run
+base hyphen; printf '%s' "$GOOD" > "$d/-y_chora.deed"; sed -i 's/"x"/"-y"/' "$d/-y_chora.deed"; change
+assert "a good deed whose name starts with a hyphen passes" 0 "1 touched" run
 
 echo "=== failures ==="
 base addtoml; printf '%s' "$TOML" > "$d/.machine_readable/descriptiles/AGENTIC.deed"; change
 assert "adding TOML under a .deed name fails, with the file named" 1 "file=.machine_readable/descriptiles/AGENTIC.deed::not a deed" run
+assert "the failure names deed_lint's reason, not the fallback" 1 "::not a deed: line" run
 base disguise; g mv .machine_readable/descriptiles/META.a2ml .machine_readable/descriptiles/META.deed; change
 assert "renaming A2ML to .deed fails (the disguise)" 1 "file=.machine_readable/descriptiles/META.deed::" run
 base editbad; printf 'more = "x"\n' >> "$d/.machine_readable/descriptiles/STATE.deed"; change
