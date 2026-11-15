@@ -1,0 +1,585 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+= Mapping spec — `rsr-criteria-v2.a2ml` → `praxis-deed` (`:profile rsr-criteria`)
+Campaign: standards#837 · Frame: link:README.adoc[mappings/README] ·
+Clause grammar: link:../spec/abnf/clauses/rsr-criteria.abnf[`clauses/rsr-criteria.abnf`] (DRAFT v0.1.0) ·
+Status: **PROPOSAL pending owner review.** Nothing is translated by this spec yet.
+
+This spec is the authority under which kyX's A2ML front end (D313; ULTRAPLAN
+P2.5) translates the RSR v2 criteria catalogue, the last canon artefact still
+held in A2ML. It closes the canon-lockstep row of
+`docs/estate-reconciliation/A7-contractiles-descriptiles-anchor.adoc` §10:
+"A criteria praxis deed under a mapping spec written by kyX's front end
+(D313). Not hand-converted." It authorises no hand conversion. The worked
+translation in §6 is an abridged illustration, as in the other specs here.
+
+The translator fails closed (owner ruling 2026-11-14): a table, key or value
+shape that §3 does not list is refused with its line number. When the source
+grows a field, this table is extended first. A field is never dropped with a
+ledger entry.
+
+== 1. Source surface
+
+* **Canonical instance:** `0-canon/rsr/rsr-criteria-v2.a2ml` in
+  `metadatastician/standards`. Measured at `origin/main` `2533b2d`: 264 lines,
+  27,263 B, sha256 `6a5aa8857bd0d0d58ef48827938ca17c251b6b854dacf59d306388d61694d82a`
+  (the value `canon.lock` pins), git blob `6fe48c6667647f9b3c14bcad01c1720941e575a3`,
+  last changed by `30be996` (#1536). `[meta] version = "2.1.0-draft"`.
+* **Dialect:** the A2ML record dialect, which is TOML-shaped: six tables, one
+  array of tables (`[[category]]`, 11 elements), one array of strings
+  (`[oracle] retired`), and an array of inline tables per category
+  (`criteria`, 78 in all). Comments are `#`, at line start or after a value.
+* **One instance estate-wide.** There is no per-repo fan-out and no mint
+  template. The file is listed in the shrink-only ledger
+  `.machine_readable/a2ml-legacy-allow.txt` (line 30, group "Waiting for kyX").
+* **🪤 Stale second copy (NOT a mapping input):** hypatia carries
+  `test/fixtures/a2ml/rsr-criteria-v2.a2ml` at `2.0.0-draft` (`d03f87d8`), and
+  `lib/mix/tasks/hypatia.rsr_score.ex` falls back to it
+  (`docs/reorg/2026-10-14-tidy/wiring-audit.adoc`, reported, not re-measured
+  here). It is a consumer defect (§7), not a second surface. Translating it
+  would mint a second catalogue that disagrees with the canon.
+
+=== 1.1 Readers
+
+Found with `grep -rn 'rsr-criteria'` over `origin/main` of standards, and over
+the local checkouts of rsr-template-repo, kyx and kyq. hypatia was not checked
+out; its rows are reported from the documents named.
+
+[cols="3,2,3"]
+|===
+| Reader | Reads | Kind
+
+| `scripts/check-canon-lockstep.sh` (Gate A), run by `.github/workflows/canon-spine-lockstep.yml` (blocking)
+| the file's bytes, through `canon.lock` `[canon.artifacts].criteria` `path` and `sha256` (assertions 1 and 2)
+| hash only, never content. Path from canon.lock; no path literal in code (comments at lines 138 and 360 name it)
+| `.github/workflows/canon-spine-lockstep.yml`
+| the `push: paths:` filter, line 30, names the file. The `pull_request` filter is `0-canon/rsr/**`, which already covers the deed
+| path trigger
+| `canon.lock`
+| the `criteria` slot (path, sha256), and header prose quoting `[versioning]` (lines 13, 21, 59, 98, 282)
+| pin
+| Hypatia `RsrConformance`, `mix hypatia.rsr_score --ssot FILE` (hyperpolymath/hypatia) [reported]
+| the content: tiers, scoring rules, every criterion's id, tier, gate, detect and weight. The only content reader
+| **parser**; the oracle (RSR-SPEC-v2 §6)
+| rsr-template-repo `.github/workflows/dogfood-gate.yml` line 621 (copies in kyx and kyq)
+| passes `--ssot ../_standards/0-canon/rsr/rsr-criteria-v2.a2ml` to the oracle
+| path literal
+| the spine's and every minted repo's `(canon … :criteria-sha256 …)` clause (rsr-template-repo_chora.deed line 38; kyx_chora.deed lines 38 and 1148), checked by Gate A assertion 3 and `canon-pin-check.sh`
+| the sha256
+| pin, two-phase (`spine-adopts-then-canon-releases`)
+| rsr-template-repo `tests/workflows/canon_pin_check_test.sh` line 32
+| a canon.lock fixture naming the path
+| test fixture
+| `.machine_readable/template-capability-gates.toml` line 145 (`[canon] paths`)
+| the path, as a canon-carried artefact. This file is itself the canon's `gates` slot
+| path literal in a hash-pinned artefact
+| `0-canon/rsr/SCAFFOLD-LIFECYCLE.adoc` lines 36 and 220 (the canon's `lifecycle` slot); `0-canon/rsr/RSR-SPEC-v2.adoc` lines 17, 75, 161, 196, 272, 278
+| prose naming the file and its dialect
+| textual
+| `deed_lint.js` `--rsr-scorecard` (`:spec` oneOf `rsr-criteria-v2`), `clauses/rsr-scorecard.abnf` line 65, and the scorecard fixtures
+| the catalogue's *name*, not its file
+| unaffected while `:canonical-name` stays `rsr-criteria-v2` (§2)
+| `standards_chora.deed` line 148; `docs/AUDIT.adoc`; `docs/AFFIRMATION.adoc`; comments in `scripts/check-package-policy.sh:120` and `scripts/tests/governance-gates-505-test.sh:154`; kyx `docs/status/ROADMAP.adoc` line 21
+| mentions
+| textual
+| dated records: `docs/affirmations/*`, `docs/reorg/2026-10-14-tidy/*`, `9-archive/MOVED.adoc`, `3-practice/canon-spine/PROPOSAL.adoc`, the A6, A7 and ULTRAPLAN plans
+| mentions
+| historical; correct as written, not migrated
+|===
+
+No other script or workflow in standards reads the file. In particular,
+nothing in standards parses its content today, so the canon's own gates are
+indifferent to the format, and the whole content contract is the oracle's.
+
+== 2. Target deed form
+
+[source]
+----
+0-canon/rsr/rsr-criteria-v2_praxis.deed
+----
+
+`praxis-deed` head, by the `<stem>_praxis.deed` dispatch row. The stem is
+**`rsr-criteria-v2`**, and the head's `:canonical-name` is the same string.
+
+* *Why the stem keeps `-v2`.* RSR-SPEC-v2 §8 freezes a major by copying its
+  catalogue to `archive/rsr-criteria-vN…` and pinning its hash, so the major
+  is part of the artefact's identity, and two majors must coexist under
+  `0-canon/rsr/`. The scorecard profile already names the catalogue
+  `rsr-criteria-v2` (`:spec rsr-criteria-v2`, ratified 2026-11-14), so the
+  scorecard's `:spec`, the catalogue's `:canonical-name` and its file stem
+  are one string. `rsr-criteria-v2.deed` would dispatch to nothing and be
+  refused at line 1 (§5, M1).
+* *Why `praxis-deed` and not `repo-deed`.* The catalogue is canon law: what a
+  conforming repository must carry and how the oracle scores it. It is not the
+  identity of any repository (a chora deed), not content organisation
+  (`CLADE.deed`), and not registry. The estate's other two machine-read
+  verification records, the proof receipt and the RSR scorecard, are already
+  praxis-deed profiles selected by `:profile`. The catalogue is the input the
+  scorecard is scored against, so it takes the same form beside it, with
+  `:profile rsr-criteria`.
+* *Why there is no `:priority`.* Nothing in this source is a first-match
+  ladder. Scoring is a weighted sum over the applicable set, a tier is the
+  highest whose inclusive threshold is met, and categories and criteria carry
+  their own ids. Order is not semantic here, and none is faked.
+
+=== Head
+
+[source]
+----
+(praxis-deed
+  :schema-version  "1.0.0"                  ; REQUIRED, exactly once
+  :canonical-name  "rsr-criteria-v2"        ; REQUIRED; = file stem
+  :profile         rsr-criteria             ; selects clauses/rsr-criteria.abnf
+  :beholding-chora #uuid"0889b37b-defb-831f-973c-e119500db00e"
+  (rsr-criteria …))                         ; the one clause
+----
+
+`:beholding-chora` is copied verbatim from `standards_chora.deed` (the estate
+chora id the launcher praxis deed also carries). kyX reads it from that deed
+and never mints or re-derives it (U1). A `#u5` literal is refused (S2).
+
+=== Four version numbers meet in this file
+
+|===
+| number | what it versions | value
+
+| `:schema-version` | the DEED format | `"1.0.0"`, set by the translator
+| `:spec-version` (source `[meta] version`) | the catalogue's criteria set | `"2.1.0-draft"`, carried verbatim (Q5)
+| `:supersedes` | the prior catalogue major | `"1.0.0"`, verbatim
+| `canon.lock` `[canon].version` | the canon release | `2.1.5` today; bumped by the change that lands the deed (§7)
+|===
+
+== 3. Field table
+
+`→` left: the A2ML surface. Right: the deed path, its value type and the
+transform. "verbatim" means the string's bytes are carried unchanged; the
+source contains no `"` or `\` inside a string, so no escape is introduced.
+All paths below are inside the one `(rsr-criteria …)` clause unless they are
+head fields.
+
+[cols="2,3,4"]
+|===
+| a2ml surface | deed path | transform / type
+
+3+| *Head (new; no source field)*
+
+| — | `:schema-version` | STRING `"1.0.0"`
+| — | `:canonical-name` | STRING `"rsr-criteria-v"` + MAJOR of `[meta] version`: `"rsr-criteria-v2"`. Derived, and checked against the file stem
+| — | `:profile` | SYMBOL `rsr-criteria`
+| — | `:beholding-chora` | `#uuid"…"` copied from `standards_chora.deed :beholding-chora`
+
+3+| *`[meta]` → fields of `(rsr-criteria …)`*
+
+| `spec` | `:spec-family` | enum → SYMBOL `rhodium-standard-repositories` (closed set of one). ⚠ **renamed**: the scorecard's `:spec` names the catalogue (`rsr-criteria-v2`), so carrying `spec` under that keyword would give it a second meaning. `spec-family` is canon.lock's own name for this value
+| `version` | `:spec-version` | STRING verbatim, semver with optional pre-release (`rc-semver`). The scorecard copies this string into its own `:spec-version`
+| `status` | `:status` | enum → SYMBOL, closed set `draft stable`
+| `supersedes` | `:supersedes` | STRING verbatim (`rc-semver`)
+| `date` | `:date` | STRING, `date-string` (common.abnf): a real calendar date
+| `authority` | `:authority` | STRING verbatim (a path relative to the file's directory)
+| `normative-oracle` | `:normative-oracle` | STRING verbatim. Not a symbol: `:` cannot occur in a DEED symbol
+| `dialect` | — | **consumed, not emitted.** The translator requires the value `"a2ml-record"` and refuses any other (a different dialect is a different source surface). The deed's own format is stated by its head and `:schema-version`; a deed claiming to dogfood the A2ML record dialect would be false (Q8)
+
+3+| *`[versioning]` → `(versioning …)`*
+
+| `model` | `(versioning :model semver-with-errata)` | enum → SYMBOL, closed set of one
+| `rule-major`, `rule-minor`, `rule-patch` | `(versioning :rule-major "…" :rule-minor "…" :rule-patch "…")` | STRINGs verbatim (normative prose)
+| `freeze-mechanism` | `(versioning :freeze-mechanism "…")` | STRING verbatim. ⚠ names `REGISTRY.a2ml` (§9, Q4)
+| `errata` | `(versioning :errata "…")` | STRING verbatim
+
+3+| *`[tiers]` → `(tiers …)`*
+
+| `bronze`, `silver`, `gold`, `rhodium` | `(tiers :bronze 75 :silver 90 :gold 100 :rhodium 100)` | INTEGER, narrowed to 0..100 (`rc-percent`); keyed by tier, so no order is implied. SEMANTIC: non-decreasing
+| `scale` | `(tiers :scale "…")` | STRING verbatim
+
+3+| *`[scoring]` → `(scoring …)`*
+
+| `applicable-set`, `denominator`, `numerator`, `partial`, `na-honesty`, `report` | `(scoring :applicable-set "…" … :report "…")` | six STRINGs verbatim. ⚠ `applicable-set` and `report` name `.a2ml` files (§9, Q4)
+
+3+| *`[oracle]` → `(oracle …)`*
+
+| `normative`, `freeze-guard`, `dogfood-gate` | `(oracle :normative "…" :freeze-guard "…" :dogfood-gate "…")` | STRINGs verbatim. ⚠ `freeze-guard` names `rsr-criteria-*.a2ml`
+| `retired` (array of 5 strings) | `(oracle :retired ("…" …))` | non-empty list of STRINGs (`str-list1`), verbatim, one per element. A set: deed list order is not semantic, and no `:priority` is added
+
+3+| *`[[category]]` (11 elements) → one `(category …)` clause each*
+
+| `id` | `(category :id 1 …)` | INTEGER (positive, no leading zero). SEMANTIC: unique, 1..N with no gap
+| `key` | `(category :key foundational-infrastructure …)` | SYMBOL. It is an identifier, never a path (canon.lock 2.0.2 note), and stays byte-identical
+| `name` | `(category :name "Foundational Infrastructure" …)` | STRING verbatim
+| `weight` | `(category :weight 12 …)` | INTEGER (non-negative)
+| `criteria` (array of inline tables) | the category's `(criterion …)` clauses, nested in it | one clause per element. The key name `criteria` is not carried; nesting says it
+
+3+| *criterion inline table (78 in all) → `(criterion …)`*
+
+| `id` | `(criterion :id "1.1.1" …)` | STRING of shape `crit-id` (rsr-scorecard.abnf), exactly three segments. Not a symbol: a DEED symbol cannot start with a digit. SEMANTIC: unique; first segment = the category's `:id`
+| `name` | `(criterion :name "scm-github" …)` | STRING verbatim, as the scorecard writes it (Q7). SEMANTIC: unique
+| `desc` | `(criterion :desc "…" …)` | STRING verbatim
+| `tier` | `(criterion :tier bronze …)` | enum → SYMBOL, `crit-tier` (bronze silver gold rhodium)
+| `gate` | `(criterion :gate "universal" …)` | STRING verbatim, as the scorecard writes it (Q7). SEMANTIC: `"universal"` or a capability of the gate table
+| `detect` | `(criterion :detect "structural_drift/SD001" …)` | STRING verbatim, of shape `"manual"` or `module/rule` (`rc-detect`)
+| `template_ref` | `(criterion :template-ref ".github/" …)` | STRING verbatim, including `"-"` (none) and the two comma lists (Q9). ⚠ **keyword renamed** `template_ref` → `:template-ref` (DEED keywords prefer hyphens; the value is unchanged)
+
+3+| *`[weights-check]` → `(weights-check …)`*
+
+| `sum-declared` | `(weights-check :sum-declared 88)` | INTEGER. SEMANTIC: equals the sum of the category `:weight`s (88 today)
+| `note` | `(weights-check :note "…")` | STRING verbatim
+
+3+| *Comments (`#`) — not fields, but part of the surface*
+
+| line 1–2 SPDX lines | the deed header, `;; SPDX-…` | carried verbatim and in order, `#` → `;;`. kyX never chooses or drops a licence
+| every other comment | `;` comment or nothing | by class, §4 and Q2. A comment never becomes a field under this table
+|===
+
+=== 3.1 Census: the table is total
+
+[cols="3,1,1"]
+|===
+| source unit | slots tabled | instances
+
+| `[meta]` keys | 8 | 8
+| `[versioning]` keys | 6 | 6
+| `[tiers]` keys | 5 | 5
+| `[scoring]` keys | 6 | 6
+| `[oracle]` keys (one an array of 5 strings) | 4 | 4
+| `[[category]]` keys × 11 | 5 | 55
+| criterion inline-table keys × 78 | 7 | 546
+| `[weights-check]` keys | 2 | 2
+| **total** | **43** | **632**
+|===
+
+Seven named tables (six plain, one array of tables) plus the inline criterion
+table shape: all eight are tabled, and so are all 43 key slots. Measured with
+`grep` over the source and cross-checked: every one of the 78 criterion lines
+carries all seven keys exactly once, the 78 ids and 78 names are each unique,
+and every `detect` is `"manual"` (19) or `module/rule` (59). Value census, for
+the acceptance greps: tiers bronze 18, silver 26, gold 30, rhodium 5; gate
+`universal` 48; `template_ref = "-"` 22; category weights 12 12 14 14 12 8 6 4
+3 2 1, sum 88.
+
+== 4. Drop doctrine
+
+* **Nothing that is a field is dropped, except `dialect`** (§3, Q8), and its
+  value is checked before it is consumed. No string is reworded, even where
+  it is now wrong (§9): translation carries the law as it stands, and
+  changing the law is a canon change of its own (Q4).
+* **Two keywords are renamed, no values are.** `spec` → `:spec-family` and
+  `template_ref` → `:template-ref`. A consumer grepping the deed for
+  `template_ref` will not find it, by design. The criterion's other six
+  keywords keep their source names.
+* **Comments are split by class** (proposal; the owner rules in Q2):
+** *Kept as `;` comments*, because they state rules no field encodes:
+   line 51 "Thresholds are inclusive lower bounds"; line 55 "Gold + the
+   rhodium-only exemplary criteria (those with tier = "rhodium")"; line 22
+   "MUST NOT be cited as ratified until §Ratification passes"; lines 261–262
+   "weights are the per-category maxima … informative, not a gate".
+** *Dropped as instructional prose* (it lives in RSR-SPEC-v2, which is the
+   prose authority): the header narrative, lines 3–17 (but see Q3 for the
+   SSOT claim it makes); the section explainers at lines 41, 50, 59, 68–69;
+   the field glossary at lines 81–91 (the clause grammar is now that
+   glossary); the inline `# draft | stable` vocabulary (the grammar's
+   `rc-status` states it); the inline remarks at lines 26–27.
+** *Dropped as duplicated record*: the 2.1.0-draft change note at lines
+   28–38, which canon.lock's 2026-09-19 MINOR 2.0.4 → 2.1.0 entry also
+   records with the same owner ruling (Q6).
+** *Dropped as wrong arithmetic in prose*: line 82–83 "Weights sum to 100"
+   (they sum to 88, as `[weights-check]` itself says) and line 260's sum
+   line (`:sum-declared` carries it and is checked). Recorded in §9.
+* **Nothing is dropped for being empty.** The source has no empty tables.
+
+== 5. Provenance & validation
+
+* **P-1 (source must parse first).** kyX reads the source with its record-dialect
+  (TOML-shaped) reader, never with `grep`: the criteria are inline tables
+  whose `desc` strings contain commas, so a line scrape splits them wrongly
+  (this spec's own first census regex did exactly that).
+* **P-2 (table-closed).** Any table, key, or value shape not in §3 is refused
+  with its line number, and nothing is written. Value shapes are part of the
+  table: a `tier` outside `crit-tier`, a `status` outside `draft stable`, a
+  non-integer `weight`, or a `dialect` other than `"a2ml-record"` are refused.
+* **P-3 (round trip).** For each of the 78 criteria, each of the seven values
+  in the deed equals the source value byte for byte (keywords aside), and the
+  counts in §3.1 hold. The translator asserts this before writing.
+* **P-4 (output must parse as DEED and as the profile).**
+  `bun 1-formats/deed/tools/deed_lint.js 0-canon/rsr/rsr-criteria-v2_praxis.deed`
+  ⇒ `OK`, and the clause parses as `rsr-criteria-clause` of
+  `clauses/rsr-criteria.abnf` under the apg-js differential
+  (`tools/deed-abnf-differential`, which would add the module to its compile
+  list). The SEMANTIC notes of the module need a validator flag,
+  `deed_lint.js --rsr-criteria [--root DIR]`, with valid and invalid
+  fixtures, before the deed is relied on. Not written by this spec.
+* **P-5 (mutants must die).** The lane carries at least these, each expected
+  to fail: M1 the file named `rsr-criteria-v2.deed` (dispatch, line 1); M2 a
+  `key = value` line; M3 a tab separator; M4 bare `true`; M5 no
+  `:schema-version`; M6 `:status "draft"` (a string where the profile wants a
+  symbol); M7 a duplicate criterion `:id`; M8 `:sum-declared` not equal to the
+  weights' sum; M9 a criterion missing `:detect`. M1, M2 and M6 were run on
+  the §6 example (results there); M7 to M9 need `--rsr-criteria`.
+* **P-6 (licence lines).** The deed's header is the source's two SPDX lines,
+  verbatim (`MPL-2.0` and the FileCopyrightText line). The translation
+  chooses no licence and changes none.
+* **P-7 (ids).** `:beholding-chora` is read from `standards_chora.deed`; the
+  translator mints nothing.
+* **P-8 (line cap).** No deed line exceeds 998 octets. The longest source
+  value (criterion 5.2.6's `desc`, about 230 B) fits; the translator writes
+  one field per line where a criterion line would pass the cap.
+* **P-9 (the source is removed and stays recoverable).** In the change that
+  lands the deed, `0-canon/rsr/rsr-criteria-v2.a2ml` is deleted, its ledger
+  row is removed, and the deed takes the `criteria` slot in `canon.lock`
+  (§7). Leaving both would be two sources of one law. The input stays
+  addressable as blob `6fe48c66…` (27,263 B).
+
+== 6. Worked translation (abridged: 2 of 11 categories, 4 of 78 criteria)
+
+The full text of this example is in the draft folder as
+`rsr-criteria-v2_praxis.deed`. It was hand-written to test this spec and the
+grammar, and is not the translation.
+
+[source]
+----
+;; SPDX-License-Identifier: MPL-2.0
+;; SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+(praxis-deed
+  :schema-version "1.0.0"
+  :canonical-name "rsr-criteria-v2"
+  :profile rsr-criteria
+  :beholding-chora #uuid"0889b37b-defb-831f-973c-e119500db00e"
+  (rsr-criteria
+    :spec-family rhodium-standard-repositories
+    :spec-version "2.1.0-draft"
+    :status draft
+    :supersedes "1.0.0"
+    :date "2026-09-19"
+    :authority "RSR-SPEC-v2.adoc"
+    :normative-oracle "hypatia:rsr-conformance"
+    (versioning
+      :model semver-with-errata
+      :rule-major "A MAJOR bump is an era change: …"     ; verbatim in the file
+      :rule-minor "A MINOR bump MAY ADD criteria …"
+      :rule-patch "A PATCH bump is editorial …"
+      :freeze-mechanism "A released major is frozen by …"
+      :errata "Corrections that do not change criteria semantics …")
+    (tiers
+      ; Thresholds are inclusive lower bounds.
+      :bronze 75 :silver 90 :gold 100
+      ; Gold + the rhodium-only exemplary criteria (those with :tier rhodium).
+      :rhodium 100
+      :scale "X F E D C B A maps onto the readiness-grade scale; …")
+    (scoring :applicable-set "…" :denominator "…" :numerator "…"
+             :partial "…" :na-honesty "…" :report "…")
+    (oracle
+      :normative "hypatia rule family `rsr-conformance` …"
+      :freeze-guard "hypatia rule `rsr-criteria-freeze`: …"
+      :retired ("rsr-audit.sh (36K bash; no tests, no CI) -> non-normative reference only"
+                "…four more…")
+      :dogfood-gate "CI runs the oracle against rsr-template-repo …")
+    (category
+      :id 1 :key foundational-infrastructure :name "Foundational Infrastructure" :weight 12
+      (criterion :id "1.1.2" :name "justfile" :desc "Justfile task runner present with real recipes"
+                 :tier bronze :gate "universal" :detect "build_system_rules/justfile" :template-ref "Justfile")
+      (criterion :id "1.2.1" :name "guix-primary" :desc "Guix manifest (guix.scm) as the reproducible build (Guix only)"
+                 :tier silver :gate "reproducible-build" :detect "build_system_rules/guix_primary" :template-ref "build/"))
+    (category
+      :id 2 :key documentation-standards :name "Documentation Standards" :weight 12
+      (criterion :id "2.1.4" :name "coc-md" :desc "CODE_OF_CONDUCT.md"
+                 :tier silver :gate "universal" :detect "root_hygiene/coc" :template-ref ".github/CODE_OF_CONDUCT.md")
+      (criterion :id "2.2.2" :name "wellknown-ext" :desc ".well-known/{consent-required.txt,provenance.json}"
+                 :tier gold :gate "web-ui" :detect "manual" :template-ref "-"))
+    (weights-check
+      :sum-declared 88
+      :note "The remaining headroom to 100 is the rhodium-only exemplary criteria …")))
+----
+
+Results on the full example file (draft folder), 2026-11-14, against
+`origin/main` `2533b2d`:
+
+* `bun 1-formats/deed/tools/deed_lint.js rsr-criteria-v2_praxis.deed` ⇒
+  `OK`. The same bytes as `m1.deed` ⇒ `FAIL … line 1: filename 'm1.deed'
+  matches no deed dispatch pattern` (M1). With `:status = draft` ⇒ `FAIL
+  line 17 … '=' as a field separator is not a deed` (M2).
+* apg-js 4.4.0 (the differential's pinned engine), compiling `deed.abnf`,
+  `common.abnf`, `rsr-scorecard.abnf` and the draft `rsr-criteria.abnf`: the
+  whole file parses as `deed`, and its clause as `rsr-criteria-clause`. The
+  clause rule refuses `:status "draft"` (M6), `:tier platinum`,
+  `:detect "no such"`, `:bronze 075`, `:bronze 101`, `:weight -12`,
+  `:spec-version "2.1"`, `:model semver` and an empty `:retired ()`, all of
+  which `deed.abnf` alone admits. It admits `:id "1.1"`, which the borrowed
+  `crit-id` allows; the three-segment rule is SEMANTIC, for the validator.
+* The abridged file would fail the proposed `--rsr-criteria` check, as it
+  should: its two categories weigh 24, not the declared 88.
+
+== 7. `canon.lock` and consumer migration (recorded here; not executed)
+
+Nothing below is changed by this spec. The order is the canon's own,
+`spine-adopts-then-canon-releases`.
+
+. **The oracle reads the deed first** (hypatia, its own PR, before standards
+  removes the A2ML). `RsrConformance` / `mix hypatia.rsr_score --ssot` reads
+  `rsr-criteria-v2_praxis.deed` (through `deed_lint.js --ast-json`, or a
+  parser tested against the same fixtures), and keeps the A2ML only as a
+  fallback until its callers move: the new-input-first exception of the A7
+  M5–M7 plan. The stale `test/fixtures/a2ml/` copy and the `rsr_score.ex`
+  fallback to it are retired in the same PR.
+. **The spine adopts the new hash.** The deed's bytes differ from the A2ML's,
+  so the `criteria` sha256 changes from `6a5aa885…` to the deed's. kyX's
+  output must be deterministic so that this hash is reproducible from the
+  source blob and the pinned kyX commit. rsr-template-repo's `(canon …)` takes
+  the new `:criteria-sha256` and `:version` (with `:proposed-by` naming the
+  standards PR while it is open), then every minted repo's pin follows
+  (kyx_chora.deed carries two). `tests/workflows/canon_pin_check_test.sh`
+  updates its fixture path.
+. **The canon releases**, in one standards commit: the deed lands; the A2ML is
+  deleted; its ledger row goes; `canon.lock` `[canon.artifacts].criteria`
+  takes the deed's `path` and `sha256`; `[canon].version` is bumped (PATCH
+  2.1.5 → 2.1.6 proposed: no criteria-set change, the rule-patch category;
+  Q5); the workflow's `push: paths:` line names the deed. If the same commit
+  repoints `template-capability-gates.toml` line 145 or
+  `SCAFFOLD-LIFECYCLE.adoc`, the `gates` and `lifecycle` hashes change too,
+  and the spine adopts all three; doing them in a later PATCH keeps this
+  release to one slot. Either is legal; the second is smaller.
+. **The dogfood gates repoint `--ssot`** (rsr-template-repo, then the copies
+  in minted repos) to `0-canon/rsr/rsr-criteria-v2_praxis.deed`.
+. **Prose follows** (owner-authored where it is normative): RSR-SPEC-v2 §4,
+  §6, §8, Appendix B and the footer name the deed and its grammar instead of
+  "the A2ML record dialect" (Q3); `canon.lock`'s WHO READS IT list and the
+  comments in the scripts above are corrected. RSR-SPEC-v2 is the
+  `rsr-spec` split-candidate slot, `PENDING-FIRST-SYNC`, so it forces no bump.
+
+== 8. Acceptance greps (this family is preserved iff, post-translation)
+
+[source,bash]
+----
+D=0-canon/rsr/rsr-criteria-v2_praxis.deed
+SRC=6fe48c6667647f9b3c14bcad01c1720941e575a3        # the source blob
+body() { grep -vE '^[[:space:]]*;' "$D"; }           # never count comment lines
+
+# 1. The deed validates, as DEED and (once it exists) as the profile.
+bun 1-formats/deed/tools/deed_lint.js "$D"                       # ⇒ OK
+bun 1-formats/deed/tools/deed_lint.js --rsr-criteria --root . "$D"  # ⇒ OK (flag proposed)
+
+# 2. The A2ML is gone, and so is its ledger row.
+test ! -e 0-canon/rsr/rsr-criteria-v2.a2ml
+! grep -qx '0-canon/rsr/rsr-criteria-v2.a2ml' .machine_readable/a2ml-legacy-allow.txt
+
+# 3. canon.lock pins the deed, and the pin is true.
+grep -q 'path = "0-canon/rsr/rsr-criteria-v2_praxis.deed"' canon.lock
+grep -q "$(sha256sum "$D" | cut -d' ' -f1)" canon.lock
+
+# 4. Every source criterion id is present, and no other.
+diff <(git show "$SRC" | grep -oE '^  \{ id = "[0-9.]+"' | grep -oE '[0-9.]+' | sort) \
+     <(body | grep -oE '\(criterion :id "[0-9.]+"' | grep -oE '[0-9][0-9.]*' | sort)   # ⇒ empty
+
+# 5. The counts of §3.1 hold.
+body | grep -c '(category'                                   # ⇒ 11
+body | grep -oE '\(criterion ' | wc -l                       # ⇒ 78
+body | grep -oE ':detect "manual"' | wc -l                   # ⇒ 19
+body | grep -oE ':template-ref "-"' | wc -l                  # ⇒ 22
+body | grep -oE ':gate "universal"' | wc -l                  # ⇒ 48
+body | grep -oE ':tier (bronze|silver|gold|rhodium)\b' | sort | uniq -c
+                                                             # ⇒ 18 bronze, 5 rhodium, 26 silver, 30 gold
+                                                             #   (only criteria carry :tier; (tiers) uses :bronze …)
+body | grep -oE ':weight [0-9]+' | awk '{s+=$2} END{print s}'  # ⇒ 88
+body | grep -c ':sum-declared 88'                            # ⇒ 1
+
+# 6. The keyword rename held. `template_ref` survives once, inside the
+#    verbatim :rule-patch string ("template_ref fixes"), and nowhere else.
+body | grep -c ':template-ref '    # ⇒ 78 if one criterion per line; else count with -o
+body | grep -o 'template_ref' | wc -l                        # ⇒ 1
+# A `key = value` line is delegated to the validator (grep 1, mutant M2), not
+# to grep: `=` legitimately occurs inside verbatim strings.
+
+# 7. No live consumer names the dead file (dated records excluded by name).
+grep -rl 'rsr-criteria-v2\.a2ml' --exclude-dir=.git . \
+  | grep -vE 'docs/affirmations/|docs/reorg/|9-archive/|3-practice/canon-spine/PROPOSAL|docs/estate-reconciliation/|ULTRAPLAN|rsr-criteria-to-praxis-deed\.adoc'
+# ⇒ empty, once §7 step 5 is done
+----
+
+⚠ Greps 5 and 6 are aids, not proofs. The validator (grep 1) and the round
+trip (P-3) are the proof; the greps catch a lost family member.
+
+== 9. Departures found in the source (reported, not fixed)
+
+Read while tabling the source. None is fixed by translation, because a
+translation carries the law as it stands and a fact may not be added to an
+A2ML file. Each needs an owner decision and a canon bump of its own (Q4).
+
+* *Criteria and prose that name or require `.a2ml` files* (A2ML is retired):
+  2.3.1 (`0-AI-MANIFEST.a2ml`), 3.1.2–3.1.9 (`desc` and `template_ref` name
+  the six descriptile `.a2ml` files, `ANCHOR.a2ml` and `CLADE.a2ml`), 3.2.1
+  `a2ml-valid` (a criterion that all `.a2ml` files validate), 3.2.2
+  (`rsr-profile.a2ml`); `[scoring] applicable-set` and `report`;
+  `[oracle] freeze-guard`; `[versioning] freeze-mechanism`
+  (`REGISTRY.a2ml`). canon.lock's 2.1.4 note already records 3.1.5–3.1.7.
+* *3.1.9* describes `CLADE` as "identity/lineage (registers into
+  gv-clade-index)". Under the identity ruling of 2026-11-13, CLADE.deed is
+  content organisation and never identity, and the registry is
+  chora-registry.
+* *5.1.6* "No Node/npm/bun runtime deps (use Deno)" contradicts the runtime
+  order Bun > Deno > pnpm > npm (2026-10-14), under which Bun is tier 1.
+* *5.1.5* "use Rust/SPARK" and *5.2.1* "Rust projects designed to admit
+  SPARK/Ada modules" rest on the withdrawn "Rust always means Rust/SPARK"
+  note; Rust is verified with Creusot (Pearlite) and Verus.
+* *The categories comment says "Weights sum to 100"*; they sum to 88, as
+  `[weights-check]` records.
+* *The header cites RSR-SPEC-v2 §7 for the generation rule*; the rule is in
+  §4 (§7 is traceability).
+
+== 10. Open questions for the owner
+
+Each names the option this spec takes as the default arm (the elegant,
+long-term-correct one) and what each option causes.
+
+. **Q1 — File stem.** (a) *Default:* `rsr-criteria-v2_praxis.deed`; the major
+  stays in the name, so §8's per-major archive and the scorecard's
+  `:spec rsr-criteria-v2` keep one string. (b) `rsr-criteria_praxis.deed`,
+  major only in `:spec-version`: shorter, but a second major cannot sit
+  beside the first, and `:spec` stops matching any file.
+. **Q2 — Which comments are carried** (§4 lists them). (a) *Default:* keep the
+  four rule-bearing comments as `;` comments and drop the rest. (b) Drop every
+  comment: a pure record, losing the inclusive-threshold and rhodium rules
+  except in RSR-SPEC-v2 prose. (c) Promote the four to `:note` fields: they
+  become greppable and checked, but `rsr-criteria.abnf` grows four fields the
+  source never had.
+. **Q3 — The SSOT and "generated from" claim** (source header; RSR-SPEC-v2 §4
+  and §7). (a) *Default:* RSR-SPEC-v2 §4 is amended to name the deed as the
+  single source, the deed header carries a one-line `;;` pointer to §4, and
+  every generator reads the deed through one parser (`deed_lint.js
+  --ast-json`). (b) Promote the claim to a field listing the generated
+  artefacts: machine-checkable, but most it would list do not exist today
+  (the checklist is archived; there are no badge files), which is an
+  overclaim. (c) Drop it from the deed and rely on §4 alone.
+. **Q4 — Departures of §9.** (a) *Default:* translate verbatim, then a separate
+  canon change, owned by the owner, corrects them in the deed (most are
+  PATCH wording; removing or re-gating 3.2.1 is a MAJOR or at least a ruling).
+  (b) Correct them during translation: kyX becomes an author of law, and the
+  round-trip check P-3 is lost. (c) Fold the corrections into the same canon
+  release as the format change: one release, but two kinds of change in it.
+. **Q5 — Versions.** `canon.lock`: (a) *Default:* PATCH 2.1.5 → 2.1.6 (no
+  criteria-set change); (b) MINOR, because the oracle's input format changes.
+  The catalogue's `:spec-version`: (a) *Default:* stays `"2.1.0-draft"`, so
+  existing scorecards stay valid; (b) bump to `"2.1.1-draft"`, as the launcher
+  standard did for a consumer-visible change, which invalidates every
+  scorecard's `:spec-version` until rescoring.
+. **Q6 — The 2.1.0-draft change note** (lines 28–38, with the owner ruling of
+  2026-09-19). (a) *Default:* drop; canon.lock's 2.1.0 entry keeps it. (b) Keep
+  as a `;` comment. (c) Add a `(change …)` clause to the profile: the
+  catalogue then carries its own history, and RSR-SPEC Appendix B (which has
+  no 2.1.0 entry) could be generated from it.
+. **Q7 — `:name`, `:gate`, `:detect` as strings.** (a) *Default:* strings,
+  matching the ratified scorecard profile, so a scorecard row is a projection
+  of a catalogue row. (b) Symbols (the frame's enum-as-symbol default): typed,
+  but the catalogue and the scorecard then disagree in type for the same
+  value, and the scorecard profile needs a major bump to follow.
+. **Q8 — `dialect`.** (a) *Default:* checked and consumed, not emitted.
+  (b) Carry as `:translated-from a2ml-record`: provenance in the record, at
+  the cost of a live A2ML name in a deed.
+. **Q9 — `:template-ref` comma lists** (2.1.2, 2.1.10). (a) *Default:* the
+  string verbatim. (b) Split into a list of strings: cleaner for the
+  template-satisfaction check of RSR-SPEC-v2 §7, but a value-type transform,
+  and `"-"` would become `()`.
+
+== 11. What this spec does not claim
+
+* That a translation exists. Only the abridged §6 example was written, by
+  hand, to test the spec and grammar.
+* That the oracle's current behaviour matches the catalogue. hypatia's
+  reader and its stale fixture were not re-measured here.
+* That `clauses/rsr-criteria.abnf` is ratified, or that any validator
+  enforces its SEMANTIC notes.

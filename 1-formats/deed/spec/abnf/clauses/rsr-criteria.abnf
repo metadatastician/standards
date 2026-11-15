@@ -1,0 +1,181 @@
+; SPDX-FileCopyrightText: © 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+; SPDX-License-Identifier: MPL-2.0
+; SPDX-License-Identifier: CC-BY-SA-4.0
+;
+; DEED clause profile: (rsr-criteria …), v0.1.0 (DRAFT, for owner approval)
+; Prose and rationale: 1-formats/deed/mappings/rsr-criteria-to-praxis-deed.adoc
+; (the mapping spec that carries 0-canon/rsr/rsr-criteria-v2.a2ml into a
+; praxis deed; A7 section 10, the canon-lockstep row; ULTRAPLAN P2.5).
+; NOT RATIFIED. No validator flag implements the SEMANTIC notes yet; the
+; proposed flag is deed_lint.js --rsr-criteria (spec section 5).
+;
+; A CLAUSE PROFILE, not a new grammar. Every rule below is also a `field` or
+; `clause` of deed.abnf v2.0.0, so a deed carrying one still passes deed_lint
+; unchanged, and no file name or doc-head is added. Rules it borrows (string,
+; symbol, integer, token-sep, DQUOTE, DIGIT, ALPHA) are deed.abnf's;
+; date-string and str-list1 are common.abnf's; crit-id and crit-tier are
+; rsr-scorecard.abnf's, all unchanged. Borrowing crit-id and crit-tier, rather
+; than restating them, keeps one definition of a criterion's id and tier for
+; the catalogue and for the scorecards scored against it.
+; Requires RFC 7405 (%s"..." case-sensitive string literals).
+;
+; Where it appears: exactly one (rsr-criteria …) clause, at the top level of a
+; praxis-deed whose :profile is the symbol rsr-criteria, at
+; 0-canon/rsr/rsr-criteria-v<MAJOR>_praxis.deed in metadatastician/standards
+; (today rsr-criteria-v2_praxis.deed). The catalogue is canon law, neither
+; identity (a chora deed) nor content organisation (CLADE.deed) nor registry
+; (chora-registry), so it is never a clause of a repo-deed; it is the
+; normative input that (rsr-scorecard …) records are scored against, and it
+; sits beside them as a praxis-deed profile.
+; SEMANTIC (validator-enforced, proposed deed_lint.js --rsr-criteria):
+;   * the praxis-deed's top level carries :schema-version, :canonical-name,
+;     :profile rsr-criteria, at most :beholding-chora besides, and the one
+;     clause; an (rsr-criteria …) anywhere else is refused;
+;   * :canonical-name is "rsr-criteria-v" followed by the MAJOR of
+;     :spec-version (so "rsr-criteria-v2" for "2.1.0-draft"), and the file
+;     stem equals it; the scorecard's :spec symbol (rsr-scorecard.abnf) names
+;     the same string;
+;   * in (rsr-criteria …): :spec-family, :spec-version, :status, :date,
+;     :authority and :normative-oracle exactly once; :supersedes at most once;
+;     (versioning …), (tiers …), (scoring …), (oracle …) and
+;     (weights-check …) exactly once each; at least one (category …);
+;   * :date is a real calendar date (common.abnf's date-string rule);
+;   * in each sub-clause, every field its rule lists exactly once;
+;   * category :id values are unique and run 1, 2, … with no gap;
+;     category :key values are unique;
+;   * criterion :id values are unique across the clause, have exactly three
+;     segments (category.group.item; the borrowed crit-id also admits "1.1",
+;     which the scorecard profile allows and this profile refuses), and the first
+;     segment of each equals the :id of the category that holds it;
+;     criterion :name values are unique across the clause;
+;   * every criterion carries each rc-crit-field exactly once;
+;   * :gate is "universal" or a capability named in the gate table
+;     (.machine_readable/template-capability-gates.toml [capabilities]),
+;     checked when the validator is given the canon root;
+;   * tiers: :bronze <= :silver <= :gold <= :rhodium;
+;   * :sum-declared equals the sum of every category's :weight.
+
+rsr-criteria-clause = "(" %s"rsr-criteria" 1*(token-sep rc-member) [token-sep] ")"
+rc-member       = rc-field / rc-versioning / rc-tiers / rc-scoring
+                / rc-oracle / rc-category / rc-weights-check
+
+rc-field        = ( %s":spec-family"      token-sep %s"rhodium-standard-repositories" )
+                / ( %s":spec-version"     token-sep rc-semver )
+                / ( %s":status"           token-sep rc-status )
+                / ( %s":supersedes"       token-sep rc-semver )
+                / ( %s":date"             token-sep date-string )
+                / ( %s":authority"        token-sep string )
+                / ( %s":normative-oracle" token-sep string )
+                ; Source [meta]. :spec-family is the source's `spec` (the
+                ; family name canon.lock also calls spec_family), renamed so it
+                ; cannot be read as the scorecard's :spec, which names this
+                ; catalogue. :spec-version and :supersedes are the catalogue's
+                ; own versions, verbatim; they are not :schema-version (the
+                ; DEED format's) and not canon.lock's [canon].version (the
+                ; canon release's). :authority is the prose spec's path,
+                ; verbatim, relative to this file's directory.
+
+rc-status       = %s"draft" / %s"stable"
+                ; Symbols, matched whole: each is followed by token-sep or ")".
+
+rc-semver       = DQUOTE 1*DIGIT "." 1*DIGIT "." 1*DIGIT
+                  [ "-" 1*( ALPHA / DIGIT / "." / "-" ) ] DQUOTE
+                ; Semantic versioning with an optional pre-release, written as
+                ; a string: "2.1.0-draft", "1.0.0".
+
+; --- [versioning] -------------------------------------------------------
+
+rc-versioning   = "(" %s"versioning" 1*(token-sep rc-vs-field) [token-sep] ")"
+rc-vs-field     = ( %s":model"            token-sep %s"semver-with-errata" )
+                / ( %s":rule-major"       token-sep string )
+                / ( %s":rule-minor"       token-sep string )
+                / ( %s":rule-patch"       token-sep string )
+                / ( %s":freeze-mechanism" token-sep string )
+                / ( %s":errata"           token-sep string )
+                ; The rule texts are normative prose and stay strings,
+                ; verbatim. :model is a closed set of one.
+
+; --- [tiers] ------------------------------------------------------------
+
+rc-tiers        = "(" %s"tiers" 1*(token-sep rc-tier-field) [token-sep] ")"
+rc-tier-field   = ( %s":bronze"  token-sep rc-percent )
+                / ( %s":silver"  token-sep rc-percent )
+                / ( %s":gold"    token-sep rc-percent )
+                / ( %s":rhodium" token-sep rc-percent )
+                / ( %s":scale"   token-sep string )
+rc-percent      = %s"100" / %x31-39 DIGIT / DIGIT
+                ; An integer from 0 to 100 with no sign and no leading zero, a
+                ; narrowing of deed.abnf's integer. Each threshold is an
+                ; inclusive lower bound on the score.
+
+; --- [scoring] ----------------------------------------------------------
+
+rc-scoring      = "(" %s"scoring" 1*(token-sep rc-sc-field) [token-sep] ")"
+rc-sc-field     = ( %s":applicable-set" token-sep string )
+                / ( %s":denominator"    token-sep string )
+                / ( %s":numerator"      token-sep string )
+                / ( %s":partial"        token-sep string )
+                / ( %s":na-honesty"     token-sep string )
+                / ( %s":report"         token-sep string )
+                ; Normative prose, verbatim. The oracle implements it; the
+                ; scorecard's SEMANTIC checks (rsr-scorecard.abnf) restate the
+                ; arithmetic and are the machine check of it.
+
+; --- [oracle] -----------------------------------------------------------
+
+rc-oracle       = "(" %s"oracle" 1*(token-sep rc-or-field) [token-sep] ")"
+rc-or-field     = ( %s":normative"    token-sep string )
+                / ( %s":freeze-guard" token-sep string )
+                / ( %s":retired"      token-sep str-list1 )
+                / ( %s":dogfood-gate" token-sep string )
+                ; :retired is a set of strings, one per retired checker, in no
+                ; order; str-list1 is common.abnf's non-empty string list.
+
+; --- [[category]] and its criteria --------------------------------------
+
+rc-category     = "(" %s"category" 1*(token-sep rc-cat-member) [token-sep] ")"
+rc-cat-member   = rc-cat-field / rc-criterion
+rc-cat-field    = ( %s":id"     token-sep rc-pos-int )
+                / ( %s":key"    token-sep symbol )
+                / ( %s":name"   token-sep string )
+                / ( %s":weight" token-sep rc-nat )
+rc-pos-int      = %x31-39 *DIGIT
+rc-nat          = "0" / rc-pos-int
+                ; :id and :weight are integers with no sign and no leading
+                ; zero. :key is the category's stable identifier
+                ; (foundational-infrastructure); it is an identifier, never a
+                ; path. A category's criteria are its (criterion …) clauses.
+
+rc-criterion    = "(" %s"criterion" 1*(token-sep rc-crit-field) [token-sep] ")"
+rc-crit-field   = ( %s":id"           token-sep DQUOTE crit-id DQUOTE )
+                / ( %s":name"         token-sep string )
+                / ( %s":desc"         token-sep string )
+                / ( %s":tier"         token-sep crit-tier )
+                / ( %s":gate"         token-sep string )
+                / ( %s":detect"       token-sep rc-detect )
+                / ( %s":template-ref" token-sep string )
+                ; The seven keys of the source's inline criterion table.
+                ; :id, :name, :tier and :gate are written exactly as the
+                ; scorecard writes them (rsr-scorecard.abnf crit-field), so a
+                ; scorecard row is a projection of a catalogue row. :tier is
+                ; the lowest tier at which the criterion is required.
+                ; :template-ref is the source's template_ref, verbatim: a path
+                ; in rsr-template-repo, a comma-separated list of paths, or
+                ; "-" for none.
+
+rc-detect       = DQUOTE ( %s"manual" / rc-rule-id ) DQUOTE
+rc-rule-id      = 1*( %x61-7A / DIGIT / "_" / "-" ) "/" 1*( ALPHA / DIGIT / "_" )
+                ; A Hypatia rule id, module "/" rule (structural_drift/SD001,
+                ; rsr-conformance/julia_ci), or the literal "manual" when no
+                ; automated check exists (RSR-SPEC-v2 section 7: the share of
+                ; criteria that are not "manual" is the automatable coverage).
+
+; --- [weights-check] ----------------------------------------------------
+
+rc-weights-check = "(" %s"weights-check" 1*(token-sep rc-wc-field) [token-sep] ")"
+rc-wc-field     = ( %s":sum-declared" token-sep rc-nat )
+                / ( %s":note"         token-sep string )
+                ; Informative, not a gate on scoring (the denominator is
+                ; always the applicable weight). SEMANTIC: :sum-declared
+                ; equals the sum of the category weights, so the record
+                ; cannot drift from its own categories.
