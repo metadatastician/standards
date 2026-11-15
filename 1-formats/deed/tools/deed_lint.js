@@ -2556,7 +2556,9 @@ export function checkRsrProfile(text, filename = null) {
   const top = items.filter(isProfile);
   if (nested(items.filter((it) => !isProfile(it)))) throw E("(rsr-profile …) sits only at the top level of the repo deed, not inside another clause");
   if (top.length === 0) return null;
-  if (head !== "repo-deed") throw E(`(rsr-profile …) belongs to a <repo>_chora.deed (repo-deed), not a ${head}`);
+  if (head !== "repo-deed" || (filename !== null && !basename(filename).endsWith("_chora.deed"))) {
+    throw E(`(rsr-profile …) belongs to a <repo>_chora.deed, not ${filename !== null ? basename(filename) : `a ${head}`}`);
+  }
   if (top.length > 1) throw E(`the repo deed carries ${top.length} (rsr-profile …) clauses; it carries one`);
   const f = new Map();
   let notes = false;
@@ -2565,9 +2567,12 @@ export function checkRsrProfile(text, filename = null) {
       if (!RSR_PROFILE_CLAUSES.includes(m[1])) throw E(`(rsr-profile …) has no clause (${m[1]} …) (J39: an unknown key refuses the clause)`);
       if (notes) throw E("(rsr-profile …) carries (notes …) once");
       notes = true;
+      const said = new Set();
       for (const n of m[2]) {
         if (n[0] !== "field" || n[2][0] !== "string") throw E("(rsr-profile (notes …)) holds prose only: :<name> \"…\" fields");
         if (n[3]) throw E(`'!' belongs only on a rule's :id in a contractile-deed, not on (notes :${n[1]})`);
+        if (said.has(n[1])) throw E(`(rsr-profile (notes …)) carries :${n[1]} once`);
+        said.add(n[1]);
       }
       continue;
     }
@@ -2587,7 +2592,11 @@ export function checkRsrProfile(text, filename = null) {
     }
   }
   if (!f.has("version")) throw E("(rsr-profile …) is missing :version");
-  if (!f.has("capabilities") && !f.has("preset")) throw E("(rsr-profile …) declares :capabilities, a :preset, or both");
+  // An empty :capabilities declares nothing: check-rsr-profile.sh reads it as
+  // absent, so it counts only beside a :preset (#1605 review).
+  if ((f.get("capabilities") ?? []).length === 0 && !f.has("preset")) {
+    throw E("(rsr-profile …) declares a non-empty :capabilities, a :preset, or both");
+  }
   return { role: f.get("role") ?? null, preset: f.get("preset") ?? null, capabilities: f.get("capabilities") ?? [], add: f.get("add") ?? [], remove: f.get("remove") ?? [] };
 }
 
