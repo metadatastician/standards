@@ -90,7 +90,8 @@
 # line"), never FRESH or BEHIND. YAML explicit mapping keys (`? key`) are NOT parsed: one
 # ENV-PIN-UNJUDGED row, with `(explicit key)` in place of a name, says so for the file.
 # An alias key (`*pin: value`) is not resolved: one ENV-PIN-UNJUDGED row, `(alias key)` in place of a name,
-# says so for the file. `\UXXXXXXXX` escapes are decoded like `\x` and `\u`.
+# says so for the file. A sequence item is its own place (`[i]`) in the path of the refresh
+# comparison. `\UXXXXXXXX` escapes are decoded like `\x` and `\u`.
 # A key under `strategy: matrix:` is matrix data (a job that is merely named `matrix` is not), not an environment map, and gets no row. A
 # double-quoted pin value is decoded (\xHH, \uHHHH in ASCII, \\ \" \/) before it is judged.
 # An empty `KEY:` whose value is an indented node on the next line is reported UNJUDGED ("value is on the
@@ -608,6 +609,14 @@ env_pin_rows() {
       if (substr(key, 1, 1) == "\"") key = unesc(substr(key, 2, length(key) - 2))
       else if (substr(key, 1, 1) == "\047") { key = substr(key, 2, length(key) - 2); gsub(/\047\047/, "\047", key) }
       rest = substr(bp, kl + 1); sub(/^[[:space:]]+/, "", rest); rest = props(rest)
+      # A key that opens a sequence item (`- key:`) lives under that item: the item gets its
+      # own path component `[i]` (its position among the items of that sequence), so two
+      # sequence elements are never the same place.
+      if (n > n0) {
+        while (top > 0 && ind[top] >= n0) top--
+        cpb = ""; for (kk = 1; kk <= top; kk++) cpb = cpb "." knm[kk]
+        top++; ind[top] = n0; knm[top] = "[" (++seqc[cpb "|" n0]) "]"
+      }
       while (top > 0 && ind[top] >= n) top--
       parent = (top > 0) ? knm[top] : ""
       inmx = 0; for (k = 1; k <= top; k++) if (knm[k] == "matrix" && k > 1 && knm[k - 1] == "strategy") inmx = 1
