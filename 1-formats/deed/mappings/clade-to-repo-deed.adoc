@@ -74,29 +74,30 @@ bare filename would resolve against nothing (grammar rationale).
 |===
 | a2ml surface | deed path | transform / type
 
-4+| *Head identity*
+3+| *Head identity*
 
 | `[identity] canonical-name` | `:canonical-name` | verbatim STRING
 | `[identity] uuid` | `:repo-uuid` | The opaque `#uuid"<v8 id>"` literal (owner ruling U4): the repo's ADR-008 profile C id, minted once from its birth path and carried as the registry holds it (U1, §5 P-1). It is never copied from the legacy source UUID. A `#u8` literal is read in an identity field but not written. A `#u5` is an error in every mode (Q2, CHORA-SPEC 7.1)
 | — (new) | `:beholding-chora` | resolved from the registry: the estate chora's v8 id, written `#uuid"…"` (`#u8"chora:estate/<host>/<owner>"` is also accepted). Never `#u5` (Q2)
 
-4+| *Clauses*
+3+| *Clauses*
 
 | `[identity] primary-forge` | `(identity … :primary-forge github)` | STRING value → SYMBOL
 | `[identity] primary-owner` | `(identity … :owner "…")` | verbatim STRING
 | `[identity] prefixed-name` | `(identity … :prefixed-name "…")` | verbatim STRING
-| `[clade] primary` | `(clade … :primary rm)` | enum → SYMBOL (12-category closed taxonomy carried *verbatim*: fv nl rm gv db ap ix dx pt ax gm sc)
-| `[clade] primary-name` | `(clade … :primary-name "…")` | verbatim STRING (the deliberate redundancy pair with `:primary` is kept — CLADE-006 survives)
-| `[clade] secondary` | `(clade … :secondary (gv))` | list of SYMBOLs
-| `[clade] assigned` | `(clade … :assigned "2026-…")` | verbatim STRING (no date type in the grammar)
-| `[clade] rationale` | `(clade … :rationale "…")` | verbatim STRING
+3+| *Placements.* The `[clade]` rows below name the source fields, but a placement is never decided from them (A1 section 11; A7 W10, YP07; owner's standing rule of 2026-11-15 that a placement is taken from the registry, never from a legacy file or a guess). In order: (1) a source whose `[clade] primary` is `UNASSIGNED` fails the translation (P-5), whatever the registry holds; (2) where chora-registry holds no `clade-12` placement for the repo, no `(clade …)` clause is emitted; (3) otherwise the category placements, `:primary`, `:primary-name` and `:secondary`, are the registry's, written whether or not the source carries the field (the absent-field rule in the status note above does not apply to them), and a legacy value that differs is reported, never written. `:assigned` and `:rationale` are placement metadata the registry seed does not hold (`registry-seed-to-deed.adoc` section 2); their rows below say when the source's value is kept.
+| `[clade] primary` | `(clade … :primary rm)` | enum → SYMBOL, from chora-registry (12-category closed taxonomy: fv nl rm gv db ap ix dx pt ax gm sc); the legacy value is only compared
+| `[clade] primary-name` | `(clade … :primary-name "…")` | STRING, the registry's name for the `:primary` category, always written with `:primary` (the deliberate redundancy pair is kept — CLADE-006 survives)
+| `[clade] secondary` | `(clade … :secondary (gv))` | list of SYMBOLs, from chora-registry; the legacy list is only compared
+| `[clade] assigned` | `(clade … :assigned "2026-…")` | STRING, verbatim from the source, kept only when the registry's `:primary` equals the legacy one (it dates that placement, not another); else omitted
+| `[clade] rationale` | `(clade … :rationale "…")` | verbatim STRING, kept only when the registry's `:primary` equals the legacy one (it explains that placement, not another); else omitted
 | `[forges] github/gitlab/bitbucket` | `(forges … :github "o/r" …)` | verbatim STRINGs; empty stays `""`
 | `[lineage] type` | `(lineage … :type standalone)` | enum → SYMBOL — **the full post-#122 taxonomy carried verbatim**: `standalone monorepo monorepo-child inflated deflated hub satellite`
 | `[lineage] parent` | `(lineage … :parent "")` | verbatim STRING (the "monorepo parent, never a description" doctrine travels in the camera's own docs, not the field)
 | `[lineage] born` | `(lineage … :born "…")` | verbatim STRING
 | `[lineage] previous-names` | `(lineage … :previous-names ())` | list of STRINGs
 | `[lineage] instantiated-from` | `(lineage … :instantiated-from "…")` | verbatim STRING
-4+| *Lifecycle.* The `[status]` rows below go to the `(status …)` clause of `.machine_readable/descriptiles/STATE.deed`, not to the chora deed (A7 J15). Its profile (`deed_lint.js --state`) requires `:since` and a non-empty `:ended` to be real `YYYY-MM-DD` dates.
+3+| *Lifecycle.* The `[status]` rows below go to the `(status …)` clause of `.machine_readable/descriptiles/STATE.deed`, not to the chora deed (A7 J15). Its profile (`deed_lint.js --state`) requires `:since` and a non-empty `:ended` to be real `YYYY-MM-DD` dates.
 
 | `[status] phase` | `(status … :phase active)` | enum → SYMBOL — taxonomy verbatim: `reserved incubating active dormant` \| `merged superseded archived extinct`
 | `[status] since` | `(status … :since "…")` | verbatim STRING
