@@ -44,7 +44,9 @@ set -euo pipefail
 REPO_ROOT="${INPUT_PATH:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
 cd "$REPO_ROOT"
 
-VALIDATOR="1-formats/k9/tools/k9-validate.sh"
+# K9_VALIDATOR lets a caller that grades another tree (the conformance report's base run) point
+# at the validator of the checker under test; unset, the tree's own validator is used.
+VALIDATOR="${K9_VALIDATOR:-1-formats/k9/tools/k9-validate.sh}"
 LEDGER=".machine_readable/k9-contract-debt.txt"
 LAYER="${K9_VALIDATE_LAYER:-L1}"
 STAGED_FILES="${INPUT_STAGED_FILES:-}"
