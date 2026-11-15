@@ -488,6 +488,11 @@ env_pin_rows() {
     # COMPLETE value (or a marker for a value that is not read), so two copies of a
     # workflow can be compared without the 8-hex / 24-char abbreviations of the report.
     function outr(row, fv) { if (full != "") row = row "\t" cp "\034" fv; print row }
+    # capadd / capflush: a tracked block scalar or multi-line quoted value is UNJUDGED, but its
+    # text is kept (trimmed, newline-joined) so a refresh that changes it is still seen. The
+    # row is printed when the scalar ends.
+    function capadd(t) { gsub(/\t/, " ", t); sub(/^[[:space:]]+/, "", t); capv = capv "\\n" t }
+    function capflush(   sv) { if (capk != "") { sv = cp; cp = capcp; outr(capk, capv); cp = sv; capk = "" } }
     # flushp: print a held row with the mapping path it was found under (cp has moved on).
     function flushp(r,   sv) { sv = cp; cp = pcp; outr(r, pv); cp = sv }
     # qclose: does this text hold the closing quote of a scalar opened with q?
@@ -561,10 +566,10 @@ env_pin_rows() {
       fq = q
       return d
     }
-    BEGIN { tgt = tolower(target); top = 0; skip = -1; inq = "" ; flow = 0; fq = ""; pend = ""; xwarn = 0; awarn = 0; cp = ""; pcp = "" }
+    BEGIN { tgt = tolower(target); top = 0; skip = -1; inq = "" ; flow = 0; fq = ""; pend = ""; xwarn = 0; awarn = 0; cp = ""; pcp = ""; capk = ""; capv = ""; capcp = "" }
     NR == 1 { sub("^\357\273\277", "") }
     { sub(/[[:space:]]+$/, "") }
-    inq != "" { if (qclose($0, inq)) inq = ""; next }
+    inq != "" { if (capk != "") capadd($0); if (qclose($0, inq)) { inq = ""; capflush() } next }
     flow > 0 { flow += depth($0); if (flow <= 0) { flow = 0; fq = "" } next }
     /^[[:space:]]*$/ { next }
     /^[[:space:]]*#/ { next }
@@ -574,7 +579,7 @@ env_pin_rows() {
       # A classified pin value is held until the next significant line: a more indented
       # line continues the plain scalar (folded), so the value is not what it looked like.
       if (pend != "") { if (n > pn) flushp(pcont); else flushp(pend); pend = "" }
-      if (skip >= 0) { if (n > skip) next; skip = -1 }
+      if (skip >= 0) { if (n > skip) { if (capk != "") capadd(s); next }; skip = -1; capflush() }
       body = substr(s, n + 1); n0 = n
       while (match(body, /^-[[:space:]]+/)) { n += RLENGTH; body = substr(body, RLENGTH + 1) }
       bp = props(body); c0 = substr(bp, 1, 1)
@@ -616,13 +621,13 @@ env_pin_rows() {
       }
       r2 = rest; sub(/[[:space:]]+#.*$/, "", r2)
       if (r2 ~ /^[|>][-+0-9]*$/) {
-        if (tracked) outr(sprintf("ENV-PIN-UNJUDGED\t%s L%d value is a block scalar; not judged", key, NR), "(block)")
+        if (tracked) { capk = sprintf("ENV-PIN-UNJUDGED\t%s L%d value is a block scalar; not judged", key, NR); capv = "(block)"; capcp = cp }
         skip = n; next
       }
       c = substr(rest, 1, 1)
       if ((c == "\047" || c == "\"") && !qclose(substr(rest, 2), c)) {
         inq = c
-        if (tracked) outr(sprintf("ENV-PIN-UNJUDGED\t%s L%d value is a multi-line quoted scalar; not judged", key, NR), "(multiline)")
+        if (tracked) { capk = sprintf("ENV-PIN-UNJUDGED\t%s L%d value is a multi-line quoted scalar; not judged", key, NR); capv = "(multiline) " rest; capcp = cp }
         next
       }
       if (!tracked) next
@@ -657,7 +662,7 @@ env_pin_rows() {
         outr(sprintf("ENV-PIN-UNJUDGED\t%s L%d value is not a 40-hex commit: %s", key, NR, (val == "" ? "(empty)" : substr(val, 1, 24))), val)
       }
     }
-    END { if (pend != "") flushp(pend) }
+    END { capflush(); if (pend != "") flushp(pend) }
   ' "$1"
 }
 

@@ -262,7 +262,7 @@ kill_mutant envpin_quote_hash_stripped 's@if \(c == "\\047" \|\| c == "\\""\) \{
 # and a block-scalar value must each be handled, not misread or silent.
 kill_mutant envpin_space_trim_dropped 's@ sub\(/\^\[\[:space:\]\]\+/, "", rest\)@@' "FAIL envpin-rows"
 kill_mutant envpin_multiline_quote_read 's@^    inq != "" \{ if@    inq == "NEVER" { if@' "FAIL envpin-rows"
-kill_mutant envpin_block_scalar_silent 's@if \(tracked\) outr\(sprintf\("ENV-PIN-UNJUDGED\\t%s L%d value is a block scalar@if (0) outr(sprintf("ENV-PIN-UNJUDGED\\t%s L%d value is a block scalar@' "FAIL envpin-rows"
+kill_mutant envpin_block_scalar_silent 's@if \(tracked\) \{ capk = sprintf\("ENV-PIN-UNJUDGED\\t%s L%d value is a block scalar@if (0) { capk = sprintf("ENV-PIN-UNJUDGED\\t%s L%d value is a block scalar@' "FAIL envpin-rows"
 # Third Codex round on #1602: an anchor or tag before a scalar must not hide the scalar
 # style (a multi-line quote, a block scalar) nor the value itself.
 kill_mutant envpin_anchor_value_kept 's@; rest = props\(rest\)@@' "FAIL envpin-rows"
@@ -930,6 +930,33 @@ case_main_content_refresh_envpin_swap() {
   done
 }
 
+# case_main_content_refresh_envpin_multiline <applier> — a tracked block scalar or multi-line
+# quoted value stays UNJUDGED, but its text is compared in full: a refresh that changes it is
+# reported, one that leaves it alone is not.
+case_main_content_refresh_envpin_multiline() {
+  local d scen ov nv want label
+  local -a scens=(
+    $'|-\n        main@@|-\n        release@@3@@a block scalar that changed'
+    $'|-\n        main@@|-\n        main@@0@@a block scalar that did not change'
+    $'"ma\n        in"@@"re\n        lease"@@3@@a multi-line quoted value that changed'
+  )
+  for scen in "${scens[@]}"; do
+    ov=${scen%%@@*}; scen=${scen#*@@}; nv=${scen%%@@*}; scen=${scen#*@@}
+    want=${scen%%@@*}; label=${scen#*@@}
+    d=$(new_case contentrefreshml)
+    content_fixture "$1" "$d"
+    stamp_into "$1" "$d/proven_template.yml" proven-lock-gate 0.2.0 "$(printf 'name: gate\nenv:\n  # proven-cicd:local-next\n  PROVEN_SHA: "%s"\njobs:\n  a:\n    env:\n      CANON_REF: %s\n' "$CO_NEW" "$nv")"
+    stamp_into "$1" "$d/own_stamped" proven-lock-gate 0.1.0 "$(printf 'name: gate\nenv:\n  # proven-cicd:local-next\n  PROVEN_SHA: "%s"\njobs:\n  a:\n    env:\n      CANON_REF: %s\n' "$CO_OLD" "$ov")"
+    run_content "$d" "$1" --fix-content --proven-sha "$P"
+    if [ "$(cat "$d/rc")" = 0 ] && [ "$(grep -c 'ENV-PIN-REFRESH-MOVED' "$d/out")" = "$want" ]; then
+      pass "main: a refresh with ${label} gives ${want} ENV-PIN-REFRESH-MOVED row(s)"
+    else
+      fail "main: refresh with ${label}: want ${want} row(s), got $(grep -c 'ENV-PIN-REFRESH-MOVED' "$d/out") (rc=$(cat "$d/rc"))"
+      sed 's/^/    /' "$d/out" >&2; tail -5 "$d/err" | sed 's/^/    /' >&2
+    fi
+  done
+}
+
 # case_main_content_refused <applier> <label> <setup> — a refresh that cannot be
 # proven equal to the template is refused with a row, and nothing is committed.
 case_main_content_refused() {
@@ -1378,6 +1405,7 @@ case_main_content_fix "$APPLIER"
 case_main_content_refresh "$APPLIER"
 case_main_content_refresh_envpin "$APPLIER"
 case_main_content_refresh_envpin_swap "$APPLIER"
+case_main_content_refresh_envpin_multiline "$APPLIER"
 case_main_content_refused "$APPLIER" "a template that does not match its own stamp" \
   'printf "      - run: injected\n" >> "$d/proven_template.yml"'
 case_main_content_refused "$APPLIER" "a template stamped for another version than the manifest's" \
@@ -1589,6 +1617,7 @@ list_mutant content_row_dropped 's@cst=\$\(content_state "\$wf" "\$PROVEN_MANIFE
 list_mutant content_row_writes 's@\[ -n "\$cst" \] \&\& printf@[ -n "$cst" ] \&\& changed+=("$base"); [ -n "$cst" ] \&\& printf@' case_main_content_fix
 list_mutant envpin_flow_value_marker 's@"\(flow\) " rest@"(flow)"@' case_main_content_refresh_envpin
 list_mutant envpin_refresh_path_dropped 's@row "\\t" cp "\\034" fv@row "\\t" "\\034" fv@' case_main_content_refresh_envpin_swap
+list_mutant envpin_block_text_dropped 's@function capadd\(t\) \{ gsub@function capadd(t) { return; gsub@' case_main_content_refresh_envpin_multiline
 list_mutant envpin_refresh_value_dropped 's@a\[1\], st, \$3@a[1], st, "-"@' case_main_content_refresh_envpin
 list_mutant envpin_refresh_move_silent 's@\[ "\$epb" = "\$epa" \] \|\|@true ||@' case_main_content_refresh_envpin
 # A stamped copy in the current layout (stamp on line 2) is still held by --fix:
