@@ -77,6 +77,10 @@
 #                    FRESH or BEHIND
 # Comment lines are skipped. A `CANON_REF=...` written to $GITHUB_ENV inside a run:
 # step is not an assignment of the env: map and is not read.
+# Only a direct child of a block-style `env:` mapping counts (found by indentation):
+# a same-named key under `with:` or `inputs:`, the body of a `run: |` block, a flow
+# style `env: {…}` and a quoted key get no row. A `#` inside a quoted value is part of
+# the value. The target is compared case-insensitively.
 #
 # SAFETY PROPERTIES (do not weaken any of these):
 #   * READ-ONLY by default. --fix is required to write anything.
@@ -411,27 +415,53 @@ deed_overcap() {
 #   ENV-PIN-DYNAMIC  an expression (`${{ ... }}`); not judged
 #   ENV-PIN-UNJUDGED any other value (a branch name, a short SHA, an empty value);
 #                    never read as FRESH or BEHIND
-# Comment lines are skipped; quotes and a trailing `# comment` are stripped.
+# Comment lines are skipped. What counts as an assignment, and how a value is read:
+# Only a key that is a direct child of an `env:` mapping (block style) counts: the
+# parent is found by indentation, so `with:` / `inputs:` keys of the same name and
+# the body of a block scalar (`run: |`) are never read. Flow style (`env: {…}`) and
+# quoted keys are not read either, and so get no row. A `#` inside a quoted value is
+# part of the value, not a comment; a quoted value followed by anything but a
+# comment is UNJUDGED. The target is compared case-insensitively (a SHA is hex).
 ENV_PIN_NAMES='STANDARDS_PIN|CANON_REF'
 env_pin_rows() {
   LC_ALL=C awk -v target="$2" -v names="$ENV_PIN_NAMES" '
+    BEGIN { tgt = tolower(target); top = 0; skip = -1 }
+    /^[[:space:]]*$/ { next }
     /^[[:space:]]*#/ { next }
     {
       s = $0
-      if (!match(s, "^[[:space:]]*(" names ")[[:space:]]*:([[:space:]]+|$)")) next
-      head = substr(s, 1, RLENGTH); val = substr(s, RLENGTH + 1)
-      name = head; gsub(/[[:space:]:]/, "", name)
-      sub(/[[:space:]]+#.*$/, "", val); sub(/[[:space:]]+$/, "", val)
-      gsub(/^[\047"]|[\047"]$/, "", val)
+      match(s, /^[[:space:]]*/); n = RLENGTH
+      if (skip >= 0) { if (n > skip) next; skip = -1 }
+      body = substr(s, n + 1)
+      while (match(body, /^-[[:space:]]+/)) { n += RLENGTH; body = substr(body, RLENGTH + 1) }
+      if (!match(body, /^[A-Za-z_][A-Za-z0-9_.-]*[[:space:]]*:([[:space:]]|$)/)) next
+      rest = substr(body, RLENGTH + 1)
+      key = substr(body, 1, RLENGTH); sub(/[[:space:]]*:.*$/, "", key)
+      while (top > 0 && ind[top] >= n) top--
+      parent = (top > 0) ? knm[top] : ""
+      top++; ind[top] = n; knm[top] = key
+      r2 = rest; sub(/[[:space:]]+#.*$/, "", r2)
+      if (r2 ~ /^[|>][-+0-9]*$/) { skip = n; next }
+      if (key !~ ("^(" names ")$") || parent != "env") next
+      val = rest; bad = 0; c = substr(val, 1, 1)
+      if (c == "\047" || c == "\"") {
+        q = index(substr(val, 2), c)
+        if (q == 0) { bad = 1; val = substr(val, 2) }
+        else { tail = substr(val, q + 2); val = substr(val, 2, q - 1)
+               if (tail !~ /^[[:space:]]*(#.*)?$/) bad = 1 }
+      } else {
+        sub(/[[:space:]]+#.*$/, "", val); sub(/[[:space:]]+$/, "", val)
+        if (val ~ /^#/) val = ""
+      }
       low = tolower(val)
-      if (length(low) == 40 && low ~ /^[0-9a-f]+$/) {
-        if (low == target) printf "ENV-PIN-FRESH\t%s L%d %s\n", name, NR, substr(low, 1, 8)
-        else printf "ENV-PIN-BEHIND\t%s L%d %s (target %s); read-only: never re-pointed here\n", name, NR, substr(low, 1, 8), substr(target, 1, 8)
-      } else if (val ~ /\$\{\{/) {
-        printf "ENV-PIN-DYNAMIC\t%s L%d is an expression; not judged\n", name, NR
+      if (!bad && length(low) == 40 && low ~ /^[0-9a-f]+$/) {
+        if (low == tgt) printf "ENV-PIN-FRESH\t%s L%d %s\n", key, NR, substr(low, 1, 8)
+        else printf "ENV-PIN-BEHIND\t%s L%d %s (target %s); read-only: never re-pointed here\n", key, NR, substr(low, 1, 8), substr(tgt, 1, 8)
+      } else if (!bad && val ~ /\$\{\{/) {
+        printf "ENV-PIN-DYNAMIC\t%s L%d is an expression; not judged\n", key, NR
       } else {
         gsub(/[\t]/, " ", val)
-        printf "ENV-PIN-UNJUDGED\t%s L%d value is not a 40-hex commit: %s\n", name, NR, (val == "" ? "(empty)" : substr(val, 1, 24))
+        printf "ENV-PIN-UNJUDGED\t%s L%d value is not a 40-hex commit: %s\n", key, NR, (val == "" ? "(empty)" : substr(val, 1, 24))
       }
     }
   ' "$1"
@@ -1140,6 +1170,19 @@ JSON
     printf '    run: echo "CANON_REF=%s" >> "$GITHUB_ENV"\n' "$eb"
     printf '  CANON_REF:\n'
     printf '  STANDARDS_PIN: %s\n' "${t^^}"
+    printf 'with:\n'
+    printf '  CANON_REF: %s\n' "$eb"
+    printf 'inputs:\n'
+    printf '  STANDARDS_PIN:\n'
+    printf 'env:\n'
+    printf '  CANON_REF: "%s # not a sha"\n' "$t"
+    printf 'run: |\n'
+    printf '  STANDARDS_PIN: %s\n' "$eb"
+    printf 'env:\n'
+    printf '  STANDARDS_PIN: %s\n' "$t"
+    printf 'steps:\n'
+    printf '  - env:\n'
+    printf '      CANON_REF: %s\n' "$eb"
   } > "$d/envpin.yml"
   local ep; ep=$(env_pin_rows "$d/envpin.yml" "$t" | tr '\t' '|')
   local epw="ENV-PIN-FRESH|STANDARDS_PIN L2 ${t:0:8}
@@ -1148,12 +1191,21 @@ ENV-PIN-DYNAMIC|STANDARDS_PIN L5 is an expression; not judged
 ENV-PIN-UNJUDGED|CANON_REF L6 value is not a 40-hex commit: main
 ENV-PIN-UNJUDGED|STANDARDS_PIN L7 value is not a 40-hex commit: ${eb:0:12}
 ENV-PIN-UNJUDGED|CANON_REF L10 value is not a 40-hex commit: (empty)
-ENV-PIN-FRESH|STANDARDS_PIN L11 ${t:0:8}"
+ENV-PIN-FRESH|STANDARDS_PIN L11 ${t:0:8}
+ENV-PIN-UNJUDGED|CANON_REF L17 value is not a 40-hex commit: ${t:0:24}
+ENV-PIN-FRESH|STANDARDS_PIN L21 ${t:0:8}
+ENV-PIN-BEHIND|CANON_REF L24 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here"
   if [ "$ep" = "$epw" ]; then echo "  PASS envpin-rows -> $(printf '%s\n' "$ep" | wc -l) row(s)"
   else echo "  FAIL envpin-rows -> got:
 $ep
 want:
 $epw" >&2; rc=1; fi
+  # The target compared case-insensitively: an uppercase --to must not turn a pin at
+  # the target commit into BEHIND.
+  local epu; epu=$(env_pin_rows "$d/envpin.yml" "${t^^}" | tr '\t' '|')
+  if [ "$epu" = "$epw" ]; then echo "  PASS envpin-target-case"
+  else echo "  FAIL envpin-target-case -> an uppercase target changed the rows:
+$epu" >&2; rc=1; fi
   # The env pin sits in a standards-pin-looking line, but it is NOT a `uses:` pin:
   # the rewrite must leave it exactly as it was.
   cp "$d/envpin.yml" "$d/envpin-rw.yml"; rewrite_pins "$d/envpin-rw.yml" "$t"

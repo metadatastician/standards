@@ -65,7 +65,7 @@ for want in "fresh.yml" "behind.yml" "illegal.yml" "tracking.yml" "none.yml" "sh
             "bad-huge.json" "content-huge.yml" \
             "dot-local.yml" "dollar-managed.yml" "dollar-unmanaged.yml" "dollar-managed-parent.yml" \
             "owner-stale.lock" "owner-clean.lock" "owner-nonstandards.lock" "owner-tag-key.lock" \
-            "envpin-rows" "envpin-not-rewritten"; do
+            "envpin-rows" "envpin-target-case" "envpin-not-rewritten"; do
   grep -q "PASS $want" "$TMP/base.out" && pass "control present: $want" \
     || fail "control MISSING from baseline: $want (a control that never runs is not a control)"
 done
@@ -251,6 +251,12 @@ kill_mutant content_stamp_unbounded \
 kill_mutant manifest_version_unbounded \
   '/and \(\.version \| type == "string"/s@\{1,9\}@+@g' \
   "FAIL bad-huge.json"
+# Codex findings on #1602, one mutant each: the target must be compared
+# case-insensitively, only a child of `env:` counts, and a `#` inside a quoted value
+# is not a comment. Each is killed by a known-answer control, not by a stub case.
+kill_mutant envpin_target_case_ignored 's@tgt = tolower\(target\)@tgt = target@' "FAIL envpin-target-case"
+kill_mutant envpin_context_ignored 's@ \|\| parent != "env"\) next@) next@' "FAIL envpin-rows"
+kill_mutant envpin_quote_hash_stripped 's@if \(c == "\\047" \|\| c == "\\""\) \{@if (0) {@' "FAIL envpin-rows"
 
 # --- 3. fetch_workflows fails CLOSED -----------------------------------------
 # A rate-limited repo used to come back as "no workflows": fetch_workflows
@@ -1333,7 +1339,7 @@ list_mutant only_existence_unchecked 's@if ! gh api "repos/\$\{ONLY_REPO\}"@if f
 # Env-var pins: rows must be written (even for a pin-free workflow), BEHIND must be
 # told from FRESH, commented lines must not count, and --fix must not move them.
 list_mutant envpin_row_dropped 's@done < <\(env_pin_rows "\$wf" "\$TARGET_SHA"\)@done < <(true)@' case_main_envpin
-list_mutant envpin_behind_as_fresh 's@if \(low == target\) printf "ENV-PIN-FRESH@if (1) printf "ENV-PIN-FRESH@' case_main_envpin
+list_mutant envpin_behind_as_fresh 's@if \(low == tgt\) printf "ENV-PIN-FRESH@if (1) printf "ENV-PIN-FRESH@' case_main_envpin
 list_mutant envpin_comment_counted 's@^    /\^\[\[:space:\]\]\*#/ \{ next \}$@    /^NEVER$/ { next }@' case_main_envpin
 list_mutant envpin_before_none_skip_lost 's@^      done < <\(env_pin_rows "\$wf" "\$TARGET_SHA"\)$@      done < <(classify_file "$wf" "$TARGET_SHA" | grep -qx NONE || env_pin_rows "$wf" "$TARGET_SHA")@' case_main_envpin
 }
