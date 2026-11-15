@@ -35,17 +35,27 @@ Red takes precedence over orange, so missing evidence cannot conceal a known
 failure. Indeterminate counts remain visible. Counts are result assertions or
 files, not lines of log output. Failed counts include advisory failures, labelled
 as such; advisory warnings on a passing file can also produce yellow. A routed
-coordination file is N/A, never a validated K9 contract. The combined badge covers
+coordination file is graded by the coordination validator, never as a K9 contract. The combined badge covers
 DEED syntax and K9 L0–L2 only; it is no security certification or L3 claim.
 
 == Comparison and evidence
 
-The previous report is read from the latest bot-owned marked PR comment. A
-small baseline is embedded in that comment. Compare different revisions of the
-same PR only when schema, validator/profile hashes, tool versions, fixture definitions and corpus identities
-match and the category has no indeterminate evidence. Arrows mean fewer/more
-failed results; equal failures and advisories mean unchanged. Changes to scope or validators
-produce `no comparable baseline`, rather than an apparent improvement.
+The "This PR vs its base" column compares the PR with the merge base of its base
+branch and head. The job checks the base commit out into a temporary worktree and
+runs the PR's own checker (report script, validators, grammars) on that tree, so both
+sides are graded by one toolchain. No earlier comment is read. DEED syntax and the live
+corpus are compared; the typecheck, self-test and fixture categories grade the checker,
+not the tree, and say so. Arrows mean fewer/more blocking failures, then fewer/more
+failed results; equal failures and advisories mean unchanged. A category with
+indeterminate evidence on either side reads `indeterminate`, a changed N/A count reads
+`scope changed`, and a base that cannot be graded reads `base not checkable: <why>`.
+A push to main has no base and reads `no base`.
+
+Files the K9 validator routes to the coordination dialect (`coordination.k9`, the
+coordination example) are validated by `2-protocols/k9-coordination/tools/validate/validate.js`
+under the verdict rules of `scripts/conformance-k9.sh` `cmd_coord`: pass needs exit 0 and a
+`PASS ` line, fail needs exit 1 and a `FAIL ` line, anything else is indeterminate. That
+validator and its grammar are part of the profile hash.
 
 Evidence lives in `tests/conformance/YYYY-MM-DD/pr-N/run-ID-ATTEMPT/` and is
 uploaded as a dated CI artifact. The current PR comment is updated in place.
