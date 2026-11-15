@@ -77,9 +77,32 @@ assert "awk path: the same deed still enforces its declared packaging" 1 "Packag
 d=$(repo deed-unknownkey)
 deed "$d" deedunknownkey '  (rsr-profile :version "1.0.0" :packaging "none" :capabilities ("reproducible-build"))'
 if command -v bun >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
-  assert "AST path: an unknown (rsr-profile …) key fails closed" 1 "resolver refuses the (rsr-profile" env RSR_DEED_PARSER=ast bash "$GATE" "$d"
+  assert "AST path: an unknown (rsr-profile …) key fails closed" 1 "cannot resolve the (rsr-profile …) clause of deedunknownkey_chora.deed" env RSR_DEED_PARSER=ast bash "$GATE" "$d"
 fi
-assert "awk path: an unknown (rsr-profile …) key fails closed" 1 "resolver refuses the (rsr-profile" env RSR_DEED_PARSER=awk bash "$GATE" "$d"
+assert "awk path: an unknown (rsr-profile …) key fails closed" 1 "cannot resolve the (rsr-profile …) clause of deedunknownkey_chora.deed" env RSR_DEED_PARSER=awk bash "$GATE" "$d"
+
+# With a legacy .a2ml beside the refused deed, the error and the fix command
+# name the deed the resolver read, never the .a2ml (Codex on #1608).
+d=$(repo deed-unknownkey-a2ml)
+deed "$d" deedunknownkeya2ml '  (rsr-profile :version "1.0.0" :packaging "none" :capabilities ("reproducible-build"))'
+printf '[rsr-profile]\nversion = "1.0.0"\ncapabilities = ["bash"]\n' > "$d/.machine_readable/rsr-profile.a2ml"
+for m in ast awk; do
+  if [ "$m" = ast ] && ! { command -v bun >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; }; then continue; fi
+  assert "$m path: the refusal names the deed, not the .a2ml beside it" 1 "--rsr-profile deedunknownkeya2ml_chora.deed)" env RSR_DEED_PARSER=$m bash "$GATE" "$d"
+done
+
+# Every resolution failure fails closed, not only those that mention the
+# clause: an unknown preset beside a packaging :add (Codex on #1608), in a
+# deed and in a legacy .a2ml.
+d=$(repo deed-unknownpreset)
+deed "$d" deedunknownpreset '  (rsr-profile :version "1.0.0" :preset "bogus" :add ("reproducible-build"))'
+for m in ast awk; do
+  if [ "$m" = ast ] && ! { command -v bun >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; }; then continue; fi
+  assert "$m path: an unknown preset in the deed fails closed" 1 "unknown preset 'bogus'" env RSR_DEED_PARSER=$m bash "$GATE" "$d"
+done
+d=$(repo a2ml-unknownpreset)
+printf '[rsr-profile]\nversion = "1.0.0"\npreset = "bogus"\nadd = ["reproducible-build"]\n' > "$d/.machine_readable/rsr-profile.a2ml"
+assert "an unknown preset in a legacy .a2ml fails closed and names it" 1 "legacy profile .machine_readable/rsr-profile.a2ml" bash "$GATE" "$d"
 
 # With a legacy .a2ml beside the rejected deed, the error names the deed
 # (the file that failed to parse), not the .a2ml (CodeRabbit on #1411).

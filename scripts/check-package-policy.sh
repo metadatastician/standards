@@ -151,29 +151,30 @@ deed_has_profile() {
 }
 
 # Print the repo's effective capabilities, one per line; nothing if it has no
-# profile. A profile the reference checker cannot resolve declares nothing it
-# can read, so it counts as undeclared but is NAMED in a warning (e.g. an
-# explicit `capabilities = []`, which check-rsr-profile.sh rejects). A missing
-# resolver is handled the same way, also with a named warning.
+# profile. A profile the reference checker cannot resolve fails the gate
+# (below): reading it as "no capabilities" would let a repo that declares
+# packaging pass with none shipped. Only a missing resolver is a named warning.
 effective_capabilities() {
-  local f found="" out perr bad
-  for f in "$ROOT"/.machine_readable/rsr-profile.a2ml "$ROOT"/machine-readable/rsr-profile.a2ml; do
-    [ -f "$f" ] && found="$f" && break
+  local f found="" out status perr bad rline
+  # Discovery follows the resolver's own precedence, so `found` is the file
+  # it actually reads and every diagnostic below names that file: first the
+  # (rsr-profile …) clause of the repo's <repo>_chora.deed (the worked model,
+  # rsr-template-repo, has carried its profile there since it retired its
+  # last .a2ml), and only then a legacy .a2ml. The resolver parses the deed;
+  # this is only discovery, so a clause token outside a ";" comment is enough
+  # to hand the deed over. estate_chora.deed is the estate-deed, never a repo
+  # deed. ".*_chora.deed" too: the deed grammar allows a dot-led stem
+  # (.github). One of the two patterns normally has no match, so failglob
+  # must be off; dotglob would make the first match the dot-led deed as well.
+  shopt -u dotglob failglob
+  for f in "$ROOT"/*_chora.deed "$ROOT"/.*_chora.deed; do
+    [ -f "$f" ] || continue
+    [ "$(basename "$f")" = estate_chora.deed ] && continue
+    if deed_has_profile "$f"; then found="$f"; break; fi
   done
-  # Deed-era profile: an (rsr-profile …) clause of the repo's <repo>_chora.deed
-  # (the worked model, rsr-template-repo, has carried its profile there since
-  # it retired its last .a2ml). The resolver parses it; this is only discovery,
-  # so a clause token outside a ";" comment is enough to hand the deed over.
-  # estate_chora.deed is the estate-deed, never a repo deed.
   if [ -z "$found" ]; then
-    # ".*_chora.deed" too: the deed grammar allows a dot-led stem (.github).
-    # One of the two patterns normally has no match, so failglob must be off;
-    # dotglob would make the first match the dot-led deed as well.
-    shopt -u dotglob failglob
-    for f in "$ROOT"/*_chora.deed "$ROOT"/.*_chora.deed; do
-      [ -f "$f" ] || continue
-      [ "$(basename "$f")" = estate_chora.deed ] && continue
-      if deed_has_profile "$f"; then found="$f"; break; fi
+    for f in "$ROOT"/.machine_readable/rsr-profile.a2ml "$ROOT"/machine-readable/rsr-profile.a2ml; do
+      [ -f "$f" ] && found="$f" && break
     done
   fi
   [ -n "$found" ] || return 0
@@ -184,7 +185,8 @@ effective_capabilities() {
     echo "::warning::check-package-policy: capability resolver missing at $RSR_PROFILE_CHECKER (caller pin predates it); ${found#"$ROOT"/} not read, treating it as declaring no packaging capability." >&2
     return 0
   fi
-  out="$(bash "$RSR_PROFILE_CHECKER" "$ROOT" 2>&1 || true)"
+  status=0
+  out="$(bash "$RSR_PROFILE_CHECKER" "$ROOT" 2>&1)" || status=$?
   # A deed the normative parser rejects is a defect in the repo, not an
   # unreadable profile: reading it as "no capabilities" would let a malformed
   # deed that declares packaging pass with none shipped. Fail closed.
@@ -198,18 +200,22 @@ effective_capabilities() {
     echo "::error::check-package-policy: $bad does not parse as DEED, so its declared capabilities cannot be read. Fix it (bun 1-formats/deed/tools/deed_lint.js $bad). $perr" >&2
     return 1
   fi
-  # A clause the resolver refuses (an unknown key under A7 J39, a missing
-  # :version, two clauses …) is a defect in the repo too, for the same reason:
-  # reading it as "no capabilities" would let a deed that declares packaging
-  # pass with none shipped. Fail closed on both of the resolver's parser paths.
-  rerr="$(printf '%s\n' "$out" | grep -m1 '^ERROR: .*(rsr-profile' || true)"
-  if [ -n "$rerr" ]; then
-    echo "::error::check-package-policy: the resolver refuses the (rsr-profile …) clause of ${found#"$ROOT"/}, so its declared capabilities cannot be read. Fix it (bun 1-formats/deed/tools/deed_lint.js --rsr-profile ${found#"$ROOT"/}). $rerr" >&2
-    return 1
-  fi
+  # Any other profile the resolver cannot resolve fails closed for the same
+  # reason, whatever the cause: an unknown key (A7 J39), a missing :version,
+  # two clauses, an unknown preset, an empty declaration. The signal is the
+  # absence of the resolver's "effective capabilities:" line, not the wording
+  # of its error, so a new kind of resolution error cannot slip through as
+  # "no capabilities" (Codex on #1608). Not its exit status alone either: the
+  # resolver also exits 2 for a later, unrelated step (the awk reader cannot
+  # assess folded baseline metadata) after it has resolved the profile.
   if ! printf '%s\n' "$out" | grep -q '^effective capabilities:'; then
-    echo "::warning::check-package-policy: ${found#"$ROOT"/} could not be resolved ($(printf '%s\n' "$out" | grep -m1 ERROR || echo "no effective capabilities line")); treating it as declaring no packaging capability." >&2
-    return 0
+    rline="$(printf '%s\n' "$out" | grep -m1 '^ERROR' || echo "exit $status, no effective capabilities line")"
+    bad="${found#"$ROOT"/}"
+    case "$bad" in
+      *_chora.deed) echo "::error::check-package-policy: the capability resolver cannot resolve the (rsr-profile …) clause of $bad, so its declared capabilities cannot be read. Fix it (bun 1-formats/deed/tools/deed_lint.js --rsr-profile $bad). $rline" >&2 ;;
+      *) echo "::error::check-package-policy: the capability resolver cannot resolve the legacy profile $bad, so its declared capabilities cannot be read. Fix it (bash scripts/check-rsr-profile.sh .). $rline" >&2 ;;
+    esac
+    return 1
   fi
   printf '%s\n' "$out" | sed -n 's/^effective capabilities: //p' | tr ' ' '\n' | sed '/^$/d'
 }
