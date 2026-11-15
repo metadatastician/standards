@@ -704,7 +704,7 @@ env_pin_rows() {
       # The value as compared across a refresh: a backslash in a single-quoted or plain scalar is
       # literal, so it is written as the escape \x5c, exactly as a decoded one in a double-quoted
       # scalar is; the two styles can then never produce the same text for different values.
-      fvv = val; if (c != "\"") gsub(/\\/, "\\x5c", fvv)
+      fvv = val; if (c != "\"") gsub(/\\/, "\\x5c", fvv); gsub(/\t/, "\\x09", fvv)
       low = tolower(val)
       if (!bad && length(low) == 40 && low ~ /^[0-9a-f]+$/) {
         if (low == tgt) row = sprintf("ENV-PIN-FRESH\t%s L%d %s", key, NR, substr(low, 1, 8))
@@ -742,7 +742,7 @@ env_pin_brief() {
   awk -F'\t' 'NF == 0 { next } {
     split($3, z, "\034"); v = z[2]
     if (v ~ /^[0-9a-fA-F]+$/ && length(v) == 40) v = substr(v, 1, 12)
-    else if (length(v) > 24) v = substr(v, 1, 24) "..."
+    else v = "[value not shown]"
     printf "%s %s %s;", $1, $2, v
   }'
 }

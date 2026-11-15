@@ -907,7 +907,7 @@ case_main_content_refresh() {
 # ones of the report: a changed branch name, a changed expression and two commits that
 # share their first 12 hex all count; an unchanged pin gives no row.
 case_main_content_refresh_envpin() {
-  local d old new want rows pair
+  local d old new want rows pair tab=$'\t'
   local c1="eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" c2="eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeef"
   local -a pairs=(
     "${c1}|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|3|a commit that moved"
@@ -917,6 +917,7 @@ case_main_content_refresh_envpin() {
     "[main]|[release]|3|a flow value that changed"
     "\"main\\x0arelease\"|\"main?release\"|3|an escaped line feed that became a question mark"
     "\"main\\x0arelease\"|'main\\x0arelease'|3|a double-quoted line feed that became a single-quoted literal backslash"
+    "'a${tab}b'|'a${tab}c'|3|a value that differs only after a literal tab"
     "main|main|0|an unchanged value"
   )
   for pair in "${pairs[@]}"; do
@@ -932,6 +933,14 @@ case_main_content_refresh_envpin() {
     else
       fail "main: refresh with ${rows}: want ${want} ENV-PIN-REFRESH-MOVED row(s), got $(grep -c 'ENV-PIN-REFRESH-MOVED' "$d/out") (rc=$(cat "$d/rc"))"
       sed 's/^/    /' "$d/out" >&2; tail -5 "$d/err" | sed 's/^/    /' >&2
+    fi
+    # The report never prints a value that is not a commit: only a 40-hex value is shown.
+    if [ "$want" != 0 ] && [ "$old" = main ] && [ "$new" = release ]; then
+      if grep -F 'ENV-PIN-REFRESH-MOVED' "$d/out" | grep -qE 'main|release'; then
+        fail "main: ENV-PIN-REFRESH-MOVED printed a branch name (non-commit values must not be shown)"
+      else
+        pass "main: ENV-PIN-REFRESH-MOVED does not print a non-commit value"
+      fi
     fi
   done
 }
@@ -1684,6 +1693,8 @@ list_mutant envpin_seq_position_dropped 's@if \(n > n0\) \{@if (0) {@' case_main
 list_mutant envpin_block_hash_line_dropped 's@if \(RLENGTH > skip && capk != ""\) capadd\(\$0\)@if (0) capadd($0)@' case_main_content_refresh_envpin_multiline
 list_mutant envpin_refresh_order_matters 's@ \| LC_ALL=C sort$@@' case_main_content_refresh_envpin_swap
 list_mutant envpin_literal_backslash_unescaped 's@if \(c != "\\""\) gsub\(@if (0) gsub(@' case_main_content_refresh_envpin
+list_mutant envpin_tab_unescaped 's@; gsub\(/\\t/, "\\\\x09", fvv\)@@' case_main_content_refresh_envpin
+list_mutant envpin_report_shows_values 's@else v = "\[value not shown\]"@else if (length(v) > 24) v = substr(v, 1, 24) "..."@' case_main_content_refresh_envpin
 list_mutant envpin_refresh_value_dropped 's@a\[1\], st, \$3@a[1], st, "-"@' case_main_content_refresh_envpin
 list_mutant envpin_refresh_move_silent 's@\[ "\$epb" = "\$epa" \] \|\|@true ||@' case_main_content_refresh_envpin
 # A stamped copy in the current layout (stamp on line 2) is still held by --fix:
