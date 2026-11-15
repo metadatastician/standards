@@ -65,7 +65,7 @@ for want in "fresh.yml" "behind.yml" "illegal.yml" "tracking.yml" "none.yml" "sh
             "bad-huge.json" "content-huge.yml" \
             "dot-local.yml" "dollar-managed.yml" "dollar-unmanaged.yml" "dollar-managed-parent.yml" \
             "owner-stale.lock" "owner-clean.lock" "owner-nonstandards.lock" "owner-tag-key.lock" \
-            "health-startup" "health-zero-shape" "health-healthy" "health-ref-suffix" "health-inprogress-ignored"; do
+            "health-startup" "health-zero-shape" "health-healthy" "health-ref-suffix" "health-inprogress-ignored" "health-tie-break" "health-pathless"; do
   grep -q "PASS $want" "$TMP/base.out" && pass "control present: $want" \
     || fail "control MISSING from baseline: $want (a control that never runs is not a control)"
 done
@@ -949,7 +949,7 @@ health_fixture() {
   echo '{"total_count": 0, "jobs": []}' > "$d/jobs_5.json"
   echo '{"total_count": 2, "jobs": [{"name": "Governance / lockfile verify", "conclusion": "failure"}, {"name": "build", "conclusion": "success"}]}' > "$d/jobs_6.json"
   echo '{"total_count": 1, "jobs": [{"name": "build", "conclusion": "failure"}]}' > "$d/jobs_9.json"
-  echo '{"total_count": 3, "jobs": [{"name": "build", "conclusion": "failure"}]}' > "$d/jobs_10.json"
+  echo '{"total_count": 3, "jobs": [{"name": "build", "conclusion": "failure"}, {"name": "test", "conclusion": "success"}, {"name": "lint", "conclusion": "success"}]}' > "$d/jobs_10.json"
 }
 
 # case_main_health <applier> — the health block lists startup failures, the
@@ -999,6 +999,24 @@ case_main_health_unread() {
   else
     fail "main: health unread handling wrong (rc=$(cat "$d/rc"), runs-unread rows=$n of 3)"
     sed 's/^/    /' "$d/out" "$d/err" | tail -12 >&2
+  fi
+}
+
+# case_main_health_paged <applier> — a failed run with more jobs than the first page
+# (100) says so: the first page's lock failure is still listed, and a HEALTH-UNREAD
+# row names how many of the jobs were read.
+case_main_health_paged() {
+  local d; d=$(new_case healthpaged)
+  health_fixture "$d"
+  echo '{"total_count": 150, "jobs": [{"name": "Governance / lockfile verify", "conclusion": "failure"}, {"name": "build", "conclusion": "success"}]}' > "$d/jobs_6.json"
+  run_content "$d" "$1" --only hyperpolymath/pub-a
+  if [ "$(cat "$d/rc")" = 0 ] \
+     && grep -qF "$(printf 'hyperpolymath/pub-a\tc.yml\tHEALTH-UNREAD\tonly 2 of the 150 jobs of latest failed run 6 were read (first page)')" "$d/out" \
+     && grep -qF "$(printf 'hyperpolymath/pub-a\tc.yml\tHEALTH-LOCK-FAILURE\t')" "$d/out"; then
+    pass "main: a run with more jobs than one page is HEALTH-UNREAD (jobs read of total), and the first page's lock failure is still listed"
+  else
+    fail "main: paged jobs not reported (rc=$(cat "$d/rc"))"
+    sed 's/^/    /' "$d/out" "$d/err" | tail -10 >&2
   fi
 }
 
@@ -1171,6 +1189,7 @@ case_main_health "$APPLIER"
 case_main_health_unread "$APPLIER"
 case_main_health_off "$APPLIER"
 case_main_health_cap "$APPLIER"
+case_main_health_paged "$APPLIER"
 case_main_content_fix "$APPLIER"
 case_main_content_refresh "$APPLIER"
 case_main_content_refused "$APPLIER" "a template that does not match its own stamp" \
@@ -1396,6 +1415,11 @@ list_mutant health_runs_unread_silent '/Actions runs could not be read/s@>> "\$t
 list_mutant health_jobs_unread_silent '/the jobs of latest failed run/s@>> "\$tsv"@>/dev/null@' case_main_health_unread
 list_mutant health_cap_ignored 's@if \[ "\$njobs" -ge "\$HEALTH_JOBS_CAP" \]; then@if false; then@' case_main_health_cap
 list_mutant health_off_ignored 's@\[ "\$HEALTH" -eq 1 \] \|\| return 0@true@' case_main_health_off
+list_mutant health_page_unnoticed 's@if \[ "\$jt" -gt "\$jn" \] 2>/dev/null; then@if false; then@' case_main_health_paged
+# Codex findings on #1600: same-second runs pick the newest by id, and a run with no
+# path is kept under a placeholder. Each is killed by a known-answer control.
+kill_mutant health_tie_break_lost 's@sort_by\(\[\.created_at, \.id\]\)@sort_by(.created_at)@' "FAIL health-tie-break"
+kill_mutant health_pathless_dropped 's@then "\(unknown workflow\)" else \. end@then "" else . end@' "FAIL health-pathless"
 }
 
 echo

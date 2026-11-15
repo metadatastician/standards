@@ -84,7 +84,8 @@
 #              no log is read, so this is a pointer, not a diagnosis.
 #   HEALTH-UNREAD  the run list (WORKFLOW column `(actions runs)`) or one run's jobs
 #              could not be read, or the per-repository jobs-read cap
-#              (HEALTH_JOBS_CAP) was reached. Never read as "healthy".
+#              (HEALTH_JOBS_CAP) was reached, or a run has more jobs than the first page
+#              (100) so some were not seen. Never read as "healthy".
 # A repository with no such row had no startup failure, no 0-job failure and no
 # lock-named job failure among those runs: NOT "all green". Cost: one request per
 # repository plus one per workflow file whose latest run failed, up to the cap.
@@ -427,23 +428,25 @@ deed_overcap() {
 # startup_failure (start_* = the latest); nzs = failures whose name equals the path
 # (the unplannable-run shape); fail_* = the latest conclusion `failure`; fail_zs = 1
 # when that run has the unplannable shape; last = the latest run's conclusion.
-# Only the `path` suffix after `@` (a ref) is dropped when comparing name to path.
+# Only the `path` suffix after `@` (a ref) is dropped when comparing name to path. A
+# run with no path is kept under the file name `(unknown workflow)` (never dropped), and
+# is never given the unplannable shape. Runs of one file are ordered by created_at then
+# id, so runs created in the same second still pick the newest.
 health_summary() {
   jq -r '
     def d: if . == null or . == "" then "-" else . end;
-    def base: (.path // "") | sub("@.*$"; "") | sub("^.*/"; "");
+    def base: ((.path // "") | sub("@.*$"; "") | sub("^.*/"; "")) | if . == "" then "(unknown workflow)" else . end;
     def full: (.path // "") | sub("@.*$"; "");
     [.workflow_runs[]? | select(.status == "completed") | . + {f: base}]
-    | map(select(.f != ""))
     | group_by(.f)[]
-    | (sort_by(.created_at) | reverse) as $r
+    | (sort_by([.created_at, .id]) | reverse) as $r
     | ($r | map(select(.conclusion == "startup_failure"))) as $s
     | ($r | map(select(.conclusion == "failure"))) as $fl
-    | ($fl | map(select((.name // "") == full))) as $z
+    | ($fl | map(select(full != "" and (.name // "") == full))) as $z
     | [ $r[0].f, ($r | length), ($s | length), ($s[0].id | d), ($s[0].created_at | d),
         (($s[0].head_sha // "")[0:8] | d), ($z | length), ($fl[0].id | d),
         ($fl[0].created_at | d), (($fl[0].head_sha // "")[0:8] | d),
-        (if ($fl[0] != null and (($fl[0].name // "") == ($fl[0] | full))) then 1 else 0 end),
+        (if ($fl[0] != null and ($fl[0] | full) != "" and (($fl[0].name // "") == ($fl[0] | full))) then 1 else 0 end),
         ($r[0].conclusion | d) ] | @tsv
   ' "$1"
 }
@@ -1162,6 +1165,18 @@ JSON
   hcheck health-ref-suffix   d.yml "d.yml|1|0|-|-|-|1|7|2026-11-12T00:00:00Z|77777777|1|failure"
   hcheck health-inprogress-ignored e.yml ""
 
+  # Same-second runs: the higher id is the newer run, whatever order the API listed
+  # them in. A run with no path is kept under a placeholder, never dropped.
+  jq -n --arg s "$sh1" '{workflow_runs: [
+    {id: 21, status: "completed", conclusion: "failure", name: "G", path: ".github/workflows/g.yml", created_at: "2026-11-12T00:00:00Z", head_sha: $s},
+    {id: 20, status: "completed", conclusion: "success", name: "G", path: ".github/workflows/g.yml", created_at: "2026-11-12T00:00:00Z", head_sha: $s},
+    {id: 30, status: "completed", conclusion: "startup_failure", name: null, path: null, created_at: "2026-11-12T00:00:00Z", head_sha: $s},
+    {id: 31, status: "completed", conclusion: "failure", name: null, path: "", created_at: "2026-11-13T00:00:00Z", head_sha: $s}
+  ]}' > "$d/runs2.json"
+  hs=$(health_summary "$d/runs2.json")
+  hcheck health-tie-break g.yml "g.yml|2|0|-|-|-|0|21|2026-11-12T00:00:00Z|11111111|0|failure"
+  hcheck health-pathless "(unknown workflow)" "(unknown workflow)|2|1|30|2026-11-12T00:00:00Z|11111111|0|31|2026-11-13T00:00:00Z|11111111|0|failure"
+
   echo "control: the lock relock is present"
   if [ -f "$RELOCK" ] && bash -n "$RELOCK"; then
     echo "  PASS $(basename "$RELOCK") present and parses"
@@ -1428,7 +1443,7 @@ repo_health() {
     rm -f "$resp"; return 0
   fi
   rm -f "$resp"
-  local f total nst sid sat ssha nzs fid fat fsha fzs last njobs=0 names jt
+  local f total nst sid sat ssha nzs fid fat fsha fzs last njobs=0 names jt jn
   while IFS=$'\t' read -r f total nst sid sat ssha nzs fid fat fsha fzs last; do
     [ -n "$f" ] || continue
     if [ "$nst" -gt 0 ]; then
@@ -1457,6 +1472,14 @@ repo_health() {
     if [ -n "$names" ]; then
       printf '%s\t%s\tHEALTH-LOCK-FAILURE\tfailed job(s) with "lock" in the name in latest failed run %s at %s (%s): %s (matched by job NAME; no log was read); latest completed run of this file: %s\n' \
         "$repo" "$f" "$fid" "$fat" "$fsha" "$names" "$last" >> "$tsv"
+    fi
+    # Only the first page (per_page=100) is read. A run with more jobs than that
+    # (a large matrix) has jobs this census did not see: say so, never read the first
+    # page as the whole run.
+    jn=$(jq -r '(.jobs | length)' "$jresp")
+    if [ "$jt" -gt "$jn" ] 2>/dev/null; then
+      printf '%s\t%s\tHEALTH-UNREAD\tonly %s of the %s jobs of latest failed run %s were read (first page); a lock-named failed job beyond it would not be seen\n' \
+        "$repo" "$f" "$jn" "$jt" "$fid" >> "$tsv"
     fi
     rm -f "$jresp"
   done <<< "$lines"
