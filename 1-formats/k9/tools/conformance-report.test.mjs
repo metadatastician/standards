@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { counts, state, checkedAssertions, corpusItems, render, delta, baseline } from './conformance-report.mjs';
+import { counts, state, checkedAssertions, corpusItems, render, delta, coordVerdict, collectBase } from './conformance-report.mjs';
 const row = (status, advisory = false) => ({ id: 'x', status, advisory, reason: '' });
 const json = (file, verdict = 'pass', findings = []) => JSON.stringify({ file, verdict, findings });
 test('known blocking failure remains red when other evidence is missing', () => {
@@ -41,28 +41,59 @@ test('debt is advisory only while untouched, and conforming exemptions fail', ()
   assert.equal(state(corpusItems(data, ['a'], new Set(['a']), new Set(['a']))), 'red');
   assert.equal(state(corpusItems(json('a'), ['a'], new Set(['a']), new Set())), 'red');
 });
-test('routed dialects are excluded rather than counted as validated contracts', () => {
-  const items = corpusItems(json('coordination.k9', 'routed'), ['coordination.k9'], new Set(), new Set());
-  assert.equal(counts(items).passed, 0);
-  assert.equal(counts(items).not_applicable, 1);
+const coordOf = (file, verdict, message = '') => new Map([[file, { verdict, message }]]);
+test('routed coordination files are graded by the coordination validator', () => {
+  const routed = json('coordination.k9', 'routed');
+  const run = (coord, ledger = new Set(), changed = new Set()) => corpusItems(routed, ['coordination.k9'], ledger, changed, coord);
+  const pass = run(coordOf('coordination.k9', 'pass'));
+  assert.equal(counts(pass).passed, 1);
+  assert.equal(counts(pass).not_applicable, 0);
+  assert.equal(state(run(coordOf('coordination.k9', 'fail', 'FAIL coordination.k9: bad'))), 'red');
+  assert.equal(state(run(coordOf('coordination.k9', 'none', 'no verdict'))), 'orange');
+  assert.equal(state(run(new Map())), 'orange');
+  assert.equal(state(run(coordOf('coordination.k9', 'fail', 'x'), new Set(['coordination.k9']))), 'yellow');
+  assert.equal(state(run(coordOf('coordination.k9', 'pass'), new Set(['coordination.k9']))), 'red');
 });
-test('comparisons require the same scope/profile and a different revision', () => {
-  const c = { id: 'corpus', counts: counts([row('pass')]) };
-  const current = { schema: 1, profile: 'p', pr: '12', sha: 'new', categories: [c] };
-  const previous = { ...current, sha: 'old', categories: [{ ...c, counts: counts([row('fail')]) }] };
-  assert.match(delta(current, previous, c), /improved/);
-  assert.match(delta(current, { ...previous, profile: 'other' }, c), /no comparable/);
-  assert.match(delta(current, current, c), /no comparable/);
-  assert.match(delta(current, { ...previous, categories: [{ ...c, counts: counts([row('indeterminate')]) }] }, c), /indeterminate/);
+test('coordination verdict rules match conformance-k9.sh cmd_coord', () => {
+  assert.equal(coordVerdict(0, 'PASS ./a.k9').verdict, 'pass');
+  assert.equal(coordVerdict(1, 'FAIL ./a.k9: x').verdict, 'fail');
+  assert.equal(coordVerdict(1, 'error: Cannot find module').verdict, 'none');
+  assert.equal(coordVerdict(0, 'ok').verdict, 'none');
+  assert.equal(coordVerdict(0, 'FAIL ./a.k9').verdict, 'none');
+  assert.equal(coordVerdict(1, 'PASS ./a.k9').verdict, 'none');
+  assert.equal(coordVerdict(null, '').verdict, 'none');
 });
-test('report escapes untrusted evidence and preserves a small valid baseline', () => {
+const cat = (items, tree = true) => ({ id: 'corpus', tree, counts: counts(items) });
+const baseOf = items => ({ sha: 'b', categories: [{ id: 'corpus', counts: counts(items) }] });
+test('delta compares this PR with its base', () => {
+  assert.match(delta(baseOf([row('fail')]), cat([row('pass')])), /improved/);
+  assert.match(delta(baseOf([row('pass')]), cat([row('fail')])), /regressed/);
+  assert.match(delta(baseOf([row('pass')]), cat([row('pass')])), /unchanged/);
+  assert.match(delta(baseOf([row('fail', true)]), cat([row('fail')])), /regressed \(1 more blocking/);
+  assert.match(delta(baseOf([row('pass')]), cat([row('fail', true)])), /more advisories|regressed/);
+  assert.match(delta({ sha: 'b', error: 'boom' }, cat([row('pass')])), /^— base not checkable: boom/);
+  assert.match(delta({ sha: 'b', categories: [] }, cat([row('pass')])), /^— base not checkable/);
+  assert.match(delta(baseOf([row('indeterminate')]), cat([row('pass')])), /indeterminate/);
+  assert.match(delta(baseOf([row('pass')]), cat([row('indeterminate')])), /indeterminate/);
+  assert.match(delta(baseOf([row('pass'), row('not_applicable')]), cat([row('pass')])), /scope changed/);
+  assert.match(delta(baseOf([row('pass')]), cat([row('pass')], false)), /checker only/);
+  assert.match(delta(null, cat([row('pass')])), /no base/);
+});
+test('report renders the base column and never reads a previous comment', () => {
+  const items = [row('pass')];
+  const r = { schema: 1, state: 'green', sha: 'abc', profile: 'p', pr: '1', run: 'local', url: '', base: { sha: 'b'.repeat(40), error: 'a | b <x>' }, categories: [{ id: 'corpus', title: 'Corpus', items, counts: counts(items), state: 'green' }] };
+  const body = render(r);
+  assert.ok(body.includes('This PR vs its base'));
+  assert.ok(body.includes('base not checkable: a &#124; b &lt;x&gt;'));
+  assert.ok(!body.includes('k9-baseline'));
+  assert.ok(body.startsWith('<!-- k9-contractile-report:'));
+});
+test('report escapes untrusted evidence', () => {
   const items = [{ id: '</details><script>x</script>', status: 'indeterminate', reason: 'bad | value\nnext' }];
   const r = { schema: 1, state: 'orange', sha: 'abc', profile: 'p', pr: '1', run: 'local', url: '', categories: [{ id: 'corpus', title: 'Corpus', items, counts: counts(items), state: 'orange' }] };
   const body = render(r);
   assert.ok(!body.includes('<script>'));
   assert.ok(body.includes('&#124;'));
-  assert.equal(baseline(body).sha, 'abc');
-  assert.equal(baseline('<!-- k9-baseline:xxx -->'), null);
 });
 // Keep this allowance outside Hypatia's file-wide header exemption window.
 // hypatia: allow code_safety/js_exec_sync -- spawnSync runs fixed test programs with argv arrays and no shell evaluation.
@@ -99,5 +130,16 @@ test('lock membership generator adds direct references and is idempotent', () =>
     const again = spawnSync('bash', [script, wf], { cwd: tmp, encoding: 'utf8' });
     assert.equal(again.status, 0, again.stderr);
     assert.equal(fs.readFileSync(lock, 'utf8'), first);
+  } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+});
+
+// hypatia: allow code_safety/js_exec_sync -- spawnSync runs git with argv arrays and no shell evaluation.
+test('collectBase reports an unresolvable base instead of faking one', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'k9-base-'));
+  try {
+    spawnSync('git', ['init', '-q'], { cwd: tmp });
+    assert.equal(collectBase(tmp, path.join(tmp, 'out'), { K9_BASE_SHA: '' }), null);
+    const r = collectBase(tmp, path.join(tmp, 'out'), { K9_BASE_SHA: 'a'.repeat(40), K9_HEAD_SHA: 'b'.repeat(40) });
+    assert.match(r.error, /cannot resolve the merge base/);
   } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
 });
