@@ -263,6 +263,10 @@ kill_mutant envpin_quote_hash_stripped 's@if \(c == "\\047" \|\| c == "\\""\) \{
 kill_mutant envpin_space_trim_dropped 's@ sub\(/\^\[\[:space:\]\]\+/, "", rest\)@@' "FAIL envpin-rows"
 kill_mutant envpin_multiline_quote_read 's@^    inq != "" \{ if@    inq == "NEVER" { if@' "FAIL envpin-rows"
 kill_mutant envpin_block_scalar_silent 's@if \(tracked\) printf "ENV-PIN-UNJUDGED\\t%s L%d value is a block scalar@if (0) printf "ENV-PIN-UNJUDGED\\t%s L%d value is a block scalar@' "FAIL envpin-rows"
+# Third Codex round on #1602: an anchor or tag before a scalar must not hide the scalar
+# style (a multi-line quote, a block scalar) nor the value itself.
+kill_mutant envpin_anchor_value_kept 's@; rest = props\(rest\)@@' "FAIL envpin-rows"
+kill_mutant envpin_anchor_hides_quote 's@bp = props\(body\);@bp = body;@' "FAIL envpin-rows"
 
 # --- 3. fetch_workflows fails CLOSED -----------------------------------------
 # A rate-limited repo used to come back as "no workflows": fetch_workflows

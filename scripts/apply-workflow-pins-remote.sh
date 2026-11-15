@@ -460,7 +460,8 @@ deed_overcap() {
 # Whitespace after the colon is not part of the value. A tracked key whose value is a
 # block scalar (`>-`, `|`) or a quoted scalar that runs over several lines is
 # UNJUDGED (one row, never silence); the lines of a multi-line quoted scalar are never
-# read as keys.
+# read as keys. An anchor or tag before a scalar (`&pin <sha>`, `!!str <sha>`, `run: &s "...`)
+# is dropped first, so the scalar style underneath decides how the value is read.
 ENV_PIN_NAMES='STANDARDS_PIN|CANON_REF'
 env_pin_rows() {
   LC_ALL=C awk -v target="$2" -v names="$ENV_PIN_NAMES" '
@@ -470,6 +471,12 @@ env_pin_rows() {
       t = line
       if (q == "\"") gsub(/\\./, "", t); else gsub(/\047\047/, "", t)
       return index(t, q) > 0
+    }
+    # props: drop YAML node properties (an anchor `&name`, a tag `!tag` / `!!str`) that
+    # precede a scalar, so the scalar style underneath is what gets tested.
+    function props(s) {
+      while (match(s, /^(&[^[:space:]]+|![^[:space:]]*)[[:space:]]+/)) s = substr(s, RLENGTH + 1)
+      return s
     }
     BEGIN { tgt = tolower(target); top = 0; skip = -1; inq = "" }
     inq != "" { if (qclose($0, inq)) inq = ""; next }
@@ -481,11 +488,12 @@ env_pin_rows() {
       if (skip >= 0) { if (n > skip) next; skip = -1 }
       body = substr(s, n + 1)
       while (match(body, /^-[[:space:]]+/)) { n += RLENGTH; body = substr(body, RLENGTH + 1) }
-      c0 = substr(body, 1, 1)
-      if ((c0 == "\047" || c0 == "\"") && !qclose(substr(body, 2), c0)) { inq = c0; next }
+      bp = props(body); c0 = substr(bp, 1, 1)
+      if ((c0 == "\047" || c0 == "\"") && !qclose(substr(bp, 2), c0)) { inq = c0; next }
       if (!match(body, /^[A-Za-z_][A-Za-z0-9_.-]*[[:space:]]*:([[:space:]]|$)/)) next
-      rest = substr(body, RLENGTH + 1); sub(/^[[:space:]]+/, "", rest)
-      key = substr(body, 1, RLENGTH); sub(/[[:space:]]*:.*$/, "", key)
+      kl = RLENGTH
+      key = substr(body, 1, kl); sub(/[[:space:]]*:.*$/, "", key)
+      rest = substr(body, kl + 1); sub(/^[[:space:]]+/, "", rest); rest = props(rest)
       while (top > 0 && ind[top] >= n) top--
       parent = (top > 0) ? knm[top] : ""
       top++; ind[top] = n; knm[top] = key
@@ -1280,6 +1288,18 @@ JSON
     printf '    env:\n'
     printf '      CANON_REF: %s"\n' "$eb"
     printf '  CANON_REF: %s\n' "$eb"
+    printf 'run: &script "echo\n'
+    printf '  env:\n'
+    printf '    CANON_REF: %s"\n' "$eb"
+    printf 'env:\n'
+    printf '  STANDARDS_PIN: &pin %s\n' "$t"
+    printf '  CANON_REF: !!str %s\n' "$eb"
+    printf '  STANDARDS_PIN: &blk >-\n'
+    printf '    %s\n' "$t"
+    printf 'steps:\n'
+    printf '  - &s "multi\n'
+    printf '    env:\n'
+    printf '      CANON_REF: %s"\n' "$eb"
   } > "$d/envpin.yml"
   local ep; ep=$(env_pin_rows "$d/envpin.yml" "$t" | tr '\t' '|')
   local epw="ENV-PIN-FRESH|STANDARDS_PIN L2 ${t:0:8}
@@ -1295,7 +1315,10 @@ ENV-PIN-BEHIND|CANON_REF L24 ${eb:0:8} (target ${t:0:8}); read-only: never re-po
 ENV-PIN-FRESH|STANDARDS_PIN L26 ${t:0:8}
 ENV-PIN-UNJUDGED|CANON_REF L27 value is a block scalar; not judged
 ENV-PIN-UNJUDGED|STANDARDS_PIN L29 value is a multi-line quoted scalar; not judged
-ENV-PIN-BEHIND|CANON_REF L32 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here"
+ENV-PIN-BEHIND|CANON_REF L32 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here
+ENV-PIN-FRESH|STANDARDS_PIN L37 ${t:0:8}
+ENV-PIN-BEHIND|CANON_REF L38 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here
+ENV-PIN-UNJUDGED|STANDARDS_PIN L39 value is a block scalar; not judged"
   if [ "$ep" = "$epw" ]; then echo "  PASS envpin-rows -> $(printf '%s\n' "$ep" | wc -l) row(s)"
   else echo "  FAIL envpin-rows -> got:
 $ep
