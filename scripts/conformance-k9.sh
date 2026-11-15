@@ -15,7 +15,8 @@
 #   enumerate   committed K9 files, changed files, shrink-only ledger growth
 #   validate    every committed K9 file, L0-L2 strict (CORPUS_CODE to $GITHUB_ENV)
 #   coord       coordination.k9 files against the v1.2 ABNF (their own grid category)
-#   previous    the previous grid comment, for the delta column (pull requests)
+#   base        the same lane on the BASE tree with this checker (the delta column)
+#   previous    the previous grid comment; used only when `base` was not run
 #   render      the verdict grid (state to $GITHUB_OUTPUT)
 #   gate        turn the grid state into the step's exit status
 #
@@ -133,7 +134,8 @@ cmd_coord() {
   : > "$RUNNER_TEMP/coord-results.jsonl"
   jq -r 'select(.verdict == "routed") | .file' "$RUNNER_TEMP/results.jsonl" > "$RUNNER_TEMP/routed" 2>/dev/null
   if [ -s "$RUNNER_TEMP/routed" ]; then
-    V="$PWD/$CANON/2-protocols/k9-coordination/tools/validate"
+    # CANON is relative in a caller (.k9-canon, or . here) and absolute in the base run.
+    case "$CANON" in /*) V="$CANON/2-protocols/k9-coordination/tools/validate" ;; *) V="$PWD/$CANON/2-protocols/k9-coordination/tools/validate" ;; esac
     if (cd "$V" && bun install --frozen-lockfile >"$RUNNER_TEMP/coord-install.log" 2>&1); then
       while IFS= read -r f; do
         [ -n "$f" ] || continue
@@ -186,6 +188,58 @@ cmd_previous() {
   [ -s "$RUNNER_TEMP/previous.md" ] && echo "previous grid found" || echo "no previous grid"
 }
 
+# The lane's own checker (CANON) on the BASE tree: a like-for-like baseline for the
+# delta column. A pull request compares with its merge base, a push with the
+# commit it replaced. The result is either k9-base-grid/report.json or base-error;
+# a base that cannot be graded is said so, never blank and never faked. This step
+# never fails the job.
+cmd_base() {
+  set +e
+  rm -rf "$RUNNER_TEMP/k9-base-grid" "$RUNNER_TEMP/base-error"
+  fail() { printf '%s\n' "$1" > "$RUNNER_TEMP/base-error"; echo "::notice::base comparison unavailable: $1"; }
+  case "${BASE_SHA:-}" in *[!0]*) ;; *) BASE_SHA="" ;; esac
+  [ -n "$BASE_SHA" ] || { fail "no base commit (new ref or manual run)"; return 0; }
+  local ref rt tree canon
+  if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+    ref=$(git merge-base "$BASE_SHA" "$HEAD_SHA" 2>/dev/null) || ref=""
+  else
+    ref=$(git rev-parse --verify "$BASE_SHA^{commit}" 2>/dev/null) || ref=""
+  fi
+  [ -n "$ref" ] || { fail "cannot resolve the base commit ${BASE_SHA:0:12}"; return 0; }
+  rt="$RUNNER_TEMP/base"; rm -rf "$rt"; mkdir -p "$rt"
+  tree=$(mktemp -d "$RUNNER_TEMP/k9-base-tree.XXXXXX")
+  if ! git worktree add --detach --quiet "$tree" "$ref" 2> "$rt/worktree.log"; then
+    rm -rf "$tree"; fail "cannot check out ${ref:0:12}"; return 0
+  fi
+  canon=$(cd "$CANON" && pwd)
+  : > "$rt/env"
+  # Each step in its own subshell: cmd_enumerate exits early by design.
+  ok=1
+  ( cd "$tree" && RUNNER_TEMP="$rt" CANON="$canon" GITHUB_ENV="$rt/env" BASE_SHA="" cmd_enumerate ) > "$rt/lane.log" 2>&1 || ok=0
+  [ "$ok" = 1 ] && { ( cd "$tree" && RUNNER_TEMP="$rt" CANON="$canon" GITHUB_ENV="$rt/env" cmd_validate ) >> "$rt/lane.log" 2>&1 || ok=0; }
+  [ "$ok" = 1 ] && { ( cd "$tree" && RUNNER_TEMP="$rt" CANON="$canon" GITHUB_ENV="$rt/env" cmd_coord ) >> "$rt/lane.log" 2>&1 || ok=0; }
+  if [ "$ok" = 1 ]; then
+    corpus_code=$(sed -n 's/^CORPUS_CODE=//p' "$rt/env" | tail -n1)
+    args=(--out "$RUNNER_TEMP/k9-base-grid" --results "$rt/results.jsonl" --expected "$rt/expected" --changed "$rt/changed"
+          --selftest "$RUNNER_TEMP/selftest.log" --selftest-code "${SELFTEST_CODE:-}" --typecheck "$RUNNER_TEMP/typecheck.log"
+          --typecheck-code "${TYPECHECK_CODE:-}" --corpus-code "${corpus_code:-}" --sha "$ref" --run "$GITHUB_RUN_ID"
+          --pr "${PR_NUMBER:-local}" --repo "$GITHUB_REPOSITORY" --canon-ref "${CANON_REF:-}" --lane k9-base)
+    [ -f "$tree/${LEDGER:-.machine_readable/k9-contract-debt.txt}" ] && args+=(--ledger "$tree/${LEDGER:-.machine_readable/k9-contract-debt.txt}")
+    [ -f "$rt/coord-results.jsonl" ] && args+=(--coord-results "$rt/coord-results.jsonl")
+    [ "${REQUIRE_FILES:-}" = "true" ] && args+=(--require-files)
+    env -u GITHUB_STEP_SUMMARY -u GITHUB_OUTPUT bash "$CANON/scripts/k9-grid.sh" render "${args[@]}" > "$rt/render.log" 2>&1 \
+      && [ -s "$RUNNER_TEMP/k9-base-grid/report.json" ] || ok=0
+  fi
+  git worktree remove --force "$tree" >/dev/null 2>&1; rm -rf "$tree"
+  if [ "$ok" = 1 ]; then
+    echo "base grid for ${ref:0:12}: $(jq -r .state "$RUNNER_TEMP/k9-base-grid/report.json")"
+  else
+    rm -rf "$RUNNER_TEMP/k9-base-grid"
+    fail "the lane could not grade ${ref:0:12} (see base/lane.log in the artifact)"
+  fi
+  return 0
+}
+
 cmd_render() {
   set -euo pipefail
   ledger=.machine_readable/k9-contract-debt.txt
@@ -196,7 +250,10 @@ cmd_render() {
         --canon-ref "$CANON_REF")
   [ -f "$ledger" ] && args+=(--ledger "$ledger")
   [ -s "$RUNNER_TEMP/ledger-growth" ] && args+=(--ledger-growth "$RUNNER_TEMP/ledger-growth")
-  [ -s "$RUNNER_TEMP/previous.md" ] && args+=(--previous "$RUNNER_TEMP/previous.md")
+  # The base grid when the `base` step ran; the previous comment only when it did not.
+  if [ -s "$RUNNER_TEMP/k9-base-grid/report.json" ]; then args+=(--base-report "$RUNNER_TEMP/k9-base-grid/report.json")
+  elif [ -s "$RUNNER_TEMP/base-error" ]; then args+=(--base-error "$(head -n1 "$RUNNER_TEMP/base-error")")
+  elif [ -s "$RUNNER_TEMP/previous.md" ]; then args+=(--previous "$RUNNER_TEMP/previous.md"); fi
   [ -n "${BASE_UNRESOLVED:-}" ] && args+=("$BASE_UNRESOLVED")
   [ -f "$RUNNER_TEMP/coord-results.jsonl" ] && args+=(--coord-results "$RUNNER_TEMP/coord-results.jsonl")
   # With require-files the empty corpus is a failing row in the grid
@@ -206,6 +263,11 @@ cmd_render() {
   cp "$RUNNER_TEMP/selftest.log" "$RUNNER_TEMP/typecheck.log" "$RUNNER_TEMP/results.jsonl" "$RUNNER_TEMP/k9-grid/"
   [ -f "$RUNNER_TEMP/coord-results.jsonl" ] && cp "$RUNNER_TEMP/coord-results.jsonl" "$RUNNER_TEMP/k9-grid/"
   [ -f "$RUNNER_TEMP/corpus.log" ] && cp "$RUNNER_TEMP/corpus.log" "$RUNNER_TEMP/k9-grid/"
+  if [ -d "$RUNNER_TEMP/base" ]; then
+    mkdir -p "$RUNNER_TEMP/k9-grid/base"
+    cp "$RUNNER_TEMP/base/lane.log" "$RUNNER_TEMP/base/results.jsonl" "$RUNNER_TEMP/k9-grid/base/" 2>/dev/null || true
+    [ -f "$RUNNER_TEMP/k9-base-grid/report.json" ] && cp "$RUNNER_TEMP/k9-base-grid/report.json" "$RUNNER_TEMP/k9-grid/base/"
+  fi
 }
 
 cmd_gate() {
@@ -241,6 +303,6 @@ cmd_gate() {
 }
 
 case "${1:-}" in
-  selftest|typecheck|enumerate|validate|coord|previous|render|gate) "cmd_$1" ;;
-  *) sed -n '5,24p' "$0" >&2; exit 2 ;;
+  selftest|typecheck|enumerate|validate|coord|base|previous|render|gate) "cmd_$1" ;;
+  *) sed -n '5,26p' "$0" >&2; exit 2 ;;
 esac

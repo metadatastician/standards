@@ -257,6 +257,36 @@ deed_subclauses() {
         i--; kw = (substr(a, 1, 1) == ":") } }
     exit }'
 }
+# deed_notes_faults : on stdin one comment-free (rsr-profile …) clause on a
+# single line; prints one line per fault inside its (notes …): anything but
+# :<name> "…" pairs (a nested clause, a list, a bare value, a dangling key) or
+# a name given twice. Prints nothing when every (notes …) is prose only.
+deed_notes_faults() {
+  awk 'BEGIN { dq = sprintf("%c", 34); bs = sprintf("%c", 92) }
+  function atom(   a) { a = ""
+    while (i <= n && substr(s, i, 1) !~ /[[:space:]()]/ && substr(s, i, 1) != dq) { a = a substr(s, i, 1); i++ }
+    return a }
+  { s = $0; n = length(s); d = 0; q = 0; innotes = 0; key = ""
+    for (i = 1; i <= n; i++) { c = substr(s, i, 1)
+      if (q) { if (c == bs) i++; else if (c == dq) q = 0; continue }
+      if (c ~ /[[:space:]]/) continue
+      if (c == dq) { q = 1
+        if (innotes && d == 2) { if (key == "") print "a value with no :name"; key = "" }
+        continue }
+      if (c == "(") { d++
+        if (d == 2) { i++; h = atom(); i--
+          if (h == "notes") { innotes = 1; key = ""; split("", seen) } }
+        else if (innotes && d == 3) print "a nested form"
+        continue }
+      if (c == ")") { if (innotes && d == 2) { if (key != "") print "a dangling :" key; innotes = 0 }; d--; continue }
+      a = atom(); i--
+      if (innotes && d == 2) {
+        if (substr(a, 1, 1) == ":") {
+          if (key != "") print "a non-string value for :" key
+          key = substr(a, 2); if (key in seen) print "a repeated :" key; seen[key] = 1 }
+        else { print "a bare value " a; key = "" } } }
+    exit }'
+}
 # rsr_profile_closed : refuse the clause on any key outside the module's set.
 rsr_profile_closed() {
   local out tooldir deed k
@@ -274,6 +304,14 @@ rsr_profile_closed() {
       return 2 ;; esac
   done <<< "$(printf '%s\n' "$_fields" | awk -F '\t' 'NF && $2 != "" { print ":" $2 }'
               printf '%s\n' "$_clauses" | head -1 | deed_subclauses | awk 'NF { print "(" $0 ")" }')"
+  # (notes …) holds prose only: the AST path has the module check it; here the
+  # awk path looks inside it too, so a nested form there cannot hide (#1605).
+  local fault
+  fault="$(printf '%s\n' "$_clauses" | head -1 | deed_notes_faults | head -1)"
+  if [ -n "$fault" ]; then
+    echo "ERROR: $DEED: (rsr-profile (notes …)) holds prose only, :<name> \"…\" each once, but has $fault (A7 J39)" >&2
+    return 2
+  fi
   return 0
 }
 

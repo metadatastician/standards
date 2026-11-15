@@ -82,7 +82,7 @@ on:
         required: false
         default: false
       grid-author:
-        description: "The account that posts the grid comment in the caller; only its comment is read as the previous revision's baseline, so a contributor's comment cannot pose as one."
+        description: "No longer used: the delta column grades the base tree with this lane's own checker and reads no comment. Kept so existing callers keep working."
         type: string
         required: false
         default: github-actions[bot]
@@ -253,15 +253,21 @@ jobs:
         # grid grades it. If the validator cannot run, no record is written
         # and the routed file stays indeterminate (orange), never green.
         run: bash "$LANE" coord
-      - name: Read the grid comment from the previous revision (delta column)
+      - name: Grade the base tree with this checker (delta column)
         continue-on-error: ${{ inputs.advisory == true }}
-        if: github.event_name == 'pull_request'
+        # The same validator and renderer on the commit this change compares
+        # with (a pull request's merge base; a push's `before`), so "This PR vs
+        # its base" is like-for-like by construction. No comment is read, so
+        # `grid-author` and `pull-requests: read` are no longer used. A base
+        # that cannot be graded is reported as such in the column.
         env:
-          GH_TOKEN: ${{ github.token }}
-          COMMENTS_URL: ${{ github.event.pull_request.comments_url }}
-          MARKER: '<!-- verdict-grid:k9 regenerated on every run -->'
-          GRID_AUTHOR: ${{ inputs.grid-author || 'github-actions[bot]' }}
-        run: bash "$LANE" previous
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          LEDGER: .machine_readable/k9-contract-debt.txt
+          ADVISORY: ${{ inputs.advisory || false }}
+          REQUIRE_FILES: ${{ inputs.require-files || false }}
+          PR_NUMBER: ${{ github.event.pull_request.number || 'local' }}
+        run: bash "$LANE" base
       - name: Render the verdict grid
         continue-on-error: ${{ inputs.advisory == true }}
         id: grid

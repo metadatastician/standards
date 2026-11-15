@@ -281,6 +281,12 @@ d=$(repo_deed deedunkclause '  (rsr-profile :version "1.0.0" :capabilities ("rus
 assert "an unknown (rsr-profile …) sub-clause refuses the clause" 2 "J39" bash "$CHECK" "$d"
 d=$(repo_deed deedunkparen '  (rsr-profile :version "1.0.0" :declares-against "(extras)" :capabilities ("rust"))')
 assert "a parenthesis inside a string is not a sub-clause" 0 "rsr-profile check: OK" bash "$CHECK" "$d"
+# (notes …) is prose only on both paths (Codex on #1605): a nested form or a
+# repeated name inside it refuses the clause.
+d=$(repo_deed deednotesnest '  (rsr-profile :version "1.0.0" :capabilities ("rust") (notes (more)))')
+assert "a nested form inside (notes …) refuses the clause" 2 "prose only" bash "$CHECK" "$d"
+d=$(repo_deed deednotesdup '  (rsr-profile :version "1.0.0" :capabilities ("rust") (notes :why "a" :why "b"))')
+assert "a repeated name inside (notes …) refuses the clause" 2 "once" bash "$CHECK" "$d"
 # A list after a :keyword is the field's value, never a sub-clause, even when
 # its items are symbols. The module wants strings, which only the AST path
 # can check; the awk path checks keys alone.

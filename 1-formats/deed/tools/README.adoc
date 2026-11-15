@@ -498,13 +498,16 @@ Checks the `(rsr-profile …)` clause of a `<repo>_chora.deed` against
 
 * `:version` is required; `:spec`, `:declares-against`, `:role` and `:preset`
   are non-empty strings; `:capabilities`, `:add` and `:remove` are lists of
-  non-empty strings, each item once; at least one of `:capabilities` and
-  `:preset`;
+  non-empty strings, each item once; a non-empty `:capabilities`, a
+  `:preset`, or both (an empty `:capabilities` declares nothing, as
+  `check-rsr-profile.sh` reads it);
 * `(notes …)`, at most once, holds prose only (`:<name> "…"` fields such as
-  `:omitted-rationale`): a `:role` inside it is never the profile's role;
+  `:omitted-rationale`, each once): a `:role` inside it is never the profile's
+  role;
 * any other field or clause refuses the clause. A reader never skips an
   unknown key (J39);
-* the clause sits once, at the top level of a repo deed.
+* the clause sits once, at the top level of a `<repo>_chora.deed` (never in
+  `0-AI-MANIFEST.deed`, though that is a repo-deed too).
 
 Whether a capability or preset is known is the gate table's business, checked
 by `scripts/check-rsr-profile.sh`. That script refuses a clause with an unknown

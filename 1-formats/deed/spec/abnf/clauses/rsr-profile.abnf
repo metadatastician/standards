@@ -17,11 +17,14 @@
 ; deed.abnf's; str-list is common.abnf's. Requires RFC 7405 (%s"..."
 ; case-sensitive literals).
 ;
-; Where it applies: the top level of a <repo>_chora.deed (head repo-deed), at
+; Where it applies: the top level of a <repo>_chora.deed (head repo-deed, and
+; that file name: 0-AI-MANIFEST.deed is a repo-deed but never carries it), at
 ; most once (check-rsr-profile.sh refuses two). SEMANTIC (validator-enforced,
 ; deed_lint.js --rsr-profile):
-;   * :version is present; every field at most once; (notes …) at most once;
-;   * at least one of :capabilities and :preset;
+;   * :version is present; every field at most once, inside (notes …) too;
+;     (notes …) at most once;
+;   * a non-empty :capabilities, a :preset, or both (an empty :capabilities
+;     declares nothing, as check-rsr-profile.sh reads it);
 ;   * the strings are not empty; list items are not empty and appear once;
 ;   * no other field and no other clause: a reader that meets an unknown key
 ;     refuses the clause, never skips it (J39).
