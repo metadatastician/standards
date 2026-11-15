@@ -412,7 +412,8 @@ Rules that follow:
 . *Never mix them.* A clade placement in the chora says where the repo sits in the estate. A `CLADE.deed` scheme says how the repo arranges its own content. Neither is ever written into the other's file, and neither is the repo's id.
 . *A clade placement is not a clade file.* The word "clade" in `(clade …)` and in `CLADE.deed` names two different things. A tool that reads one MUST NOT treat it as the other.
 . *No `CLADE.deed` yet.* `deed.abnf` dispatches `CLADE.deed` to `descriptile-deed` (A7 J14), but the `clade` module (A7 M3) has not landed, so no `CLADE.deed` can be checked. None is created until it lands. Then every repo carries one, in the minimum form `:in-use #f` with `:of-chora` when unused (A7 S4).
-. *Legacy `CLADE.a2ml` is deprecated.* Its content splits as `1-formats/deed/mappings/clade-to-repo-deed.adoc` directs: identity content goes to the chora deed, and lifecycle content goes to `STATE.deed` (A7 J15). Nothing from it goes into `CLADE.deed`.
+. *A placement comes from the registry.* A chora's `(clade …)` placement is taken from chora-registry. It is never decided from a legacy file, and never guessed.
+. *Legacy `CLADE.a2ml` is deprecated.* So is an A2ML file renamed to `CLADE.deed` without being converted (for example a `CLADE.deed` that holds TOML). Both mixed the two sides. Their content splits as `1-formats/deed/mappings/clade-to-repo-deed.adoc` directs: identity content goes to the chora deed, and lifecycle content goes to `STATE.deed` (A7 J15). Nothing from them goes into `CLADE.deed`.
 
 == 12. Evidence base
 
