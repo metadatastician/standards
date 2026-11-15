@@ -95,7 +95,9 @@
 # A sequence item is its own place (`[i]`) in the path of the refresh
 # comparison. `\UXXXXXXXX` escapes are decoded like `\x` and `\u`; a decoded character that is
 # not printable ASCII (or is a backslash) is kept as its own escape (`\x0a`), so a value stays
-# lossless and one row never spans two lines.
+# lossless and one row never spans two lines; a literal backslash in a single-quoted or plain
+# value is written the same way (`\x5c`) in the refresh comparison. A `#` right after `,`, `[`
+# or `{` starts a comment inside a flow collection.
 # A key under `strategy: matrix:` is matrix data (a job that is merely named `matrix` is not), not an environment map, and gets no row. A
 # double-quoted pin value is decoded (\xHH, \uHHHH in ASCII, \\ \" \/) before it is judged.
 # An empty `KEY:` whose value is an indented node on the next line is reported UNJUDGED ("value is on the
@@ -571,7 +573,7 @@ env_pin_rows() {
           else if (ch == q) { if (q == "\047" && substr(line, i + 1, 1) == "\047") i++; else { q = ""; pl = 0; cq = 1 } }
         }
         else if ((ch == "\047" || ch == "\"") && isb) q = ch
-        else if (ch == "#" && prev ~ /[[:space:]]/) break
+        else if (ch == "#" && prev ~ /[[:space:],\[{]/) break
         else if (ch == "{" || ch == "[") { d++; pl = 0 }
         else if (ch == "}" || ch == "]") { d--; pl = 0 }
         else if (ch == "," || (ch == "?" && !pl)) pl = 0
@@ -699,6 +701,10 @@ env_pin_rows() {
         sub(/[[:space:]]+#.*$/, "", val); sub(/[[:space:]]+$/, "", val)
         if (val ~ /^#/) val = ""
       }
+      # The value as compared across a refresh: a backslash in a single-quoted or plain scalar is
+      # literal, so it is written as the escape \x5c, exactly as a decoded one in a double-quoted
+      # scalar is; the two styles can then never produce the same text for different values.
+      fvv = val; if (c != "\"") gsub(/\\/, "\\x5c", fvv)
       low = tolower(val)
       if (!bad && length(low) == 40 && low ~ /^[0-9a-f]+$/) {
         if (low == tgt) row = sprintf("ENV-PIN-FRESH\t%s L%d %s", key, NR, substr(low, 1, 8))
@@ -706,14 +712,14 @@ env_pin_rows() {
         if (c == "\047" || c == "\"") outr(row, low)
         else { pend = row; pv = low; pcp = cp; pn = n; pcont = sprintf("ENV-PIN-UNJUDGED\t%s L%d value continues on the next line (a folded plain scalar); not judged", key, NR) }
       } else if (!bad && val ~ /\$\{\{/) {
-        outr(sprintf("ENV-PIN-DYNAMIC\t%s L%d is an expression; not judged", key, NR), val)
+        outr(sprintf("ENV-PIN-DYNAMIC\t%s L%d is an expression; not judged", key, NR), fvv)
       } else if (val == "" && !bad && c != "\047" && c != "\"") {
         # An empty value may be completed by an indented node on the next line: hold the row.
         pend = sprintf("ENV-PIN-UNJUDGED\t%s L%d value is not a 40-hex commit: (empty)", key, NR); pv = ""; pcp = cp; pn = n
         pcont = sprintf("ENV-PIN-UNJUDGED\t%s L%d value is on the next line (an indented node); not judged", key, NR)
       } else {
         gsub(/[\t]/, " ", val)
-        outr(sprintf("ENV-PIN-UNJUDGED\t%s L%d value is not a 40-hex commit: %s", key, NR, (val == "" ? "(empty)" : substr(val, 1, 24))), val)
+        outr(sprintf("ENV-PIN-UNJUDGED\t%s L%d value is not a 40-hex commit: %s", key, NR, (val == "" ? "(empty)" : substr(val, 1, 24))), fvv)
       }
     }
     END { capflush(); if (pend != "") flushp(pend) }
@@ -1634,6 +1640,10 @@ JSON
     printf 'env:\n'
     printf '  CANON_REF: |-  \n'
     printf '    text\n'
+    printf 'env: [foo,# comment with [\n'
+    printf '  bar]\n'
+    printf 'env:\n'
+    printf '  CANON_REF: %s\n' "$eb"
   } > "$d/envpin.yml"
   local ep; ep=$(env_pin_rows "$d/envpin.yml" "$t" | tr '\t' '|')
   local epw="ENV-PIN-FRESH|STANDARDS_PIN L2 ${t:0:8}
@@ -1681,7 +1691,8 @@ ENV-PIN-UNJUDGED|(alias env) L151 an env map supplied by an alias (*name) is not
 ENV-PIN-UNJUDGED|(alias env) L158 an env map supplied by an alias (*name) is not resolved; env pins in this file may be missed
 ENV-PIN-BEHIND|CANON_REF L164 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here
 ENV-PIN-BEHIND|CANON_REF L167 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here
-ENV-PIN-UNJUDGED|CANON_REF L169 value is a block scalar; not judged"
+ENV-PIN-UNJUDGED|CANON_REF L169 value is a block scalar; not judged
+ENV-PIN-BEHIND|CANON_REF L174 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here"
   if [ "$ep" = "$epw" ]; then echo "  PASS envpin-rows -> $(printf '%s\n' "$ep" | wc -l) row(s)"
   else echo "  FAIL envpin-rows -> got:
 $ep

@@ -276,7 +276,7 @@ kill_mutant envpin_flow_multiline_read 's@^    flow > 0 \{ flow@    flow > 99 { 
 kill_mutant envpin_flow_value_silent 's@if \(tracked\) outr\(sprintf\("ENV-PIN-UNJUDGED\\t%s L%d value is a flow collection@if (0) outr(sprintf("ENV-PIN-UNJUDGED\\t%s L%d value is a flow collection@' "FAIL envpin-rows"
 # Fifth Codex round on #1602: a bracket inside a comment or a quoted scalar is not flow
 # structure, so it must not end (or open) a flow collection early.
-kill_mutant envpin_flow_comment_counted 's@else if \(ch == "#" && prev ~ /\[\[:space:\]\]/\) break@else if (0) break@' "FAIL envpin-rows"
+kill_mutant envpin_flow_comment_counted 's@else if \(ch == "#" && prev ~ /\[\[:space:\],\\\[\{\]/\) break@else if (0) break@' "FAIL envpin-rows"
 kill_mutant envpin_flow_quote_counted 's@else if \(\(ch == "\\047" \|\| ch == "\\""\) && isb\) q = ch@else if (0) q = ch@' "FAIL envpin-rows"
 # Seventh Codex round on #1602: an anchor or tag on a mapping key, a CR or trailing
 # whitespace after a block-scalar header, and a quote that stays open across the lines
@@ -330,6 +330,9 @@ kill_mutant envpin_alias_comment_unstripped 's@ab = bp; sub\(/\[\[:space:\]\]\+#
 # Twenty-first round: continuation lines of ordinary plain values, a property-only explicit value, and a
 # quote just before an embedded colon.
 kill_mutant envpin_plain_value_continuation 's@if \(n > pc\) \{ skip = pc; pc = -1; next \}@if (0) { skip = pc; pc = -1; next }@' "FAIL envpin-rows"
+# Twenty-second round: a comment right after a flow separator, and a literal backslash that must not
+# read as a decoded escape.
+kill_mutant envpin_comma_hash_not_comment 's@prev ~ /\[\[:space:\],\\\[\{\]/\) break@prev ~ /[[:space:]]/) break@' "FAIL envpin-rows"
 kill_mutant envpin_explicit_propline_top 's@\(top == 0 \|\| ind\[top\] < n\)@(top > 0 \&\& ind[top] < n)@' "FAIL envpin-explicit-propline"
 kill_mutant envpin_quote_before_colon 's@ \|\| jq\) \? 0 : 1@ || prev ~ /["\\047]/) ? 0 : 1@' "FAIL envpin-rows"
 kill_mutant envpin_escape_flattened 's@else o = o \(\(v > 255\) \? sprintf\("\\\\u%04x", v\) : sprintf\("\\\\x%02x", v\)\)@else o = o "?"@' "FAIL envpin-rows"
@@ -913,6 +916,7 @@ case_main_content_refresh_envpin() {
     "${c1}|${c2}|3|two commits that share their first 12 hex"
     "[main]|[release]|3|a flow value that changed"
     "\"main\\x0arelease\"|\"main?release\"|3|an escaped line feed that became a question mark"
+    "\"main\\x0arelease\"|'main\\x0arelease'|3|a double-quoted line feed that became a single-quoted literal backslash"
     "main|main|0|an unchanged value"
   )
   for pair in "${pairs[@]}"; do
@@ -1679,6 +1683,7 @@ list_mutant envpin_block_text_dropped 's@function capadd\(t\) \{ gsub@function c
 list_mutant envpin_seq_position_dropped 's@if \(n > n0\) \{@if (0) {@' case_main_content_refresh_envpin_seq
 list_mutant envpin_block_hash_line_dropped 's@if \(RLENGTH > skip && capk != ""\) capadd\(\$0\)@if (0) capadd($0)@' case_main_content_refresh_envpin_multiline
 list_mutant envpin_refresh_order_matters 's@ \| LC_ALL=C sort$@@' case_main_content_refresh_envpin_swap
+list_mutant envpin_literal_backslash_unescaped 's@if \(c != "\\""\) gsub\(@if (0) gsub(@' case_main_content_refresh_envpin
 list_mutant envpin_refresh_value_dropped 's@a\[1\], st, \$3@a[1], st, "-"@' case_main_content_refresh_envpin
 list_mutant envpin_refresh_move_silent 's@\[ "\$epb" = "\$epa" \] \|\|@true ||@' case_main_content_refresh_envpin
 # A stamped copy in the current layout (stamp on line 2) is still held by --fix:
