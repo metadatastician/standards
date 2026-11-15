@@ -262,7 +262,7 @@ kill_mutant envpin_quote_hash_stripped 's@if \(c == "\\047" \|\| c == "\\""\) \{
 # and a block-scalar value must each be handled, not misread or silent.
 kill_mutant envpin_space_trim_dropped 's@ sub\(/\^\[\[:space:\]\]\+/, "", rest\)@@' "FAIL envpin-rows"
 kill_mutant envpin_multiline_quote_read 's@^    inq != "" \{ if@    inq == "NEVER" { if@' "FAIL envpin-rows"
-kill_mutant envpin_block_scalar_silent 's@if \(tracked\) printf "ENV-PIN-UNJUDGED\\t%s L%d value is a block scalar@if (0) printf "ENV-PIN-UNJUDGED\\t%s L%d value is a block scalar@' "FAIL envpin-rows"
+kill_mutant envpin_block_scalar_silent 's@if \(tracked\) outr\(sprintf\("ENV-PIN-UNJUDGED\\t%s L%d value is a block scalar@if (0) outr(sprintf("ENV-PIN-UNJUDGED\\t%s L%d value is a block scalar@' "FAIL envpin-rows"
 # Third Codex round on #1602: an anchor or tag before a scalar must not hide the scalar
 # style (a multi-line quote, a block scalar) nor the value itself.
 kill_mutant envpin_anchor_value_kept 's@; rest = props\(rest\)@@' "FAIL envpin-rows"
@@ -271,7 +271,7 @@ kill_mutant envpin_anchor_hides_quote 's@bp = props\(body\);@bp = body;@' "FAIL 
 # tracked to its closing bracket (its lines are not keys), and a tracked key whose own
 # value is one must be reported, not skipped.
 kill_mutant envpin_flow_multiline_read 's@^    flow > 0 \{ flow@    flow > 99 { flow@' "FAIL envpin-rows"
-kill_mutant envpin_flow_value_silent 's@if \(tracked\) printf "ENV-PIN-UNJUDGED\\t%s L%d value is a flow collection@if (0) printf "ENV-PIN-UNJUDGED\\t%s L%d value is a flow collection@' "FAIL envpin-rows"
+kill_mutant envpin_flow_value_silent 's@if \(tracked\) outr\(sprintf\("ENV-PIN-UNJUDGED\\t%s L%d value is a flow collection@if (0) outr(sprintf("ENV-PIN-UNJUDGED\\t%s L%d value is a flow collection@' "FAIL envpin-rows"
 # Fifth Codex round on #1602: a bracket inside a comment or a quoted scalar is not flow
 # structure, so it must not end (or open) a flow collection early.
 kill_mutant envpin_flow_comment_counted 's@else if \(ch == "#" && prev ~ /\[\[:space:\]\]/\) break@else if (0) break@' "FAIL envpin-rows"
@@ -291,8 +291,8 @@ kill_mutant envpin_quote_escape_first 's@q = qend\(val\)@q = index(substr(val, 2
 # Ninth round on #1602: a block scalar as a sequence item, a plain scalar that continues on
 # the next line, and YAML explicit mapping keys (not parsed, and said so).
 kill_mutant envpin_seq_blockscalar_read 's@skip = n0; next@next@' "FAIL envpin-rows"
-kill_mutant envpin_plain_continuation_ignored 's@if \(n > pn\) print pcont; else print pend@print pend@' "FAIL envpin-rows"
-kill_mutant envpin_explicit_key_silent 's@if \(!xwarn\) \{ xwarn = 1; printf@if (0) { xwarn = 1; printf@' "FAIL envpin-explicit-key"
+kill_mutant envpin_plain_continuation_ignored 's@if \(n > pn\) outr\(pcont, pv\); else outr\(pend, pv\)@outr(pend, pv)@' "FAIL envpin-rows"
+kill_mutant envpin_explicit_key_silent 's@if \(!xwarn\) \{ xwarn = 1; outr@if (0) { xwarn = 1; outr@' "FAIL envpin-explicit-key"
 # Tenth round on #1602: a doubled single quote inside a flow scalar, and escapes in a
 # double-quoted key.
 kill_mutant envpin_flow_doubled_quote 's@if \(q == "\\047" && substr\(line, i \+ 1, 1\) == "\\047"\) i\+\+; else q = ""@q = ""@' "FAIL envpin-rows"
@@ -858,23 +858,35 @@ case_main_content_refresh() {
 
 # case_main_content_refresh_envpin <applier> — a refresh replaces the copy with the
 # template, so an env pin it carried moves with it. The census reads the refreshed copy,
-# so the run must also say what changed: one ENV-PIN-REFRESH-MOVED row naming before and
-# after. A refresh that leaves the env pins alone gets no such row (content_fixture has none).
+# so the run must also say what changed: one ENV-PIN-REFRESH-MOVED row per refreshed copy
+# naming before and after. The comparison is on COMPLETE values, never the abbreviated
+# ones of the report: a changed branch name, a changed expression and two commits that
+# share their first 12 hex all count; an unchanged pin gives no row.
 case_main_content_refresh_envpin() {
-  local d old new; d=$(new_case contentrefreshenv)
-  old="eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"; new="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-  content_fixture "$1" "$d"
-  stamp_into "$1" "$d/proven_template.yml" proven-lock-gate 0.2.0 "$(printf 'name: gate\nenv:\n  # proven-cicd:local-next\n  PROVEN_SHA: "%s"\n  CANON_REF: %s\njobs:\n  g:\n    steps:\n      - run: echo new\n' "$CO_NEW" "$new")"
-  stamp_into "$1" "$d/own_stamped" proven-lock-gate 0.1.0 "$(printf 'name: gate\nenv:\n  # proven-cicd:local-next\n  PROVEN_SHA: "%s"\n  CANON_REF: %s\njobs:\n  g:\n    steps:\n      - run: echo old\n' "$CO_OLD" "$old")"
-  run_content "$d" "$1" --fix-content --proven-sha "$P"
-  if [ "$(cat "$d/rc")" = 0 ] \
-     && [ "$(grep -c 'ENV-PIN-REFRESH-MOVED' "$d/out")" = 3 ] \
-     && [ "$(grep -F 'ENV-PIN-REFRESH-MOVED' "$d/out" | grep -cF "before [CANON_REF BEHIND ${old:0:8}] after [CANON_REF BEHIND ${new:0:8}]")" = 3 ]; then
-    pass "main: a content refresh that moves an env pin says so (one ENV-PIN-REFRESH-MOVED row per refreshed copy, before and after)"
-  else
-    fail "main: refresh moved an env pin without a row, or the row is wrong (rc=$(cat "$d/rc"))"
-    sed 's/^/    /' "$d/out" >&2; tail -5 "$d/err" | sed 's/^/    /' >&2
-  fi
+  local d old new want rows pair
+  local c1="eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" c2="eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeef"
+  local -a pairs=(
+    "${c1}|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|3|a commit that moved"
+    "main|release|3|a branch name that changed"
+    "\${{ inputs.a }}|\${{ inputs.b }}|3|an expression that changed"
+    "${c1}|${c2}|3|two commits that share their first 12 hex"
+    "main|main|0|an unchanged value"
+  )
+  for pair in "${pairs[@]}"; do
+    IFS='|' read -r old new want rows <<< "$pair"
+    d=$(new_case contentrefreshenv)
+    content_fixture "$1" "$d"
+    stamp_into "$1" "$d/proven_template.yml" proven-lock-gate 0.2.0 "$(printf 'name: gate\nenv:\n  # proven-cicd:local-next\n  PROVEN_SHA: "%s"\n  CANON_REF: %s\njobs:\n  g:\n    steps:\n      - run: echo new\n' "$CO_NEW" "$new")"
+    stamp_into "$1" "$d/own_stamped" proven-lock-gate 0.1.0 "$(printf 'name: gate\nenv:\n  # proven-cicd:local-next\n  PROVEN_SHA: "%s"\n  CANON_REF: %s\njobs:\n  g:\n    steps:\n      - run: echo old\n' "$CO_OLD" "$old")"
+    run_content "$d" "$1" --fix-content --proven-sha "$P"
+    if [ "$(cat "$d/rc")" = 0 ] && [ "$(grep -c 'ENV-PIN-REFRESH-MOVED' "$d/out")" = "$want" ] \
+       && { [ "$want" = 0 ] || [ "$(grep -F 'ENV-PIN-REFRESH-MOVED' "$d/out" | grep -c 'before \[CANON_REF [A-Z]* [^;]*;\] after \[CANON_REF [A-Z]* [^;]*;\]')" = "$want" ]; }; then
+      pass "main: a content refresh with ${rows} gives ${want} ENV-PIN-REFRESH-MOVED row(s)"
+    else
+      fail "main: refresh with ${rows}: want ${want} ENV-PIN-REFRESH-MOVED row(s), got $(grep -c 'ENV-PIN-REFRESH-MOVED' "$d/out") (rc=$(cat "$d/rc"))"
+      sed 's/^/    /' "$d/out" >&2; tail -5 "$d/err" | sed 's/^/    /' >&2
+    fi
+  done
 }
 
 # case_main_content_refused <applier> <label> <setup> — a refresh that cannot be
@@ -1533,6 +1545,7 @@ list_mutant content_fail_stops_pin_census 's@^      log "ERROR: \$\{content_fail
 list_mutant content_manifest_unpinned 's@\?ref=\$\{PROVEN_SHA\}@@' case_main_content
 list_mutant content_row_dropped 's@cst=\$\(content_state "\$wf" "\$PROVEN_MANIFEST"\)@cst=""@' case_main_content
 list_mutant content_row_writes 's@\[ -n "\$cst" \] \&\& printf@[ -n "$cst" ] \&\& changed+=("$base"); [ -n "$cst" ] \&\& printf@' case_main_content_fix
+list_mutant envpin_refresh_value_dropped 's@a\[1\], st, \$3@a[1], st, "-"@' case_main_content_refresh_envpin
 list_mutant envpin_refresh_move_silent 's@\[ "\$epb" = "\$epa" \] \|\|@true ||@' case_main_content_refresh_envpin
 # A stamped copy in the current layout (stamp on line 2) is still held by --fix:
 # a hold that only recognises the legacy line-1 stamp re-pins it and breaks its hash.

@@ -93,7 +93,8 @@
 # double-quoted pin value is decoded (\xHH, \uHHHH in ASCII, \\ \" \/) before it is judged.
 # --fix-content replaces a stale stamped copy with the template, so an env pin may move
 # with it: the census reads the refreshed copy, and one ENV-PIN-REFRESH-MOVED row per
-# such file gives before and after (NAME STATUS first-8-hex), so the move is never silent.
+# such file gives before and after (NAME STATUS value, shortened for the row only), so the
+# move is never silent. The comparison itself is on COMPLETE values, never the shortened ones.
 # the value. The target is compared case-insensitively. A tracked key with a block
 # scalar or multi-line quoted value gets an ENV-PIN-UNJUDGED row; the lines of a
 # multi-line quoted scalar are not read as keys.
@@ -478,7 +479,11 @@ deed_overcap() {
 # is dropped first, so the scalar style underneath decides how the value is read.
 ENV_PIN_NAMES='STANDARDS_PIN|CANON_REF'
 env_pin_rows() {
-  LC_ALL=C awk -v target="$2" -v names="$ENV_PIN_NAMES" '
+  LC_ALL=C awk -v target="$2" -v names="$ENV_PIN_NAMES" -v full="${3:-}" '
+    # outr: print one row; with a third argument the row carries a third TAB field, the
+    # COMPLETE value (or a marker for a value that is not read), so two copies of a
+    # workflow can be compared without the 8-hex / 24-char abbreviations of the report.
+    function outr(row, fv) { if (full != "") row = row "\t" fv; print row }
     # qclose: does this text hold the closing quote of a scalar opened with q?
     # (double quotes: an unescaped ", single quotes: a lone ; a doubled is an escape)
     function qclose(line, q,   t) {
@@ -562,14 +567,14 @@ env_pin_rows() {
       match(s, /^[[:space:]]*/); n = RLENGTH
       # A classified pin value is held until the next significant line: a more indented
       # line continues the plain scalar (folded), so the value is not what it looked like.
-      if (pend != "") { if (n > pn) print pcont; else print pend; pend = "" }
+      if (pend != "") { if (n > pn) outr(pcont, pv); else outr(pend, pv); pend = "" }
       if (skip >= 0) { if (n > skip) next; skip = -1 }
       body = substr(s, n + 1); n0 = n
       while (match(body, /^-[[:space:]]+/)) { n += RLENGTH; body = substr(body, RLENGTH + 1) }
       bp = props(body); c0 = substr(bp, 1, 1)
       # Explicit mapping keys (? key / : value) are not parsed: say so once, never silently.
       if (bp ~ /^\?([[:space:]]|$)/) {
-        if (!xwarn) { xwarn = 1; printf "ENV-PIN-UNJUDGED\t(explicit key) L%d YAML explicit mapping keys (? key) are not parsed; env pins in this file may be missed\n", NR }
+        if (!xwarn) { xwarn = 1; outr(sprintf("ENV-PIN-UNJUDGED\t(explicit key) L%d YAML explicit mapping keys (? key) are not parsed; env pins in this file may be missed", NR), "(explicit)") }
         next
       }
       # A block scalar as a sequence item (- | or - >): skip its body.
@@ -589,19 +594,19 @@ env_pin_rows() {
       top++; ind[top] = n; knm[top] = key
       tracked = (key ~ ("^(" names ")$") && parent == "env" && !inmx)
       if (rest ~ /^[\{\[]/) {
-        if (tracked) printf "ENV-PIN-UNJUDGED\t%s L%d value is a flow collection; not judged\n", key, NR
+        if (tracked) outr(sprintf("ENV-PIN-UNJUDGED\t%s L%d value is a flow collection; not judged", key, NR), "(flow)")
         fq = ""; d = depth(rest); if (d > 0) flow = d; else fq = ""
         next
       }
       r2 = rest; sub(/[[:space:]]+#.*$/, "", r2)
       if (r2 ~ /^[|>][-+0-9]*$/) {
-        if (tracked) printf "ENV-PIN-UNJUDGED\t%s L%d value is a block scalar; not judged\n", key, NR
+        if (tracked) outr(sprintf("ENV-PIN-UNJUDGED\t%s L%d value is a block scalar; not judged", key, NR), "(block)")
         skip = n; next
       }
       c = substr(rest, 1, 1)
       if ((c == "\047" || c == "\"") && !qclose(substr(rest, 2), c)) {
         inq = c
-        if (tracked) printf "ENV-PIN-UNJUDGED\t%s L%d value is a multi-line quoted scalar; not judged\n", key, NR
+        if (tracked) outr(sprintf("ENV-PIN-UNJUDGED\t%s L%d value is a multi-line quoted scalar; not judged", key, NR), "(multiline)")
         next
       }
       if (!tracked) next
@@ -623,27 +628,36 @@ env_pin_rows() {
       if (!bad && length(low) == 40 && low ~ /^[0-9a-f]+$/) {
         if (low == tgt) row = sprintf("ENV-PIN-FRESH\t%s L%d %s", key, NR, substr(low, 1, 8))
         else row = sprintf("ENV-PIN-BEHIND\t%s L%d %s (target %s); read-only: never re-pointed here", key, NR, substr(low, 1, 8), substr(tgt, 1, 8))
-        if (c == "\047" || c == "\"") print row
-        else { pend = row; pn = n; pcont = sprintf("ENV-PIN-UNJUDGED\t%s L%d value continues on the next line (a folded plain scalar); not judged", key, NR) }
+        if (c == "\047" || c == "\"") outr(row, low)
+        else { pend = row; pv = low; pn = n; pcont = sprintf("ENV-PIN-UNJUDGED\t%s L%d value continues on the next line (a folded plain scalar); not judged", key, NR) }
       } else if (!bad && val ~ /\$\{\{/) {
-        printf "ENV-PIN-DYNAMIC\t%s L%d is an expression; not judged\n", key, NR
+        outr(sprintf("ENV-PIN-DYNAMIC\t%s L%d is an expression; not judged", key, NR), val)
       } else {
         gsub(/[\t]/, " ", val)
-        printf "ENV-PIN-UNJUDGED\t%s L%d value is not a 40-hex commit: %s\n", key, NR, (val == "" ? "(empty)" : substr(val, 1, 24))
+        outr(sprintf("ENV-PIN-UNJUDGED\t%s L%d value is not a 40-hex commit: %s", key, NR, (val == "" ? "(empty)" : substr(val, 1, 24))), val)
       }
     }
-    END { if (pend != "") print pend }
+    END { if (pend != "") outr(pend, pv) }
   ' "$1"
 }
 
 # env_pin_values <file> <target_sha> — the tracked assignments as sorted
-# `NAME STATUS VALUE` lines (line numbers dropped), so two copies of a workflow can be
-# compared for what they pin, not for where. Used to say when a content refresh moved one.
+# `NAME<TAB>STATUS<TAB>COMPLETE VALUE` lines (line numbers dropped, nothing abbreviated),
+# so two copies of a workflow can be compared for what they pin, not for where.
+# env_pin_brief shortens such lines for the report only.
 env_pin_values() {
-  env_pin_rows "$1" "$2" | awk -F'\t' '{
+  env_pin_rows "$1" "$2" full | awk -F'\t' '{
     split($2, a, " "); st = $1; sub(/^ENV-PIN-/, "", st)
-    printf "%s %s %s\n", a[1], st, (st == "FRESH" || st == "BEHIND") ? a[3] : "-"
+    printf "%s\t%s\t%s\n", a[1], st, $3
   }' | LC_ALL=C sort
+}
+env_pin_brief() {
+  awk -F'\t' 'NF == 0 { next } {
+    v = $3
+    if (v ~ /^[0-9a-fA-F]+$/ && length(v) == 40) v = substr(v, 1, 12)
+    else if (length(v) > 24) v = substr(v, 1, 24) "..."
+    printf "%s %s %s;", $1, $2, v
+  }'
 }
 
 # health_summary <runs.json> — one TAB-separated line per workflow file seen in a
@@ -2120,7 +2134,7 @@ main() {
             # move with it. The census below reads the refreshed copy; say what changed.
             epa=$(env_pin_values "$wf" "$TARGET_SHA")
             [ "$epb" = "$epa" ] || printf '%s\t%s\tENV-PIN-REFRESH-MOVED\tthe content refresh changed the env pins; before [%s] after [%s]; the census never re-points them, review before merging\n' \
-              "$repo" "$base" "$(printf '%s' "$epb" | tr '\n' ';')" "$(printf '%s' "$epa" | tr '\n' ';')" >> "$tsv"
+              "$repo" "$base" "$(printf '%s\n' "$epb" | env_pin_brief)" "$(printf '%s\n' "$epa" | env_pin_brief)" >> "$tsv"
           fi
         fi
       fi
