@@ -6,7 +6,7 @@ import { cpSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, writ
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { validate, blankComments, LintError, SELF_TEST_CASES, checkEgress, EgressError, checkAnchor, AnchorError, profileCOfBody, readMustfileChecks, MustfileError, readProofReceipt, ProofReceiptError, checkContractiles, ContractilesError, contractilePaths, CONTRACTILE_VERBS, checkEdict, EdictError, verbOfFilename, checkVerbDescriptile, VerbDescriptileError, verbOfDescriptile, choraRepoUuid, rootChora, FIXTURE_TODAY, checkEcosystem, EcosystemError, ECOSYSTEM_RELATIONSHIPS, checkState, StateError, STATE_PHASES, MATURITY_LEVELS, checkRsrScorecard, RsrScorecardError, RSR_TIERS, RSR_VERDICTS, checkMeta, MetaError, META_PROJECT_TYPES, ADR_STATUSES } from "./deed_lint.js";
+import { validate, blankComments, LintError, SELF_TEST_CASES, checkEgress, EgressError, checkAnchor, AnchorError, profileCOfBody, readMustfileChecks, MustfileError, readProofReceipt, ProofReceiptError, checkContractiles, ContractilesError, contractilePaths, CONTRACTILE_VERBS, checkEdict, EdictError, verbOfFilename, checkVerbDescriptile, VerbDescriptileError, verbOfDescriptile, choraRepoUuid, rootChora, FIXTURE_TODAY, checkEcosystem, EcosystemError, ECOSYSTEM_RELATIONSHIPS, checkState, StateError, STATE_PHASES, MATURITY_LEVELS, checkRsrScorecard, RsrScorecardError, RSR_TIERS, RSR_VERDICTS, checkMeta, MetaError, META_PROJECT_TYPES, ADR_STATUSES, checkAgentic, AgenticError, J19_SETTINGS } from "./deed_lint.js";
 import { generateContractileRegistry as generateRegistry } from "./deed_lint.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -1559,5 +1559,49 @@ describe("prototype-named members are unknown, not crashes", () => {
     const rsr = join(FIX, "rsr-scorecard", "valid", "minimal_praxis.deed");
     const rt = readFileSync(rsr, "utf8").replace('(criterion :id "1.1.2"', '(criterion :constructor "x" :id "1.1.2"');
     expect(() => checkRsrScorecard(rt, rsr)).toThrow(/has no field :constructor/);
+  });
+});
+
+// A7 7.2, 14.2, J19, J33, YD04, YD06, YF05: AGENTIC.deed (clauses/agentic.abnf).
+const FIX_AG = join(FIX, "agentic");
+
+describe("agentic fixtures", () => {
+  test("--agentic-fixtures passes on the corpus", () => {
+    const r = cli("--agentic-fixtures", FIX_AG);
+    expect(r.code).toBe(0);
+    expect(r.out).toContain("AGENTIC FIXTURES OK");
+  });
+  test("J19: an authorised, reported relaxation is recorded but not accepted, so affirmation stays required", () => {
+    const p = join(FIX_AG, "valid", "relaxed-authorised-reported", "AGENTIC.deed");
+    const r = checkAgentic(readFileSync(p, "utf8"), p, { today: FIXTURE_TODAY });
+    expect(r.affirmationRequired).toBe(true);
+    expect(r.warnings).toEqual([expect.stringMatching(/recorded but not accepted.*\(J19, J4\)/)]);
+  });
+  test("J19: the settings are exactly the three of 14.2", () => {
+    expect([...J19_SETTINGS]).toEqual(["affirmation.required", "affirmation.may-change", "affirmation.report-to"]);
+  });
+  test("J19: a change never authorises itself — an entry adding its own actor is judged by the clause's :may-change", () => {
+    const p = join(FIX_AG, "invalid", "relaxed-self-authorised", "AGENTIC.deed");
+    expect(() => checkAgentic(readFileSync(p, "utf8"), p, { today: FIXTURE_TODAY })).toThrow(/:changed-by agent is not in :may-change \(owner\)/);
+  });
+  test("YD04: a model pin and a language list are each refused with their own reason", () => {
+    const pin = join(FIX_AG, "invalid", "agentic-model-pin", "AGENTIC.deed");
+    expect(() => checkAgentic(readFileSync(pin, "utf8"), pin, { today: FIXTURE_TODAY })).toThrow(/no model pin.*\(YD04\)/);
+    const ban = join(FIX_AG, "invalid", "agentic-lang-ban", "AGENTIC.deed");
+    expect(() => checkAgentic(readFileSync(ban, "utf8"), ban, { today: FIXTURE_TODAY })).toThrow(/no language list.*\(YD04, YL3\)/);
+  });
+  test("YF05: a chora (agentic …) is warned with --root, and refused with --strict", () => {
+    const dir = join(FIX_AG, "valid", "agentic-in-chora-lax");
+    const lax = cli("--agentic", "--root", dir, join(dir, "AGENTIC.deed"));
+    expect(lax.code).toBe(0);
+    expect(lax.out).toMatch(/WARN .*still carries \(agentic …\).*\(J33, YF05\)/);
+    expect(cli("--agentic", "--root", dir, "--strict", join(dir, "AGENTIC.deed")).code).toBe(1);
+  });
+  test("another descriptile is outside the profile", () => {
+    const t = readFileSync(join(FIX_AG, "valid", "minimal", "AGENTIC.deed"), "utf8");
+    expect(checkAgentic(t, "META.deed")).toBeNull();
+  });
+  test("--root without a directory is a usage error", () => {
+    expect(cli("--agentic", join(FIX_AG, "valid", "minimal", "AGENTIC.deed"), "--root").code).toBe(2);
   });
 });

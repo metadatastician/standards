@@ -64,6 +64,78 @@
 #              REST fallback, the repository root could not be listed (WORKFLOW column
 #              `(root listing)`): not judged, and never read as "no over-cap line".
 #
+# ENV-VAR PINS (own rows, WORKFLOW column = the workflow file; census only, every
+# mode, READ-ONLY by design). A literal `STANDARDS_PIN:` or `CANON_REF:` assignment
+# is counted beside the `uses:` pins, one row per assignment, DETAIL = NAME, line,
+# first 8 hex. Such a pin names the commit a script is fetched from; the applier
+# never moves it (that is the repository's decision, not a re-point). It does not
+# count as a BEHIND pin for --fix, and no lock is touched for it.
+#   ENV-PIN-FRESH    a 40-hex commit equal to the target
+#   ENV-PIN-BEHIND   a 40-hex commit that is not the target
+#   ENV-PIN-DYNAMIC  an expression (`${{ ... }}`): not judged
+#   ENV-PIN-UNJUDGED any other value (branch name, short SHA, empty): never read as
+#                    FRESH or BEHIND
+# Comment lines are skipped. A `CANON_REF=...` written to $GITHUB_ENV inside a run:
+# step is not an assignment of the env: map and is not read.
+# Only a direct child of a block-style `env:` mapping counts (found by indentation):
+# a same-named key under `with:` or `inputs:`, the body of a `run: |` block, a flow
+# style `env: {…}` get no row. A quoted key (`"CANON_REF":`) is the same key and is read. A flow collection (also one
+# that runs over several lines) is tracked to its closing bracket and never read as
+# keys; a tracked key whose own value is one gets an ENV-PIN-UNJUDGED row. Node
+# properties on a key (`&pin CANON_REF:`) are dropped before the key is read; trailing
+# whitespace and CR are ignored; the quote state of a flow collection carries across lines. A `#` inside a quoted value is part of
+# A sequence item that is a block scalar (`- |`) is skipped like a mapping value. A pin
+# value is held until the next significant line: a more indented line continues the plain
+# scalar (folded), so it is reported ENV-PIN-UNJUDGED ("value continues on the next
+# line"), never FRESH or BEHIND. YAML explicit mapping keys (`? key`) are NOT parsed: one
+# ENV-PIN-UNJUDGED row, with `(explicit key)` in place of a name, says so for the file.
+# An alias key (`*pin: value`) is not resolved: one ENV-PIN-UNJUDGED row, `(alias key)` in place of a name,
+# says so for the file; so does an env map supplied by an alias (`env: *pins`, `<<: *pins`), and
+# any `<<:` merge written as a flow collection (`<<: [*a, *b]`, also over several lines).
+# A sequence item is its own place (`[i]`) in the path of the refresh
+# comparison. `\UXXXXXXXX` escapes are decoded like `\x` and `\u`; a decoded character that is
+# not printable ASCII (or is a backslash) is kept as its own escape (`\x0a`), so a value stays
+# lossless and one row never spans two lines; a literal backslash in a single-quoted or plain
+# value is written the same way (`\x5c`) in the refresh comparison. A `#` right after `,`, `[`
+# or `{` starts a comment inside a flow collection.
+# A key under `strategy: matrix:` is matrix data (a job that is merely named `matrix` is not), not an environment map, and gets no row. A
+# double-quoted pin value is decoded (\xHH, \uHHHH in ASCII, \\ \" \/) before it is judged.
+# An empty `KEY:` whose value is an indented node on the next line is reported UNJUDGED ("value is on the
+# next line"), never as an empty value.
+# --fix-content replaces a stale stamped copy with the template, so an env pin may move
+# with it: the census reads the refreshed copy, and one ENV-PIN-REFRESH-MOVED row per
+# such file gives before and after (NAME STATUS value, shortened for the row only), so the
+# move is never silent. The comparison itself is on COMPLETE values, never the shortened ones.
+# the value. The target is compared case-insensitively. A tracked key with a block
+# scalar or multi-line quoted value gets an ENV-PIN-UNJUDGED row; the lines of a
+# multi-line quoted scalar are not read as keys.
+#
+# HEALTH BLOCK (own rows, WORKFLOW column = the workflow file; read-only, every
+# mode, on by default, --no-health turns it off). For EVERY repository walked,
+# whether or not it has a standards pin, the applier reads that repository's last
+# HEALTH_WINDOW completed Actions runs (ONE request) and lists the workflow files
+# whose recent runs never started a job. It LISTS; it never skips, defers or
+# excludes a repository because of what it finds (a repo that cannot start its
+# workflows is exactly the one a pin move must not be judged blind about).
+#   HEALTH-STARTUP-FAILURE  one or more recent runs of the file ended with the
+#              conclusion `startup_failure`. DETAIL: how many of the window, the
+#              latest such run, and what the latest completed run of that file was.
+#   HEALTH-ZERO-JOB  the latest FAILED run of the file has name == path (the shape
+#              GitHub gives a run it could not plan) AND the jobs endpoint says it
+#              ran 0 jobs. The shape alone is not the cause (a dead pin, a
+#              forbidden ref, a bot-authored run all look the same): the row says
+#              what was SEEN, not why.
+#   HEALTH-LOCK-FAILURE  the latest failed run of the file has a failed job whose
+#              NAME contains "lock" (case-insensitive). Matched by job name only:
+#              no log is read, so this is a pointer, not a diagnosis.
+#   HEALTH-UNREAD  the run list (WORKFLOW column `(actions runs)`) or one run's jobs
+#              could not be read, or the per-repository jobs-read cap
+#              (HEALTH_JOBS_CAP) was reached, or a run has more jobs than the first page
+#              (100) so some were not seen. Never read as "healthy".
+# A repository with no such row had no startup failure, no 0-job failure and no
+# lock-named job failure among those runs: NOT "all green". Cost: one request per
+# repository plus one per workflow file whose latest run failed, up to the cap.
+#
 # SAFETY PROPERTIES (do not weaken any of these):
 #   * READ-ONLY by default. --fix is required to write anything.
 #   * The target SHA is proven REACHABLE FROM standards' main before any write.
@@ -111,6 +183,8 @@
 #                         to combine with --fix or --ensure-squabbler, and needs
 #                         --proven-sha. (Owner ruling 2026-11-14: content-only,
 #                         so the hold on pin moves is untouched.)
+#     --no-health         do not read Actions runs (see HEALTH BLOCK); saves the
+#                         per-repository requests when the API budget is short
 #     --self-test         run the pure-function controls and exit
 #
 # PROVEN CONTENT (--proven-sha):
@@ -181,6 +255,11 @@ ONLY_REPO=""
 OUT_FILE=""
 LIMIT=0
 ENSURE_SQUABBLER=0
+# Health block (see HEALTH BLOCK): on by default; the window of completed runs read
+# per repository and the cap on per-run jobs reads.
+HEALTH=1
+HEALTH_WINDOW=30
+HEALTH_JOBS_CAP=6
 SQUABBLER_FILE="cicd-squabbler.yml"
 BRANCH_NAME="chore/re-point-standards-workflow-pins"
 # The standards checkout this script runs from: the relock reads reusables and
@@ -384,6 +463,329 @@ deed_overcap() {
     { line = $0; sub(/\r$/, "", line); n = length(line)
       if (n > cap) { out = out (out == "" ? "" : " ") "L" NR "=" n; cnt++ } }
     END { if (cnt > 0) printf "DEED-OVERCAP\t%d line(s) over %d octets: %s\n", cnt, cap, out }
+  ' "$1"
+}
+
+#
+# Known limits (this is a line scanner, not a YAML parser; the owner has been asked whether to
+# replace it with a real parse). It is fail-loud for what it recognises (an UNJUDGED row rather
+# than silence) but, for these exotic shapes, a later real assignment can still go unreported
+# or a false row can appear: a terminal `&anchor` on `env:` with its mapping on the next line;
+# a plain scalar that begins on the line after its key and continues with a flow indicator; an
+# explicit `? key` inside `strategy.matrix`; a standalone block-scalar skip inside a nested
+# explicit key; an anchored quoted scalar in a flow collection (`[&a "[", b]`); and a `#` that
+# YAML itself would reject as a comment (no white space before it) after `]`, `}` or a quote.
+# Refresh comparison (ENV-PIN-REFRESH-MOVED, diagnostic only) also ignores alias values, folded
+# continuation text, blank lines inside block scalars and bare-dash sequence items.
+# env_pin_rows <file> <target_sha> — one `STATUS<TAB>DETAIL` line per literal
+# `STANDARDS_PIN:` / `CANON_REF:` assignment (a workflow env: entry), so a pin held
+# in an environment variable is COUNTED beside the `uses:` pins. READ-ONLY by
+# design: nothing here is ever rewritten (such a pin names the commit a script is
+# fetched from, so moving it is a decision for the repository, not a re-point).
+#   ENV-PIN-FRESH    a 40-hex commit equal to the target
+#   ENV-PIN-BEHIND   a 40-hex commit that is not the target
+#   ENV-PIN-DYNAMIC  an expression (`${{ ... }}`); not judged
+#   ENV-PIN-UNJUDGED any other value (a branch name, a short SHA, an empty value);
+#                    never read as FRESH or BEHIND
+# Comment lines are skipped. What counts as an assignment, and how a value is read:
+# Only a key that is a direct child of an `env:` mapping (block style) counts: the
+# parent is found by indentation, so `with:` / `inputs:` keys of the same name and
+# the body of a block scalar (`run: |`) are never read. Flow style (`env: {…}`) and
+# quoted keys are the same keys (`"with":` still scopes its children). A `#` inside a quoted value is
+# part of the value, not a comment; a quoted value followed by anything but a
+# comment is UNJUDGED. The target is compared case-insensitively (a SHA is hex).
+# Whitespace after the colon is not part of the value. A tracked key whose value is a
+# block scalar (`>-`, `|`) or a quoted scalar that runs over several lines is
+# UNJUDGED (one row, never silence); the lines of a multi-line quoted scalar are never
+# read as keys. An anchor or tag before a scalar (`&pin <sha>`, `!!str <sha>`, `run: &s "...`)
+# is dropped first, so the scalar style underneath decides how the value is read.
+ENV_PIN_NAMES='STANDARDS_PIN|CANON_REF'
+env_pin_rows() {
+  LC_ALL=C awk -v target="$2" -v names="$ENV_PIN_NAMES" -v full="${3:-}" '
+    # outr: print one row; with a third argument the row carries a third TAB field, the
+    # COMPLETE value (or a marker for a value that is not read), so two copies of a
+    # workflow can be compared without the 8-hex / 24-char abbreviations of the report.
+    function outr(row, fv) { if (full != "") row = row "\t" cp "\034" fv; print row }
+    # capadd / capflush: a tracked block scalar or multi-line quoted value is UNJUDGED, but its
+    # text is kept (trimmed, newline-joined) so a refresh that changes it is still seen. The
+    # row is printed when the scalar ends.
+    function capadd(t) { gsub(/\t/, " ", t); sub(/^[[:space:]]+/, "", t); capv = capv "\\n" t }
+    function capflush(   sv) { if (capk != "") { sv = cp; cp = capcp; outr(capk, capv); cp = sv; capk = "" } }
+    # flushp: print a held row with the mapping path it was found under (cp has moved on).
+    function flushp(r,   sv) { sv = cp; cp = pcp; outr(r, pv); cp = sv }
+    # qclose: does this text hold the closing quote of a scalar opened with q?
+    # (double quotes: an unescaped ", single quotes: a lone ; a doubled is an escape)
+    function qclose(line, q,   t) {
+      t = line
+      if (q == "\"") gsub(/\\./, "", t); else gsub(/\047\047/, "", t)
+      return index(t, q) > 0
+    }
+    # qend: position of the closing quote of the scalar that starts at s[1] (a quote), or
+    # 0. Escape-aware: a backslash escape in double quotes, a doubled quote in single quotes.
+    function qend(s,   i, n, c, ch) {
+      c = substr(s, 1, 1); n = length(s)
+      for (i = 2; i <= n; i++) {
+        ch = substr(s, i, 1)
+        if (c == "\"") { if (ch == "\\") i++; else if (ch == "\"") return i }
+        else if (ch == "\047") { if (substr(s, i + 1, 1) == "\047") i++; else return i }
+      }
+      return 0
+    }
+    # hexv: value of a hex string, or -1. unesc: decode the escapes of a double-quoted key
+    # that matter for a NAME (\xHH, \uHHHH in the ASCII range, \\, \", \/); others stay as
+    # written, so a key that cannot be decoded simply does not equal a tracked name.
+    function hexv(h,   i, c, v) {
+      v = 0; h = tolower(h)
+      for (i = 1; i <= length(h); i++) { c = index("0123456789abcdef", substr(h, i, 1)); if (c == 0) return -1; v = v * 16 + c - 1 }
+      return v
+    }
+    function unesc(s,   o, i, n, ch, h, v) {
+      o = ""; n = length(s)
+      for (i = 1; i <= n; i++) {
+        ch = substr(s, i, 1)
+        if (ch != "\\") { o = o ch; continue }
+        ch = substr(s, ++i, 1)
+        if (ch == "x" || ch == "u" || ch == "U") {
+          h = substr(s, i + 1, (ch == "x") ? 2 : (ch == "u") ? 4 : 8); v = hexv(h)
+          if (v < 0) o = o "\\" ch h
+          else if (v >= 32 && v < 127 && v != 92) o = o sprintf("%c", v)
+          else o = o ((v > 255) ? sprintf("\\u%04x", v) : sprintf("\\x%02x", v))
+          i += length(h)
+        }
+        else if (ch == "\\") o = o "\\x5c"
+        else if (ch == "\"" || ch == "/") o = o ch
+        else o = o "\\" ch
+      }
+      return o
+    }
+    # props: drop YAML node properties (an anchor `&name`, a tag `!tag` / `!!str`) that
+    # precede a scalar, so the scalar style underneath is what gets tested.
+    function props(s) {
+      while (match(s, /^(&[^[:space:]]+|![^[:space:]]*)[[:space:]]+/)) s = substr(s, RLENGTH + 1)
+      return s
+    }
+    # depth: net open flow brackets in a line (a flow collection `{...}` or `[...]` may
+    # run over several lines). Scanned character by character: a bracket inside a quoted
+    # scalar, or after a `#` that starts a comment (at the line start or after
+    # whitespace), is text, not structure. The quote still open at the end of the line
+    # is kept in fq, so a quoted scalar that runs over several lines is followed.
+    function depth(line,   i, n, ch, q, d, prev, isb, pl, nx, jq) {
+      n = length(line); q = fq; d = 0; prev = " "; pl = fpl; cq = 0
+      for (i = 1; i <= n; i++) {
+        ch = substr(line, i, 1)
+        jq = cq; cq = 0
+        # A quote opens a quoted scalar only at a scalar boundary: after whitespace, `{`, `,`,
+        # `:`, `[` or `?`, and never while a plain scalar is still open (pl). pl survives
+        # whitespace and the end of a line: a quote that starts a continuation line of a plain
+        # scalar is content.
+        isb = (prev ~ /[[:space:]{,:[?]/) && !pl
+        if (q != "") {
+          if (ch == "\\" && q == "\"") i++
+          else if (ch == q) { if (q == "\047" && substr(line, i + 1, 1) == "\047") i++; else { q = ""; pl = 0; cq = 1 } }
+        }
+        else if ((ch == "\047" || ch == "\"") && isb) q = ch
+        else if (ch == "#" && prev ~ /[[:space:],\[{]/) break
+        else if (ch == "{" || ch == "[") { d++; pl = 0 }
+        else if (ch == "}" || ch == "]") { d--; pl = 0 }
+        else if (ch == "," || (ch == "?" && !pl)) pl = 0
+        else if (ch == ":") {
+          # A colon ends a plain scalar only as a key/value delimiter (followed by space, a
+          # flow indicator or the end of the line, or right after a quoted key); inside a
+          # plain scalar (`http:x`) it is content.
+          nx = substr(line, i + 1, 1)
+          pl = (nx == "" || nx ~ /[[:space:],\]}]/ || jq) ? 0 : 1
+        }
+        else if (ch !~ /[[:space:]]/) pl = 1
+        prev = ch
+      }
+      fpl = (q == "") ? pl : 0
+      fq = q
+      return d
+    }
+    BEGIN { tgt = tolower(target); top = 0; skip = -1; inq = "" ; flow = 0; fq = ""; pend = ""; xwarn = 0; awarn = 0; fpl = 0; cp = ""; pcp = ""; capk = ""; capv = ""; capcp = ""; pc = -1; cq = 0 }
+    NR == 1 { sub("^\357\273\277", "") }
+    { sub(/[[:space:]]+$/, "") }
+    inq != "" { if (capk != "") capadd($0); if (qclose($0, inq)) { inq = ""; capflush() } next }
+    flow > 0 { flow += depth($0); if (flow <= 0) { flow = 0; fq = "" } next }
+    /^[[:space:]]*$/ { next }
+    # A `#` line inside the body of a block scalar is content, not a comment.
+    skip >= 0 && /^[[:space:]]*#/ { match($0, /^[[:space:]]*/); if (RLENGTH > skip && capk != "") capadd($0); next }
+    /^[[:space:]]*#/ { next }
+    {
+      s = $0
+      match(s, /^[[:space:]]*/); n = RLENGTH
+      # A classified pin value is held until the next significant line: a more indented
+      # line continues the plain scalar (folded), so the value is not what it looked like.
+      if (pend != "") {
+        # A more indented line is part of the scalar (folded), not structure: it is consumed.
+        if (n > pn) { flushp(pcont); pend = ""; pc = -1; skip = pn; next }
+        else { flushp(pend); pend = "" }
+      }
+      # The value of any other key is a plain scalar: a more indented line continues it (YAML
+      # folds it), so it is text and is consumed, never read as structure.
+      if (pc >= 0) { if (n > pc) { skip = pc; pc = -1; next } pc = -1 }
+      if (skip >= 0) { if (n > skip) { if (capk != "") capadd(s); next }; skip = -1; capflush() }
+      body = substr(s, n + 1); n0 = n
+      while (match(body, /^-[[:space:]]+/)) { n += RLENGTH; body = substr(body, RLENGTH + 1) }
+      bp = props(body); c0 = substr(bp, 1, 1)
+      # Explicit mapping keys (? key / : value) are not parsed: say so once, never silently.
+      if (bp ~ /^\?([[:space:]]|$)/) {
+        if (!xwarn) { xwarn = 1; outr(sprintf("ENV-PIN-UNJUDGED\t(explicit key) L%d YAML explicit mapping keys (? key) are not parsed; env pins in this file may be missed", NR), "(explicit)") }
+        next
+      }
+      # Alias keys (`*name: value`) are not resolved: say so once, never silently.
+      if (bp ~ /^\*[^[:space:]]+[[:space:]]*:([[:space:]]|$)/) {
+        am = 0; for (k = 1; k <= top; k++) if (ind[k] < n && knm[k] == "matrix" && k > 1 && knm[k - 1] == "strategy") am = 1
+        if (!awarn && !am) { awarn = 1; outr(sprintf("ENV-PIN-UNJUDGED\t(alias key) L%d YAML alias keys (*name:) are not resolved; env pins in this file may be missed", NR), "(alias)") }
+        next
+      }
+      # An alias node on its own line under `env:` (or `<<:`): the env map is the anchored one,
+      # which is not resolved. Say so, never silently.
+      ab = bp; sub(/[[:space:]]+#.*$/, "", ab)
+      if (ab ~ /^\*[^[:space:]]+$/ && top > 0 && ind[top] < n && (knm[top] == "env" || knm[top] == "<<")) {
+        outr(sprintf("ENV-PIN-UNJUDGED\t(alias env) L%d an env map supplied by an alias (*name) is not resolved; env pins in this file may be missed", NR), "(alias env)")
+        next
+      }
+      # A block scalar as a sequence item (- | or - >): skip its body.
+      bq = bp; sub(/[[:space:]]+#.*$/, "", bq)
+      if (n > n0 && bq ~ /^[|>][-+0-9]*$/) { skip = n0; next }
+      # The value half of an explicit key (`: |`), or an indicator alone on the line after
+      # an empty `key:`: the body is text, never keys.
+      if (bq ~ /^:[[:space:]]+/) { eb = bq; sub(/^:[[:space:]]+/, "", eb); eb = props(eb); if (eb ~ /^[|>][-+0-9]*$/) { skip = n0; next }
+        if (eb ~ /^["\047]/ && !qclose(substr(eb, 2), substr(eb, 1, 1))) { inq = substr(eb, 1, 1); next } }
+      if (n == n0 && bq ~ /^[|>][-+0-9]*$/ && (top == 0 || ind[top] < n)) { skip = (top > 0) ? ind[top] : 0; next }
+      if (c0 == "{" || c0 == "[") { fq = ""; fpl = 0; d = depth(bp); if (d > 0) flow = d; else fq = ""; next }
+      if ((c0 == "\047" || c0 == "\"") && !qclose(substr(bp, 2), c0)) { inq = c0; next }
+      if (!(match(bp, /^"([^"\\]|\\.)*"[[:space:]]*:([[:space:]]|$)/) || match(bp, /^\047([^\047]|\047\047)*\047[[:space:]]*:([[:space:]]|$)/) || match(bp, /^(<<|[A-Za-z_][A-Za-z0-9_.-]*)[[:space:]]*:([[:space:]]|$)/))) next
+      kl = RLENGTH
+      key = substr(bp, 1, kl); sub(/[[:space:]]*:[[:space:]]*$/, "", key)
+      if (substr(key, 1, 1) == "\"") key = unesc(substr(key, 2, length(key) - 2))
+      else if (substr(key, 1, 1) == "\047") { key = substr(key, 2, length(key) - 2); gsub(/\047\047/, "\047", key) }
+      rest = substr(bp, kl + 1); sub(/^[[:space:]]+/, "", rest); rest = props(rest)
+      # A key that opens a sequence item (`- key:`) lives under that item: the item gets its
+      # own path component `[i]` (its position among the items of that sequence), so two
+      # sequence elements are never the same place.
+      if (n > n0) {
+        while (top > 0 && ind[top] >= n0) top--
+        cpb = ""; for (kk = 1; kk <= top; kk++) cpb = cpb "." knm[kk]
+        top++; ind[top] = n0; knm[top] = "[" (++seqc[cpb "|" n0]) "]"
+      }
+      while (top > 0 && ind[top] >= n) top--
+      parent = (top > 0) ? knm[top] : ""
+      inmx = 0; for (k = 1; k <= top; k++) if (knm[k] == "matrix" && k > 1 && knm[k - 1] == "strategy") inmx = 1
+      top++; ind[top] = n; knm[top] = key
+      cp = ""; for (kk = 1; kk < top; kk++) cp = cp "." knm[kk]
+      tracked = (key ~ ("^(" names ")$") && parent == "env" && !inmx)
+      # An env map supplied by an alias (`env: *pins`, or `<<: *pins` inside `env:`) is not
+      # resolved: say so, never silently skip a map that may hold a pin.
+      if (!inmx && (key == "env" || (key == "<<" && parent == "env")) && (rest ~ /^\*[^[:space:]]+/ || (key == "<<" && rest ~ /^[\[\{]/)))
+        outr(sprintf("ENV-PIN-UNJUDGED\t(alias env) L%d an env map supplied by an alias (*name) is not resolved; env pins in this file may be missed", NR), "(alias env)")
+      if (rest ~ /^[\{\[]/) {
+        if (tracked) outr(sprintf("ENV-PIN-UNJUDGED\t%s L%d value is a flow collection; not judged", key, NR), "(flow) " rest)
+        fq = ""; fpl = 0; d = depth(rest); if (d > 0) flow = d; else fq = ""
+        next
+      }
+      r2 = rest; sub(/[[:space:]]+#.*$/, "", r2)
+      if (r2 ~ /^[|>][-+0-9]*$/) {
+        if (tracked) { capk = sprintf("ENV-PIN-UNJUDGED\t%s L%d value is a block scalar; not judged", key, NR); capv = "(block)"; capcp = cp }
+        skip = n; next
+      }
+      c = substr(rest, 1, 1)
+      if ((c == "\047" || c == "\"") && !qclose(substr(rest, 2), c)) {
+        inq = c
+        if (tracked) { capk = sprintf("ENV-PIN-UNJUDGED\t%s L%d value is a multi-line quoted scalar; not judged", key, NR); capv = "(multiline) " rest; capcp = cp }
+        next
+      }
+      if (r2 != "" && c != "\047" && c != "\"") pc = n
+      if (!tracked) next
+      val = rest; bad = 0
+      if (c == "\047" || c == "\"") {
+        q = qend(val)
+        if (q == 0) bad = 1
+        else {
+          tail = substr(val, q + 1); val = substr(val, 2, q - 2)
+          if (c == "\"") val = unesc(val)
+          if (c == "\047") gsub(/\047\047/, "\047", val)
+          if (tail !~ /^[[:space:]]*(#.*)?$/) bad = 1
+        }
+      } else {
+        sub(/[[:space:]]+#.*$/, "", val); sub(/[[:space:]]+$/, "", val)
+        if (val ~ /^#/) val = ""
+      }
+      # The value as compared across a refresh: a backslash in a single-quoted or plain scalar is
+      # literal, so it is written as the escape \x5c, exactly as a decoded one in a double-quoted
+      # scalar is; the two styles can then never produce the same text for different values.
+      fvv = val; if (c != "\"") gsub(/\\/, "\\x5c", fvv); gsub(/\t/, "\\x09", fvv)
+      low = tolower(val)
+      if (!bad && length(low) == 40 && low ~ /^[0-9a-f]+$/) {
+        if (low == tgt) row = sprintf("ENV-PIN-FRESH\t%s L%d %s", key, NR, substr(low, 1, 8))
+        else row = sprintf("ENV-PIN-BEHIND\t%s L%d %s (target %s); read-only: never re-pointed here", key, NR, substr(low, 1, 8), substr(tgt, 1, 8))
+        if (c == "\047" || c == "\"") outr(row, low)
+        else { pend = row; pv = low; pcp = cp; pn = n; pcont = sprintf("ENV-PIN-UNJUDGED\t%s L%d value continues on the next line (a folded plain scalar); not judged", key, NR) }
+      } else if (!bad && val ~ /\$\{\{/) {
+        outr(sprintf("ENV-PIN-DYNAMIC\t%s L%d is an expression; not judged", key, NR), fvv)
+      } else if (val == "" && !bad && c != "\047" && c != "\"") {
+        # An empty value may be completed by an indented node on the next line: hold the row.
+        pend = sprintf("ENV-PIN-UNJUDGED\t%s L%d value is not a 40-hex commit: (empty)", key, NR); pv = ""; pcp = cp; pn = n
+        pcont = sprintf("ENV-PIN-UNJUDGED\t%s L%d value is on the next line (an indented node); not judged", key, NR)
+      } else {
+        gsub(/[\t]/, " ", val)
+        outr(sprintf("ENV-PIN-UNJUDGED\t%s L%d value is not a 40-hex commit: %s", key, NR, (val == "" ? "(empty)" : substr(val, 1, 24))), fvv)
+      }
+    }
+    END { capflush(); if (pend != "") flushp(pend) }
+  ' "$1"
+}
+
+# env_pin_values <file> <target_sha> — the tracked assignments as sorted
+# `NAME<TAB>STATUS<TAB>PATH<US>VALUE` lines, sorted (line numbers dropped, nothing
+# abbreviated, the mapping path of each assignment kept), so two copies of a workflow can
+# be compared for what each job pins: exchanging two values between jobs is a change, while
+# merely reordering the jobs is not (each record carries its own path).
+# env_pin_brief shortens such lines for the report only.
+env_pin_values() {
+  env_pin_rows "$1" "$2" full | awk -F'\t' '{
+    split($2, a, " "); st = $1; sub(/^ENV-PIN-/, "", st)
+    printf "%s\t%s\t%s\n", a[1], st, $3
+  }' | LC_ALL=C sort
+}
+env_pin_brief() {
+  awk -F'\t' 'NF == 0 { next } {
+    split($3, z, "\034"); v = z[2]
+    if (v ~ /^[0-9a-fA-F]+$/ && length(v) == 40) v = substr(v, 1, 12)
+    else v = "[value not shown]"
+    printf "%s %s %s;", $1, $2, v
+  }'
+}
+
+# health_summary <runs.json> — one TAB-separated line per workflow file seen in a
+# `actions/runs` response, newest run first within the file (empty fields are `-`,
+# never empty, so `read` cannot collapse them):
+#   file total nstart start_id start_at start_sha nzs fail_id fail_at fail_sha fail_zs last
+# total = completed runs of the file in the window; nstart = those with conclusion
+# startup_failure (start_* = the latest); nzs = failures whose name equals the path
+# (the unplannable-run shape); fail_* = the latest conclusion `failure`; fail_zs = 1
+# when that run has the unplannable shape; last = the latest run's conclusion.
+# Only the `path` suffix after `@` (a ref) is dropped when comparing name to path. A
+# run with no path is kept under the file name `(unknown workflow)` (never dropped), and
+# is never given the unplannable shape. Runs of one file are ordered by created_at then
+# id, so runs created in the same second still pick the newest.
+health_summary() {
+  jq -r '
+    def d: if . == null or . == "" then "-" else . end;
+    def base: ((.path // "") | sub("@.*$"; "") | sub("^.*/"; "")) | if . == "" then "(unknown workflow)" else . end;
+    def full: (.path // "") | sub("@.*$"; "");
+    [.workflow_runs[]? | select(.status == "completed") | . + {f: base}]
+    | group_by(.f)[]
+    | (sort_by([.created_at, .id]) | reverse) as $r
+    | ($r | map(select(.conclusion == "startup_failure"))) as $s
+    | ($r | map(select(.conclusion == "failure"))) as $fl
+    | ($fl | map(select(full != "" and (.name // "") == full))) as $z
+    | [ $r[0].f, ($r | length), ($s | length), ($s[0].id | d), ($s[0].created_at | d),
+        (($s[0].head_sha // "")[0:8] | d), ($z | length), ($fl[0].id | d),
+        ($fl[0].created_at | d), (($fl[0].head_sha // "")[0:8] | d),
+        (if ($fl[0] != null and ($fl[0] | full) != "" and (($fl[0].name // "") == ($fl[0] | full))) then 1 else 0 end),
+        ($r[0].conclusion | d) ] | @tsv
   ' "$1"
 }
 
@@ -1076,6 +1478,310 @@ JSON
   dcheck deed-multibyte.deed    "1 line(s) over 998 octets: L1=1000"
   dcheck deed-crlf.deed         ""
 
+  echo "control: env_pin_rows counts literal STANDARDS_PIN / CANON_REF assignments and never judges what it cannot read"
+  local eb="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  {
+    printf 'env:\n'
+    printf "  STANDARDS_PIN: '%s'\n" "$t"
+    printf '  CANON_REF: "%s" # pinned\n' "$eb"
+    printf '  # STANDARDS_PIN: %s\n' "$eb"
+    printf '  STANDARDS_PIN: ${{ inputs.pin }}\n'
+    printf '  CANON_REF: main\n'
+    printf '  STANDARDS_PIN: %s\n' "${eb:0:12}"
+    printf '  OTHER_STANDARDS_PIN: %s\n' "$eb"
+    printf '    run: echo "CANON_REF=%s" >> "$GITHUB_ENV"\n' "$eb"
+    printf '  CANON_REF:\n'
+    printf '  STANDARDS_PIN: %s\n' "${t^^}"
+    printf 'with:\n'
+    printf '  CANON_REF: %s\n' "$eb"
+    printf 'inputs:\n'
+    printf '  STANDARDS_PIN:\n'
+    printf 'env:\n'
+    printf '  CANON_REF: "%s # not a sha"\n' "$t"
+    printf 'run: |\n'
+    printf '  STANDARDS_PIN: %s\n' "$eb"
+    printf 'env:\n'
+    printf '  STANDARDS_PIN: %s\n' "$t"
+    printf 'steps:\n'
+    printf '  - env:\n'
+    printf '      CANON_REF: %s\n' "$eb"
+    printf 'env:\n'
+    printf '  STANDARDS_PIN:  %s\n' "$t"
+    printf '  CANON_REF: >-\n'
+    printf '    %s\n' "$t"
+    printf '  STANDARDS_PIN: "starts here\n'
+    printf '    env:\n'
+    printf '      CANON_REF: %s"\n' "$eb"
+    printf '  CANON_REF: %s\n' "$eb"
+    printf 'run: &script "echo\n'
+    printf '  env:\n'
+    printf '    CANON_REF: %s"\n' "$eb"
+    printf 'env:\n'
+    printf '  STANDARDS_PIN: &pin %s\n' "$t"
+    printf '  CANON_REF: !!str %s\n' "$eb"
+    printf '  STANDARDS_PIN: &blk >-\n'
+    printf '    %s\n' "$t"
+    printf 'steps:\n'
+    printf '  - &s "multi\n'
+    printf '    env:\n'
+    printf '      CANON_REF: %s"\n' "$eb"
+    printf 'env: {\n'
+    printf '  CANON_REF: %s,\n' "$eb"
+    printf '  STANDARDS_PIN: %s }\n' "$t"
+    printf 'env:\n'
+    printf '  STANDARDS_PIN: {a: b}\n'
+    printf '  CANON_REF: %s\n' "$eb"
+    printf 'env: { OTHER: x, # } harmless comment\n'
+    printf '  CANON_REF: %s,\n' "$eb"
+    printf '  STANDARDS_PIN: %s }\n' "$t"
+    printf 'env: { A: "}", # note\n'
+    printf '  CANON_REF: %s }\n' "$eb"
+    printf 'env:\n'
+    printf '  &pin CANON_REF: %s\n' "$eb"
+    printf '&e env:\n'
+    printf '  STANDARDS_PIN: %s\n' "$t"
+    printf 'run: |   \n'
+    printf '  env:\n'
+    printf '    CANON_REF: %s\n' "$eb"
+    printf 'run: >\r\n'
+    printf '  env:\n'
+    printf '    CANON_REF: %s\n' "$eb"
+    printf 'env:\n'
+    printf '  OTHER: { A: "first\n'
+    printf '    } text",\n'
+    printf '  CANON_REF: %s }\n' "$eb"
+    printf "env: { OTHER: don't }\n"
+    printf 'env:\n'
+    printf '  STANDARDS_PIN: %s\n' "$t"
+    printf 'steps:\n'
+    printf '  - env:\n'
+    printf '      A: b\n'
+    printf '    "with":\n'
+    printf '      CANON_REF: %s\n' "$eb"
+    printf 'env:\n'
+    printf '  "CANON_REF": %s\n' "$eb"
+    printf 'env:\n'
+    printf "  CANON_REF: '\${{ inputs.pin || ''main'' }}'\n"
+    printf 'steps:\n'
+    printf '  - |\n'
+    printf '    env:\n'
+    printf '      CANON_REF: %s\n' "$eb"
+    printf 'env:\n'
+    printf '  STANDARDS_PIN: %s\n' "$t"
+    printf '    folded\n'
+    printf 'env:\n'
+    printf '  CANON_REF: %s\n' "$eb"
+    printf 'done: x\n'
+    printf 'env: {\n'
+    printf "  OTHER: 'it''s } text',\n"
+    printf '  CANON_REF: %s }\n' "$eb"
+    printf '"e\\x6ev":\n'
+    printf '  "CANON\\u005fREF": %s\n' "$eb"
+    printf 'strategy:\n'
+    printf '  matrix:\n'
+    printf '    env:\n'
+    printf '      CANON_REF: %s\n' "$eb"
+    printf 'env:\n'
+    printf '  STANDARDS_PIN: "%s\\x62"\n' "${eb:0:39}"
+    printf 'run:\n'
+    printf '  |\n'
+    printf '  env:\n'
+    printf '    CANON_REF: %s\n' "$eb"
+    printf 'jobs:\n'
+    printf '  matrix:\n'
+    printf '    env:\n'
+    printf '      CANON_REF: %s\n' "$eb"
+    printf 'env:\n'
+    printf '  CANON_REF:\n'
+    printf '    %s\n' "$eb"
+    printf 'env:\n'
+    printf '  "\\U00000043ANON_REF": %s\n' "$eb"
+    printf 'env:\n'
+    printf '  STANDARDS_PIN: "%s\\U00000062"\n' "${eb:0:39}"
+    printf 'env: {\n'
+    printf '  ?"OTHER}": x,\n'
+    printf '  CANON_REF: %s }\n' "$eb"
+    printf 'env: { OTHER: don\n'
+    printf "  't, X: y }\n"
+    printf 'env:\n'
+    printf '  CANON_REF: %s\n' "$eb"
+    printf 'jobs:\n'
+    printf '  a:\n'
+    printf '    env: *pins\n'
+    printf '  b:\n'
+    printf '    env:\n'
+    printf '      <<: *pins\n'
+    printf 'env:\n'
+    printf '  STANDARDS_PIN: %s\n' "$t"
+    printf '    {literal\n'
+    printf '  CANON_REF: %s\n' "$eb"
+    printf 'strategy:\n'
+    printf '  matrix:\n'
+    printf '    os: &axes [a, b]\n'
+    printf '    env: *axes\n'
+    printf 'env:\n'
+    printf '  <<: [*base, *override]\n'
+    printf 'env:\n'
+    printf '  <<: [\n'
+    printf '    *base\n'
+    printf '  ]\n'
+    printf "env: { OTHER: http:'abc, X: y }\n"
+    printf 'env:\n'
+    printf '  CANON_REF: %s\n' "$eb"
+    printf 'env:\n'
+    printf '  CANON_REF: "main\\x0arelease"\n'
+    printf 'env:\n'
+    printf '  *pins\n'
+    printf 'strategy:\n'
+    printf '  matrix:\n'
+    printf '    include:\n'
+    printf '      - x: &pin CANON_REF\n'
+    printf '        *pin: %s\n' "$eb"
+    printf 'env:\n'
+    printf '  *pins # inherited\n'
+    printf 'jobs:\n'
+    printf '  a:\n'
+    printf '    run: echo\n'
+    printf '      {literal\n'
+    printf '    env:\n'
+    printf '      CANON_REF: %s\n' "$eb"
+    printf "env: { OTHER: abc':'x, X: y }\n"
+    printf 'env:\n'
+    printf '  CANON_REF: %s\n' "$eb"
+    printf 'env:\n'
+    printf '  CANON_REF: |-  \n'
+    printf '    text\n'
+    printf 'env: [foo,# comment with [\n'
+    printf '  bar]\n'
+    printf 'env:\n'
+    printf '  CANON_REF: %s\n' "$eb"
+  } > "$d/envpin.yml"
+  local ep; ep=$(env_pin_rows "$d/envpin.yml" "$t" | tr '\t' '|')
+  local epw="ENV-PIN-FRESH|STANDARDS_PIN L2 ${t:0:8}
+ENV-PIN-BEHIND|CANON_REF L3 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here
+ENV-PIN-DYNAMIC|STANDARDS_PIN L5 is an expression; not judged
+ENV-PIN-UNJUDGED|CANON_REF L6 value is not a 40-hex commit: main
+ENV-PIN-UNJUDGED|STANDARDS_PIN L7 value is not a 40-hex commit: ${eb:0:12}
+ENV-PIN-UNJUDGED|CANON_REF L10 value is not a 40-hex commit: (empty)
+ENV-PIN-FRESH|STANDARDS_PIN L11 ${t:0:8}
+ENV-PIN-UNJUDGED|CANON_REF L17 value is not a 40-hex commit: ${t:0:24}
+ENV-PIN-FRESH|STANDARDS_PIN L21 ${t:0:8}
+ENV-PIN-BEHIND|CANON_REF L24 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here
+ENV-PIN-FRESH|STANDARDS_PIN L26 ${t:0:8}
+ENV-PIN-UNJUDGED|CANON_REF L27 value is a block scalar; not judged
+ENV-PIN-UNJUDGED|STANDARDS_PIN L29 value is a multi-line quoted scalar; not judged
+ENV-PIN-BEHIND|CANON_REF L32 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here
+ENV-PIN-FRESH|STANDARDS_PIN L37 ${t:0:8}
+ENV-PIN-BEHIND|CANON_REF L38 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here
+ENV-PIN-UNJUDGED|STANDARDS_PIN L39 value is a block scalar; not judged
+ENV-PIN-UNJUDGED|STANDARDS_PIN L49 value is a flow collection; not judged
+ENV-PIN-BEHIND|CANON_REF L50 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here
+ENV-PIN-BEHIND|CANON_REF L57 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here
+ENV-PIN-FRESH|STANDARDS_PIN L59 ${t:0:8}
+ENV-PIN-FRESH|STANDARDS_PIN L72 ${t:0:8}
+ENV-PIN-BEHIND|CANON_REF L79 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here
+ENV-PIN-DYNAMIC|CANON_REF L81 is an expression; not judged
+ENV-PIN-UNJUDGED|STANDARDS_PIN L87 value continues on the next line (a folded plain scalar); not judged
+ENV-PIN-BEHIND|CANON_REF L90 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here
+ENV-PIN-BEHIND|CANON_REF L96 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here
+ENV-PIN-BEHIND|STANDARDS_PIN L102 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here
+ENV-PIN-BEHIND|CANON_REF L110 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here
+ENV-PIN-UNJUDGED|CANON_REF L112 value is on the next line (an indented node); not judged
+ENV-PIN-BEHIND|CANON_REF L115 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here
+ENV-PIN-BEHIND|STANDARDS_PIN L117 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here
+ENV-PIN-BEHIND|CANON_REF L124 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here
+ENV-PIN-UNJUDGED|(alias env) L127 an env map supplied by an alias (*name) is not resolved; env pins in this file may be missed
+ENV-PIN-UNJUDGED|(alias env) L130 an env map supplied by an alias (*name) is not resolved; env pins in this file may be missed
+ENV-PIN-UNJUDGED|STANDARDS_PIN L132 value continues on the next line (a folded plain scalar); not judged
+ENV-PIN-BEHIND|CANON_REF L134 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here
+ENV-PIN-UNJUDGED|(alias env) L140 an env map supplied by an alias (*name) is not resolved; env pins in this file may be missed
+ENV-PIN-UNJUDGED|(alias env) L142 an env map supplied by an alias (*name) is not resolved; env pins in this file may be missed
+ENV-PIN-BEHIND|CANON_REF L147 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here
+ENV-PIN-UNJUDGED|CANON_REF L149 value is not a 40-hex commit: main\\x0arelease
+ENV-PIN-UNJUDGED|(alias env) L151 an env map supplied by an alias (*name) is not resolved; env pins in this file may be missed
+ENV-PIN-UNJUDGED|(alias env) L158 an env map supplied by an alias (*name) is not resolved; env pins in this file may be missed
+ENV-PIN-BEHIND|CANON_REF L164 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here
+ENV-PIN-BEHIND|CANON_REF L167 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here
+ENV-PIN-UNJUDGED|CANON_REF L169 value is a block scalar; not judged
+ENV-PIN-BEHIND|CANON_REF L174 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here"
+  if [ "$ep" = "$epw" ]; then echo "  PASS envpin-rows -> $(printf '%s\n' "$ep" | wc -l) row(s)"
+  else echo "  FAIL envpin-rows -> got:
+$ep
+want:
+$epw" >&2; rc=1; fi
+  # The target compared case-insensitively: an uppercase --to must not turn a pin at
+  # the target commit into BEHIND.
+  local epu; epu=$(env_pin_rows "$d/envpin.yml" "${t^^}" | tr '\t' '|')
+  if [ "$epu" = "$epw" ]; then echo "  PASS envpin-target-case"
+  else echo "  FAIL envpin-target-case -> an uppercase target changed the rows:
+$epu" >&2; rc=1; fi
+  # YAML explicit mapping keys are not parsed: that must be said (one row), never silence.
+  printf 'env:\n  ? CANON_REF\n  : %s\n' "$eb" > "$d/explicit.yml"
+  if [ "$(env_pin_rows "$d/explicit.yml" "$t" | tr '\t' '|')" = "ENV-PIN-UNJUDGED|(explicit key) L2 YAML explicit mapping keys (? key) are not parsed; env pins in this file may be missed" ]; then echo "  PASS envpin-explicit-key"
+  else echo "  FAIL envpin-explicit-key -> an explicit key was silently skipped" >&2; rc=1; fi
+  # The value of an explicit key can be a block scalar: its body is text, never keys.
+  printf 'jobs:\n  ? run\n  : |\n    env:\n      CANON_REF: %s\n' "$eb" > "$d/explicit2.yml"
+  if [ "$(env_pin_rows "$d/explicit2.yml" "$t" | tr '\t' '|')" = "ENV-PIN-UNJUDGED|(explicit key) L2 YAML explicit mapping keys (? key) are not parsed; env pins in this file may be missed" ]; then echo "  PASS envpin-explicit-block"
+  else echo "  FAIL envpin-explicit-block -> the body of an explicit key's block scalar was read as keys" >&2; rc=1; fi
+  printf 'jobs:\n  ? run\n  : &script |\n    env:\n      CANON_REF: %s\n' "$eb" > "$d/explicit3.yml"
+  if [ "$(env_pin_rows "$d/explicit3.yml" "$t" | tr '\t' '|')" = "ENV-PIN-UNJUDGED|(explicit key) L2 YAML explicit mapping keys (? key) are not parsed; env pins in this file may be missed" ]; then echo "  PASS envpin-explicit-props"
+  else echo "  FAIL envpin-explicit-props -> a block scalar with a node property after an explicit key was read as keys" >&2; rc=1; fi
+  # An alias used as a key is not resolved: that must be said (one row), never silence.
+  printf 'env:\n  OTHER: &pin CANON_REF\n  *pin: %s\n' "$eb" > "$d/alias.yml"
+  if [ "$(env_pin_rows "$d/alias.yml" "$t" | tr '\t' '|')" = "ENV-PIN-UNJUDGED|(alias key) L3 YAML alias keys (*name:) are not resolved; env pins in this file may be missed" ]; then echo "  PASS envpin-alias-key"
+  else echo "  FAIL envpin-alias-key -> an alias key was silently skipped" >&2; rc=1; fi
+  printf 'jobs:\n  ? run\n  : "echo\n    env:\n      CANON_REF: %s"\n' "$eb" > "$d/explicit4.yml"
+  if [ "$(env_pin_rows "$d/explicit4.yml" "$t" | tr '\t' '|')" = "ENV-PIN-UNJUDGED|(explicit key) L2 YAML explicit mapping keys (? key) are not parsed; env pins in this file may be missed" ]; then echo "  PASS envpin-explicit-quoted"
+  else echo "  FAIL envpin-explicit-quoted -> the body of an explicit key's multi-line quoted value was read as keys" >&2; rc=1; fi
+  printf '? run\n: &script\n  |\n  env:\n    CANON_REF: %s\n' "$eb" > "$d/explicit5.yml"
+  if [ "$(env_pin_rows "$d/explicit5.yml" "$t" | tr '\t' '|')" = "ENV-PIN-UNJUDGED|(explicit key) L1 YAML explicit mapping keys (? key) are not parsed; env pins in this file may be missed" ]; then echo "  PASS envpin-explicit-propline"
+  else echo "  FAIL envpin-explicit-propline -> a block scalar after a property-only explicit value was read as keys" >&2; rc=1; fi
+  # A UTF-8 byte-order mark before the first key must not hide it.
+  printf '\357\273\277env:\n  STANDARDS_PIN: %s\n' "$t" > "$d/bom.yml"
+  if [ "$(env_pin_rows "$d/bom.yml" "$t" | tr '\t' '|')" = "ENV-PIN-FRESH|STANDARDS_PIN L2 ${t:0:8}" ]; then echo "  PASS envpin-bom"
+  else echo "  FAIL envpin-bom -> a leading BOM hid the first key" >&2; rc=1; fi
+  # The env pin sits in a standards-pin-looking line, but it is NOT a `uses:` pin:
+  # the rewrite must leave it exactly as it was.
+  cp "$d/envpin.yml" "$d/envpin-rw.yml"; rewrite_pins "$d/envpin-rw.yml" "$t"
+  if cmp -s "$d/envpin.yml" "$d/envpin-rw.yml"; then echo "  PASS envpin-not-rewritten"
+  else echo "  FAIL envpin-not-rewritten (rewrite_pins changed an env: pin)" >&2; rc=1; fi
+  echo "control: health_summary reads startup failures, the unplannable-run shape, and the latest conclusion"
+  local sh1="1111111111111111111111111111111111111111" sh2="2222222222222222222222222222222222222222" sh5="5555555555555555555555555555555555555555" sh7="7777777777777777777777777777777777777777"
+  jq -n --arg s1 "$sh1" --arg s2 "$sh2" --arg s5 "$sh5" --arg s7 "$sh7" '{workflow_runs: [
+    {id: 1, status: "completed", conclusion: "startup_failure", name: "A", path: ".github/workflows/a.yml", created_at: "2026-11-10T00:00:00Z", head_sha: $s1},
+    {id: 2, status: "completed", conclusion: "startup_failure", name: "A", path: ".github/workflows/a.yml", created_at: "2026-11-12T00:00:00Z", head_sha: $s2},
+    {id: 3, status: "completed", conclusion: "success", name: "A", path: ".github/workflows/a.yml", created_at: "2026-11-13T00:00:00Z", head_sha: $s1},
+    {id: 4, status: "completed", conclusion: "failure", name: ".github/workflows/b.yml", path: ".github/workflows/b.yml", created_at: "2026-11-11T00:00:00Z", head_sha: $s1},
+    {id: 5, status: "completed", conclusion: "failure", name: "B", path: ".github/workflows/b.yml", created_at: "2026-11-12T00:00:00Z", head_sha: $s5},
+    {id: 6, status: "completed", conclusion: "success", name: "C", path: ".github/workflows/c.yml", created_at: "2026-11-12T00:00:00Z", head_sha: $s1},
+    {id: 7, status: "completed", conclusion: "failure", name: ".github/workflows/d.yml", path: ".github/workflows/d.yml@refs/heads/main", created_at: "2026-11-12T00:00:00Z", head_sha: $s7},
+    {id: 8, status: "in_progress", conclusion: null, name: "E", path: ".github/workflows/e.yml", created_at: "2026-11-14T00:00:00Z", head_sha: $s1}
+  ]}' > "$d/runs.json"
+  local hs; hs=$(health_summary "$d/runs.json")
+  hcheck() {
+    local label="$1" file="$2" want="$3" got
+    got=$(printf '%s\n' "$hs" | awk -F'\t' -v f="$file" '$1 == f' | tr '\t' '|')
+    if [ "$got" = "$want" ]; then echo "  PASS $label -> ${got:-no line}"
+    else echo "  FAIL $label -> got '${got}' want '${want}'" >&2; rc=1; fi
+  }
+  hcheck health-startup      a.yml "a.yml|3|2|2|2026-11-12T00:00:00Z|22222222|0|-|-|-|0|success"
+  hcheck health-zero-shape   b.yml "b.yml|2|0|-|-|-|1|5|2026-11-12T00:00:00Z|55555555|0|failure"
+  hcheck health-healthy      c.yml "c.yml|1|0|-|-|-|0|-|-|-|0|success"
+  hcheck health-ref-suffix   d.yml "d.yml|1|0|-|-|-|1|7|2026-11-12T00:00:00Z|77777777|1|failure"
+  hcheck health-inprogress-ignored e.yml ""
+
+  # Same-second runs: the higher id is the newer run, whatever order the API listed
+  # them in. A run with no path is kept under a placeholder, never dropped.
+  jq -n --arg s "$sh1" '{workflow_runs: [
+    {id: 21, status: "completed", conclusion: "failure", name: "G", path: ".github/workflows/g.yml", created_at: "2026-11-12T00:00:00Z", head_sha: $s},
+    {id: 20, status: "completed", conclusion: "success", name: "G", path: ".github/workflows/g.yml", created_at: "2026-11-12T00:00:00Z", head_sha: $s},
+    {id: 30, status: "completed", conclusion: "startup_failure", name: null, path: null, created_at: "2026-11-12T00:00:00Z", head_sha: $s},
+    {id: 31, status: "completed", conclusion: "failure", name: null, path: "", created_at: "2026-11-13T00:00:00Z", head_sha: $s}
+  ]}' > "$d/runs2.json"
+  hs=$(health_summary "$d/runs2.json")
+  hcheck health-tie-break g.yml "g.yml|2|0|-|-|-|0|21|2026-11-12T00:00:00Z|11111111|0|failure"
+  hcheck health-pathless "(unknown workflow)" "(unknown workflow)|2|1|30|2026-11-12T00:00:00Z|11111111|0|31|2026-11-13T00:00:00Z|11111111|0|failure"
+
   echo "control: the lock relock is present"
   if [ -f "$RELOCK" ] && bash -n "$RELOCK"; then
     echo "  PASS $(basename "$RELOCK") present and parses"
@@ -1325,6 +2031,66 @@ fetch_workflows() {
   return 0
 }
 
+# repo_health <repo> <tsv> — append HEALTH-* rows (see HEALTH BLOCK) for one
+# repository. READ-ONLY: it only issues GET requests, and it never changes what
+# the caller does with the repository. Every failure to read is a HEALTH-UNREAD row.
+repo_health() {
+  local repo="$1" tsv="$2" resp lines jresp
+  [ "$HEALTH" -eq 1 ] || return 0
+  resp=$(mktemp)
+  if ! gh api "repos/${repo}/actions/runs?status=completed&per_page=${HEALTH_WINDOW}" > "$resp" 2>/dev/null \
+     || ! jq -e '(.workflow_runs | type) == "array"' "$resp" >/dev/null 2>&1; then
+    printf '%s\t(actions runs)\tHEALTH-UNREAD\tthe repository'"'"'s recent Actions runs could not be read (no permission, rate limit, or a non-JSON answer); not judged\n' "$repo" >> "$tsv"
+    rm -f "$resp"; return 0
+  fi
+  if ! lines=$(health_summary "$resp"); then
+    printf '%s\t(actions runs)\tHEALTH-UNREAD\tthe Actions runs answer could not be summarised; not judged\n' "$repo" >> "$tsv"
+    rm -f "$resp"; return 0
+  fi
+  rm -f "$resp"
+  local f total nst sid sat ssha nzs fid fat fsha fzs last njobs=0 names jt jn
+  while IFS=$'\t' read -r f total nst sid sat ssha nzs fid fat fsha fzs last; do
+    [ -n "$f" ] || continue
+    if [ "$nst" -gt 0 ]; then
+      printf '%s\t%s\tHEALTH-STARTUP-FAILURE\t%s of the last %s completed run(s) of this file ended startup_failure; latest run %s at %s (%s); latest completed run of this file: %s\n' \
+        "$repo" "$f" "$nst" "$total" "$sid" "$sat" "$ssha" "$last" >> "$tsv"
+    fi
+    [ "$fid" = "-" ] && continue
+    if [ "$njobs" -ge "$HEALTH_JOBS_CAP" ]; then
+      printf '%s\t%s\tHEALTH-UNREAD\tlatest failed run %s not inspected: the jobs-read cap (%s per repository) was reached\n' \
+        "$repo" "$f" "$fid" "$HEALTH_JOBS_CAP" >> "$tsv"
+      continue
+    fi
+    njobs=$((njobs+1))
+    jresp=$(mktemp)
+    if ! gh api "repos/${repo}/actions/runs/${fid}/jobs?per_page=100" > "$jresp" 2>/dev/null \
+       || ! jq -e '(.jobs | type) == "array"' "$jresp" >/dev/null 2>&1; then
+      printf '%s\t%s\tHEALTH-UNREAD\tthe jobs of latest failed run %s could not be read; not judged\n' "$repo" "$f" "$fid" >> "$tsv"
+      rm -f "$jresp"; continue
+    fi
+    jt=$(jq -r '.total_count // (.jobs | length)' "$jresp")
+    if [ "$fzs" = 1 ] && [ "$jt" = 0 ]; then
+      printf '%s\t%s\tHEALTH-ZERO-JOB\t%s of the last %s completed run(s) of this file failed with name == path; latest failed run %s at %s (%s) ran 0 jobs; latest completed run of this file: %s\n' \
+        "$repo" "$f" "$nzs" "$total" "$fid" "$fat" "$fsha" "$last" >> "$tsv"
+    fi
+    names=$(jq -r '[.jobs[]? | select(.conclusion == "failure" and ((.name // "") | test("lock"; "i"))) | .name | gsub("[\t\n]"; " ")] | join(", ")' "$jresp")
+    if [ -n "$names" ]; then
+      printf '%s\t%s\tHEALTH-LOCK-FAILURE\tfailed job(s) with "lock" in the name in latest failed run %s at %s (%s): %s (matched by job NAME; no log was read); latest completed run of this file: %s\n' \
+        "$repo" "$f" "$fid" "$fat" "$fsha" "$names" "$last" >> "$tsv"
+    fi
+    # Only the first page (per_page=100) is read. A run with more jobs than that
+    # (a large matrix) has jobs this census did not see: say so, never read the first
+    # page as the whole run.
+    jn=$(jq -r '(.jobs | length)' "$jresp")
+    if [ "$jt" -gt "$jn" ] 2>/dev/null; then
+      printf '%s\t%s\tHEALTH-UNREAD\tonly %s of the %s jobs of latest failed run %s were read (first page); a lock-named failed job beyond it would not be seen\n' \
+        "$repo" "$f" "$jn" "$jt" "$fid" >> "$tsv"
+    fi
+    rm -f "$jresp"
+  done <<< "$lines"
+  return 0
+}
+
 # land_pr <repo> <dir> <files...> — create branch, commit VERIFIED, open PR.
 # Uses createCommitOnBranch: it is cross-repo by construction and the resulting
 # commit is GitHub-"Verified", which required_signatures rulesets demand.
@@ -1436,6 +2202,7 @@ main() {
       --out) OUT_FILE="$2"; shift ;;
       --limit) LIMIT="$2"; shift ;;
       --ensure-squabbler) ENSURE_SQUABBLER=1 ;;
+      --no-health) HEALTH=0 ;;
       --proven-sha) PROVEN_SHA="$2"; shift ;;
       --fix-content) DO_FIX_CONTENT=1 ;;
       --self-test) self_test; exit $? ;;
@@ -1544,6 +2311,9 @@ main() {
     [ "$LIMIT" -gt 0 ] && [ "$n" -ge "$LIMIT" ] && break
     walked=$((walked+1)); [ "$DO_FIX" -eq 1 ] || [ "$DO_FIX_CONTENT" -eq 1 ] || n=$((n+1))
     local rdir="${WORKDIR}/$(echo "$repo" | tr '/' '_')"
+    # Health rows come first and for EVERY repository walked: nothing below (a
+    # failed fetch, no workflows, a pin-free repo) can hide them.
+    repo_health "$repo" "$tsv"
     if ! fetch_workflows "$repo" "$rdir"; then
       log "  FETCH-FAILED ${repo}: workflows could not be read; NOT classified"
       printf '%s\t-\tFETCH-FAILED\t-\n' "$repo" >> "$tsv"
@@ -1561,11 +2331,25 @@ main() {
         cst=$(content_state "$wf" "$PROVEN_MANIFEST")
         [ -n "$cst" ] && printf '%s\t%s\t%s\n' "$repo" "$base" "$cst" >> "$tsv"
         if [ "$DO_FIX_CONTENT" -eq 1 ] && [ "${cst%%$'\t'*}" = BEHIND-CONTENT ]; then
-          local rst; rst=$(refresh_copy "$rdir" "$wf")
+          local rst epb epa; epb=$(env_pin_values "$wf" "$TARGET_SHA")
+          rst=$(refresh_copy "$rdir" "$wf")
           printf '%s\t%s\t%s\n' "$repo" "$base" "$rst" >> "$tsv"
-          [ "${rst%%$'\t'*}" = CONTENT-REFRESHED ] && changed+=("$base")
+          if [ "${rst%%$'\t'*}" = CONTENT-REFRESHED ]; then
+            changed+=("$base")
+            # The refresh replaces the copy with the template, so an env pin it carried can
+            # move with it. The census below reads the refreshed copy; say what changed.
+            epa=$(env_pin_values "$wf" "$TARGET_SHA")
+            [ "$epb" = "$epa" ] || printf '%s\t%s\tENV-PIN-REFRESH-MOVED\tthe content refresh changed the env pins; before [%s] after [%s]; the census never re-points them, review before merging\n' \
+              "$repo" "$base" "$(printf '%s\n' "$epb" | env_pin_brief)" "$(printf '%s\n' "$epa" | env_pin_brief)" >> "$tsv"
+          fi
         fi
       fi
+      # Env-var pins (STANDARDS_PIN, CANON_REF) are counted for every workflow, even
+      # one with no `uses:` pin (so before the NONE skip). Census only, every mode.
+      local epl
+      while IFS= read -r epl; do
+        [ -n "$epl" ] && printf '%s\t%s\t%s\n' "$repo" "$base" "$epl" >> "$tsv"
+      done < <(env_pin_rows "$wf" "$TARGET_SHA")
       st=$(classify_file "$wf" "$TARGET_SHA" | sort | tr '\n' ',' ); st="${st%,}"
       [ "$st" = "NONE" ] && continue
       detail=""

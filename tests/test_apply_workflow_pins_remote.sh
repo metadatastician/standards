@@ -22,6 +22,7 @@ APPLIER="${SCRIPT_DIR}/../scripts/apply-workflow-pins-remote.sh"
 
 TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
 rc=0
+MUT_RAN=0   # mutant invocations that actually started (checked against the call lines at the end)
 pass() { echo "  PASS $*"; }
 fail() { echo "  FAIL $*" >&2; rc=1; }
 
@@ -64,7 +65,9 @@ for want in "fresh.yml" "behind.yml" "illegal.yml" "tracking.yml" "none.yml" "sh
             "content-wide.yml" "content-unlisted.yml" "content-malformed.yml" "content-not-first.yml" \
             "bad-huge.json" "content-huge.yml" \
             "dot-local.yml" "dollar-managed.yml" "dollar-unmanaged.yml" "dollar-managed-parent.yml" \
-            "owner-stale.lock" "owner-clean.lock" "owner-nonstandards.lock" "owner-tag-key.lock"; do
+            "owner-stale.lock" "owner-clean.lock" "owner-nonstandards.lock" "owner-tag-key.lock" \
+            "envpin-rows" "envpin-target-case" "envpin-bom" "envpin-explicit-key" "envpin-not-rewritten" \
+            "health-startup" "health-zero-shape" "health-healthy" "health-ref-suffix" "health-inprogress-ignored" "health-tie-break" "health-pathless"; do
   grep -q "PASS $want" "$TMP/base.out" && pass "control present: $want" \
     || fail "control MISSING from baseline: $want (a control that never runs is not a control)"
 done
@@ -72,6 +75,7 @@ done
 # --- 2. mutants --------------------------------------------------------------
 # kill <name> <sed-expr> <expected-substring-in-red-output>
 kill_mutant() {
+  MUT_RAN=$((MUT_RAN+1))
   # NOTE: `local a="$1" m="${a}"` does NOT work — bash expands every word of the
   # `local` builtin's argument list BEFORE assigning any of them, so `${a}` is
   # unset there. Assign on separate lines. (Cost one red herring to find.)
@@ -250,6 +254,97 @@ kill_mutant content_stamp_unbounded \
 kill_mutant manifest_version_unbounded \
   '/and \(\.version \| type == "string"/s@\{1,9\}@+@g' \
   "FAIL bad-huge.json"
+# Codex findings on #1602, one mutant each: the target must be compared
+# case-insensitively, only a child of `env:` counts, and a `#` inside a quoted value
+# is not a comment. Each is killed by a known-answer control, not by a stub case.
+kill_mutant envpin_target_case_ignored 's@tgt = tolower\(target\)@tgt = target@' "FAIL envpin-target-case"
+kill_mutant envpin_context_ignored 's@ && parent == "env" && !inmx\)@ \&\& !inmx)@' "FAIL envpin-rows"
+kill_mutant envpin_quote_hash_stripped 's@if \(c == "\\047" \|\| c == "\\""\) \{@if (0) {@' "FAIL envpin-rows"
+# Second Codex round on #1602: whitespace after the colon, multi-line quoted scalars,
+# and a block-scalar value must each be handled, not misread or silent.
+kill_mutant envpin_space_trim_dropped 's@ sub\(/\^\[\[:space:\]\]\+/, "", rest\)@@' "FAIL envpin-rows"
+kill_mutant envpin_multiline_quote_read 's@^    inq != "" \{ if@    inq == "NEVER" { if@' "FAIL envpin-rows"
+kill_mutant envpin_block_scalar_silent 's@if \(tracked\) \{ capk = sprintf\("ENV-PIN-UNJUDGED\\t%s L%d value is a block scalar@if (0) { capk = sprintf("ENV-PIN-UNJUDGED\\t%s L%d value is a block scalar@' "FAIL envpin-rows"
+# Third Codex round on #1602: an anchor or tag before a scalar must not hide the scalar
+# style (a multi-line quote, a block scalar) nor the value itself.
+kill_mutant envpin_anchor_value_kept 's@; rest = props\(rest\)@@' "FAIL envpin-rows"
+kill_mutant envpin_anchor_hides_quote 's@bp = props\(body\);@bp = body;@' "FAIL envpin-rows"
+# Fourth Codex round on #1602: a flow collection that runs over several lines must be
+# tracked to its closing bracket (its lines are not keys), and a tracked key whose own
+# value is one must be reported, not skipped.
+kill_mutant envpin_flow_multiline_read 's@^    flow > 0 \{ flow@    flow > 99 { flow@' "FAIL envpin-rows"
+kill_mutant envpin_flow_value_silent 's@if \(tracked\) outr\(sprintf\("ENV-PIN-UNJUDGED\\t%s L%d value is a flow collection@if (0) outr(sprintf("ENV-PIN-UNJUDGED\\t%s L%d value is a flow collection@' "FAIL envpin-rows"
+# Fifth Codex round on #1602: a bracket inside a comment or a quoted scalar is not flow
+# structure, so it must not end (or open) a flow collection early.
+kill_mutant envpin_flow_comment_counted 's@else if \(ch == "#" && prev ~ /\[\[:space:\],\\\[\{\]/\) break@else if (0) break@' "FAIL envpin-rows"
+kill_mutant envpin_flow_quote_counted 's@else if \(\(ch == "\\047" \|\| ch == "\\""\) && isb\) q = ch@else if (0) q = ch@' "FAIL envpin-rows"
+# Seventh Codex round on #1602: an anchor or tag on a mapping key, a CR or trailing
+# whitespace after a block-scalar header, and a quote that stays open across the lines
+# of a flow collection must each be handled.
+kill_mutant envpin_key_props_kept 's@match\(bp, /\^\(<<\|\[A-Za-z_\]\[A-Za-z0-9_\.-\]\*\)@match(body, /^([A-Za-z_][A-Za-z0-9_.-]*)@' "FAIL envpin-rows"
+kill_mutant envpin_trailing_space_kept 's@^    \{ sub\(/\[\[:space:\]\]\+\$/, ""\) \}$@    { }@' "FAIL envpin-rows"
+kill_mutant envpin_flow_quote_reset 's@n = length\(line\); q = fq; d = 0@n = length(line); q = ""; d = 0@' "FAIL envpin-rows"
+# Eighth Codex/CodeRabbit round on #1602: a BOM, an apostrophe inside a plain scalar of a
+# flow collection, a quoted structural key, and the closing quote of a quoted value.
+kill_mutant envpin_bom_kept 's@^    NR == 1 \{ sub\("\^\\357\\273\\277", ""\) \}$@    NR == 1 { }@' "FAIL envpin-bom"
+kill_mutant envpin_apostrophe_quote 's@ && isb\) q = ch@) q = ch@' "FAIL envpin-rows"
+kill_mutant envpin_quoted_key_ignored 's@match\(bp, /\^"\(@match(bp, /^NEVER"(@' "FAIL envpin-rows"
+kill_mutant envpin_quote_escape_first 's@q = qend\(val\)@q = index(substr(val, 2), c) + 1@' "FAIL envpin-rows"
+# Ninth round on #1602: a block scalar as a sequence item, a plain scalar that continues on
+# the next line, and YAML explicit mapping keys (not parsed, and said so).
+kill_mutant envpin_seq_blockscalar_read 's@skip = n0; next@next@' "FAIL envpin-rows"
+kill_mutant envpin_plain_continuation_ignored 's@if \(n > pn\) \{ flushp\(pcont\)@if (0) { flushp(pcont)@' "FAIL envpin-rows"
+kill_mutant envpin_explicit_key_silent 's@if \(!xwarn\) \{ xwarn = 1; outr@if (0) { xwarn = 1; outr@' "FAIL envpin-explicit-key"
+# Tenth round on #1602: a doubled single quote inside a flow scalar, and escapes in a
+# double-quoted key.
+kill_mutant envpin_flow_doubled_quote 's@if \(q == "\\047" && substr\(line, i \+ 1, 1\) == "\\047"\) i\+\+; else \{ q = ""; pl = 0; cq = 1 \}@q = ""; pl = 0; cq = 1@' "FAIL envpin-rows"
+kill_mutant envpin_key_escape_literal 's@key = unesc\(substr\(key, 2, length\(key\) - 2\)\)@key = substr(key, 2, length(key) - 2)@' "FAIL envpin-rows"
+# Eleventh round on #1602: a matrix axis named env is not an environment map, and
+# escapes in a double-quoted pin value are decoded.
+kill_mutant envpin_matrix_env_read 's@ && !inmx\)@)@' "FAIL envpin-rows"
+kill_mutant envpin_value_escape_literal 's@if \(c == "\\""\) val = unesc\(val\)@@' "FAIL envpin-rows"
+# Twelfth round: a job named matrix is not matrix data, and block scalars written as an
+# explicit key's value or on the line after an empty `key:` are skipped.
+kill_mutant envpin_matrix_job_name 's@ && k > 1 && knm\[k - 1\] == "strategy"@@' "FAIL envpin-rows"
+kill_mutant envpin_explicit_value_read 's@if \(bq ~ /\^:\[\[:space:\]\]\+/\) \{ eb = bq;@if (0) { eb = bq;@' "FAIL envpin-explicit-block"
+kill_mutant envpin_nextline_indicator_read 's@if \(n == n0 && bq ~ /\^\[\|>\]\[-\+0-9\]\*\$/ && \(top == 0 \|\| ind\[top\] < n\)\) \{ skip = \(top > 0\) \? ind\[top\] : 0; next \}@@' "FAIL envpin-rows"
+# Thirteenth round: an empty KEY: completed by an indented node on the next line.
+kill_mutant envpin_empty_value_nextline 's@\} else if \(val == "" && !bad && c != "\\047" && c != "\\""\) \{@} else if (0) {@' "FAIL envpin-rows"
+# Fifteenth round: a plain scalar left open across the lines of a flow collection.
+kill_mutant envpin_flow_plain_carry 's@pl = fpl@pl = 0@' "FAIL envpin-rows"
+# Sixteenth round: an env map supplied by an alias is said aloud.
+kill_mutant envpin_alias_env_silent 's@if \(!inmx && \(key == "env"@if (0 \&\& (key == "env"@' "FAIL envpin-rows"
+kill_mutant envpin_merge_key_unread 's@\(<<\|\[A-Za-z_\]@([A-Za-z_]@' "FAIL envpin-rows"
+# Seventeenth round: the alias warning respects matrix data, merge sequences are warned about, and
+# the continuation lines of a folded pin are scalar text, never structure.
+kill_mutant envpin_alias_env_in_matrix 's@if \(!inmx && \(key == "env"@if ((key == "env"@' "FAIL envpin-rows"
+kill_mutant envpin_merge_sequence_silent 's@ \|\| \(key == "<<" && rest ~ /\^\[\\\[\\\{\]/\)@@' "FAIL envpin-rows"
+kill_mutant envpin_folded_line_is_structure 's@pend = ""; pc = -1; skip = pn; next \}@pend = ""; pc = -1 }@' "FAIL envpin-rows"
+# Eighteenth round: a colon inside a flow plain scalar, and a decoded line feed.
+kill_mutant envpin_embedded_colon_ends_scalar 's@pl = \(nx == "" \|\| nx ~ /\[\[:space:\],\\\]\}\]/ \|\| jq\) \? 0 : 1@pl = 0@' "FAIL envpin-rows"
+# Nineteenth round: a next-line alias under env, alias keys inside matrix data, a multi-line quoted
+# value of an explicit key, and a refresh that only reorders jobs.
+kill_mutant envpin_nextline_alias_silent 's@ab ~ /\^\\\*\[\^\[:space:\]\]\+\$/ && top > 0@0 \&\& top > 0@' "FAIL envpin-rows"
+# Twentieth round: a comment after a next-line alias, and escapes kept lossless.
+kill_mutant envpin_alias_comment_unstripped 's@ab = bp; sub\(/\[\[:space:\]\]\+#\.\*\$/, "", ab\)@ab = bp@' "FAIL envpin-rows"
+# Twenty-first round: continuation lines of ordinary plain values, a property-only explicit value, and a
+# quote just before an embedded colon.
+kill_mutant envpin_plain_value_continuation 's@if \(n > pc\) \{ skip = pc; pc = -1; next \}@if (0) { skip = pc; pc = -1; next }@' "FAIL envpin-rows"
+# Twenty-second round: a comment right after a flow separator, and a literal backslash that must not
+# read as a decoded escape.
+kill_mutant envpin_comma_hash_not_comment 's@prev ~ /\[\[:space:\],\\\[\{\]/\) break@prev ~ /[[:space:]]/) break@' "FAIL envpin-rows"
+kill_mutant envpin_explicit_propline_top 's@\(top == 0 \|\| ind\[top\] < n\)@(top > 0 \&\& ind[top] < n)@' "FAIL envpin-explicit-propline"
+kill_mutant envpin_quote_before_colon 's@ \|\| jq\) \? 0 : 1@ || prev ~ /["\\047]/) ? 0 : 1@' "FAIL envpin-rows"
+kill_mutant envpin_escape_flattened 's@else o = o \(\(v > 255\) \? sprintf\("\\\\u%04x", v\) : sprintf\("\\\\x%02x", v\)\)@else o = o "?"@' "FAIL envpin-rows"
+kill_mutant envpin_alias_key_in_matrix 's@if \(!awarn && !am\)@if (!awarn)@' "FAIL envpin-rows"
+kill_mutant envpin_explicit_quoted_read 's@if \(eb ~ /\^\["\\047\]/ && !qclose@if (0 \&\& !qclose@' "FAIL envpin-explicit-quoted"
+kill_mutant envpin_decoded_line_feed 's@else if \(v >= 32 && v < 127 && v != 92\)@else if (v > 0 \&\& v < 128)@' "FAIL envpin-rows"
+# Fourteenth round: \U escapes, a flow value compared in full, node properties after an explicit
+# key's colon, alias keys said aloud, and a quote right after `?` inside a flow collection.
+kill_mutant envpin_big_u_escape 's@ \|\| ch == "U"@@' "FAIL envpin-rows"
+kill_mutant envpin_explicit_props_kept 's@eb = props\(eb\); @@' "FAIL envpin-explicit-props"
+kill_mutant envpin_alias_key_silent 's@if \(!awarn && !am\) \{ awarn = 1; outr@if (0) { awarn = 1; outr@' "FAIL envpin-alias-key"
+kill_mutant envpin_flow_question_boundary 's@\[\[:space:\]\{,:\[\?\]@[[:space:]{,:[]@' "FAIL envpin-rows"
 
 # --- 3. fetch_workflows fails CLOSED -----------------------------------------
 # A rate-limited repo used to come back as "no workflows": fetch_workflows
@@ -376,6 +471,8 @@ if [ "$gql" = 1 ]; then
   [ -f "$GH_FIX/own_lock_unread" ] && extra=$(printf '%s' "$extra" | jq '. + [{name: "actions.lock", type: "blob", object: {text: null}}]')
   # $GH_FIX/own_stamped: each repository also holds that stamped proven-cicd copy.
   [ -f "$GH_FIX/own_stamped" ] && extra=$(printf '%s' "$extra" | jq --rawfile s "$GH_FIX/own_stamped" '. + [{name: "proven-lock-gate.yml", type: "blob", object: {text: $s}}]')
+  # $GH_FIX/own_envpin: each repository also holds that workflow, named env-pin.yml.
+  [ -f "$GH_FIX/own_envpin" ] && extra=$(printf '%s' "$extra" | jq --rawfile s "$GH_FIX/own_envpin" '. + [{name: "env-pin.yml", type: "blob", object: {text: $s}}]')
   # $GH_FIX/own_deed: each repository has that root deed (named <repo>_chora.deed, or
   # the name in own_deed_name: a deed kept under a former repository name; the
   # conventional-name alias then reads null, as GitHub answers for a missing file).
@@ -417,6 +514,16 @@ case "$p" in
   repos/*/contents/*_chora.deed)
     [ -f "$GH_FIX/own_deed_rest_fail" ] && refuse 403 "This API returns blobs up to 1 MB in size. The requested blob is too large"
     body="$GH_FIX/own_deed" ;;
+  # Actions runs (the health block). $GH_FIX/runs.json is the answer for EVERY
+  # repository (default: no runs); runs_fail makes the list refuse; jobs_<id>.json
+  # answers a run's jobs and jobs_fail_<id> makes that read refuse.
+  repos/*/actions/runs/*/jobs)
+    jid="${p%/jobs}"; jid="${jid##*/}"
+    [ -f "$GH_FIX/jobs_fail_$jid" ] && refuse 403 "Resource not accessible by integration"
+    body="$GH_FIX/jobs_$jid.json" ;;
+  repos/*/actions/runs)
+    [ -f "$GH_FIX/runs_fail" ] && refuse 403 "Resource not accessible by integration"
+    if [ -f "$GH_FIX/runs.json" ]; then body="$GH_FIX/runs.json"; else echo '{"workflow_runs": []}'; exit 0; fi ;;
   repos/*/commits/*)
     j='{"sha": "cccccccccccccccccccccccccccccccccccccccc"}'
     if [ -n "$jqx" ]; then printf '%s' "$j" | jq -r "$jqx"; else printf '%s' "$j"; fi; exit 0 ;;
@@ -440,6 +547,10 @@ chmod +x "$LSTUB/gh"
 # Mutants are sourced, and the applier sources lib/ beside itself.
 MUT="$TMP/mut"; mkdir -p "$MUT"
 ln -s "$(cd "$(dirname "$APPLIER")" && pwd)/lib" "$MUT/lib"
+# The applier finds its relock script beside itself, and its startup controls fail when it
+# is missing. Without this link every case_main_* run against a mutant is red for that
+# reason alone, and a no-op mutant would count as killed (it did, for every list_mutant).
+ln -s "$(cd "$(dirname "$APPLIER")" && pwd)/relock-standards-pin.sh" "$MUT/relock-standards-pin.sh"
 
 # fixture_repos <file> <owner/name:archived>... — write a REST repository list.
 fixture_repos() {
@@ -789,6 +900,132 @@ case_main_content_refresh() {
   fi
 }
 
+# case_main_content_refresh_envpin <applier> — a refresh replaces the copy with the
+# template, so an env pin it carried moves with it. The census reads the refreshed copy,
+# so the run must also say what changed: one ENV-PIN-REFRESH-MOVED row per refreshed copy
+# naming before and after. The comparison is on COMPLETE values, never the abbreviated
+# ones of the report: a changed branch name, a changed expression and two commits that
+# share their first 12 hex all count; an unchanged pin gives no row.
+case_main_content_refresh_envpin() {
+  local d old new want rows pair tab=$'\t'
+  local c1="eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" c2="eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeef"
+  local -a pairs=(
+    "${c1}|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|3|a commit that moved"
+    "main|release|3|a branch name that changed"
+    "\${{ inputs.a }}|\${{ inputs.b }}|3|an expression that changed"
+    "${c1}|${c2}|3|two commits that share their first 12 hex"
+    "[main]|[release]|3|a flow value that changed"
+    "\"main\\x0arelease\"|\"main?release\"|3|an escaped line feed that became a question mark"
+    "\"main\\x0arelease\"|'main\\x0arelease'|3|a double-quoted line feed that became a single-quoted literal backslash"
+    "'a${tab}b'|'a${tab}c'|3|a value that differs only after a literal tab"
+    "main|main|0|an unchanged value"
+  )
+  for pair in "${pairs[@]}"; do
+    IFS='|' read -r old new want rows <<< "$pair"
+    d=$(new_case contentrefreshenv)
+    content_fixture "$1" "$d"
+    stamp_into "$1" "$d/proven_template.yml" proven-lock-gate 0.2.0 "$(printf 'name: gate\nenv:\n  # proven-cicd:local-next\n  PROVEN_SHA: "%s"\n  CANON_REF: %s\njobs:\n  g:\n    steps:\n      - run: echo new\n' "$CO_NEW" "$new")"
+    stamp_into "$1" "$d/own_stamped" proven-lock-gate 0.1.0 "$(printf 'name: gate\nenv:\n  # proven-cicd:local-next\n  PROVEN_SHA: "%s"\n  CANON_REF: %s\njobs:\n  g:\n    steps:\n      - run: echo old\n' "$CO_OLD" "$old")"
+    run_content "$d" "$1" --fix-content --proven-sha "$P"
+    if [ "$(cat "$d/rc")" = 0 ] && [ "$(grep -c 'ENV-PIN-REFRESH-MOVED' "$d/out")" = "$want" ] \
+       && { [ "$want" = 0 ] || [ "$(grep -F 'ENV-PIN-REFRESH-MOVED' "$d/out" | grep -c 'before \[CANON_REF [A-Z]* [^;]*;\] after \[CANON_REF [A-Z]* [^;]*;\]')" = "$want" ]; }; then
+      pass "main: a content refresh with ${rows} gives ${want} ENV-PIN-REFRESH-MOVED row(s)"
+    else
+      fail "main: refresh with ${rows}: want ${want} ENV-PIN-REFRESH-MOVED row(s), got $(grep -c 'ENV-PIN-REFRESH-MOVED' "$d/out") (rc=$(cat "$d/rc"))"
+      sed 's/^/    /' "$d/out" >&2; tail -5 "$d/err" | sed 's/^/    /' >&2
+    fi
+    # The report never prints a value that is not a commit: only a 40-hex value is shown.
+    if [ "$want" != 0 ] && [ "$old" = main ] && [ "$new" = release ]; then
+      if grep -F 'ENV-PIN-REFRESH-MOVED' "$d/out" | grep -qE 'main|release'; then
+        fail "main: ENV-PIN-REFRESH-MOVED printed a branch name (non-commit values must not be shown)"
+      else
+        pass "main: ENV-PIN-REFRESH-MOVED does not print a non-commit value"
+      fi
+    fi
+  done
+}
+
+# case_main_content_refresh_envpin_swap <applier> — the comparison keeps each assignment's
+# mapping path and the document order. A refresh that EXCHANGES two env pins between two
+# jobs (same values, same count) is reported, and so is one that moves the same pins under
+# different job names; an identical layout is not.
+case_main_content_refresh_envpin_swap() {
+  local d scen oa ob ta tb want label
+  local -a scens=(
+    "a|b|a|b|release|main|main|release|3|exchanged between two jobs"
+    "a|b|x|y|main|release|main|release|3|moved under other job names"
+    "a|b|a|b|main|release|main|release|0|laid out identically"
+    "a|b|b|a|main|release|release|main|0|reordered job blocks"
+  )
+  for scen in "${scens[@]}"; do
+    IFS='|' read -r oa ob ta tb ova ovb tva tvb want label <<< "$scen"
+    d=$(new_case contentrefreshswap)
+    content_fixture "$1" "$d"
+    stamp_into "$1" "$d/proven_template.yml" proven-lock-gate 0.2.0 "$(printf 'name: gate\nenv:\n  # proven-cicd:local-next\n  PROVEN_SHA: "%s"\njobs:\n  %s:\n    env:\n      CANON_REF: %s\n  %s:\n    env:\n      CANON_REF: %s\n' "$CO_NEW" "$ta" "$tva" "$tb" "$tvb")"
+    stamp_into "$1" "$d/own_stamped" proven-lock-gate 0.1.0 "$(printf 'name: gate\nenv:\n  # proven-cicd:local-next\n  PROVEN_SHA: "%s"\njobs:\n  %s:\n    env:\n      CANON_REF: %s\n  %s:\n    env:\n      CANON_REF: %s\n' "$CO_OLD" "$oa" "$ova" "$ob" "$ovb")"
+    run_content "$d" "$1" --fix-content --proven-sha "$P"
+    if [ "$(cat "$d/rc")" = 0 ] && [ "$(grep -c 'ENV-PIN-REFRESH-MOVED' "$d/out")" = "$want" ]; then
+      pass "main: a refresh with env pins ${label} gives ${want} ENV-PIN-REFRESH-MOVED row(s)"
+    else
+      fail "main: refresh with env pins ${label}: want ${want} row(s), got $(grep -c 'ENV-PIN-REFRESH-MOVED' "$d/out") (rc=$(cat "$d/rc"))"
+      sed 's/^/    /' "$d/out" >&2; tail -5 "$d/err" | sed 's/^/    /' >&2
+    fi
+  done
+}
+
+# case_main_content_refresh_envpin_multiline <applier> — a tracked block scalar or multi-line
+# quoted value stays UNJUDGED, but its text is compared in full: a refresh that changes it is
+# reported, one that leaves it alone is not.
+case_main_content_refresh_envpin_multiline() {
+  local d scen ov nv want label
+  local -a scens=(
+    $'|-\n        main@@|-\n        release@@3@@a block scalar that changed'
+    $'|-\n        main@@|-\n        main@@0@@a block scalar that did not change'
+    $'|-\n        # main@@|-\n        # release@@3@@a block scalar whose body is a hash line that changed'
+    $'"ma\n        in"@@"re\n        lease"@@3@@a multi-line quoted value that changed'
+  )
+  for scen in "${scens[@]}"; do
+    ov=${scen%%@@*}; scen=${scen#*@@}; nv=${scen%%@@*}; scen=${scen#*@@}
+    want=${scen%%@@*}; label=${scen#*@@}
+    d=$(new_case contentrefreshml)
+    content_fixture "$1" "$d"
+    stamp_into "$1" "$d/proven_template.yml" proven-lock-gate 0.2.0 "$(printf 'name: gate\nenv:\n  # proven-cicd:local-next\n  PROVEN_SHA: "%s"\njobs:\n  a:\n    env:\n      CANON_REF: %s\n' "$CO_NEW" "$nv")"
+    stamp_into "$1" "$d/own_stamped" proven-lock-gate 0.1.0 "$(printf 'name: gate\nenv:\n  # proven-cicd:local-next\n  PROVEN_SHA: "%s"\njobs:\n  a:\n    env:\n      CANON_REF: %s\n' "$CO_OLD" "$ov")"
+    run_content "$d" "$1" --fix-content --proven-sha "$P"
+    if [ "$(cat "$d/rc")" = 0 ] && [ "$(grep -c 'ENV-PIN-REFRESH-MOVED' "$d/out")" = "$want" ]; then
+      pass "main: a refresh with ${label} gives ${want} ENV-PIN-REFRESH-MOVED row(s)"
+    else
+      fail "main: refresh with ${label}: want ${want} row(s), got $(grep -c 'ENV-PIN-REFRESH-MOVED' "$d/out") (rc=$(cat "$d/rc"))"
+      sed 's/^/    /' "$d/out" >&2; tail -5 "$d/err" | sed 's/^/    /' >&2
+    fi
+  done
+}
+
+# case_main_content_refresh_envpin_seq <applier> — two sequence elements are two places: a refresh
+# that moves an unchanged pin from the first step to the second is reported; the same layout is not.
+case_main_content_refresh_envpin_seq() {
+  local d scen ob nb want label
+  local -a scens=(
+    $'      - env:\n          CANON_REF: main\n      - run: x\n@@      - run: x\n      - env:\n          CANON_REF: main\n@@3@@moved to the second step'
+    $'      - env:\n          CANON_REF: main\n      - run: x\n@@      - env:\n          CANON_REF: main\n      - run: x\n@@0@@in the same step'
+  )
+  for scen in "${scens[@]}"; do
+    ob=${scen%%@@*}; scen=${scen#*@@}; nb=${scen%%@@*}; scen=${scen#*@@}
+    want=${scen%%@@*}; label=${scen#*@@}
+    d=$(new_case contentrefreshseq)
+    content_fixture "$1" "$d"
+    stamp_into "$1" "$d/proven_template.yml" proven-lock-gate 0.2.0 "$(printf 'name: gate\nenv:\n  # proven-cicd:local-next\n  PROVEN_SHA: "%s"\njobs:\n  a:\n    steps:\n%s' "$CO_NEW" "$nb")"
+    stamp_into "$1" "$d/own_stamped" proven-lock-gate 0.1.0 "$(printf 'name: gate\nenv:\n  # proven-cicd:local-next\n  PROVEN_SHA: "%s"\njobs:\n  a:\n    steps:\n%s' "$CO_OLD" "$ob")"
+    run_content "$d" "$1" --fix-content --proven-sha "$P"
+    if [ "$(cat "$d/rc")" = 0 ] && [ "$(grep -c 'ENV-PIN-REFRESH-MOVED' "$d/out")" = "$want" ]; then
+      pass "main: a refresh that leaves an env pin ${label} gives ${want} ENV-PIN-REFRESH-MOVED row(s)"
+    else
+      fail "main: refresh with an env pin ${label}: want ${want} row(s), got $(grep -c 'ENV-PIN-REFRESH-MOVED' "$d/out") (rc=$(cat "$d/rc"))"
+      sed 's/^/    /' "$d/out" >&2; tail -5 "$d/err" | sed 's/^/    /' >&2
+    fi
+  done
+}
+
 # case_main_content_refused <applier> <label> <setup> — a refresh that cannot be
 # proven equal to the template is refused with a row, and nothing is committed.
 case_main_content_refused() {
@@ -919,6 +1156,174 @@ case_main_deed_overcap() {
   else
     fail "main: deed over-cap census wrong (rc=$(cat "$d/rc"))"
     sed 's/^/    /' "$d/out" "$d/err" | tail -8 >&2
+  fi
+}
+
+# case_main_envpin <applier> — env-var pins are counted for a workflow that has no
+# `uses:` pin at all, judged against the target, and never rewritten.
+case_main_envpin() {
+  local d; d=$(new_case envpin)
+  { printf 'jobs:\n  g:\n    runs-on: ubuntu-latest\n    env:\n'
+    printf "      STANDARDS_PIN: '%s'\n" "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    printf '      CANON_REF: %s\n' "$T"
+    printf '      # STANDARDS_PIN: %s\n' "$T"
+  } > "$d/own_envpin"
+  run_content "$d" "$1" --only hyperpolymath/pub-a
+  if [ "$(cat "$d/rc")" = 0 ] \
+     && grep -qF "$(printf 'hyperpolymath/pub-a\tenv-pin.yml\tENV-PIN-BEHIND\tSTANDARDS_PIN L5 bbbbbbbb (target aaaaaaaa)')" "$d/out" \
+     && grep -qF "$(printf 'hyperpolymath/pub-a\tenv-pin.yml\tENV-PIN-FRESH\tCANON_REF L6 aaaaaaaa')" "$d/out" \
+     && [ "$(grep -c 'ENV-PIN-' "$d/out")" = 2 ] \
+     && ! grep -qE "$(printf '\t')env-pin\.yml$(printf '\t')(FRESH|BEHIND|NONE)" "$d/out"; then
+    pass "main: env-var pins get their own rows (BEHIND/FRESH), commented lines are skipped, and the pin-free workflow gets no uses: row"
+  else
+    fail "main: env-var pin census wrong (rc=$(cat "$d/rc"))"
+    sed 's/^/    /' "$d/out" "$d/err" | tail -8 >&2
+  fi
+}
+
+# case_main_envpin_fix_untouched <applier> — under --fix the env-var pin is only
+# reported. The stub's ci.yml still sits under the former owner (MOVED), so fix mode
+# lands a re-pin commit for ci.yml; it must NOT carry the workflow whose only stale
+# pin is an env var, and that workflow stays ENV-PIN-BEHIND.
+case_main_envpin_fix_untouched() {
+  local d root sha paths
+  d=$(new_case envpinfix)
+  root=$(mktemp -d "$TMP/envpinfix-root.XXXX")
+  git -C "$root" init -q
+  git -C "$root" -c user.name=t -c user.email=t@t -c commit.gpgsign=false commit -q --allow-empty -m target
+  sha=$(git -C "$root" rev-parse HEAD)
+  printf 'jobs:\n  g:\n    env:\n      STANDARDS_PIN: %s\n' "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" > "$d/own_envpin"
+  : > "$d/calls.log"
+  # shellcheck disable=SC2016  # $1 and $2 are expanded by the inner shell
+  env PATH="$LSTUB:$PATH" GH_FIX="$d" GH_TOKEN=ghs_app GITHUB_TOKEN= TARGET="$sha" \
+    bash -c 'source "$1"; STANDARDS_ROOT="$2"; validate_target() { return 0; }; shift 2; main "$@"' _ "$1" "$root" \
+      --to "$sha" --owners hyperpolymath,metadatastician --only hyperpolymath/pub-a --fix > "$d/out" 2> "$d/err"
+  echo $? > "$d/rc"
+  paths=$(jq -r '.variables.input.fileChanges.additions[]?.path' "$d/commit.json" 2>/dev/null)
+  if [ "$(cat "$d/rc")" = 0 ] \
+     && grep -q 'ENV-PIN-BEHIND' "$d/out" \
+     && printf '%s\n' "$paths" | grep -qxF '.github/workflows/ci.yml' \
+     && ! printf '%s\n' "$paths" | grep -qF 'env-pin.yml'; then
+    pass "main: --fix never moves an env-var pin (the commit carries ci.yml only; env-pin.yml stays ENV-PIN-BEHIND)"
+  else
+    fail "main: --fix touched or mishandled an env-var pin (rc=$(cat "$d/rc"), paths: $(echo $paths))"
+    sed 's/^/    /' "$d/out" >&2; tail -5 "$d/err" | sed 's/^/    /' >&2
+  fi
+}
+
+# health_fixture <dir> — the Actions runs every repository answers with, and the
+# jobs of each failed run. a.yml: startup_failure. b.yml: failed, name == path, 0
+# jobs. c.yml: failed, a job named "…lockfile verify" failed. e.yml: failed, no
+# lock job. f.yml: the unplannable SHAPE (name == path) but the run DID run jobs.
+health_fixture() {
+  local d="$1" sha="1111111111111111111111111111111111111111"
+  jq -n --arg s "$sha" '{workflow_runs: [
+    {id: 2,  status: "completed", conclusion: "startup_failure", name: "A", path: ".github/workflows/a.yml", created_at: "2026-11-12T00:00:00Z", head_sha: $s},
+    {id: 5,  status: "completed", conclusion: "failure", name: ".github/workflows/b.yml", path: ".github/workflows/b.yml", created_at: "2026-11-12T00:00:00Z", head_sha: $s},
+    {id: 6,  status: "completed", conclusion: "failure", name: "C", path: ".github/workflows/c.yml", created_at: "2026-11-12T00:00:00Z", head_sha: $s},
+    {id: 9,  status: "completed", conclusion: "failure", name: "E", path: ".github/workflows/e.yml", created_at: "2026-11-12T00:00:00Z", head_sha: $s},
+    {id: 10, status: "completed", conclusion: "failure", name: ".github/workflows/f.yml", path: ".github/workflows/f.yml", created_at: "2026-11-12T00:00:00Z", head_sha: $s}
+  ]}' > "$d/runs.json"
+  echo '{"total_count": 0, "jobs": []}' > "$d/jobs_5.json"
+  echo '{"total_count": 2, "jobs": [{"name": "Governance / lockfile verify", "conclusion": "failure"}, {"name": "build", "conclusion": "success"}]}' > "$d/jobs_6.json"
+  echo '{"total_count": 1, "jobs": [{"name": "build", "conclusion": "failure"}]}' > "$d/jobs_9.json"
+  echo '{"total_count": 3, "jobs": [{"name": "build", "conclusion": "failure"}, {"name": "test", "conclusion": "success"}, {"name": "lint", "conclusion": "success"}]}' > "$d/jobs_10.json"
+}
+
+# case_main_health <applier> — the health block lists startup failures, the
+# 0-job failure (only where the jobs endpoint agrees), and a lock-named job
+# failure, beside the pin row; a failed run with neither gets no row.
+case_main_health() {
+  local d; d=$(new_case health)
+  health_fixture "$d"
+  run_content "$d" "$1" --only hyperpolymath/pub-a
+  local ok=1 want
+  for want in \
+    'HEALTH-STARTUP-FAILURE	1 of the last 1 completed run(s) of this file ended startup_failure; latest run 2 at 2026-11-12T00:00:00Z (11111111)' \
+    'HEALTH-ZERO-JOB	1 of the last 1 completed run(s) of this file failed with name == path; latest failed run 5 at 2026-11-12T00:00:00Z (11111111) ran 0 jobs' \
+    'HEALTH-LOCK-FAILURE	failed job(s) with "lock" in the name in latest failed run 6 at 2026-11-12T00:00:00Z (11111111): Governance / lockfile verify (matched by job NAME; no log was read)' \
+    "$(printf 'hyperpolymath/pub-a\tci.yml\tFRESH')"; do
+    grep -qF "$want" "$d/out" || { ok=0; echo "    missing: $want" >&2; }
+  done
+  # e.yml failed without a lock job and f.yml has the 0-job SHAPE but ran jobs:
+  # neither may be reported.
+  if [ "$ok" = 1 ] && [ "$(cat "$d/rc")" = 0 ] \
+     && ! grep -qE "$(printf '\t')(e|f)\.yml$(printf '\t')HEALTH-" "$d/out"; then
+    pass "main: health block lists startup, 0-job (jobs-confirmed) and lock-named failures; no row for a plain failure or an unconfirmed shape"
+  else
+    fail "main: health block census wrong (rc=$(cat "$d/rc"))"
+    sed 's/^/    /' "$d/out" "$d/err" | tail -12 >&2
+  fi
+}
+
+# case_main_health_unread <applier> — a runs list that cannot be read is
+# HEALTH-UNREAD for every repository, never a clean bill, and the pin row is
+# unaffected. A jobs read that fails is HEALTH-UNREAD for that file, not a
+# 0-job row.
+case_main_health_unread() {
+  local d; d=$(new_case healthunread)
+  health_fixture "$d"; : > "$d/runs_fail"
+  run_content "$d" "$1"
+  local n; n=$(grep -cF "$(printf '\t(actions runs)\tHEALTH-UNREAD\t')" "$d/out")
+  local ok=0
+  [ "$(cat "$d/rc")" = 0 ] && [ "$n" = 3 ] \
+    && grep -qF "$(printf 'hyperpolymath/pub-a\tci.yml\tFRESH')" "$d/out" && ok=1
+  rm -f "$d/runs_fail"; : > "$d/jobs_fail_5"
+  run_content "$d" "$1" --only hyperpolymath/pub-a
+  if [ "$ok" = 1 ] && [ "$(cat "$d/rc")" = 0 ] \
+     && grep -qF "$(printf 'hyperpolymath/pub-a\tb.yml\tHEALTH-UNREAD\tthe jobs of latest failed run 5 could not be read; not judged')" "$d/out" \
+     && ! grep -q 'HEALTH-ZERO-JOB' "$d/out"; then
+    pass "main: unreadable runs / jobs are HEALTH-UNREAD (every repository listed), never healthy and never a guessed 0-job row"
+  else
+    fail "main: health unread handling wrong (rc=$(cat "$d/rc"), runs-unread rows=$n of 3)"
+    sed 's/^/    /' "$d/out" "$d/err" | tail -12 >&2
+  fi
+}
+
+# case_main_health_paged <applier> — a failed run with more jobs than the first page
+# (100) says so: the first page's lock failure is still listed, and a HEALTH-UNREAD
+# row names how many of the jobs were read.
+case_main_health_paged() {
+  local d; d=$(new_case healthpaged)
+  health_fixture "$d"
+  echo '{"total_count": 150, "jobs": [{"name": "Governance / lockfile verify", "conclusion": "failure"}, {"name": "build", "conclusion": "success"}]}' > "$d/jobs_6.json"
+  run_content "$d" "$1" --only hyperpolymath/pub-a
+  if [ "$(cat "$d/rc")" = 0 ] \
+     && grep -qF "$(printf 'hyperpolymath/pub-a\tc.yml\tHEALTH-UNREAD\tonly 2 of the 150 jobs of latest failed run 6 were read (first page)')" "$d/out" \
+     && grep -qF "$(printf 'hyperpolymath/pub-a\tc.yml\tHEALTH-LOCK-FAILURE\t')" "$d/out"; then
+    pass "main: a run with more jobs than one page is HEALTH-UNREAD (jobs read of total), and the first page's lock failure is still listed"
+  else
+    fail "main: paged jobs not reported (rc=$(cat "$d/rc"))"
+    sed 's/^/    /' "$d/out" "$d/err" | tail -10 >&2
+  fi
+}
+
+# case_main_health_off <applier> — --no-health reads no run and writes no health row.
+case_main_health_off() {
+  local d; d=$(new_case healthoff)
+  health_fixture "$d"
+  run_content "$d" "$1" --only hyperpolymath/pub-a --no-health
+  if [ "$(cat "$d/rc")" = 0 ] && ! grep -q 'HEALTH-' "$d/out" && ! grep -q 'actions/runs' "$d/calls.log" \
+     && grep -qF "$(printf 'hyperpolymath/pub-a\tci.yml\tFRESH')" "$d/out"; then
+    pass "main: --no-health reads no Actions runs and writes no health row"
+  else
+    fail "main: --no-health still read runs or wrote rows (rc=$(cat "$d/rc"))"
+  fi
+}
+
+# case_main_health_cap <applier> — more failed workflow files than HEALTH_JOBS_CAP
+# (6) are not all read: the rest are said, not dropped.
+case_main_health_cap() {
+  local d i; d=$(new_case healthcap)
+  jq -n '{workflow_runs: [range(1; 9) as $i | {id: (100 + $i), status: "completed", conclusion: "failure", name: "W\($i)", path: ".github/workflows/w\($i).yml", created_at: "2026-11-12T00:00:00Z", head_sha: "1111111111111111111111111111111111111111"}]}' > "$d/runs.json"
+  for i in 1 2 3 4 5 6 7 8; do echo '{"total_count": 1, "jobs": [{"name": "build", "conclusion": "failure"}]}' > "$d/jobs_$((100+i)).json"; done
+  run_content "$d" "$1" --only hyperpolymath/pub-a
+  local n; n=$(grep -c 'HEALTH-UNREAD.*jobs-read cap (6 per repository)' "$d/out")
+  if [ "$(cat "$d/rc")" = 0 ] && [ "$n" = 2 ] && [ "$(grep -c 'actions/runs/10[0-9]/jobs' "$d/calls.log")" = 6 ]; then
+    pass "main: the jobs-read cap holds at 6 and the two unread files are listed as HEALTH-UNREAD"
+  else
+    fail "main: jobs-read cap wrong (rc=$(cat "$d/rc"), unread rows=$n, jobs reads=$(grep -c 'actions/runs/10[0-9]/jobs' "$d/calls.log"))"
+    sed 's/^/    /' "$d/out" "$d/err" | tail -12 >&2
   fi
 }
 
@@ -1058,8 +1463,19 @@ case_main_deed_unread "$APPLIER"
 case_main_deed_renamed "$APPLIER"
 case_main_deed_rest_fail "$APPLIER"
 case_main_only_missing "$APPLIER"
+case_main_envpin "$APPLIER"
+case_main_envpin_fix_untouched "$APPLIER"
+case_main_health "$APPLIER"
+case_main_health_unread "$APPLIER"
+case_main_health_off "$APPLIER"
+case_main_health_cap "$APPLIER"
+case_main_health_paged "$APPLIER"
 case_main_content_fix "$APPLIER"
 case_main_content_refresh "$APPLIER"
+case_main_content_refresh_envpin "$APPLIER"
+case_main_content_refresh_envpin_swap "$APPLIER"
+case_main_content_refresh_envpin_multiline "$APPLIER"
+case_main_content_refresh_envpin_seq "$APPLIER"
 case_main_content_refused "$APPLIER" "a template that does not match its own stamp" \
   'printf "      - run: injected\n" >> "$d/proven_template.yml"'
 case_main_content_refused "$APPLIER" "a template stamped for another version than the manifest's" \
@@ -1216,9 +1632,26 @@ case_target_selfcheck "$APPLIER" 0 0 "control: a self-consistent reachable targe
 # list_mutant <name> <sed-expr> <case-fn> — apply <sed-expr> to a copy of the
 # applier, prove the edit landed and still parses, then require <case-fn> to
 # report FAIL against it.
+# LM_CTL caches, per case function, whether an UNMUTATED copy of the applier passes it in
+# the mutant environment. A mutant is only meaningful against a case that is green there.
+declare -A LM_CTL
+# lm_red <output> — did a case report a failure? A line that STARTS with FAIL, not the bare
+# substring: a passing label can contain it (one CONTENT-CENSUS-FAILED row), which made
+# a green case look red and a no-op mutant look killed.
+lm_red() { printf '%s\n' "$1" | grep -Eq '^[[:space:]]*FAIL[[:space:]]'; }
 list_mutant() {
+  MUT_RAN=$((MUT_RAN+1))
   local name="$1" expr="$2" fn="$3"
   local m="$MUT/mutant_${name}.sh" out
+  if [ -z "${LM_CTL[$fn]:-}" ]; then
+    local ctl="$MUT/control_${fn}.sh" outc
+    cp "$APPLIER" "$ctl"
+    outc=$("$fn" "$ctl" 2>&1)
+    if lm_red "$outc"; then LM_CTL[$fn]=red; else LM_CTL[$fn]=green; fi
+  fi
+  if [ "${LM_CTL[$fn]}" = red ]; then
+    fail "mutant '$name': the UNMUTATED copy is already red under $fn in the mutant environment, so a kill would prove nothing"; return
+  fi
   cp "$APPLIER" "$m"
   sed -E -i "$expr" "$m"
   if cmp -s "$APPLIER" "$m"; then
@@ -1229,10 +1662,8 @@ list_mutant() {
     sed 's/^/    /' "$MUT/${name}.parse" >&2; return
   fi
   out=$("$fn" "$m" 2>&1)
-  case "$out" in
-    *FAIL*) pass "mutant '$name' killed by $fn" ;;
-    *)      fail "mutant '$name' stayed GREEN under $fn" ;;
-  esac
+  if lm_red "$out"; then pass "mutant '$name' killed by $fn"
+  else fail "mutant '$name' stayed GREEN under $fn"; fi
 }
 
 # shellcheck disable=SC2016  # the ${…} and $(…) below are sed text to match
@@ -1255,6 +1686,17 @@ list_mutant content_fail_stops_pin_census 's@^      log "ERROR: \$\{content_fail
 list_mutant content_manifest_unpinned 's@\?ref=\$\{PROVEN_SHA\}@@' case_main_content
 list_mutant content_row_dropped 's@cst=\$\(content_state "\$wf" "\$PROVEN_MANIFEST"\)@cst=""@' case_main_content
 list_mutant content_row_writes 's@\[ -n "\$cst" \] \&\& printf@[ -n "$cst" ] \&\& changed+=("$base"); [ -n "$cst" ] \&\& printf@' case_main_content_fix
+list_mutant envpin_flow_value_marker 's@"\(flow\) " rest@"(flow)"@' case_main_content_refresh_envpin
+list_mutant envpin_refresh_path_dropped 's@row "\\t" cp "\\034" fv@row "\\t" "\\034" fv@' case_main_content_refresh_envpin_swap
+list_mutant envpin_block_text_dropped 's@function capadd\(t\) \{ gsub@function capadd(t) { return; gsub@' case_main_content_refresh_envpin_multiline
+list_mutant envpin_seq_position_dropped 's@if \(n > n0\) \{@if (0) {@' case_main_content_refresh_envpin_seq
+list_mutant envpin_block_hash_line_dropped 's@if \(RLENGTH > skip && capk != ""\) capadd\(\$0\)@if (0) capadd($0)@' case_main_content_refresh_envpin_multiline
+list_mutant envpin_refresh_order_matters 's@ \| LC_ALL=C sort$@@' case_main_content_refresh_envpin_swap
+list_mutant envpin_literal_backslash_unescaped 's@if \(c != "\\""\) gsub\(@if (0) gsub(@' case_main_content_refresh_envpin
+list_mutant envpin_tab_unescaped 's@; gsub\(/\\t/, "\\\\x09", fvv\)@@' case_main_content_refresh_envpin
+list_mutant envpin_report_shows_values 's@else v = "\[value not shown\]"@else if (length(v) > 24) v = substr(v, 1, 24) "..."@' case_main_content_refresh_envpin
+list_mutant envpin_refresh_value_dropped 's@a\[1\], st, \$3@a[1], st, "-"@' case_main_content_refresh_envpin
+list_mutant envpin_refresh_move_silent 's@\[ "\$epb" = "\$epa" \] \|\|@true ||@' case_main_content_refresh_envpin
 # A stamped copy in the current layout (stamp on line 2) is still held by --fix:
 # a hold that only recognises the legacy line-1 stamp re-pins it and breaks its hash.
 case_main_stamped_held_l2() { case_main_stamped_held "$1" l2; }
@@ -1273,8 +1715,37 @@ list_mutant deed_estate_not_excluded 's@ \| select\(\. != "estate_chora\.deed"\)
 # An explicit --only repository must be checked for existence: this is what stops a
 # typo from becoming a header-only census and a clean exit.
 list_mutant only_existence_unchecked 's@if ! gh api "repos/\$\{ONLY_REPO\}"@if false \&\& gh api "repos/${ONLY_REPO}"@' case_main_only_missing
+# Env-var pins: rows must be written (even for a pin-free workflow), BEHIND must be
+# told from FRESH, commented lines must not count, and --fix must not move them.
+list_mutant envpin_row_dropped 's@done < <\(env_pin_rows "\$wf" "\$TARGET_SHA"\)@done < <(true)@' case_main_envpin
+list_mutant envpin_behind_as_fresh 's@if \(low == tgt\) row = sprintf\("ENV-PIN-FRESH@if (1) row = sprintf("ENV-PIN-FRESH@' case_main_envpin
+# (No mutant for the comment-line guard: the key regex already rejects a line that starts
+# with #, so removing the guard changes nothing observable. The commented fixture lines
+# stay as a regression check, not a mutation target.)
+list_mutant envpin_before_none_skip_lost 's@^      done < <\(env_pin_rows "\$wf" "\$TARGET_SHA"\)$@      done < <(classify_file "$wf" "$TARGET_SHA" | grep -qx NONE || env_pin_rows "$wf" "$TARGET_SHA")@' case_main_envpin
+# Health block: each row kind must be written, a 0-job row needs the jobs endpoint's
+# agreement, an unreadable answer must be said, the cap must hold, and --no-health
+# must read nothing.
+list_mutant health_startup_dropped 's@^    if \[ "\$nst" -gt 0 \]; then$@    if false; then@' case_main_health
+list_mutant health_zero_unconfirmed 's@if \[ "\$fzs" = 1 \] && \[ "\$jt" = 0 \]; then@if [ "$fzs" = 1 ]; then@' case_main_health
+list_mutant health_lock_dropped 's@^    if \[ -n "\$names" \]; then$@    if false; then@' case_main_health
+list_mutant health_runs_unread_silent '/Actions runs could not be read/s@>> "\$tsv"@>/dev/null@' case_main_health_unread
+list_mutant health_jobs_unread_silent '/the jobs of latest failed run/s@>> "\$tsv"@>/dev/null@' case_main_health_unread
+list_mutant health_cap_ignored 's@if \[ "\$njobs" -ge "\$HEALTH_JOBS_CAP" \]; then@if false; then@' case_main_health_cap
+list_mutant health_off_ignored 's@\[ "\$HEALTH" -eq 1 \] \|\| return 0@true@' case_main_health_off
+list_mutant health_page_unnoticed 's@if \[ "\$jt" -gt "\$jn" \] 2>/dev/null; then@if false; then@' case_main_health_paged
+# Codex findings on #1600: same-second runs pick the newest by id, and a run with no
+# path is kept under a placeholder. Each is killed by a known-answer control.
+kill_mutant health_tie_break_lost 's@sort_by\(\[\.created_at, \.id\]\)@sort_by(.created_at)@' "FAIL health-tie-break"
+kill_mutant health_pathless_dropped 's@then "\(unknown workflow\)" else \. end@then "" else . end@' "FAIL health-pathless"
 }
 
 echo
+# A mutant call placed before its function exists fails silently (no `set -e`) and would leave the
+# suite green: every call line must have started.
+MUT_WANT=$(grep -cE '^(kill_mutant|list_mutant) [a-z0-9_]+ ' "$0")
+if [ "$MUT_RAN" -ne "$MUT_WANT" ]; then
+  echo "  FAIL mutants: $MUT_RAN mutant calls started but $MUT_WANT are written (one ran before its function existed?)" >&2; rc=1
+fi
 if [ "$rc" -ne 0 ]; then echo "RESULT: FAILED" >&2; else echo "RESULT: all checks passed"; fi
 exit $rc

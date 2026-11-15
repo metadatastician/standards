@@ -8,7 +8,7 @@
 //
 // deed.abnf is normative (D308); deed_lint.js is the gate that CI runs. This
 // harness keeps them from drifting apart. It compiles deed.abnf (with the
-// (egress …), (anchor …), (contractiles …), edict, verb-descriptile, ecosystem, state, meta and rsr-scorecard clause profiles and the shared rules of
+// (egress …), (anchor …), (contractiles …), edict, verb-descriptile, ecosystem, state, meta, agentic and rsr-scorecard clause profiles and the shared rules of
 // clauses/common.abnf) using apg-js, mutates every
 // committed deed with a seeded generator, and asks both the grammar and the
 // gate for a verdict on each variant:
@@ -26,7 +26,7 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import apg from "apg-js";
-import { checkEcosystem, checkMeta, checkRsrScorecard, checkState, checkVerbDescriptile, choraRepoUuid, edictRuleIdsAt, FIXTURE_TODAY, LintError, rootChora, validate, verbOfDescriptile } from "../../1-formats/deed/tools/deed_lint.js";
+import { checkAgentic, checkEcosystem, checkMeta, checkRsrScorecard, checkState, checkVerbDescriptile, choraRepoUuid, edictRuleIdsAt, FIXTURE_TODAY, LintError, rootChora, validate, verbOfDescriptile } from "../../1-formats/deed/tools/deed_lint.js";
 
 const { apgApi, apgLib } = apg;
 const ROOT = resolve(import.meta.dir, "../..");
@@ -75,6 +75,7 @@ function compileGrammar() {
       readFileSync(join(ABNF, "clauses/ecosystem.abnf"), "utf8") + "\n" +
       readFileSync(join(ABNF, "clauses/state.abnf"), "utf8") + "\n" +
       readFileSync(join(ABNF, "clauses/meta.abnf"), "utf8") + "\n" +
+      readFileSync(join(ABNF, "clauses/agentic.abnf"), "utf8") + "\n" +
       readFileSync(join(ABNF, "clauses/rsr-scorecard.abnf"), "utf8")).replace(/[^\x00-\x7f]/g, "?") +
     "\nSP = %x20\nDQUOTE = %x22\nALPHA = %x41-5A / %x61-7A\nDIGIT = %x30-39\n" +
     "VCHAR = %x21-7E\nCR = %x0D\nLF = %x0A\nCRLF = CR LF\n";
@@ -557,6 +558,55 @@ for (const { c, text } of edictCases("valid")) {
     } else if (semanticOnly.includes(k.c)) {
       if (!grammarOk(k.text)) fail("meta.abnf refuses a field or clause of a case listed as semantic only", k.c);
     } else fail("meta invalid fixture is in neither list", k.c);
+  }
+}
+
+// AGENTIC.deed (A7 7.2, 14.2, J19, J33, YD04, YD06, YF05; clauses/agentic.abnf).
+// Laid out as META.deed: each top-level AGENTIC field parses as agentic-field
+// and each clause as its rule; every invalid case is a grammar refusal or
+// semantic only.
+{
+  const AG_FIELDS = new Set(["version", "last-updated", "tools", "project-specific"]);
+  const CLAUSE_RULES = { patterns: "ag-patterns", permissions: "ag-permissions", integrity: "ag-integrity",
+    methodology: "ag-methodology", hooks: "ag-hooks", settings: "ag-settings" };
+  const fieldsOf = (t) => topLevelFields(t, AG_FIELDS);
+  const clausesOf = (t) => Object.entries(CLAUSE_RULES).flatMap(([n, rule]) => allClauses(t, n).map((c) => [rule, c]));
+  const cases = (sub) => readdirSync(join(FIXTURES, "agentic", sub)).sort().map((c) => {
+    const dir = join(FIXTURES, "agentic", sub, c);
+    return { c, dir, file: join(dir, "AGENTIC.deed"), text: readFileSync(join(dir, "AGENTIC.deed"), "utf8") };
+  });
+  const profile = ({ dir, file, text }) => {
+    try {
+      const ch = rootChora(dir);
+      const strict = readdirSync(dir).includes("STRICT");
+      return checkAgentic(text, file, { repoUuid: ch && ch.uuid, choraClauses: ch && ch.clauses, strict, today: FIXTURE_TODAY }) !== null;
+    } catch (e) {
+      if (!(e instanceof LintError)) throw e;
+      return false;
+    }
+  };
+  const grammarOk = (t) => fieldsOf(t).every((f) => grammarAccepts(grammar, "agentic-field", f)) && clausesOf(t).every(([r, c]) => grammarAccepts(grammar, r, c));
+  for (const k of cases("valid")) {
+    if (!grammarAccepts(grammar, "deed", k.text)) fail("agentic valid fixture rejected by deed.abnf", k.c);
+    if (!profile(k)) fail("agentic valid fixture rejected by deed_lint.js --agentic", k.c);
+    for (const f of fieldsOf(k.text)) if (!grammarAccepts(grammar, "agentic-field", f)) fail("agentic.abnf refuses a valid field", `${k.c}: ${f.slice(0, 60)}`);
+    for (const [r, c] of clausesOf(k.text)) if (!grammarAccepts(grammar, r, c)) fail(`agentic.abnf refuses a valid clause as ${r}`, `${k.c}: ${c.slice(0, 60)}`);
+  }
+  const grammarRejects = ["hooks-empty", "integrity-unknown", "patterns-unknown", "permissions-string", "relaxation-setting-unknown",
+    "settings-no-affirmation", "tools-strings"];
+  const semanticOnly = ["agentic-clause", "agentic-in-chora-strict", "agentic-lang-ban", "agentic-model-pin", "beholding-chora",
+    "clause-constructor", "methodology-both", "methodology-dir-absolute", "missing-affirmed", "of-chora-mismatch", "patterns-twice",
+    "relaxation-missing-receipt", "relaxed-policy-change-unauthorised", "relaxed-policy-value", "relaxed-self-authorised",
+    "relaxed-seq-duplicate", "relaxed-seq-gap", "relaxed-seq-not-one", "relaxed-unauthorised", "relaxed-unreported",
+    "rule-in-descriptile", "settings-twice", "unknown-clause", "unknown-field", "version-twice"];
+  for (const k of cases("invalid")) {
+    if (!gateVerdict(k.text).ok) fail("agentic invalid fixture is not a valid deed (YD01)", k.c);
+    if (profile(k)) fail("deed_lint.js --agentic accepts an invalid fixture", k.c);
+    if (grammarRejects.includes(k.c)) {
+      if (grammarOk(k.text)) fail("agentic.abnf accepts every field and clause of a case it must refuse", k.c);
+    } else if (semanticOnly.includes(k.c)) {
+      if (!grammarOk(k.text)) fail("agentic.abnf refuses a field or clause of a case listed as semantic only", k.c);
+    } else fail("agentic invalid fixture is in neither list", k.c);
   }
 }
 

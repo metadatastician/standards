@@ -1,0 +1,14 @@
+;; SPDX-License-Identifier: CC-BY-SA-4.0
+(descriptile-deed
+  :schema-version "1.0.0"
+  :canonical-name "example-game"
+  :of-chora #uuid"00000000-0000-8000-8000-0000000000a1"
+  :affirmed "2026-11-14" :affirmed-by agent
+  :version "0.1.0"
+  :last-updated "2026-04-11"
+  :tools (formatter linter prover)
+  (patterns :code-review "evidence per finding" :testing "property tests first")
+  (permissions :source #t :tests #t :docs #t :config #t :create-files #t)
+  (integrity :fail-closed #t :require-evidence-per-step #t :allow-silent-skip #f :require-rerun-after-fix #t :release-claim-requires-hard-pass #t)
+  (methodology :instructions-clause "bot-directives" :default-mode hybrid)
+  (hooks :on-enter "read the chora deed" :on-commit "just validate"))
