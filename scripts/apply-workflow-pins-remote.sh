@@ -589,7 +589,11 @@ env_pin_rows() {
       match(s, /^[[:space:]]*/); n = RLENGTH
       # A classified pin value is held until the next significant line: a more indented
       # line continues the plain scalar (folded), so the value is not what it looked like.
-      if (pend != "") { if (n > pn) flushp(pcont); else flushp(pend); pend = "" }
+      if (pend != "") {
+        # A more indented line is part of the scalar (folded), not structure: it is consumed.
+        if (n > pn) { flushp(pcont); pend = ""; skip = pn; next }
+        else { flushp(pend); pend = "" }
+      }
       if (skip >= 0) { if (n > skip) { if (capk != "") capadd(s); next }; skip = -1; capflush() }
       body = substr(s, n + 1); n0 = n
       while (match(body, /^-[[:space:]]+/)) { n += RLENGTH; body = substr(body, RLENGTH + 1) }
@@ -635,7 +639,7 @@ env_pin_rows() {
       tracked = (key ~ ("^(" names ")$") && parent == "env" && !inmx)
       # An env map supplied by an alias (`env: *pins`, or `<<: *pins` inside `env:`) is not
       # resolved: say so, never silently skip a map that may hold a pin.
-      if ((key == "env" || (key == "<<" && parent == "env")) && rest ~ /^\*[^[:space:]]+/)
+      if (!inmx && (key == "env" || (key == "<<" && parent == "env")) && (rest ~ /^\*[^[:space:]]+/ || (key == "<<" && rest ~ /^\[.*\*/)))
         outr(sprintf("ENV-PIN-UNJUDGED\t(alias env) L%d an env map supplied by an alias (*name) is not resolved; env pins in this file may be missed", NR), "(alias env)")
       if (rest ~ /^[\{\[]/) {
         if (tracked) outr(sprintf("ENV-PIN-UNJUDGED\t%s L%d value is a flow collection; not judged", key, NR), "(flow) " rest)
@@ -1562,6 +1566,16 @@ JSON
     printf '  b:\n'
     printf '    env:\n'
     printf '      <<: *pins\n'
+    printf 'env:\n'
+    printf '  STANDARDS_PIN: %s\n' "$t"
+    printf '    {literal\n'
+    printf '  CANON_REF: %s\n' "$eb"
+    printf 'strategy:\n'
+    printf '  matrix:\n'
+    printf '    os: &axes [a, b]\n'
+    printf '    env: *axes\n'
+    printf 'env:\n'
+    printf '  <<: [*base, *override]\n'
   } > "$d/envpin.yml"
   local ep; ep=$(env_pin_rows "$d/envpin.yml" "$t" | tr '\t' '|')
   local epw="ENV-PIN-FRESH|STANDARDS_PIN L2 ${t:0:8}
@@ -1598,7 +1612,10 @@ ENV-PIN-BEHIND|CANON_REF L115 ${eb:0:8} (target ${t:0:8}); read-only: never re-p
 ENV-PIN-BEHIND|STANDARDS_PIN L117 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here
 ENV-PIN-BEHIND|CANON_REF L124 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here
 ENV-PIN-UNJUDGED|(alias env) L127 an env map supplied by an alias (*name) is not resolved; env pins in this file may be missed
-ENV-PIN-UNJUDGED|(alias env) L130 an env map supplied by an alias (*name) is not resolved; env pins in this file may be missed"
+ENV-PIN-UNJUDGED|(alias env) L130 an env map supplied by an alias (*name) is not resolved; env pins in this file may be missed
+ENV-PIN-UNJUDGED|STANDARDS_PIN L132 value continues on the next line (a folded plain scalar); not judged
+ENV-PIN-BEHIND|CANON_REF L134 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here
+ENV-PIN-UNJUDGED|(alias env) L140 an env map supplied by an alias (*name) is not resolved; env pins in this file may be missed"
   if [ "$ep" = "$epw" ]; then echo "  PASS envpin-rows -> $(printf '%s\n' "$ep" | wc -l) row(s)"
   else echo "  FAIL envpin-rows -> got:
 $ep

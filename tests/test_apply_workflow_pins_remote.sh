@@ -291,7 +291,7 @@ kill_mutant envpin_quote_escape_first 's@q = qend\(val\)@q = index(substr(val, 2
 # Ninth round on #1602: a block scalar as a sequence item, a plain scalar that continues on
 # the next line, and YAML explicit mapping keys (not parsed, and said so).
 kill_mutant envpin_seq_blockscalar_read 's@skip = n0; next@next@' "FAIL envpin-rows"
-kill_mutant envpin_plain_continuation_ignored 's@if \(n > pn\) flushp\(pcont\); else flushp\(pend\)@flushp(pend)@' "FAIL envpin-rows"
+kill_mutant envpin_plain_continuation_ignored 's@if \(n > pn\) \{ flushp\(pcont\)@if (0) { flushp(pcont)@' "FAIL envpin-rows"
 kill_mutant envpin_explicit_key_silent 's@if \(!xwarn\) \{ xwarn = 1; outr@if (0) { xwarn = 1; outr@' "FAIL envpin-explicit-key"
 # Tenth round on #1602: a doubled single quote inside a flow scalar, and escapes in a
 # double-quoted key.
@@ -311,8 +311,13 @@ kill_mutant envpin_empty_value_nextline 's@\} else if \(val == "" && !bad && c !
 # Fifteenth round: a plain scalar left open across the lines of a flow collection.
 kill_mutant envpin_flow_plain_carry 's@pl = fpl@pl = 0@' "FAIL envpin-rows"
 # Sixteenth round: an env map supplied by an alias is said aloud.
-kill_mutant envpin_alias_env_silent 's@if \(\(key == "env" \|\| \(key == "<<" && parent == "env"\)\) && rest@if (0 \&\& rest@' "FAIL envpin-rows"
+kill_mutant envpin_alias_env_silent 's@if \(!inmx && \(key == "env"@if (0 \&\& (key == "env"@' "FAIL envpin-rows"
 kill_mutant envpin_merge_key_unread 's@\(<<\|\[A-Za-z_\]@([A-Za-z_]@' "FAIL envpin-rows"
+# Seventeenth round: the alias warning respects matrix data, merge sequences are warned about, and
+# the continuation lines of a folded pin are scalar text, never structure.
+kill_mutant envpin_alias_env_in_matrix 's@if \(!inmx && \(key == "env"@if ((key == "env"@' "FAIL envpin-rows"
+kill_mutant envpin_merge_sequence_silent 's@ \|\| \(key == "<<" && rest ~ /\^\\\[\.\*\\\*/\)@@' "FAIL envpin-rows"
+kill_mutant envpin_folded_line_is_structure 's@pend = ""; skip = pn; next \}@pend = "" }@' "FAIL envpin-rows"
 # Fourteenth round: \U escapes, a flow value compared in full, node properties after an explicit
 # key's colon, alias keys said aloud, and a quote right after `?` inside a flow collection.
 kill_mutant envpin_big_u_escape 's@ \|\| ch == "U"@@' "FAIL envpin-rows"
