@@ -198,6 +198,15 @@ effective_capabilities() {
     echo "::error::check-package-policy: $bad does not parse as DEED, so its declared capabilities cannot be read. Fix it (bun 1-formats/deed/tools/deed_lint.js $bad). $perr" >&2
     return 1
   fi
+  # A clause the resolver refuses (an unknown key under A7 J39, a missing
+  # :version, two clauses …) is a defect in the repo too, for the same reason:
+  # reading it as "no capabilities" would let a deed that declares packaging
+  # pass with none shipped. Fail closed on both of the resolver's parser paths.
+  rerr="$(printf '%s\n' "$out" | grep -m1 '^ERROR: .*(rsr-profile' || true)"
+  if [ -n "$rerr" ]; then
+    echo "::error::check-package-policy: the resolver refuses the (rsr-profile …) clause of ${found#"$ROOT"/}, so its declared capabilities cannot be read. Fix it (bun 1-formats/deed/tools/deed_lint.js --rsr-profile ${found#"$ROOT"/}). $rerr" >&2
+    return 1
+  fi
   if ! printf '%s\n' "$out" | grep -q '^effective capabilities:'; then
     echo "::warning::check-package-policy: ${found#"$ROOT"/} could not be resolved ($(printf '%s\n' "$out" | grep -m1 ERROR || echo "no effective capabilities line")); treating it as declaring no packaging capability." >&2
     return 0

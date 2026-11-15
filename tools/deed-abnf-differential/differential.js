@@ -301,7 +301,8 @@ for (const name of CONTRACTILES_GRAMMAR_REJECTS) {
     "policy-field_chora.deed", "role-symbol_chora.deed", "unknown-clause_chora.deed", "unknown-field_chora.deed",
   ];
   const RSR_PROFILE_SEMANTIC_ONLY = [
-    "capabilities-duplicate_chora.deed", "capabilities-empty-string_chora.deed", "missing-version_chora.deed",
+    "0-AI-MANIFEST.deed", "capabilities-duplicate_chora.deed", "capabilities-empty-no-preset_chora.deed", "capabilities-empty-string_chora.deed",
+    "missing-version_chora.deed", "notes-duplicate_chora.deed",
     "no-capabilities-no-preset_chora.deed", "notes-twice_chora.deed", "preset-empty_chora.deed", "profile-nested_chora.deed",
     "profile-twice_chora.deed", "version-twice_chora.deed",
   ];

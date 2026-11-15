@@ -72,6 +72,15 @@ else
 fi
 assert "awk path: the same deed still enforces its declared packaging" 1 "Package policy violation" env RSR_DEED_PARSER=awk bash "$GATE" "$d"
 
+# A clause the resolver refuses (an unknown key, A7 J39) must not read as "no
+# capabilities" either, on either parser path (CodeRabbit on #1605).
+d=$(repo deed-unknownkey)
+deed "$d" deedunknownkey '  (rsr-profile :version "1.0.0" :packaging "none" :capabilities ("reproducible-build"))'
+if command -v bun >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
+  assert "AST path: an unknown (rsr-profile …) key fails closed" 1 "resolver refuses the (rsr-profile" env RSR_DEED_PARSER=ast bash "$GATE" "$d"
+fi
+assert "awk path: an unknown (rsr-profile …) key fails closed" 1 "resolver refuses the (rsr-profile" env RSR_DEED_PARSER=awk bash "$GATE" "$d"
+
 # With a legacy .a2ml beside the rejected deed, the error names the deed
 # (the file that failed to parse), not the .a2ml (CodeRabbit on #1411).
 d=$(repo deed-unparseable-a2ml)
