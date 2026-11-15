@@ -113,7 +113,10 @@ Observed instance: all five sections (`deployment`, `incident-response`,
   conformance lane greps for exactly one value estate-wide
   (`a2ml/playbook`) and any second string in that position is a propagation
   bug, flagged automatically. `a2ml/agentic` and `a2ml/neurosym` are not
-  translated (J34, J36), so they never appear in a deed.
+  translated (J34, J36), so they never appear in a new deed. The check reads
+  the target forms only: a `(profile …)` nested in a chora `(agentic …)` or
+  `(neurosym …)` that YF05 or YF06 still permits for one release is a legacy
+  form, reported by those rules and not counted here.
 * **P-2a (table-closed):** applies per the frame; PLAYBOOK populated
   sections and NEUROSYM rule/config content fail closed for table
   extension rather than translate by guess.
@@ -123,15 +126,21 @@ Observed instance: all five sections (`deployment`, `incident-response`,
 
 == 5. Acceptance greps
 
-* `grep -rln ':allow-silent-skip #f' --include='AGENTIC.deed' --include='*_chora.deed'`
+* `grep -rln ':allow-silent-skip #f' --include='AGENTIC.deed' --include='*_chora.deed' | sed -e 's#/\.machine_readable/descriptiles/AGENTIC\.deed$##' -e 's#/[^/]*_chora\.deed$##' | sort -u | wc -l`
   returns the same repo count as `grep -rln 'allow-silent-skip = false'` over
-  the old a2ml corpus. Same for `#t` fields — all five integrity axioms
+  the old a2ml corpus, normalised to repo roots the same way. `grep -l`
+  lists files, not repos, so the `sed` and `sort -u` count each repo once;
+  without them a repo carrying both forms would count twice and could hide
+  a repo whose translation is missing. Same for `#t` fields — all five integrity axioms
   count-preserved per repo. The integrity members live in
   `.machine_readable/descriptiles/AGENTIC.deed` (J33); the `*_chora.deed`
   pattern counts a repo whose `(agentic …)` is still in its chora during the
-  YF05 window. A repo found in both is a defect, and counts once.
-* `@profile` strings: exactly one distinct `:id` value estate-wide, and no
-  `AGENTIC.deed` or `NEUROSYM.deed` carries one (J34, J36).
+  YF05 window. A repo found in both is a defect, reported separately:
+  the same `grep` without `sort -u`, then `uniq -d`, lists those repos.
+* `@profile` strings: exactly one distinct `:id` value estate-wide in the
+  target forms, and no `AGENTIC.deed` or `NEUROSYM.deed` carries one (J34,
+  J36). A legacy chora clause still permitted under YF05 or YF06 is not
+  counted (P-9).
 *`scan-depth` symbols are exactly from the closed three-set (validator,
   not eyeballs).
 
