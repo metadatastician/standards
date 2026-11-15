@@ -175,7 +175,7 @@ refuses the bare form (`fixtures/invalid/inbot-bare-name_chora.deed`).
 | `deny` | `(bot … :deny (<mode> …))` | list of SYMBOLs. Optional. Narrows the suite; deny wins over allow. A `(bot …)` with `:deny` and no `:allow` means everything except those modes.
 | `[config] min-severity` | `(bot … (config :min-severity low))` | SYMBOL verbatim.
 | `[config] timeout-seconds` | `(bot … (config :timeout-seconds 300))` | INTEGER.
-| (new; no legacy key) rhodibot's community-document format | `(bot :name rhodibot (config :community-doc-format md))` | SYMBOL, `adoc` or `md`; absent means `adoc`. rhodibot only. It sets which form of `CONTRIBUTING` and `CODE_OF_CONDUCT` rhodibot names in a suggestion and would create; rhodibot accepts either file that is present, whatever the value.
+| (new; no legacy key) rhodibot's community-document format | `(bot :name rhodibot (config :community-doc-format md))` | SYMBOL, `adoc` or `md`; absent means `adoc`. rhodibot only. It sets which form of `CONTRIBUTING` and `CODE_OF_CONDUCT` rhodibot names in a suggestion and would create; rhodibot accepts either file that is present, whatever the value. Owner ruling of 2026-11-15 (by selector, relayed by SysArch): "make it toggleable but note in my repos it is almost always adoc - and in any case, bot_directive allows per repo exceptions".
 | (new; no legacy key) the dynamic-mode target | `(bot … (target :build "…" :program "…"))` | optional. Absent means dynamic modes report `not_applicable "no target declared"`. `:program` is a STRING path relative to the repo root and MUST resolve inside it (no leading `/`, no `..` escape, no symlink out). `:build` is a STRING shell command and runs only in an unprivileged job.
 |===
 
