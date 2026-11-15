@@ -316,8 +316,11 @@ kill_mutant envpin_merge_key_unread 's@\(<<\|\[A-Za-z_\]@([A-Za-z_]@' "FAIL envp
 # Seventeenth round: the alias warning respects matrix data, merge sequences are warned about, and
 # the continuation lines of a folded pin are scalar text, never structure.
 kill_mutant envpin_alias_env_in_matrix 's@if \(!inmx && \(key == "env"@if ((key == "env"@' "FAIL envpin-rows"
-kill_mutant envpin_merge_sequence_silent 's@ \|\| \(key == "<<" && rest ~ /\^\\\[\.\*\\\*/\)@@' "FAIL envpin-rows"
+kill_mutant envpin_merge_sequence_silent 's@ \|\| \(key == "<<" && rest ~ /\^\[\\\[\\\{\]/\)@@' "FAIL envpin-rows"
 kill_mutant envpin_folded_line_is_structure 's@pend = ""; skip = pn; next \}@pend = "" }@' "FAIL envpin-rows"
+# Eighteenth round: a colon inside a flow plain scalar, and a decoded line feed.
+kill_mutant envpin_embedded_colon_ends_scalar 's@pl = \(nx == "" \|\| nx ~ /\[\[:space:\],\\\]\}\]/ \|\| prev ~ /\["\\047\]/\) \? 0 : 1@pl = 0@' "FAIL envpin-rows"
+kill_mutant envpin_decoded_line_feed 's@if \(v >= 32 && v < 127\) o = o sprintf@if (v > 0 \&\& v < 128) o = o sprintf@' "FAIL envpin-rows"
 # Fourteenth round: \U escapes, a flow value compared in full, node properties after an explicit
 # key's colon, alias keys said aloud, and a quote right after `?` inside a flow collection.
 kill_mutant envpin_big_u_escape 's@ \|\| ch == "U"@@' "FAIL envpin-rows"

@@ -90,7 +90,8 @@
 # line"), never FRESH or BEHIND. YAML explicit mapping keys (`? key`) are NOT parsed: one
 # ENV-PIN-UNJUDGED row, with `(explicit key)` in place of a name, says so for the file.
 # An alias key (`*pin: value`) is not resolved: one ENV-PIN-UNJUDGED row, `(alias key)` in place of a name,
-# says so for the file; so does an env map supplied by an alias (`env: *pins`, `<<: *pins`).
+# says so for the file; so does an env map supplied by an alias (`env: *pins`, `<<: *pins`), and
+# any `<<:` merge written as a flow collection (`<<: [*a, *b]`, also over several lines).
 # A sequence item is its own place (`[i]`) in the path of the refresh
 # comparison. `\UXXXXXXXX` escapes are decoded like `\x` and `\u`.
 # A key under `strategy: matrix:` is matrix data (a job that is merely named `matrix` is not), not an environment map, and gets no row. A
@@ -531,7 +532,7 @@ env_pin_rows() {
         ch = substr(s, ++i, 1)
         if (ch == "x" || ch == "u" || ch == "U") {
           h = substr(s, i + 1, (ch == "x") ? 2 : (ch == "u") ? 4 : 8); v = hexv(h)
-          if (v > 0 && v < 128) o = o sprintf("%c", v); else o = o "?"
+          if (v >= 32 && v < 127) o = o sprintf("%c", v); else o = o "?"
           i += length(h)
         }
         else if (ch == "\\" || ch == "\"" || ch == "/") o = o ch
@@ -550,7 +551,7 @@ env_pin_rows() {
     # scalar, or after a `#` that starts a comment (at the line start or after
     # whitespace), is text, not structure. The quote still open at the end of the line
     # is kept in fq, so a quoted scalar that runs over several lines is followed.
-    function depth(line,   i, n, ch, q, d, prev, isb, pl) {
+    function depth(line,   i, n, ch, q, d, prev, isb, pl, nx) {
       n = length(line); q = fq; d = 0; prev = " "; pl = fpl
       for (i = 1; i <= n; i++) {
         ch = substr(line, i, 1)
@@ -567,7 +568,14 @@ env_pin_rows() {
         else if (ch == "#" && prev ~ /[[:space:]]/) break
         else if (ch == "{" || ch == "[") { d++; pl = 0 }
         else if (ch == "}" || ch == "]") { d--; pl = 0 }
-        else if (ch == "," || ch == ":" || (ch == "?" && !pl)) pl = 0
+        else if (ch == "," || (ch == "?" && !pl)) pl = 0
+        else if (ch == ":") {
+          # A colon ends a plain scalar only as a key/value delimiter (followed by space, a
+          # flow indicator or the end of the line, or right after a quoted key); inside a
+          # plain scalar (`http:x`) it is content.
+          nx = substr(line, i + 1, 1)
+          pl = (nx == "" || nx ~ /[[:space:],\]}]/ || prev ~ /["\047]/) ? 0 : 1
+        }
         else if (ch !~ /[[:space:]]/) pl = 1
         prev = ch
       }
@@ -639,7 +647,7 @@ env_pin_rows() {
       tracked = (key ~ ("^(" names ")$") && parent == "env" && !inmx)
       # An env map supplied by an alias (`env: *pins`, or `<<: *pins` inside `env:`) is not
       # resolved: say so, never silently skip a map that may hold a pin.
-      if (!inmx && (key == "env" || (key == "<<" && parent == "env")) && (rest ~ /^\*[^[:space:]]+/ || (key == "<<" && rest ~ /^\[.*\*/)))
+      if (!inmx && (key == "env" || (key == "<<" && parent == "env")) && (rest ~ /^\*[^[:space:]]+/ || (key == "<<" && rest ~ /^[\[\{]/)))
         outr(sprintf("ENV-PIN-UNJUDGED\t(alias env) L%d an env map supplied by an alias (*name) is not resolved; env pins in this file may be missed", NR), "(alias env)")
       if (rest ~ /^[\{\[]/) {
         if (tracked) outr(sprintf("ENV-PIN-UNJUDGED\t%s L%d value is a flow collection; not judged", key, NR), "(flow) " rest)
@@ -1576,6 +1584,15 @@ JSON
     printf '    env: *axes\n'
     printf 'env:\n'
     printf '  <<: [*base, *override]\n'
+    printf 'env:\n'
+    printf '  <<: [\n'
+    printf '    *base\n'
+    printf '  ]\n'
+    printf "env: { OTHER: http:'abc, X: y }\n"
+    printf 'env:\n'
+    printf '  CANON_REF: %s\n' "$eb"
+    printf 'env:\n'
+    printf '  CANON_REF: "main\\x0arelease"\n'
   } > "$d/envpin.yml"
   local ep; ep=$(env_pin_rows "$d/envpin.yml" "$t" | tr '\t' '|')
   local epw="ENV-PIN-FRESH|STANDARDS_PIN L2 ${t:0:8}
@@ -1615,7 +1632,10 @@ ENV-PIN-UNJUDGED|(alias env) L127 an env map supplied by an alias (*name) is not
 ENV-PIN-UNJUDGED|(alias env) L130 an env map supplied by an alias (*name) is not resolved; env pins in this file may be missed
 ENV-PIN-UNJUDGED|STANDARDS_PIN L132 value continues on the next line (a folded plain scalar); not judged
 ENV-PIN-BEHIND|CANON_REF L134 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here
-ENV-PIN-UNJUDGED|(alias env) L140 an env map supplied by an alias (*name) is not resolved; env pins in this file may be missed"
+ENV-PIN-UNJUDGED|(alias env) L140 an env map supplied by an alias (*name) is not resolved; env pins in this file may be missed
+ENV-PIN-UNJUDGED|(alias env) L142 an env map supplied by an alias (*name) is not resolved; env pins in this file may be missed
+ENV-PIN-BEHIND|CANON_REF L147 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here
+ENV-PIN-UNJUDGED|CANON_REF L149 value is not a 40-hex commit: main?release"
   if [ "$ep" = "$epw" ]; then echo "  PASS envpin-rows -> $(printf '%s\n' "$ep" | wc -l) row(s)"
   else echo "  FAIL envpin-rows -> got:
 $ep
