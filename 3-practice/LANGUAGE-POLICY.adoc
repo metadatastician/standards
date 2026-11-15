@@ -26,7 +26,8 @@ environment so that it *can* (§1.4).
 
 | 1 | *Bun*
 | Default for all new work. Built-in test runner and bundler. Its lock,
-  `bun.lock`, is the one governance requires.
+  `bun.lock`, is the one governance requires (a zero-dependency package
+  carries no lock at all, §1.4).
 
 | 2 | *Deno*
 | Second. Permitted, not gated (§1.3). Reads the same `package.json`, so in the
@@ -152,24 +153,67 @@ record is `docs/decisions/2026-10-14-one-manifest-every-runtime.adoc`.
 natively, so nothing is translated and no second manifest can drift. Each
 runtime's own tool writes its own lockfile: `bun.lock` (tier 1, required),
 then `deno.lock` and `pnpm-lock.yaml` (generated compatibility locks, never
-hand-edited). npm keeps none.
+hand-edited). npm keeps none. A zero-dependency package keeps none of them
+(below).
 
 The tool is `tools/js-runtimes` (Rust; JCS in-process via the `ijson-jcs`
 crate).
 
 Writer:: `js-runtimes regen` is the only writer. It makes `package.json`
 I-JSON + JCS (D306) and regenerates all three locks. Run it after every
-`bun add` / `pnpm add`.
+`bun add` / `pnpm add`. For a zero-dependency package it writes no lock,
+says so, and removes any lock left over.
 Gate:: `.github/workflows/js-runtimes-reusable.yml`, and the same jobs in
 `governance-reusable.yml`, run `js-runtimes check bun|deno|pnpm` on every
 repository with a `package.json`. Each fails on:
 +
 * a non-canonical `package.json`;
-* a missing lock;
+* a missing lock (except for a zero-dependency package);
 * a stale lock (the frozen install refuses it);
+* any lock carried by a zero-dependency package;
 * a failing `test` script under that runtime's runner.
 +
 `scripts/tests/js-runtimes-test.sh` proves each failure.
+Zero-dependency packages::
++
+--
+RULED 2026-11-14 by the owner: *a `package.json` with no dependencies needs
+no lockfile.*
+
+A package is zero-dependency when each of `dependencies`, `devDependencies`,
+`optionalDependencies` and `peerDependencies` is absent or an empty object.
+Two more fields are weighed:
+
+* *Bundled dependencies.* A `bundleDependencies` (or `bundledDependencies`)
+  list names packages that must also be dependencies, so on its own it adds
+  none. A non-empty list is still treated as not zero-dependency, so that a
+  malformed manifest keeps the lock rule rather than escaping it.
+* *Workspaces.* A workspace root resolves its members' dependencies into one
+  lock at the root, even with no dependencies of its own. A `workspaces` field
+  that is not empty, or a `pnpm-workspace.yaml` beside the manifest, makes the
+  package not zero-dependency.
+
+Any other value in these fields (a list where an object belongs, `null`) is
+not zero-dependency either: the check fails closed.
+
+Such a package needs no lock *and carries none*. "No lock required, and any
+lock present must still be correct" would be simpler, but it cannot be
+checked the same way on every leg. Measured on 2026-11-14 with Bun 1.4.4,
+Deno 2.9.6 and pnpm 10.28.0, for a package with no dependencies:
+
+* `bun install` deletes the lock it would write ("No packages! Deleted empty
+  lockfile"), so no `bun.lock` can exist;
+* `deno install` writes no `deno.lock`;
+* `pnpm install --lockfile-only` writes a `pnpm-lock.yaml` that records only
+  an empty importer;
+* given that file and no `bun.lock`, `bun install --frozen-lockfile` migrates
+  it and then refuses ("lockfile had changes, but lockfile is frozen").
+
+So a lock that is correct for pnpm makes the Bun leg fail. The one state all
+three runtimes accept is no lock at all, and a lock that pins nothing proves
+nothing. `hyperpolymath/boj-server`, whose four `package.json` files have no
+dependencies, met each of these.
+--
 Order:: `js-runtimes pick` names the most-preferred runtime on `PATH`, and
 `js-runtimes run SCRIPT` runs a script with it, so scripts and tooling
 follow Bun > Deno > pnpm > npm wherever the environment allows.

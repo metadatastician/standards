@@ -8,12 +8,16 @@ preference order Bun > Deno > pnpm > npm. `3-practice/LANGUAGE-POLICY.adoc`
 [cols="2,5",options="header"]
 |===
 | Command | Does
-| `js-runtimes regen [DIR]` | The only writer. It makes `package.json` I-JSON + JCS (D306, the `ijson-jcs` crate, in-process), then regenerates `bun.lock`, `deno.lock` and `pnpm-lock.yaml`, each with its own tool. npm keeps no tracked lock. Run it after every `bun add` / `pnpm add`.
-| `js-runtimes check bun\|deno\|pnpm [DIR]` | The gate. It checks that `package.json` is JCS, that the runtime's lock exists, and that a frozen install accepts it (a stale lock fails). It then runs the `test` script under that runtime's own runner.
+| `js-runtimes regen [DIR]` | The only writer. It makes `package.json` I-JSON + JCS (D306, the `ijson-jcs` crate, in-process), then regenerates `bun.lock`, `deno.lock` and `pnpm-lock.yaml`, each with its own tool. npm keeps no tracked lock. A zero-dependency package gets no lock: regen says so, writes none and removes any left over. Run it after every `bun add` / `pnpm add`.
+| `js-runtimes check bun\|deno\|pnpm [DIR]` | The gate. It checks that `package.json` is JCS, that the runtime's lock exists, and that a frozen install accepts it (a stale lock fails). A zero-dependency package passes with no lock and fails if it carries one. It then runs the `test` script under that runtime's own runner.
 | `js-runtimes pick [DIR]` | Prints the most-preferred runtime on `PATH`.
 | `js-runtimes run SCRIPT [DIR]` | Runs a `package.json` script with that runtime (`bun run` / `deno task` / `pnpm run` / `npm run`).
 | `js-runtimes provision [DIR]` | Checks that every environment definition (`mise.toml`, each `Containerfile`, each Guix manifest) provisions Bun. mise and containers can always provide Bun, so settling for less there is a finding. For Guix, the best runtime it provisions is accepted and reported.
 |===
+
+A zero-dependency package (no dependency in any field, no bundle list, no
+workspace) needs no lock and carries none: owner ruling 2026-11-14, defined in
+`3-practice/LANGUAGE-POLICY.adoc` §1.4.
 
 Exit codes:
 

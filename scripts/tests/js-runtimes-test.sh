@@ -6,6 +6,10 @@
 #   * check, under each of bun, deno and pnpm: a regenerated package passes; a
 #     non-canonical package.json, a missing lock, a stale lock and a failing
 #     test script each fail and say why;
+#   * a zero-dependency package (owner ruling 2026-11-14) needs no lock:
+#     regen writes none, says so, and removes leftovers; check passes it with
+#     no lock and fails it with one; a package WITH a dependency and no lock,
+#     and a workspace root, still fail (controls);
 #   * pick / run follow the preference order Bun > Deno > pnpm > npm;
 #   * provision accepts an environment that provisions Bun, refuses one that
 #     settles for less where Bun is always possible, and reports a Guix
@@ -96,6 +100,53 @@ for rt in bun deno pnpm; do
   expect 1 "$rt: a failing test script fails" check "$rt"
   names "the test script failed" "$rt: and says why"
 done
+
+echo "zero-dependency package (owner ruling 2026-11-14: no lock needed, none carried)"
+# Pretty-printed on purpose: regen must still canonicalise it.
+ZERO='{
+  "name": "fixture",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": { "test": "echo js-runtimes-test-ran" },
+  "dependencies": {},
+  "devDependencies": {}
+}'
+nolocks() { # nolocks <label>
+  local f left=""
+  for f in bun.lock deno.lock pnpm-lock.yaml; do [ -e "$WORK/p/$f" ] && left="$left $f"; done
+  if [ -z "$left" ]; then pass=$((pass+1)); echo "  ok    $1"
+  else fail=$((fail+1)); echo "  FAIL  $1 (present:$left)"; fi
+}
+fixture "$ZERO"
+expect 0 "regen accepts a zero-dependency package" regen
+names "declares no dependencies, so it needs no lock" "regen says it needs no lock"
+if grep -qF "regenerated" "$WORK/out"; then fail=$((fail+1)); echo "  FAIL  regen claimed to regenerate a lock"; sed 's/^/        /' "$WORK/out"
+else pass=$((pass+1)); echo "  ok    regen claims no lock it did not write"; fi
+nolocks "regen wrote no lock"
+cp "$WORK/p/package.json" "$WORK/zero.json"
+fixture "$ZERO"; printf "lockfileVersion: '9.0'\n" > "$WORK/p/pnpm-lock.yaml"; : > "$WORK/p/deno.lock"
+expect 0 "regen of a zero-dependency package with leftover locks passes" regen
+names "removed deno.lock, pnpm-lock.yaml" "and names the locks it removed"
+nolocks "and leaves none"
+for rt in bun deno pnpm; do
+  fixture "$(cat "$WORK/zero.json")"
+  expect 0 "$rt: a zero-dependency package with no lock passes check" check "$rt"
+  names "no lock needed" "$rt: and says why"
+  names "js-runtimes-test-ran" "$rt: the test script still ran under $rt"
+  fixture "$(cat "$WORK/zero.json")"; printf "lockfileVersion: '9.0'\n" > "$WORK/p/pnpm-lock.yaml"
+  expect 1 "$rt: a zero-dependency package carrying a leftover lock fails" check "$rt"
+  names "carries no lock" "$rt: and says why"
+  # Control: the ruling is about zero dependencies only.
+  fixture "$FAILING"; sed -i 's/exit 3/echo js-runtimes-test-ran/' "$WORK/p/package.json"
+  expect 1 "$rt: control: a package WITH a dependency and no lock still fails" check "$rt"
+  names "is missing" "$rt: and says why"
+done
+fixture '{"name":"fixture","private":true,"version":"0.0.0","workspaces":["packages/*"]}'
+expect 1 "a workspace root with no dependencies of its own still needs bun.lock" check bun
+names "bun.lock is missing" "and says why"
+fixture '{"name":"fixture","private":true,"version":"0.0.0"}'; printf 'packages:\n  - "packages/*"\n' > "$WORK/p/pnpm-workspace.yaml"
+expect 1 "a pnpm-workspace.yaml root still needs pnpm-lock.yaml" check pnpm
+names "pnpm-lock.yaml is missing" "and says why"
 
 echo "pick / run (stub runtimes on a private PATH)"
 STUBS="$WORK/stubs"

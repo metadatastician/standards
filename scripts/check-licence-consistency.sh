@@ -147,9 +147,26 @@ if [ -f "Cargo.toml" ]; then
     | tr -d '"' | head -c 80 | sed -E 's/[[:space:]]+$//')
 elif [ -f "package.json" ]; then
   manifest_path="package.json"
-  manifest_decl=$(grep -m1 -E '"license"[[:space:]]*:' "$manifest_path" 2>/dev/null \
-    | sed -E 's/.*"license"[[:space:]]*:[[:space:]]*//' \
-    | tr -d '",' | head -c 80 | sed -E 's/[[:space:]]+$//')
+  # A real JSON parse, so the field is read the same whether package.json is
+  # pretty-printed or one-line JCS (what `tools/js-runtimes regen` writes,
+  # 3-practice/LANGUAGE-POLICY.adoc §1.4). A line-based grep read the rest of
+  # a one-line file as the licence. `license` is an SPDX string; the legacy
+  # `{"type": …}` object form is read through its `type`.
+  if ! command -v jq >/dev/null 2>&1; then
+    emit ERROR "jq is not on PATH: cannot read the licence field of package.json (cannot run, not a pass)."
+    exit 2
+  fi
+  if ! manifest_decl=$(jq -r '
+      if type == "object" then
+        (.license // empty)
+        | if type == "string" then .
+          elif type == "object" then (.type // empty | strings)
+          else empty end
+      else empty end' "$manifest_path" 2>/dev/null); then
+    emit WARN "package.json is not valid JSON: its licence field cannot be read."
+    manifest_decl=""
+  fi
+  manifest_decl=$(printf '%s' "$manifest_decl" | head -n1 | head -c 80 | sed -E 's/[[:space:]]+$//')
 elif [ -f "pyproject.toml" ]; then
   manifest_path="pyproject.toml"
   manifest_decl=$(grep -m1 -E '^license[[:space:]]*=' "$manifest_path" 2>/dev/null \
