@@ -256,7 +256,7 @@ kill_mutant manifest_version_unbounded \
 # case-insensitively, only a child of `env:` counts, and a `#` inside a quoted value
 # is not a comment. Each is killed by a known-answer control, not by a stub case.
 kill_mutant envpin_target_case_ignored 's@tgt = tolower\(target\)@tgt = target@' "FAIL envpin-target-case"
-kill_mutant envpin_context_ignored 's@ && parent == "env"\)@)@' "FAIL envpin-rows"
+kill_mutant envpin_context_ignored 's@ && parent == "env" && !inmx\)@ \&\& !inmx)@' "FAIL envpin-rows"
 kill_mutant envpin_quote_hash_stripped 's@if \(c == "\\047" \|\| c == "\\""\) \{@if (0) {@' "FAIL envpin-rows"
 # Second Codex round on #1602: whitespace after the colon, multi-line quoted scalars,
 # and a block-scalar value must each be handled, not misread or silent.
@@ -297,6 +297,10 @@ kill_mutant envpin_explicit_key_silent 's@if \(!xwarn\) \{ xwarn = 1; printf@if 
 # double-quoted key.
 kill_mutant envpin_flow_doubled_quote 's@if \(q == "\\047" && substr\(line, i \+ 1, 1\) == "\\047"\) i\+\+; else q = ""@q = ""@' "FAIL envpin-rows"
 kill_mutant envpin_key_escape_literal 's@key = unesc\(substr\(key, 2, length\(key\) - 2\)\)@key = substr(key, 2, length(key) - 2)@' "FAIL envpin-rows"
+# Eleventh round on #1602: a matrix axis named env is not an environment map, and
+# escapes in a double-quoted pin value are decoded.
+kill_mutant envpin_matrix_env_read 's@ && !inmx\)@)@' "FAIL envpin-rows"
+kill_mutant envpin_value_escape_literal 's@if \(c == "\\""\) val = unesc\(val\)@@' "FAIL envpin-rows"
 
 # --- 3. fetch_workflows fails CLOSED -----------------------------------------
 # A rate-limited repo used to come back as "no workflows": fetch_workflows
@@ -852,6 +856,27 @@ case_main_content_refresh() {
   fi
 }
 
+# case_main_content_refresh_envpin <applier> — a refresh replaces the copy with the
+# template, so an env pin it carried moves with it. The census reads the refreshed copy,
+# so the run must also say what changed: one ENV-PIN-REFRESH-MOVED row naming before and
+# after. A refresh that leaves the env pins alone gets no such row (content_fixture has none).
+case_main_content_refresh_envpin() {
+  local d old new; d=$(new_case contentrefreshenv)
+  old="eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"; new="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  content_fixture "$1" "$d"
+  stamp_into "$1" "$d/proven_template.yml" proven-lock-gate 0.2.0 "$(printf 'name: gate\nenv:\n  # proven-cicd:local-next\n  PROVEN_SHA: "%s"\n  CANON_REF: %s\njobs:\n  g:\n    steps:\n      - run: echo new\n' "$CO_NEW" "$new")"
+  stamp_into "$1" "$d/own_stamped" proven-lock-gate 0.1.0 "$(printf 'name: gate\nenv:\n  # proven-cicd:local-next\n  PROVEN_SHA: "%s"\n  CANON_REF: %s\njobs:\n  g:\n    steps:\n      - run: echo old\n' "$CO_OLD" "$old")"
+  run_content "$d" "$1" --fix-content --proven-sha "$P"
+  if [ "$(cat "$d/rc")" = 0 ] \
+     && [ "$(grep -c 'ENV-PIN-REFRESH-MOVED' "$d/out")" = 3 ] \
+     && [ "$(grep -F 'ENV-PIN-REFRESH-MOVED' "$d/out" | grep -cF "before [CANON_REF BEHIND ${old:0:8}] after [CANON_REF BEHIND ${new:0:8}]")" = 3 ]; then
+    pass "main: a content refresh that moves an env pin says so (one ENV-PIN-REFRESH-MOVED row per refreshed copy, before and after)"
+  else
+    fail "main: refresh moved an env pin without a row, or the row is wrong (rc=$(cat "$d/rc"))"
+    sed 's/^/    /' "$d/out" >&2; tail -5 "$d/err" | sed 's/^/    /' >&2
+  fi
+}
+
 # case_main_content_refused <applier> <label> <setup> — a refresh that cannot be
 # proven equal to the template is refused with a row, and nothing is committed.
 case_main_content_refused() {
@@ -1298,6 +1323,7 @@ case_main_health_cap "$APPLIER"
 case_main_health_paged "$APPLIER"
 case_main_content_fix "$APPLIER"
 case_main_content_refresh "$APPLIER"
+case_main_content_refresh_envpin "$APPLIER"
 case_main_content_refused "$APPLIER" "a template that does not match its own stamp" \
   'printf "      - run: injected\n" >> "$d/proven_template.yml"'
 case_main_content_refused "$APPLIER" "a template stamped for another version than the manifest's" \
@@ -1507,6 +1533,7 @@ list_mutant content_fail_stops_pin_census 's@^      log "ERROR: \$\{content_fail
 list_mutant content_manifest_unpinned 's@\?ref=\$\{PROVEN_SHA\}@@' case_main_content
 list_mutant content_row_dropped 's@cst=\$\(content_state "\$wf" "\$PROVEN_MANIFEST"\)@cst=""@' case_main_content
 list_mutant content_row_writes 's@\[ -n "\$cst" \] \&\& printf@[ -n "$cst" ] \&\& changed+=("$base"); [ -n "$cst" ] \&\& printf@' case_main_content_fix
+list_mutant envpin_refresh_move_silent 's@\[ "\$epb" = "\$epa" \] \|\|@true ||@' case_main_content_refresh_envpin
 # A stamped copy in the current layout (stamp on line 2) is still held by --fix:
 # a hold that only recognises the legacy line-1 stamp re-pins it and breaks its hash.
 case_main_stamped_held_l2() { case_main_stamped_held "$1" l2; }

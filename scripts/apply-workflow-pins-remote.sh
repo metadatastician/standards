@@ -89,6 +89,11 @@
 # scalar (folded), so it is reported ENV-PIN-UNJUDGED ("value continues on the next
 # line"), never FRESH or BEHIND. YAML explicit mapping keys (`? key`) are NOT parsed: one
 # ENV-PIN-UNJUDGED row, with `(explicit key)` in place of a name, says so for the file.
+# A key under any `matrix:` is matrix data, not an environment map, and gets no row. A
+# double-quoted pin value is decoded (\xHH, \uHHHH in ASCII, \\ \" \/) before it is judged.
+# --fix-content replaces a stale stamped copy with the template, so an env pin may move
+# with it: the census reads the refreshed copy, and one ENV-PIN-REFRESH-MOVED row per
+# such file gives before and after (NAME STATUS first-8-hex), so the move is never silent.
 # the value. The target is compared case-insensitively. A tracked key with a block
 # scalar or multi-line quoted value gets an ENV-PIN-UNJUDGED row; the lines of a
 # multi-line quoted scalar are not read as keys.
@@ -580,8 +585,9 @@ env_pin_rows() {
       rest = substr(bp, kl + 1); sub(/^[[:space:]]+/, "", rest); rest = props(rest)
       while (top > 0 && ind[top] >= n) top--
       parent = (top > 0) ? knm[top] : ""
+      inmx = 0; for (k = 1; k <= top; k++) if (knm[k] == "matrix") inmx = 1
       top++; ind[top] = n; knm[top] = key
-      tracked = (key ~ ("^(" names ")$") && parent == "env")
+      tracked = (key ~ ("^(" names ")$") && parent == "env" && !inmx)
       if (rest ~ /^[\{\[]/) {
         if (tracked) printf "ENV-PIN-UNJUDGED\t%s L%d value is a flow collection; not judged\n", key, NR
         fq = ""; d = depth(rest); if (d > 0) flow = d; else fq = ""
@@ -605,6 +611,7 @@ env_pin_rows() {
         if (q == 0) bad = 1
         else {
           tail = substr(val, q + 1); val = substr(val, 2, q - 2)
+          if (c == "\"") val = unesc(val)
           if (c == "\047") gsub(/\047\047/, "\047", val)
           if (tail !~ /^[[:space:]]*(#.*)?$/) bad = 1
         }
@@ -627,6 +634,16 @@ env_pin_rows() {
     }
     END { if (pend != "") print pend }
   ' "$1"
+}
+
+# env_pin_values <file> <target_sha> — the tracked assignments as sorted
+# `NAME STATUS VALUE` lines (line numbers dropped), so two copies of a workflow can be
+# compared for what they pin, not for where. Used to say when a content refresh moved one.
+env_pin_values() {
+  env_pin_rows "$1" "$2" | awk -F'\t' '{
+    split($2, a, " "); st = $1; sub(/^ENV-PIN-/, "", st)
+    printf "%s %s %s\n", a[1], st, (st == "FRESH" || st == "BEHIND") ? a[3] : "-"
+  }' | LC_ALL=C sort
 }
 
 # health_summary <runs.json> — one TAB-separated line per workflow file seen in a
@@ -1448,6 +1465,12 @@ JSON
     printf '  CANON_REF: %s }\n' "$eb"
     printf '"e\\x6ev":\n'
     printf '  "CANON\\u005fREF": %s\n' "$eb"
+    printf 'strategy:\n'
+    printf '  matrix:\n'
+    printf '    env:\n'
+    printf '      CANON_REF: %s\n' "$eb"
+    printf 'env:\n'
+    printf '  STANDARDS_PIN: "%s\\x62"\n' "${eb:0:39}"
   } > "$d/envpin.yml"
   local ep; ep=$(env_pin_rows "$d/envpin.yml" "$t" | tr '\t' '|')
   local epw="ENV-PIN-FRESH|STANDARDS_PIN L2 ${t:0:8}
@@ -1476,7 +1499,8 @@ ENV-PIN-BEHIND|CANON_REF L79 ${eb:0:8} (target ${t:0:8}); read-only: never re-po
 ENV-PIN-DYNAMIC|CANON_REF L81 is an expression; not judged
 ENV-PIN-UNJUDGED|STANDARDS_PIN L87 value continues on the next line (a folded plain scalar); not judged
 ENV-PIN-BEHIND|CANON_REF L90 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here
-ENV-PIN-BEHIND|CANON_REF L96 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here"
+ENV-PIN-BEHIND|CANON_REF L96 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here
+ENV-PIN-BEHIND|STANDARDS_PIN L102 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here"
   if [ "$ep" = "$epw" ]; then echo "  PASS envpin-rows -> $(printf '%s\n' "$ep" | wc -l) row(s)"
   else echo "  FAIL envpin-rows -> got:
 $ep
@@ -2087,9 +2111,17 @@ main() {
         cst=$(content_state "$wf" "$PROVEN_MANIFEST")
         [ -n "$cst" ] && printf '%s\t%s\t%s\n' "$repo" "$base" "$cst" >> "$tsv"
         if [ "$DO_FIX_CONTENT" -eq 1 ] && [ "${cst%%$'\t'*}" = BEHIND-CONTENT ]; then
-          local rst; rst=$(refresh_copy "$rdir" "$wf")
+          local rst epb epa; epb=$(env_pin_values "$wf" "$TARGET_SHA")
+          rst=$(refresh_copy "$rdir" "$wf")
           printf '%s\t%s\t%s\n' "$repo" "$base" "$rst" >> "$tsv"
-          [ "${rst%%$'\t'*}" = CONTENT-REFRESHED ] && changed+=("$base")
+          if [ "${rst%%$'\t'*}" = CONTENT-REFRESHED ]; then
+            changed+=("$base")
+            # The refresh replaces the copy with the template, so an env pin it carried can
+            # move with it. The census below reads the refreshed copy; say what changed.
+            epa=$(env_pin_values "$wf" "$TARGET_SHA")
+            [ "$epb" = "$epa" ] || printf '%s\t%s\tENV-PIN-REFRESH-MOVED\tthe content refresh changed the env pins; before [%s] after [%s]; the census never re-points them, review before merging\n' \
+              "$repo" "$base" "$(printf '%s' "$epb" | tr '\n' ';')" "$(printf '%s' "$epa" | tr '\n' ';')" >> "$tsv"
+          fi
         fi
       fi
       # Env-var pins (STANDARDS_PIN, CANON_REF) are counted for every workflow, even
