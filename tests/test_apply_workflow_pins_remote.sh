@@ -256,8 +256,13 @@ kill_mutant manifest_version_unbounded \
 # case-insensitively, only a child of `env:` counts, and a `#` inside a quoted value
 # is not a comment. Each is killed by a known-answer control, not by a stub case.
 kill_mutant envpin_target_case_ignored 's@tgt = tolower\(target\)@tgt = target@' "FAIL envpin-target-case"
-kill_mutant envpin_context_ignored 's@ \|\| parent != "env"\) next@) next@' "FAIL envpin-rows"
+kill_mutant envpin_context_ignored 's@ && parent == "env"\)@)@' "FAIL envpin-rows"
 kill_mutant envpin_quote_hash_stripped 's@if \(c == "\\047" \|\| c == "\\""\) \{@if (0) {@' "FAIL envpin-rows"
+# Second Codex round on #1602: whitespace after the colon, multi-line quoted scalars,
+# and a block-scalar value must each be handled, not misread or silent.
+kill_mutant envpin_space_trim_dropped 's@ sub\(/\^\[\[:space:\]\]\+/, "", rest\)@@' "FAIL envpin-rows"
+kill_mutant envpin_multiline_quote_read 's@^    inq != "" \{ if@    inq == "NEVER" { if@' "FAIL envpin-rows"
+kill_mutant envpin_block_scalar_silent 's@if \(tracked\) printf "ENV-PIN-UNJUDGED\\t%s L%d value is a block scalar@if (0) printf "ENV-PIN-UNJUDGED\\t%s L%d value is a block scalar@' "FAIL envpin-rows"
 
 # --- 3. fetch_workflows fails CLOSED -----------------------------------------
 # A rate-limited repo used to come back as "no workflows": fetch_workflows

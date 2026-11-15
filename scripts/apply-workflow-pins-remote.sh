@@ -80,7 +80,9 @@
 # Only a direct child of a block-style `env:` mapping counts (found by indentation):
 # a same-named key under `with:` or `inputs:`, the body of a `run: |` block, a flow
 # style `env: {…}` and a quoted key get no row. A `#` inside a quoted value is part of
-# the value. The target is compared case-insensitively.
+# the value. The target is compared case-insensitively. A tracked key with a block
+# scalar or multi-line quoted value gets an ENV-PIN-UNJUDGED row; the lines of a
+# multi-line quoted scalar are not read as keys.
 #
 # HEALTH BLOCK (own rows, WORKFLOW column = the workflow file; read-only, every
 # mode, on by default, --no-health turns it off). For EVERY repository walked,
@@ -455,10 +457,22 @@ deed_overcap() {
 # quoted keys are not read either, and so get no row. A `#` inside a quoted value is
 # part of the value, not a comment; a quoted value followed by anything but a
 # comment is UNJUDGED. The target is compared case-insensitively (a SHA is hex).
+# Whitespace after the colon is not part of the value. A tracked key whose value is a
+# block scalar (`>-`, `|`) or a quoted scalar that runs over several lines is
+# UNJUDGED (one row, never silence); the lines of a multi-line quoted scalar are never
+# read as keys.
 ENV_PIN_NAMES='STANDARDS_PIN|CANON_REF'
 env_pin_rows() {
   LC_ALL=C awk -v target="$2" -v names="$ENV_PIN_NAMES" '
-    BEGIN { tgt = tolower(target); top = 0; skip = -1 }
+    # qclose: does this text hold the closing quote of a scalar opened with q?
+    # (double quotes: an unescaped ", single quotes: a lone ; a doubled is an escape)
+    function qclose(line, q,   t) {
+      t = line
+      if (q == "\"") gsub(/\\./, "", t); else gsub(/\047\047/, "", t)
+      return index(t, q) > 0
+    }
+    BEGIN { tgt = tolower(target); top = 0; skip = -1; inq = "" }
+    inq != "" { if (qclose($0, inq)) inq = ""; next }
     /^[[:space:]]*$/ { next }
     /^[[:space:]]*#/ { next }
     {
@@ -467,21 +481,32 @@ env_pin_rows() {
       if (skip >= 0) { if (n > skip) next; skip = -1 }
       body = substr(s, n + 1)
       while (match(body, /^-[[:space:]]+/)) { n += RLENGTH; body = substr(body, RLENGTH + 1) }
+      c0 = substr(body, 1, 1)
+      if ((c0 == "\047" || c0 == "\"") && !qclose(substr(body, 2), c0)) { inq = c0; next }
       if (!match(body, /^[A-Za-z_][A-Za-z0-9_.-]*[[:space:]]*:([[:space:]]|$)/)) next
-      rest = substr(body, RLENGTH + 1)
+      rest = substr(body, RLENGTH + 1); sub(/^[[:space:]]+/, "", rest)
       key = substr(body, 1, RLENGTH); sub(/[[:space:]]*:.*$/, "", key)
       while (top > 0 && ind[top] >= n) top--
       parent = (top > 0) ? knm[top] : ""
       top++; ind[top] = n; knm[top] = key
+      tracked = (key ~ ("^(" names ")$") && parent == "env")
       r2 = rest; sub(/[[:space:]]+#.*$/, "", r2)
-      if (r2 ~ /^[|>][-+0-9]*$/) { skip = n; next }
-      if (key !~ ("^(" names ")$") || parent != "env") next
-      val = rest; bad = 0; c = substr(val, 1, 1)
+      if (r2 ~ /^[|>][-+0-9]*$/) {
+        if (tracked) printf "ENV-PIN-UNJUDGED\t%s L%d value is a block scalar; not judged\n", key, NR
+        skip = n; next
+      }
+      c = substr(rest, 1, 1)
+      if ((c == "\047" || c == "\"") && !qclose(substr(rest, 2), c)) {
+        inq = c
+        if (tracked) printf "ENV-PIN-UNJUDGED\t%s L%d value is a multi-line quoted scalar; not judged\n", key, NR
+        next
+      }
+      if (!tracked) next
+      val = rest; bad = 0
       if (c == "\047" || c == "\"") {
         q = index(substr(val, 2), c)
-        if (q == 0) { bad = 1; val = substr(val, 2) }
-        else { tail = substr(val, q + 2); val = substr(val, 2, q - 1)
-               if (tail !~ /^[[:space:]]*(#.*)?$/) bad = 1 }
+        tail = substr(val, q + 2); val = substr(val, 2, q - 1)
+        if (tail !~ /^[[:space:]]*(#.*)?$/) bad = 1
       } else {
         sub(/[[:space:]]+#.*$/, "", val); sub(/[[:space:]]+$/, "", val)
         if (val ~ /^#/) val = ""
@@ -1247,6 +1272,14 @@ JSON
     printf 'steps:\n'
     printf '  - env:\n'
     printf '      CANON_REF: %s\n' "$eb"
+    printf 'env:\n'
+    printf '  STANDARDS_PIN:  %s\n' "$t"
+    printf '  CANON_REF: >-\n'
+    printf '    %s\n' "$t"
+    printf '  STANDARDS_PIN: "starts here\n'
+    printf '    env:\n'
+    printf '      CANON_REF: %s"\n' "$eb"
+    printf '  CANON_REF: %s\n' "$eb"
   } > "$d/envpin.yml"
   local ep; ep=$(env_pin_rows "$d/envpin.yml" "$t" | tr '\t' '|')
   local epw="ENV-PIN-FRESH|STANDARDS_PIN L2 ${t:0:8}
@@ -1258,7 +1291,11 @@ ENV-PIN-UNJUDGED|CANON_REF L10 value is not a 40-hex commit: (empty)
 ENV-PIN-FRESH|STANDARDS_PIN L11 ${t:0:8}
 ENV-PIN-UNJUDGED|CANON_REF L17 value is not a 40-hex commit: ${t:0:24}
 ENV-PIN-FRESH|STANDARDS_PIN L21 ${t:0:8}
-ENV-PIN-BEHIND|CANON_REF L24 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here"
+ENV-PIN-BEHIND|CANON_REF L24 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here
+ENV-PIN-FRESH|STANDARDS_PIN L26 ${t:0:8}
+ENV-PIN-UNJUDGED|CANON_REF L27 value is a block scalar; not judged
+ENV-PIN-UNJUDGED|STANDARDS_PIN L29 value is a multi-line quoted scalar; not judged
+ENV-PIN-BEHIND|CANON_REF L32 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here"
   if [ "$ep" = "$epw" ]; then echo "  PASS envpin-rows -> $(printf '%s\n' "$ep" | wc -l) row(s)"
   else echo "  FAIL envpin-rows -> got:
 $ep
