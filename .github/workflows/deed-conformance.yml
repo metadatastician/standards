@@ -141,6 +141,10 @@ jobs:
       - name: agentic fixtures (DRAFT, A7)
         if: github.repository_id == 1116521501 && steps.bun.outcome == 'success'
         run: bun "$T/deed_lint.js" --agentic-fixtures "$T/fixtures/agentic"
+      # NEUROSYM.deed (A7 7.2, J35 to J37, YD05, YF06): a DRAFT profile, gated on its own fixtures until ratified.
+      - name: neurosym fixtures (DRAFT, A7)
+        if: github.repository_id == 1116521501 && steps.bun.outcome == 'success'
+        run: bun "$T/deed_lint.js" --neurosym-fixtures "$T/fixtures/neurosym"
       # RSR scorecard (owner ruling 2026-11-14, ratified that day with :assessor and :assessed-at;
       # rsr-scorecard.abnf v0.2.0): gated on its own fixtures. The caller-wide lint below also runs the profile.
       - name: rsr-scorecard fixtures

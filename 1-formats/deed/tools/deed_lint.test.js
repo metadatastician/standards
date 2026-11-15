@@ -6,7 +6,7 @@ import { cpSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, writ
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { validate, blankComments, LintError, SELF_TEST_CASES, checkEgress, EgressError, checkAnchor, AnchorError, profileCOfBody, readMustfileChecks, MustfileError, readProofReceipt, ProofReceiptError, checkContractiles, ContractilesError, contractilePaths, CONTRACTILE_VERBS, checkEdict, EdictError, verbOfFilename, checkVerbDescriptile, VerbDescriptileError, verbOfDescriptile, choraRepoUuid, rootChora, FIXTURE_TODAY, checkEcosystem, EcosystemError, ECOSYSTEM_RELATIONSHIPS, checkState, StateError, STATE_PHASES, MATURITY_LEVELS, checkRsrScorecard, RsrScorecardError, RSR_TIERS, RSR_VERDICTS, checkMeta, MetaError, META_PROJECT_TYPES, ADR_STATUSES, checkAgentic, AgenticError, J19_SETTINGS } from "./deed_lint.js";
+import { validate, blankComments, LintError, SELF_TEST_CASES, checkEgress, EgressError, checkAnchor, AnchorError, profileCOfBody, readMustfileChecks, MustfileError, readProofReceipt, ProofReceiptError, checkContractiles, ContractilesError, contractilePaths, CONTRACTILE_VERBS, checkEdict, EdictError, verbOfFilename, checkVerbDescriptile, VerbDescriptileError, verbOfDescriptile, choraRepoUuid, rootChora, FIXTURE_TODAY, checkEcosystem, EcosystemError, ECOSYSTEM_RELATIONSHIPS, checkState, StateError, STATE_PHASES, MATURITY_LEVELS, checkRsrScorecard, RsrScorecardError, RSR_TIERS, RSR_VERDICTS, checkMeta, MetaError, META_PROJECT_TYPES, ADR_STATUSES, checkAgentic, AgenticError, J19_SETTINGS, checkNeurosym, NeurosymError, SCAN_DEPTHS } from "./deed_lint.js";
 import { generateContractileRegistry as generateRegistry } from "./deed_lint.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -1603,5 +1603,53 @@ describe("agentic fixtures", () => {
   });
   test("--root without a directory is a usage error", () => {
     expect(cli("--agentic", join(FIX_AG, "valid", "minimal", "AGENTIC.deed"), "--root").code).toBe(2);
+  });
+});
+
+const FIX_NS = join(FIX, "neurosym");
+describe("neurosym fixtures", () => {
+  const read = (sub, c) => {
+    const p = join(FIX_NS, sub, c, "NEUROSYM.deed");
+    return [readFileSync(p, "utf8"), p];
+  };
+  test("--neurosym-fixtures passes on the corpus", () => {
+    const r = cli("--neurosym-fixtures", FIX_NS);
+    expect(r.code).toBe(0);
+    expect(r.out).toContain("NEUROSYM FIXTURES OK");
+  });
+  test("the template model reads back its hypatia settings", () => {
+    const r = checkNeurosym(...read("valid", "template-model"), { today: FIXTURE_TODAY });
+    expect(r.scanEnabled).toBe(true);
+    expect(r.scanDepth).toBe("standard");
+    const off = checkNeurosym(...read("valid", "scan-off-quick"), { today: FIXTURE_TODAY });
+    expect(off.scanEnabled).toBe(false);
+    expect(off.scanDepth).toBe("quick");
+  });
+  test("scan depth is the closed set of the ruled mapping row", () => {
+    expect([...SCAN_DEPTHS]).toEqual(["quick", "standard", "deep"]);
+  });
+  test("YD05: (symbolic-rules) holds no rule definition", () => {
+    expect(() => checkNeurosym(...read("invalid", "neurosym-rule-def-bad"), { today: FIXTURE_TODAY })).toThrow(/no rule definition.*\(YD05\)/);
+  });
+  test("J37: (neural-config) holds no member", () => {
+    expect(() => checkNeurosym(...read("invalid", "neural-config-populated"), { today: FIXTURE_TODAY })).toThrow(NeurosymError);
+  });
+  test("J36: the A2ML @profile marker does not translate, as a clause or a field", () => {
+    for (const c of ["profile-clause", "profile-field"]) {
+      expect(() => checkNeurosym(...read("invalid", c), { today: FIXTURE_TODAY })).toThrow(/does not translate \(J36\)/);
+    }
+  });
+  test(":rulesets selects A5 domains and never names a rule", () => {
+    expect(() => checkNeurosym(...read("invalid", "rulesets-rule-id"), { today: FIXTURE_TODAY })).toThrow(/not an A5 rule domain/);
+  });
+  test("YF06: a chora (neurosym …) is warned with --root, and refused with --strict", () => {
+    const dir = join(FIX_NS, "valid", "neurosym-in-chora-lax");
+    const lax = cli("--neurosym", "--root", dir, join(dir, "NEUROSYM.deed"));
+    expect(lax.code).toBe(0);
+    expect(lax.out).toMatch(/WARN .*still carries \(neurosym …\).*\(J35, YF06\)/);
+    expect(cli("--neurosym", "--root", dir, "--strict", join(dir, "NEUROSYM.deed")).code).toBe(1);
+  });
+  test("another descriptile is outside the profile", () => {
+    expect(checkNeurosym(read("valid", "minimal")[0], "AGENTIC.deed")).toBeNull();
   });
 });

@@ -26,7 +26,7 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import apg from "apg-js";
-import { checkAgentic, checkEcosystem, checkMeta, checkRsrScorecard, checkState, checkVerbDescriptile, choraRepoUuid, edictRuleIdsAt, FIXTURE_TODAY, LintError, rootChora, validate, verbOfDescriptile } from "../../1-formats/deed/tools/deed_lint.js";
+import { checkAgentic, checkEcosystem, checkNeurosym, checkMeta, checkRsrScorecard, checkState, checkVerbDescriptile, choraRepoUuid, edictRuleIdsAt, FIXTURE_TODAY, LintError, rootChora, validate, verbOfDescriptile } from "../../1-formats/deed/tools/deed_lint.js";
 
 const { apgApi, apgLib } = apg;
 const ROOT = resolve(import.meta.dir, "../..");
@@ -76,6 +76,7 @@ function compileGrammar() {
       readFileSync(join(ABNF, "clauses/state.abnf"), "utf8") + "\n" +
       readFileSync(join(ABNF, "clauses/meta.abnf"), "utf8") + "\n" +
       readFileSync(join(ABNF, "clauses/agentic.abnf"), "utf8") + "\n" +
+      readFileSync(join(ABNF, "clauses/neurosym.abnf"), "utf8") + "\n" +
       readFileSync(join(ABNF, "clauses/rsr-scorecard.abnf"), "utf8")).replace(/[^\x00-\x7f]/g, "?") +
     "\nSP = %x20\nDQUOTE = %x22\nALPHA = %x41-5A / %x61-7A\nDIGIT = %x30-39\n" +
     "VCHAR = %x21-7E\nCR = %x0D\nLF = %x0A\nCRLF = CR LF\n";
@@ -607,6 +608,53 @@ for (const { c, text } of edictCases("valid")) {
     } else if (semanticOnly.includes(k.c)) {
       if (!grammarOk(k.text)) fail("agentic.abnf refuses a field or clause of a case listed as semantic only", k.c);
     } else fail("agentic invalid fixture is in neither list", k.c);
+  }
+}
+
+// NEUROSYM.deed (A7 7.2, J35 to J37, YD05, YF06; clauses/neurosym.abnf). Laid
+// out as AGENTIC.deed: each top-level NEUROSYM field parses as neurosym-field
+// and each clause as its rule; every invalid case is a grammar refusal or
+// semantic only.
+{
+  const NS_FIELDS = new Set(["version", "last-updated", "rulesets"]);
+  const CLAUSE_RULES = { hypatia: "ns-hypatia", "neural-config": "ns-neural", "symbolic-rules": "ns-symbolic" };
+  const fieldsOf = (t) => topLevelFields(t, NS_FIELDS);
+  const clausesOf = (t) => Object.entries(CLAUSE_RULES).flatMap(([n, rule]) => allClauses(t, n).map((c) => [rule, c]));
+  const cases = (sub) => readdirSync(join(FIXTURES, "neurosym", sub)).sort().map((c) => {
+    const dir = join(FIXTURES, "neurosym", sub, c);
+    return { c, dir, file: join(dir, "NEUROSYM.deed"), text: readFileSync(join(dir, "NEUROSYM.deed"), "utf8") };
+  });
+  const profile = ({ dir, file, text }) => {
+    try {
+      const ch = rootChora(dir);
+      const strict = readdirSync(dir).includes("STRICT");
+      return checkNeurosym(text, file, { repoUuid: ch && ch.uuid, choraClauses: ch && ch.clauses, strict, today: FIXTURE_TODAY }) !== null;
+    } catch (e) {
+      if (!(e instanceof LintError)) throw e;
+      return false;
+    }
+  };
+  const grammarOk = (t) => fieldsOf(t).every((f) => grammarAccepts(grammar, "neurosym-field", f)) && clausesOf(t).every(([r, c]) => grammarAccepts(grammar, r, c));
+  for (const k of cases("valid")) {
+    if (!grammarAccepts(grammar, "deed", k.text)) fail("neurosym valid fixture rejected by deed.abnf", k.c);
+    if (!profile(k)) fail("neurosym valid fixture rejected by deed_lint.js --neurosym", k.c);
+    for (const f of fieldsOf(k.text)) if (!grammarAccepts(grammar, "neurosym-field", f)) fail("neurosym.abnf refuses a valid field", `${k.c}: ${f.slice(0, 60)}`);
+    for (const [r, c] of clausesOf(k.text)) if (!grammarAccepts(grammar, r, c)) fail(`neurosym.abnf refuses a valid clause as ${r}`, `${k.c}: ${c.slice(0, 60)}`);
+  }
+  const grammarRejects = ["hypatia-unknown-member", "last-updated-bad", "neural-config-populated", "neurosym-rule-def-bad",
+    "rulesets-empty", "rulesets-symbols", "scan-depth-string", "scan-depth-unknown", "scan-enabled-string"];
+  const semanticOnly = ["beholding-chora", "clause-constructor", "hypatia-config-name", "hypatia-missing-member", "hypatia-twice",
+    "missing-affirmed", "missing-hypatia", "neural-config-twice", "neurosym-clause", "neurosym-in-chora-strict", "of-chora-mismatch",
+    "profile-clause", "profile-field", "report-format-empty", "rule-in-descriptile", "rulesets-duplicate", "rulesets-rule-id",
+    "unknown-clause", "unknown-field", "version-twice"];
+  for (const k of cases("invalid")) {
+    if (!gateVerdict(k.text).ok) fail("neurosym invalid fixture is not a valid deed (YD01)", k.c);
+    if (profile(k)) fail("deed_lint.js --neurosym accepts an invalid fixture", k.c);
+    if (grammarRejects.includes(k.c)) {
+      if (grammarOk(k.text)) fail("neurosym.abnf accepts every field and clause of a case it must refuse", k.c);
+    } else if (semanticOnly.includes(k.c)) {
+      if (!grammarOk(k.text)) fail("neurosym.abnf refuses a field or clause of a case listed as semantic only", k.c);
+    } else fail("neurosym invalid fixture is in neither list", k.c);
   }
 }
 

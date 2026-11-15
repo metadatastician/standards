@@ -1,0 +1,56 @@
+; SPDX-FileCopyrightText: © 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+; SPDX-License-Identifier: MPL-2.0
+; SPDX-License-Identifier: CC-BY-SA-4.0
+;
+; DEED clause profile: NEUROSYM.deed, v1.0.0 (DRAFT)
+; Prose and rationale: docs/estate-reconciliation/A7-contractiles-descriptiles-anchor.adoc
+; sections 7.1 and 7.2 (the NEUROSYM.deed row); rulings J14, J20 and J35 to
+; J37 of 2026-11-15 (the chora's (neurosym …) moves here whole; its A2ML
+; @profile marker does not translate; (neural-config) holds no member until
+; one is ruled). Field source: the ruled table of
+; 1-formats/deed/mappings/agentic-neurosym-playbook-to-repo-deed.adoc
+; (NEUROSYM.a2ml), applied in standards_chora.deed. M3 module order: section 11.
+;
+; A CLAUSE PROFILE, not a new grammar. Every rule below is also a `field` or
+; `clause` of deed.abnf v2.0.0, so NEUROSYM.deed still passes deed_lint
+; unchanged. Rules it borrows: string, symbol, boolean and token-sep are
+; deed.abnf's; date-string and str-list1 are common.abnf's. Requires RFC 7405
+; (%s"..." case-sensitive literals).
+;
+; Where it applies: NEUROSYM.deed (head descriptile-deed, J14), at the top
+; level of the form. (hypatia …) is required; every other member is optional.
+; SEMANTIC (validator-enforced, deed_lint.js --neurosym):
+;   * the descriptile header, as for every descriptile (J20, J28, J4, YD06);
+;   * each neurosym-field at most once, and at most one of each clause;
+;   * no (rule …) (YF02), and no rule definition anywhere (YD05);
+;   * with the chora deed read alongside, a chora (neurosym …) is warned, and
+;     refused in strict mode (J35, YF06).
+
+neurosym-field  = ( %s":version"      token-sep string )
+                / ( %s":last-updated" token-sep date-string )
+                / ( %s":rulesets"     token-sep str-list1 )
+                ; :version and :last-updated come from the chora's
+                ; (neurosym …) (J35). :rulesets selects rules from the A5
+                ; registry: each entry is an A5 rule domain (A5 3.1, `domain`,
+                ; such as "hypatia" or "rsr"), never a rule definition (YD05).
+                ; SEMANTIC: the strings are not empty, and each :rulesets
+                ; entry matches the A5 domain form, once.
+
+ns-hypatia      = "(" %s"hypatia" 1*(token-sep hypatia-member) [token-sep] ")"
+hypatia-member  = ( %s":scan-enabled"  token-sep boolean )
+                / ( %s":scan-depth"    token-sep scan-depth )
+                / ( %s":report-format" token-sep string )
+scan-depth      = %s"quick" / %s"standard" / %s"deep"
+                ; The mapping's ruled row: [hypatia-config] becomes
+                ; (hypatia …), and scan-depth is a SYMBOL from a closed set
+                ; of three. SEMANTIC: all three members, each exactly once.
+
+ns-neural       = "(" %s"neural-config" ")"
+                ; J37: no member is defined until one is ruled, so the clause
+                ; is empty or absent. A populated [neural-config] fails closed
+                ; in the mapping too.
+
+ns-symbolic     = "(" %s"symbolic-rules" ")"
+                ; YD05: rules live in the A5 registry, which :rulesets selects
+                ; from; this clause holds no rule definition, so it is empty
+                ; or absent.
