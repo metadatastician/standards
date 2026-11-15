@@ -304,10 +304,16 @@ kill_mutant envpin_value_escape_literal 's@if \(c == "\\""\) val = unesc\(val\)@
 # Twelfth round: a job named matrix is not matrix data, and block scalars written as an
 # explicit key's value or on the line after an empty `key:` are skipped.
 kill_mutant envpin_matrix_job_name 's@ && k > 1 && knm\[k - 1\] == "strategy"@@' "FAIL envpin-rows"
-kill_mutant envpin_explicit_value_read 's@if \(bq ~ /\^:\[\[:space:\]\]\+\[\|>\]\[-\+0-9\]\*\$/\) \{ skip = n0; next \}@@' "FAIL envpin-explicit-block"
+kill_mutant envpin_explicit_value_read 's@if \(bq ~ /\^:\[\[:space:\]\]\+/\) \{ eb = bq;@if (0) { eb = bq;@' "FAIL envpin-explicit-block"
 kill_mutant envpin_nextline_indicator_read 's@if \(n == n0 && bq ~ /\^\[\|>\]\[-\+0-9\]\*\$/ && top > 0 && ind\[top\] < n\) \{ skip = ind\[top\]; next \}@@' "FAIL envpin-rows"
 # Thirteenth round: an empty KEY: completed by an indented node on the next line.
 kill_mutant envpin_empty_value_nextline 's@\} else if \(val == "" && !bad && c != "\\047" && c != "\\""\) \{@} else if (0) {@' "FAIL envpin-rows"
+# Fourteenth round: \U escapes, a flow value compared in full, node properties after an explicit
+# key's colon, alias keys said aloud, and a quote right after `?` inside a flow collection.
+kill_mutant envpin_big_u_escape 's@ \|\| ch == "U"@@' "FAIL envpin-rows"
+kill_mutant envpin_explicit_props_kept 's@eb = props\(eb\); @@' "FAIL envpin-explicit-props"
+kill_mutant envpin_alias_key_silent 's@if \(!awarn\) \{ awarn = 1; outr@if (0) { awarn = 1; outr@' "FAIL envpin-alias-key"
+kill_mutant envpin_flow_question_boundary 's@\[\[:space:\]\{,:\[\?\]@[[:space:]{,:[]@' "FAIL envpin-rows"
 
 # --- 3. fetch_workflows fails CLOSED -----------------------------------------
 # A rate-limited repo used to come back as "no workflows": fetch_workflows
@@ -877,6 +883,7 @@ case_main_content_refresh_envpin() {
     "main|release|3|a branch name that changed"
     "\${{ inputs.a }}|\${{ inputs.b }}|3|an expression that changed"
     "${c1}|${c2}|3|two commits that share their first 12 hex"
+    "[main]|[release]|3|a flow value that changed"
     "main|main|0|an unchanged value"
   )
   for pair in "${pairs[@]}"; do
@@ -1552,6 +1559,7 @@ list_mutant content_fail_stops_pin_census 's@^      log "ERROR: \$\{content_fail
 list_mutant content_manifest_unpinned 's@\?ref=\$\{PROVEN_SHA\}@@' case_main_content
 list_mutant content_row_dropped 's@cst=\$\(content_state "\$wf" "\$PROVEN_MANIFEST"\)@cst=""@' case_main_content
 list_mutant content_row_writes 's@\[ -n "\$cst" \] \&\& printf@[ -n "$cst" ] \&\& changed+=("$base"); [ -n "$cst" ] \&\& printf@' case_main_content_fix
+list_mutant envpin_flow_value_marker 's@"\(flow\) " rest@"(flow)"@' case_main_content_refresh_envpin
 list_mutant envpin_refresh_value_dropped 's@a\[1\], st, \$3@a[1], st, "-"@' case_main_content_refresh_envpin
 list_mutant envpin_refresh_move_silent 's@\[ "\$epb" = "\$epa" \] \|\|@true ||@' case_main_content_refresh_envpin
 # A stamped copy in the current layout (stamp on line 2) is still held by --fix:

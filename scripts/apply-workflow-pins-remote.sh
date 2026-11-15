@@ -89,6 +89,8 @@
 # scalar (folded), so it is reported ENV-PIN-UNJUDGED ("value continues on the next
 # line"), never FRESH or BEHIND. YAML explicit mapping keys (`? key`) are NOT parsed: one
 # ENV-PIN-UNJUDGED row, with `(explicit key)` in place of a name, says so for the file.
+# An alias key (`*pin: value`) is not resolved: one ENV-PIN-UNJUDGED row, `(alias key)` in place of a name,
+# says so for the file. `\UXXXXXXXX` escapes are decoded like `\x` and `\u`.
 # A key under `strategy: matrix:` is matrix data (a job that is merely named `matrix` is not), not an environment map, and gets no row. A
 # double-quoted pin value is decoded (\xHH, \uHHHH in ASCII, \\ \" \/) before it is judged.
 # An empty `KEY:` whose value is an indented node on the next line is reported UNJUDGED ("value is on the
@@ -518,8 +520,8 @@ env_pin_rows() {
         ch = substr(s, i, 1)
         if (ch != "\\") { o = o ch; continue }
         ch = substr(s, ++i, 1)
-        if (ch == "x" || ch == "u") {
-          h = substr(s, i + 1, (ch == "x") ? 2 : 4); v = hexv(h)
+        if (ch == "x" || ch == "u" || ch == "U") {
+          h = substr(s, i + 1, (ch == "x") ? 2 : (ch == "u") ? 4 : 8); v = hexv(h)
           if (v > 0 && v < 128) o = o sprintf("%c", v); else o = o "?"
           i += length(h)
         }
@@ -543,7 +545,7 @@ env_pin_rows() {
       n = length(line); q = fq; d = 0; prev = " "
       for (i = 1; i <= n; i++) {
         ch = substr(line, i, 1)
-        isb = (prev ~ /[[:space:]{,:[]/)
+        isb = (prev ~ /[[:space:]{,:[?]/)
         if (q != "") {
           if (ch == "\\" && q == "\"") i++
           else if (ch == q) { if (q == "\047" && substr(line, i + 1, 1) == "\047") i++; else q = "" }
@@ -557,7 +559,7 @@ env_pin_rows() {
       fq = q
       return d
     }
-    BEGIN { tgt = tolower(target); top = 0; skip = -1; inq = "" ; flow = 0; fq = ""; pend = ""; xwarn = 0 }
+    BEGIN { tgt = tolower(target); top = 0; skip = -1; inq = "" ; flow = 0; fq = ""; pend = ""; xwarn = 0; awarn = 0 }
     NR == 1 { sub("^\357\273\277", "") }
     { sub(/[[:space:]]+$/, "") }
     inq != "" { if (qclose($0, inq)) inq = ""; next }
@@ -579,12 +581,17 @@ env_pin_rows() {
         if (!xwarn) { xwarn = 1; outr(sprintf("ENV-PIN-UNJUDGED\t(explicit key) L%d YAML explicit mapping keys (? key) are not parsed; env pins in this file may be missed", NR), "(explicit)") }
         next
       }
+      # Alias keys (`*name: value`) are not resolved: say so once, never silently.
+      if (bp ~ /^\*[^[:space:]]+[[:space:]]*:([[:space:]]|$)/) {
+        if (!awarn) { awarn = 1; outr(sprintf("ENV-PIN-UNJUDGED\t(alias key) L%d YAML alias keys (*name:) are not resolved; env pins in this file may be missed", NR), "(alias)") }
+        next
+      }
       # A block scalar as a sequence item (- | or - >): skip its body.
       bq = bp; sub(/[[:space:]]+#.*$/, "", bq)
       if (n > n0 && bq ~ /^[|>][-+0-9]*$/) { skip = n0; next }
       # The value half of an explicit key (`: |`), or an indicator alone on the line after
       # an empty `key:`: the body is text, never keys.
-      if (bq ~ /^:[[:space:]]+[|>][-+0-9]*$/) { skip = n0; next }
+      if (bq ~ /^:[[:space:]]+/) { eb = bq; sub(/^:[[:space:]]+/, "", eb); eb = props(eb); if (eb ~ /^[|>][-+0-9]*$/) { skip = n0; next } }
       if (n == n0 && bq ~ /^[|>][-+0-9]*$/ && top > 0 && ind[top] < n) { skip = ind[top]; next }
       if (c0 == "{" || c0 == "[") { fq = ""; d = depth(bp); if (d > 0) flow = d; else fq = ""; next }
       if ((c0 == "\047" || c0 == "\"") && !qclose(substr(bp, 2), c0)) { inq = c0; next }
@@ -600,7 +607,7 @@ env_pin_rows() {
       top++; ind[top] = n; knm[top] = key
       tracked = (key ~ ("^(" names ")$") && parent == "env" && !inmx)
       if (rest ~ /^[\{\[]/) {
-        if (tracked) outr(sprintf("ENV-PIN-UNJUDGED\t%s L%d value is a flow collection; not judged", key, NR), "(flow)")
+        if (tracked) outr(sprintf("ENV-PIN-UNJUDGED\t%s L%d value is a flow collection; not judged", key, NR), "(flow) " rest)
         fq = ""; d = depth(rest); if (d > 0) flow = d; else fq = ""
         next
       }
@@ -1506,6 +1513,13 @@ JSON
     printf 'env:\n'
     printf '  CANON_REF:\n'
     printf '    %s\n' "$eb"
+    printf 'env:\n'
+    printf '  "\\U00000043ANON_REF": %s\n' "$eb"
+    printf 'env:\n'
+    printf '  STANDARDS_PIN: "%s\\U00000062"\n' "${eb:0:39}"
+    printf 'env: {\n'
+    printf '  ?"OTHER}": x,\n'
+    printf '  CANON_REF: %s }\n' "$eb"
   } > "$d/envpin.yml"
   local ep; ep=$(env_pin_rows "$d/envpin.yml" "$t" | tr '\t' '|')
   local epw="ENV-PIN-FRESH|STANDARDS_PIN L2 ${t:0:8}
@@ -1537,7 +1551,9 @@ ENV-PIN-BEHIND|CANON_REF L90 ${eb:0:8} (target ${t:0:8}); read-only: never re-po
 ENV-PIN-BEHIND|CANON_REF L96 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here
 ENV-PIN-BEHIND|STANDARDS_PIN L102 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here
 ENV-PIN-BEHIND|CANON_REF L110 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here
-ENV-PIN-UNJUDGED|CANON_REF L112 value is on the next line (an indented node); not judged"
+ENV-PIN-UNJUDGED|CANON_REF L112 value is on the next line (an indented node); not judged
+ENV-PIN-BEHIND|CANON_REF L115 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here
+ENV-PIN-BEHIND|STANDARDS_PIN L117 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here"
   if [ "$ep" = "$epw" ]; then echo "  PASS envpin-rows -> $(printf '%s\n' "$ep" | wc -l) row(s)"
   else echo "  FAIL envpin-rows -> got:
 $ep
@@ -1557,6 +1573,13 @@ $epu" >&2; rc=1; fi
   printf 'jobs:\n  ? run\n  : |\n    env:\n      CANON_REF: %s\n' "$eb" > "$d/explicit2.yml"
   if [ "$(env_pin_rows "$d/explicit2.yml" "$t" | tr '\t' '|')" = "ENV-PIN-UNJUDGED|(explicit key) L2 YAML explicit mapping keys (? key) are not parsed; env pins in this file may be missed" ]; then echo "  PASS envpin-explicit-block"
   else echo "  FAIL envpin-explicit-block -> the body of an explicit key's block scalar was read as keys" >&2; rc=1; fi
+  printf 'jobs:\n  ? run\n  : &script |\n    env:\n      CANON_REF: %s\n' "$eb" > "$d/explicit3.yml"
+  if [ "$(env_pin_rows "$d/explicit3.yml" "$t" | tr '\t' '|')" = "ENV-PIN-UNJUDGED|(explicit key) L2 YAML explicit mapping keys (? key) are not parsed; env pins in this file may be missed" ]; then echo "  PASS envpin-explicit-props"
+  else echo "  FAIL envpin-explicit-props -> a block scalar with a node property after an explicit key was read as keys" >&2; rc=1; fi
+  # An alias used as a key is not resolved: that must be said (one row), never silence.
+  printf 'env:\n  OTHER: &pin CANON_REF\n  *pin: %s\n' "$eb" > "$d/alias.yml"
+  if [ "$(env_pin_rows "$d/alias.yml" "$t" | tr '\t' '|')" = "ENV-PIN-UNJUDGED|(alias key) L3 YAML alias keys (*name:) are not resolved; env pins in this file may be missed" ]; then echo "  PASS envpin-alias-key"
+  else echo "  FAIL envpin-alias-key -> an alias key was silently skipped" >&2; rc=1; fi
   # A UTF-8 byte-order mark before the first key must not hide it.
   printf '\357\273\277env:\n  STANDARDS_PIN: %s\n' "$t" > "$d/bom.yml"
   if [ "$(env_pin_rows "$d/bom.yml" "$t" | tr '\t' '|')" = "ENV-PIN-FRESH|STANDARDS_PIN L2 ${t:0:8}" ]; then echo "  PASS envpin-bom"
