@@ -1499,14 +1499,47 @@ jobs:
           else
             echo "No files larger than 1M found."
           fi
-      - name: EditorConfig check
+      - name: EditorConfig check (verified pinned binary)
         id: editorconfig_check
-        uses: editorconfig-checker/action-editorconfig-checker@51f63319f592f97930c73d9c46184d20bd206393 # v3.0.0
-        # advisory-by-design, fails OPEN not closed: formatting hygiene is
-        # reported from the reusable estate bundle; the follow-up step below
-        # emits ::warning:: explicitly when this fails instead of silently
-        # swallowing it. Repos opt into blocking formatter checks locally.
-        # hypatia: allow research_extensions/RE005 -- advisory-by-design, fails OPEN; see comment above.
+        # The previously pinned third-party setup action is NOT from a verified
+        # Marketplace creator, so a selected-actions-only caller rejects the
+        # *entire* reusable workflow at startup, before any governance jobs.
+        # Preserve the actual checker and its advisory result, but remove the
+        # unverified action. SHA256 digests are from upstream release v4.0.1;
+        # no mutable tags, unverified scripts, added token grants or broad
+        # allowlist exceptions. Tested x86_64 artifact digest independently.
+        # hypatia: allow research_extensions/RE005 -- existing advisory policy.
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$RUNNER_OS" != "Linux" ]; then
+            echo "::error::EditorConfig checker requires Linux (got $RUNNER_OS)"
+            exit 2
+          fi
+          case "$RUNNER_ARCH" in
+            X64)
+              asset="editorconfig-checker-linux-amd64.tar.gz"
+              expected="90139c6ed52373c0acfc9deb2a07aa812e5184753afd4bc8252bf44eb4909155"
+              ;;
+            ARM64)
+              asset="editorconfig-checker-linux-arm64.tar.gz"
+              expected="f162c749ade763ed4954de678ebb786c99431b9a615a964c284605e68dbbd3f9"
+              ;;
+            *)
+              echo "::error::Unsupported EditorConfig checker architecture: $RUNNER_ARCH"
+              exit 2
+              ;;
+          esac
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          url="https://github.com/editorconfig-checker/editorconfig-checker/releases/download/v4.0.1/$asset"
+          curl --fail --location --silent --show-error --retry 2 --max-time 60 "$url" -o "$tmp/$asset"
+          printf '%s  %s\n' "$expected" "$tmp/$asset" | sha256sum --check --status
+          tar --extract --gzip --file "$tmp/$asset" --directory "$tmp" --no-same-owner --no-same-permissions editorconfig-checker
+          chmod +x "$tmp/editorconfig-checker"
+          "$tmp/editorconfig-checker"
+        # Existing advisory semantics: failures are surfaced by the next step,
+        # but cannot disable the rest of Governance.
         continue-on-error: true
       - name: EditorConfig check - surface result
         if: steps.editorconfig_check.outcome == 'failure'
