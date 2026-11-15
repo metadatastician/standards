@@ -78,10 +78,16 @@ rc-field        = ( %s":spec-family"      token-sep %s"rhodium-standard-reposito
 rc-status       = %s"draft" / %s"stable"
                 ; Symbols, matched whole: each is followed by token-sep or ")".
 
-rc-semver       = DQUOTE 1*DIGIT "." 1*DIGIT "." 1*DIGIT
-                  [ "-" 1*( ALPHA / DIGIT / "." / "-" ) ] DQUOTE
-                ; Semantic versioning with an optional pre-release, written as
-                ; a string: "2.1.0-draft", "1.0.0".
+rc-semver       = DQUOTE rc-sv-num "." rc-sv-num "." rc-sv-num
+                  [ "-" rc-sv-pre *( "." rc-sv-pre ) ] DQUOTE
+rc-sv-num       = "0" / ( %x31-39 *DIGIT )
+rc-sv-pre       = ( *DIGIT ( ALPHA / "-" ) *( ALPHA / DIGIT / "-" ) )
+                / rc-sv-num
+                ; SemVer 2.0.0 core and pre-release, written as a string:
+                ; "2.1.0-draft", "1.0.0". No leading zeros in a number, and
+                ; no empty pre-release identifier. The alphanumeric form is
+                ; tried first, and each repetition is followed by a class it
+                ; cannot consume, so the rule needs no backtracking.
 
 ; --- [versioning] -------------------------------------------------------
 

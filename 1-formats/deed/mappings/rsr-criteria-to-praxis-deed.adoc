@@ -250,7 +250,7 @@ table shape: all eight are tabled, and so are all 43 key slots. Measured with
 `grep` over the source and cross-checked: every one of the 78 criterion lines
 carries all seven keys exactly once, the 78 ids and 78 names are each unique,
 and every `detect` is `"manual"` (19) or `module/rule` (59). Value census, for
-the acceptance greps: tiers bronze 18, silver 26, gold 30, rhodium 5; gate
+the acceptance greps: tiers bronze 18, silver 26, gold 30, rhodium 4; gate
 `universal` 48; `template_ref = "-"` 22; category weights 12 12 14 14 12 8 6 4
 3 2 1, sum 88.
 
@@ -295,8 +295,11 @@ the acceptance greps: tiers bronze 18, silver 26, gold 30, rhodium 5; gate
   table: a `tier` outside `crit-tier`, a `status` outside `draft stable`, a
   non-integer `weight`, or a `dialect` other than `"a2ml-record"` are refused.
 * **P-3 (round trip).** For each of the 78 criteria, each of the seven values
-  in the deed equals the source value byte for byte (keywords aside), and the
-  counts in §3.1 hold. The translator asserts this before writing.
+  in the deed equals the source value once both are decoded: a string's
+  decoded characters equal the source string's; a SYMBOL (`tier`) equals the
+  characters of the source string it was converted from, after that string
+  was checked against its closed set; an INTEGER equals the source integer.
+  The counts in §3.1 hold too. The translator asserts this before writing.
 * **P-4 (output must parse as DEED and as the profile).**
   `bun 1-formats/deed/tools/deed_lint.js 0-canon/rsr/rsr-criteria-v2_praxis.deed`
   ⇒ `OK`, and the clause parses as `rsr-criteria-clause` of
@@ -328,14 +331,20 @@ the acceptance greps: tiers bronze 18, silver 26, gold 30, rhodium 5; gate
 
 == 6. Worked translation (abridged: 2 of 11 categories, 4 of 78 criteria)
 
-The full text of this example is in the draft folder as
-`rsr-criteria-v2_praxis.deed`. It was hand-written to test this spec and the
-grammar, and is not the translation.
+The block below is the whole example file. Save it as
+`rsr-criteria-v2_praxis.deed` to rerun the results that follow. It was
+hand-written to test this spec and the grammar, and is not the translation.
 
 [source]
 ----
 ;; SPDX-License-Identifier: MPL-2.0
 ;; SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+;;
+;; ILLUSTRATIVE, ABRIDGED: 2 of 11 categories and 4 of 78 criteria, hand-written
+;; to show that the draft mapping spec is complete and that the draft clause
+;; grammar admits its output. It is not the translation; kyX emits that.
+;; Translated from 0-canon/rsr/rsr-criteria-v2.a2ml (sha256 6a5aa885…) under
+;; 1-formats/deed/mappings/rsr-criteria-to-praxis-deed.adoc.
 (praxis-deed
   :schema-version "1.0.0"
   :canonical-name "rsr-criteria-v2"
@@ -351,43 +360,63 @@ grammar, and is not the translation.
     :normative-oracle "hypatia:rsr-conformance"
     (versioning
       :model semver-with-errata
-      :rule-major "A MAJOR bump is an era change: …"     ; verbatim in the file
-      :rule-minor "A MINOR bump MAY ADD criteria …"
-      :rule-patch "A PATCH bump is editorial …"
-      :freeze-mechanism "A released major is frozen by …"
-      :errata "Corrections that do not change criteria semantics …")
+      :rule-major "A MAJOR bump is an era change: it MAY remove or redefine criteria and MAY move a criterion between tiers. Cutting a major freezes the prior major's rsr-criteria as an immutable, hash-pinned artefact under archive/."
+      :rule-minor "A MINOR bump MAY ADD criteria or ADD a capability gate, but MUST NOT make a previously-conforming repo non-conforming at the same tier. Additive only."
+      :rule-patch "A PATCH bump is editorial (wording, detection-rule id corrections, template_ref fixes) with no criteria-set change."
+      :freeze-mechanism "A released major is frozen by pinning this file's byte-hash in .machine_readable/REGISTRY.a2ml (or the spec's own VERSIONS ledger), NOT by a prose 'FROZEN' banner. A freeze guard in CI (see [oracle].freeze-guard) fails any PR that mutates a frozen major's criteria file."
+      :errata "Corrections that do not change criteria semantics are recorded in RSR-SPEC-v2.adoc Appendix E (Errata) and shipped as PATCH bumps.")
     (tiers
       ; Thresholds are inclusive lower bounds.
-      :bronze 75 :silver 90 :gold 100
+      :bronze 75
+      :silver 90
+      :gold 100
       ; Gold + the rhodium-only exemplary criteria (those with :tier rhodium).
       :rhodium 100
-      :scale "X F E D C B A maps onto the readiness-grade scale; …")
-    (scoring :applicable-set "…" :denominator "…" :numerator "…"
-             :partial "…" :na-honesty "…" :report "…")
+      :scale "X F E D C B A maps onto the readiness-grade scale; RSR tiers are the repo-shape projection (Bronze~C, Silver~B, Gold~A, Rhodium~A+).")
+    (scoring
+      :applicable-set "A criterion is APPLICABLE to a repo iff its `gate` is `universal` OR the repo's .machine_readable/rsr-profile.a2ml declares the gating capability (per 0-canon/TEMPLATE-APPLICABILITY-POLICY.adoc). Non-applicable criteria are scored `na` and excluded from the denominator."
+      :denominator "sum of weights of APPLICABLE criteria"
+      :numerator "sum of weights of APPLICABLE criteria whose `detect` returns pass"
+      :partial "A criterion MAY return `partial` (e.g. some but not all files present); partial contributes half its weight and is reported explicitly."
+      :na-honesty "A repo MUST NOT reach a tier by declaring away (via rsr-profile) a capability it actually has. hypatia cross-checks declared capabilities against detected ones (structural_drift) and flags under-declaration as :review."
+      :report "The oracle writes a per-repo scorecard to verisim-data (.machine_readable/scorecards/<repo>.scorecard.a2ml shape) with per-criterion verdicts, the applicable set, and the resulting tier.")
     (oracle
-      :normative "hypatia rule family `rsr-conformance` …"
-      :freeze-guard "hypatia rule `rsr-criteria-freeze`: …"
-      :retired ("rsr-audit.sh (36K bash; no tests, no CI) -> non-normative reference only"
-                "…four more…")
-      :dogfood-gate "CI runs the oracle against rsr-template-repo …")
+      :normative "hypatia rule family `rsr-conformance` (to be implemented; consumes THIS file). hypatia is the estate scanner and already writes scorecards to verisim-data, so it is the natural oracle."
+      :freeze-guard "hypatia rule `rsr-criteria-freeze`: fails any change to a frozen major's rsr-criteria-*.a2ml whose byte-hash no longer matches the registry pin."
+      :retired (
+        "rsr-audit.sh (36K bash; no tests, no CI) -> non-normative reference only"
+        "rsr-check.scm (Guile) -> retired with the .scm era"
+        "rsr-compliance-checklist.k9.ncl -> retired; k9 kennel data is GENERATED from this file if needed"
+        "COMPLIANCE_CHECKLIST.md -> GENERATED from this file, not authored"
+        "rhodium-pipeline rsr-certifier -> product, not the spec's oracle; MAY consume this file but is not normative")
+      :dogfood-gate "CI runs the oracle against rsr-template-repo on every change to either repo and REQUIRES Gold for the applicable set (the template declares the union of capabilities, so its applicable set is near-total). See rsr-template-repo/.github/workflows/dogfood-gate.yml.")
     (category
-      :id 1 :key foundational-infrastructure :name "Foundational Infrastructure" :weight 12
+      :id 1
+      :key foundational-infrastructure
+      :name "Foundational Infrastructure"
+      :weight 12
       (criterion :id "1.1.2" :name "justfile" :desc "Justfile task runner present with real recipes"
                  :tier bronze :gate "universal" :detect "build_system_rules/justfile" :template-ref "Justfile")
       (criterion :id "1.2.1" :name "guix-primary" :desc "Guix manifest (guix.scm) as the reproducible build (Guix only)"
                  :tier silver :gate "reproducible-build" :detect "build_system_rules/guix_primary" :template-ref "build/"))
     (category
-      :id 2 :key documentation-standards :name "Documentation Standards" :weight 12
+      :id 2
+      :key documentation-standards
+      :name "Documentation Standards"
+      :weight 12
       (criterion :id "2.1.4" :name "coc-md" :desc "CODE_OF_CONDUCT.md"
                  :tier silver :gate "universal" :detect "root_hygiene/coc" :template-ref ".github/CODE_OF_CONDUCT.md")
       (criterion :id "2.2.2" :name "wellknown-ext" :desc ".well-known/{consent-required.txt,provenance.json}"
                  :tier gold :gate "web-ui" :detect "manual" :template-ref "-"))
     (weights-check
+      ; Abridged: the full deed's 11 categories sum to 88. This example's two
+      ; sum to 24, so the proposed --rsr-criteria check would refuse it; the
+      ; grammar and the plain gate admit it.
       :sum-declared 88
-      :note "The remaining headroom to 100 is the rhodium-only exemplary criteria …")))
+      :note "The remaining headroom to 100 is the rhodium-only exemplary criteria (gate windows: formal-proofs, succession, provenance chains, spark-ready). A repo with no optional capabilities is scored purely on its applicable universal set.")))
 ----
 
-Results on the full example file (draft folder), 2026-11-14, against
+Results on the example file above, 2026-11-14, against
 `origin/main` `2533b2d`:
 
 * `bun 1-formats/deed/tools/deed_lint.js rsr-criteria-v2_praxis.deed` ⇒
@@ -425,6 +454,11 @@ Nothing below is changed by this spec. The order is the canon's own,
   standards PR while it is open), then every minted repo's pin follows
   (kyx_chora.deed carries two). `tests/workflows/canon_pin_check_test.sh`
   updates its fixture path.
+. **The dogfood gates select their input** (rsr-template-repo, then the
+  copies in minted repos, before the canon releases): `--ssot` names
+  `0-canon/rsr/rsr-criteria-v2_praxis.deed` when the checked-out standards
+  has it, and the A2ML otherwise. Each caller therefore keeps working across
+  the release commit that deletes the A2ML.
 . **The canon releases**, in one standards commit: the deed lands; the A2ML is
   deleted; its ledger row goes; `canon.lock` `[canon.artifacts].criteria`
   takes the deed's `path` and `sha256`; `[canon].version` is bumped (PATCH
@@ -434,8 +468,9 @@ Nothing below is changed by this spec. The order is the canon's own,
   `SCAFFOLD-LIFECYCLE.adoc`, the `gates` and `lifecycle` hashes change too,
   and the spine adopts all three; doing them in a later PATCH keeps this
   release to one slot. Either is legal; the second is smaller.
-. **The dogfood gates repoint `--ssot`** (rsr-template-repo, then the copies
-  in minted repos) to `0-canon/rsr/rsr-criteria-v2_praxis.deed`.
+. **The dogfood gates drop the A2ML branch** (rsr-template-repo, then the
+  copies in minted repos): `--ssot` names
+  `0-canon/rsr/rsr-criteria-v2_praxis.deed` only.
 . **Prose follows** (owner-authored where it is normative): RSR-SPEC-v2 §4,
   §6, §8, Appendix B and the footer name the deed and its grammar instead of
   "the A2ML record dialect" (Q3); `canon.lock`'s WHO READS IT list and the
@@ -473,7 +508,7 @@ body | grep -oE ':detect "manual"' | wc -l                   # ⇒ 19
 body | grep -oE ':template-ref "-"' | wc -l                  # ⇒ 22
 body | grep -oE ':gate "universal"' | wc -l                  # ⇒ 48
 body | grep -oE ':tier (bronze|silver|gold|rhodium)\b' | sort | uniq -c
-                                                             # ⇒ 18 bronze, 5 rhodium, 26 silver, 30 gold
+                                                             # ⇒ 18 bronze, 4 rhodium, 26 silver, 30 gold
                                                              #   (only criteria carry :tier; (tiers) uses :bronze …)
 body | grep -oE ':weight [0-9]+' | awk '{s+=$2} END{print s}'  # ⇒ 88
 body | grep -c ':sum-declared 88'                            # ⇒ 1
@@ -488,7 +523,7 @@ body | grep -o 'template_ref' | wc -l                        # ⇒ 1
 # 7. No live consumer names the dead file (dated records excluded by name).
 grep -rl 'rsr-criteria-v2\.a2ml' --exclude-dir=.git . \
   | grep -vE 'docs/affirmations/|docs/reorg/|9-archive/|3-practice/canon-spine/PROPOSAL|docs/estate-reconciliation/|ULTRAPLAN|rsr-criteria-to-praxis-deed\.adoc'
-# ⇒ empty, once §7 step 5 is done
+# ⇒ empty, once §7 step 6 is done
 ----
 
 ⚠ Greps 5 and 6 are aids, not proofs. The validator (grep 1) and the round
