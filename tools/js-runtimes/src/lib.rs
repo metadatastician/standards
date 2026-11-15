@@ -118,6 +118,53 @@ pub fn has_test_script(bytes: &[u8]) -> bool {
     }
 }
 
+/// The `package.json` fields that declare dependencies a lock would pin.
+pub const DEPENDENCY_FIELDS: [&str; 4] = [
+    "dependencies",
+    "devDependencies",
+    "optionalDependencies",
+    "peerDependencies",
+];
+
+/// Is this `package.json` a zero-dependency package (owner ruling
+/// 2026-11-14, 3-practice/LANGUAGE-POLICY.adoc §1.4)? Such a package needs
+/// no lock: Bun deletes the empty `bun.lock` it would write, and Deno writes
+/// no `deno.lock`.
+///
+/// It is one where each of [`DEPENDENCY_FIELDS`] is absent or an empty
+/// object, a `bundleDependencies` / `bundledDependencies` list is absent,
+/// `false` or empty, and `workspaces` is absent, an empty list or an empty
+/// object (a workspace root resolves its members' dependencies into one
+/// lock). Fail closed: any other value, or a document that does not parse,
+/// is not zero-dependency, so the lock rule applies. A `pnpm-workspace.yaml`
+/// beside the manifest is the caller's to check: this sees only the bytes.
+pub fn is_zero_dependency(bytes: &[u8]) -> bool {
+    let Ok(v) = ijson_jcs::parse_json_bytes(bytes, ijson_jcs::JsonMode::Loose) else {
+        return false;
+    };
+    let Some(obj) = v.as_object() else {
+        return false;
+    };
+    let empty_object = |k: &str| match obj.get(k) {
+        None => true,
+        Some(x) => x.as_object().is_some_and(|o| o.is_empty()),
+    };
+    let empty_list = |k: &str| match obj.get(k) {
+        None => true,
+        Some(x) => x.as_array().is_some_and(|a| a.is_empty()) || x.as_bool() == Some(false),
+    };
+    DEPENDENCY_FIELDS.iter().all(|k| empty_object(k))
+        && empty_list("bundleDependencies")
+        && empty_list("bundledDependencies")
+        && match obj.get("workspaces") {
+            None => true,
+            Some(x) => {
+                x.as_array().is_some_and(|a| a.is_empty())
+                    || x.as_object().is_some_and(|o| o.is_empty())
+            }
+        }
+}
+
 /// The first runtime in preference order for which `available` holds.
 pub fn pick(available: impl Fn(Runtime) -> bool) -> Option<Runtime> {
     ORDER.iter().copied().find(|&r| available(r))
@@ -488,6 +535,39 @@ mod tests {
         assert!(!has_test_script(br#"{"scripts":{"build":"x"}}"#));
         assert!(!has_test_script(br#"{"scripts":{"test":1}}"#));
         assert!(!has_test_script(br#"{}"#));
+    }
+
+    /// A zero-dependency package declares no dependency in any field, no
+    /// bundle list and no workspace; anything else, or anything malformed,
+    /// keeps the lock rule (owner ruling 2026-11-14).
+    #[test]
+    fn zero_dependency_definition() {
+        // Zero-dependency: fields absent, or empty.
+        assert!(is_zero_dependency(br#"{"name":"x"}"#));
+        assert!(is_zero_dependency(
+            br#"{"dependencies":{},"devDependencies":{},"optionalDependencies":{},"peerDependencies":{}}"#
+        ));
+        assert!(is_zero_dependency(
+            br#"{"bundleDependencies":[],"bundledDependencies":false,"workspaces":[]}"#
+        ));
+        assert!(is_zero_dependency(
+            b"{\n  \"name\": \"x\",\n  \"workspaces\": {}\n}\n"
+        ));
+        // Any one dependency field with an entry is a dependency.
+        for f in DEPENDENCY_FIELDS {
+            let doc = format!(r#"{{"{f}":{{"is-number":"7.0.0"}}}}"#);
+            assert!(!is_zero_dependency(doc.as_bytes()), "{f}");
+        }
+        // A bundle list or a workspace keeps the lock rule.
+        assert!(!is_zero_dependency(br#"{"bundleDependencies":["a"]}"#));
+        assert!(!is_zero_dependency(br#"{"bundledDependencies":true}"#));
+        assert!(!is_zero_dependency(br#"{"workspaces":["packages/*"]}"#));
+        assert!(!is_zero_dependency(br#"{"workspaces":{"packages":["a"]}}"#));
+        // Fail closed on a malformed field or document.
+        assert!(!is_zero_dependency(br#"{"dependencies":["is-number"]}"#));
+        assert!(!is_zero_dependency(br#"{"dependencies":null}"#));
+        assert!(!is_zero_dependency(br#"[]"#));
+        assert!(!is_zero_dependency(b"not json"));
     }
 
     /// Only the `[tools]` table of a mise.toml is read for runtimes.

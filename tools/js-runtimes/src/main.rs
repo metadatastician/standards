@@ -17,6 +17,10 @@
 //                                     Containerfile, Guix) provisions Bun, or
 //                                     the best runtime it can
 //
+// A zero-dependency package (no dependency in any field, no bundle list, no
+// workspace; owner ruling 2026-11-14) needs no lock and carries none: regen
+// writes none and removes any left over, and check refuses one that is left.
+//
 // Exit: 0 pass; 1 a finding; 2 cannot run (missing tool, manifest or
 // argument). A gate that cannot look does not report a pass.
 
@@ -26,8 +30,12 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode, Stdio};
 
 use js_runtimes::{
-    canon, find_env_defs, has_test_script, pick, verdict, Canon, Runtime, Verdict, LOCKED, ORDER,
+    canon, find_env_defs, has_test_script, is_zero_dependency, pick, verdict, Canon, Runtime,
+    Verdict, LOCKED, ORDER,
 };
+
+/// The owner ruling that a zero-dependency package needs no lock.
+const ZERO_DEP_RULING: &str = "owner ruling 2026-11-14, 3-practice/LANGUAGE-POLICY.adoc §1.4";
 
 const USAGE: &str = "usage: js-runtimes regen [DIR] | check bun|deno|pnpm [DIR] | pick [DIR] | run SCRIPT [DIR] | provision [DIR]";
 
@@ -125,8 +133,24 @@ fn canonicalise(path: &Path, bytes: &[u8]) -> Result<(), Fail> {
     }
 }
 
+/// A zero-dependency package: the manifest declares no dependency (see
+/// `is_zero_dependency`) and no `pnpm-workspace.yaml` names workspace members.
+fn zero_dependency(dir: &Path, bytes: &[u8]) -> bool {
+    is_zero_dependency(bytes) && !dir.join("pnpm-workspace.yaml").exists()
+}
+
+/// The tracked runtime locks present in `dir`, in preference order.
+fn locks_present(dir: &Path) -> Vec<&'static str> {
+    LOCKED
+        .iter()
+        .filter_map(|r| r.lockfile())
+        .filter(|l| dir.join(l).exists())
+        .collect()
+}
+
 /// The only writer: canonicalises `package.json`, then regenerates each
-/// runtime's lock.
+/// runtime's lock. A zero-dependency package gets no lock: none is written,
+/// and any left over is removed (Bun does the same to its own empty lock).
 fn regen(dir: &Path) -> Result<(), Fail> {
     let (path, bytes) = manifest(dir)?;
     for r in LOCKED {
@@ -138,6 +162,23 @@ fn regen(dir: &Path) -> Result<(), Fail> {
         ));
     }
     canonicalise(&path, &bytes)?;
+    if zero_dependency(dir, &bytes) {
+        let stale = locks_present(dir);
+        for l in &stale {
+            fs::remove_file(dir.join(l))
+                .map_err(|e| cannot(format!("could not remove {l}: {e}")))?;
+        }
+        let removed = if stale.is_empty() {
+            String::new()
+        } else {
+            format!("; removed {}", stale.join(", "))
+        };
+        note(&format!(
+            "{}: package.json (JCS) declares no dependencies, so it needs no lock ({ZERO_DEP_RULING}): wrote none{removed}",
+            dir.display()
+        ));
+        return Ok(());
+    }
     let steps: [(&str, &[&str]); 3] = [
         ("bun", &["bun", "install", "--lockfile-only"]),
         // deno has no lockfile-only mode; it also populates node_modules.
@@ -179,21 +220,37 @@ fn check(rt: Runtime, dir: &Path) -> Result<(), Fail> {
         }
         Canon::Invalid(e) => return Err(finding(format!("package.json is not I-JSON: {e}"))),
     }
-    if !dir.join(lock).is_file() {
-        return Err(finding(format!("{lock} is missing: run js-runtimes regen")));
+    if zero_dependency(dir, &bytes) {
+        // Every leg gives the same verdict: a lock left in a zero-dependency
+        // package is not inert (Bun migrates a lone pnpm-lock.yaml and its
+        // frozen install then refuses), so none may be carried.
+        let stale = locks_present(dir);
+        if !stale.is_empty() {
+            return Err(finding(format!(
+                "package.json declares no dependencies, so it carries no lock ({ZERO_DEP_RULING}), but {} present: run js-runtimes regen (it removes them)",
+                stale.join(", ")
+            )));
+        }
+        note(&format!(
+            "{rt}: package.json declares no dependencies: no lock needed, nothing to install ({ZERO_DEP_RULING})"
+        ));
+    } else {
+        if !dir.join(lock).is_file() {
+            return Err(finding(format!("{lock} is missing: run js-runtimes regen")));
+        }
+        let frozen: &[&str] = match rt {
+            Runtime::Bun => &["bun", "install", "--frozen-lockfile"],
+            Runtime::Deno => &["deno", "install", "--frozen"],
+            Runtime::Pnpm => &["pnpm", "install", "--frozen-lockfile"],
+            Runtime::Npm => unreachable!("npm has no lock"),
+        };
+        if !quiet(dir, frozen)? {
+            return Err(finding(format!(
+                "{rt}: {lock} is stale against package.json (frozen install refused): run js-runtimes regen"
+            )));
+        }
+        note(&format!("{rt} installs frozen from {lock}"));
     }
-    let frozen: &[&str] = match rt {
-        Runtime::Bun => &["bun", "install", "--frozen-lockfile"],
-        Runtime::Deno => &["deno", "install", "--frozen"],
-        Runtime::Pnpm => &["pnpm", "install", "--frozen-lockfile"],
-        Runtime::Npm => unreachable!("npm has no lock"),
-    };
-    if !quiet(dir, frozen)? {
-        return Err(finding(format!(
-            "{rt}: {lock} is stale against package.json (frozen install refused): run js-runtimes regen"
-        )));
-    }
-    note(&format!("{rt} installs frozen from {lock}"));
     if has_test_script(&bytes) {
         let [bin, sub] = rt.run_script();
         if !loud(dir, &[bin, sub, "test"])? {
