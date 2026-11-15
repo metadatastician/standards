@@ -56,5 +56,31 @@ fresh; t_pass tests/a.sh; printf 'exit 0\n' > "$WORK/t/tests/notes.txt"
 expect 0 "non-.sh files are not run as tests"
 said "only the .sh file is discovered" "Discovered 1 test file(s)."
 
+# Sharding: light + heavy must equal all, and a stale heavy entry must fail.
+shard_expect() { # shard_expect <shard> <wanted-exit> <label>
+  local got=0
+  (cd "$WORK/t" && SHELL_TEST_SHARD="$1" bash "$SCRIPT") >"$WORK/out" 2>&1 || got=$?
+  if [ "$got" = "$2" ]; then pass=$((pass+1)); echo "  ok    $3"
+  else fail=$((fail+1)); echo "  FAIL  $3 (wanted exit $2, got $got)"; sed 's/^/        /' "$WORK/out"; fi
+}
+
+fresh; t_pass tests/a.sh; t_pass tests/test_apply_workflow_pins_remote.sh
+shard_expect light 0 "light shard runs the tests outside HEAVY_TESTS"
+said "light shard leaves the heavy test out" "Shard 'light': 1 of 2"
+if grep -qF "test_apply_workflow_pins_remote" "$WORK/out"; then fail=$((fail+1)); echo "  FAIL  light shard ran a heavy test"; else pass=$((pass+1)); echo "  ok    light shard ran no heavy test"; fi
+shard_expect heavy 0 "heavy shard runs the heavy test"
+said "heavy shard selects only the heavy test" "Shard 'heavy': 1 of 2"
+
+fresh; t_pass tests/a.sh
+shard_expect heavy 1 "a heavy entry that does not exist fails closed"
+said "the stale entry is named" "does not exist"
+
+fresh; t_pass tests/a.sh
+shard_expect bogus 2 "an unknown shard is refused"
+
+fresh; t_fail tests/test_apply_workflow_pins_remote.sh; t_pass tests/a.sh
+shard_expect light 0 "a failing heavy test does not fail the light shard"
+shard_expect heavy 1 "a failing heavy test fails the heavy shard"
+
 echo "PASS=$pass FAIL=$fail"
 [ "$fail" -eq 0 ]

@@ -12,6 +12,13 @@
 # The suite is deliberately FAIL-CLOSED: an empty tests/ directory, a
 # non-executable test, or a missing interpreter fails the job rather than
 # reporting a vacuous pass.
+#
+# SHARDS: the suite is split so no single job nears its limit. The mutation
+# test tests/test_apply_workflow_pins_remote.sh runs its mutants one after
+# another and takes longer than the rest of the suite together; it runs alone in
+# `tests-heavy`. `tests` keeps the required context name `Repo self-tests` and
+# fails unless both shards pass, so a shard cannot be skipped or forgotten.
+# What belongs in which shard is HEAVY_TESTS in scripts/run-shell-test-suite.sh.
 
 name: Self Test
 
@@ -23,7 +30,9 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # A newer push replaces an older pull-request run. A run on main is never
+  # cancelled: the push-to-main result is the one that must exist.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -32,7 +41,23 @@ jobs:
   tests:
     name: Repo self-tests
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    needs: [tests-light, tests-heavy]
+    if: ${{ always() }}
+    timeout-minutes: 5
+    steps:
+      - name: Both shards passed
+        env:
+          LIGHT: ${{ needs.tests-light.result }}
+          HEAVY: ${{ needs.tests-heavy.result }}
+        run: |
+          echo "tests-light: $LIGHT"
+          echo "tests-heavy: $HEAVY"
+          [ "$LIGHT" = success ] && [ "$HEAVY" = success ]
+
+  tests-light:
+    name: Repo self-tests (light)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -131,7 +156,9 @@ jobs:
           bash scripts/tests/check-reusable-closure-test.sh
           bash scripts/tests/governance-canary-test.sh
 
-      - name: Run tests/*.sh and scripts/tests/*.sh
+      - name: Run tests/*.sh and scripts/tests/*.sh (light shard)
+        env:
+          SHELL_TEST_SHARD: light
         run: bash scripts/run-shell-test-suite.sh
 
       # The suite above runs with whatever `awk` this image offers, and on
@@ -189,6 +216,75 @@ jobs:
       # SHA, so a PR that edits a helper is not asked to pin to its own
       # unborn merge commit; on main it is HEAD, so the bump owed after such a
       # PR lands shows up immediately instead of rotting silently.
+
+  tests-heavy:
+    name: Repo self-tests (heavy)
+    runs-on: ubuntu-latest
+    # STOPGAP, NOT THE FIX. The mutation test inside this shard runs its
+    # mutants serially and is still the long pole; this limit only stops it
+    # being killed. The real fix is to run its mutants in parallel (see the
+    # tracking issue linked from the PR that introduced this shard).
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # check-lock-gate-pin-freshness.sh compares the lock gate's pinned
+          # commit against the base ref. A depth-1 clone has neither object, and
+          # that guard fails rather than skipping on an unresolvable pin, so the
+          # history is a requirement and not an optimisation.
+          fetch-depth: 0
+
+      # The secret-scanner canary reads YAML with yq (preinstalled on the
+      # runner; YAML-POLICY Y-1) -- no Python. Shell tests use ripgrep
+      # (wave9-session-detritus-test.sh); the Ruby tests need minitest.
+      - name: Install pinned YAML parser
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/lock-tools"
+          curl --proto '=https' --proto-redir '=https' --tlsv1.2 -fsSL --retry 3 https://github.com/mikefarah/yq/releases/download/v4.54.1/yq_linux_amd64 -o "$RUNNER_TEMP/lock-tools/yq"
+          echo "8e34fc298390875de416e6a4afcb8cabeceb25d9aa8506c1a2f9353cf702ea5f  $RUNNER_TEMP/lock-tools/yq" | sha256sum --check
+          chmod u+x "$RUNNER_TEMP/lock-tools/yq"
+          echo "$RUNNER_TEMP/lock-tools" >> "$GITHUB_PATH"
+      - name: Install test dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends ripgrep ruby ruby-minitest
+
+      # scripts/tests/check-ijson-jcs-test.sh needs the real tool; it exits 2
+      # without it. Same pin as ijson-jcs.yml (JSON-POLICY §3).
+      - name: Install ijson-jcs
+        run: cargo install --git https://github.com/hyperpolymath/ijson-jcs --rev 0fdeea716fd558e9807362acf6f8202d56d8d88f --locked ijson-jcs
+
+      # scripts/tests/js-runtimes-test.sh needs all three runtimes; it exits 2
+      # without them. Same pins as js-runtimes-reusable.yml (keep in step).
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: "1.4.2"
+      - name: Set up Deno
+        uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+        with:
+          deno-version: "2.9.6"
+      - name: Set up pnpm (Corepack, hash-pinned)
+        env:
+          PNPM_PIN: pnpm@10.28.0+sha512.05df71d1421f21399e053fde567cea34d446fa02c76571441bfc1c7956e98e363088982d940465fd34480d4d90a0668bc12362f8aa88000a64e83d0b0e47be48
+        run: corepack enable pnpm && corepack install -g "$PNPM_PIN"
+      # scripts/tests/gh-actions-lock-contract-test.sh runs the real binary; it
+      # exits 2 without it. The version must match every `--pin` in this tree
+      # (the test fails when they disagree); the hash is the release asset's.
+      - name: Install gh-actions-lock
+        run: |
+          set -euo pipefail
+          curl -sSfL --proto '=https' --proto-redir '=https' --tlsv1.2 --retry 3 -o "$RUNNER_TEMP/gh-actions-lock" https://github.com/github/gh-actions-lock/releases/download/v0.2.0/linux-amd64
+          echo "79ec84c191667fd935a277e6fd3662cf5d3669cccc9e99998731d8f306f373b6  $RUNNER_TEMP/gh-actions-lock" | sha256sum --check
+          chmod u+x "$RUNNER_TEMP/gh-actions-lock"
+          echo "GH_ACTIONS_LOCK_BIN=$RUNNER_TEMP/gh-actions-lock" >> "$GITHUB_ENV"
+
+      - name: Run the heavy tests
+        env:
+          SHELL_TEST_SHARD: heavy
+        run: bash scripts/run-shell-test-suite.sh
+
 
   hypatia-projection:
     name: Hypatia single-scan projection contract
