@@ -320,12 +320,18 @@ kill_mutant envpin_merge_sequence_silent 's@ \|\| \(key == "<<" && rest ~ /\^\[\
 kill_mutant envpin_folded_line_is_structure 's@pend = ""; skip = pn; next \}@pend = "" }@' "FAIL envpin-rows"
 # Eighteenth round: a colon inside a flow plain scalar, and a decoded line feed.
 kill_mutant envpin_embedded_colon_ends_scalar 's@pl = \(nx == "" \|\| nx ~ /\[\[:space:\],\\\]\}\]/ \|\| prev ~ /\["\\047\]/\) \? 0 : 1@pl = 0@' "FAIL envpin-rows"
+# Nineteenth round: a next-line alias under env, alias keys inside matrix data, a multi-line quoted
+# value of an explicit key, and a refresh that only reorders jobs.
+kill_mutant envpin_nextline_alias_silent 's@bp ~ /\^\\\*\[\^\[:space:\]\]\+\$/ && top > 0@0 \&\& top > 0@' "FAIL envpin-rows"
+kill_mutant envpin_alias_key_in_matrix 's@if \(!awarn && !am\)@if (!awarn)@' "FAIL envpin-rows"
+kill_mutant envpin_explicit_quoted_read 's@if \(eb ~ /\^\["\\047\]/ && !qclose@if (0 \&\& !qclose@' "FAIL envpin-explicit-quoted"
+list_mutant envpin_refresh_order_matters 's@ \| LC_ALL=C sort$@@' case_main_content_refresh_envpin_swap
 kill_mutant envpin_decoded_line_feed 's@if \(v >= 32 && v < 127\) o = o sprintf@if (v > 0 \&\& v < 128) o = o sprintf@' "FAIL envpin-rows"
 # Fourteenth round: \U escapes, a flow value compared in full, node properties after an explicit
 # key's colon, alias keys said aloud, and a quote right after `?` inside a flow collection.
 kill_mutant envpin_big_u_escape 's@ \|\| ch == "U"@@' "FAIL envpin-rows"
 kill_mutant envpin_explicit_props_kept 's@eb = props\(eb\); @@' "FAIL envpin-explicit-props"
-kill_mutant envpin_alias_key_silent 's@if \(!awarn\) \{ awarn = 1; outr@if (0) { awarn = 1; outr@' "FAIL envpin-alias-key"
+kill_mutant envpin_alias_key_silent 's@if \(!awarn && !am\) \{ awarn = 1; outr@if (0) { awarn = 1; outr@' "FAIL envpin-alias-key"
 kill_mutant envpin_flow_question_boundary 's@\[\[:space:\]\{,:\[\?\]@[[:space:]{,:[]@' "FAIL envpin-rows"
 
 # --- 3. fetch_workflows fails CLOSED -----------------------------------------
@@ -926,6 +932,7 @@ case_main_content_refresh_envpin_swap() {
     "a|b|a|b|release|main|main|release|3|exchanged between two jobs"
     "a|b|x|y|main|release|main|release|3|moved under other job names"
     "a|b|a|b|main|release|main|release|0|laid out identically"
+    "a|b|b|a|main|release|release|main|0|reordered job blocks"
   )
   for scen in "${scens[@]}"; do
     IFS='|' read -r oa ob ta tb ova ovb tva tvb want label <<< "$scen"

@@ -613,7 +613,14 @@ env_pin_rows() {
       }
       # Alias keys (`*name: value`) are not resolved: say so once, never silently.
       if (bp ~ /^\*[^[:space:]]+[[:space:]]*:([[:space:]]|$)/) {
-        if (!awarn) { awarn = 1; outr(sprintf("ENV-PIN-UNJUDGED\t(alias key) L%d YAML alias keys (*name:) are not resolved; env pins in this file may be missed", NR), "(alias)") }
+        am = 0; for (k = 1; k <= top; k++) if (ind[k] < n && knm[k] == "matrix" && k > 1 && knm[k - 1] == "strategy") am = 1
+        if (!awarn && !am) { awarn = 1; outr(sprintf("ENV-PIN-UNJUDGED\t(alias key) L%d YAML alias keys (*name:) are not resolved; env pins in this file may be missed", NR), "(alias)") }
+        next
+      }
+      # An alias node on its own line under `env:` (or `<<:`): the env map is the anchored one,
+      # which is not resolved. Say so, never silently.
+      if (bp ~ /^\*[^[:space:]]+$/ && top > 0 && ind[top] < n && (knm[top] == "env" || knm[top] == "<<")) {
+        outr(sprintf("ENV-PIN-UNJUDGED\t(alias env) L%d an env map supplied by an alias (*name) is not resolved; env pins in this file may be missed", NR), "(alias env)")
         next
       }
       # A block scalar as a sequence item (- | or - >): skip its body.
@@ -621,7 +628,8 @@ env_pin_rows() {
       if (n > n0 && bq ~ /^[|>][-+0-9]*$/) { skip = n0; next }
       # The value half of an explicit key (`: |`), or an indicator alone on the line after
       # an empty `key:`: the body is text, never keys.
-      if (bq ~ /^:[[:space:]]+/) { eb = bq; sub(/^:[[:space:]]+/, "", eb); eb = props(eb); if (eb ~ /^[|>][-+0-9]*$/) { skip = n0; next } }
+      if (bq ~ /^:[[:space:]]+/) { eb = bq; sub(/^:[[:space:]]+/, "", eb); eb = props(eb); if (eb ~ /^[|>][-+0-9]*$/) { skip = n0; next }
+        if (eb ~ /^["\047]/ && !qclose(substr(eb, 2), substr(eb, 1, 1))) { inq = substr(eb, 1, 1); next } }
       if (n == n0 && bq ~ /^[|>][-+0-9]*$/ && top > 0 && ind[top] < n) { skip = ind[top]; next }
       if (c0 == "{" || c0 == "[") { fq = ""; fpl = 0; d = depth(bp); if (d > 0) flow = d; else fq = ""; next }
       if ((c0 == "\047" || c0 == "\"") && !qclose(substr(bp, 2), c0)) { inq = c0; next }
@@ -702,15 +710,16 @@ env_pin_rows() {
 }
 
 # env_pin_values <file> <target_sha> — the tracked assignments as sorted
-# `NAME<TAB>STATUS<TAB>PATH<US>VALUE` lines in document order (line numbers dropped, nothing
+# `NAME<TAB>STATUS<TAB>PATH<US>VALUE` lines, sorted (line numbers dropped, nothing
 # abbreviated, the mapping path of each assignment kept), so two copies of a workflow can
-# be compared for what each job pins: exchanging two values between jobs is a change.
+# be compared for what each job pins: exchanging two values between jobs is a change, while
+# merely reordering the jobs is not (each record carries its own path).
 # env_pin_brief shortens such lines for the report only.
 env_pin_values() {
   env_pin_rows "$1" "$2" full | awk -F'\t' '{
     split($2, a, " "); st = $1; sub(/^ENV-PIN-/, "", st)
     printf "%s\t%s\t%s\n", a[1], st, $3
-  }'
+  }' | LC_ALL=C sort
 }
 env_pin_brief() {
   awk -F'\t' 'NF == 0 { next } {
@@ -1593,6 +1602,13 @@ JSON
     printf '  CANON_REF: %s\n' "$eb"
     printf 'env:\n'
     printf '  CANON_REF: "main\\x0arelease"\n'
+    printf 'env:\n'
+    printf '  *pins\n'
+    printf 'strategy:\n'
+    printf '  matrix:\n'
+    printf '    include:\n'
+    printf '      - x: &pin CANON_REF\n'
+    printf '        *pin: %s\n' "$eb"
   } > "$d/envpin.yml"
   local ep; ep=$(env_pin_rows "$d/envpin.yml" "$t" | tr '\t' '|')
   local epw="ENV-PIN-FRESH|STANDARDS_PIN L2 ${t:0:8}
@@ -1635,7 +1651,8 @@ ENV-PIN-BEHIND|CANON_REF L134 ${eb:0:8} (target ${t:0:8}); read-only: never re-p
 ENV-PIN-UNJUDGED|(alias env) L140 an env map supplied by an alias (*name) is not resolved; env pins in this file may be missed
 ENV-PIN-UNJUDGED|(alias env) L142 an env map supplied by an alias (*name) is not resolved; env pins in this file may be missed
 ENV-PIN-BEHIND|CANON_REF L147 ${eb:0:8} (target ${t:0:8}); read-only: never re-pointed here
-ENV-PIN-UNJUDGED|CANON_REF L149 value is not a 40-hex commit: main?release"
+ENV-PIN-UNJUDGED|CANON_REF L149 value is not a 40-hex commit: main?release
+ENV-PIN-UNJUDGED|(alias env) L151 an env map supplied by an alias (*name) is not resolved; env pins in this file may be missed"
   if [ "$ep" = "$epw" ]; then echo "  PASS envpin-rows -> $(printf '%s\n' "$ep" | wc -l) row(s)"
   else echo "  FAIL envpin-rows -> got:
 $ep
@@ -1662,6 +1679,9 @@ $epu" >&2; rc=1; fi
   printf 'env:\n  OTHER: &pin CANON_REF\n  *pin: %s\n' "$eb" > "$d/alias.yml"
   if [ "$(env_pin_rows "$d/alias.yml" "$t" | tr '\t' '|')" = "ENV-PIN-UNJUDGED|(alias key) L3 YAML alias keys (*name:) are not resolved; env pins in this file may be missed" ]; then echo "  PASS envpin-alias-key"
   else echo "  FAIL envpin-alias-key -> an alias key was silently skipped" >&2; rc=1; fi
+  printf 'jobs:\n  ? run\n  : "echo\n    env:\n      CANON_REF: %s"\n' "$eb" > "$d/explicit4.yml"
+  if [ "$(env_pin_rows "$d/explicit4.yml" "$t" | tr '\t' '|')" = "ENV-PIN-UNJUDGED|(explicit key) L2 YAML explicit mapping keys (? key) are not parsed; env pins in this file may be missed" ]; then echo "  PASS envpin-explicit-quoted"
+  else echo "  FAIL envpin-explicit-quoted -> the body of an explicit key's multi-line quoted value was read as keys" >&2; rc=1; fi
   # A UTF-8 byte-order mark before the first key must not hide it.
   printf '\357\273\277env:\n  STANDARDS_PIN: %s\n' "$t" > "$d/bom.yml"
   if [ "$(env_pin_rows "$d/bom.yml" "$t" | tr '\t' '|')" = "ENV-PIN-FRESH|STANDARDS_PIN L2 ${t:0:8}" ]; then echo "  PASS envpin-bom"
