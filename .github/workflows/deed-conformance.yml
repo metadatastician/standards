@@ -145,6 +145,10 @@ jobs:
       - name: neurosym fixtures (DRAFT, A7)
         if: github.repository_id == 1116521501 && steps.bun.outcome == 'success'
         run: bun "$T/deed_lint.js" --neurosym-fixtures "$T/fixtures/neurosym"
+      # (rsr-profile …) (A7 10, J39): one grammar owns the clause's keys; check-rsr-profile.sh fails closed against it.
+      - name: rsr-profile fixtures (DRAFT, A7)
+        if: github.repository_id == 1116521501 && steps.bun.outcome == 'success'
+        run: bun "$T/deed_lint.js" --rsr-profile-fixtures "$T/fixtures/rsr-profile"
       # RSR scorecard (owner ruling 2026-11-14, ratified that day with :assessor and :assessed-at;
       # rsr-scorecard.abnf v0.2.0): gated on its own fixtures. The caller-wide lint below also runs the profile.
       - name: rsr-scorecard fixtures

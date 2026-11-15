@@ -1,0 +1,51 @@
+; SPDX-FileCopyrightText: © 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+; SPDX-License-Identifier: MPL-2.0
+; SPDX-License-Identifier: CC-BY-SA-4.0
+;
+; DEED clause profile: (rsr-profile …) in <repo>_chora.deed, v1.0.0 (DRAFT)
+; Prose and rationale: docs/estate-reconciliation/A7-contractiles-descriptiles-anchor.adoc
+; section 10 (the check-rsr-profile.sh row) and ruling J39 of 2026-11-15 (one
+; grammar owns the clause's keys; scripts/check-rsr-profile.sh and every other
+; reader fail closed against it). Field source: the clause as the owner moved
+; it from .machine_readable/rsr-profile.a2ml (2026-11-05), in
+; rsr-template-repo_chora.deed and standards_chora.deed, and the fields
+; check-rsr-profile.sh reads.
+;
+; A CLAUSE PROFILE, not a new grammar. Every rule below is also a `clause` of
+; deed.abnf v2.0.0, so a chora deed carrying it still passes deed_lint
+; unchanged. Rules it borrows: string, keyword and token-sep are
+; deed.abnf's; str-list is common.abnf's. Requires RFC 7405 (%s"..."
+; case-sensitive literals).
+;
+; Where it applies: the top level of a <repo>_chora.deed (head repo-deed), at
+; most once (check-rsr-profile.sh refuses two). SEMANTIC (validator-enforced,
+; deed_lint.js --rsr-profile):
+;   * :version is present; every field at most once; (notes …) at most once;
+;   * at least one of :capabilities and :preset;
+;   * the strings are not empty; list items are not empty and appear once;
+;   * no other field and no other clause: a reader that meets an unknown key
+;     refuses the clause, never skips it (J39).
+; Whether a capability or preset is known is the gate table's business
+; (0-canon/template-capability-gates.toml), checked by check-rsr-profile.sh.
+
+rsr-profile-clause = "(" %s"rsr-profile" 1*(token-sep rsr-profile-member) [token-sep] ")"
+rsr-profile-member = ( %s":version"          token-sep string )
+                   / ( %s":spec"             token-sep string )
+                   / ( %s":declares-against" token-sep string )
+                   / ( %s":role"             token-sep string )
+                   / ( %s":preset"           token-sep string )
+                   / ( %s":capabilities"     token-sep str-list )
+                   / ( %s":add"              token-sep str-list )
+                   / ( %s":remove"           token-sep str-list )
+                   / rsr-profile-notes
+                   ; :spec names the criteria canon ("rsr-criteria-v2") and
+                   ; :declares-against its version. :role is read by
+                   ; check-rsr-profile.sh ("spine", "canon"); an unknown role
+                   ; gets no carrier exemption there, so it stays a string.
+                   ; Effective capabilities = :capabilities + the :preset's
+                   ; + :add - :remove.
+
+rsr-profile-notes  = "(" %s"notes" *(token-sep keyword token-sep string) [token-sep] ")"
+                   ; Prose only, such as :omitted-rationale. Nothing in it is
+                   ; read as a profile field: a :role inside (notes …) never
+                   ; makes a repo a spine.
