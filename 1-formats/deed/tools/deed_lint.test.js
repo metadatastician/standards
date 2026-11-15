@@ -6,7 +6,7 @@ import { cpSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, writ
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { validate, blankComments, LintError, SELF_TEST_CASES, checkEgress, EgressError, checkAnchor, AnchorError, profileCOfBody, readMustfileChecks, MustfileError, readProofReceipt, ProofReceiptError, checkContractiles, ContractilesError, contractilePaths, CONTRACTILE_VERBS, checkEdict, EdictError, verbOfFilename, checkVerbDescriptile, VerbDescriptileError, verbOfDescriptile, choraRepoUuid, rootChora, FIXTURE_TODAY, checkEcosystem, EcosystemError, ECOSYSTEM_RELATIONSHIPS, checkState, StateError, STATE_PHASES, MATURITY_LEVELS, checkRsrScorecard, RsrScorecardError, RSR_TIERS, RSR_VERDICTS, checkMeta, MetaError, META_PROJECT_TYPES, ADR_STATUSES, checkAgentic, AgenticError, J19_SETTINGS, checkNeurosym, NeurosymError, SCAN_DEPTHS } from "./deed_lint.js";
+import { validate, blankComments, LintError, SELF_TEST_CASES, checkEgress, EgressError, checkAnchor, AnchorError, profileCOfBody, readMustfileChecks, MustfileError, readProofReceipt, ProofReceiptError, checkContractiles, ContractilesError, contractilePaths, CONTRACTILE_VERBS, checkEdict, EdictError, verbOfFilename, checkVerbDescriptile, VerbDescriptileError, verbOfDescriptile, choraRepoUuid, rootChora, FIXTURE_TODAY, checkEcosystem, EcosystemError, ECOSYSTEM_RELATIONSHIPS, checkState, StateError, STATE_PHASES, MATURITY_LEVELS, checkRsrScorecard, RsrScorecardError, RSR_TIERS, RSR_VERDICTS, checkMeta, MetaError, META_PROJECT_TYPES, ADR_STATUSES, checkAgentic, AgenticError, J19_SETTINGS, checkNeurosym, NeurosymError, SCAN_DEPTHS, checkRsrProfile, RsrProfileError, RSR_PROFILE_FIELDS } from "./deed_lint.js";
 import { generateContractileRegistry as generateRegistry } from "./deed_lint.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -1651,5 +1651,42 @@ describe("neurosym fixtures", () => {
   });
   test("another descriptile is outside the profile", () => {
     expect(checkNeurosym(read("valid", "minimal")[0], "AGENTIC.deed")).toBeNull();
+  });
+});
+
+const FIX_RP = join(FIX, "rsr-profile");
+describe("rsr-profile clause (A7 J39)", () => {
+  test("--rsr-profile-fixtures passes on the corpus", () => {
+    const r = cli("--rsr-profile-fixtures", FIX_RP);
+    expect(r.code).toBe(0);
+    expect(r.out).toContain("RSR PROFILE FIXTURES OK");
+  });
+  test("--rsr-profile-keys prints the clause's one key set", () => {
+    const r = cli("--rsr-profile-keys");
+    expect(r.code).toBe(0);
+    expect(r.out.trim().split("\n")).toEqual([...RSR_PROFILE_FIELDS.map((k) => ":" + k), "(notes)"]);
+  });
+  test("the canon's own clause conforms", () => {
+    for (const p of ["standards_chora.deed"]) {
+      const f = join(import.meta.dir, "..", "..", "..", p);
+      expect(checkRsrProfile(readFileSync(f, "utf8"), f)).not.toBeNull();
+    }
+  });
+  test("an unknown key refuses the clause, never skips it", () => {
+    const p = join(FIX_RP, "invalid", "unknown-field_chora.deed");
+    expect(() => checkRsrProfile(readFileSync(p, "utf8"), p)).toThrow(/has no field :description.*J39/);
+  });
+  test("a :role inside (notes …) is prose, not the profile's role", () => {
+    const p = join(FIX_RP, "valid", "notes-role-prose_chora.deed");
+    expect(checkRsrProfile(readFileSync(p, "utf8"), p).role).toBeNull();
+  });
+  test("a deed without the clause is outside the profile", () => {
+    const p = join(FIX, "valid");
+    const f = readdirSync(p).find((n) => n.endsWith("_chora.deed") && !readFileSync(join(p, n), "utf8").includes("(rsr-profile"));
+    expect(checkRsrProfile(readFileSync(join(p, f), "utf8"), join(p, f))).toBeNull();
+  });
+  test("errors are RsrProfileError", () => {
+    const p = join(FIX_RP, "invalid", "profile-twice_chora.deed");
+    expect(() => checkRsrProfile(readFileSync(p, "utf8"), p)).toThrow(RsrProfileError);
   });
 });

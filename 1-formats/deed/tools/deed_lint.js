@@ -56,6 +56,10 @@ Usage: deed_lint.js FILE...     exit 0 iff all files conform
                                               RFC 3339 UTC :assessed-at once each; the score and coverage must be
                                               what the criteria give
        deed_lint.js --rsr-scorecard-fixtures DIR DIR/valid pass the profile, DIR/invalid fail it (both required)
+       deed_lint.js --rsr-profile FILE...     the (rsr-profile …) clause of a <repo>_chora.deed (DRAFT, A7 10, J39):
+                                              known keys only, :version, and :capabilities or :preset
+       deed_lint.js --rsr-profile-keys        print the clause's keys, one per line: the set every reader fails closed on
+       deed_lint.js --rsr-profile-fixtures DIR DIR/valid pass the profile, DIR/invalid fail it (both required)
        deed_lint.js --state FILE... [--root DIR] [--strict]
                                               STATE.deed (DRAFT, A7 7.2, J3, J15); --root checks :of-chora against the
                                               chora deed (YD08) and warns on a chora (status …) or (maturity …), which
@@ -2516,6 +2520,94 @@ function rsrScorecardFiles(files) {
 }
 
 // ---------------------------------------------------------------------------
+// (rsr-profile …) in a <repo>_chora.deed (A7 10, J39; clauses/rsr-profile.abnf).
+// The one owner of the clause's keys: check-rsr-profile.sh and the other
+// readers fail closed against RSR_PROFILE_FIELDS (--rsr-profile-keys).
+
+export class RsrProfileError extends LintError {
+  constructor(msg) {
+    super(msg, null);
+    this.name = "RsrProfileError";
+  }
+
+  toString() {
+    return this.msg;
+  }
+}
+
+/** The clause's fields and their value kinds; (notes …) is its one sub-clause. */
+const RSR_PROFILE_SPEC = {
+  version: "string", spec: "string", "declares-against": "string", role: "string", preset: "string",
+  capabilities: "list", add: "list", remove: "list",
+};
+export const RSR_PROFILE_FIELDS = Object.freeze(Object.keys(RSR_PROFILE_SPEC));
+export const RSR_PROFILE_CLAUSES = Object.freeze(["notes"]);
+
+/**
+ * Check the (rsr-profile …) clause of a repo deed. Returns null when the deed
+ * carries none; otherwise {role, preset, capabilities, add, remove}, or throws
+ * RsrProfileError. An unknown field or clause refuses the clause (J39).
+ */
+export function checkRsrProfile(text, filename = null) {
+  const [head, items] = validate(text, filename);
+  const E = (m) => new RsrProfileError(m);
+  const isProfile = (it) => it[0] === "clause" && it[1] === "rsr-profile";
+  const nested = (list) => list.some((it) => it[0] === "clause" && it[2].some((c) => isProfile(c) || nested([c])));
+  const top = items.filter(isProfile);
+  if (nested(items.filter((it) => !isProfile(it)))) throw E("(rsr-profile …) sits only at the top level of the repo deed, not inside another clause");
+  if (top.length === 0) return null;
+  if (head !== "repo-deed") throw E(`(rsr-profile …) belongs to a <repo>_chora.deed (repo-deed), not a ${head}`);
+  if (top.length > 1) throw E(`the repo deed carries ${top.length} (rsr-profile …) clauses; it carries one`);
+  const f = new Map();
+  let notes = false;
+  for (const m of top[0][2]) {
+    if (m[0] === "clause") {
+      if (!RSR_PROFILE_CLAUSES.includes(m[1])) throw E(`(rsr-profile …) has no clause (${m[1]} …) (J39: an unknown key refuses the clause)`);
+      if (notes) throw E("(rsr-profile …) carries (notes …) once");
+      notes = true;
+      for (const n of m[2]) {
+        if (n[0] !== "field" || n[2][0] !== "string") throw E("(rsr-profile (notes …)) holds prose only: :<name> \"…\" fields");
+        if (n[3]) throw E(`'!' belongs only on a rule's :id in a contractile-deed, not on (notes :${n[1]})`);
+      }
+      continue;
+    }
+    if (m[3]) throw E(`'!' belongs only on a rule's :id in a contractile-deed, not on (rsr-profile :${m[1]})`);
+    if (!Object.hasOwn(RSR_PROFILE_SPEC, m[1])) throw E(`(rsr-profile …) has no field :${m[1]} (J39: an unknown key refuses the clause)`);
+    if (f.has(m[1])) throw E(`(rsr-profile …) carries :${m[1]} once`);
+    const v = m[2];
+    if (RSR_PROFILE_SPEC[m[1]] === "string") {
+      if (v[0] !== "string" || v[1] === "") throw E(`(rsr-profile :${m[1]}) must be a non-empty string`);
+      f.set(m[1], v[1]);
+    } else {
+      if (v[0] !== "list" || !v[1].every((x) => x[0] === "string" && x[1] !== "")) throw E(`(rsr-profile :${m[1]}) must be a list of non-empty strings`);
+      const xs = v[1].map((x) => x[1]);
+      const dup = xs.find((x, i) => xs.indexOf(x) !== i);
+      if (dup !== undefined) throw E(`(rsr-profile :${m[1]}) names "${dup}" once`);
+      f.set(m[1], xs);
+    }
+  }
+  if (!f.has("version")) throw E("(rsr-profile …) is missing :version");
+  if (!f.has("capabilities") && !f.has("preset")) throw E("(rsr-profile …) declares :capabilities, a :preset, or both");
+  return { role: f.get("role") ?? null, preset: f.get("preset") ?? null, capabilities: f.get("capabilities") ?? [], add: f.get("add") ?? [], remove: f.get("remove") ?? [] };
+}
+
+/** --rsr-profile FILE...: profile-check each repo deed; returns exit code. */
+function rsrProfileFiles(files) {
+  let bad = 0;
+  for (const f of files) {
+    try {
+      const r = checkRsrProfile(readFileSync(f, "utf8"), f);
+      console.log(`OK   ${f} (${r === null ? "no (rsr-profile …)" : `role ${r.role ?? "unset"}${r.preset ? `, preset ${r.preset}` : ""}, ${r.capabilities.length} capabilities`})`);
+    } catch (e) {
+      if (!(e instanceof LintError) && e.code === undefined) throw e;
+      bad += 1;
+      console.log(`FAIL ${f}: ${e instanceof LintError ? e.toString() : e.message}`);
+    }
+  }
+  return bad ? 1 : 0;
+}
+
+// ---------------------------------------------------------------------------
 // ECOSYSTEM.deed (A7 7.2, YD07; clauses/ecosystem.abnf).
 
 export class EcosystemError extends LintError {
@@ -3736,6 +3828,31 @@ function main(argv) {
     return rc;
   }
   if (argv.includes("--contractile-registry")) return registryMain(argv.filter((a) => a !== "--contractile-registry"));
+  if (argv.includes("--rsr-profile-keys")) {
+    for (const k of RSR_PROFILE_FIELDS) console.log(":" + k);
+    for (const c of RSR_PROFILE_CLAUSES) console.log("(" + c + ")");
+    return 0;
+  }
+  if (argv.includes("--rsr-profile-fixtures")) {
+    const d = argv[argv.indexOf("--rsr-profile-fixtures") + 1];
+    if (d === undefined) {
+      console.log("--rsr-profile-fixtures requires a DIR argument");
+      return 2;
+    }
+    const rc = profileFixtures(d, (t, f) => {
+      if (checkRsrProfile(t, f) === null) throw new RsrProfileError("no (rsr-profile …) clause");
+    });
+    console.log("RSR PROFILE FIXTURES " + (rc === 0 ? "OK" : rc === 2 ? "NOT CHECKED" : "FAILED"));
+    return rc;
+  }
+  if (argv.includes("--rsr-profile")) {
+    const files = argv.filter((a) => !a.startsWith("-"));
+    if (files.length === 0) {
+      console.log(DOC);
+      return 2;
+    }
+    return rsrProfileFiles(files);
+  }
   if (argv.includes("--rsr-scorecard-fixtures")) {
     const d = argv[argv.indexOf("--rsr-scorecard-fixtures") + 1];
     if (d === undefined) {

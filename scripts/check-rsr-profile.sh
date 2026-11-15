@@ -6,7 +6,8 @@
 # Policy: ../TEMPLATE-APPLICABILITY-POLICY.adoc
 # Data:   ../.machine_readable/template-capability-gates.toml
 #
-# Reads a target repo's .machine_readable/rsr-profile.a2ml, resolves its
+# Reads a target repo's (rsr-profile …) clause from its <repo>_chora.deed (or,
+# as a legacy fallback, .machine_readable/rsr-profile.a2ml), resolves its
 # effective capability set (preset capabilities + add - remove) against the
 # gate table, and reports gated modules that are:
 #   VESTIGIAL — present but the repo does not declare the gating capability.
@@ -226,6 +227,56 @@ case "$DEED_PARSER" in
   *) echo "ERROR: RSR_DEED_PARSER must be auto, ast or awk (got '$DEED_PARSER')" >&2; exit 2 ;;
 esac
 
+# The (rsr-profile …) keys are owned by one grammar,
+# 1-formats/deed/spec/abnf/clauses/rsr-profile.abnf (A7 J39), and an unknown
+# key refuses the clause rather than being skipped. The AST path asks the
+# module's own checker (deed_lint.js --rsr-profile). The awk path checks this
+# copy, which scripts/tests/check-rsr-profile-test.sh holds equal to
+# `deed_lint.js --rsr-profile-keys`.
+RSR_PROFILE_KEYS=":version :spec :declares-against :role :preset :capabilities :add :remove (notes)"
+# deed_subclauses : on stdin one comment-free clause on a single line, as
+# emitted by deed_clause; prints the head of each clause nested directly in
+# it, one per line. A parenthesis right after a :keyword opens that field's
+# list value, not a clause, and parentheses inside strings are text.
+deed_subclauses() {
+  awk 'BEGIN { dq = sprintf("%c", 34); bs = sprintf("%c", 92) }
+  { s = $0; n = length(s); d = 0; q = 0; kw = 0
+    for (i = 1; i <= n; i++) { c = substr(s, i, 1)
+      if (q) { if (c == bs) i++; else if (c == dq) { q = 0; if (d == 1) kw = 0 } continue }
+      if (c == dq) { q = 1; continue }
+      if (c ~ /[[:space:]]/) continue
+      if (c == "(") { d++
+        if (d == 2) {
+          if (kw) { kw = 0; continue }
+          h = ""; j = i + 1
+          while (j <= n && substr(s, j, 1) !~ /[[:space:]()]/ && substr(s, j, 1) != dq) { h = h substr(s, j, 1); j++ }
+          print h } }
+      else if (c == ")") d--
+      else if (d == 1) {
+        a = ""; while (i <= n && substr(s, i, 1) !~ /[[:space:]()]/ && substr(s, i, 1) != dq) { a = a substr(s, i, 1); i++ }
+        i--; kw = (substr(a, 1, 1) == ":") } }
+    exit }'
+}
+# rsr_profile_closed : refuse the clause on any key outside the module's set.
+rsr_profile_closed() {
+  local out tooldir deed k
+  if [ "$DEED_PARSER" = ast ]; then
+    deed="$(cd "$(dirname "$DEED")" && pwd)/$(basename "$DEED")"
+    tooldir="$(cd "$(dirname "$DEED_LINT")" && pwd)"
+    out="$(cd "$tooldir" && bun "./$(basename "$DEED_LINT")" --rsr-profile "$deed" 2>&1)" || {
+      echo "ERROR: $DEED: $(printf '%s\n' "$out" | sed -n 's/^FAIL [^:]*: //p' | head -1)" >&2; return 2; }
+    return 0
+  fi
+  while IFS= read -r k; do
+    [ -n "$k" ] || continue
+    case " $RSR_PROFILE_KEYS " in *" $k "*) ;; *)
+      echo "ERROR: $DEED: (rsr-profile …) has no ${k#(} key (A7 J39: an unknown key refuses the clause; the set is clauses/rsr-profile.abnf's)" >&2
+      return 2 ;; esac
+  done <<< "$(printf '%s\n' "$_fields" | awk -F '\t' 'NF && $2 != "" { print ":" $2 }'
+              printf '%s\n' "$_clauses" | head -1 | deed_subclauses | awk 'NF { print "(" $0 ")" }')"
+  return 0
+}
+
 DEED=""; DEED_PROFILE=""; DEED_AST=""
 _deeds=()
 # estate_chora.deed is the estate-deed (deed.abnf filename dispatch reserves
@@ -258,6 +309,7 @@ elif [ "${#_deeds[@]}" -eq 1 ]; then
   if [ "${_n:-0}" -gt 1 ]; then
     echo "ERROR: $DEED carries $_n (rsr-profile …) clauses, need exactly 1" >&2; exit 2
   elif [ "${_n:-0}" -eq 1 ]; then
+    rsr_profile_closed || exit 2
     DEED_PROFILE="$_fields"
     [ -n "$DEED_PROFILE" ] || DEED_PROFILE=" "   # a clause with no fields is still a clause
   fi
