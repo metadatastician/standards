@@ -22,8 +22,14 @@ any field not tabulated below (frame fail-closed rule).
 
 == 2. Target form
 
-Clauses `(agentic …)`, `(neurosym …)`, `(playbook …)` on the repo's single
-`<canonical-name>_chora.deed` (same deed as families 1–2).
+AGENTIC translates into `.machine_readable/descriptiles/AGENTIC.deed`, a
+`descriptile-deed` checked by `deed_lint.js --agentic` (A7 7.2, owner ruling
+J33 of 2026-11-14): the members tabled below become its own members, and the
+chora deed keeps no `(agentic …)` (a remaining one is warned for one release,
+then refused in strict mode, A7 YF05). NEUROSYM and PLAYBOOK still translate
+into `(neurosym …)` and `(playbook …)` clauses on the repo's single
+`<canonical-name>_chora.deed` (same deed as families 1–2), until their own A7
+modules land.
 
 == 3. Field tables
 
@@ -36,20 +42,20 @@ Clauses `(agentic …)`, `(neurosym …)`, `(playbook …)` on the repo's single
 | `@profile(id=a2ml/agentic)` etc. | `(profile :id "a2ml/agentic")` as FIRST clause inside the corresponding family clause | verbatim STRING. Kept as a string, not migrated into the BaseRecord `profileDecl` bridge — v0.1 conformance does not parse profileDecl through this surface, and silent re-homings are exactly the drift this campaign is against. Explicit revival decision rides with the typed-core bridge work, not this campaign.
 |===
 
-=== AGENTIC.a2ml → `(agentic …)`
+=== AGENTIC.a2ml → `AGENTIC.deed` (J33)
 
 [cols="2,3,4"]
 |===
 | a2ml surface | deed path | transform
 
-| `[metadata] version` / `last-updated` | `(agentic :version "…" :last-updated "…")` | verbatim STRINGs
-| `[agent-permissions] can-edit-source/tests/docs/config/create-files` | `(agentic (permissions :source #t :tests #t :docs #t :config #t :create-files #t))` | BOOLEANs → `#t`/`#f`
-| `[agent-constraints]` | `(constraints …)` if populated, else slot dropped | fail-closed if any unknown key (see §4)
-| `[maintenance-integrity] fail-closed`, `require-evidence-per-step`, `allow-silent-skip`, `require-rerun-after-fix`, `release-claim-requires-hard-pass` | `(agentic (integrity :fail-closed #t :require-evidence-per-step #t :allow-silent-skip #f :require-rerun-after-fix #t :release-claim-requires-hard-pass #t))` | BOOLEANs → `#t`/`#f` — **including `#f` for `allow-silent-skip`**: the negative must survive verbatim, it is load-bearing security behaviour (a flipped "false" is how silent-skip escapes happen)
-| `[methodology] instructions-dir` (rsr instance) | `(agentic (methodology :instructions-dir ".machine_readable/bot_directives/"))` | verbatim STRING — the bot_directives pointer is real config
-| `… default-mode` | `(agentic (methodology :default-mode hybrid))` | SYMBOL verbatim (no closed set observed; fail-closed on table extension need)
+| `[metadata] version` / `last-updated` | `:version "…"`, `:last-updated "…"` | verbatim STRING; `:last-updated` a real `YYYY-MM-DD` date
+| `[agent-permissions] can-edit-source/tests/docs/config/create-files` | `(permissions :source #t :tests #t :docs #t :config #t :create-files #t)` | BOOLEANs → `#t`/`#f`
+| `[agent-constraints]` | not into `AGENTIC.deed`: a populated constraint is an edict, a `(rule …)` in `Mustfile.deed` (A7 YL3), and `--agentic` refuses a `(constraints …)` clause. Empty → dropped | fail-closed if any unknown key (see §4)
+| `[maintenance-integrity] fail-closed`, `require-evidence-per-step`, `allow-silent-skip`, `require-rerun-after-fix`, `release-claim-requires-hard-pass` | `(integrity :fail-closed #t :require-evidence-per-step #t :allow-silent-skip #f :require-rerun-after-fix #t :release-claim-requires-hard-pass #t)` | BOOLEANs → `#t`/`#f` — **including `#f` for `allow-silent-skip`**: the negative must survive verbatim, it is load-bearing security behaviour (a flipped "false" is how silent-skip escapes happen)
+| `[methodology] instructions-dir` (rsr instance) | `(methodology :instructions-dir ".machine_readable/bot_directives/")` | verbatim STRING — the bot_directives pointer is real config
+| `… default-mode` | `(methodology :default-mode hybrid)` | SYMBOL verbatim (no closed set observed; fail-closed on table extension need)
 | `[automation-hooks]` (block identical to template canon) | see **D4-1** below this table | —
-| `[automation-hooks]` (block DIVERGENT from template canon) — the comment-carried `on-enter`, `on-exit`, `on-commit` lines | `(agentic (hooks :on-enter "…" :on-exit "…" :on-commit "…"))` | verbatim STRINGs, the text after each `on-<event>:` label. **RULED 2026-10-27 (owner, standards#1356 review):** this is the table row D4-1's fail-closed branch resolves to. The first instance is standards itself, whose `on-commit` runs `just validate` where the template's runs `just validate-rsr`. A hook absent from the block is not emitted. An identical block still derives from canon and carries no `(hooks …)` clause.
+| `[automation-hooks]` (block DIVERGENT from template canon) — the comment-carried `on-enter`, `on-exit`, `on-commit` lines | `(hooks :on-enter "…" :on-exit "…" :on-commit "…")` | verbatim STRINGs, the text after each `on-<event>:` label. **RULED 2026-10-27 (owner, standards#1356 review):** this is the table row D4-1's fail-closed branch resolves to. The first instance is standards itself, whose `on-commit` runs `just validate` where the template's runs `just validate-rsr`. A hook absent from the block is not emitted. An identical block still derives from canon and carries no `(hooks …)` clause.
 |===
 
 **D4-1 (decision record): comment-carried constraints are TEMPLATE CANON,
