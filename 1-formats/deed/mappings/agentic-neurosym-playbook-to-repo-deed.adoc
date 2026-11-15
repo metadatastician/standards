@@ -110,10 +110,13 @@ Observed instance: all five sections (`deployment`, `incident-response`,
 
 * **P-9 (profile literal):** each emitted deed's profile string equals the
   source `@profile(id=…)` payload byte-for-byte inside the quotes — the
-  conformance lane greps for exactly one value estate-wide
-  (`a2ml/playbook`) and any second string in that position is a propagation
+  conformance lane checks for exactly one value estate-wide
+  (`a2ml/playbook`, section 5) and any second string in that position is a propagation
   bug, flagged automatically. `a2ml/agentic` and `a2ml/neurosym` are not
-  translated (J34, J36), so they never appear in a deed.
+  translated (J34, J36), so they never appear in a new deed. The check reads
+  the target forms only: a `(profile …)` nested in a chora `(agentic …)` or
+  `(neurosym …)` that YF05 or YF06 still permits for one release is a legacy
+  form, reported by those rules and not counted here.
 * **P-2a (table-closed):** applies per the frame; PLAYBOOK populated
   sections and NEUROSYM rule/config content fail closed for table
   extension rather than translate by guess.
@@ -123,15 +126,53 @@ Observed instance: all five sections (`deployment`, `incident-response`,
 
 == 5. Acceptance greps
 
-* `grep -rln ':allow-silent-skip #f' --include='AGENTIC.deed' --include='*_chora.deed'`
-  returns the same repo count as `grep -rln 'allow-silent-skip = false'` over
-  the old a2ml corpus. Same for `#t` fields — all five integrity axioms
-  count-preserved per repo. The integrity members live in
-  `.machine_readable/descriptiles/AGENTIC.deed` (J33); the `*_chora.deed`
-  pattern counts a repo whose `(agentic …)` is still in its chora during the
-  YF05 window. A repo found in both is a defect, and counts once.
-* `@profile` strings: exactly one distinct `:id` value estate-wide, and no
-  `AGENTIC.deed` or `NEUROSYM.deed` carries one (J34, J36).
+Each check runs over a directory of repo checkouts, `$ESTATE/<repo>/`, and
+reads only each repo's canonical paths: its root `*_chora.deed` and its
+`.machine_readable/descriptiles/` deeds. A recursive search would also count
+fixtures and examples, such as `standards`' own
+`1-formats/deed/tools/fixtures/…/AGENTIC.deed`, as repos.
+
+* *Integrity preserved, per repo.* The number of repos with
+  `:allow-silent-skip #f` in a canonical deed equals the number with
+  `allow-silent-skip = false` in the old a2ml corpus. Same for the `#t`
+  fields: all five integrity axioms are count-preserved per repo.
++
+[source,bash]
+----
+for r in "$ESTATE"/*/; do
+  n=$(grep -l ':allow-silent-skip #f' "$r"*_chora.deed \
+        "$r".machine_readable/descriptiles/AGENTIC.deed 2>/dev/null | wc -l)
+  [ "$n" -ge 1 ] && echo "$r"
+  [ "$n" -ge 2 ] && echo "both forms: $r" >&2
+done | wc -l
+----
++
+The integrity members live in `AGENTIC.deed` (J33). The chora pattern
+counts a repo whose `(agentic …)` is still in its chora during the YF05
+window. Each repo counts once however many of its files match, so a repo
+with both forms cannot hide a repo whose translation is missing. A repo with
+both forms is a defect, and the loop names it on standard error.
+* *Profile strings, target forms only (P-9).* Over every repo, the distinct
+  `:id` values of a `(profile …)` directly inside a chora `(playbook …)` are
+  exactly `a2ml/playbook`. The check reads the deed's validated parse, not
+  its text: a grep cannot tell which clause a `(profile …)` sits in, and a
+  transitioning chora such as `standards_chora.deed` still holds the legacy
+  `(agentic (profile …))` and `(neurosym (profile …))` that YF05 and YF06
+  permit for one release. No `AGENTIC.deed` or `NEUROSYM.deed` carries a
+  profile at all: `--agentic` and `--neurosym` refuse one (J34, J36).
++
+[source,bash]
+----
+for r in "$ESTATE"/*/; do
+  for d in "$r"*_chora.deed; do
+    [ -f "$d" ] || continue
+    bun 1-formats/deed/tools/deed_lint.js --ast-json "$d" | jq -r '
+      .. | arrays | select(.[0] == "clause" and .[1] == "playbook")
+      | .[2][] | select(.[0] == "clause" and .[1] == "profile")
+      | .[2][] | select(.[0] == "field" and .[1] == "id") | .[2][1]'
+  done
+done | sort -u
+----
 *`scan-depth` symbols are exactly from the closed three-set (validator,
   not eyeballs).
 
