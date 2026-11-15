@@ -262,21 +262,49 @@ def esc: tostring | gsub("&"; "&amp;") | gsub("<"; "&lt;") | gsub(">"; "&gt;") |
 def grid_label: "k9-deed L0–L2";
 def badge_url(st): "https://img.shields.io/badge/\(grid_label | @uri)-\(st | word | @uri)-\(st | colour)";
 
+# One category's movement against the grid of the PR's base, graded by this
+# revision's own checker. `base` is {sha, categories: [{id, counts}]} or
+# {sha, error}. No profile, PR or commit gate: both sides ran one toolchain by
+# construction. typecheck and self-test grade the checker, not the tree, so they
+# have no base movement to report. An unreadable or indeterminate side is never
+# graded, and a base that could not be produced says why.
+def delta_base(base):
+  . as $c
+  | if base.error != null then "— base not checkable: \(base.error | esc | .[0:120])"
+    elif ($c.id | IN("typecheck", "selftest")) then "— checker only; same toolchain as base"
+    else (base.categories | map(select(.id == $c.id)) | first) as $b
+    | if $b == null then "— scope changed (no base counterpart)"
+      elif ($b.counts.indeterminate > 0) or ($c.counts.indeterminate > 0) then "— indeterminate"
+      elif $b.counts.not_applicable != $c.counts.not_applicable then "— scope changed"
+      elif ($b.counts.failed - $b.counts.advisory) != ($c.counts.failed - $c.counts.advisory) then
+        (($b.counts.failed - $b.counts.advisory) as $bb | ($c.counts.failed - $c.counts.advisory) as $cb
+         | if $cb < $bb then "↑ improved (\($bb - $cb) fewer blocking failures)"
+           else "↓ regressed (\($cb - $bb) more blocking failures)" end)
+      elif $b.counts.failed != $c.counts.failed then
+        (if $c.counts.failed < $b.counts.failed then "↑ improved (\($b.counts.failed - $c.counts.failed) fewer failures)"
+         else "↓ regressed (\($c.counts.failed - $b.counts.failed) more failures)" end)
+      elif $c.counts.advisory < $b.counts.advisory then "↑ fewer advisories"
+      elif $c.counts.advisory > $b.counts.advisory then "↓ more advisories"
+      elif ($c.counts.warnings // 0) < ($b.counts.warnings // 0) then "↑ fewer warnings"
+      elif ($c.counts.warnings // 0) > ($b.counts.warnings // 0) then "↓ more warnings"
+      else "↔ unchanged" end end;
+
 # Render the input report as Markdown, comparing categories with prev or null.
 # Include at most 20 findings or scope notes per category, truncating escaped
 # ids to 240 characters and reasons to 280, and embed counts for the next
 # baseline.
 def render(prev):
-  . as $r
+  ($ARGS.named.base // null) as $base
+  | . as $r
   | "<!-- verdict-grid:\($r.lane) regenerated on every run -->\n"
   + "![\(grid_label) \($r.state)](\(badge_url($r.state)))\n\n"
   + "\($r.state | state_label) · commit `\($r.sha[0:12] | esc)` · "
   + (if $r.url != "" then "[run \($r.run | esc)](\($r.url))" else "local run" end)
   + (if $r.canon_ref != "" then " · validator metadatastician/standards@`\($r.canon_ref[0:12] | esc)`" else "" end)
   + (if $r.dirty then " · working tree modified" else "" end) + "\n\n"
-  + "| Category | Status | Pass | Fail | Indeterminate | N/A | Since previous revision |\n|---|---|---:|---:|---:|---:|---|\n"
+  + "| Category | Status | Pass | Fail | Indeterminate | N/A | \(if $base != null then "This PR vs its base" else "Since previous revision" end) |\n|---|---|---:|---:|---:|---:|---|\n"
   + ([ $r.categories[]
-       | "| \(.title) | \(.state | state_label) | \(.counts.passed)\(if .counts.warnings > 0 then " (\(.counts.warnings) with warnings)" else "" end) | \(.counts.failed)\(if .counts.advisory > 0 then " (\(.counts.advisory) advisory)" else "" end) | \(.counts.indeterminate) | \(.counts.not_applicable) | \(delta(prev; $r)) |\n" ] | add // "")
+       | "| \(.title) | \(.state | state_label) | \(.counts.passed)\(if .counts.warnings > 0 then " (\(.counts.warnings) with warnings)" else "" end) | \(.counts.failed)\(if .counts.advisory > 0 then " (\(.counts.advisory) advisory)" else "" end) | \(.counts.indeterminate) | \(.counts.not_applicable) | \(if $base != null then delta_base($base) else delta(prev; $r) end) |\n" ] | add // "")
   + ([ $r.categories[]
        | ([.items[] | select(.status != "pass" or .advisory)]) as $f
        | select(($f | length) > 0)
@@ -285,6 +313,7 @@ def render(prev):
          + (if ($f | length) > 20 then "- \(($f | length) - 20) more; see the structured report and logs in the artifact.\n" else "" end)
          + "\n</details>\n" ] | add // "")
   + "\nScope: K9 components L0–L2 against contract v1.0.0 at the named standards commit. L3 signature verification is not certified. coordination.k9 files are graded in their own category against the v1.2 ABNF grammar and its schema rule. Green is limited to this scope. Orange is missing evidence; yellow is grandfathered debt or warnings; grey is an explicit scope exclusion. report.json, badge.json and the validator logs are in the k9-grid artifact on the linked run.\n"
+  + (if $base != null and $base.sha != null then "\nBase: \($base.sha[0:12] | esc) (the PR's merge base, or the commit a push replaced), graded by this revision's checker.\n" else "" end)
   + "\n<!-- k9-baseline:\({schema: $r.schema, profile: $r.profile, pr: $r.pr, sha: $r.sha,
         categories: [$r.categories[] | {id, counts}]} | tojson | @base64) -->\n";
 

@@ -567,7 +567,7 @@ and `hypatia-scan-reusable.yml` therefore request no write permission.
 | Lints the caller's tree.
 | `k9` (called reusable)
 | `contents: read`, `pull-requests: read`
-| Reads the previous grid comment for the delta column; writes nothing.
+| Grades the base tree with its own checker for the delta column ("This PR vs its base"); reads no comment and writes nothing. `pull-requests: read` is no longer used by this lane and may be dropped by callers.
 | `hypatia` (called reusable)
 | `actions: read`, `contents: read`, `security-events: write`
 | Uploads SARIF. A caller may not grant less than the callee declares — the

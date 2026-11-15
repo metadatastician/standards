@@ -82,8 +82,11 @@ blocking one, and a ledger entry the pull request adds exempts nothing unless
 a commit message or the PR body declares it in the exemption ratchet's form
 (`Ratchet-exception: .machine_readable/k9-contract-debt.txt — <why>`); a
 ledger path that names no tracked K9 file is a stale exemption. The
-"since previous revision" column compares only under one profile (renderer,
-validator commit, ledger, lane and the corpus itself). `scripts/tests/k9-grid-test.sh`
+"This PR vs its base" column grades the base tree (the PR's merge base; a push's
+`before`) with the same validator and renderer (`conformance-k9.sh base`), so no
+profile or comment is involved; see docs/VERDICT-GRID-SPEC.adoc, "Comparison". A lane
+that has no base grid falls back to "Since previous revision", which compares only
+under one profile (renderer, validator commit, ledger, lane and the corpus itself). `scripts/tests/k9-grid-test.sh`
 checks them. To reproduce what the lane posts for a consumer:
 
 [source,bash]

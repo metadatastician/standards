@@ -25,7 +25,11 @@
 #                             coordination.k9 files their own grid category; a file the K9
 #                             validator routed to the coordination dialect with no record here
 #                             is indeterminate, never green
-#       --previous FILE       body of the previous grid comment (delta column)
+#       --previous FILE       body of the previous grid comment (delta column; used only
+#                             when neither --base-report nor --base-error is given)
+#       --base-report FILE    report.json of this renderer run on the BASE tree with the same
+#                             checker: the delta column then reads "This PR vs its base"
+#       --base-error TEXT     the base grid could not be produced; the column says why
 #     identity
 #       --lane NAME           grid lane (default: k9)
 #       --sha SHA --run ID --url URL --pr N --repo OWNER/NAME
@@ -49,7 +53,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 JQ_LIB="$SCRIPT_DIR/lib/k9-grid.jq"
 
 # Print the invocation summary to stderr and terminate with status 2.
-usage() { sed -n '5,38p' "$0" >&2; exit 2; }
+usage() { sed -n '5,42p' "$0" >&2; exit 2; }
 
 # A path list file to a JSON array; a missing file is an empty list, and so
 # is a file of comments and blanks (grep's no-match exit is not an error).
@@ -143,7 +147,7 @@ case "$cmd" in
   render)
     out="" results="" expected="" ledger="" growth="" changed="" prev="" lane="k9"
     selftest="" selftest_code="" typecheck="" typecheck_code="" corpus_code="" coord=""
-    base_resolved=true require_files=false sha="" run="local" url="" pr="local" repo="" canon=""
+    base_report="" base_error="" base_resolved=true require_files=false sha="" run="local" url="" pr="local" repo="" canon=""
     while [ $# -gt 0 ]; do
       case "$1" in
         --out) out="$2"; shift 2 ;;
@@ -161,6 +165,8 @@ case "$cmd" in
         --corpus-code) corpus_code="$2"; shift 2 ;;
         --coord-results) coord="$2"; shift 2 ;;
         --previous) prev="$2"; shift 2 ;;
+        --base-report) base_report="$2"; shift 2 ;;
+        --base-error) base_error="$2"; shift 2 ;;
         --lane) lane="$2"; shift 2 ;;
         --sha) sha="$2"; shift 2 ;;
         --run) run="$2"; shift 2 ;;
@@ -177,6 +183,19 @@ case "$cmd" in
 
     previous=null
     [ -n "$prev" ] && previous=$(baseline_of "$prev")
+    # The base grid, when the lane produced one. An error wins, and a report
+    # that cannot be read is an error, never a silent fallback to the old column.
+    base=null
+    if [ -n "$base_error" ]; then
+      base=$(jq -n -c --arg e "$base_error" '{error: $e}')
+    elif [ -n "$base_report" ]; then
+      base=$(jq -c 'if type == "object" and (.categories | type) == "array"
+                      and all(.categories[]; . as $c | ($c.id | type) == "string" and ($c.counts | type) == "object"
+                        and all(["passed", "failed", "indeterminate", "not_applicable", "advisory"][]; . as $k
+                          | ($c.counts | has($k)) and ($c.counts[$k] | type) == "number"))
+                    then {sha, categories: [.categories[] | {id, counts}]} else {error: "the base grid report is malformed"} end' "$base_report" 2>/dev/null) \
+        || base='{"error":"the base grid report could not be read"}'
+    fi
 
     # The profile names what produced the grid: this renderer, the standards
     # commit that supplied validator and contract, the ledger, the lane and
@@ -208,7 +227,7 @@ case "$cmd" in
                    generated: $generated, canon_ref: $canon}}' \
       | jq --arg mode build --argjson previous null -f "$JQ_LIB" | canon_json > "$out/report.json"
 
-    jq -r --arg mode render --argjson previous "$previous" -f "$JQ_LIB" "$out/report.json" > "$out/report.md"
+    jq -r --arg mode render --argjson previous "$previous" --argjson base "$base" -f "$JQ_LIB" "$out/report.json" > "$out/report.md"
     jq --arg mode badge --argjson previous null -f "$JQ_LIB" "$out/report.json" | canon_json > "$out/badge.json"
 
     if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then cat "$out/report.md" >> "$GITHUB_STEP_SUMMARY"; fi
