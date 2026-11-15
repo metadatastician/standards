@@ -29,9 +29,11 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  # A newer push replaces an older pull-request run. A run on main is never
-  # cancelled: the push-to-main result is the one that must exist.
+  # Pull requests share one group per ref so a newer push replaces an older run.
+  # Every other run gets its own group (the run id): GitHub also cancels a
+  # PENDING run in a shared group even with cancel-in-progress false, which
+  # would drop a push-to-main result.
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
