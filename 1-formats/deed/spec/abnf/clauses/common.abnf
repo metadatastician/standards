@@ -20,6 +20,9 @@
 str-list        = "(" [token-sep] [string *(token-sep string)] [token-sep] ")"
 str-list1       = "(" [token-sep] string *(token-sep string) [token-sep] ")"
                 ; str-list1 is non-empty.
+symbol-list     = "(" [token-sep] [symbol *(token-sep symbol)] [token-sep] ")"
+                ; Used by meta.abnf (:languages) and agentic.abnf (:tools,
+                ; parties and channels).
 
 ; --- The chora id -------------------------------------------------------
 

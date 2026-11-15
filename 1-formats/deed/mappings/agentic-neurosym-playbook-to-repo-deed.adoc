@@ -22,8 +22,14 @@ any field not tabulated below (frame fail-closed rule).
 
 == 2. Target form
 
-Clauses `(agentic …)`, `(neurosym …)`, `(playbook …)` on the repo's single
-`<canonical-name>_chora.deed` (same deed as families 1–2).
+AGENTIC translates into `.machine_readable/descriptiles/AGENTIC.deed`, a
+`descriptile-deed` checked by `deed_lint.js --agentic` (A7 7.2, owner ruling
+J33 of 2026-11-14): the members tabled below become its own members, and the
+chora deed keeps no `(agentic …)` (a remaining one is warned for one release,
+then refused in strict mode, A7 YF05). NEUROSYM and PLAYBOOK still translate
+into `(neurosym …)` and `(playbook …)` clauses on the repo's single
+`<canonical-name>_chora.deed` (same deed as families 1–2), until their own A7
+modules land.
 
 == 3. Field tables
 
@@ -33,23 +39,24 @@ Clauses `(agentic …)`, `(neurosym …)`, `(playbook …)` on the repo's single
 |===
 | a2ml surface | deed path | transform
 
-| `@profile(id=a2ml/agentic)` etc. | `(profile :id "a2ml/agentic")` as FIRST clause inside the corresponding family clause | verbatim STRING. Kept as a string, not migrated into the BaseRecord `profileDecl` bridge — v0.1 conformance does not parse profileDecl through this surface, and silent re-homings are exactly the drift this campaign is against. Explicit revival decision rides with the typed-core bridge work, not this campaign.
+| `@profile(id=a2ml/neurosym)`, `@profile(id=a2ml/playbook)` | `(profile :id "a2ml/neurosym")` etc. as FIRST clause inside the corresponding family clause | verbatim STRING. Kept as a string, not migrated into the BaseRecord `profileDecl` bridge — v0.1 conformance does not parse profileDecl through this surface, and silent re-homings are exactly the drift this campaign is against. Explicit revival decision rides with the typed-core bridge work, not this campaign.
+| `@profile(id=a2ml/agentic)` | — | Not translated (owner ruling J34, 2026-11-15). `AGENTIC.deed` has no family clause to hold it: its file name and `descriptile-deed` head already name the family, and the marker named only the retired A2ML format. `--agentic` refuses a top-level `(profile …)` as an unknown clause.
 |===
 
-=== AGENTIC.a2ml → `(agentic …)`
+=== AGENTIC.a2ml → `AGENTIC.deed` (J33)
 
 [cols="2,3,4"]
 |===
 | a2ml surface | deed path | transform
 
-| `[metadata] version` / `last-updated` | `(agentic :version "…" :last-updated "…")` | verbatim STRINGs
-| `[agent-permissions] can-edit-source/tests/docs/config/create-files` | `(agentic (permissions :source #t :tests #t :docs #t :config #t :create-files #t))` | BOOLEANs → `#t`/`#f`
-| `[agent-constraints]` | `(constraints …)` if populated, else slot dropped | fail-closed if any unknown key (see §4)
-| `[maintenance-integrity] fail-closed`, `require-evidence-per-step`, `allow-silent-skip`, `require-rerun-after-fix`, `release-claim-requires-hard-pass` | `(agentic (integrity :fail-closed #t :require-evidence-per-step #t :allow-silent-skip #f :require-rerun-after-fix #t :release-claim-requires-hard-pass #t))` | BOOLEANs → `#t`/`#f` — **including `#f` for `allow-silent-skip`**: the negative must survive verbatim, it is load-bearing security behaviour (a flipped "false" is how silent-skip escapes happen)
-| `[methodology] instructions-dir` (rsr instance) | `(agentic (methodology :instructions-dir ".machine_readable/bot_directives/"))` | verbatim STRING — the bot_directives pointer is real config
-| `… default-mode` | `(agentic (methodology :default-mode hybrid))` | SYMBOL verbatim (no closed set observed; fail-closed on table extension need)
+| `[metadata] version` / `last-updated` | `:version "…"`, `:last-updated "…"` | verbatim STRING; `:last-updated` a real `YYYY-MM-DD` date
+| `[agent-permissions] can-edit-source/tests/docs/config/create-files` | `(permissions :source #t :tests #t :docs #t :config #t :create-files #t)` | BOOLEANs → `#t`/`#f`
+| `[agent-constraints]` | not into `AGENTIC.deed`: a populated constraint is an edict, a `(rule …)` in `Mustfile.deed` (A7 YL3), and `--agentic` refuses a `(constraints …)` clause. Empty → dropped | fail-closed if any unknown key (see §4)
+| `[maintenance-integrity] fail-closed`, `require-evidence-per-step`, `allow-silent-skip`, `require-rerun-after-fix`, `release-claim-requires-hard-pass` | `(integrity :fail-closed #t :require-evidence-per-step #t :allow-silent-skip #f :require-rerun-after-fix #t :release-claim-requires-hard-pass #t)` | BOOLEANs → `#t`/`#f` — **including `#f` for `allow-silent-skip`**: the negative must survive verbatim, it is load-bearing security behaviour (a flipped "false" is how silent-skip escapes happen)
+| `[methodology] instructions-dir` (rsr instance) | `(methodology :instructions-dir ".machine_readable/bot_directives/")` | verbatim STRING — the bot_directives pointer is real config
+| `… default-mode` | `(methodology :default-mode hybrid)` | SYMBOL verbatim (no closed set observed; fail-closed on table extension need)
 | `[automation-hooks]` (block identical to template canon) | see **D4-1** below this table | —
-| `[automation-hooks]` (block DIVERGENT from template canon) — the comment-carried `on-enter`, `on-exit`, `on-commit` lines | `(agentic (hooks :on-enter "…" :on-exit "…" :on-commit "…"))` | verbatim STRINGs, the text after each `on-<event>:` label. **RULED 2026-10-27 (owner, standards#1356 review):** this is the table row D4-1's fail-closed branch resolves to. The first instance is standards itself, whose `on-commit` runs `just validate` where the template's runs `just validate-rsr`. A hook absent from the block is not emitted. An identical block still derives from canon and carries no `(hooks …)` clause.
+| `[automation-hooks]` (block DIVERGENT from template canon) — the comment-carried `on-enter`, `on-exit`, `on-commit` lines | `(hooks :on-enter "…" :on-exit "…" :on-commit "…")` | verbatim STRINGs, the text after each `on-<event>:` label. **RULED 2026-10-27 (owner, standards#1356 review):** this is the table row D4-1's fail-closed branch resolves to. The first instance is standards itself, whose `on-commit` runs `just validate` where the template's runs `just validate-rsr`. A hook absent from the block is not emitted. An identical block still derives from canon and carries no `(hooks …)` clause.
 |===
 
 **D4-1 (decision record): comment-carried constraints are TEMPLATE CANON,
@@ -99,9 +106,10 @@ Observed instance: all five sections (`deployment`, `incident-response`,
 
 * **P-9 (profile literal):** each emitted deed's profile string equals the
   source `@profile(id=…)` payload byte-for-byte inside the quotes — the
-  conformance lane greps for exactly three values estate-wide
-  (`a2ml/agentic`, `a2ml/neurosym`, `a2ml/playbook`) and any FOURTH string in
-  that position is a propagation bug, flagged automatically.
+  conformance lane greps for exactly two values estate-wide
+  (`a2ml/neurosym`, `a2ml/playbook`) and any THIRD string in that position is
+  a propagation bug, flagged automatically. `a2ml/agentic` is not translated
+  (J34), so it never appears in a deed.
 * **P-2a (table-closed):** applies per the frame; PLAYBOOK populated
   sections and NEUROSYM rule/config content fail closed for table
   extension rather than translate by guess.
@@ -111,11 +119,15 @@ Observed instance: all five sections (`deployment`, `incident-response`,
 
 == 5. Acceptance greps
 
-* `grep -rn ':allow-silent-skip #f' --include='*_chora.deed'` returns the
-  same repo count as `grep -rln 'allow-silent-skip = false'` over the
-  old a2ml corpus. Same for `#t` fields — all five integrity axioms
-  count-preserved per repo.
-* `@profile` strings: exactly three distinct `:id` values estate-wide.
+* `grep -rln ':allow-silent-skip #f' --include='AGENTIC.deed' --include='*_chora.deed'`
+  returns the same repo count as `grep -rln 'allow-silent-skip = false'` over
+  the old a2ml corpus. Same for `#t` fields — all five integrity axioms
+  count-preserved per repo. The integrity members live in
+  `.machine_readable/descriptiles/AGENTIC.deed` (J33); the `*_chora.deed`
+  pattern counts a repo whose `(agentic …)` is still in its chora during the
+  YF05 window. A repo found in both is a defect, and counts once.
+* `@profile` strings: exactly two distinct `:id` values estate-wide, and no
+  `AGENTIC.deed` carries one (J34).
 *`scan-depth` symbols are exactly from the closed three-set (validator,
   not eyeballs).
 
@@ -163,6 +175,7 @@ refuses the bare form (`fixtures/invalid/inbot-bare-name_chora.deed`).
 | `deny` | `(bot … :deny (<mode> …))` | list of SYMBOLs. Optional. Narrows the suite; deny wins over allow. A `(bot …)` with `:deny` and no `:allow` means everything except those modes.
 | `[config] min-severity` | `(bot … (config :min-severity low))` | SYMBOL verbatim.
 | `[config] timeout-seconds` | `(bot … (config :timeout-seconds 300))` | INTEGER.
+| (new; no legacy key) rhodibot's community-document format | `(bot :name rhodibot (config :community-doc-format md))` | SYMBOL, `adoc` or `md`; absent means `adoc`. rhodibot only. It sets which form of `CONTRIBUTING` and `CODE_OF_CONDUCT` rhodibot names in a suggestion and would create; rhodibot accepts either file that is present, whatever the value. Owner ruling of 2026-11-15 (by selector, relayed by SysArch): "make it toggleable but note in my repos it is almost always adoc - and in any case, bot_directive allows per repo exceptions".
 | (new; no legacy key) the dynamic-mode target | `(bot … (target :build "…" :program "…"))` | optional. Absent means dynamic modes report `not_applicable "no target declared"`. `:program` is a STRING path relative to the repo root and MUST resolve inside it (no leading `/`, no `..` escape, no symlink out). `:build` is a STRING shell command and runs only in an unprivileged job.
 |===
 
