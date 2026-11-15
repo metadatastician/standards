@@ -1,0 +1,110 @@
+; SPDX-FileCopyrightText: © 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+; SPDX-License-Identifier: MPL-2.0
+; SPDX-License-Identifier: CC-BY-SA-4.0
+;
+; DEED clause profile: AGENTIC.deed, v1.0.0 (DRAFT)
+; Prose and rationale: docs/estate-reconciliation/A7-contractiles-descriptiles-anchor.adoc
+; sections 7.1, 7.2 (the AGENTIC.deed row) and 14.2 (J19, the settings
+; interface); rulings J4, J14, J19, J20 and J33 of 2026-11-14 (the chora's
+; (agentic …) moves here whole). Field sources:
+; 1-formats/deed/mappings/agentic-neurosym-playbook-to-repo-deed.adoc and
+; docs/DESCRIPTILE-SPEC.adoc (AGENTIC). M3 module order: section 11.
+;
+; A CLAUSE PROFILE, not a new grammar. Every rule below is also a `field` or
+; `clause` of deed.abnf v2.0.0, so AGENTIC.deed still passes deed_lint
+; unchanged. Rules it borrows: string, symbol, boolean, integer and token-sep
+; are deed.abnf's; date-string and symbol-list are common.abnf's. Requires
+; RFC 7405 (%s"..." case-sensitive literals).
+;
+; Where it applies: AGENTIC.deed (head descriptile-deed, J14), at the top level
+; of the form. Every member is optional. SEMANTIC (validator-enforced,
+; deed_lint.js --agentic):
+;   * the descriptile header, as for every descriptile (J20, J28, J4, YD06);
+;   * each agentic-field at most once, and at most one of each clause;
+;   * no model pin and no language allow or ban list (YD04, YL3), and no
+;     (rule …) (YF02);
+;   * the J19 journal: see ag-relaxation;
+;   * with the chora deed read alongside, a chora (agentic …) is warned, and
+;     refused in strict mode (J33, YF05).
+
+agentic-field   = ( %s":version"          token-sep string )
+                / ( %s":last-updated"     token-sep date-string )
+                / ( %s":tools"            token-sep symbol-list )
+                / ( %s":project-specific" token-sep string )
+                ; :version and :last-updated come from the chora's (agentic …)
+                ; (J33); :tools and :project-specific are A7 7.2's. :tools
+                ; names tool classes, never a model (YD04).
+                ; SEMANTIC: the strings are not empty.
+
+ag-patterns     = "(" %s"patterns" 1*(token-sep pattern-member) [token-sep] ")"
+pattern-member  = ( %s":code-review"   token-sep string )
+                / ( %s":refactoring"   token-sep string )
+                / ( %s":testing"       token-sep string )
+                / ( %s":documentation" token-sep string )
+                ; DESCRIPTILE-SPEC: the per-activity posture.
+
+ag-permissions  = "(" %s"permissions" 1*(token-sep permission-member) [token-sep] ")"
+permission-member = ( %s":source"       token-sep boolean )
+                  / ( %s":tests"        token-sep boolean )
+                  / ( %s":docs"         token-sep boolean )
+                  / ( %s":config"       token-sep boolean )
+                  / ( %s":create-files" token-sep boolean )
+
+ag-integrity    = "(" %s"integrity" 1*(token-sep integrity-member) [token-sep] ")"
+integrity-member = ( %s":fail-closed"                      token-sep boolean )
+                 / ( %s":require-evidence-per-step"        token-sep boolean )
+                 / ( %s":allow-silent-skip"                token-sep boolean )
+                 / ( %s":require-rerun-after-fix"          token-sep boolean )
+                 / ( %s":release-claim-requires-hard-pass" token-sep boolean )
+                 ; Carried verbatim, #f included: a flipped allow-silent-skip
+                 ; is how a silent skip escapes (mapping section 3).
+
+ag-methodology  = "(" %s"methodology" 1*(token-sep methodology-member) [token-sep] ")"
+methodology-member = ( %s":instructions-dir"    token-sep string )
+                   / ( %s":instructions-clause" token-sep string )
+                   / ( %s":default-mode"        token-sep symbol )
+                   ; :instructions-dir is a repo-relative path (the mapping);
+                   ; :instructions-clause names a chora clause (the template:
+                   ; "bot-directives"). SEMANTIC: at most one of the two.
+
+ag-hooks        = "(" %s"hooks" 1*(token-sep hook-member) [token-sep] ")"
+hook-member     = ( %s":on-enter"  token-sep string )
+                / ( %s":on-exit"   token-sep string )
+                / ( %s":on-commit" token-sep string )
+                ; The mapping's ruled row (2026-10-27).
+                ; SEMANTIC (every clause above): each member at most once,
+                ; and the clause is not empty.
+
+ag-settings     = "(" %s"settings" token-sep ag-affirmation *(token-sep ag-relaxation) [token-sep] ")"
+                ; J19 (14.2). The (affirmation …) clause comes first and gives
+                ; the starting policy; each (relaxation …) after it is one
+                ; journal entry.
+ag-affirmation  = "(" %s"affirmation" token-sep %s":may-change" token-sep symbol-list
+                  token-sep %s":report-to" token-sep symbol-list [token-sep] ")"
+                ; Who may change the setting and where a change is reported.
+                ; It never holds the value, which starts as required: a clause
+                ; alone can never relax affirmation (J19). A party is owner,
+                ; agent or a named role; a channel is a symbol.
+ag-relaxation   = "(" %s"relaxation" 1*(token-sep relaxation-member) [token-sep] ")"
+relaxation-member = ( %s":seq"         token-sep integer )
+                  / ( %s":setting"     token-sep ag-setting )
+                  / ( %s":value"       token-sep ( boolean / symbol-list ) )
+                  / ( %s":changed-by"  token-sep symbol )
+                  / ( %s":changed-on"  token-sep date-string )
+                  / ( %s":reported-to" token-sep symbol )
+                  / ( %s":receipt"     token-sep string )
+ag-setting      = %s"affirmation.required" / %s"affirmation.may-change" / %s"affirmation.report-to"
+                ; SEMANTIC (J19): every member exactly once. :value is a
+                ; boolean for affirmation.required and a symbol list for the
+                ; other two. The :seq values run 1, 2, 3 … in order, with no
+                ; gap and no duplicate, or the journal is refused whole. An
+                ; entry is refused when :changed-by is not in :may-change, or
+                ; :reported-to is not in :report-to, as they stood at the last
+                ; accepted state (a change never authorises itself). An
+                ; authorised, reported entry is accepted only when its
+                ; :receipt verifies with the channel; no channel receipt
+                ; interface exists yet, so no entry is accepted and
+                ; affirmation stays required (J4 default). Whether the
+                ; (affirmation …) clause was edited after it was first set is
+                ; checked against the base version (14.2), outside this
+                ; profile.

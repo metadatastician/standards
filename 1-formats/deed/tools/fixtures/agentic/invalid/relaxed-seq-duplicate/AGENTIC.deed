@@ -1,0 +1,9 @@
+;; SPDX-License-Identifier: CC-BY-SA-4.0
+(descriptile-deed
+  :schema-version "1.0.0"
+  :canonical-name "example-game"
+  :of-chora #uuid"00000000-0000-8000-8000-0000000000a1"
+  :affirmed "2026-11-14" :affirmed-by agent
+  (settings (affirmation :may-change (owner) :report-to (feedback-o-tron))
+    (relaxation :seq 1 :setting affirmation.required :value #f :changed-by owner :changed-on "2026-11-14" :reported-to feedback-o-tron :receipt "rcpt-1")
+    (relaxation :seq 1 :setting affirmation.required :value #t :changed-by owner :changed-on "2026-11-14" :reported-to feedback-o-tron :receipt "rcpt-1")))
