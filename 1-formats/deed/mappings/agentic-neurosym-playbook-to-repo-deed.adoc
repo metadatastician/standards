@@ -88,7 +88,7 @@ its own table rows.
 | `[metadata] version` / `last-updated` | `:version "…"`, `:last-updated "…"` | verbatim STRINGs; `:last-updated` a real `YYYY-MM-DD` date
 | `[hypatia-config] scan-enabled` | `(hypatia :scan-enabled #t)` | BOOLEAN → `#t`/`#f`
 | `… scan-depth` | `(hypatia :scan-depth standard)` | enum → SYMBOL; closed set `quick standard deep`
-| `… report-format` | `(hypatia :report-format "logtalk")` | verbatim STRING. `(hypatia …)` is required in `NEUROSYM.deed`, with all three members (A7 7.2).
+| `… report-format` | `(hypatia :report-format "json")` | STRING from the closed set `json text github sarif`, the report formats Hypatia emits; `json` is canonical. A value in the set is carried verbatim. *Migration rule:* two source values become `"json"` and are never carried across: `"logtalk"`, a retired format, and `"assail"`, the old name for the same JSON (panic-attack AssailReport) output. The first went with Hypatia's old rule engine (its ADR-001, 2026-04-14), and carrying such a value verbatim is how it spread to every template and fixture. Any other value outside the set fails closed. `(hypatia …)` is required in `NEUROSYM.deed`, with all three members (A7 7.2).
 | `[symbolic-rules]`, `[neural-config]` | populated → fail-closed pending table rows; unpopulated → section dropped | —. `NEUROSYM.deed` holds no rule definition (YD05) and no `(neural-config)` member (J37); a rule selection is `:rulesets`, a list of A5 rule domains, which no source section carries.
 |===
 
@@ -173,8 +173,11 @@ for r in "$ESTATE"/*/; do
   done
 done | sort -u
 ----
-*`scan-depth` symbols are exactly from the closed three-set (validator,
+* `scan-depth` symbols are exactly from the closed three-set (validator,
   not eyeballs).
+* `:report-format` strings are exactly from the closed four-set `json text
+  github sarif` (validator: `deed_lint.js --neurosym` refuses any other
+  value, so no translated deed carries a retired format).
 
 == 6. Per-bot directive files → `(bot-directives …)`
 
