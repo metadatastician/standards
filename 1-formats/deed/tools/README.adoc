@@ -469,8 +469,10 @@ rules it adds to the grammar:
 * the descriptile header, as for the other descriptiles (J20, J28, J4, YD06);
 * `(hypatia :scan-enabled :scan-depth :report-format)` is required, once, with
   all three members: `:scan-enabled` a boolean, `:scan-depth` one of `quick`,
-  `standard` and `deep` as a symbol, `:report-format` a non-empty string (the
-  mapping's ruled row; the source's `[hypatia-config]` is this clause);
+  `standard` and `deep` as a symbol, `:report-format` one of `"json"`,
+  `"text"`, `"github"` and `"sarif"` as a string, Hypatia's report formats
+  with `"json"` canonical (the mapping's ruled row; the source's
+  `[hypatia-config]` is this clause);
 * `:version`, `:last-updated` (a real date) and `:rulesets`, each at most once.
   `:rulesets` is a non-empty list of A5 rule domains as strings (A5 3.1, such
   as `"hypatia"`), each once: it selects from the A5 registry by domain only
