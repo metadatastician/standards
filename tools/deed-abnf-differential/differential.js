@@ -684,10 +684,11 @@ for (const { c, text } of edictCases("valid")) {
     for (const [r, c] of clausesOf(k.text)) if (!grammarAccepts(grammar, r, c)) fail(`neurosym.abnf refuses a valid clause as ${r}`, `${k.c}: ${c.slice(0, 60)}`);
   }
   const grammarRejects = ["hypatia-unknown-member", "last-updated-bad", "neural-config-populated", "neurosym-rule-def-bad",
-    "rulesets-empty", "rulesets-symbols", "scan-depth-string", "scan-depth-unknown", "scan-enabled-string"];
+    "report-format-empty", "report-format-symbol", "report-format-unknown", "rulesets-empty", "rulesets-symbols", "scan-depth-string",
+    "scan-depth-unknown", "scan-enabled-string"];
   const semanticOnly = ["beholding-chora", "clause-constructor", "hypatia-config-name", "hypatia-missing-member", "hypatia-twice",
     "missing-affirmed", "missing-hypatia", "neural-config-twice", "neurosym-clause", "neurosym-in-chora-strict", "of-chora-mismatch",
-    "profile-clause", "profile-field", "report-format-empty", "rule-in-descriptile", "rulesets-duplicate", "rulesets-rule-id",
+    "profile-clause", "profile-field", "rule-in-descriptile", "rulesets-duplicate", "rulesets-rule-id",
     "unknown-clause", "unknown-field", "version-twice"];
   for (const k of cases("invalid")) {
     if (!gateVerdict(k.text).ok) fail("neurosym invalid fixture is not a valid deed (YD01)", k.c);

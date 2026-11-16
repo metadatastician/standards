@@ -2,7 +2,9 @@
 ; SPDX-License-Identifier: MPL-2.0
 ; SPDX-License-Identifier: CC-BY-SA-4.0
 ;
-; DEED clause profile: NEUROSYM.deed, v1.0.0 (DRAFT)
+; DEED clause profile: NEUROSYM.deed, v1.1.0 (DRAFT)
+; v1.1.0 closes :report-format to Hypatia's four formats (json text github
+; sarif), as the mapping's row now does; v1.0.0 took any string.
 ; Prose and rationale: docs/estate-reconciliation/A7-contractiles-descriptiles-anchor.adoc
 ; sections 7.1 and 7.2 (the NEUROSYM.deed row); rulings J14, J20 and J35 to
 ; J38 of 2026-11-15 (the chora's (neurosym …) moves here whole; its A2ML
@@ -43,11 +45,18 @@ neurosym-field  = ( %s":version"      token-sep string )
 ns-hypatia      = "(" %s"hypatia" 1*(token-sep hypatia-member) [token-sep] ")"
 hypatia-member  = ( %s":scan-enabled"  token-sep boolean )
                 / ( %s":scan-depth"    token-sep scan-depth )
-                / ( %s":report-format" token-sep string )
+                / ( %s":report-format" token-sep report-format )
 scan-depth      = %s"quick" / %s"standard" / %s"deep"
                 ; The mapping's ruled row: [hypatia-config] becomes
                 ; (hypatia …), and scan-depth is a SYMBOL from a closed set
                 ; of three. SEMANTIC: all three members, each exactly once.
+report-format   = DQUOTE ( %s"json" / %s"text" / %s"github" / %s"sarif" ) DQUOTE
+                ; A STRING from a closed set of four: the report formats
+                ; Hypatia emits, json canonical. It stays a string, as the
+                ; mapping's row has always carried it, so a deed already
+                ; written with "json" is unchanged. A retired format a source
+                ; still names becomes "json" during migration (the mapping's
+                ; row); it is never carried across.
 
 ns-neural       = "(" %s"neural-config" [token-sep] ")"
                 ; J37: no member is defined until one is ruled, so the clause
