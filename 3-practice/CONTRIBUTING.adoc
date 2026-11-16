@@ -13,7 +13,7 @@ dependencies manually
 
 == Verify setup
 
-just check # or: cargo check / mix compile / etc. just test # Run test
+just validate # structural gates: language guides, canonical names just test # Run test
 suite
 
 ....
@@ -49,7 +49,7 @@ MAINTAINERS.md ├── README.adoc ├── 3-practice/SECURITY.md ├── 
 
 **When reporting**:
 
-Use the [bug report template](.github/ISSUE_TEMPLATE/bug_report.md) and include:
+Use the bug form, https://github.com/metadatastician/standards/issues/new?template=bug.yml[`.github/ISSUE_TEMPLATE/bug.yml`], and include:
 
 - Clear, descriptive title
 - Environment details (OS, versions, toolchain)
@@ -66,7 +66,7 @@ Use the [bug report template](.github/ISSUE_TEMPLATE/bug_report.md) and include:
 
 **When suggesting**:
 
-Use the [feature request template](.github/ISSUE_TEMPLATE/feature_request.md) and include:
+There is no feature-request form, and blank issues are disabled (`docs/ISSUE-INTAKE-SPEC.adoc`, Rule 4). Propose a feature as a decision or a campaign issue from https://github.com/metadatastician/standards/issues/new/choose[the issue chooser], and include:
 
 - Problem statement (what pain point does this solve?)
 - Proposed solution
