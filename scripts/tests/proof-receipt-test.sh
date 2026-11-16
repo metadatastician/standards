@@ -248,6 +248,10 @@ grep -q '|o/sibling@'"$SC"'=' "$R/runs.rows" && ok "the recorded Agda row binds 
 printf -- '-- later\n' >>"$SIB/src/Sib.agda"; gitq -C "$SIB" commit -qam later
 SC_LATER=$(git -C "$SIB" rev-parse HEAD)
 IMPORT_COMMIT="$SC_LATER" expect "a hook that now imports something else is refused" 1 "the agda run recorded imports" --write
+# The run row binds the pinned bytes, so the imported clone must hold them:
+# a sibling checked out at another commit is refused at --run-row.
+expect "a run row is refused when the imported clone is not at its pin" 1 "differs from o/sibling at $SC" --run-row agda --run "https://ci.example/run/w" --commit "$C" --checker "agda 1" --reported ok
+gitq -C "$SIB" checkout -q "$SC"
 
 # The gate never reads or rewrites the home EXIT handler, so one holding quotes runs as written.
 sed -i 's/^\. "\$RECEIPT_STD\/scripts\/proof-receipt.sh"$/trap "echo '"'"'it is kept'"'"'" EXIT\n&/' "$R/scripts/grade-receipt.sh"
@@ -293,7 +297,7 @@ expect "a row of a prover no leg names is refused" 1 "unknown prover in row" --e
 
 # An echo's forge reference must hold its source, even when the commit is here.
 grep "^agda|" "$R/runs.rows" >"$WORK/agda.rows"
-X=$(git -C "$R" commit-tree "$C^{tree}" -m orphan)
+X=$(gitq -C "$R" commit-tree "$C^{tree}" -m orphan)
 git -C "$R" update-ref refs/pull/2/head "$X"
 RUNS_FILE="$WORK/agda.rows" ECHO_ROW="$C|$D|inputs-sha256|refs/pull/9/head" expect "an echo whose reference is missing is refused, the commit being here" 1 "cannot fetch refs/pull/9/head" --write
 RUNS_FILE="$WORK/agda.rows" ECHO_ROW="$C|$D|inputs-sha256|refs/pull/2/head" expect "an echo whose reference does not hold its source is refused" 1 "refs/pull/2/head does not hold commit $C" --write
@@ -307,6 +311,17 @@ S=$(git -C "$R" rev-parse HEAD); gitq -C "$R" checkout -q main
 RUNS_FILE="$WORK/srows" expect "--write refuses a receipt whose source is off the default branch" 1 "the git checks of PROOF-POLICY §8.5.3 failed" --write
 cmp -s "$WORK/before2_praxis.deed" "$R/verification/receipts/t_praxis.deed" \
   && ok "and leaves the existing receipt as it was" || bad "a refused --write changed the receipt"
+
+# A leading ./ in an input path hashes as the reference digest does.
+a=$(cd "$R" && bash scripts/grade-receipt.sh --digest rocq)
+sed -i "s|printf 'legs/rocq/T.v|printf './legs/rocq/T.v|" "$R/scripts/grade-receipt.sh"
+b=$(cd "$R" && bash scripts/grade-receipt.sh --digest rocq); cp "$WORK/grade.orig" "$R/scripts/grade-receipt.sh"
+[ -n "$a" ] && [ "$a" = "$b" ] && ok "an input listed as ./path has the reference digest" || bad "./path changes the digest ($a, $b)"
+
+# An echo that no current leg's chain uses is neither fetched nor written.
+ECHO_ROW="$X1|$X2|inputs-sha256|refs/pull/77/head" expect "an echo no current chain uses is left out" 0 "WROTE" --write
+grep -q "$X1" "$R/verification/receipts/t_praxis.deed" && bad "the unused echo is in the receipt" || ok "and the receipt does not carry it"
+gitq -C "$R" checkout -q -- verification/receipts/t_praxis.deed
 
 # PWG-3 across a squash: only the Agda leg has a current receipt, and the
 # echo carries a witness for that leg alone, so the git checks hold.

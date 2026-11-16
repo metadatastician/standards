@@ -147,7 +147,9 @@ receipt_agda_cone() {
 _receipt_inputs() {
   local f; f="$(mktemp)"
   receipt_inputs "$1" > "$f" || { rm -f "$f"; receipt_die "the hook receipt_inputs of $RECEIPT_SCRIPT failed for $1"; }
-  LC_ALL=C sort -u "$f"; rm -f "$f"
+  # A leading ./ is dropped, as the reference digest drops it, so the working
+  # tree and a commit hash the same manifest.
+  sed 's|^\./||' "$f" | LC_ALL=C sort -u; rm -f "$f"
 }
 _receipt_imports() {
   if declare -F receipt_imports >/dev/null; then receipt_imports "$1" "$2"; fi
@@ -623,6 +625,9 @@ _receipt_prepare() {
     done > "$_receipt_manifest_dir/$p.chain"
   done
   while IFS='|' read -r src img wit ref; do
+    # An echo that no current leg's chain passes through is not used, and is
+    # neither fetched nor witnessed; the receipt leaves it out.
+    grep -qxF "$src" "$_receipt_manifest_dir"/*.chain 2>/dev/null || continue
     # An image that is itself an echo source (a chain A -> B -> C) is kept by
     # its own forge reference; only the end of a chain is on the default branch.
     _receipt_ensure_commit "$src" "$ref"
@@ -701,6 +706,19 @@ _receipt_imports_field() {
   local d="$1" p="$2"
   [[ -f "$d/$p.imports" ]] || return 0
   awk -F'|' '{print $1 "@" $2 "=" $3}' "$d/$p.imports" | LC_ALL=C sort | paste -sd, -
+}
+# At --run-row, each imported file in its clone's working tree must be the
+# file at the pinned commit: no uncommitted change, no other checkout, and no
+# symbolic link (whose recorded blob is its target's name, not the bytes read).
+_receipt_check_import_worktree() {
+  local d="$1" p="$2" repo commit dir path
+  [[ -f "$d/$p.lines" ]] || return 0
+  while IFS='|' read -r repo commit dir path; do
+    [[ -n "$repo" ]] || continue
+    [[ ! -L "$dir/$path" ]] || receipt_die "the $p leg imports $repo:$path, which is a symbolic link; list the file it points to"
+    git -C "$dir" diff --quiet "$commit" -- "$path" \
+      || receipt_die "the $p leg read $repo:$path from $dir, which differs from $repo at $commit (an uncommitted change or another checkout): run the prover on the pinned files"
+  done < "$d/$p.lines"
 }
 # The run-row field that binds the trusted base: the sha256 of what
 # receipt_trusted_base printed (file $1); empty when it printed nothing.
@@ -837,6 +855,10 @@ _receipt_main() {
       local imd imf tbf=
       imd="$(mktemp -d)"; _receipt_tmpfiles+=("$imd")
       _receipt_build_imports "$r_prover" "$r_commit" "$imd"
+      # The row records the pinned commit's bytes; the prover read the clone's
+      # working files.  They must be the same files, or the row would bind
+      # bytes the run never read.
+      _receipt_check_import_worktree "$imd" "$r_prover"
       imf="$(_receipt_imports_field "$imd" "$r_prover")"
       if [[ "$r_prover" == agda ]]; then
         _receipt_hook "$imd/trusted-base" receipt_trusted_base
