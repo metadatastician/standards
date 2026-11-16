@@ -93,7 +93,7 @@ jobs:
 
       - name: Install the pinned, attested squabble
         id: squabble
-        uses: hyperpolymath/cicd-squabbler/.github/actions/squabble@d04055f4a26c4a0a5fa4f5149d40f0c42aeac274
+        uses: hyperpolymath/cicd-squabbler/.github/actions/squabble@b62a5ce01efdbf5c86977f35e3507759fcb4c22d
         with:
           args: ""
 
@@ -214,7 +214,7 @@ jobs:
       - name: Install the pinned, attested squabble
         id: squabble
         if: steps.fight-credential.outputs.available == 'true'
-        uses: hyperpolymath/cicd-squabbler/.github/actions/squabble@d04055f4a26c4a0a5fa4f5149d40f0c42aeac274
+        uses: hyperpolymath/cicd-squabbler/.github/actions/squabble@b62a5ce01efdbf5c86977f35e3507759fcb4c22d
         with:
           args: ""
 
