@@ -6,7 +6,7 @@ import { cpSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, writ
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { validate, blankComments, LintError, SELF_TEST_CASES, checkEgress, EgressError, checkAnchor, AnchorError, profileCOfBody, readMustfileChecks, MustfileError, readProofReceipt, ProofReceiptError, checkContractiles, ContractilesError, contractilePaths, CONTRACTILE_VERBS, checkEdict, EdictError, verbOfFilename, checkVerbDescriptile, VerbDescriptileError, verbOfDescriptile, choraRepoUuid, rootChora, FIXTURE_TODAY, checkEcosystem, EcosystemError, ECOSYSTEM_RELATIONSHIPS, checkState, StateError, STATE_PHASES, MATURITY_LEVELS, checkRsrScorecard, RsrScorecardError, RSR_TIERS, RSR_VERDICTS, checkMeta, MetaError, META_PROJECT_TYPES, ADR_STATUSES, checkAgentic, AgenticError, J19_SETTINGS, checkNeurosym, NeurosymError, SCAN_DEPTHS, checkRsrProfile, RsrProfileError, RSR_PROFILE_FIELDS } from "./deed_lint.js";
+import { validate, blankComments, LintError, SELF_TEST_CASES, checkEgress, EgressError, checkAnchor, AnchorError, profileCOfBody, readMustfileChecks, MustfileError, readProofReceipt, ProofReceiptError, checkContractiles, ContractilesError, contractilePaths, CONTRACTILE_VERBS, checkEdict, EdictError, verbOfFilename, checkVerbDescriptile, VerbDescriptileError, verbOfDescriptile, choraRepoUuid, rootChora, FIXTURE_TODAY, checkEcosystem, EcosystemError, ECOSYSTEM_RELATIONSHIPS, checkState, StateError, STATE_PHASES, MATURITY_LEVELS, checkRsrScorecard, RsrScorecardError, RSR_TIERS, RSR_VERDICTS, checkMeta, MetaError, META_PROJECT_TYPES, ADR_STATUSES, checkAgentic, AgenticError, J19_SETTINGS, checkNeurosym, NeurosymError, SCAN_DEPTHS, REPORT_FORMATS, checkRsrProfile, RsrProfileError, RSR_PROFILE_FIELDS } from "./deed_lint.js";
 import { generateContractileRegistry as generateRegistry } from "./deed_lint.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -1627,6 +1627,17 @@ describe("neurosym fixtures", () => {
   });
   test("scan depth is the closed set of the ruled mapping row", () => {
     expect([...SCAN_DEPTHS]).toEqual(["quick", "standard", "deep"]);
+  });
+  test("report format is Hypatia's closed set of four, as a string", () => {
+    expect([...REPORT_FORMATS]).toEqual(["json", "text", "github", "sarif"]);
+    const [text, p] = read("valid", "minimal");
+    expect(text).toContain(':report-format "json"');
+    for (const f of REPORT_FORMATS) {
+      expect(checkNeurosym(text.replace(':report-format "json"', `:report-format "${f}"`), p, { today: FIXTURE_TODAY })).not.toBeNull();
+    }
+    expect(() => checkNeurosym(...read("invalid", "report-format-unknown"), { today: FIXTURE_TODAY })).toThrow(/must be one of json text github sarif, as a string/);
+    expect(() => checkNeurosym(...read("invalid", "report-format-symbol"), { today: FIXTURE_TODAY })).toThrow(/:report-format\) must be a non-empty string/);
+    expect(() => checkNeurosym(...read("invalid", "report-format-empty"), { today: FIXTURE_TODAY })).toThrow(/:report-format\) must be a non-empty string/);
   });
   test("YD05: (symbolic-rules) holds no rule definition", () => {
     expect(() => checkNeurosym(...read("invalid", "neurosym-rule-def-bad"), { today: FIXTURE_TODAY })).toThrow(/no rule definition.*\(YD05\)/);

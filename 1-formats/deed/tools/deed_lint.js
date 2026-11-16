@@ -3331,6 +3331,11 @@ const NEUROSYM_FIELDS = [...DESCRIPTILE_HEADER, "version", "last-updated", "rule
 const HYPATIA_MEMBERS = ["scan-enabled", "scan-depth", "report-format"];
 /** The closed set of scan depths (the mapping's ruled row). */
 export const SCAN_DEPTHS = new Set(["quick", "standard", "deep"]);
+/**
+ * The closed set of report formats, as strings: the formats Hypatia emits,
+ * json canonical (the mapping's row; clauses/neurosym.abnf v2.0.0).
+ */
+export const REPORT_FORMATS = new Set(["json", "text", "github", "sarif"]);
 /** An A5 rule domain (A5 3.1): lower-alpha *(lower-alpha / DIGIT / "-"). */
 const A5_DOMAIN = /^[a-z][a-z0-9-]*$/;
 
@@ -3394,6 +3399,9 @@ export function checkNeurosym(text, filename, opts = {}) {
   if (hypatia.get("scan-enabled")[0] !== "boolean") throw E("(hypatia :scan-enabled) must be #t or #f");
   const scanDepth = stateSymbol(hypatia, "scan-depth", SCAN_DEPTHS, "(hypatia …)", E);
   metaString(hypatia.get("report-format"), "(hypatia :report-format)", E);
+  if (!REPORT_FORMATS.has(hypatia.get("report-format")[1])) {
+    throw E(`(hypatia :report-format) must be one of ${[...REPORT_FORMATS].join(" ")}, as a string (the mapping's row: a retired format becomes "json")`);
+  }
 
   if ((opts.choraClauses || []).includes("neurosym")) {
     const msg = "the chora deed still carries (neurosym …), which moved to NEUROSYM.deed (J35, YF06)";
