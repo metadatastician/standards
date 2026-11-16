@@ -100,7 +100,7 @@ _receipt_checker() { printf '%s/scripts/check-proof-receipt.sh' "$RECEIPT_STD"; 
 # Modules supplied with the prover are under no include directory and are
 # not printed.
 receipt_agda_cone() {
-  local root="$1"; shift
+  local root="${1#./}"; shift
   local -a incs=("$@")
   local f m p i
   local -A seen=()
@@ -112,10 +112,10 @@ receipt_agda_cone() {
     printf '%s\n' "$f"
     while read -r m; do
       for i in "${incs[@]}"; do
-        p="$i/${m//.//}.agda"
+        p="$i/${m//.//}.agda"; p="${p#./}"
         if [[ -f "$p" ]]; then queue+=("$p"); break; fi
       done
-    done < <(sed -e 's/--.*$//' "$f" | grep -oE '(^|[[:space:];])import[[:space:]]+[A-Za-z0-9_.]+' | awk '{print $NF}')
+    done < <(sed -e 's/--.*$//' "$f" | grep -oE '(^|[[:space:];])import[[:space:]]+[^[:space:];(){}]+' | awk '{print $NF}')
   done
 }
 
@@ -186,6 +186,7 @@ _receipt_check_row() {
   IFS='|' read -r prover run commit checker inv dig said state reason axioms <<< "$row"
   [[ "$(tr -cd '|' <<< "$row" | wc -c)" == 9 ]] || receipt_die "a ledger row needs 10 fields: $row"
   [[ "$row" != *'"'* && "$row" != *'\'* ]] || receipt_die "a ledger row holds a quote or backslash: $row"
+  [[ "$row" != *[[:cntrl:]]* ]] || receipt_die "a ledger row holds a control character, which a deed string cannot: $row"
   [[ "$prover" =~ ^(agda|rocq|lean)$ ]] || receipt_die "unknown prover in row: $row"
   [[ "$commit" =~ ^[0-9a-f]{40}$ ]] || receipt_die "a row's commit must be 40 lowercase hex: $row"
   [[ "$dig" =~ ^[0-9a-f]{64}$ ]] || receipt_die "a row's inputs digest must be a sha256: $row"
@@ -254,7 +255,9 @@ _receipt_current_field() { awk -F'|' -v p="$1" -v f="$2" '$1==p && $8=="current"
 _receipt_has_any() { awk -F'|' -v p="$1" '$1==p{f=1} END{exit !f}' "$_receipt_ledger_file"; }
 # PROOF-POLICY §2.1: the Agda invocation is at least the estate default.
 _receipt_canonical() {
-  local w=" $1 "
+  local w
+  # Split on any whitespace, as the reader does.
+  w=" $(tr -s '[:space:]' ' ' <<< "$1") "
   [[ "$w" == *' --safe '* && "$w" == *' --without-K '* ]] && [[ "$w" == *' --cubical-compatible '* || "$w" == *' --cubical '* ]]
 }
 # A leg's witness counts only if every axiom its current receipt reports has
@@ -377,6 +380,9 @@ _receipt_emit_receipts() {
 }
 _receipt_emit_echoes() {
   local src img wit ref p
+  # An echo carries a witness per current leg; with no current leg it would
+  # carry none, which the reader refuses, so it is left out.
+  _receipt_has_current agda || _receipt_has_current rocq || _receipt_has_current lean || return 0
   while IFS='|' read -r src img wit ref; do
     printf '  ; %s was rewritten into %s on %s; %s keeps it.\n' "${src:0:12}" "${img:0:12}" "$RECEIPT_DEFAULT_BRANCH" "$ref"
     printf '  (echo :source "%s" :image "%s" :witness %s' "$src" "$img" "$wit"
@@ -496,10 +502,11 @@ _receipt_prepare() {
   # §8.5.2: no echo chain may cycle, whether or not the current receipts use it.
   local start
   while IFS='|' read -r start _; do
-    local hops=0 at="$start"
+    local at="$start"
+    local -A visited=(["$start"]=1)
     while at="$(awk -F'|' -v c="$at" '$1==c{print $2}' "$_receipt_echo_file")" && [[ -n "$at" ]]; do
-      hops=$((hops + 1))
-      [[ "$at" != "$start" ]] && (( hops < 64 )) || receipt_die "the echoes form a cycle through $start"
+      [[ -z "${visited[$at]:-}" ]] || receipt_die "the echoes form a cycle through $start"
+      visited[$at]=1
     done
   done < "$_receipt_echo_file"
   commits="$(awk -F'|' '$8=="current"{print $3}' "$_receipt_ledger_file" | sort -u)"
@@ -564,7 +571,8 @@ _receipt_prepare() {
   local steps=0 next
   while next="$(awk -F'|' -v c="$_receipt_source_commit" '$1==c{print $2}' "$_receipt_echo_file")" && [[ -n "$next" ]]; do
     _receipt_source_commit="$next"; steps=$((steps + 1))
-    (( steps < 64 )) || receipt_die 'the echoes form a cycle'
+    # Every chain was checked for a cycle above; this only guards the walk.
+    (( steps <= $(wc -l < "$_receipt_echo_file") )) || receipt_die 'the echoes form a cycle'
   done
   [[ "$_receipt_source_commit" =~ ^[0-9a-f]{40}$ ]] || receipt_die "no 40-hex source commit (got '${_receipt_source_commit}')"
 }
@@ -637,7 +645,8 @@ receipt_main() {
   # Keep the home script's EXIT trap, and clean up before it runs.
   local prior
   prior="$(trap -p EXIT | sed -E "s/^trap -- '(.*)' EXIT\$/\1/")"
-  trap "_receipt_cleanup${prior:+; $prior}" EXIT
+  # The home handler sees the status the gate exited with, not cleanup's.
+  trap "_receipt_rc=\$?; _receipt_cleanup; set +e; (exit \$_receipt_rc)${prior:+; $prior}" EXIT
   _receipt_claims_file="$(mktemp)"; _receipt_runs_file="$(mktemp)"; _receipt_echoes_file="$(mktemp)"; _receipt_header_file="$(mktemp)"
   _receipt_tmpfiles+=("$_receipt_claims_file" "$_receipt_runs_file" "$_receipt_echoes_file" "$_receipt_header_file")
   _receipt_hook "$_receipt_claims_file" receipt_claims
@@ -692,9 +701,10 @@ receipt_main() {
       tmp="$(mktemp -d "$(dirname "$target")/.receipt.XXXXXX")"; _receipt_tmpfiles+=("$tmp")
       tmp="$tmp/$(basename "$target")"
       _receipt_emit > "$tmp"
-      # A run's receipt is read, with its negative control, before it
-      # replaces anything.
-      if [[ "$mode" == --emit-run ]]; then _receipt_read_with_reader "$tmp"; fi
+      # The receipt is read, with its negative control, before it replaces
+      # anything (PROOF-POLICY §8.5.1: a gate that writes receipts validates
+      # them with the reader).
+      _receipt_read_with_reader "$tmp"
       mv -T "$tmp" "$target" || receipt_die "cannot install the receipt at $target"
       printf 'WROTE %s (source-commit %s)\n' "$target" "$_receipt_source_commit"
       if [[ "$mode" == --emit-run ]]; then

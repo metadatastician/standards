@@ -201,6 +201,28 @@ printf -- '-- moved again\n' >>"$R/src/T/B.agda"
 expect "--write refuses current rows whose inputs moved" 1 "the agda inputs changed since run" --write
 gitq -C "$R" checkout -q -- src/T/B.agda
 
+# A module name with a hyphen is followed whole, not cut at the hyphen.
+printf 'import T.B-x\n' >>"$R/src/T/A.agda"; printf 'module T.B-x where\n' >"$R/src/T/B-x.agda"
+out=$(cd "$R" && bash scripts/grade-receipt.sh --inputs agda 2>&1)
+grep -qx 'src/T/B-x.agda' <<<"$out" && ok "a hyphenated module name is followed whole" || bad "the cone missed src/T/B-x.agda: $out"
+gitq -C "$R" checkout -q -- src/T/A.agda; rm -f "$R/src/T/B-x.agda"
+
+# A tab can never sit in a deed string, so a row holding one is refused.
+awk -F'|' 'BEGIN{OFS="|"} $1=="agda"{gsub(/ /,"\t",$5)} {print}' "$WORK/rows" >"$WORK/tabrows"
+expect "a row with a tab in a field is refused" 1 "holds a control character" --emit-run "$WORK/tabrows" --out "$WORK/tab_praxis.deed"
+
+# --write runs the reader before it replaces the receipt.
+cp "$R/verification/receipts/t_praxis.deed" "$WORK/before_praxis.deed"
+awk -F'|' 'BEGIN{OFS="|"} $1=="rocq"{$10="X:c,X:c"} {print}' "$R/runs.rows" >"$WORK/duprows"
+RUNS_FILE="$WORK/duprows" expect "--write refuses a receipt the reader refuses" 1 "the pinned reader refused" --write
+cmp -s "$WORK/before_praxis.deed" "$R/verification/receipts/t_praxis.deed" \
+  && ok "and leaves the existing receipt as it was" || bad "a refused --write changed the receipt"
+
+# The home EXIT handler sees the gate's own failure status.
+sed -i 's/^\. "\$RECEIPT_STD\/scripts\/proof-receipt.sh"$/trap '"'"'echo "HOME-RC=$?"'"'"' EXIT\n&/' "$R/scripts/grade-receipt.sh"
+expect "the home EXIT handler sees the refusal's status" 1 "HOME-RC=1" --emit-run "$WORK/emptyrows" --out "$WORK/rc_praxis.deed"
+cp "$WORK/grade.orig" "$R/scripts/grade-receipt.sh"
+
 # A path a deed string cannot hold is refused, not written.
 printf 'module T.Q where\n' >"$R/src/T/Q\"uote.agda"
 gitq -C "$R" add -A; gitq -C "$R" commit -qm quote
