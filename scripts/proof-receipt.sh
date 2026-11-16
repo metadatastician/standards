@@ -159,7 +159,7 @@ _receipt_ensure_import() {
   git -C "$dir" cat-file -e "$commit^{commit}" 2>/dev/null \
     || receipt_die "the clone $dir of $repo does not hold commit $commit"
 }
-_receipt_echo_ref() { local c="$1"; receipt_echoes | awk -F'|' -v c="$c" '$1==c{print $4}'; }
+_receipt_echo_ref() { local c="$1"; awk -F'|' -v c="$c" '$1==c{print $4}' "$_receipt_echoes_file"; }
 
 # ── Ledger rows ───────────────────────────────────────────────────────────────
 # Validate one row; print nothing.  A field may not hold " or \ (deed strings)
@@ -227,7 +227,7 @@ _receipt_ledger() {
     else
       printf '%s\n' "$row"
     fi
-  done < <(receipt_runs)
+  done < "$_receipt_runs_file"
 }
 
 # ── Grade (§8.2 and §8.5.2, the same rules as readProofReceipt) ───────────────
@@ -285,15 +285,25 @@ _receipt_emit_axioms() {
   for x in "${a[@]}"; do printf '\n                 (axiom :name "%s" :disposition %s)' "${x%:*}" "${x##*:}"; done
   printf '))\n'
 }
+# One (file …) per line of a reference --manifest file, "<sha256>  <path>".
+# The path is taken whole, with any leading or trailing space kept, and a
+# path that a deed string cannot hold unescaped is refused.
+_receipt_emit_files() {
+  local file="$1" indent="$2" line sha path
+  while IFS= read -r line; do
+    sha="${line:0:64}"; path="${line:66}"
+    [[ "$sha" =~ ^[0-9a-f]{64}$ && "${line:64:2}" == '  ' && -n "$path" ]] || receipt_die "a manifest line is not '<sha256>  <path>': $line"
+    [[ "$path" != *'"'* ]] || receipt_die "the input path $path holds a double quote, which a deed string cannot hold here"
+    printf '\n%s(file :path "%s" :sha256 "%s")' "$indent" "$path" "$sha"
+  done < "$file"
+}
 # §8.5.1: the inputs manifest of a leg's current receipt, one (file ...) per
 # line of the reference script's --manifest output at the receipt's commit.
 # The reader recomputes :inputs-sha256 from it.
 _receipt_emit_manifest() {
   local prover="$1" sha path
   printf '               (inputs-manifest'
-  while read -r sha path; do
-    printf '\n                 (file :path "%s" :sha256 "%s")' "$path" "$sha"
-  done < "$_receipt_manifest_dir/$prover"
+  _receipt_emit_files "$_receipt_manifest_dir/$prover" '                 '
   printf ')\n'
 }
 # §8.5.1, Imported repositories: one (import …) per repository the current
@@ -303,9 +313,7 @@ _receipt_emit_imports() {
   [[ -f "$_receipt_manifest_dir/$prover.imports" ]] || return 0
   while IFS='|' read -r repo commit dig f; do
     printf '               (import :repository "%s" :commit "%s" :inputs-sha256 "%s"' "$repo" "$commit" "$dig"
-    while read -r sha path; do
-      printf '\n                 (file :path "%s" :sha256 "%s")' "$path" "$sha"
-    done < "$f"
+    _receipt_emit_files "$f" '                 '
     printf ')\n'
   done < "$_receipt_manifest_dir/$prover.imports"
 }
@@ -340,6 +348,7 @@ _receipt_emit_echoes() {
     printf '  ; %s was rewritten into %s on %s; %s keeps it.\n' "${src:0:12}" "${img:0:12}" "$RECEIPT_DEFAULT_BRANCH" "$ref"
     printf '  (echo :source "%s" :image "%s" :witness %s' "$src" "$img" "$wit"
     for p in agda rocq lean; do
+      _receipt_has_current "$p" || continue
       printf '\n    (inputs :prover %s :sha256 "%s")' "$p" "$(awk -F'|' -v c="$src" -v p="$p" '$1==c && $2==p{print $3}' "$_receipt_echo_digest_file")"
     done
     printf ')\n'
@@ -362,7 +371,7 @@ _receipt_emit_leg() {
 }
 _receipt_emit() {
   local id token kind coq coq_state lean lean_state coq_reason lean_reason m name binding
-  receipt_header
+  cat "$_receipt_header_file"
   printf '(praxis-deed\n'
   printf '  :schema-version "1.0.0"\n'
   printf '  :canonical-name "%s"\n' "$RECEIPT_CANONICAL_NAME"
@@ -386,7 +395,7 @@ _receipt_emit() {
     if _receipt_has_any agda; then printf '\n'; _receipt_emit_receipts agda | sed '$ s/$/)/'; else printf ')\n'; fi
     _receipt_emit_leg rocq "$coq" "$coq_state" "$coq_reason" ')'
     _receipt_emit_leg lean "$lean" "$lean_state" "$lean_reason" '))'
-  done < <(receipt_claims)
+  done < "$_receipt_claims_file"
   printf ')\n'
 }
 
@@ -402,7 +411,7 @@ _receipt_hook() {
 _receipt_check_claim_ids() {
   local decl doc f
   f="$(mktemp)"; _receipt_tmpfiles+=("$f")
-  decl="$(receipt_claims | cut -d'|' -f1 | LC_ALL=C sort)"
+  decl="$(cut -d"|" -f1 "$_receipt_claims_file" | LC_ALL=C sort)"
   _receipt_hook "$f" receipt_status_ids
   doc="$(LC_ALL=C sort -u "$f")"
   [[ -n "$doc" ]] || receipt_die 'no claim ids found in the proof-status file; its table layout changed'
@@ -415,7 +424,7 @@ _receipt_check_claim_ids() {
 _receipt_check_leg_records() {
   local counted recorded f
   f="$(mktemp)"; _receipt_tmpfiles+=("$f")
-  counted="$(receipt_claims | awk -F'|' '$5=="RECONCILED"||$7=="RECONCILED"{print $1}' | LC_ALL=C sort)"
+  counted="$(awk -F'|' '$5=="RECONCILED"||$7=="RECONCILED"{print $1}' "$_receipt_claims_file" | LC_ALL=C sort)"
   _receipt_hook "$f" receipt_recorded_legs
   recorded="$(LC_ALL=C sort -u "$f")"
   if [[ "$counted" != "$recorded" ]]; then
@@ -438,7 +447,7 @@ _receipt_prepare() {
   _receipt_ledger > "$_receipt_ledger_file"
   _receipt_trusted_base_file="$(mktemp)"; _receipt_tmpfiles+=("$_receipt_trusted_base_file")
   _receipt_hook "$_receipt_trusted_base_file" receipt_trusted_base
-  receipt_echoes | grep . > "$_receipt_echo_file" || true
+  grep . "$_receipt_echoes_file" > "$_receipt_echo_file" || true
   local row p commits src img wit ref a b c n repo commit dir path
   local -a paths
   while IFS= read -r row; do _receipt_check_row "$row"; done < "$_receipt_ledger_file"
@@ -452,6 +461,9 @@ _receipt_prepare() {
   while IFS='|' read -r src img wit ref; do
     _receipt_ensure_commit "$src" "$ref"; _receipt_ensure_commit "$img" "refs/heads/$RECEIPT_DEFAULT_BRANCH"
     for p in agda rocq lean; do
+      # Only a leg with a current receipt has a manifest for the witness to
+      # match (§8.5.3), so only those legs carry one.
+      _receipt_has_current "$p" || continue
       a="$(_receipt_ref_digest "$src" "$p")" || receipt_die "cannot compute the $p digest at $src"
       b="$(_receipt_ref_digest "$img" "$p")" || receipt_die "cannot compute the $p digest at $img"
       [[ "$a" == "$b" ]] || receipt_die "echo $src -> $img: the $p inputs differ ($a at the source, $b at the image)"
@@ -474,6 +486,8 @@ _receipt_prepare() {
     _receipt_hook "$_receipt_manifest_dir/$p.raw" _receipt_imports "$p" "$c"
     grep . "$_receipt_manifest_dir/$p.raw" > "$_receipt_manifest_dir/$p.lines" || true
     while IFS= read -r row; do _receipt_check_import "$row"; done < "$_receipt_manifest_dir/$p.lines"
+    [[ "$(cut -d'|' -f1 "$_receipt_manifest_dir/$p.lines" | LC_ALL=C sort -u | wc -l)" == "$(cut -d'|' -f1 "$_receipt_manifest_dir/$p.lines" | tr '[:upper:]' '[:lower:]' | LC_ALL=C sort -u | wc -l)" ]] \
+      || receipt_die "the $p leg names one imported repository in two spellings; GitHub names are case-insensitive, so spell each one way"
     n=0
     while IFS='|' read -r repo commit dir; do
       [[ -n "$repo" ]] || continue
@@ -559,6 +573,12 @@ receipt_main() {
     declare -F "$v" >/dev/null || receipt_die "the home script must define $v"
   done
   trap _receipt_cleanup EXIT
+  _receipt_claims_file="$(mktemp)"; _receipt_runs_file="$(mktemp)"; _receipt_echoes_file="$(mktemp)"; _receipt_header_file="$(mktemp)"
+  _receipt_tmpfiles+=("$_receipt_claims_file" "$_receipt_runs_file" "$_receipt_echoes_file" "$_receipt_header_file")
+  _receipt_hook "$_receipt_claims_file" receipt_claims
+  _receipt_hook "$_receipt_runs_file" receipt_runs
+  _receipt_hook "$_receipt_echoes_file" receipt_echoes
+  _receipt_hook "$_receipt_header_file" receipt_header
   local mode=--write target="$RECEIPT_OUT" row tmp
   local r_prover= r_run= r_commit= r_checker= r_reported=
   _receipt_fallback_commit=
@@ -583,7 +603,10 @@ receipt_main() {
     --inputs) _receipt_inputs "$r_prover" ;;
     --run-row)
       # A run that passed its gate reported no axiom: every gate fails on one.
-      row="$r_prover|$r_run|$r_commit|$r_checker|$(receipt_invocation "$r_prover")|$(_receipt_digest "$r_prover")|$r_reported|current||"
+      tmp="$(mktemp)"; _receipt_tmpfiles+=("$tmp")
+      _receipt_hook "$tmp" receipt_invocation "$r_prover"
+      [[ -s "$tmp" ]] || receipt_die "receipt_invocation printed nothing for $r_prover"
+      row="$r_prover|$r_run|$r_commit|$r_checker|$(head -n1 "$tmp")|$(_receipt_digest "$r_prover")|$r_reported|current||"
       _receipt_check_row "$row"; printf '%s\n' "$row" ;;
     --write|--emit-run)
       _receipt_check_claim_ids; _receipt_check_leg_records
@@ -593,7 +616,11 @@ receipt_main() {
       # A run's receipt must describe the tree it was emitted from.
       if [[ "$mode" == --emit-run ]]; then _receipt_check_currency; fi
       mkdir -p "$(dirname "$target")"
-      _receipt_emit > "$target"
+      # Emit beside the target and move it into place only when the whole
+      # receipt was written, so a refusal never leaves a partial file.
+      tmp="$(mktemp "$(dirname "$target")/.receipt.XXXXXX")"; _receipt_tmpfiles+=("$tmp")
+      _receipt_emit > "$tmp"
+      mv "$tmp" "$target"
       printf 'WROTE %s (source-commit %s)\n' "$target" "$_receipt_source_commit"
       if [[ "$mode" == --emit-run ]]; then
         _receipt_read_with_reader "$target"

@@ -61,8 +61,8 @@ RECEIPT_CANONICAL_NAME=t-proof-receipt
 RECEIPT_SCRIPT=scripts/grade-receipt.sh
 SIB="$SIB"
 receipt_claims() { printf '%s\n' 'T-1|proven|theorem|re-proved|RECONCILED|re-proved|RECONCILED||' 'T-2|tested-only|demonstration|n/a|n/a|n/a|n/a||'; }
-receipt_runs() { cat runs.rows; }
-receipt_echoes() { :; }
+receipt_runs() { [ -z "\${FAIL_RUNS:-}" ] || return 4; cat "\${RUNS_FILE:-runs.rows}"; }
+receipt_echoes() { if [ -n "\${ECHO_ROW:-}" ]; then printf "%s\\n" "\$ECHO_ROW"; fi; }
 receipt_header() { printf ';; SPDX-License-Identifier: CC-BY-SA-4.0\n;; test receipt\n'; }
 receipt_trusted_base() { [ -z "\${FAIL_HOOK:-}" ] || return 3; }
 receipt_invocation() {
@@ -133,6 +133,38 @@ expect "a moved input makes the current receipt stale" 1 "the agda inputs change
 gitq -C "$R" checkout -q -- src/T/B.agda
 printf '| T-1 | RECONCILED | PENDING\n' >"$R/legs/README.adoc"
 expect "a legs record that disagrees with the claim list is refused" 1 "differ from the legs record" --write
+
+gitq -C "$R" checkout -q -- legs/README.adoc
+
+# A failing ledger hook stops the gate by name, never a receipt from part of the data.
+FAIL_RUNS=1 expect "a failing run-ledger hook stops the gate by name" 1 "the hook receipt_runs of scripts/grade-receipt.sh failed" --write
+
+# Two spellings of one imported repository are refused.
+cp "$R/scripts/grade-receipt.sh" "$WORK/grade.orig"
+sed -i 's/receipt_imports() {/receipt_imports() { if [ -n "${MIXED_CASE:-}" ]; then printf "%s|%s|%s|%s\\n" o\/sibling "$(git show "$2:scripts\/sibling.pin")" "$SIB" src\/Sib.agda O\/Sibling "$(git show "$2:scripts\/sibling.pin")" "$SIB" src\/Sib.agda; return 0; fi/' "$R/scripts/grade-receipt.sh"
+MIXED_CASE=1 expect "an imported repository named in two spellings is refused" 1 "names one imported repository in two spellings" --write
+cp "$WORK/grade.orig" "$R/scripts/grade-receipt.sh"
+
+# A path a deed string cannot hold is refused, not written.
+printf 'module T.Q where\n' >"$R/src/T/Q\"uote.agda"
+gitq -C "$R" add -A; gitq -C "$R" commit -qm quote
+QC=$(git -C "$R" rev-parse HEAD)
+sed -i 's/^    rocq) printf .legs\/rocq\/T.v\\n. ;;$/    rocq) printf "legs\/rocq\/T.v\\n"; if [ -n "${QUOTE:-}" ]; then printf "src\/T\/Q\\"uote.agda\\n"; fi ;;/' "$R/scripts/grade-receipt.sh"
+(cd "$R" && QUOTE=1 bash scripts/grade-receipt.sh --run-row rocq --run "https://ci.example/run/q" --commit "$QC" --checker "rocq 1" --reported ok) >"$WORK/qrows" 2>/dev/null
+RUNS_FILE="$WORK/qrows" QUOTE=1 expect "an input path holding a double quote is refused" 1 "holds a double quote" --write
+cp "$WORK/grade.orig" "$R/scripts/grade-receipt.sh"
+
+# PWG-3 across a squash: only the Agda leg has a current receipt, and the
+# echo carries a witness for that leg alone, so the git checks hold.
+grep '^agda|' "$R/runs.rows" >"$WORK/agda.rows"
+printf 'docs\n' >"$R/README.adoc"; gitq -C "$R" add -A; gitq -C "$R" commit -qm docs
+IMG=$(git -C "$R" rev-parse HEAD)
+git -C "$R" update-ref refs/pull/1/head "$C"
+RUNS_FILE="$WORK/agda.rows" ECHO_ROW="$C|$IMG|inputs-sha256|refs/pull/1/head" expect "a PWG-3 receipt carried by an echo writes" 0 "WROTE" --write
+grep -q ':pwg PWG-3' "$R/verification/receipts/t_praxis.deed" && ok "the receipt derives PWG-3 with one current leg" || bad "no PWG-3 in the echo receipt"
+grep -q '(inputs :prover rocq' "$R/verification/receipts/t_praxis.deed" && bad "the echo carries a witness for a leg with no current receipt" || ok "the echo carries witnesses only for current legs"
+gitq -C "$R" add -A; gitq -C "$R" commit -qm "pwg3 receipt"
+RUNS_FILE="$WORK/agda.rows" ECHO_ROW="$C|$IMG|inputs-sha256|refs/pull/1/head" expect "its --check passes the git checks of the echo" 0 "PASS: negative control" --check
 
 echo "proof-receipt-test: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]
