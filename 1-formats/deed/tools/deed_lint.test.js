@@ -428,10 +428,18 @@ describe("proof-receipt profile (PROOF-POLICY §8.5)", () => {
     expect(read(doc(claim("PWG-3", agda() + " " + none))).claims[0].pwg).toBe("PWG-3");
     expect(read(doc(claim("PWG-3", agda({ image: null }) + " " + none))).claims[0].pwg).toBe("PWG-3");
     // A tag is not a pin; the reference must carry a sha256 digest.
-    for (const bad of ["ubuntu:24.04", "ubuntu@sha256:abc", "ubuntu:24.04@sha256:" + "A".repeat(64), "@sha256:" + "a".repeat(64)]) {
+    // Malformed names are refused too: an empty tag, an empty path component, a
+    // doubled separator, two tags, an upper-case path (distribution/reference).
+    const d = "a".repeat(64);
+    for (const bad of ["ubuntu:24.04", "ubuntu@sha256:abc", "ubuntu:24.04@sha256:" + "A".repeat(64), "@sha256:" + d,
+      "debian:@sha256:" + d, "debian/@sha256:" + d, "a//b@sha256:" + d, "a:b:c@sha256:" + d, "Ubuntu@sha256:" + d]) {
       expect(() => read(doc(claim("PWG-1", at({ rocq: { image: bad } }))))).toThrow(/:image must be an image reference pinned by digest/);
     }
-    expect(read(doc(claim("PWG-1", at({ rocq: { image: "ghcr.io/o/coq:8.18@sha256:" + "b".repeat(64) } })))).claims[0].pwg).toBe("PWG-1");
+    // Valid forms: a registry host with a port, a tag with upper case, no tag at all.
+    for (const good of ["ghcr.io/o/coq:8.18@sha256:" + "b".repeat(64), "ghcr.io/o/checker:RC1@sha256:" + d,
+      "localhost:5000/coq@sha256:" + d, "ubuntu@sha256:" + d, "docker.io/library/debian:trixie-slim@sha256:" + d]) {
+      expect(read(doc(claim("PWG-1", at({ rocq: { image: good } })))).claims[0].pwg).toBe("PWG-1");
+    }
   });
   test("a recorded grade the receipts do not support is refused (grades are derived, not asserted)", () => {
     expect(() => read(doc(claim("PWG-2i", agda() + " " + none)))).toThrow(/records :pwg PWG-2i, but .* support PWG-3/);

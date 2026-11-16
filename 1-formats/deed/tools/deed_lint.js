@@ -883,8 +883,14 @@ export function readProofReceipt(text, filename = null) {
   const V = PROOF_RECEIPT_VOCABULARY;
   const HEX40 = /^[0-9a-f]{40}$/;
   const HEX64 = /^[0-9a-f]{64}$/;
-  // An OCI image reference pinned by its manifest digest: NAME[:TAG]@sha256:<64 hex>.
-  const IMAGE = /^[a-z0-9][a-z0-9._\/:-]*@sha256:[0-9a-f]{64}$/;
+  // An OCI image reference pinned by its manifest digest, NAME[:TAG]@sha256:<64 hex>,
+  // with NAME and TAG as the distribution/reference grammar defines them: an
+  // optional registry host (with port), then path components of lower-case
+  // alphanumerics joined by one separator ("." "_" "__" or "-" runs), none empty.
+  // A tag may hold upper case; the digest is lower-case hex.
+  const IMG_COMPONENT = "[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*";
+  const IMG_HOST = "(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?)*(?::[0-9]+)?/)";
+  const IMAGE = new RegExp(`^${IMG_HOST}?${IMG_COMPONENT}(?:/${IMG_COMPONENT})*(?::[A-Za-z0-9_][A-Za-z0-9_.-]{0,127})?@sha256:[0-9a-f]{64}$`);
 
   // Collect a clause's fields, refusing unknown, duplicate and mistyped ones.
   const fieldsOf = (where, members, spec, allowedClauses) => {
