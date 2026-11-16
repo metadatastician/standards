@@ -64,7 +64,7 @@ receipt_claims() { printf '%s\n' 'T-1|proven|theorem|re-proved|RECONCILED|re-pro
 receipt_runs() { if [ -n "\${PARTIAL_FAIL:-}" ]; then cat runs.rows; return 3; fi; [ -z "\${FAIL_RUNS:-}" ] || return 4; cat "\${RUNS_FILE:-runs.rows}"; }
 receipt_echoes() { if [ -n "\${ECHO_ROW:-}" ]; then printf "%s\\n" "\$ECHO_ROW"; fi; }
 receipt_header() { printf ';; SPDX-License-Identifier: CC-BY-SA-4.0\n;; test receipt (a comment may say :pwg PWG-1 without moving the control)\n'; }
-receipt_trusted_base() { [ -z "\${FAIL_HOOK:-}" ] || return 3; }
+receipt_trusted_base() { [ -z "\${FAIL_HOOK:-}" ] || return 3; [ -z "\${TB:-}" ] || printf 'Agda.Primitive|Level|BUILTIN LEVEL\n'; }
 receipt_invocation() {
   case "\$1" in
     agda) printf 'agda --safe --without-K --cubical-compatible -i src -i _deps/sibling/src src/T/A.agda\n' ;;
@@ -188,6 +188,8 @@ cp "$WORK/grade.orig" "$R/scripts/grade-receipt.sh"
 # The home script's own EXIT trap still runs.
 sed -i 's/^\. "\$RECEIPT_STD\/scripts\/proof-receipt.sh"$/trap "echo HOME-TRAP-RAN" EXIT\n&/' "$R/scripts/grade-receipt.sh"
 expect "the home script's EXIT trap is kept" 0 "HOME-TRAP-RAN" --digest agda
+out=$(cd "$R" && bash scripts/grade-receipt.sh --digest agda 2>&1)
+[ "$(grep -c HOME-TRAP-RAN <<<"$out")" = 1 ] && ok "and runs once, as written, never through the gate" || bad "the home EXIT trap ran $(grep -c HOME-TRAP-RAN <<<"$out") times"
 cp "$WORK/grade.orig" "$R/scripts/grade-receipt.sh"
 
 # --emit-run needs rows, a file target, and writes nothing a reader refuses.
@@ -229,6 +231,12 @@ out=$(cd "$R" && bash scripts/grade-receipt.sh --inputs agda 2>&1)
 grep -qx 'src/T/L.lagda.md' <<<"$out" && ok "a literate module (.lagda.md) is in the cone" || bad "the cone missed src/T/L.lagda.md: $out"
 gitq -C "$R" checkout -q -- src/T/A.agda; rm -f "$R/src/T/L.lagda.md"
 
+# A module named on the line after its import is followed too.
+printf 'open import\n  T.M\n' >>"$R/src/T/A.agda"; printf 'module T.M where\n' >"$R/src/T/M.agda"
+out=$(cd "$R" && bash scripts/grade-receipt.sh --inputs agda 2>&1)
+grep -qx 'src/T/M.agda' <<<"$out" && ok "a module named on the next line is in the cone" || bad "the cone missed src/T/M.agda: $out"
+gitq -C "$R" checkout -q -- src/T/A.agda; rm -f "$R/src/T/M.agda"
+
 # A run row binds what the run imported: a hook that now derives other
 # imported files cannot re-describe that run.
 grep -q '|o/sibling@'"$SC"'=' "$R/runs.rows" && ok "the recorded Agda row binds the sibling import" || bad "the Agda row carries no import binding"
@@ -236,13 +244,20 @@ printf -- '-- later\n' >>"$SIB/src/Sib.agda"; gitq -C "$SIB" commit -qam later
 SC_LATER=$(git -C "$SIB" rev-parse HEAD)
 IMPORT_COMMIT="$SC_LATER" expect "a hook that now imports something else is refused" 1 "the agda run recorded imports" --write
 
-# The home EXIT handler cannot turn a refusal into success, and keeps its quotes.
-sed -i 's/^\. "\$RECEIPT_STD\/scripts\/proof-receipt.sh"$/trap '"'"'printf "handler ran\\n"; exit "$?"'"'"' EXIT\n&/' "$R/scripts/grade-receipt.sh"
-expect "a home handler that exits 0 does not hide a refusal" 1 "handler ran" --emit-run "$WORK/emptyrows" --out "$WORK/rc2_praxis.deed"
-cp "$WORK/grade.orig" "$R/scripts/grade-receipt.sh"
+# The gate never reads or rewrites the home EXIT handler, so one holding quotes runs as written.
 sed -i 's/^\. "\$RECEIPT_STD\/scripts\/proof-receipt.sh"$/trap "echo '"'"'it is kept'"'"'" EXIT\n&/' "$R/scripts/grade-receipt.sh"
 expect "a home handler holding quotes runs as written" 0 "it is kept" --digest agda
 cp "$WORK/grade.orig" "$R/scripts/grade-receipt.sh"
+
+# A changed trusted base is earned again (§8.4): the Agda row binds the list
+# its run had, and a list that differs now is refused.
+TB=1 expect "a trusted base the recorded run did not bind is refused" 1 "is earned again (§8.4)" --write
+(cd "$R" && TB=1 bash scripts/grade-receipt.sh --run-row agda --run "https://ci.example/run/3" --commit "$C" --checker "agda 1" --reported ok) >"$WORK/tbrows" || bad "--run-row agda with a trusted base"
+[ "$(tr -cd '|' <"$WORK/tbrows" | wc -c)" = 11 ] && ok "an Agda row with a trusted base binds its sha256 as a twelfth field" || bad "the Agda row binds no trusted base: $(cat "$WORK/tbrows")"
+grep -v '^agda|' "$R/runs.rows" >>"$WORK/tbrows"
+TB=1 expect "a run bound to its trusted base writes a receipt" 0 "PASS: the pinned reader" --emit-run "$WORK/tbrows" --out "$WORK/tb_praxis.deed"
+grep -q '(primitive :prover agda :module "Agda.Primitive" :name "Level"' "$WORK/tb_praxis.deed" && ok "that receipt lists the trusted base" || bad "no trusted base in the receipt"
+expect "the same run is refused once the trusted base changes" 1 "is earned again (§8.4)" --emit-run "$WORK/tbrows" --out "$WORK/tb2_praxis.deed"
 
 # A path a deed string cannot hold is refused, not written.
 printf 'module T.Q where\n' >"$R/src/T/Q\"uote.agda"

@@ -30,7 +30,10 @@
 #   --emit-run ROWS --out FILE
 #                        write a receipt for the run whose rows are in ROWS:
 #                        they become current, and the earlier current receipts
-#                        of the same legs become superseded (CI does this)
+#                        of the same legs become superseded (CI does this).
+#                        The current receipts must all name one commit, so a
+#                        run at a new commit records every leg that stays
+#                        current
 #
 # What the home script provides.  Variables:
 #   RECEIPT_STD             directory holding the pinned standards files, in
@@ -50,9 +53,13 @@
 #                           reported | state (current|superseded|regressed) |
 #                           reason | axioms (name:c|b|debt, comma-separated)
 #                           [| imports: OWNER/REPO@COMMIT=SHA256, comma-separated,
-#                           which --run-row writes when the leg imports files;
-#                           the gate refuses a row whose binding differs from
-#                           what receipt_imports derives at its commit]
+#                           which --run-row writes when the leg imports files
+#                           [| trusted base: the sha256 of what
+#                           receipt_trusted_base printed, on an Agda row whose
+#                           trusted base is not empty; the imports field may
+#                           then be empty]].  The gate refuses a current row
+#                           whose bindings differ from what the hooks derive
+#                           now: the run is recorded again (§8.4)
 #   receipt_echoes          the echo ledger: source | image | inputs-sha256 |
 #                           fetch ref
 #   receipt_header          the comment lines that open the receipt, after
@@ -122,7 +129,9 @@ receipt_agda_cone() {
           if [[ -f "$p" ]]; then queue+=("$p"); continue 3; fi
         done
       done
-    done < <(sed -e 's/--.*$//' "$f" | grep -oE '(^|[[:space:];])import[[:space:]]+[^[:space:];(){}]+' | awk '{print $NF}')
+    # Split into tokens across lines, so a module name on the line after its
+    # `import` is found too; the token after each `import` is the module.
+    done < <(sed -e 's/--.*$//' "$f" | tr -s ' \t\r\n;(){}' '\n' | awk 'p{print; p=0; next} $0=="import"{p=1}')
   done
 }
 
@@ -188,17 +197,23 @@ _receipt_echo_ref() { local c="$1"; awk -F'|' -v c="$c" '$1==c{print $4}' "$_rec
 # Validate one row; print nothing.  A field may not hold " or \ (deed strings)
 # and may not be empty, except the reason of a current receipt and the axioms.
 _receipt_check_row() {
-  local row="$1" prover run commit checker inv dig said state reason axioms imports x n
+  local row="$1" prover run commit checker inv dig said state reason axioms imports tb x n
   local -a a
-  IFS='|' read -r prover run commit checker inv dig said state reason axioms imports <<< "$row"
-  # Ten fields, or eleven when the run read files of an imported repository:
-  # then the last field binds those files to the run (OWNER/REPO@COMMIT=SHA256,
-  # comma-separated), so a receipt can never re-describe what a run imported.
+  IFS='|' read -r prover run commit checker inv dig said state reason axioms imports tb <<< "$row"
+  # Ten fields; eleven when the run read files of an imported repository,
+  # whose last field binds those files to the run (OWNER/REPO@COMMIT=SHA256,
+  # comma-separated); twelve on an Agda row with a trusted base, whose last
+  # field is that list's sha256 (the imports field may then be empty).  So a
+  # receipt can never re-describe what a run imported or trusted.
   n="$(tr -cd '|' <<< "$row" | wc -c)"
-  [[ "$n" == 9 || "$n" == 10 ]] || receipt_die "a ledger row needs 10 fields, or 11 with imports: $row"
-  if [[ "$n" == 10 ]]; then
+  [[ "$n" == 9 || "$n" == 10 || "$n" == 11 ]] || receipt_die "a ledger row needs 10 fields, 11 with imports, or 12 with a trusted base: $row"
+  if [[ "$n" == 10 || ( "$n" == 11 && -n "$imports" ) ]]; then
     [[ "$imports" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+@[0-9a-f]{40}=[0-9a-f]{64}(,[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+@[0-9a-f]{40}=[0-9a-f]{64})*$ ]] \
       || receipt_die "a row's imports must be OWNER/REPO@COMMIT=SHA256, comma-separated: $row"
+  fi
+  if [[ "$n" == 11 ]]; then
+    [[ "$prover" == agda ]] || receipt_die "only an Agda row binds a trusted base: $row"
+    [[ "$tb" =~ ^[0-9a-f]{64}$ ]] || receipt_die "a row's trusted-base binding must be a sha256: $row"
   fi
   [[ "$row" != *'"'* && "$row" != *'\'* ]] || receipt_die "a ledger row holds a quote or backslash: $row"
   [[ "$row" != *[[:cntrl:]]* ]] || receipt_die "a ledger row holds a control character, which a deed string cannot: $row"
@@ -562,6 +577,12 @@ _receipt_prepare() {
     [[ "$a" == "$(_receipt_current_field "$p" 11)" ]] \
       || receipt_die "the $p run recorded imports '$(_receipt_current_field "$p" 11)', but the hook now derives '$a' at $c: record the run again"
   done
+  # §8.4: a change to the trusted base means the receipt is earned again.
+  if _receipt_has_current agda; then
+    a="$(_receipt_trusted_base_field "$_receipt_trusted_base_file")"
+    [[ "$a" == "$(_receipt_current_field agda 12)" ]] \
+      || receipt_die "the agda run recorded trusted base '$(_receipt_current_field agda 12)', but receipt_trusted_base now gives '$a': a changed trusted base is earned again (§8.4), so record the run again"
+  fi
   _receipt_source_commit="${commits:-$_receipt_fallback_commit}"
   _receipt_prepare_tail
 }
@@ -602,6 +623,12 @@ _receipt_imports_field() {
   local d="$1" p="$2"
   [[ -f "$d/$p.imports" ]] || return 0
   awk -F'|' '{print $1 "@" $2 "=" $3}' "$d/$p.imports" | LC_ALL=C sort | paste -sd, -
+}
+# The run-row field that binds the trusted base: the sha256 of what
+# receipt_trusted_base printed (file $1); empty when it printed nothing.
+_receipt_trusted_base_field() {
+  grep -q . "$1" || return 0
+  sha256sum < "$1" | cut -d' ' -f1
 }
 _receipt_prepare_tail() {
   local steps=0 next
@@ -665,23 +692,26 @@ _receipt_read_with_reader() {
 }
 
 _receipt_tmpfiles=()
-_receipt_prior_trap=
-# On exit: clean up, then run the home script's own EXIT handler in a
-# subshell that sees the gate's status. The gate's failure always stands; a
-# handler's own failure stands when the gate succeeded.
-_receipt_on_exit() {
-  local rc=$? hrc=0
-  _receipt_cleanup
-  set +e
-  if [[ -n "$_receipt_prior_trap" ]]; then
-    ( (exit "$rc"); eval "$_receipt_prior_trap" ); hrc=$?
-  fi
-  if (( rc != 0 )); then exit "$rc"; fi
-  exit "$hrc"
-}
 _receipt_cleanup() { (( ${#_receipt_tmpfiles[@]} )) && rm -rf "${_receipt_tmpfiles[@]}"; return 0; }
 
+# The gate runs in a subshell under its own strictness and its own EXIT trap.
+# A subshell starts without the caller's trap handlers, so the home script's
+# EXIT trap is neither read nor replaced: it runs, as written, when the home
+# script exits.  The subshell's status is returned; a refusal is a non-zero
+# status.  The caller's errexit is suspended only around the subshell, so
+# that set -e inside it is not ignored, and then restored.  Call it as a plain
+# command: bash ignores set -e inside a command that if, && or || tests.
 receipt_main() {
+  local rc had_e=
+  [[ $- != *e* ]] || had_e=1
+  set +e
+  ( _receipt_tmpfiles=(); trap _receipt_cleanup EXIT; set -euo pipefail; _receipt_main "$@" )
+  rc=$?
+  [[ -z "$had_e" ]] || set -e
+  return "$rc"
+}
+
+_receipt_main() {
   local v
   for v in RECEIPT_STD RECEIPT_STANDARDS_COMMIT RECEIPT_OUT RECEIPT_REPOSITORY RECEIPT_DEFAULT_BRANCH RECEIPT_CANONICAL_NAME RECEIPT_SCRIPT; do
     [[ -n "${!v:-}" ]] || receipt_die "the home script must set $v"
@@ -689,16 +719,6 @@ receipt_main() {
   for v in receipt_claims receipt_runs receipt_echoes receipt_header receipt_trusted_base receipt_invocation receipt_inputs receipt_status_ids receipt_recorded_legs; do
     declare -F "$v" >/dev/null || receipt_die "the home script must define $v"
   done
-  # The gate's own strictness, whatever the sourcing script set: a failure
-  # anywhere stops it rather than letting a later step report success.
-  set -euo pipefail
-  # Keep the home script's EXIT trap, and clean up before it runs.
-  # `trap -p` prints the handler as shell words; read them back as words, so a
-  # handler holding quotes is kept exactly.
-  local -a _receipt_t=()
-  eval "_receipt_t=($(trap -p EXIT))"
-  _receipt_prior_trap="${_receipt_t[2]:-}"
-  trap _receipt_on_exit EXIT
   _receipt_claims_file="$(mktemp)"; _receipt_runs_file="$(mktemp)"; _receipt_echoes_file="$(mktemp)"; _receipt_header_file="$(mktemp)"
   _receipt_tmpfiles+=("$_receipt_claims_file" "$_receipt_runs_file" "$_receipt_echoes_file" "$_receipt_header_file")
   _receipt_hook "$_receipt_claims_file" receipt_claims
@@ -732,11 +752,16 @@ receipt_main() {
       tmp="$(mktemp)"; _receipt_tmpfiles+=("$tmp")
       _receipt_hook "$tmp" receipt_invocation "$r_prover"
       [[ "$(grep -c . "$tmp")" == 1 && "$(wc -l < "$tmp")" == 1 ]] || receipt_die "receipt_invocation must print exactly one line for $r_prover"
-      local imd imf
+      local imd imf tbf=
       imd="$(mktemp -d)"; _receipt_tmpfiles+=("$imd")
       _receipt_build_imports "$r_prover" "$r_commit" "$imd"
       imf="$(_receipt_imports_field "$imd" "$r_prover")"
-      row="$r_prover|$r_run|$r_commit|$r_checker|$(cat "$tmp")|$(_receipt_digest "$r_prover")|$r_reported|current||${imf:+|$imf}"
+      if [[ "$r_prover" == agda ]]; then
+        _receipt_hook "$imd/trusted-base" receipt_trusted_base
+        tbf="$(_receipt_trusted_base_field "$imd/trusted-base")"
+      fi
+      row="$r_prover|$r_run|$r_commit|$r_checker|$(cat "$tmp")|$(_receipt_digest "$r_prover")|$r_reported|current||"
+      if [[ -n "$tbf" ]]; then row+="|$imf|$tbf"; elif [[ -n "$imf" ]]; then row+="|$imf"; fi
       _receipt_check_row "$row"; printf '%s\n' "$row" ;;
     --write|--emit-run)
       _receipt_check_claim_ids; _receipt_check_leg_records
