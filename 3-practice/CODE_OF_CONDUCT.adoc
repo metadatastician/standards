@@ -118,17 +118,21 @@ include:
 If you experience or witness unacceptable behaviour, or have any other
 concerns, please report it as soon as possible.
 
+The conduct team is Joshua Jewell
+(https://github.com/JoshuaJewell[@JoshuaJewell]). Reports go to
+mailto:conduct@themetadatastician.art[conduct@themetadatastician.art].
+
 *How to Report*
 
 [width="99%",cols="30%,33%,37%",options="header",]
 |===
 |Method |Details |Best For
-|*Email* |\{\{CONDUCT_EMAIL}} |Detailed reports, sensitive matters
+|*Email* |mailto:conduct@themetadatastician.art[conduct@themetadatastician.art] |Detailed reports, sensitive matters
 
 |*Private Message* |Contact any maintainer directly |Quick questions,
 minor issues
 
-|*Anonymous Form* |[Link to form if available] |When you need anonymity
+|*Anonymous email* |Write to the same address from one that does not identify you. We will not ask who you are. |When you need anonymity
 |===
 
 *What to Include*
@@ -144,8 +148,8 @@ minor issues
 *What Happens Next*
 
 [arabic]
-. You will receive acknowledgment within *\{\{RESPONSE_TIME}}*
-. The \{\{CONDUCT_TEAM}} will review the report
+. You will receive acknowledgment within *5 days*
+. The conduct team will review the report
 . We may ask for additional information
 . We will determine appropriate action
 . We will inform you of the outcome (respecting others’ privacy)
@@ -161,7 +165,7 @@ All reports will be handled with discretion:
 
 ==== Conflicts of Interest
 
-If a \{\{CONDUCT_TEAM}} member is involved in an incident:
+If a conduct team member is involved in an incident:
 
 * They will recuse themselves from the process
 * Another maintainer or external party will handle the report
@@ -171,7 +175,7 @@ If a \{\{CONDUCT_TEAM}} member is involved in an incident:
 
 === Enforcement Guidelines
 
-The \{\{CONDUCT_TEAM}} will follow these guidelines in determining
+The conduct team will follow these guidelines in determining
 consequences:
 
 ==== 1. Correction
@@ -245,15 +249,16 @@ If you believe an enforcement decision was made in error:
 
 [arabic]
 . *Wait 7 days* after the decision (cooling-off period)
-. *Email* \{\{CONDUCT_EMAIL}} with subject line "`Appeal: [Original
+. *Email* conduct@themetadatastician.art with subject line "`Appeal: [Original
 Report ID]`"
 . *Explain* why you believe the decision should be reconsidered
 . *Provide* any new information not previously available
 
 *Appeals Process*
 
-* Appeals are reviewed by a different \{\{CONDUCT_TEAM}} member than the
-original
+* Appeals are reviewed by someone other than the person who made the
+original decision: the repository owner, Jonathan D.A. Jewell
+(@hyperpolymath), or Joshua Jewell where the owner made it
 * You will receive a response within 14 days
 * The appeals decision is final
 * You may only appeal once per incident
@@ -322,7 +327,7 @@ If you have questions about this Code of Conduct:
 * Open a
 https://github.com/metadatastician/standards/discussions[Discussion] (for
 general questions)
-* Email \{\{CONDUCT_EMAIL}} (for private questions)
+* Email conduct@themetadatastician.art (for private questions)
 * Contact any maintainer directly
 
 '''''
