@@ -535,6 +535,7 @@ receipt from a headless, isolated, pinned checker run on the exact source
 commit. A receipt records:
 +
 * the checker and its version;
+* the image the checker ran in, pinned by its digest (`:image`, §8.5.1);
 * the invocation;
 * a digest of the inputs (`:inputs-sha256`, computed as §8.5.1 says);
 * the observed result;
@@ -549,6 +550,14 @@ pinned kernel run in CI (`agda`, `rocq compile` or `coqc`, `lean` under
 `lake`) qualifies on the same terms. A checker service is no stronger than
 the kernel behind it. A hosted service counts only if it reports its
 checker version, and that version is recorded on the receipt.
++
+*Isolated* means that the checker ran in a container image pinned by its
+digest, and the receipt names that image (owner ruling 2026-11-16). A fresh CI
+runner on its own, with the prover pinned by package version or by checksum, is
+not isolated: the runner image underneath it changes without notice. Such a
+witness still counts toward `PWG-3`, `PWG-2i` and `PWG-2ii`. The reader of
+§8.5.1 derives `PWG-1` only when the current receipt of every counted witness
+names an image.
 
 === 8.3 Foundational diversity is a tag, not a grade
 
@@ -670,6 +679,9 @@ prover-supplied postulates of §8.4, by name and binding;
 ** each leg holds its `(receipt :run … :commit … :checker … :invocation …
 :inputs-sha256 … :state … (inputs-manifest …) (axioms …))` records, with a
 `:reason` on any that is not `current`;
+** a receipt may carry `:image`, the image its checker ran in, as
+`NAME[:TAG]@sha256:<64 hex>`; a witness counts toward `PWG-1` only through a
+current receipt that has one (§8.2);
 * zero or more `(echo …)` records (§8.5.2).
 
 Every `current` receipt carries `:inputs-sha256`, `(inputs-manifest …)` and

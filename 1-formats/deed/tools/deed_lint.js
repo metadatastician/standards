@@ -883,6 +883,8 @@ export function readProofReceipt(text, filename = null) {
   const V = PROOF_RECEIPT_VOCABULARY;
   const HEX40 = /^[0-9a-f]{40}$/;
   const HEX64 = /^[0-9a-f]{64}$/;
+  // An OCI image reference pinned by its manifest digest: NAME[:TAG]@sha256:<64 hex>.
+  const IMAGE = /^[a-z0-9][a-z0-9._\/:-]*@sha256:[0-9a-f]{64}$/;
 
   // Collect a clause's fields, refusing unknown, duplicate and mistyped ones.
   const fieldsOf = (where, members, spec, allowedClauses) => {
@@ -1061,7 +1063,13 @@ export function readProofReceipt(text, filename = null) {
       "inputs-sha256": { types: ["string"] },
       state: { types: ["symbol"], required: true, oneOf: V.receiptState },
       reason: { types: ["string"] },
+      image: { types: ["string"] },
     }, ["axioms", "inputs-manifest", "import"]);
+    // §8.2: the image the checker ran in, pinned by digest. Only a receipt that
+    // names one can make its witness count toward PWG-1 (owner ruling 2026-11-16).
+    if (rf.has("image") && !IMAGE.test(rf.get("image"))) {
+      fail(`${rw}: :image must be an image reference pinned by digest (NAME@sha256:<64 hex>)`);
+    }
     if (!HEX40.test(rf.get("commit"))) fail(`${where}: a receipt :commit must be the full 40-character commit`);
     if (rf.get("state") !== "current" && !rf.has("reason")) fail(`${where}: a ${rf.get("state")} receipt needs :reason`);
     const isCurrent = rf.get("state") === "current";
@@ -1218,7 +1226,11 @@ export function readProofReceipt(text, filename = null) {
     if (agdaCounts) {
       pwg = ["PWG-3", "PWG-2i", "PWG-2ii"][recheck.length];
       const counted = [agda, ...recheck];
-      if (recheck.length === 2 && counted.every(describesSource)) pwg = "PWG-1";
+      // §8.2: PWG-1 needs every counted witness checked at the source commit by a
+      // pinned, headless, isolated checker: its current receipt names the image,
+      // pinned by digest, that the checker ran in (owner ruling 2026-11-16).
+      const isolated = (l) => current(l).image !== undefined;
+      if (recheck.length === 2 && counted.every(describesSource) && counted.every(isolated)) pwg = "PWG-1";
     }
     if (pwg !== cl.fields.get("pwg")) {
       fail(`${where} records :pwg ${cl.fields.get("pwg")}, but its legs and receipts support ${pwg} (PROOF-POLICY §8.2, §8.4)`);
