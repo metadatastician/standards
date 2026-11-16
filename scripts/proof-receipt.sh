@@ -23,17 +23,15 @@
 #                        checks of §8.5.3, check that each current receipt
 #                        still describes the tree, and run the pinned reader
 #                        with a negative control
-#   --digest PROVER      print the §8.5.1 inputs digest of one leg (agda|rocq|lean)
+#   --digest PROVER      print the §8.5.1 inputs digest of one leg (agda, rocq,
+#                        lean, or a prover receipt_extra_legs names)
 #   --inputs PROVER      print the §8.5.1 input set of one leg, one path a line
 #   --run-row PROVER --run URL --commit SHA --checker TEXT --reported TEXT
 #                        print one ledger row for a run that just passed
 #   --emit-run ROWS --out FILE
 #                        write a receipt for the run whose rows are in ROWS:
 #                        they become current, and the earlier current receipts
-#                        of the same legs become superseded (CI does this).
-#                        The current receipts must all name one commit, so a
-#                        run at a new commit records every leg that stays
-#                        current
+#                        of the same legs become superseded (CI does this)
 #
 # What the home script provides.  Variables:
 #   RECEIPT_STD             directory holding the pinned standards files, in
@@ -66,7 +64,7 @@
 #                           nothing (the SPDX lines are the home's to write)
 #   receipt_trusted_base    module | name | binding, one line per Agda
 #                           prover postulate of §8.4
-#   receipt_invocation P    the invocation of leg P (agda|rocq|lean)
+#   receipt_invocation P    the invocation of leg P
 #   receipt_inputs P        the §8.5.1 input set of leg P: paths of files of
 #                           the home repository, one a line (sorted here)
 #   receipt_status_ids      the claim ids the home proof-status file lists
@@ -83,15 +81,26 @@
 #                           (§8.5.1, Imported repositories).  Default: none.
 #   receipt_ensure_import R C D   make commit C of R present in clone D.
 #                           Default: refuse when it is not there.
+#   receipt_extra_legs      legs outside dependent type theory (§8.3), one a
+#                           line: claim id | prover | route | §2.2 state |
+#                           reason.  The prover is a lowercase name other than
+#                           agda, rocq and lean, and it then takes run rows,
+#                           inputs and an invocation like any other leg.  A
+#                           claim's :foundation-diverse is #t when one of its
+#                           such legs is RECONCILED with a current receipt
+#                           whose axioms are all of disposition (c).
+#                           Default: none.
 #
 # Helpers the hooks may use: receipt_agda_cone ROOT INCLUDE... (the modules a
 # root imports, directly or not, found under the include directories in
 # order), receipt_die MESSAGE.
 #
-# Scope: legs of Agda, Rocq and Lean only. The run ledger refuses a row of any
-# other prover, so a repository with a witness outside dependent type theory
-# (§8.3, foundation-diverse) cannot use this generator yet; it writes
-# :foundation-diverse #f because no such leg can reach it.
+# Legs at different commits: each current leg is followed along its own echo
+# chain (§8.5.2).  The :source-commit is the end of the Agda leg's chain (of
+# the first current leg's, when Agda has none), and a leg whose chain ends
+# elsewhere still counts toward PWG-2i and PWG-2ii but not PWG-1.  An echo
+# carries a witness for each current leg whose chain passes through it, and is
+# left out when no chain does.
 #
 # The grade is never typed: it is derived here under §8.2 and §8.5.2 and
 # derived again by the pinned reader, which refuses a receipt whose :pwg its
@@ -174,13 +183,19 @@ _receipt_ref_digest() {
   bash "$(_receipt_digest_script)" "$commit" "${paths[@]}"
 }
 # Make a home commit available, fetching the forge reference that keeps it.
+# Make commit $1 present.  With a forge reference $2, the reference is fetched
+# and must hold the commit even when the commit is already here: a receipt is
+# only as recoverable as the reference it records, and a clean clone has only
+# that reference to find the commit by.
 _receipt_ensure_commit() {
-  local commit="$1" ref="${2:-}"
-  git cat-file -e "$commit^{commit}" 2>/dev/null && return 0
-  [[ -n "$ref" ]] || receipt_die "commit $commit is not here and has no fetch reference"
-  git fetch -q origin "+$ref:refs/remotes/origin/receipt-fetch/${commit:0:12}" \
-    || receipt_die "cannot fetch $ref for commit $commit"
-  git cat-file -e "$commit^{commit}" 2>/dev/null || receipt_die "$ref does not hold commit $commit"
+  local commit="$1" ref="${2:-}" at
+  if [[ -z "$ref" ]]; then
+    git cat-file -e "$commit^{commit}" 2>/dev/null || receipt_die "commit $commit is not here and has no fetch reference"
+    return 0
+  fi
+  at="refs/remotes/origin/receipt-fetch/${commit:0:12}"
+  git fetch -q origin "+$ref:$at" || receipt_die "cannot fetch $ref for commit $commit"
+  git merge-base --is-ancestor "$commit" "$at" 2>/dev/null || receipt_die "$ref does not hold commit $commit"
 }
 _receipt_ensure_import() {
   local repo="$1" commit="$2" dir="$3"
@@ -217,7 +232,7 @@ _receipt_check_row() {
   fi
   [[ "$row" != *'"'* && "$row" != *'\'* ]] || receipt_die "a ledger row holds a quote or backslash: $row"
   [[ "$row" != *[[:cntrl:]]* ]] || receipt_die "a ledger row holds a control character, which a deed string cannot: $row"
-  [[ "$prover" =~ ^(agda|rocq|lean)$ ]] || receipt_die "unknown prover in row: $row"
+  _receipt_is_prover "$prover" || receipt_die "unknown prover in row (agda, rocq, lean, or one that receipt_extra_legs names): $row"
   [[ "$commit" =~ ^[0-9a-f]{40}$ ]] || receipt_die "a row's commit must be 40 lowercase hex: $row"
   [[ "$dig" =~ ^[0-9a-f]{64}$ ]] || receipt_die "a row's inputs digest must be a sha256: $row"
   [[ -n "$run" && -n "$checker" && -n "$inv" && -n "$said" ]] || receipt_die "an empty field in row: $row"
@@ -279,6 +294,34 @@ _receipt_ledger() {
   done < "$_receipt_runs_file"
 }
 
+# ── Provers ───────────────────────────────────────────────────────────────────
+# Agda, Rocq and Lean, then each prover outside dependent type theory that
+# receipt_extra_legs names (§8.3), in name order.
+_receipt_provers=(agda rocq lean)
+_receipt_extra_legs_file=
+_receipt_load_provers() {
+  local id prover route state reason row
+  _receipt_extra_legs_file="$(mktemp)"; _receipt_tmpfiles+=("$_receipt_extra_legs_file" "$_receipt_extra_legs_file.claim")
+  if declare -F receipt_extra_legs >/dev/null; then
+    _receipt_hook "$_receipt_extra_legs_file.raw" receipt_extra_legs
+    _receipt_tmpfiles+=("$_receipt_extra_legs_file.raw")
+    grep . "$_receipt_extra_legs_file.raw" > "$_receipt_extra_legs_file" || true
+  fi
+  while IFS= read -r row; do
+    [[ "$(tr -cd '|' <<< "$row" | wc -c)" == 4 ]] || receipt_die "an extra leg needs 5 fields (claim id | prover | route | state | reason): $row"
+    IFS='|' read -r id prover route state reason <<< "$row"
+    [[ "$row" != *'"'* && "$row" != *'\'* && "$row" != *[[:cntrl:]]* ]] || receipt_die "an extra leg holds a quote, backslash or control character: $row"
+    [[ "$prover" =~ ^[a-z][a-z0-9-]*$ ]] || receipt_die "an extra leg's prover must be a lowercase name: $row"
+    [[ ! "$prover" =~ ^(agda|rocq|lean)$ ]] || receipt_die "agda, rocq and lean legs come from receipt_claims, not receipt_extra_legs: $row"
+    awk -F'|' -v i="$id" '$1==i && $3=="theorem"{f=1} END{exit !f}' "$_receipt_claims_file" \
+      || receipt_die "an extra leg names no theorem claim of receipt_claims: $row"
+    [[ "$route" =~ ^(transported|re-proved|waived|unavailable)$ ]] || receipt_die "an extra leg's route must be transported, re-proved, waived or unavailable: $row"
+  done < "$_receipt_extra_legs_file"
+  [[ "$(cut -d'|' -f1,2 "$_receipt_extra_legs_file" | sort | uniq -d | wc -l)" == 0 ]] || receipt_die 'a claim has two extra legs of one prover'
+  mapfile -t -O 3 _receipt_provers < <(cut -d'|' -f2 "$_receipt_extra_legs_file" | LC_ALL=C sort -u)
+}
+_receipt_is_prover() { local x; for x in "${_receipt_provers[@]}"; do [[ "$x" != "$1" ]] || return 0; done; return 1; }
+
 # ── Grade (§8.2 and §8.5.2, the same rules as readProofReceipt) ───────────────
 _receipt_has_current() { awk -F'|' -v p="$1" '$1==p && $8=="current"{f=1} END{exit !f}' "$_receipt_ledger_file"; }
 _receipt_current_field() { awk -F'|' -v p="$1" -v f="$2" '$1==p && $8=="current"{print $f}' "$_receipt_ledger_file"; }
@@ -293,6 +336,18 @@ _receipt_canonical() {
 # A leg's witness counts only if every axiom its current receipt reports has
 # disposition c (§8.4).
 _receipt_axioms_ok() { local x; x=",$(_receipt_current_field "$1" 10),"; [[ "$x" != *':b,'* && "$x" != *':debt,'* ]]; }
+# §8.3, as the reader derives it: a claim is foundation-diverse when one of its
+# legs outside dependent type theory is kernel-checked (its token is proven or
+# proven-with-postulates, which here means RECONCILED), every axiom its current
+# run reported is of disposition (c), and it has a current receipt.
+_receipt_diverse_of() {
+  local xp xroute xstate
+  while IFS='|' read -r _ xp xroute xstate _; do
+    if [[ "$xroute" == transported || "$xroute" == re-proved ]] && [[ "$xstate" == RECONCILED ]] \
+       && _receipt_has_current "$xp" && _receipt_axioms_ok "$xp"; then printf '#t'; return 0; fi
+  done < <(awk -F'|' -v i="$1" '$1==i' "$_receipt_extra_legs_file")
+  printf '#f'
+}
 # §8.5.2: the leg's current receipt describes the :source-commit when its
 # commit is that commit, or an echo chain leads there and every link's digest
 # for this prover equals the receipt's digest.
@@ -409,16 +464,17 @@ _receipt_emit_receipts() {
   done
 }
 _receipt_emit_echoes() {
-  local src img wit ref p
-  # An echo carries a witness per current leg; with no current leg it would
-  # carry none, which the reader refuses, so it is left out.
-  _receipt_has_current agda || _receipt_has_current rocq || _receipt_has_current lean || return 0
+  local src img wit ref p d
+  # An echo carries a witness for each current leg whose chain passes through
+  # it; one that no chain uses would carry none, which the reader refuses, so
+  # it is left out.
   while IFS='|' read -r src img wit ref; do
+    grep -q "^$src|" "$_receipt_echo_digest_file" || continue
     printf '  ; %s was rewritten into %s on %s; %s keeps it.\n' "${src:0:12}" "${img:0:12}" "$RECEIPT_DEFAULT_BRANCH" "$ref"
     printf '  (echo :source "%s" :image "%s" :witness %s' "$src" "$img" "$wit"
-    for p in agda rocq lean; do
-      _receipt_has_current "$p" || continue
-      printf '\n    (inputs :prover %s :sha256 "%s")' "$p" "$(awk -F'|' -v c="$src" -v p="$p" '$1==c && $2==p{print $3}' "$_receipt_echo_digest_file")"
+    for p in "${_receipt_provers[@]}"; do
+      d="$(awk -F'|' -v c="$src" -v p="$p" '$1==c && $2==p{print $3}' "$_receipt_echo_digest_file")"
+      [[ -z "$d" ]] || printf '\n    (inputs :prover %s :sha256 "%s")' "$p" "$d"
     done
     printf ')\n'
   done < "$_receipt_echo_file"
@@ -439,7 +495,7 @@ _receipt_emit_leg() {
   esac
 }
 _receipt_emit() {
-  local id token kind coq coq_state lean lean_state coq_reason lean_reason m name binding
+  local id token kind coq coq_state lean lean_state coq_reason lean_reason m name binding n k xp xroute xstate xreason
   cat "$_receipt_header_file"
   printf '(praxis-deed\n'
   printf '  :schema-version "1.0.0"\n'
@@ -466,11 +522,23 @@ _receipt_emit() {
     if [[ "$token" == proven-with-postulates ]] && _receipt_has_current agda && [[ -z "$(_receipt_current_field agda 10)" ]]; then
       receipt_die "claim $id: its token proven-with-postulates names axioms, but the current Agda run reported none"
     fi
-    printf '  (claim :id "%s" :pwg %s :foundation-diverse #f\n' "$id" "$(_receipt_pwg_of "$token" "$coq" "$coq_state" "$lean" "$lean_state")"
+    printf '  (claim :id "%s" :pwg %s :foundation-diverse %s\n' "$id" "$(_receipt_pwg_of "$token" "$coq" "$coq_state" "$lean" "$lean_state")" "$(_receipt_diverse_of "$id")"
     printf '    (leg :prover agda :route source :token %s :state AGDA-VERIFIED' "$token"
     if _receipt_has_any agda; then printf '\n'; _receipt_emit_receipts_closed agda ')'; else printf ')\n'; fi
     _receipt_emit_leg rocq "$coq" "$coq_state" "$coq_reason" ')'
-    _receipt_emit_leg lean "$lean" "$lean_state" "$lean_reason" '))'
+    # The claim's legs outside dependent type theory follow; the last leg
+    # printed closes the claim.
+    awk -F'|' -v i="$id" '$1==i' "$_receipt_extra_legs_file" | LC_ALL=C sort -t'|' -k2,2 > "$_receipt_extra_legs_file.claim"
+    if [[ -s "$_receipt_extra_legs_file.claim" ]]; then
+      _receipt_emit_leg lean "$lean" "$lean_state" "$lean_reason" ')'
+      n="$(wc -l < "$_receipt_extra_legs_file.claim")"; k=0
+      while IFS='|' read -r _ xp xroute xstate xreason; do
+        k=$((k + 1))
+        if (( k < n )); then _receipt_emit_leg "$xp" "$xroute" "$xstate" "$xreason" ')'; else _receipt_emit_leg "$xp" "$xroute" "$xstate" "$xreason" '))'; fi
+      done < "$_receipt_extra_legs_file.claim"
+    else
+      _receipt_emit_leg lean "$lean" "$lean_state" "$lean_reason" '))'
+    fi
   done < "$_receipt_claims_file"
   printf ')\n'
 }
@@ -539,20 +607,30 @@ _receipt_prepare() {
       visited[$at]=1
     done
   done < "$_receipt_echo_file"
-  commits="$(awk -F'|' '$8=="current"{print $3}' "$_receipt_ledger_file" | sort -u)"
-  [[ "$(grep -c . <<< "$commits" || true)" -le 1 ]] || receipt_die "the current receipts name different commits: $(tr '\n' ' ' <<< "$commits")"
-  for p in agda rocq lean; do
+  # Current legs may sit at different commits (§8.5.2): each is followed along
+  # its own echo chain.  The :source-commit is reached from the Agda leg's
+  # commit, or from the first current leg's when Agda has none.
+  commits=
+  for p in "${_receipt_provers[@]}"; do
     [[ "$(awk -F'|' -v p="$p" '$1==p && $8=="current"' "$_receipt_ledger_file" | wc -l)" -le 1 ]] || receipt_die "the $p leg has more than one current row"
+    _receipt_has_current "$p" || continue
+    c="$(_receipt_current_field "$p" 3)"
+    [[ -n "$commits" ]] || commits="$c"
+    # The leg's chain: its commit, then each image in turn (no cycle, above).
+    while [[ -n "$c" ]]; do
+      printf '%s\n' "$c"
+      c="$(awk -F'|' -v c="$c" '$1==c{print $2}' "$_receipt_echo_file")"
+    done > "$_receipt_manifest_dir/$p.chain"
   done
   while IFS='|' read -r src img wit ref; do
     # An image that is itself an echo source (a chain A -> B -> C) is kept by
     # its own forge reference; only the end of a chain is on the default branch.
     _receipt_ensure_commit "$src" "$ref"
     _receipt_ensure_commit "$img" "$(_receipt_echo_ref "$img" | grep . || printf 'refs/heads/%s' "$RECEIPT_DEFAULT_BRANCH")"
-    for p in agda rocq lean; do
-      # Only a leg with a current receipt has a manifest for the witness to
-      # match (§8.5.3), so only those legs carry one.
-      _receipt_has_current "$p" || continue
+    for p in "${_receipt_provers[@]}"; do
+      # Only a current leg whose chain passes through this link has a manifest
+      # for the witness to match (§8.5.3), so only those legs carry one.
+      [[ -f "$_receipt_manifest_dir/$p.chain" ]] && grep -qxF "$src" "$_receipt_manifest_dir/$p.chain" || continue
       a="$(_receipt_ref_digest "$src" "$p")" || receipt_die "cannot compute the $p digest at $src"
       b="$(_receipt_ref_digest "$img" "$p")" || receipt_die "cannot compute the $p digest at $img"
       [[ "$a" == "$b" ]] || receipt_die "echo $src -> $img: the $p inputs differ ($a at the source, $b at the image)"
@@ -562,7 +640,7 @@ _receipt_prepare() {
   # The inputs manifest of each current receipt, at its commit (§8.5.1).  Its
   # SHA-256 is the digest the ledger records, or the row is wrong.  Then the
   # manifest of each repository the run imported, at its pinned commit.
-  for p in agda rocq lean; do
+  for p in "${_receipt_provers[@]}"; do
     _receipt_has_current "$p" || continue
     c="$(_receipt_current_field "$p" 3)"
     _receipt_ensure_commit "$c" "$(_receipt_echo_ref "$c")"
@@ -660,7 +738,7 @@ _receipt_check_git_facts() {
 # superseded or regressed with its reason.
 _receipt_check_currency() {
   local p want got
-  for p in agda rocq lean; do
+  for p in "${_receipt_provers[@]}"; do
     _receipt_has_current "$p" || continue
     want="$(_receipt_current_field "$p" 6)"; got="$(_receipt_digest "$p")"
     [[ "$want" == "$got" ]] || receipt_die "the $p inputs changed since run $(_receipt_current_field "$p" 2) (recorded $want, now $got): record a new CI run, or mark that row superseded or regressed"
@@ -725,6 +803,7 @@ _receipt_main() {
   _receipt_hook "$_receipt_runs_file" receipt_runs
   _receipt_hook "$_receipt_echoes_file" receipt_echoes
   _receipt_hook "$_receipt_header_file" receipt_header
+  _receipt_load_provers
   local mode=--write target="$RECEIPT_OUT" row tmp
   local r_prover= r_run= r_commit= r_checker= r_reported=
   _receipt_fallback_commit=
@@ -744,6 +823,9 @@ _receipt_main() {
     esac
     shift
   done
+  case "$mode" in --digest|--inputs|--run-row)
+    _receipt_is_prover "$r_prover" || receipt_die "unknown prover '$r_prover': agda, rocq, lean, or one that receipt_extra_legs names" ;;
+  esac
   case "$mode" in
     --digest) _receipt_digest "$r_prover" ;;
     --inputs) _receipt_inputs "$r_prover" ;;
@@ -786,6 +868,11 @@ _receipt_main() {
       # anything (PROOF-POLICY §8.5.1: a gate that writes receipts validates
       # them with the reader).
       _receipt_read_with_reader "$tmp"
+      # --write installs the receipt the gate will hold: the git checks of
+      # §8.5.3 run on it first, as --check runs them.  (--emit-run writes to
+      # --out for a run CI has just recorded; the recording PR's --check runs
+      # them there.)
+      [[ "$mode" != --write ]] || _receipt_check_git_facts "$tmp"
       mv -T "$tmp" "$target" || receipt_die "cannot install the receipt at $target"
       printf 'WROTE %s (source-commit %s)\n' "$target" "$_receipt_source_commit"
       if [[ "$mode" == --emit-run ]]; then

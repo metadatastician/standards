@@ -42,6 +42,7 @@ printf 'Theorem t : True. Proof. exact I. Qed.\n' >"$R/legs/rocq/T.v"
 printf 'theorem t : True := trivial\n' >"$R/legs/lean/T/A.lean"
 printf 'import T.A\n' >"$R/legs/lean/T.lean"
 printf 'name = "t"\n' >"$R/legs/lean/lakefile.toml"
+mkdir -p "$R/legs/isabelle"; printf 'theory T imports Main begin lemma t: True by simp end\n' >"$R/legs/isabelle/T.thy"
 printf 'leanprover/lean4:v4.24.0\n' >"$R/legs/lean/lean-toolchain"
 printf '%s\n' "$SC" >"$R/scripts/sibling.pin"
 printf '| T-1 | proven\n| T-2 | tested-only\n' >"$R/STATUS.adoc"
@@ -64,12 +65,14 @@ receipt_claims() { printf '%s\n' 'T-1|proven|theorem|re-proved|RECONCILED|re-pro
 receipt_runs() { if [ -n "\${PARTIAL_FAIL:-}" ]; then cat runs.rows; return 3; fi; [ -z "\${FAIL_RUNS:-}" ] || return 4; cat "\${RUNS_FILE:-runs.rows}"; }
 receipt_echoes() { if [ -n "\${ECHO_ROW:-}" ]; then printf "%s\\n" "\$ECHO_ROW"; fi; }
 receipt_header() { printf ';; SPDX-License-Identifier: CC-BY-SA-4.0\n;; test receipt (a comment may say :pwg PWG-1 without moving the control)\n'; }
+receipt_extra_legs() { [ -z "\${EXTRA:-}" ] || printf 'T-1|isabelle|re-proved|%s|\n' "\$EXTRA"; }
 receipt_trusted_base() { [ -z "\${FAIL_HOOK:-}" ] || return 3; [ -z "\${TB:-}" ] || printf 'Agda.Primitive|Level|BUILTIN LEVEL\n'; }
 receipt_invocation() {
   case "\$1" in
     agda) printf 'agda --safe --without-K --cubical-compatible -i src -i _deps/sibling/src src/T/A.agda\n' ;;
     rocq) printf 'coqc -q T.v (in legs/rocq)\n'; if [ -n "\${TWO_LINES:-}" ]; then printf 'second line\n'; fi ;;
     lean) printf 'lake build (in legs/lean)\n' ;;
+    isabelle) printf 'isabelle build -D legs/isabelle\n' ;;
   esac
 }
 receipt_inputs() {
@@ -77,6 +80,7 @@ receipt_inputs() {
     agda) receipt_agda_cone src/T/A.agda src "\$SIB/src" | grep -v "^\$SIB/"; printf 'scripts/sibling.pin\n' ;;
     rocq) printf 'legs/rocq/T.v\n' ;;
     lean) git ls-files -- legs/lean ;;
+    isabelle) printf 'legs/isabelle/T.thy\n' ;;
   esac
 }
 receipt_imports() {
@@ -92,6 +96,7 @@ receipt_recorded_legs() { grep -oE '^\\| T-[0-9]+ \\| RECONCILED \\| RECONCILED\
 receipt_main "\$@"
 EOF
 gitq -C "$R" add -A; gitq -C "$R" commit -qm home
+git -C "$R" remote add origin "$R"
 C=$(git -C "$R" rev-parse HEAD)
 
 # Inputs: the cone stays home, the sibling module goes to the import.
@@ -267,6 +272,41 @@ sed -i 's/^    rocq) printf .legs\/rocq\/T.v\\n. ;;$/    rocq) printf "legs\/roc
 (cd "$R" && QUOTE=1 bash scripts/grade-receipt.sh --run-row rocq --run "https://ci.example/run/q" --commit "$QC" --checker "rocq 1" --reported ok) >"$WORK/qrows" 2>/dev/null
 RUNS_FILE="$WORK/qrows" QUOTE=1 expect "an input path holding a double quote is refused" 1 "holds a double quote" --write
 cp "$WORK/grade.orig" "$R/scripts/grade-receipt.sh"
+
+# Legs at different commits (§8.5.2): each follows its own chain, so a Rocq
+# leg re-run at a later commit still counts toward PWG-2ii, not PWG-1, and the
+# :source-commit stays the Agda leg's.
+D=$(git -C "$R" rev-parse HEAD)
+(cd "$R" && bash scripts/grade-receipt.sh --run-row rocq --run "https://ci.example/run/d" --commit "$D" --checker "rocq 1" --reported ok) >"$WORK/drows"
+expect "current legs at different commits write a receipt" 0 "T-1  PWG-2ii" --emit-run "$WORK/drows" --out "$WORK/diff_praxis.deed"
+grep -q ":source-commit \"$C\"" "$WORK/diff_praxis.deed" && ok "its :source-commit is the Agda leg's commit" || bad "the :source-commit is not the Agda leg's"
+bash "$ROOT/scripts/check-proof-receipt.sh" --branch refs/heads/main --import "o/sibling=$SIB" "$WORK/diff_praxis.deed" "$R" >/dev/null 2>&1 && ok "the shared checker holds on it" || bad "the shared checker refuses the receipt with legs at different commits"
+
+# A leg outside dependent type theory (§8.3) takes rows like any other, and
+# makes its claim foundation-diverse when it is RECONCILED with a current run.
+(cd "$R" && EXTRA=RECONCILED bash scripts/grade-receipt.sh --run-row isabelle --run "https://ci.example/run/i" --commit "$C" --checker "isabelle 1" --reported ok) >"$WORK/irows" || bad "--run-row isabelle"
+cat "$WORK/rows" >>"$WORK/irows"
+EXTRA=RECONCILED expect "a RECONCILED Isabelle leg makes the claim foundation-diverse" 0 "T-1  PWG-1  foundation-diverse true" --emit-run "$WORK/irows" --out "$WORK/iso_praxis.deed"
+grep -q '(leg :prover isabelle :route re-proved :token proven :state RECONCILED' "$WORK/iso_praxis.deed" && ok "the receipt carries the Isabelle leg" || bad "no Isabelle leg in the receipt"
+EXTRA=BRIDGE-PENDING expect "an Isabelle leg that is not RECONCILED does not" 0 "T-1  PWG-1  foundation-diverse false" --emit-run "$WORK/irows" --out "$WORK/iso2_praxis.deed"
+expect "a row of a prover no leg names is refused" 1 "unknown prover in row" --emit-run "$WORK/irows" --out "$WORK/iso3_praxis.deed"
+
+# An echo's forge reference must hold its source, even when the commit is here.
+grep "^agda|" "$R/runs.rows" >"$WORK/agda.rows"
+X=$(git -C "$R" commit-tree "$C^{tree}" -m orphan)
+git -C "$R" update-ref refs/pull/2/head "$X"
+RUNS_FILE="$WORK/agda.rows" ECHO_ROW="$C|$D|inputs-sha256|refs/pull/9/head" expect "an echo whose reference is missing is refused, the commit being here" 1 "cannot fetch refs/pull/9/head" --write
+RUNS_FILE="$WORK/agda.rows" ECHO_ROW="$C|$D|inputs-sha256|refs/pull/2/head" expect "an echo whose reference does not hold its source is refused" 1 "refs/pull/2/head does not hold commit $C" --write
+
+# --write runs the git checks of §8.5.3 before it installs the receipt: a
+# source commit off the default branch is refused there, not first in --check.
+cp "$R/verification/receipts/t_praxis.deed" "$WORK/before2_praxis.deed"
+gitq -C "$R" checkout -q -b side; printf 'side\n' >"$R/side.txt"; gitq -C "$R" add -A; gitq -C "$R" commit -qm side
+S=$(git -C "$R" rev-parse HEAD); gitq -C "$R" checkout -q main
+(cd "$R" && bash scripts/grade-receipt.sh --run-row agda --run "https://ci.example/run/s" --commit "$S" --checker "agda 1" --reported ok) >"$WORK/srows"
+RUNS_FILE="$WORK/srows" expect "--write refuses a receipt whose source is off the default branch" 1 "the git checks of PROOF-POLICY §8.5.3 failed" --write
+cmp -s "$WORK/before2_praxis.deed" "$R/verification/receipts/t_praxis.deed" \
+  && ok "and leaves the existing receipt as it was" || bad "a refused --write changed the receipt"
 
 # PWG-3 across a squash: only the Agda leg has a current receipt, and the
 # echo carries a witness for that leg alone, so the git checks hold.
