@@ -9,7 +9,7 @@ last-updated = "2026-04-11"
 [hypatia-config]
 scan-enabled = true
 scan-depth = "standard"  # quick | standard | deep
-report-format = "logtalk"
+report-format = "json"
 
 [symbolic-rules]
 # Custom symbolic rules for this project
