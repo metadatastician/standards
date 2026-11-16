@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: CC-BY-SA-4.0
+cff-version: 1.2.0
+message: "If you cite the hyperpolymath estate canon, please cite this repository."
+title: "standards: canon for the hyperpolymath estate"
+type: software
+authors:
+  - family-names: "Jewell"
+    given-names: "Jonathan D.A."
+repository-code: "https://github.com/metadatastician/standards"
+license: MPL-2.0
