@@ -4,12 +4,12 @@
 # NEUROSYM.a2ml — Neurosymbolic integration metadata
 [metadata]
 version = "0.1.0"
-last-updated = "2026-04-11"
+last-updated = "2026-11-16"
 
 [hypatia-config]
 scan-enabled = true
 scan-depth = "standard"  # quick | standard | deep
-report-format = "logtalk"
+report-format = "json"
 
 [symbolic-rules]
 # Custom symbolic rules for this project
