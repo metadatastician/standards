@@ -1,20 +1,34 @@
 == Clone the repository
 
-git clone https://github.com/metadatastician/standards.git cd standards
+[source,sh]
+----
+git clone https://github.com/metadatastician/standards.git
+cd standards
+----
 
 == Using Guix (recommended for reproducibility)
 
+[source,sh]
+----
 guix shell
+----
 
 == Or using toolbox/distrobox
 
-toolbox create standards-dev toolbox enter standards-dev # Install
-dependencies manually
+[source,sh]
+----
+toolbox create standards-dev
+toolbox enter standards-dev
+# then install the dependencies manually
+----
 
 == Verify setup
 
-just validate # structural gates: language guides, canonical names just test # Run test
-suite
+[source,sh]
+----
+just validate   # structural gates: language guides, canonical names
+just test       # the test suite
+----
 
 ....
 
