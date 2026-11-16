@@ -291,20 +291,27 @@ for (const name of CONTRACTILES_GRAMMAR_REJECTS) {
 }
 // (rsr-profile …) (A7 10, J39; clauses/rsr-profile.abnf). Invalid fixtures whose
 // defect rsr-profile.abnf itself expresses: an unknown field or sub-clause, a
-// value of the wrong kind, a non-prose (notes …). The others break a SEMANTIC
-// side condition (presence, once-only, placement, empty or repeated items),
+// value of the wrong kind, a non-prose (notes …), a (layout …) member other than
+// (module :gate "…" :at ("…" …)). The others break a SEMANTIC side condition
+// (presence, once-only, placement, empty or repeated items, an :at path that
+// is not a concrete repo-relative path),
 // which only deed_lint.js --rsr-profile checks. Every invalid fixture is in
 // one list or the other.
 {
   const RSR_PROFILE_GRAMMAR_REJECTS = [
     "capabilities-symbols_chora.deed", "notes-clause_chora.deed", "notes-nonstring_chora.deed", "omitted-rationale-top_chora.deed",
     "policy-field_chora.deed", "role-symbol_chora.deed", "unknown-clause_chora.deed", "unknown-field_chora.deed",
+    "layout-at-empty_chora.deed", "layout-at-string_chora.deed", "layout-empty_chora.deed", "layout-field_chora.deed",
+    "layout-gate-symbol_chora.deed", "layout-in-notes_chora.deed", "layout-unknown-clause_chora.deed", "layout-unknown-member_chora.deed",
   ];
   const RSR_PROFILE_SEMANTIC_ONLY = [
     "0-AI-MANIFEST.deed", "capabilities-duplicate_chora.deed", "capabilities-empty-no-preset_chora.deed", "capabilities-empty-string_chora.deed",
     "missing-version_chora.deed", "notes-duplicate_chora.deed",
     "no-capabilities-no-preset_chora.deed", "notes-twice_chora.deed", "preset-empty_chora.deed", "profile-nested_chora.deed",
     "profile-twice_chora.deed", "version-twice_chora.deed",
+    "layout-at-absolute_chora.deed", "layout-at-alternation_chora.deed", "layout-at-dot_chora.deed", "layout-at-dotdot_chora.deed",
+    "layout-at-duplicate_chora.deed", "layout-at-emptyseg_chora.deed", "layout-at-glob_chora.deed", "layout-gate-twice_chora.deed",
+    "layout-no-at_chora.deed", "layout-no-gate_chora.deed", "layout-twice_chora.deed",
   ];
   const profileOk = (text, name) => {
     try {
