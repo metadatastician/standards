@@ -63,12 +63,12 @@ SIB="$SIB"
 receipt_claims() { printf '%s\n' 'T-1|proven|theorem|re-proved|RECONCILED|re-proved|RECONCILED||' 'T-2|tested-only|demonstration|n/a|n/a|n/a|n/a||'; }
 receipt_runs() { if [ -n "\${PARTIAL_FAIL:-}" ]; then cat runs.rows; return 3; fi; [ -z "\${FAIL_RUNS:-}" ] || return 4; cat "\${RUNS_FILE:-runs.rows}"; }
 receipt_echoes() { if [ -n "\${ECHO_ROW:-}" ]; then printf "%s\\n" "\$ECHO_ROW"; fi; }
-receipt_header() { printf ';; SPDX-License-Identifier: CC-BY-SA-4.0\n;; test receipt\n'; }
+receipt_header() { printf ';; SPDX-License-Identifier: CC-BY-SA-4.0\n;; test receipt (a comment may say :pwg PWG-1 without moving the control)\n'; }
 receipt_trusted_base() { [ -z "\${FAIL_HOOK:-}" ] || return 3; }
 receipt_invocation() {
   case "\$1" in
     agda) printf 'agda --safe --without-K --cubical-compatible -i src -i _deps/sibling/src src/T/A.agda\n' ;;
-    rocq) printf 'coqc -q T.v (in legs/rocq)\n' ;;
+    rocq) printf 'coqc -q T.v (in legs/rocq)\n'; if [ -n "\${TWO_LINES:-}" ]; then printf 'second line\n'; fi ;;
     lean) printf 'lake build (in legs/lean)\n' ;;
   esac
 }
@@ -165,6 +165,29 @@ gitq -C "$R" rm -q legs/lean/Link.lean; gitq -C "$R" commit -qm unlink
 cp "$R/scripts/grade-receipt.sh" "$WORK/grade.orig"
 sed -i 's/receipt_imports() {/receipt_imports() { if [ -n "${MIXED_CASE:-}" ]; then printf "%s|%s|%s|%s\\n" o\/sibling "$(git show "$2:scripts\/sibling.pin")" "$SIB" src\/Sib.agda O\/Sibling "$(git show "$2:scripts\/sibling.pin")" "$SIB" src\/Sib.agda; return 0; fi/' "$R/scripts/grade-receipt.sh"
 MIXED_CASE=1 expect "an imported repository named in two spellings is refused" 1 "names one imported repository in two spellings" --write
+cp "$WORK/grade.orig" "$R/scripts/grade-receipt.sh"
+
+# An invocation hook must print one line, not have its tail dropped.
+TWO_LINES=1 expect "an invocation hook that prints two lines is refused" 1 "must print exactly one line" --run-row rocq --run "https://ci.example/run/2" --commit "$C" --checker "rocq 1" --reported ok
+
+# A claim typed proven-with-postulates needs the axioms its token names.
+sed -i 's/T-1|proven|theorem/T-1|proven-with-postulates|theorem/' "$R/scripts/grade-receipt.sh"
+expect "proven-with-postulates with no reported axiom is refused" 1 "names axioms, but the current Agda run reported none" --write
+cp "$WORK/grade.orig" "$R/scripts/grade-receipt.sh"
+
+# An echo cycle is refused even when the current receipts do not use it.
+X1=1111111111111111111111111111111111111111; X2=2222222222222222222222222222222222222222
+ECHO_ROW="$X1|$X2|inputs-sha256|refs/pull/7/head
+$X2|$X1|inputs-sha256|refs/pull/8/head" expect "a cycle among echoes the receipts do not use is refused" 1 "the echoes form a cycle" --write
+
+# A directory among the inputs is refused, not hashed as nothing.
+sed -i 's/^    rocq) printf .legs\/rocq\/T.v\\n. ;;$/    rocq) printf "legs\/rocq\\n" ;;/' "$R/scripts/grade-receipt.sh"
+expect "a directory given as an input is refused" 1 "is not a regular file" --digest rocq
+cp "$WORK/grade.orig" "$R/scripts/grade-receipt.sh"
+
+# The home script's own EXIT trap still runs.
+sed -i 's/^\. "\$RECEIPT_STD\/scripts\/proof-receipt.sh"$/trap "echo HOME-TRAP-RAN" EXIT\n&/' "$R/scripts/grade-receipt.sh"
+expect "the home script's EXIT trap is kept" 0 "HOME-TRAP-RAN" --digest agda
 cp "$WORK/grade.orig" "$R/scripts/grade-receipt.sh"
 
 # A path a deed string cannot hold is refused, not written.

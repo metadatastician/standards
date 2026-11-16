@@ -137,6 +137,8 @@ _receipt_digest() {
   [[ -n "$paths" ]] || receipt_die "the $prover leg has no inputs"
   while IFS= read -r p; do
     git ls-files --error-unmatch -- "$p" >/dev/null 2>&1 || receipt_die "$p is not tracked by git"
+    # A pathspec also matches a directory with tracked files; an input is a file.
+    [[ -f "$p" ]] || receipt_die "$p is not a regular file"
     # The reference digest hashes a link's git blob (its target text), which
     # sha256sum of the working tree would not: refuse rather than disagree.
     [[ ! -L "$p" ]] || receipt_die "$p is a symbolic link; list the file it points to as the input"
@@ -423,6 +425,9 @@ _receipt_emit() {
     if [[ "$token" == proven ]] && _receipt_has_current agda && [[ -n "$(_receipt_current_field agda 10)" ]]; then
       receipt_die "claim $id: the current Agda run reported axioms, so its token is proven-with-postulates, not proven"
     fi
+    if [[ "$token" == proven-with-postulates ]] && _receipt_has_current agda && [[ -z "$(_receipt_current_field agda 10)" ]]; then
+      receipt_die "claim $id: its token proven-with-postulates names axioms, but the current Agda run reported none"
+    fi
     printf '  (claim :id "%s" :pwg %s :foundation-diverse #f\n' "$id" "$(_receipt_pwg_of "$token" "$coq" "$coq_state" "$lean" "$lean_state")"
     printf '    (leg :prover agda :route source :token %s :state AGDA-VERIFIED' "$token"
     if _receipt_has_any agda; then printf '\n'; _receipt_emit_receipts_closed agda ')'; else printf ')\n'; fi
@@ -486,6 +491,15 @@ _receipt_prepare() {
   while IFS= read -r row; do _receipt_check_row "$row"; done < "$_receipt_ledger_file"
   while IFS= read -r row; do _receipt_check_echo "$row"; done < "$_receipt_echo_file"
   [[ "$(cut -d'|' -f1 "$_receipt_echo_file" | sort | uniq -d | wc -l)" == 0 ]] || receipt_die 'an echo source has two images'
+  # §8.5.2: no echo chain may cycle, whether or not the current receipts use it.
+  local start
+  while IFS='|' read -r start _; do
+    local hops=0 at="$start"
+    while at="$(awk -F'|' -v c="$at" '$1==c{print $2}' "$_receipt_echo_file")" && [[ -n "$at" ]]; do
+      hops=$((hops + 1))
+      [[ "$at" != "$start" ]] && (( hops < 64 )) || receipt_die "the echoes form a cycle through $start"
+    done
+  done < "$_receipt_echo_file"
   commits="$(awk -F'|' '$8=="current"{print $3}' "$_receipt_ledger_file" | sort -u)"
   [[ "$(grep -c . <<< "$commits" || true)" -le 1 ]] || receipt_die "the current receipts name different commits: $(tr '\n' ' ' <<< "$commits")"
   for p in agda rocq lean; do
@@ -533,6 +547,11 @@ _receipt_prepare() {
         || receipt_die "cannot list the $p inputs of $repo at $commit"
       printf '%s|%s|%s|%s\n' "$repo" "$commit" "$(sha256sum < "$_receipt_manifest_dir/$p.import.$n" | cut -d' ' -f1)" "$_receipt_manifest_dir/$p.import.$n" \
         >> "$_receipt_manifest_dir/$p.imports"
+      # The checker takes one clone per repository, so every leg that imports
+      # a repository must name the same clone.
+      if [[ -f "$_receipt_manifest_dir/clones" ]] && awk -F= -v r="${repo,,}" -v d="$dir" 'tolower($1)==r && $2!=d{f=1} END{exit !f}' "$_receipt_manifest_dir/clones"; then
+        receipt_die "two legs import $repo from different clones; name one clone for it"
+      fi
       printf '%s=%s\n' "$repo" "$dir" >> "$_receipt_manifest_dir/clones"
     done < <(cut -d'|' -f1-3 "$_receipt_manifest_dir/$p.lines" | LC_ALL=C sort -u -t'|' -k1,1)
   done
@@ -583,10 +602,12 @@ _receipt_read_with_reader() {
   grep -oE '"source_commit":"[0-9a-f]{40}"' <<< "$json" | sed 's/"source_commit":"\(.*\)"/  source-commit \1/'
   grep -oE '"id":"[^"]*","pwg":"[^"]*","foundation_diverse":(true|false)' <<< "$json" \
     | sed -E 's/"id":"([^"]*)","pwg":"([^"]*)","foundation_diverse":(.*)/  \1  \2  foundation-diverse \3/'
-  first="$(grep -m1 -oE ':pwg [A-Za-z0-9-]+' "$file" | cut -d' ' -f2)"
+  # The first (claim …) line, never a comment that mentions a grade.
+  first="$(grep -m1 -E '^  \(claim :id "[^"]*" :pwg ' "$file" | grep -oE ':pwg [A-Za-z0-9-]+' | cut -d' ' -f2)"
+  [[ -n "$first" ]] || receipt_die "negative control: $file has no claim to alter"
   case "$first" in PWG-1) wrong=PWG-2ii ;; *) wrong=PWG-1 ;; esac
   ctl="$(mktemp -d)"; _receipt_tmpfiles+=("$ctl")
-  awk -v w="$wrong" '!done && /:pwg /{sub(/:pwg [A-Za-z0-9-]+/, ":pwg " w); done=1} {print}' "$file" > "$ctl/control_praxis.deed"
+  awk -v w="$wrong" '!done && /^  \(claim :id "[^"]*" :pwg /{sub(/:pwg [A-Za-z0-9-]+/, ":pwg " w); done=1} {print}' "$file" > "$ctl/control_praxis.deed"
   if err="$(bun "$(_receipt_reader)" --proof-receipt-json "$ctl/control_praxis.deed" 2>&1)"; then
     receipt_die "negative control: the reader accepted a receipt whose first claim records :pwg $wrong"
   fi
@@ -605,7 +626,13 @@ receipt_main() {
   for v in receipt_claims receipt_runs receipt_echoes receipt_header receipt_trusted_base receipt_invocation receipt_inputs receipt_status_ids receipt_recorded_legs; do
     declare -F "$v" >/dev/null || receipt_die "the home script must define $v"
   done
-  trap _receipt_cleanup EXIT
+  # The gate's own strictness, whatever the sourcing script set: a failure
+  # anywhere stops it rather than letting a later step report success.
+  set -euo pipefail
+  # Keep the home script's EXIT trap, and clean up before it runs.
+  local prior
+  prior="$(trap -p EXIT | sed -E "s/^trap -- '(.*)' EXIT\$/\1/")"
+  trap "_receipt_cleanup${prior:+; $prior}" EXIT
   _receipt_claims_file="$(mktemp)"; _receipt_runs_file="$(mktemp)"; _receipt_echoes_file="$(mktemp)"; _receipt_header_file="$(mktemp)"
   _receipt_tmpfiles+=("$_receipt_claims_file" "$_receipt_runs_file" "$_receipt_echoes_file" "$_receipt_header_file")
   _receipt_hook "$_receipt_claims_file" receipt_claims
@@ -638,8 +665,8 @@ receipt_main() {
       # A run that passed its gate reported no axiom: every gate fails on one.
       tmp="$(mktemp)"; _receipt_tmpfiles+=("$tmp")
       _receipt_hook "$tmp" receipt_invocation "$r_prover"
-      [[ -s "$tmp" ]] || receipt_die "receipt_invocation printed nothing for $r_prover"
-      row="$r_prover|$r_run|$r_commit|$r_checker|$(head -n1 "$tmp")|$(_receipt_digest "$r_prover")|$r_reported|current||"
+      [[ "$(grep -c . "$tmp")" == 1 && "$(wc -l < "$tmp")" == 1 ]] || receipt_die "receipt_invocation must print exactly one line for $r_prover"
+      row="$r_prover|$r_run|$r_commit|$r_checker|$(cat "$tmp")|$(_receipt_digest "$r_prover")|$r_reported|current||"
       _receipt_check_row "$row"; printf '%s\n' "$row" ;;
     --write|--emit-run)
       _receipt_check_claim_ids; _receipt_check_leg_records
@@ -653,7 +680,7 @@ receipt_main() {
       # receipt was written, so a refusal never leaves a partial file.
       tmp="$(mktemp "$(dirname "$target")/.receipt.XXXXXX")"; _receipt_tmpfiles+=("$tmp")
       _receipt_emit > "$tmp"
-      mv "$tmp" "$target"
+      mv "$tmp" "$target" || receipt_die "cannot install the receipt at $target"
       printf 'WROTE %s (source-commit %s)\n' "$target" "$_receipt_source_commit"
       if [[ "$mode" == --emit-run ]]; then
         _receipt_read_with_reader "$target"
