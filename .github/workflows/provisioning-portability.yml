@@ -1,0 +1,37 @@
+# SPDX-License-Identifier: MPL-2.0
+name: Provisioning shell portability
+on:
+  pull_request:
+    paths:
+      - '3-practice/provisioning/**'
+      - '.github/workflows/provisioning-portability.yml'
+  push:
+    branches: [main]
+    paths:
+      - '3-practice/provisioning/**'
+      - '.github/workflows/provisioning-portability.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  language-detection:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Install the bounded-command prerequisite on macOS
+        if: runner.os == 'macOS'
+        shell: bash
+        run: brew install coreutils
+      - name: Exercise empty, Rust and mixed repositories with the host Bash
+        shell: bash
+        run: bash 3-practice/provisioning/tests/language-detection.sh
+      - name: Refuse failed or incomplete crate imports without replacing prior inputs
+        shell: bash
+        run: bash 3-practice/provisioning/tests/crate-generation.sh
