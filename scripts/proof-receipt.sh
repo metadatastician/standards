@@ -142,6 +142,8 @@ _receipt_digest() {
     # The reference digest hashes a link's git blob (its target text), which
     # sha256sum of the working tree would not: refuse rather than disagree.
     [[ ! -L "$p" ]] || receipt_die "$p is a symbolic link; list the file it points to as the input"
+    # The reference digest refuses these, and sha256sum would escape them.
+    [[ "$p" != *'\'* ]] || receipt_die "$p holds a backslash, which §8.5.1 refuses in an input path"
   done <<< "$paths"
   printf '%s\n' "$paths" | xargs -d '\n' sha256sum -- | sha256sum | cut -d' ' -f1
 }
@@ -506,7 +508,10 @@ _receipt_prepare() {
     [[ "$(awk -F'|' -v p="$p" '$1==p && $8=="current"' "$_receipt_ledger_file" | wc -l)" -le 1 ]] || receipt_die "the $p leg has more than one current row"
   done
   while IFS='|' read -r src img wit ref; do
-    _receipt_ensure_commit "$src" "$ref"; _receipt_ensure_commit "$img" "refs/heads/$RECEIPT_DEFAULT_BRANCH"
+    # An image that is itself an echo source (a chain A -> B -> C) is kept by
+    # its own forge reference; only the end of a chain is on the default branch.
+    _receipt_ensure_commit "$src" "$ref"
+    _receipt_ensure_commit "$img" "$(_receipt_echo_ref "$img" | grep . || printf 'refs/heads/%s' "$RECEIPT_DEFAULT_BRANCH")"
     for p in agda rocq lean; do
       # Only a leg with a current receipt has a manifest for the witness to
       # match (§8.5.3), so only those legs carry one.
@@ -671,19 +676,28 @@ receipt_main() {
     --write|--emit-run)
       _receipt_check_claim_ids; _receipt_check_leg_records
       [[ -n "$_receipt_fallback_commit" ]] || _receipt_fallback_commit="$(git rev-parse HEAD)"
-      [[ "$mode" == --write || -f "$_receipt_extra" ]] || receipt_die "--emit-run needs a rows file"
+      if [[ "$mode" == --emit-run ]]; then
+        [[ -f "$_receipt_extra" ]] || receipt_die "--emit-run needs a rows file"
+        grep -q '[^[:space:]]' "$_receipt_extra" || receipt_die "--emit-run was given no rows: $_receipt_extra is empty"
+      fi
+      [[ ! -d "$target" ]] || receipt_die "the receipt target $target is a directory"
       _receipt_prepare
-      # A run's receipt must describe the tree it was emitted from.
-      if [[ "$mode" == --emit-run ]]; then _receipt_check_currency; fi
+      # A receipt must describe the tree it is written from: a current row
+      # whose inputs moved is superseded or regressed first, never rewritten.
+      _receipt_check_currency
       mkdir -p "$(dirname "$target")"
       # Emit beside the target and move it into place only when the whole
       # receipt was written, so a refusal never leaves a partial file.
-      tmp="$(mktemp "$(dirname "$target")/.receipt.XXXXXX")"; _receipt_tmpfiles+=("$tmp")
+      # The staging copy keeps the target's name, which the reader checks.
+      tmp="$(mktemp -d "$(dirname "$target")/.receipt.XXXXXX")"; _receipt_tmpfiles+=("$tmp")
+      tmp="$tmp/$(basename "$target")"
       _receipt_emit > "$tmp"
-      mv "$tmp" "$target" || receipt_die "cannot install the receipt at $target"
+      # A run's receipt is read, with its negative control, before it
+      # replaces anything.
+      if [[ "$mode" == --emit-run ]]; then _receipt_read_with_reader "$tmp"; fi
+      mv -T "$tmp" "$target" || receipt_die "cannot install the receipt at $target"
       printf 'WROTE %s (source-commit %s)\n' "$target" "$_receipt_source_commit"
       if [[ "$mode" == --emit-run ]]; then
-        _receipt_read_with_reader "$target"
         printf 'To record this run, add these rows to the run ledger in %s:\n' "$RECEIPT_SCRIPT"
         sed 's/^/  /' "$_receipt_extra"
       fi ;;

@@ -190,6 +190,17 @@ sed -i 's/^\. "\$RECEIPT_STD\/scripts\/proof-receipt.sh"$/trap "echo HOME-TRAP-R
 expect "the home script's EXIT trap is kept" 0 "HOME-TRAP-RAN" --digest agda
 cp "$WORK/grade.orig" "$R/scripts/grade-receipt.sh"
 
+# --emit-run needs rows, a file target, and writes nothing a reader refuses.
+: >"$WORK/emptyrows"
+expect "--emit-run refuses an empty rows file" 1 "was given no rows" --emit-run "$WORK/emptyrows" --out "$WORK/empty_praxis.deed"
+mkdir -p "$WORK/adir_praxis.deed"
+expect "a directory as the receipt target is refused" 1 "is a directory" --emit-run "$WORK/rows" --out "$WORK/adir_praxis.deed"
+
+# --write refuses current rows whose inputs have since moved.
+printf -- '-- moved again\n' >>"$R/src/T/B.agda"
+expect "--write refuses current rows whose inputs moved" 1 "the agda inputs changed since run" --write
+gitq -C "$R" checkout -q -- src/T/B.agda
+
 # A path a deed string cannot hold is refused, not written.
 printf 'module T.Q where\n' >"$R/src/T/Q\"uote.agda"
 gitq -C "$R" add -A; gitq -C "$R" commit -qm quote
