@@ -1,0 +1,167 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+// SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell (hyperpolymath)
+= The receipt source: writing proof receipts
+:toc: macro
+
+A proof receipt (link:PROOF-POLICY.adoc[PROOF-POLICY] §8.5.1) holds two kinds
+of fact: facts a person types, such as which run checked which commit, and
+facts derived from git, such as each manifest, digest and grade. The derived
+facts must not be typed, because a typed digest or grade can be wrong in a way
+that nothing notices.
+
+So a repository keeps a *receipt source*, a TOML file that holds only the typed
+facts. The shared writer
+link:../scripts/proof-receipt.js[`scripts/proof-receipt.js`] derives the rest
+and writes the receipt. It works the same way in every repository.
+
+toc::[]
+
+== What the writer derives
+
+* *Input sets.* The writer takes each leg's input set at the commit of its
+receipt. For Agda this is the import cone of the graded roots, found through the
+include directories. Files a pinned sibling supplies go in an `(import …)`
+clause. For any other prover it is the files the glob patterns name, plus the
+patterns given for each import.
+* *Manifests and digests.* The writer gets the `(inputs-manifest …)` and
+`:inputs-sha256` of each current receipt, and of each import, from the reference
+script `scripts/proof-inputs-sha256.sh`.
+* *Echo witnesses.* The writer computes an echo's witness digests at both its
+source and its image. A digest that differs between the two ends is refused.
+* *The source commit.* The `:source-commit` is the commit where the echo chain
+from the current receipts ends. If the current receipts lead to different
+commits, they are refused.
+* *Grades.* The writer derives `:pwg` and `:foundation-diverse` with
+`deriveProofGrade`. This is the same function the reader `readProofReceipt` uses
+(`1-formats/deed/tools/deed_lint.js`), so a writer and the reader cannot
+disagree. The written receipt is then read back with the reader, which must
+accept it.
+
+== The source
+
+The receipt source is TOML, a format the estate keeps (DATA-FORMAT-ROUTING). The
+writer reads it strictly: it refuses an unknown key, a missing key and a value of
+the wrong type. Paths are relative to the root of the home repository.
+
+[source,toml]
+----
+repository = "OWNER/REPO"
+receipt = "verification/receipts/agda_praxis.deed"
+canonical-name = "repo-proof-receipt"
+spdx = "CC-BY-SA-4.0"               # the receipt's licence: the repository's choice, never a default
+copyright = "2026 …"
+header = ["comment lines for the head of the receipt"]
+default-branch = "main"             # optional
+
+[[trusted-base]]                    # §8.4, as the home gate finds it
+prover = "agda"
+module = "Agda.Primitive"
+name = "Level"
+binding = "BUILTIN LEVEL"
+
+[inputs.agda]
+roots = ["src/Repo/All.agda"]        # the graded roots
+include = ["src"]                    # the -i directories of the home repository
+paths = ["scripts/fetch-siblings.sh"]  # other files the run reads (globs)
+
+[[inputs.agda.import]]              # a sibling fetched at a pinned commit
+repository = "OWNER/SIBLING"
+commit = "<40 hex>"
+checkout = "_build/dependencies/sibling"
+include = ["src"]
+pin = { file = "scripts/fetch-siblings.sh", pattern = 'SIBLING_COMMIT:-([0-9a-f]{40})' }
+
+[inputs.rocq]                        # any other prover: glob patterns
+paths = ["verification/legs/rocq/*.v"]
+# [[inputs.rocq.import]] takes repository, commit, checkout, paths and pin.
+
+[inputs.lean]
+paths = ["verification/legs/lean/**/*.lean", "verification/legs/lean/lakefile.{lean,toml}",
+         "verification/legs/lean/lean-toolchain"]
+
+[[claim]]                            # one per theorem (§8.1)
+id = "T-1"
+token = "proven"                     # the Agda leg's §5 token
+rocq = { route = "re-proved", state = "RECONCILED" }
+lean = { route = "unavailable", reason = "…" }
+# agda-state defaults to AGDA-VERIFIED. A discharged leg's token defaults to
+# proven when RECONCILED and open otherwise. [[claim.control]] takes path and
+# prover (§8.5.4).
+
+[[run]]                              # one per checker run, copied from its CI log
+prover = "agda"
+run = "https://github.com/OWNER/REPO/actions/runs/<id>/attempts/1"
+commit = "<40 hex>"
+checker = "Agda version 2.6.4.3 (…)"
+invocation = "agda --safe --without-K --cubical-compatible … src/Repo/All.agda"
+reported = "what the run printed"    # optional; written as a comment
+state = "current"                    # or superseded / regressed, with reason
+# Optional: inputs-sha256 (refused unless it is the derived digest), axioms
+# ([{ name, disposition }]), control (the path of a negative control), and
+# claims (restrict the run to some claim ids).
+
+[[echo]]                             # §8.5.2: a rewrite of a commit that a run names
+source = "<40 hex>"
+image = "<40 hex>"
+witness = "inputs-sha256"            # or tree-sha256
+fetch = "refs/pull/<n>/head"         # the forge reference that keeps the source
+----
+
+The writer refuses a source in which:
+
+* a claim has no `rocq` or no `lean` leg. A leg that is not discharged is still
+recorded, as `unavailable` or `waived`, with its reason (§2);
+* a leg has two current runs;
+* an Agda module is found in no include directory, unless the prover supplies it
+(`Agda.*`), or is found in two;
+* a glob pattern matches no file;
+* a pin file pins another commit than the source does, or is missing from the
+input set of a leg that uses the pin. The script that holds a pin is in the home
+input set (§8.5.1).
+
+== Running it
+
+[source,sh]
+----
+bun scripts/proof-receipt.js write SOURCE            # write the receipt
+bun scripts/proof-receipt.js check SOURCE            # the gate: see below
+bun scripts/proof-receipt.js row --prover agda --run URL --commit SHA \
+    --checker TEXT --invocation TEXT [--reported TEXT] SOURCE
+                                                     # the [[run]] of a run that just passed
+bun scripts/proof-receipt.js write --runs ROWS.toml --out FILE SOURCE
+                                                     # a receipt with those runs current
+bun scripts/proof-receipt.js inputs|digest [--commit C] SOURCE PROVER
+----
+
+`check` fails unless all of these hold:
+
+. The committed receipt is exactly what the source and the tree give.
+. Each current receipt still describes the tree. Its inputs digest at `HEAD`, or
+at `--at`, is the digest it records. A change to an input needs a new run, or
+the row must be marked `superseded` or `regressed` with its reason (§8.4).
+. The git checks of §8.5.3 hold (`scripts/check-proof-receipt.sh`), with each
+import's checkout given as its clone.
+. The reader refuses a receipt in which the first claim records another grade.
+This negative control shows that the reader still derives grades.
+
+A repository that runs the writer from a pinned standards commit fetches the
+writer, the reader (`1-formats/deed/tools/deed_lint.js`), the reference digest
+script and the git checker. It keeps them in the standards layout, because the
+writer finds the others by their relative paths. It pins each file by its
+SHA-256.
+
+The writer does not run any prover. The home gate is the evidence that a run
+passed. It must still check that the trusted base and the Agda cone are what the
+prover reports (`agda --dependency-graph`): the writer's cone is a text scan of
+`import` statements, with comments and pragmas stripped.
+
+== Tests
+
+`scripts/tests/proof-receipt-test.sh` builds a home repository and a pinned
+sibling, with a squash merge carried by an echo. It checks that:
+
+* the written receipt reads as `PWG-1`;
+* `check` passes;
+* each refusal above, a hand-edited receipt, a changed input, a forged echo and
+a tree echo across a docs change each fail for their own reason;
+* `row`, `--runs` and negative controls work.

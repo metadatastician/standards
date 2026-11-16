@@ -158,6 +158,15 @@ jobs:
           bash scripts/tests/check-reusable-closure-test.sh
           bash scripts/tests/governance-canary-test.sh
 
+      # PROOF-POLICY §8.5: the shared receipt writer and the git checker of
+      # §8.5.3, each on scratch repositories. Named for the same reason as the
+      # guard controls above: home gates and Mathesis run these tools.
+      - name: Proof receipt writer and checker (fixture-driven)
+        run: |
+          set -euo pipefail
+          bash scripts/tests/check-proof-receipt-test.sh
+          bash scripts/tests/proof-receipt-test.sh
+
       - name: Run tests/*.sh and scripts/tests/*.sh (light shard)
         env:
           SHELL_TEST_SHARD: light

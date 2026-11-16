@@ -785,6 +785,14 @@ receipts through it and catalogues the result as a census (§8.4).
 
 `echo_praxis.deed` in the same directory is a worked example of §8.5.2.
 
+The shared writer is
+link:../scripts/proof-receipt.js[`scripts/proof-receipt.js`]. It reads a
+receipt source: a TOML file that holds only the typed facts (the claims, the
+run ledger, the echoes and the trusted base). It derives every manifest,
+digest, import and grade from git, through the reference digest script and the
+reader's own `deriveProofGrade`. Its `check` mode is a home gate for §8.5.3.
+link:PROOF-RECEIPT-SOURCE.adoc[PROOF-RECEIPT-SOURCE] describes the source.
+
 ==== 8.5.2 Echoes: receipts across a history rewrite
 
 Owner ruling 2026-11-13. A receipt is earned on a commit. A squash merge or a
