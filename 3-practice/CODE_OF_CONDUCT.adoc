@@ -248,7 +248,8 @@ For contributors with elevated access (Perimeter 2 or 1):
 If you believe an enforcement decision was made in error:
 
 [arabic]
-. *Wait 7 days* after the decision (cooling-off period)
+. *Wait 7 days* after the decision (cooling-off period). A permanent ban
+is the exception: it can be appealed only after 12 months
 . *Email* conduct@themetadatastician.art with subject line "`Appeal: [Original
 Report ID]`"
 . *Explain* why you believe the decision should be reconsidered
