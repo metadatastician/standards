@@ -143,7 +143,7 @@ FAIL_RUNS=1 expect "a failing run-ledger hook stops the gate by name" 1 "the hoo
 PARTIAL_FAIL=1 expect "a run-ledger hook that prints rows and then fails stops the gate" 1 "the hook receipt_runs of scripts/grade-receipt.sh failed" --write
 
 # The rows of a run become current, so --emit-run refuses any other state.
-sed 's/|current||$/|superseded|by hand|/' "$WORK/rows" | head -1 >"$WORK/badrows"
+awk -F'|' 'BEGIN{OFS="|"} NR==1{$8="superseded"; $9="by hand"; print}' "$WORK/rows" >"$WORK/badrows"
 expect "--emit-run refuses a row that is not current" 1 "a row given to --emit-run must be current" --emit-run "$WORK/badrows" --out "$WORK/bad_praxis.deed"
 
 # A counted leg whose run reported an axiom is proven-with-postulates (§5).
@@ -221,6 +221,27 @@ cmp -s "$WORK/before_praxis.deed" "$R/verification/receipts/t_praxis.deed" \
 # The home EXIT handler sees the gate's own failure status.
 sed -i 's/^\. "\$RECEIPT_STD\/scripts\/proof-receipt.sh"$/trap '"'"'echo "HOME-RC=$?"'"'"' EXIT\n&/' "$R/scripts/grade-receipt.sh"
 expect "the home EXIT handler sees the refusal's status" 1 "HOME-RC=1" --emit-run "$WORK/emptyrows" --out "$WORK/rc_praxis.deed"
+cp "$WORK/grade.orig" "$R/scripts/grade-receipt.sh"
+
+# A literate module is followed like a plain one.
+printf 'import T.L\n' >>"$R/src/T/A.agda"; printf '```agda\nmodule T.L where\n```\n' >"$R/src/T/L.lagda.md"
+out=$(cd "$R" && bash scripts/grade-receipt.sh --inputs agda 2>&1)
+grep -qx 'src/T/L.lagda.md' <<<"$out" && ok "a literate module (.lagda.md) is in the cone" || bad "the cone missed src/T/L.lagda.md: $out"
+gitq -C "$R" checkout -q -- src/T/A.agda; rm -f "$R/src/T/L.lagda.md"
+
+# A run row binds what the run imported: a hook that now derives other
+# imported files cannot re-describe that run.
+grep -q '|o/sibling@'"$SC"'=' "$R/runs.rows" && ok "the recorded Agda row binds the sibling import" || bad "the Agda row carries no import binding"
+printf -- '-- later\n' >>"$SIB/src/Sib.agda"; gitq -C "$SIB" commit -qam later
+SC_LATER=$(git -C "$SIB" rev-parse HEAD)
+IMPORT_COMMIT="$SC_LATER" expect "a hook that now imports something else is refused" 1 "the agda run recorded imports" --write
+
+# The home EXIT handler cannot turn a refusal into success, and keeps its quotes.
+sed -i 's/^\. "\$RECEIPT_STD\/scripts\/proof-receipt.sh"$/trap '"'"'printf "handler ran\\n"; exit "$?"'"'"' EXIT\n&/' "$R/scripts/grade-receipt.sh"
+expect "a home handler that exits 0 does not hide a refusal" 1 "handler ran" --emit-run "$WORK/emptyrows" --out "$WORK/rc2_praxis.deed"
+cp "$WORK/grade.orig" "$R/scripts/grade-receipt.sh"
+sed -i 's/^\. "\$RECEIPT_STD\/scripts\/proof-receipt.sh"$/trap "echo '"'"'it is kept'"'"'" EXIT\n&/' "$R/scripts/grade-receipt.sh"
+expect "a home handler holding quotes runs as written" 0 "it is kept" --digest agda
 cp "$WORK/grade.orig" "$R/scripts/grade-receipt.sh"
 
 # A path a deed string cannot hold is refused, not written.

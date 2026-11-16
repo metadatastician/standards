@@ -49,6 +49,10 @@
 #                           checker | invocation | inputs sha256 | what the run
 #                           reported | state (current|superseded|regressed) |
 #                           reason | axioms (name:c|b|debt, comma-separated)
+#                           [| imports: OWNER/REPO@COMMIT=SHA256, comma-separated,
+#                           which --run-row writes when the leg imports files;
+#                           the gate refuses a row whose binding differs from
+#                           what receipt_imports derives at its commit]
 #   receipt_echoes          the echo ledger: source | image | inputs-sha256 |
 #                           fetch ref
 #   receipt_header          the comment lines that open the receipt, after
@@ -112,8 +116,11 @@ receipt_agda_cone() {
     printf '%s\n' "$f"
     while read -r m; do
       for i in "${incs[@]}"; do
-        p="$i/${m//.//}.agda"; p="${p#./}"
-        if [[ -f "$p" ]]; then queue+=("$p"); break; fi
+        # A source module, plain or literate (the extensions Agda reads).
+        for x in .agda .lagda .lagda.tex .lagda.md .lagda.rst .lagda.org .lagda.typ .lagda.tree; do
+          p="$i/${m//.//}$x"; p="${p#./}"
+          if [[ -f "$p" ]]; then queue+=("$p"); continue 3; fi
+        done
       done
     done < <(sed -e 's/--.*$//' "$f" | grep -oE '(^|[[:space:];])import[[:space:]]+[^[:space:];(){}]+' | awk '{print $NF}')
   done
@@ -181,10 +188,18 @@ _receipt_echo_ref() { local c="$1"; awk -F'|' -v c="$c" '$1==c{print $4}' "$_rec
 # Validate one row; print nothing.  A field may not hold " or \ (deed strings)
 # and may not be empty, except the reason of a current receipt and the axioms.
 _receipt_check_row() {
-  local row="$1" prover run commit checker inv dig said state reason axioms x
+  local row="$1" prover run commit checker inv dig said state reason axioms imports x n
   local -a a
-  IFS='|' read -r prover run commit checker inv dig said state reason axioms <<< "$row"
-  [[ "$(tr -cd '|' <<< "$row" | wc -c)" == 9 ]] || receipt_die "a ledger row needs 10 fields: $row"
+  IFS='|' read -r prover run commit checker inv dig said state reason axioms imports <<< "$row"
+  # Ten fields, or eleven when the run read files of an imported repository:
+  # then the last field binds those files to the run (OWNER/REPO@COMMIT=SHA256,
+  # comma-separated), so a receipt can never re-describe what a run imported.
+  n="$(tr -cd '|' <<< "$row" | wc -c)"
+  [[ "$n" == 9 || "$n" == 10 ]] || receipt_die "a ledger row needs 10 fields, or 11 with imports: $row"
+  if [[ "$n" == 10 ]]; then
+    [[ "$imports" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+@[0-9a-f]{40}=[0-9a-f]{64}(,[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+@[0-9a-f]{40}=[0-9a-f]{64})*$ ]] \
+      || receipt_die "a row's imports must be OWNER/REPO@COMMIT=SHA256, comma-separated: $row"
+  fi
   [[ "$row" != *'"'* && "$row" != *'\'* ]] || receipt_die "a ledger row holds a quote or backslash: $row"
   [[ "$row" != *[[:cntrl:]]* ]] || receipt_die "a ledger row holds a control character, which a deed string cannot: $row"
   [[ "$prover" =~ ^(agda|rocq|lean)$ ]] || receipt_die "unknown prover in row: $row"
@@ -354,11 +369,11 @@ _receipt_emit_imports() {
   done < "$_receipt_manifest_dir/$prover.imports"
 }
 _receipt_emit_receipts() {
-  local prover="$1" row p run commit checker inv dig said state reason axioms want
+  local prover="$1" row p run commit checker inv dig said state reason axioms imports want
   # Current first, then the lineage in ledger order.
   for want in current other; do
     while IFS= read -r row; do
-      IFS='|' read -r p run commit checker inv dig said state reason axioms <<< "$row"
+      IFS='|' read -r p run commit checker inv dig said state reason axioms imports <<< "$row"
       [[ "$p" == "$prover" ]] || continue
       if [[ $want == current ]]; then [[ $state == current ]] || continue; else [[ $state != current ]] || continue; fi
       printf '      ; the run reported: %s\n' "$said"
@@ -542,32 +557,53 @@ _receipt_prepare() {
     a="$(sha256sum < "$_receipt_manifest_dir/$p" | cut -d' ' -f1)"
     [[ "$a" == "$(_receipt_current_field "$p" 6)" ]] \
       || receipt_die "the $p receipt records inputs $(_receipt_current_field "$p" 6), but the manifest at $c gives $a"
-    _receipt_hook "$_receipt_manifest_dir/$p.raw" _receipt_imports "$p" "$c"
-    grep . "$_receipt_manifest_dir/$p.raw" > "$_receipt_manifest_dir/$p.lines" || true
-    while IFS= read -r row; do _receipt_check_import "$row"; done < "$_receipt_manifest_dir/$p.lines"
-    [[ "$(cut -d'|' -f1 "$_receipt_manifest_dir/$p.lines" | LC_ALL=C sort -u | wc -l)" == "$(cut -d'|' -f1 "$_receipt_manifest_dir/$p.lines" | tr '[:upper:]' '[:lower:]' | LC_ALL=C sort -u | wc -l)" ]] \
+    _receipt_build_imports "$p" "$c" "$_receipt_manifest_dir"
+    a="$(_receipt_imports_field "$_receipt_manifest_dir" "$p")"
+    [[ "$a" == "$(_receipt_current_field "$p" 11)" ]] \
+      || receipt_die "the $p run recorded imports '$(_receipt_current_field "$p" 11)', but the hook now derives '$a' at $c: record the run again"
+  done
+  _receipt_source_commit="${commits:-$_receipt_fallback_commit}"
+  _receipt_prepare_tail
+}
+# The (import …) manifests of leg $1 at home commit $2, built in $3: one
+# $1.import.N manifest per repository, $1.imports lines (repo|commit|digest|
+# manifest), and the clone of each repository in clones.
+_receipt_build_imports() {
+  local p="$1" c="$2" d="$3" row n repo commit dir
+  local -a paths
+  _receipt_hook "$d/$p.raw" _receipt_imports "$p" "$c"
+  grep . "$d/$p.raw" > "$d/$p.lines" || true
+    while IFS= read -r row; do _receipt_check_import "$row"; done < "$d/$p.lines"
+    [[ "$(cut -d'|' -f1 "$d/$p.lines" | LC_ALL=C sort -u | wc -l)" == "$(cut -d'|' -f1 "$d/$p.lines" | tr '[:upper:]' '[:lower:]' | LC_ALL=C sort -u | wc -l)" ]] \
       || receipt_die "the $p leg names one imported repository in two spellings; GitHub names are case-insensitive, so spell each one way"
     n=0
     while IFS='|' read -r repo commit dir; do
       [[ -n "$repo" ]] || continue
-      [[ "$(awk -F'|' -v r="$repo" 'tolower($1)==tolower(r){print $2"|"$3}' "$_receipt_manifest_dir/$p.lines" | sort -u | wc -l)" == 1 ]] \
+      [[ "$(awk -F'|' -v r="$repo" 'tolower($1)==tolower(r){print $2"|"$3}' "$d/$p.lines" | sort -u | wc -l)" == 1 ]] \
         || receipt_die "the $p leg imports $repo at more than one commit or clone (one pin per repository)"
       _receipt_ensure_import "$repo" "$commit" "$dir"
-      mapfile -t paths < <(awk -F'|' -v r="$repo" '$1==r{print $4}' "$_receipt_manifest_dir/$p.lines" | LC_ALL=C sort -u)
+      mapfile -t paths < <(awk -F'|' -v r="$repo" '$1==r{print $4}' "$d/$p.lines" | LC_ALL=C sort -u)
       n=$((n + 1))
-      bash "$(_receipt_digest_script)" -C "$dir" --manifest "$commit" "${paths[@]}" > "$_receipt_manifest_dir/$p.import.$n" \
+      bash "$(_receipt_digest_script)" -C "$dir" --manifest "$commit" "${paths[@]}" > "$d/$p.import.$n" \
         || receipt_die "cannot list the $p inputs of $repo at $commit"
-      printf '%s|%s|%s|%s\n' "$repo" "$commit" "$(sha256sum < "$_receipt_manifest_dir/$p.import.$n" | cut -d' ' -f1)" "$_receipt_manifest_dir/$p.import.$n" \
-        >> "$_receipt_manifest_dir/$p.imports"
+      printf '%s|%s|%s|%s\n' "$repo" "$commit" "$(sha256sum < "$d/$p.import.$n" | cut -d' ' -f1)" "$d/$p.import.$n" \
+        >> "$d/$p.imports"
       # The checker takes one clone per repository, so every leg that imports
       # a repository must name the same clone.
-      if [[ -f "$_receipt_manifest_dir/clones" ]] && awk -F= -v r="${repo,,}" -v d="$dir" 'tolower($1)==r && $2!=d{f=1} END{exit !f}' "$_receipt_manifest_dir/clones"; then
+      if [[ -f "$d/clones" ]] && awk -F= -v r="${repo,,}" -v d="$dir" 'tolower($1)==r && $2!=d{f=1} END{exit !f}' "$d/clones"; then
         receipt_die "two legs import $repo from different clones; name one clone for it"
       fi
-      printf '%s=%s\n' "$repo" "$dir" >> "$_receipt_manifest_dir/clones"
-    done < <(cut -d'|' -f1-3 "$_receipt_manifest_dir/$p.lines" | LC_ALL=C sort -u -t'|' -k1,1)
-  done
-  _receipt_source_commit="${commits:-$_receipt_fallback_commit}"
+      printf '%s=%s\n' "$repo" "$dir" >> "$d/clones"
+    done < <(cut -d'|' -f1-3 "$d/$p.lines" | LC_ALL=C sort -u -t'|' -k1,1)
+}
+# The run-row field that binds a leg's imports: OWNER/REPO@COMMIT=SHA256 per
+# imported repository, sorted, comma-separated; empty when it imports none.
+_receipt_imports_field() {
+  local d="$1" p="$2"
+  [[ -f "$d/$p.imports" ]] || return 0
+  awk -F'|' '{print $1 "@" $2 "=" $3}' "$d/$p.imports" | LC_ALL=C sort | paste -sd, -
+}
+_receipt_prepare_tail() {
   local steps=0 next
   while next="$(awk -F'|' -v c="$_receipt_source_commit" '$1==c{print $2}' "$_receipt_echo_file")" && [[ -n "$next" ]]; do
     _receipt_source_commit="$next"; steps=$((steps + 1))
@@ -629,6 +665,20 @@ _receipt_read_with_reader() {
 }
 
 _receipt_tmpfiles=()
+_receipt_prior_trap=
+# On exit: clean up, then run the home script's own EXIT handler in a
+# subshell that sees the gate's status. The gate's failure always stands; a
+# handler's own failure stands when the gate succeeded.
+_receipt_on_exit() {
+  local rc=$? hrc=0
+  _receipt_cleanup
+  set +e
+  if [[ -n "$_receipt_prior_trap" ]]; then
+    ( (exit "$rc"); eval "$_receipt_prior_trap" ); hrc=$?
+  fi
+  if (( rc != 0 )); then exit "$rc"; fi
+  exit "$hrc"
+}
 _receipt_cleanup() { (( ${#_receipt_tmpfiles[@]} )) && rm -rf "${_receipt_tmpfiles[@]}"; return 0; }
 
 receipt_main() {
@@ -643,10 +693,12 @@ receipt_main() {
   # anywhere stops it rather than letting a later step report success.
   set -euo pipefail
   # Keep the home script's EXIT trap, and clean up before it runs.
-  local prior
-  prior="$(trap -p EXIT | sed -E "s/^trap -- '(.*)' EXIT\$/\1/")"
-  # The home handler sees the status the gate exited with, not cleanup's.
-  trap "_receipt_rc=\$?; _receipt_cleanup; set +e; (exit \$_receipt_rc)${prior:+; $prior}" EXIT
+  # `trap -p` prints the handler as shell words; read them back as words, so a
+  # handler holding quotes is kept exactly.
+  local -a _receipt_t=()
+  eval "_receipt_t=($(trap -p EXIT))"
+  _receipt_prior_trap="${_receipt_t[2]:-}"
+  trap _receipt_on_exit EXIT
   _receipt_claims_file="$(mktemp)"; _receipt_runs_file="$(mktemp)"; _receipt_echoes_file="$(mktemp)"; _receipt_header_file="$(mktemp)"
   _receipt_tmpfiles+=("$_receipt_claims_file" "$_receipt_runs_file" "$_receipt_echoes_file" "$_receipt_header_file")
   _receipt_hook "$_receipt_claims_file" receipt_claims
@@ -680,7 +732,11 @@ receipt_main() {
       tmp="$(mktemp)"; _receipt_tmpfiles+=("$tmp")
       _receipt_hook "$tmp" receipt_invocation "$r_prover"
       [[ "$(grep -c . "$tmp")" == 1 && "$(wc -l < "$tmp")" == 1 ]] || receipt_die "receipt_invocation must print exactly one line for $r_prover"
-      row="$r_prover|$r_run|$r_commit|$r_checker|$(cat "$tmp")|$(_receipt_digest "$r_prover")|$r_reported|current||"
+      local imd imf
+      imd="$(mktemp -d)"; _receipt_tmpfiles+=("$imd")
+      _receipt_build_imports "$r_prover" "$r_commit" "$imd"
+      imf="$(_receipt_imports_field "$imd" "$r_prover")"
+      row="$r_prover|$r_run|$r_commit|$r_checker|$(cat "$tmp")|$(_receipt_digest "$r_prover")|$r_reported|current||${imf:+|$imf}"
       _receipt_check_row "$row"; printf '%s\n' "$row" ;;
     --write|--emit-run)
       _receipt_check_claim_ids; _receipt_check_leg_records
