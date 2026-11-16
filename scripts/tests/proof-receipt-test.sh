@@ -61,7 +61,7 @@ RECEIPT_CANONICAL_NAME=t-proof-receipt
 RECEIPT_SCRIPT=scripts/grade-receipt.sh
 SIB="$SIB"
 receipt_claims() { printf '%s\n' 'T-1|proven|theorem|re-proved|RECONCILED|re-proved|RECONCILED||' 'T-2|tested-only|demonstration|n/a|n/a|n/a|n/a||'; }
-receipt_runs() { [ -z "\${FAIL_RUNS:-}" ] || return 4; cat "\${RUNS_FILE:-runs.rows}"; }
+receipt_runs() { if [ -n "\${PARTIAL_FAIL:-}" ]; then cat runs.rows; return 3; fi; [ -z "\${FAIL_RUNS:-}" ] || return 4; cat "\${RUNS_FILE:-runs.rows}"; }
 receipt_echoes() { if [ -n "\${ECHO_ROW:-}" ]; then printf "%s\\n" "\$ECHO_ROW"; fi; }
 receipt_header() { printf ';; SPDX-License-Identifier: CC-BY-SA-4.0\n;; test receipt\n'; }
 receipt_trusted_base() { [ -z "\${FAIL_HOOK:-}" ] || return 3; }
@@ -138,6 +138,28 @@ gitq -C "$R" checkout -q -- legs/README.adoc
 
 # A failing ledger hook stops the gate by name, never a receipt from part of the data.
 FAIL_RUNS=1 expect "a failing run-ledger hook stops the gate by name" 1 "the hook receipt_runs of scripts/grade-receipt.sh failed" --write
+
+# A ledger hook that prints valid rows and then fails still stops the gate.
+PARTIAL_FAIL=1 expect "a run-ledger hook that prints rows and then fails stops the gate" 1 "the hook receipt_runs of scripts/grade-receipt.sh failed" --write
+
+# The rows of a run become current, so --emit-run refuses any other state.
+sed 's/|current||$/|superseded|by hand|/' "$WORK/rows" | head -1 >"$WORK/badrows"
+expect "--emit-run refuses a row that is not current" 1 "a row given to --emit-run must be current" --emit-run "$WORK/badrows" --out "$WORK/bad_praxis.deed"
+
+# A counted leg whose run reported an axiom is proven-with-postulates (§5).
+awk -F'|' 'BEGIN{OFS="|"} $1=="rocq"{$10="Classical:c"} {print}' "$WORK/rows" >"$WORK/axrows"
+expect "--emit-run with a Rocq axiom of disposition c is accepted" 0 "PASS: the pinned reader" --emit-run "$WORK/axrows" --out "$WORK/ax_praxis.deed"
+grep -q ':prover rocq :route re-proved :token proven-with-postulates' "$WORK/ax_praxis.deed" \
+  && ok "that leg's token is proven-with-postulates" || bad "the Rocq leg with an axiom is not proven-with-postulates"
+grep -q ':prover lean :route re-proved :token proven :state' "$WORK/ax_praxis.deed" \
+  && ok "a leg without axioms stays proven" || bad "the Lean leg lost its proven token"
+awk -F'|' 'BEGIN{OFS="|"} $1=="agda"{$10="funext:c"} {print}' "$WORK/rows" >"$WORK/agdaax"
+expect "an Agda run with an axiom refuses a claim typed proven" 1 "its token is proven-with-postulates, not proven" --emit-run "$WORK/agdaax" --out "$WORK/agdaax_praxis.deed"
+
+# A symbolic link among the inputs is refused, not hashed through.
+ln -s T.lean "$R/legs/lean/Link.lean"; gitq -C "$R" add -A; gitq -C "$R" commit -qm link
+expect "a symbolic link in an input set is refused" 1 "is a symbolic link" --digest lean
+gitq -C "$R" rm -q legs/lean/Link.lean; gitq -C "$R" commit -qm unlink
 
 # Two spellings of one imported repository are refused.
 cp "$R/scripts/grade-receipt.sh" "$WORK/grade.orig"

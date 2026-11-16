@@ -77,6 +77,11 @@
 # root imports, directly or not, found under the include directories in
 # order), receipt_die MESSAGE.
 #
+# Scope: legs of Agda, Rocq and Lean only. The run ledger refuses a row of any
+# other prover, so a repository with a witness outside dependent type theory
+# (§8.3, foundation-diverse) cannot use this generator yet; it writes
+# :foundation-diverse #f because no such leg can reach it.
+#
 # The grade is never typed: it is derived here under §8.2 and §8.5.2 and
 # derived again by the pinned reader, which refuses a receipt whose :pwg its
 # legs and receipts do not support (§8.4).
@@ -130,7 +135,12 @@ _receipt_digest() {
   local prover="$1" paths p
   paths="$(_receipt_inputs "$prover")"
   [[ -n "$paths" ]] || receipt_die "the $prover leg has no inputs"
-  while read -r p; do git ls-files --error-unmatch -- "$p" >/dev/null 2>&1 || receipt_die "$p is not tracked by git"; done <<< "$paths"
+  while IFS= read -r p; do
+    git ls-files --error-unmatch -- "$p" >/dev/null 2>&1 || receipt_die "$p is not tracked by git"
+    # The reference digest hashes a link's git blob (its target text), which
+    # sha256sum of the working tree would not: refuse rather than disagree.
+    [[ ! -L "$p" ]] || receipt_die "$p is a symbolic link; list the file it points to as the input"
+  done <<< "$paths"
   printf '%s\n' "$paths" | xargs -d '\n' sha256sum -- | sha256sum | cut -d' ' -f1
 }
 # The reference digest of a leg's home inputs at a commit, over the input set
@@ -155,7 +165,9 @@ _receipt_ensure_commit() {
 _receipt_ensure_import() {
   local repo="$1" commit="$2" dir="$3"
   if git -C "$dir" cat-file -e "$commit^{commit}" 2>/dev/null; then return 0; fi
-  if declare -F receipt_ensure_import >/dev/null; then receipt_ensure_import "$repo" "$commit" "$dir"; fi
+  if declare -F receipt_ensure_import >/dev/null; then
+    receipt_ensure_import "$repo" "$commit" "$dir" || receipt_die "the hook receipt_ensure_import of $RECEIPT_SCRIPT failed for $repo at $commit"
+  fi
   git -C "$dir" cat-file -e "$commit^{commit}" 2>/dev/null \
     || receipt_die "the clone $dir of $repo does not hold commit $commit"
 }
@@ -214,7 +226,9 @@ _receipt_ledger() {
   if [[ -n "$_receipt_extra" ]]; then
     while IFS= read -r row; do
       [[ -n "$row" ]] || continue
-      IFS='|' read -r prover run _ <<< "$row"
+      IFS='|' read -r prover run _ _ _ _ _ state _ <<< "$row"
+      # The rows of a run are what that run earned, so they become current.
+      [[ "$state" == current ]] || receipt_die "a row given to --emit-run must be current: $row"
       replaced[$prover]="$run"
       printf '%s\n' "$row"
     done < "$_receipt_extra"
@@ -271,9 +285,24 @@ _receipt_pwg_of() {
     *) receipt_die "unexpected recheck count: $n" ;;
   esac
 }
-# A leg's §5 token: a RECONCILED re-proof is kernel-checked with no axiom
-# (the leg gate refuses any), so it is proven; any other state is open.
-_receipt_leg_token() { [[ "$1" == RECONCILED ]] && printf 'proven' || printf 'open'; }
+# A leg's §5 token: a RECONCILED re-proof is kernel-checked, so it is proven,
+# or proven-with-postulates when its current run reported an axiom (§5: a
+# kernel proof resting on named necessary axioms); any other state is open.
+_receipt_leg_token() {
+  local state="$1" prover="$2"
+  if [[ "$state" != RECONCILED ]]; then printf 'open'
+  elif _receipt_has_current "$prover" && [[ -n "$(_receipt_current_field "$prover" 10)" ]]; then printf 'proven-with-postulates'
+  else printf 'proven'; fi
+}
+# A leg's receipts, then $2 (the closing parentheses) on the last line.  The
+# receipts are written to a file first, so a refusal while writing them stops
+# the gate whatever the caller's shell options.
+_receipt_emit_receipts_closed() {
+  local prover="$1" close="$2" f
+  f="$(mktemp)"; _receipt_tmpfiles+=("$f")
+  _receipt_emit_receipts "$prover" > "$f" || receipt_die "cannot write the $prover receipts"
+  sed "\$ s/\$/$close/" "$f"
+}
 
 # ── Emit ──────────────────────────────────────────────────────────────────────
 _receipt_emit_axioms() {
@@ -364,8 +393,8 @@ _receipt_emit_leg() {
       [[ -n "$reason" && "$reason" != *'"'* ]] || receipt_die "a $route $prover leg needs a reason without a quote"
       printf '    (leg :prover %s :route %s :reason "%s"%s\n' "$prover" "$route" "$reason" "$close" ;;
     transported|re-proved)
-      printf '    (leg :prover %s :route %s :token %s :state %s' "$prover" "$route" "$(_receipt_leg_token "$state")" "$state"
-      if _receipt_has_any "$prover"; then printf '\n'; _receipt_emit_receipts "$prover" | sed "\$ s/\$/$close/"; else printf '%s\n' "$close"; fi ;;
+      printf '    (leg :prover %s :route %s :token %s :state %s' "$prover" "$route" "$(_receipt_leg_token "$state" "$prover")" "$state"
+      if _receipt_has_any "$prover"; then printf '\n'; _receipt_emit_receipts_closed "$prover" "$close"; else printf '%s\n' "$close"; fi ;;
     *) receipt_die "unknown route for the $prover leg: $route" ;;
   esac
 }
@@ -390,9 +419,13 @@ _receipt_emit() {
   _receipt_emit_echoes
   while IFS='|' read -r id token kind coq coq_state lean lean_state coq_reason lean_reason; do
     [[ "$kind" == theorem ]] || continue
+    # §5: the typed Agda token must agree with what the Agda run reported.
+    if [[ "$token" == proven ]] && _receipt_has_current agda && [[ -n "$(_receipt_current_field agda 10)" ]]; then
+      receipt_die "claim $id: the current Agda run reported axioms, so its token is proven-with-postulates, not proven"
+    fi
     printf '  (claim :id "%s" :pwg %s :foundation-diverse #f\n' "$id" "$(_receipt_pwg_of "$token" "$coq" "$coq_state" "$lean" "$lean_state")"
     printf '    (leg :prover agda :route source :token %s :state AGDA-VERIFIED' "$token"
-    if _receipt_has_any agda; then printf '\n'; _receipt_emit_receipts agda | sed '$ s/$/)/'; else printf ')\n'; fi
+    if _receipt_has_any agda; then printf '\n'; _receipt_emit_receipts_closed agda ')'; else printf ')\n'; fi
     _receipt_emit_leg rocq "$coq" "$coq_state" "$coq_reason" ')'
     _receipt_emit_leg lean "$lean" "$lean_state" "$lean_reason" '))'
   done < "$_receipt_claims_file"
