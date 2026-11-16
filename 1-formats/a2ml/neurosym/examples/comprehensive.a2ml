@@ -18,7 +18,7 @@ last-updated = "2026-04-12"
 [hypatia-config]
 scan-enabled = true
 scan-depth = "deep"         # quick | standard | deep
-report-format = "assail"    # assail = JSON AssailReport consumed by Hypatia Elixir rules
+report-format = "json"      # json is Hypatia's canonical report format (closed set: json text github sarif)
 scan-on-commit = true
 
 # ==============================================================

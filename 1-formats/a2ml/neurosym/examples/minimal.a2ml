@@ -13,7 +13,7 @@ last-updated = "2026-04-12"
 [hypatia-config]
 scan-enabled = true
 scan-depth = "standard"
-report-format = "assail"
+report-format = "json"
 
 [[operation-definitions]]
 name = "file-read"
