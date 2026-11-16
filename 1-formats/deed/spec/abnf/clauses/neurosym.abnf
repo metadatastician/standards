@@ -2,9 +2,10 @@
 ; SPDX-License-Identifier: MPL-2.0
 ; SPDX-License-Identifier: CC-BY-SA-4.0
 ;
-; DEED clause profile: NEUROSYM.deed, v1.1.0 (DRAFT)
-; v1.1.0 closes :report-format to Hypatia's four formats (json text github
-; sarif), as the mapping's row now does; v1.0.0 took any string.
+; DEED clause profile: NEUROSYM.deed, v2.0.0 (DRAFT)
+; v2.0.0 closes :report-format to Hypatia's four formats (json text github
+; sarif), as the mapping's row now does. v1.0.0 took any string, so this
+; refuses input v1.0.0 accepted: a major version (A7 J24 doctrine).
 ; Prose and rationale: docs/estate-reconciliation/A7-contractiles-descriptiles-anchor.adoc
 ; sections 7.1 and 7.2 (the NEUROSYM.deed row); rulings J14, J20 and J35 to
 ; J38 of 2026-11-15 (the chora's (neurosym …) moves here whole; its A2ML

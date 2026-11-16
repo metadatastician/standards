@@ -3333,7 +3333,7 @@ const HYPATIA_MEMBERS = ["scan-enabled", "scan-depth", "report-format"];
 export const SCAN_DEPTHS = new Set(["quick", "standard", "deep"]);
 /**
  * The closed set of report formats, as strings: the formats Hypatia emits,
- * json canonical (the mapping's row; clauses/neurosym.abnf v1.1.0).
+ * json canonical (the mapping's row; clauses/neurosym.abnf v2.0.0).
  */
 export const REPORT_FORMATS = new Set(["json", "text", "github", "sarif"]);
 /** An A5 rule domain (A5 3.1): lower-alpha *(lower-alpha / DIGIT / "-"). */
