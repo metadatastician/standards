@@ -14,14 +14,15 @@ longer exist here and did not mention the one proof file that does; see
 
 Checked against `main` at `513cba8` on 2026-11-16. Every digest, count and
 CI claim below was re-measured then. That check corrected the census, the
-grammar receipt and the validator bounds, merged two duplicated tables, and
-added the <<other-claims>> row.
+grammar receipt and the validator bounds, and merged two duplicated tables.
+It also found an unproved SPARK claim in an Ada file; that file has since
+been deleted (<<moved-out>>).
 
 toc::[]
 
 == Census
 
-8 proven of 31 rows; 3 argued; 7 tested-only; 13 open. No row is
+8 proven of 30 rows; 3 argued; 7 tested-only; 12 open. No row is
 `proven-with-postulates`. Every `proven` row holds *relative to* the
 `argued` row for the Idris2 library its file imports (PROOF-POLICY §1.1),
 so none counts as unconditionally proven.
@@ -368,20 +369,6 @@ that CI runs (`tools/validate/validate.js`) supplies the tested rows.
 | Last CI receipt | Run `43816238257`, 2026-11-16, at `305743d`, on the current digest: Idris 2 0.8.0-ab7bbfd91 (pack collection `nightly-261116`, executable sha256 `767c6ff57a554e9d275543c80821ea78667532c8717fdc0c1c1b8f3922739543`), "Building GrammarExtension", no error.
 |===
 
-[[other-claims]]
-== Other proof claims in this repository
-
-[cols="3,1,2,2,3",options="header"]
-|===
-| Obligation | Status | Checker (version, flags) | Where | Trust boundary
-
-| `RSR_Adapter` is written in the SPARK subset and so has its memory-safety guarantees, as its header says
-| open
-| -
-| `1-formats/a2ml/agentic/ffi/rsr-adapter.ads`, `rsr-adapter.adb`
-| Not established. Neither file has `SPARK_Mode` or any contract, no `gnatprove` run is recorded, and no CI lane builds or proves them. The package sits under the retired A2ML tree (`1-formats/a2ml/`). Under PROOF-POLICY §1, Ada code is verified with SPARK, so either the claim is discharged with `gnatprove` or the header stops making it.
-|===
-
 [[deviation]]
 == Toolchain deviation (PROOF-POLICY §6)
 
@@ -407,9 +394,9 @@ repository's Guix manifest or a container.
 [[moved-out]]
 == Obligations that left this repository
 
-The previous version of this file listed these. None is tracked here any
-more; each now belongs to the proof-status file of the repository that
-holds it.
+Earlier versions of this file listed these. None is tracked here any more:
+each belongs to the proof-status file of the repository that now holds it,
+or its code was deleted.
 
 [cols="2,3",options="header"]
 |===
@@ -429,4 +416,7 @@ holds it.
 
 | `2-protocols/axel/src/Tea.res`, `AxelApp.res` (`Obj.magic`)
 | Not a proof obligation. Only the compiled `.res.js` files remain here
+
+| `1-formats/a2ml/agentic/ffi/rsr-adapter.ads`, `rsr-adapter.adb`: its header said it "uses SPARK subset for memory safety guarantees"
+| Deleted on 2026-11-16 by owner decision. The claim was never established: neither file had `SPARK_Mode` or a contract, and no `gnatprove` run was recorded. Checked that day with gnatprove (FSF 16.1), five of its six functions are illegal SPARK, because they read the terminal or write files. Nothing built or called the package, and it sat in the retired A2ML tree.
 |===
