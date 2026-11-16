@@ -58,18 +58,21 @@ set -eo pipefail
 # It REPORTS ONLY. It never writes a setting. Unattended cross-repo mutation is
 # a human decision, and settings are exactly where that matters most.
 #
-# Usage:  check-settings-drift.sh [--owner OWNER] [--canon PATH] [--limit N]
+# Usage:  check-settings-drift.sh [--owner OWNER] [--canon PATH]
+#                                [--actions-canon PATH] [--limit N]
 # Output: TSV — repo <TAB> key <TAB> expected <TAB> actual
 # Exit:   0 = no drift   1 = drift found   2 = usage / environment error
 
 OWNER="hyperpolymath"
 CANON="config/settings/repo.json"
+ACTIONS_CANON="config/settings/actions-allowlist.json"
 LIMIT=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --owner) OWNER="$2"; shift 2 ;;
     --canon) CANON="$2"; shift 2 ;;
+    --actions-canon) ACTIONS_CANON="$2"; shift 2 ;;
     --limit) LIMIT="$2"; shift 2 ;;
     -h|--help) sed -n '5,70p' "$0"; exit 0 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
@@ -79,6 +82,7 @@ done
 command -v gh  >/dev/null || { echo "gh not found"  >&2; exit 2; }
 command -v jq  >/dev/null || { echo "jq not found"  >&2; exit 2; }
 [ -f "$CANON" ] || { echo "canon not found: $CANON" >&2; exit 2; }
+[ -f "$ACTIONS_CANON" ] || { echo "actions canon not found: $ACTIONS_CANON" >&2; exit 2; }
 
 DELTAS=$(jq -r '(.per_repo_deltas_allowed // [])[]' "$CANON" | tr '\n' ' ')
 drift=0
@@ -133,6 +137,30 @@ check_actions() {
     [ "$n" = "0" ] && emit "$repo" "actions.patterns_allowed" "non-empty" "EMPTY (refuses all third-party actions, incl. via reusables)"
     verified=$(echo "$sel" | jq -r '.verified_allowed // "ABSENT"')
     [ "$verified" = "false" ] && emit "$repo" "actions.verified_allowed" "true" "false (refuses even Marketplace-verified actions)"
+
+    # CANON ⊆ LIVE for the pattern list. A NON-empty list that has lost
+    # canonical patterns refuses exactly those actions, and the checks above
+    # pass it. Measured 2026-11-16: ordinal-notation and mathesis refused
+    # editorconfig-checker/action-editorconfig-checker@* (quality.yml) and
+    # haskell-actions/setup@* (pages.yml) from 2026-11-09 and 2026-11-14 on.
+    # Every run of those workflows died at startup_failure with no check run,
+    # and no instrument reported it. Same comparison as
+    # scripts/check-actions-policy.sh, which runs only per repo and only when
+    # a caller supplies a credential. Exact string membership: a narrower
+    # repo-specific pattern that still admits the action is reported too,
+    # which is what canon ⊆ live means (calibration: a row is not proof of
+    # breakage).
+    missing=$(jq -n --argjson canon "$(<"$ACTIONS_CANON")" --argjson live "$sel" '
+      [($canon.patterns_allowed // [])[] as $p
+       | select((($live.patterns_allowed // []) | index($p)) == null) | $p]')
+    nm=$(echo "$missing" | jq 'length')
+    # An EMPTY list is already reported above; do not report it twice.
+    if [ "$n" != "0" ] && [ "$nm" != "0" ]; then
+      shown=$(echo "$missing" | jq -r '.[:5] | join(", ")')
+      [ "$nm" -gt 5 ] && shown="$shown, +$((nm - 5)) more"
+      emit "$repo" "actions.patterns_allowed" "⊇ canon ($(jq '.patterns_allowed | length' "$ACTIONS_CANON") patterns)" \
+        "missing $nm: $shown (a workflow using one dies at startup_failure, no check run)"
+    fi
   fi
 
   wf=$(gh api "repos/$OWNER/$repo/actions/permissions/workflow" 2>/dev/null) || return 0
