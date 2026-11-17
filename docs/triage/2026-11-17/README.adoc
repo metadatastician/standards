@@ -147,11 +147,14 @@ says so.
 | Does the language ban cover toolchain declarations | Yes, by derivation from the languages a deed declares | #698, #706, #917
 | CodeQL: D256 or the monthly cron | D256 wins; the cron campaign closes as superseded | #288, #323, #324
 | Stub `.affine` files | Port genuinely, repository by repository | #664, #272, #276, #278, #279
-| The red debt check on `main` | Pay the `todo-fixme-markers` measure down; no ceiling change. Measured afterwards: this is not a small job, see W3 | #955
+| The red debt check on `main` | First answer: pay the `todo-fixme-markers` measure down; no ceiling change. Measured afterwards: that is not a small job, so the question went back to the owner. Second answer, which governs: a marker must cite an issue; the file-counting probe is retired (see W3) | #955
 | Dependabot and the lock | Retire `dependabot-lock-regen.yml`; rely on Dependabot plus the lock gate, after a census of recent Dependabot pull requests | #670
 | The codeql-action hold at v4.38.0 | Lift it; correct the refuted comments | #1037
 | Two Actions allow-lists | `config/settings/actions-allowlist.json` is the source; the rhodium copy is generated from it, then retired after a deprecation window | #1220
 | How this work is shipped | Two pull requests: one needing no lock change, one with only the closer-bot workflows | —
+| A ledger line left stale by the commit that removed its offender (this turned `main` red on 2026-11-17) | Give the shrink-only ledgers a mode that only deletes stale lines, run by the pre-commit hook (W8) | —
+| kyX | Measure first which `.a2ml` files hold only facts their deeds already carry and can be deleted without a translator; then start a dedicated kyX session briefed with what is left (E10) | #837, #732
+| Departures that cannot be fixed on the spot | A departures ledger that closes itself: one row per departure with a check that the defect is still present; the row goes when the defect does (W9) | —
 |===
 
 On the stub files the owner chose the genuine port over the recommended
@@ -489,7 +492,7 @@ models for CI, workflow, template-drift and status work.
 | E10
 | kyX: remaining families and a mechanical retire check
 | 360 `.a2ml` files in three repositories; #837, #732, parts of #1399
-| Opus (own thread; a task card was offered)
+| Opus (own thread). Owner, 2026-11-17: measure first, then start it. The measurement counts, per family, the files that can be deleted with no translator because their deeds already hold every fact; the session is briefed with the remainder
 |===
 
 *Dated risk.* 34 Hypatia baseline entries expire together on 2026-12-22.
@@ -518,11 +521,13 @@ they are renewed or E6 lands first.
 | Id | Work | Tier
 | W1 | Regenerate `actions.lock` for the two issue-evidence workflows (one command; the tool cannot run in an agent session), merge, then set `ISSUE_EVIDENCE_APPLY`. | Owner
 | W2 | Work the pieces listed in the small-pieces table above, one commit and one ledger row each. The table shortens each piece (a trailing `…`), so work from the full text: the `cherry_pick.what` field (with its `files` and `test`) of the record with the same `issue` in `verdicts-standards.jsonl`, for example `jq -c 'select(.issue == 1031) \| .cherry_pick' docs/triage/2026-11-17/verdicts-standards.jsonl`. | Sonnet
-| W3 | Bring `todo-fixme-markers` back under its ceiling (#955). Measured 2026-11-17: the probe counts _files_ that contain the word, 88 on `main` against a ceiling of 84. An agent found one stale marker it could remove honestly (`docs/INNERVATION.adoc:139`); the rest are real undone work with no tracking issue, or files where the word is the subject (policy text, gate code, fixtures). So this needs either about four real tasks done, or an owner ruling that the probe should count markers and not mentions. | Opus or the owner
+| W3 | Settle #955 by substitution (owner, 2026-11-17). Measured: the probe counts _files_ that contain the marker word, 88 on `main` against a ceiling of 84, and most hits are mentions or real undone work with no tracking issue. Decision: a gate refuses a marker that does not cite an issue, existing files are grandfathered in a shrink-only list, and the file-counting probe is retired; the debt is then the open issues the markers cite. An earlier statement in this session that this was "a small content pass" was wrong. | Opus for the gate; Sonnet for citing issues file by file
 | W4 | Execute D256 in `standards`: retire `codeql.yml`, close #288, #323, #324 as superseded through the ledger (#1031). | Sonnet
 | W5 | Write the ruled-but-unwritten rulings back: D128 (#1032), D133 (#957), D169 (#999), D171 (#1008), D129 (#1059). | Sonnet
 | W6 | Carry out the move-out manifest, destination by destination, once the owner approves it. | Sonnet, with access to each destination
 | W7 | Finish #1341. The page `3-practice/DATA-FORMAT-ROUTING.adoc` is added in this change (three repositories already cite it). Still to do: the routing entries in the deed and AI manifest, the cross-references in the YAML and JSON policy pages, the generated `CLAUDE.md` copies, and recording the owner clarification of 2026-10-25 in this repository, since today its only recorded text is in the template's `CLAUDE.md`. | Sonnet
+| W8 | Self-pruning shrink-only ledgers (owner, 2026-11-17). Each ledger checker that can decide staleness from the tree gets a mode that deletes stale lines and nothing else; the pre-commit hook runs it on the staged tree, so the commit that removes an offender also removes its ledger line. Cause: 1fb72f74 removed inline Python from a test and left its allowlist line; the light shard on `main` failed until #1653. | Opus for the invariant; Sonnet after
+| W9 | The departures ledger (owner, 2026-11-17): `.machine_readable/departures.jsonl`, evaluated by the issue-evidence check engine, with `report`, `check` and `prune`. A row says a defect exists and how to see it; it is not a waiver. The section below becomes rows where a mechanical check exists. Rows for other repositories are kept as data for those repositories to adopt. | Opus for the design; Sonnet for rows
 |===
 
 == Departures met, for the owner
