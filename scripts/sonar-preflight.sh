@@ -132,6 +132,13 @@ finish() {
 # GET $1 into $body; sets HTTP to the status code. A transport failure (DNS,
 # TLS, timeout) is a server-side class, never a pass.
 HTTP=000
+
+# Print the string at jq path $1 of $body; fail (status, not exit) when the
+# body is not JSON or the path is not a non-empty string. Callers decide the
+# class: `x="$(field …)" || finish …`. It never calls finish itself, because
+# inside $(…) that would exit only the subshell and the script would go on.
+field() { jq -er "$1 | strings | select(length > 0)" "$body" 2>/dev/null; }
+
 get() {
   local -a auth=()
   [ -s "$hdr" ] && auth=(--header "@$hdr")
@@ -183,7 +190,9 @@ get "$HOST/api/organizations/search?organizations=$ORG"
 if [ "$HTTP" != 200 ]; then
   finish server-unavailable 1 "Unexpected answer from organizations/search (HTTP $HTTP)."
 fi
-if [ "$(jq -r '.paging.total // (.organizations | length) // 0' "$body")" = 0 ]; then
+org_keys="$(jq -er '.organizations | arrays | map(.key) | join(" ")' "$body" 2>/dev/null)" \
+  || finish server-unavailable 1 "organizations/search answered HTTP 200 without an organizations list (not JSON, or no .organizations). Treated as a server problem; re-run, and report it if it persists."
+if ! printf ' %s ' "$org_keys" | grep -qF " $ORG "; then
   finish organization-missing 1 "SonarCloud has no organisation '$ORG'. Fix sonar.organization. If the repository moved between GitHub organisations, its SonarCloud project did not move with it."
 fi
 
@@ -195,8 +204,15 @@ case "$HTTP" in
   401|403) finish project-forbidden 1 "The token is valid but cannot see project '$KEY'. The token's account has no access to it, for example because the project stayed in another organisation after a repository transfer." ;;
   *) finish server-unavailable 1 "Unexpected answer from components/show (HTTP $HTTP)." ;;
 esac
-actual="$(jq -r '.component.organization // empty' "$body")"
-if [ -n "$actual" ] && [ "$actual" != "$ORG" ]; then
+# A 200 is evidence only if the body says which project and organisation it
+# describes; `{}` or a non-JSON page must not read as "the project exists".
+shown_key="$(field '.component.key')" \
+  || finish server-unavailable 1 "components/show answered HTTP 200 without a project key (not JSON, or no .component.key). Treated as a server problem; re-run, and report it if it persists."
+[ "$shown_key" = "$KEY" ] \
+  || finish server-unavailable 1 "components/show answered for project '$shown_key', not '$KEY'. Treated as a server problem; re-run, and report it if it persists."
+actual="$(field '.component.organization')" \
+  || finish server-unavailable 1 "components/show answered HTTP 200 without the project's organisation. Treated as a server problem; re-run, and report it if it persists."
+if [ "$actual" != "$ORG" ]; then
   finish project-org-mismatch 1 "Project '$KEY' belongs to organisation '$actual', but the configuration says '$ORG'. Move the project, or fix sonar.organization and sonar.projectKey together."
 fi
 

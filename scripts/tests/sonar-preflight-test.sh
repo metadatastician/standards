@@ -171,6 +171,30 @@ reset; F_TRANSPORT_FAIL=1
 run transport SONAR_TOKEN="$TOKEN"
 expect "server-unavailable (transport)" server-unavailable 1
 
+echo "== malformed 200 answers are server-unavailable, never ok (review of #1664)"
+# Each must still write a class: under set -e a failed jq once exited silently.
+reset; F_VALIDATE="$VALID"; F_ORGS="$ORG_FOUND"; F_COMP='<html>maintenance</html>'
+run compnotjson SONAR_TOKEN="$TOKEN"
+expect "components/show not JSON" server-unavailable 1
+reset; F_VALIDATE="$VALID"; F_ORGS="$ORG_FOUND"; F_COMP='{}'
+run compempty SONAR_TOKEN="$TOKEN"
+expect "components/show {} is not evidence of a project" server-unavailable 1
+reset; F_VALIDATE="$VALID"; F_ORGS="$ORG_FOUND"; F_COMP='{"component":{"organization":"acme","key":"some_other_key"}}'
+run compwrongkey SONAR_TOKEN="$TOKEN"
+expect "components/show for a different key" server-unavailable 1
+reset; F_VALIDATE="$VALID"; F_ORGS="$ORG_FOUND"; F_COMP='{"component":{"key":"acme_widget"}}'
+run compnoorg SONAR_TOKEN="$TOKEN"
+expect "components/show without an organisation" server-unavailable 1
+reset; F_VALIDATE="$VALID"; F_ORGS='<html>maintenance</html>'
+run orgsnotjson SONAR_TOKEN="$TOKEN"
+expect "organizations/search not JSON" server-unavailable 1
+reset; F_VALIDATE="$VALID"; F_ORGS='{}'
+run orgsempty SONAR_TOKEN="$TOKEN"
+expect "organizations/search {} is not evidence of an organisation" server-unavailable 1
+reset; F_VALIDATE="$VALID"; F_ORGS='{"organizations":[{"key":"acme-other"}],"paging":{"total":1}}'
+run orgsother SONAR_TOKEN="$TOKEN"
+expect "organizations/search lists only another organisation" organization-missing 1
+
 echo "== configuration"
 reset
 run cfgmissing SONAR_TOKEN="$TOKEN" SONAR_PROPERTIES=/nonexistent
@@ -180,7 +204,7 @@ reset
 run cfginvalid SONAR_TOKEN="$TOKEN" SONAR_PROJECT_KEY='acme_widget&x=1'
 expect "config-invalid (URL metacharacter)" config-invalid 1
 check "config-invalid: no request made" 0 "$CALLS"
-reset; F_VALIDATE="$VALID"; F_ORGS="$ORG_FOUND"; F_COMP='{"component":{"organization":"other","key":"other_key"}}'
+reset; F_VALIDATE="$VALID"; F_ORGS='{"organizations":[{"key":"other"}],"paging":{"total":1}}'; F_COMP='{"component":{"organization":"other","key":"other_key"}}'
 run override SONAR_TOKEN="$TOKEN" SONAR_ORGANIZATION=other SONAR_PROJECT_KEY=other_key
 expect "inputs override the properties file" ok 0
 
