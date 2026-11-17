@@ -1,119 +1,192 @@
-== Clone the repository
+= Contributing to standards
 
-git clone https://github.com/metadatastician/standards.git cd standards
+This repository is the canon for the hyperpolymath estate: the RSR repository
+rules, the deed, k9, KYAML and I-JSON format specifications, the ADRs and owner
+rulings, and the reusable CI gates that enforce them.
 
-== Using Guix (recommended for reproducibility)
+== Set up
 
-guix shell
+[source,sh]
+----
+git clone https://github.com/metadatastician/standards.git
+cd standards
+guix shell -D -f guix.scm just jq  # guix.scm inputs, plus just and jq
+just hooks-install                 # the pre-commit guard, see below
+----
 
-== Or using toolbox/distrobox
+The test suite also needs Mike Farah’s `yq`, version 4 (the Go one, not the
+Python wrapper of the same name). Some tests stop with an error without `jq` or
+`yq` v4, and `just test` counts that as a failure. Install `yq` v4 from
+https://github.com/mikefarah/yq/releases[its releases] if your system does not
+provide it.
 
-toolbox create standards-dev toolbox enter standards-dev # Install
-dependencies manually
+`just hooks-install` installs `hooks/pre-commit`, which checks staged files
+before a commit leaves your machine. It blocks banned languages and Makefiles,
+warns about source files without an SPDX header, and blocks added lines that
+reintroduce `6a2` or `agent_instructions`, two of the deprecated names in
+`0-canon/CANONICAL-NAMES.adoc`. It does not check the others, such as `weft`.
 
-== Verify setup
+== Check your change
 
-just check # or: cargo check / mix compile / etc. just test # Run test
-suite
+[source,sh]
+----
+just validate   # structural gates: language guides, canonical names
+just test       # the shell test suite
+----
 
-....
+`just --list` shows every recipe. A change to a gate, a workflow or a format
+specification usually has its own test under `scripts/tests/` or `tests/`; run
+that one too, and add one when you change behaviour.
 
-### Repository Structure
-....
+== Where things live
 
-standards/ ├── src/ # Source code (Perimeter 1-2) ├── lib/ # Library
-code (Perimeter 1-2) ├── extensions/ # Extensions (Perimeter 2) ├──
-plugins/ # Plugins (Perimeter 2) ├── tools/ # Tooling (Perimeter 2) ├──
-docs/ # Documentation (Perimeter 3) │ ├── architecture/ # ADRs, specs
-(Perimeter 2) │ └── proposals/ # RFCs (Perimeter 3) ├── examples/ #
-Examples (Perimeter 3) ├── spec/ # Spec tests (Perimeter 3) ├── tests/ #
-Test suite (Perimeter 2-3) ├── .well-known/ # Protocol files (Perimeter
-1-3) ├── .github/ # GitHub config (Perimeter 1) │ ├── ISSUE_TEMPLATE/ │
-└── workflows/ ├── CHANGELOG.md ├── CODE_OF_CONDUCT.md ├──
-CONTRIBUTING.md # This file ├── GOVERNANCE.md ├── LICENSE ├──
-MAINTAINERS.md ├── README.adoc ├── 3-practice/SECURITY.md ├── guix.scm # Guix manifest
-(Perimeter 1) └── Justfile # Task runner (Perimeter 1)
+The tree is organised in numbered districts. `standards-map.toml` is the
+authoritative map: every entry names its district, kind, lifecycle and the
+gate that checks it, and `scripts/check-standards-map.sh` keeps it honest.
 
-....
+[cols="1,3",options="header"]
+|===
+|Path |What it holds
 
----
+|`0-canon/` |The constitution, canonical names and the RSR criteria.
+|`1-formats/` |Format specifications and their tools: deed, k9, KYAML, I-JSON.
+|`2-protocols/` |Protocols, such as k9 agent coordination.
+|`3-practice/` |Estate policy: languages, licences, proofs, security, this guide.
+|`4-readiness/` |Readiness grades and their templates.
+|`9-archive/` |Frozen history. Do not edit it.
+|`docs/` |ADRs, rulings, audits, plans and reports.
+|`scripts/`, `tools/`, `tests/` |The gates, their tooling and their tests.
+|`.github/workflows/` |CI, including the reusable workflows other repositories call.
+|===
 
-## How to Contribute
+== Who may change what
 
-### Reporting Bugs
+The estate's
+link:../0-canon/constitution/CONTRIBUTION-CONSTITUTION.adoc[Contribution Constitution]
+sorts contribution authority into three perimeters. In this repository they
+map onto the tree as below. A perimeter limits what a change may land, not who
+may propose it: anyone may open a pull request against any path.
 
-**Before reporting**:
-1. Search existing issues
-2. Check if it's already fixed in `main`
-3. Determine which perimeter the bug affects
+[cols="1,3,2",options="header"]
+|===
+|Perimeter |Paths |To land a change
 
-**When reporting**:
+|1 Core
+|`0-canon/`, `docs/decisions/`, `.github/` (workflows, forms, CODEOWNERS),
+`3-practice/LICENCE-POLICY.adoc`, `LICENSE`, `LICENSES/`, `canon.lock`,
+`standards_chora.deed`, `CITATION.cff`, `SECURITY.md`, the code of conduct and
+this guide (root and `3-practice/` copies), and any path not listed in this
+table
+|The owner's review. A change to the canon or to a ruling needs a decision
+issue first.
 
-Use the [bug report template](.github/ISSUE_TEMPLATE/bug_report.md) and include:
+|2 Trusted contributors
+|`1-formats/`, `2-protocols/`, `4-readiness/`, `3-practice/` other than the
+files named in Perimeter 1,
+`scripts/`, `tools/`, `hooks/`, `standards-map.toml`
+|A maintainer's review, and the gate that covers the path passing with its
+tests.
 
-- Clear, descriptive title
-- Environment details (OS, versions, toolchain)
-- Steps to reproduce
-- Expected vs actual behaviour
-- Logs, screenshots, or minimal reproduction
+|3 Community
+|`docs/` outside `docs/decisions/`, `tests/`, and wording or typo fixes
+anywhere outside Perimeter 1
+|A green CI run and one maintainer's review.
+|===
 
-### Suggesting Features
+`9-archive/` is frozen in every perimeter.
 
-**Before suggesting**:
-1. Check the [roadmap](ROADMAP.md) if available
-2. Search existing issues and discussions
-3. Consider which perimeter the feature belongs to
+Today the owner is code owner of every path (`.github/CODEOWNERS`), so the
+owner reviews every change. The perimeters set how much review and evidence a
+change needs, and become separate reviewer sets as maintainers are added.
 
-**When suggesting**:
+Moving between perimeters follows these criteria:
 
-Use the [feature request template](.github/ISSUE_TEMPLATE/feature_request.md) and include:
+* *Perimeter 3 to 2.* At least three merged pull requests in Perimeter 2
+  paths, the first merged at least 30 days before the request, and a
+  nomination by a maintainer. The nomination is a decision issue that names
+  the contributor and links those pull requests, and the owner rules on it.
+* *Perimeter 2 to 1.* The owner names the contributor in a decision issue.
+* *Moving down.* Access is reduced only through the code of conduct's
+  enforcement steps, or by a decision issue that gives the reason.
 
-- Problem statement (what pain point does this solve?)
-- Proposed solution
-- Alternatives considered
-- Which perimeter this affects
+Anyone may challenge a move, or a refusal, in its decision issue, as
+described under Challenging a decision.
 
-### Your First Contribution
+== Report a bug, propose an idea
 
-Look for issues labelled:
+Issues are filed through the forms in `.github/ISSUE_TEMPLATE/`, and blank
+issues are disabled (`docs/ISSUE-INTAKE-SPEC.adoc`, Rule 4):
 
-- [`good first issue`](https://github.com/metadatastician/standards/labels/good%20first%20issue) — Simple Perimeter 3 tasks
-- [`help wanted`](https://github.com/metadatastician/standards/labels/help%20wanted) — Community help needed
-- [`documentation`](https://github.com/metadatastician/standards/labels/documentation) — Docs improvements
-- [`perimeter-3`](https://github.com/metadatastician/standards/labels/perimeter-3) — Community sandbox scope
+* *Bug*: a defect, with the command, its output and the expected result.
+  https://github.com/metadatastician/standards/issues/new?template=bug.yml[Open a bug].
+* *Decision*: a question that needs an owner ruling, with the options and a
+  recommendation.
+* *Campaign*: a multi-repository or multi-step effort, with its step list.
 
----
+An idea or suggestion that is none of these belongs in the repository's
+Discussions, in the Ideas category, not in an issue.
 
-## Development Workflow
+Security problems are never filed in public. Follow `SECURITY.md`.
 
-### First: install the pre-commit guard
+== Branches
 
-```sh
-just hooks-install
-....
+[source,text]
+----
+docs/short-description        documentation
+test/what-added               test additions
+feat/short-description        new features
+fix/issue-number-description  bug fixes
+refactor/what-changed         behaviour-preserving changes
+security/what-fixed           security fixes
+----
 
-This installs `+hooks/pre-commit+`, which checks your staged files before
-the commit leaves your machine. It blocks banned languages and Makefiles,
-warns about source files without an SPDX header, and blocks any
-reintroduction of the deprecated names listed in
-`+0-canon/CANONICAL-NAMES.adoc+`.
+== Commit messages
 
-=== Branch Naming
+Commits follow https://www.conventionalcommits.org/[Conventional Commits]:
 
-....
-docs/short-description       # Documentation (P3)
-test/what-added              # Test additions (P3)
-feat/short-description       # New features (P2)
-fix/issue-number-description # Bug fixes (P2)
-refactor/what-changed        # Code improvements (P2)
-security/what-fixed          # Security fixes (P1-2)
-....
+[source,text]
+----
+<type>(<optional scope>): <description>
 
-=== Commit Messages
+<optional body: what changed and why>
 
-We follow https://www.conventionalcommits.org/[Conventional Commits]:
-``` ():
+<optional footer, such as Refs #123>
+----
 
-{empty}[optional body]
+Common types: `feat`, `fix`, `docs`, `test`, `refactor`, `ci`, `chore`.
 
-{empty}[optional footer]
+Every commit on a pull-request branch must carry a verified signature, or the
+branch cannot merge. A DCO sign-off (`git commit -s`) is not a signature. Set
+up an SSH signing key registered on your GitHub account, with a verified
+committer email, as link:../docs/SIGNING-POLICY.adoc[the signing policy] describes.
+
+== Pull requests
+
+* One change per pull request, small enough to review in one sitting.
+* Every pull request gets CI, review bots and one generated fork-governance
+  comment with the DEED, K9-DEED and Hypatia lanes. Never hand-edit that
+  comment.
+* Answer every review thread, either with a fix or with the reason for not
+  making one.
+* A pull request is ready to merge when CI is green, no thread waits on you
+  and there is no merge conflict. Maintainers merge.
+
+=== Challenging a decision
+
+If a maintainer rejects or restricts your contribution and you think the
+decision is wrong, open a
+https://github.com/metadatastician/standards/issues/new?template=decision.yml[decision issue]
+that names the pull request and says why. In its register field, give the
+number of the open owner-decision register issue (the one labelled
+`meta:umbrella` and `decision`). The owner rules on it, and the ruling is
+recorded there. If the decision you challenge was the owner's own, a
+maintainer who took no part in it rules instead; where there is none, an
+outside reviewer you propose in the issue does. Code of conduct enforcement has its own appeal route, in
+link:CODE_OF_CONDUCT.adoc[the code of conduct].
+
+== Licences
+
+Code, configuration and scripts are MPL-2.0. Prose documentation is
+CC-BY-SA-4.0 (`3-practice/LICENCE-POLICY.adoc`). A new file carries the
+matching SPDX header from its first commit. Never change the licence or SPDX
+header of an existing file: licence changes are the owner's alone.
