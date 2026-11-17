@@ -462,9 +462,10 @@ destination:
 Why depart: the owner's rule puts numbers before any Wave 3 commitment, and
 Idris2 cannot run in this environment while the estate's GitHub runners are
 billing-blocked, so an ABI-first merge here would be a silent green. On the
-dependable and secure axis, two live holes outrank new types: an
-unauthenticated schema on `0.0.0.0` that can rewrite webhook secrets, and
-prover code execution. And the hole re-check is the one class that reaches
+dependable and secure axis, two holes outranked new types when this was
+written (2026-11-04): an unauthenticated schema on `0.0.0.0` that could
+rewrite webhook secrets (closed 2026-11-05 by hyperpolymath/echidnabot#192),
+and prover code execution. And the hole re-check is the one class that reaches
 runtime `sound` without new theory. The destination stays A's sealed ABI and
 `Discharged` support, with C's record model. A demonstrable,
 honestly-graded loop is about two weeks after Wave 0; the full A shape
@@ -706,9 +707,9 @@ smart learning" on this route.
 |v1 trains on synthetic rows
 
 |echidnabot
-|Store transitions, `proofObligation(id)`, drain, endpoint auth, report-back writer, receipt `/2` parser
+|Store transitions, `proofObligation(id)`, drain, report-back writer, receipt `/2` parser
 |code
-|none of these
+|none of these (endpoint auth shipped 2026-11-05, hyperpolymath/echidnabot#192)
 
 |echidnabot
 |Instantiated Idris2 ABI or its deletion (today an uninstantiated template, `src/abi/Types.idr:13`)
@@ -780,7 +781,8 @@ the estate has no OBSERVABILITY-POLICY yet
 [[wave0]]
 === Wave 0 — now, on any route
 
-These close holes that exist today, record what was measured, and take the
+These closed the holes measured on 2026-11-04 (items 1 and 2 have merged),
+record what was measured, and take the
 rulings the rest depends on. None of them commits to Wave 3.
 
 . *echidnabot, first:* authentication _and_ authorization on the whole
@@ -842,8 +844,10 @@ proof-status file, and none is written in another's place:
   (`BRIDGE-PENDING` until the statement comparison is recorded and reviewed,
   then `RECONCILED`);
 * for a theory row, the Proof Witness Grade of §8, derived from receipts and
-  never asserted. The target is `PWG-2ii`, where the §2 recheck obligation is
-  discharged, and `PWG-1` once every witness has a per-commit CI receipt.
+  never asserted. The target is `PWG-2ii`: the Agda witness at `PWG-3` (it
+  checks under §2.1, with a receipt) plus both recheck legs counting, which
+  discharges the §2 recheck obligation; and `PWG-1` once every witness has a
+  per-commit CI receipt.
   A leg waived under §4 is not a witness: one waived leg caps the theorem at
   `PWG-2i` and two at `PWG-3`, and the reported target is lowered to match.
   Below `PWG-3` a theorem is `ungraded`.
@@ -1009,7 +1013,9 @@ E-AUTH-GUARD and E-RATE-BOUND; scheduled as merged row 24
 |A route principal passes `admin_only`, or a pattern admits `a/b` for an
 owner it does not name; or a planted flood of distinct idle peer addresses
 grows the peer map past `max(4096, 2 × size after the last sweep)` without
-a sweep, or a sweep drops a peer with a request inside the window.
+a sweep, or a sweep drops a peer with a request inside the window, or a
+planted expired idle peer is still in the map after a sweep (the post-sweep
+size must not exceed the number of peers with a request inside the window).
 
 |16
 |K0 (shipped, merged row 2)
@@ -1289,8 +1295,11 @@ authors (merged rows 14-15).
 theory PRs with their Rocq and Lean legs in `hyperpolymath/mathesis` for
 ladder rows 2 and 12 (D-10) and in residual-evidence-types for row 7.
 |Idris2 and Agda green on an owned runner; accept/reject gate; generated
-output byte-stable; both theory legs of each theorem count (kernel-accepted
-and `RECONCILED`, `PWG-2ii`), or an approved §4 waiver lowers the reported
+output byte-stable; each theorem's Agda witness is at `PWG-3` (checks under
+§2.1, with a receipt) and both theory legs count (kernel-accepted and
+`RECONCILED`), giving `PWG-2ii`; an `OPEN` or `ASSUMED` Agda source, or one
+with no receipt, leaves the theorem `ungraded` whatever its legs; an approved
+§4 waiver lowers the reported
 target to the grade the counted legs support.
 
 |P7 harden and surface
@@ -1390,7 +1399,7 @@ gate and phase.
 |12 |standards |Widen ADR-008 proof domains; register the versioned obligation domain |XS |9, content-id agreement (P3) |Identical ids from Rust and Elixir; a changed target digest gives a new obligation id
 |13 |echidnabot + hypatia (draft) |The pipe: read-back, drain, stub ECHIDNA with real Lean in the shared sandbox, `ProofRoute`, report-back and SARIF; auth, sandbox, line-binding and burrower-compatibility experiments |L |1-5, 7, 8 |All controls print; stub row orange; PRs stay draft
 |14 |standards |Proof-route spec (PROPOSED) and Idris2 package, generated fixtures, CI on an owned runner |L |8, 13 |Idris2 green; rejects refused; generated output byte-stable
-|15 |mathesis (ladder rows 2 and 12, D-10); residual-evidence-types (row 7) |Token order and meet, level monotonicity, fold join, retraction never raises: Agda, Rocq leg, Lean leg re-proved |M |8 |Both legs count (kernel-accepted and `RECONCILED`), giving `PWG-2ii`, route recorded; an approved §4 waiver lowers the reported target (`PWG-2i` with one leg waived)
+|15 |mathesis (ladder rows 2 and 12, D-10); residual-evidence-types (row 7) |Token order and meet, level monotonicity, fold join, retraction never raises: Agda, Rocq leg, Lean leg re-proved |M |8 |The Agda witness is at `PWG-3` and both legs count (kernel-accepted and `RECONCILED`), giving `PWG-2ii`; without `PWG-3` the theorem is `ungraded`; route recorded; an approved §4 waiver lowers the reported target (`PWG-2i` with one leg waived)
 |16 |hypatia |`ProverRecheck` v2 with span and rule binding; sandboxed artefact re-run |M |13, 14 |`RecheckOfOtherLineIsNotSound` refused; `LeanHoleRecheckSound` still accepted
 |17 |echidnabot, proof-burrower |Dual-accept `prove.result` `/1` and `/2`; Creusot/Pearlite and Verus on proof-burrower's `echidna_contract.rs` (ladder row 8) |M |14 |Golden `/2` accepted by both; burrower's parser rows recorded in its proof-status file, each discharged or `open` with its reason
 |18 |echidnabot |Lifecycle store, `proofObligation` query, sandboxed drain; Creusot/Pearlite and Verus; TLA+ |L |1, 13, 14, 17 |Illegal transitions refused; sandbox off means refused; TLC bounds recorded
