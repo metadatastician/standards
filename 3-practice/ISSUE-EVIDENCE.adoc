@@ -147,24 +147,28 @@ reintroduced).
 | unevaluated | any | none: nothing is done on what was not evaluated
 |===
 
-"Closed by the bot" means closed by `github-actions[bot]` with the bot's marker
-comment from that same account. Each comment the bot writes ends with
+"Closed by the bot" means the latest close was by `github-actions[bot]` and a
+marker comment from that same account follows the latest reopen, so a close by
+that account for another reason does not count. Each comment the bot writes ends with
 `<!-- issue-evidence-bot: row-sha256=HASH -->`, where HASH is the SHA-256 of the
 row's ledger line. To dispute a closure, change or remove the row in a reviewed
 pull request, or reopen the issue: the bot does not re-close an issue a person
-reopened.
+reopened. When a row is removed after the bot closed its issue, the bot
+reopens the issue, within the cap, with a comment saying the row was removed;
+it finds such issues from every version of the ledger in the history of the
+default branch.
 
 == 5. Running it
 
-IMPORTANT: The two workflows this section and §6 describe,
-`.github/workflows/issue-evidence.yml` and
-`.github/workflows/issue-evidence-reusable.yml`, are added by the follow-up
-pull request #1652, not by the change that introduced this page. Until #1652
-merges they are not in the repository, no bot closes or reopens anything, and
-the ledger is evaluated only by hand (`scripts/issue-evidence.sh`) and by its
-test suite. The bullets below and §6 describe the workflows as #1652 adds them.
+NOTE: The two workflows, `.github/workflows/issue-evidence.yml` and
+`.github/workflows/issue-evidence-reusable.yml`, were added by pull request
+#1652, after the ledger and the evaluator. Everything that reads or changes
+an issue is in `scripts/issue-evidence-apply.sh`, which the reusable workflow
+calls; its tests are `scripts/tests/issue-evidence-apply-test.sh`. Those
+tests use a stand-in for `gh`. Until one report-only run on `main` has been
+read by a person, the bot's reading of real issue state is untested.
 
-* `.github/workflows/issue-evidence.yml` (from #1652) runs on a push to `main` that touches
+* `.github/workflows/issue-evidence.yml` runs on a push to `main` that touches
   the ledger or the bot, weekly, and by hand. Every run writes the decision
   table, and a report-only list of candidate rows, to the job summary.
 * It applies nothing unless the repository variable `ISSUE_EVIDENCE_APPLY` is
@@ -182,8 +186,7 @@ from, never an action.
 
 == 6. Adopting it in another repository
 
-These steps need the reusable workflow from #1652; until that pull request
-merges there is no commit of it to pin.
+These steps use the reusable workflow, pinned by commit.
 
 . Add an empty `.machine_readable/issue-evidence.jsonl`.
 . Add a caller that pins the reusable to a full commit SHA, and record that
@@ -214,9 +217,16 @@ changes only when it moves its pin.
   landed, not that it fixed the issue; a `grep-absent` passes if the defect
   moved to another file. The reviewer of the row judges that the checks
   capture the claim.
-* GitHub's own state is read once per run. A person acting between the read
-  and the action is caught by a re-read just before each action, not by a
-  lock.
+* GitHub's own state is read once per run, and again just before each
+  action: the issue's state and who closed or reopened it last. A person who
+  reopened or closed it since the plan was made is not overridden. This is a
+  re-read, not a lock: a person acting in the moment between the re-read and
+  the action is not caught. A failed or malformed read stops the run.
+* Before it acts, the apply job reads the head of the default branch again.
+  If the branch has moved since the commit that was evaluated, it reports
+  "stale; nothing done" and acts on nothing. The next run evaluates the new
+  head: a push that touches the ledger or the bot, the weekly run, or a run
+  by hand.
 
 == 8. Change log
 
@@ -229,4 +239,11 @@ changes only when it moves its pin.
 | Ledger format, check vocabulary and evaluator. The reusable workflow and
   its caller follow in #1652; the caller is report-only until
   `ISSUE_EVIDENCE_APPLY` is set.
+
+| 2026-11-17
+| Workflows added (#1652)
+| The caller and the reusable workflow, with `scripts/issue-evidence-apply.sh`
+  for every read and change of an issue: a re-read before each action, a
+  refusal when a read fails or the branch head has moved, and a reopen when a
+  row the bot acted on is removed.
 |===

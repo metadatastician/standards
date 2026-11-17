@@ -25,8 +25,11 @@
 #
 # Least privilege: the evaluate job reads (contents, issues) and runs the
 # ledger's `script` checks; it holds no write token, and its checkouts do not
-# persist credentials. Only the apply job holds `issues: write`, and it checks
-# out nothing and runs no repository code. Every `${{ }}` value reaches a
+# persist credentials. Only the apply job holds `issues: write`; it checks out
+# nothing and runs no code of the calling repository, only
+# scripts/issue-evidence-apply.sh fetched from this reusable's own commit
+# (the GitHub reads and writes, tested by
+# scripts/tests/issue-evidence-apply-test.sh). Every `${{ }}` value reaches a
 # script through `env:`, never through the text of a `run:` body.
 name: Issue evidence (reusable)
 
@@ -95,12 +98,14 @@ jobs:
           persist-credentials: false
           sparse-checkout: |
             scripts/issue-evidence.sh
+            scripts/issue-evidence-apply.sh
           sparse-checkout-cone-mode: false
 
       - name: Stage the evaluator outside the evaluated tree
         run: |
           set -euo pipefail
           cp .issue-evidence-standards/scripts/issue-evidence.sh "$RUNNER_TEMP/issue-evidence.sh"
+          cp .issue-evidence-standards/scripts/issue-evidence-apply.sh "$RUNNER_TEMP/issue-evidence-apply.sh"
           rm -rf .issue-evidence-standards
 
       # Only rows on the default branch are ever acted on: the owner approves a
@@ -134,58 +139,45 @@ jobs:
           bash "$RUNNER_TEMP/issue-evidence.sh" evaluate --repo "$REPO" --ref HEAD "$LEDGER" >"$RUNNER_TEMP/evaluated.jsonl"
           echo "rows evaluated: $(grep -c . "$RUNNER_TEMP/evaluated.jsonl" || true)"
 
-      # For each ledger issue: its state, whether this bot closed it (closed by
-      # github-actions[bot] AND carrying this bot's marker comment from
-      # github-actions[bot]; a marker anyone else posted does not count), and
-      # whether a person reopened it after this bot closed it.
+      # For each ledger issue: its state, whether this bot closed it, and whether
+      # a person reopened it after this bot closed it, from its timeline
+      # (scripts/issue-evidence-apply.sh `states`). A failed read fails this
+      # step, so nothing is decided or applied on a guess.
       - name: Read the ledger issues' states
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          bot='github-actions[bot]'
-          marker='<!-- issue-evidence-bot: row-sha256='
-          : >"$RUNNER_TEMP/states.jsonl"
-          for n in $(jq -r '.issue' "$RUNNER_TEMP/evaluated.jsonl" | sort -n -u); do
-            issue="$(gh api "repos/$REPO/issues/$n")"
-            if [ "$(jq 'has("pull_request")' <<<"$issue")" = true ]; then
-              echo "::warning::ledger row #$n names a pull request, not an issue; it is never acted on."
-              continue
-            fi
-            state="$(jq -r .state <<<"$issue")"
-            closed_by="$(jq -r '.closed_by.login // ""' <<<"$issue")"
-            markers="$(gh api --paginate "repos/$REPO/issues/$n/comments?per_page=100" \
-              --jq ".[] | select(.user.login == \"$bot\" and (.body | contains(\"$marker\"))) | .id" | grep -c . || true)"
-            closed_by_bot=false
-            reopened_by_human=false
-            if [ "$state" = closed ] && [ "$closed_by" = "$bot" ] && [ "$markers" -gt 0 ]; then
-              closed_by_bot=true
-            fi
-            if [ "$state" = open ] && [ "$markers" -gt 0 ]; then
-              last="$(gh api --paginate "repos/$REPO/issues/$n/events?per_page=100" \
-                --jq '.[] | select(.event == "closed" or .event == "reopened") | [.event, (.actor.login // "")] | @tsv' | tail -n 1)"
-              if [ "${last%%$'\t'*}" = reopened ] && [ "${last#*$'\t'}" != "$bot" ]; then
-                reopened_by_human=true
-              fi
-            fi
-            jq -c -n --argjson number "$n" --arg state "$state" \
-              --argjson cbb "$closed_by_bot" --argjson rbh "$reopened_by_human" \
-              '{number: $number, state: $state, closed_by_bot: $cbb, reopened_by_human: $rbh}' >>"$RUNNER_TEMP/states.jsonl"
-          done
-          jq -c -s . "$RUNNER_TEMP/states.jsonl" >"$RUNNER_TEMP/states.json"
+          bash "$RUNNER_TEMP/issue-evidence-apply.sh" states --repo "$REPO" \
+            --evaluated "$RUNNER_TEMP/evaluated.jsonl" >"$RUNNER_TEMP/states.json"
+
+      # Removing a row is how a closure is disputed, but an issue with no row is
+      # not in the evaluation. List the issues this bot closed whose row is gone
+      # (every ledger version in this commit's history, minus today's rows) so
+      # they are reopened, within the same cap. A failed read fails this step.
+      - name: Issues the bot closed whose row was removed
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LEDGER: ${{ inputs.ledger }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          bash "$RUNNER_TEMP/issue-evidence-apply.sh" removed-rows --repo "$REPO" --ledger "$LEDGER" \
+            --commit HEAD >"$RUNNER_TEMP/removed.jsonl"
 
       - name: Decide
         env:
           LEDGER: ${{ inputs.ledger }}
+          REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          bash "$RUNNER_TEMP/issue-evidence.sh" decide --open "$RUNNER_TEMP/states.json" \
+          bash "$RUNNER_TEMP/issue-evidence.sh" decide --repo "$REPO" --open "$RUNNER_TEMP/states.json" \
             --evaluated "$RUNNER_TEMP/evaluated.jsonl" "$LEDGER" >"$RUNNER_TEMP/decisions.jsonl"
 
       # The plan is the first max_actions closes and reopens, in ledger order,
-      # each with its rendered comment. Beyond the cap nothing is planned, and
-      # the summary says so.
+      # then the removed-row reopens, each with its comment. Beyond the cap
+      # nothing is planned, and the summary says so.
       - name: Plan (capped) and render comments
         id: plan
         env:
@@ -194,14 +186,15 @@ jobs:
           MAX_ACTIONS: ${{ inputs.max_actions }}
         run: |
           set -euo pipefail
-          if ! [[ "$MAX_ACTIONS" =~ ^[0-9]+$ ]] || [ "$MAX_ACTIONS" -gt 50 ]; then
-            echo "::error::max_actions must be an integer from 0 to 50 (got '$MAX_ACTIONS')."
-            exit 1
-          fi
-          jq -c 'select(.action != "none")' "$RUNNER_TEMP/decisions.jsonl" >"$RUNNER_TEMP/actions.jsonl"
-          total="$(grep -c . "$RUNNER_TEMP/actions.jsonl" || true)"
+          bash "$RUNNER_TEMP/issue-evidence-apply.sh" select --decisions "$RUNNER_TEMP/decisions.jsonl" \
+            --max-actions "$MAX_ACTIONS" --removed "$RUNNER_TEMP/removed.jsonl" \
+            --counts "$RUNNER_TEMP/counts" >"$RUNNER_TEMP/selected.jsonl"
           : >"$RUNNER_TEMP/plan.jsonl"
-          head -n "$MAX_ACTIONS" "$RUNNER_TEMP/actions.jsonl" | while IFS= read -r d; do
+          while IFS= read -r d; do
+            if jq -e 'has("body")' <<<"$d" >/dev/null; then
+              jq -c '{issue, action, close_reason, body}' <<<"$d" >>"$RUNNER_TEMP/plan.jsonl"
+              continue
+            fi
             n="$(jq -r .issue <<<"$d")"
             action="$(jq -r .action <<<"$d")"
             body="$(bash "$RUNNER_TEMP/issue-evidence.sh" render-comment --issue "$n" --action "$action" \
@@ -210,11 +203,10 @@ jobs:
               '{issue: $d.issue, action: $d.action,
                 close_reason: (if $d.disposition == "landed" then "completed" else "not planned" end),
                 body: $body}' >>"$RUNNER_TEMP/plan.jsonl"
-          done
+          done <"$RUNNER_TEMP/selected.jsonl"
           planned="$(grep -c . "$RUNNER_TEMP/plan.jsonl" || true)"
           echo "plan=$(jq -c -s . "$RUNNER_TEMP/plan.jsonl")" >>"$GITHUB_OUTPUT"
           echo "plan_count=$planned" >>"$GITHUB_OUTPUT"
-          echo "$total $planned" >"$RUNNER_TEMP/counts"
 
       - name: Candidate rows (report only)
         env:
@@ -265,6 +257,16 @@ jobs:
                 | "| #\(.issue) | \(.disposition) | \($r.holds) | \($r.failed | map(tostring) | join(", ")) | \(.action) | \(.reason) |"' \
                 "$RUNNER_TEMP/decisions.jsonl"
             fi
+            if [ -s "$RUNNER_TEMP/removed.jsonl" ]; then
+              echo
+              echo "### Rows removed after the bot closed their issue"
+              echo
+              echo "Each is reopened, within the cap, with a comment saying its row was removed."
+              echo
+              echo "| Issue | Action |"
+              echo "|---|---|"
+              jq -r '"| #\(.issue) | reopen (row removed) |"' "$RUNNER_TEMP/removed.jsonl"
+            fi
             if [ -s "$RUNNER_TEMP/candidates.jsonl" ]; then
               echo
               echo "### Candidate rows (report only, top 20)"
@@ -283,58 +285,49 @@ jobs:
     if: ${{ inputs.apply && needs.evaluate.outputs.on_default == 'true' && needs.evaluate.outputs.plan_count != '0' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # contents: read lets it read the default branch's live head (the stale-plan
+    # check below) in a private repository; it reads no file of the repository.
     permissions:
+      contents: read
       issues: write
     concurrency:
       group: issue-evidence-apply-${{ github.repository }}
       cancel-in-progress: false
     steps:
+      # The apply job checks out nothing. It runs one script, fetched from this
+      # reusable's own commit in metadatastician/standards (immutable at a
+      # 40-hex SHA), never from the calling repository and never from the
+      # evaluate job, whose ledger `script` checks ran code.
+      - name: Fetch the applier at this reusable's own commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SELF_WORKFLOW_SHA: ${{ job.workflow_sha }}
+        run: |
+          set -euo pipefail
+          if ! printf '%s' "$SELF_WORKFLOW_SHA" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "::error::job.workflow_sha resolved to '${SELF_WORKFLOW_SHA:-<empty>}', not a 40-hex commit; refusing to act."
+            exit 1
+          fi
+          gh api -H 'Accept: application/vnd.github.raw' \
+            "repos/metadatastician/standards/contents/scripts/issue-evidence-apply.sh?ref=$SELF_WORKFLOW_SHA" \
+            >"$RUNNER_TEMP/issue-evidence-apply.sh"
+          head -n 1 "$RUNNER_TEMP/issue-evidence-apply.sh" | grep -qx '#!/usr/bin/env bash' || {
+            echo "::error::the fetched applier is not the expected script; refusing to act."
+            exit 1
+          }
+
       - name: Close and reopen
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           PLAN: ${{ needs.evaluate.outputs.plan }}
+          # The evaluate job checked out and evaluated exactly this commit. If the
+          # default branch has moved since, nothing is applied (stale plan).
+          EVALUATED_SHA: ${{ github.sha }}
           MAX_ACTIONS: ${{ inputs.max_actions }}
         run: |
           set -euo pipefail
-          count="$(jq 'length' <<<"$PLAN")"
-          if ! [[ "$MAX_ACTIONS" =~ ^[0-9]+$ ]] || [ "$count" -gt "$MAX_ACTIONS" ]; then
-            echo "::error::the plan holds $count actions, more than max_actions ($MAX_ACTIONS); refusing to act."
-            exit 1
-          fi
-          done_n=0
-          for ((i = 0; i < count; i++)); do
-            item="$(jq -c --argjson i "$i" '.[$i]' <<<"$PLAN")"
-            n="$(jq -r .issue <<<"$item")"
-            action="$(jq -r .action <<<"$item")"
-            reason="$(jq -r .close_reason <<<"$item")"
-            body="$(jq -r .body <<<"$item")"
-            [[ "$n" =~ ^[1-9][0-9]*$ ]] || { echo "::error::bad issue number in plan"; exit 1; }
-            # Re-read the state right before acting: a person may have acted
-            # since the evaluate job read it.
-            now="$(gh issue view "$n" --repo "$REPO" --json state --jq .state)"
-            case "$action" in
-              close)
-                if [ "$now" != OPEN ]; then echo "#$n is $now now; not closing."; continue; fi
-                gh issue close "$n" --repo "$REPO" --reason "$reason" --comment "$body"
-                ;;
-              reopen)
-                if [ "$now" != CLOSED ]; then echo "#$n is $now now; not reopening."; continue; fi
-                gh issue reopen "$n" --repo "$REPO" --comment "$body"
-                ;;
-              *) echo "::error::unknown action in plan: $action"; exit 1 ;;
-            esac
-            done_n=$((done_n + 1))
-            echo "| #$n | $action |" >>"$RUNNER_TEMP/applied.md"
-          done
-          {
-            echo "## Issue evidence: applied"
-            echo
-            echo "$done_n of $count planned action(s) performed."
-            if [ -s "$RUNNER_TEMP/applied.md" ]; then
-              echo
-              echo "| Issue | Action |"
-              echo "|---|---|"
-              cat "$RUNNER_TEMP/applied.md"
-            fi
-          } >>"$GITHUB_STEP_SUMMARY"
+          printf '%s' "$PLAN" >"$RUNNER_TEMP/plan.json"
+          bash "$RUNNER_TEMP/issue-evidence-apply.sh" apply --repo "$REPO" \
+            --plan "$RUNNER_TEMP/plan.json" --max-actions "$MAX_ACTIONS" \
+            --commit "$EVALUATED_SHA"

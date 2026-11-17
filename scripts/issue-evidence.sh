@@ -17,10 +17,9 @@
 #
 # THIS SCRIPT IS A TOTAL, SIDE-EFFECT-FREE FUNCTION of (ledger, git tree at a
 # ref). It never calls the network and never writes to the repository. The
-# GitHub reads and writes belong to .github/workflows/issue-evidence.yml and
-# issue-evidence-reusable.yml, which the follow-up pull request (#1652) adds;
-# they are not in this tree until it merges. Until then the ledger is
-# evaluated only by hand (the subcommands below) and by the test suite.
+# GitHub reads and writes live in scripts/issue-evidence-apply.sh, which
+# .github/workflows/issue-evidence-reusable.yml calls (caller:
+# .github/workflows/issue-evidence.yml).
 #
 # SUBCOMMANDS (LEDGER defaults to .machine_readable/issue-evidence.jsonl)
 #   validate [LEDGER]
