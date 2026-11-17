@@ -119,7 +119,8 @@ The architecture that follows from this, as decided today:
 == Decisions the owner made on 2026-11-17
 
 Given through the question selector. Each is recorded so it reaches the
-issues it answers.
+issues it answers. None is implemented by this page unless a work order below
+says so.
 
 [cols="3,4,2",options="header"]
 |===
@@ -138,6 +139,10 @@ issues it answers.
 | CodeQL: D256 or the monthly cron | D256 wins; the cron campaign closes as superseded | #288, #323, #324
 | Stub `.affine` files | Port genuinely, repository by repository | #664, #272, #276, #278, #279
 | The red debt check on `main` | Pay down four TODO/FIXME markers; no ceiling change | #955
+| Dependabot and the lock | Retire `dependabot-lock-regen.yml`; rely on Dependabot plus the lock gate, after a census of recent Dependabot pull requests | #670
+| The codeql-action hold at v4.38.0 | Lift it; correct the refuted comments | #1037
+| Two Actions allow-lists | `config/settings/actions-allowlist.json` is the source; the rhodium copy is generated from it, then retired after a deprecation window | #1220
+| How this work is shipped | Two pull requests: one needing no lock change, one with only the closer-bot workflows | —
 |===
 
 On the stub files the owner chose the genuine port over the recommended
@@ -283,7 +288,6 @@ completeness; no agent edits licence text or SPDX headers.
 | #497 | How should the 007 classification conflict and the Palimpsest material in standards be settled? | First reconcile 007's class in one canon place (LICENCE-POLICY Rule 4 AGPL vs CLAUDE.md category 2 ARR vs D246 MPL-2.0), then rule PALIMPSEST.adoc and licenses/PALIMPSEST-* against the Rule 2 register
 | #662 | Was the wordpress-tools purge (2966736, 108 source files deleted, no port) a retirement of that functionality, or is a port owed? | Ratify retirement: record it in the repo's deed/ROADMAP and remove .git_corrupted/ and the 15 orphaned .res.js (wordpress-tools#66, #67)
 | #663 | What becomes of the TypeScript exemption table, given the 2026-08-27 'retire every exemption' ruling and the 2026-11-13 text that cites the listed exemptions? | Replace the .d.ts and bindings rows with a derivation rule: declarations and TS bindings are generated from the Idris2/Zig ABI and never authored (generated in build, or committed under generate == committed); other…
-| #670 | Dependabot now updates actions.lock natively (observed on standards #1345 and #1437). What happens to the standards-side regeneration machinery? | Retire dependabot-lock-regen.yml and scripts/regen-dependabot-locks.sh; rely on native Dependabot lock updates plus the existing actions-lock-verify gate; close #670 after a census of recent estate Dependabot PRs shows…
 | #674 | The 2026-08-27 ruling said 'raise upstream, do not work around'. scorecard-reusable.yml now filters Scorecard pin findings for lock-verified workflows (a Ruby reconciler). Keep it? | Ratify the reconciler as the sanctioned interim (it derives 'pinned' from native gh actions-lock verification, not from dismissals), record that and the three upstream links in a canon decision, port it out of Ruby,…
 | #732 | In the deed era, where does the content of 0.N-AI-MANIFEST.a2ml directory manifests go, and is the ply number kept? | Derive ply from the path (from the repo root, or from the nearest unit per D165 (b)) and stop storing it; map each directory manifest's remaining content into (manifest …) clauses of the repo deed keyed by path, under…
 | #895 | How should the gate table represent a repo that carries only part of a capability's module set (maa-framework: MAINTAINERS and GOVERNANCE but not AUDIT and AFFIRMATION)? | Split governance-tier into atomic capabilities (governance-docs: GOVERNANCE+MAINTAINERS; audit-tier: AUDIT+AFFIRMATION), each gating exactly the files it names
@@ -293,8 +297,6 @@ completeness; no agent edits licence text or SPDX headers.
 | #924 | In a repo whose actions.lock is verified on every PR, is `uses: owner/repo@vX.Y.Z` plus a lock record an acceptable pin under canon rule 10? | Yes for lock-verified repos: the lock is the pin authority (it binds commit, owner_id, repo_id and transitive deps); write that into canon rule 10 and close #924 once gh actions-lock --verify-local passes on the…
 | #925 | scripts/check-ts-allowlist.deno.js is dead at HEAD but still fetched by callers pinned before 4f7f02ca, and Deno is no longer banned. What should happen to it? | Delete it after the apply-workflow-pins census shows no governance caller pinned to a pre-4f7f02ca revision (bump them via the applier first).
 | #991 | How should the launcher-standard stale-version class be armed, given that every CURRENT_VERSION bump makes correct consumers stale with no action of theirs? | Derive staleness from a support window: the standard declares the oldest still-supported version, and the gate fails only on citations older than that
-| #1037 | #1093 measured codeql-action 4.38.1 and 4.38.2 healthy wherever actions.lock matches, and the template already ships v4.39.3. Should the estate-wide codeql-action hold at v4.38.0 be lifted? | Lift the hold: drop the codeql-action exclude/ignore from canon and standards' dependabot.yml, fix the refuted comments, and rely on the squabble-bump fixer plus the lock-sync gate to pair every uses: bump with its…
-| #1220 | Where should the estate's Actions allowlist live, given two drifted hand-kept copies (rhodium allowed-actions.json for the tree gate, config/settings/actions-allowlist.json for the live settings payload)? | One source: config/settings/actions-allowlist.json; generate rhodium-standard-repositories/actions-allowlist/allowed-actions.json from it with a generate == committed check, keep the old URL as a generated copy for a…
 | #1225 | Should the canonical launcher deed define platforms, lifecycle phases and the metadata-block encoding, and may launch-scaffolder keep an offline copy of it? | Adopt the three clauses in the canonical deed (adoc in the same commit) and keep no vendored copy: launch-scaffolder resolves the canonical file by commit and sha256 from canon.lock at build time and fails closed when…
 | #1226 | What is the normative vocabulary for per-app <app>.launcher_praxis.deed descriptors, and in particular for the untyped [integration] and [exceptions] tables? | A closed, typed vocabulary for every field, including [integration] and [exceptions], published as a standards mapping spec with fixtures; unknown keys block conversion
 | #1262 | What must a repo show for the abi row src/interface/generated/? | Nothing tracked: CI generates the ABI output from the Idris2 source and the gate checks the generation step ran and its output is non-empty
@@ -302,7 +304,7 @@ completeness; no agent edits licence text or SPDX headers.
 | #1443 | Where does the immutable record of a repo's mint answers live, so that a drift check cannot be satisfied by editing the child's own (mint-answers)? | Signed receipt in the child: a detached signature over the JCS-canonical answers clause from the minter's key (Scaffoldia's mint identity), verified against a published public key
 | rsr-template-repo#205 | How should github-actions dependency updates stay in step with actions.lock? | Derive and verify (most elegant long-term)
 |===
-27 questions. Full option sets, with what each option causes, are in the data files.
+24 questions. Full option sets, with what each option causes, are in the data files.
 
 === Issues that should leave this repository
 
