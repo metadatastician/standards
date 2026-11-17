@@ -195,7 +195,7 @@ jobs:
 
       - name: Install Rust toolchain
         # `toolchain:` is mandatory under a SHA pin.
-        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # stable
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
         with:
           toolchain: stable
           components: llvm-tools-preview
