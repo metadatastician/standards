@@ -146,7 +146,7 @@ no summary row. In this repository it is the `fleet` job of
 | Producer | gitbot-fleet `scripts/fleet-report-back.sh` (+ `fleet-report-back-build.sh`), pinned to a gitbot-fleet commit
 | Question | For every member enrolled in `.gitbot-fleet/enrolment.json`: did its adapter run on this head, and what did it report?
 | Output | artifact `fleet-report-backs`: one `<member>.json` envelope per enrolled member (VERDICT-GRID-SPEC, "The report-back envelope")
-| Consumer | `hypatia-scan-reusable.yml` input `report-backs-artifact`: downloaded into `.gitbot-fleet/report-backs/` before "Render the verdict grid"
+| Consumer | `hypatia-scan-reusable.yml` input `report-backs-artifact`: downloaded into a fresh directory under the runner's temp directory, outside the checkout, before "Render the verdict grid"; nothing committed under `.gitbot-fleet/report-backs/` is read
 | Permissions | `contents: read`
 |===
 

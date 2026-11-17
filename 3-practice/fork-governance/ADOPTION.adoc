@@ -424,10 +424,13 @@ lane that reads it land together. New repositories inherit both from
 === 8.3 What the lane does with it
 
 `hypatia-scan-reusable.yml` downloads the artifact named by its
-`report-backs-artifact` input (default `fleet-report-backs`) into
-`.gitbot-fleet/report-backs/` before rendering. A missing artifact is tolerated
-and leaves the enrolled rows orange. Pass `report-backs-artifact: ""` to opt
-out. The envelope contract is `docs/VERDICT-GRID-SPEC.adoc`; the producer is
+`report-backs-artifact` input (default `fleet-report-backs`) into a fresh
+directory under the runner's temp directory, outside the checkout, and renders
+from there. A `.gitbot-fleet/report-backs/` committed to a pull request, a file
+or a symlink, is cleared and never read, so nothing committed can pose as
+evidence. A missing artifact is tolerated and leaves the enrolled rows orange.
+Pass `report-backs-artifact: ""` to opt out; the renderer then reads an empty
+directory. The envelope contract is `docs/VERDICT-GRID-SPEC.adoc`; the producer is
 documented in gitbot-fleet's `docs/REPORT-BACK.adoc`.
 
 === 8.4 Verify

@@ -22,7 +22,7 @@ toc::[]
 
 == Census
 
-8 proven of 30 rows; 3 argued; 7 tested-only; 12 open. No row is
+8 proven of 31 rows; 3 argued; 8 tested-only; 12 open. No row is
 `proven-with-postulates`. Every `proven` row holds *relative to* the
 `argued` row for the Idris2 library its file imports (PROOF-POLICY §1.1),
 so none counts as unconditionally proven.
@@ -179,7 +179,7 @@ supplies, so they are not listed as discharged theorems.
 [[gate-obligations]]
 === Tested obligations: K9 routing and CI gates
 
-The last three rows are the CI gates built for standards#963 and #1306.
+The three rows after the first are the CI gates built for standards#963 and #1306; the last is the report-back isolation of the fleet lane (2026-11-17).
 The formal closure model belongs to Hypatia, the closure authority:
 `verification/proofs/idris2/ActionsLockClosure.idr` in
 `hyperpolymath/hypatia` proves the decision procedure sound and complete,
@@ -216,6 +216,13 @@ below were re-run on 2026-11-16 and all passed.
 | `scripts/tests/hypatia-blocking-gate-test.sh`
 | `.github/workflows/hypatia-scan-reusable.yml`, panic-attack step
 | Bounds: 3 cases. Excluded findings are reported but not counted. A critical that is only under an excluded prefix raises no warning. An empty scope counts everything. `docs/9-archive/` and `9-archive-not/` still count.
+
+| Nothing committed to a pull request reaches the verdict grid as a gitbot-fleet report-back: the renderer reads only a directory the job creates empty under `$RUNNER_TEMP`, which only the `fleet-report-backs` artifact writes to, and a committed `.gitbot-fleet/report-backs` (file, symlinked file, or a symlink to a directory) is cleared without following the link
+| tested-only
+| `scripts/tests/report-backs-isolation-test.sh`
+| `.github/workflows/hypatia-scan-reusable.yml`, steps "Isolate the fleet report-backs from the checkout", "Download the fleet report-backs" and "Render the verdict grid"
+| Bounds: 24 checks over 6 checkouts (committed and symlinked envelopes, a symlinked report-backs directory, a `.gitbot-fleet` resolving outside the checkout, none at all, an opted-out caller), each run through the real step and the real renderer. A control shows the renderer does turn a clean envelope green; a negative control shows the previous sweep let a forged envelope through as green. Fails 10 of 24 against the previous workflow. A step outside this job, or a caller whose own workflow is edited in the pull request, is outside the property.
+
 |===
 
 [[receipt]]

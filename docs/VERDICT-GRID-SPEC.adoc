@@ -131,7 +131,7 @@ Hypatia lane; the rest come from the fleet.
 |As above.
 
 |One row per gitbot-fleet member
-|`.gitbot-fleet/report-backs/<member>.json` in the scanned tree, each a report-back envelope (below), and `.gitbot-fleet/enrolment.json` naming which members apply to this repository. The envelopes are produced per run, never committed: the caller's fleet job (gitbot-fleet `fleet-report-back-reusable.yml`, or its two scripts inline) uploads them as the `fleet-report-backs` artifact and `hypatia-scan-reusable.yml` (input `report-backs-artifact`) downloads them into that directory before rendering.
+|One `<member>.json` report-back envelope (below) per enrolled member, from the `fleet-report-backs` artifact of this run, and `.gitbot-fleet/enrolment.json` naming which members apply to this repository. The envelopes are produced per run, never committed: the caller's fleet job (gitbot-fleet `fleet-report-back-reusable.yml`, or its two scripts inline) uploads them as the `fleet-report-backs` artifact, and `hypatia-scan-reusable.yml` (input `report-backs-artifact`) downloads them into a fresh directory under the runner's temp directory, outside the checkout, and renders from there. Nothing in the scanned tree is read as an envelope: a `.gitbot-fleet/report-backs/` in a pull request, committed file or symlink, is cleared and never followed.
 |An enrolled member with no report-back is orange ("enrolled, but no report-back was received"); a member marked not enrolled is grey with the manifest's reason; a member with a report-back but no enrolment entry gets a row from its report-back alone. An unreadable manifest is one orange row named `gitbot-fleet enrolment`.
 |===
 
