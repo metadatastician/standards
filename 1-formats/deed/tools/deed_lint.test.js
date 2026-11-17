@@ -6,7 +6,7 @@ import { cpSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, writ
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { validate, blankComments, LintError, SELF_TEST_CASES, checkEgress, EgressError, checkAnchor, AnchorError, profileCOfBody, readMustfileChecks, MustfileError, readProofReceipt, ProofReceiptError, checkContractiles, ContractilesError, contractilePaths, CONTRACTILE_VERBS, checkEdict, EdictError, verbOfFilename, checkVerbDescriptile, VerbDescriptileError, verbOfDescriptile, choraRepoUuid, rootChora, FIXTURE_TODAY, checkEcosystem, EcosystemError, ECOSYSTEM_RELATIONSHIPS, checkState, StateError, STATE_PHASES, MATURITY_LEVELS, checkRsrScorecard, RsrScorecardError, RSR_TIERS, RSR_VERDICTS, checkMeta, MetaError, META_PROJECT_TYPES, ADR_STATUSES, checkAgentic, AgenticError, J19_SETTINGS, checkNeurosym, NeurosymError, SCAN_DEPTHS, REPORT_FORMATS, checkRsrProfile, RsrProfileError, RSR_PROFILE_FIELDS } from "./deed_lint.js";
+import { validate, blankComments, LintError, SELF_TEST_CASES, checkEgress, EgressError, checkAnchor, AnchorError, profileCOfBody, readMustfileChecks, MustfileError, readProofReceipt, ProofReceiptError, checkContractiles, ContractilesError, contractilePaths, CONTRACTILE_VERBS, checkEdict, EdictError, verbOfFilename, checkVerbDescriptile, VerbDescriptileError, verbOfDescriptile, choraRepoUuid, rootChora, FIXTURE_TODAY, checkEcosystem, EcosystemError, ECOSYSTEM_RELATIONSHIPS, checkState, StateError, STATE_PHASES, MATURITY_LEVELS, checkRsrScorecard, RsrScorecardError, RSR_TIERS, RSR_VERDICTS, checkMeta, MetaError, META_PROJECT_TYPES, ADR_STATUSES, checkAgentic, AgenticError, J19_SETTINGS, checkNeurosym, NeurosymError, SCAN_DEPTHS, REPORT_FORMATS, checkRsrProfile, RsrProfileError, RSR_PROFILE_FIELDS, layoutPathFault } from "./deed_lint.js";
 import { generateContractileRegistry as generateRegistry } from "./deed_lint.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -1721,7 +1721,7 @@ describe("rsr-profile clause (A7 J39)", () => {
   test("--rsr-profile-keys prints the clause's one key set", () => {
     const r = cli("--rsr-profile-keys");
     expect(r.code).toBe(0);
-    expect(r.out.trim().split("\n")).toEqual([...RSR_PROFILE_FIELDS.map((k) => ":" + k), "(notes)"]);
+    expect(r.out.trim().split("\n")).toEqual([...RSR_PROFILE_FIELDS.map((k) => ":" + k), "(notes)", "(layout)"]);
   });
   test("the canon's own clause conforms", () => {
     for (const p of ["standards_chora.deed"]) {
@@ -1741,6 +1741,27 @@ describe("rsr-profile clause (A7 J39)", () => {
     const p = join(FIX, "valid");
     const f = readdirSync(p).find((n) => n.endsWith("_chora.deed") && !readFileSync(join(p, n), "utf8").includes("(rsr-profile"));
     expect(checkRsrProfile(readFileSync(join(p, f), "utf8"), join(p, f))).toBeNull();
+  });
+  test("(layout …) returns its bindings in order", () => {
+    const p = join(FIX_RP, "valid", "layout-binding_chora.deed");
+    expect(checkRsrProfile(readFileSync(p, "utf8"), p).layout).toEqual([
+      { gate: "abi.ipkg", at: ["src/interface/abi.ipkg"] },
+      { gate: "src/interface/abi/|src/interface/Abi/", at: ["src/abi/"] },
+    ]);
+  });
+  test("a profile without (layout …) has no bindings", () => {
+    const p = join(FIX_RP, "valid", "minimal_chora.deed");
+    expect(checkRsrProfile(readFileSync(p, "utf8"), p).layout).toEqual([]);
+  });
+  test("an :at path is concrete and inside the repo", () => {
+    for (const [path, ok] of [["src/interface/abi.ipkg", true], ["proofs/", true], ["/abs", false], ["a/../b", false],
+      ["./a", false], ["a//b", false], ["a/*.rs", false], ["a|b", false], ["a?", false], ["a[b]", false], ["", false], ["a\\b", false], ["a\nb", false]]) {
+      expect(layoutPathFault(path) === null).toBe(ok);
+    }
+  });
+  test("an unknown (module …) member refuses the clause (J39)", () => {
+    const p = join(FIX_RP, "invalid", "layout-unknown-member_chora.deed");
+    expect(() => checkRsrProfile(readFileSync(p, "utf8"), p)).toThrow(/has no field :why.*J39/);
   });
   test("errors are RsrProfileError", () => {
     const p = join(FIX_RP, "invalid", "profile-twice_chora.deed");

@@ -48,7 +48,7 @@ ledger() {
 expect() {
   local label=$1 want=$2 needle=$3 gate=${4:-$GATE} out rc
   out="$(bash "$gate" --root "$WORK/t" 2>&1)"; rc=$?
-  if [ "$rc" -ne "$want" ] || { [ "$needle" != - ] && ! printf '%s' "$out" | /usr/bin/grep -qF -- "$needle"; }; then
+  if [ "$rc" -ne "$want" ] || { [ "$needle" != - ] && ! /usr/bin/grep -qF -- "$needle" <<<"$out"; }; then
     echo "FAIL: $label — wanted exit $want and '$needle', got exit $rc"
     printf '%s\n' "$out" | sed 's/^/      | /'
     fail=$((fail + 1)); return

@@ -32,17 +32,28 @@
 # listed that was renamed with identical content (git R100) keeps its entry
 # at the new path, because a move adds no fact.
 #
-# Usage: check-a2ml-archived.sh [--base REF] [ROOT]   (ROOT defaults to .)
-# Exit:  0 clean · 1 violation · 2 setup error (no ledger, unreadable root,
-#        unresolvable REF)
+# With --prune, each entry the check reports as naming no A2ML file is deleted
+# from the ledger (same computation as the check) and the exit is 0. Nothing
+# else changes. With any other violation the ledger is left unchanged and the
+# exit is 1. Contract: docs/wikis/maintainers/index.adoc, "Shrink-only ledgers".
+#
+# Usage: check-a2ml-archived.sh [--prune] [--base REF] [ROOT]   (ROOT defaults to .)
+# Exit:  0 clean (or pruned clean) · 1 violation · 2 setup error (no ledger,
+#        unreadable root, unresolvable REF)
 
 set -euo pipefail
 
 BASE=""
-if [ "${1:-}" = "--base" ]; then
-  [ -n "${2:-}" ] || { echo "ERROR: --base needs a ref" >&2; exit 2; }
-  BASE="$2"; shift 2
-fi
+PRUNE=false
+while :; do
+  case "${1:-}" in
+    --base)
+      [ -n "${2:-}" ] || { echo "ERROR: --base needs a ref" >&2; exit 2; }
+      BASE="$2"; shift 2 ;;
+    --prune) PRUNE=true; shift ;;
+    *) break ;;
+  esac
+done
 ROOT="${1:-.}"
 LEDGER_REL=".machine_readable/a2ml-legacy-allow.txt"
 LEDGER="$ROOT/$LEDGER_REL"
@@ -77,18 +88,19 @@ ledger_entries() {
 
 declare -A listed=()
 fail=0
+hard=0   # a violation pruning may not fix; `fail` also counts stale entries
 while IFS=$'\t' read -r lineno entry; do
   case "$entry" in
     *'*'*|*'?'*|*'['*)
       echo "::error file=$LEDGER_REL,line=$lineno::ledger entry '$entry' is a pattern; list exact paths only"
-      fail=1; continue ;;
+      fail=1; hard=1; continue ;;
     9-archive/*)
       echo "::error file=$LEDGER_REL,line=$lineno::ledger entry '$entry' is under 9-archive/: archived A2ML is removed, not ledgered"
-      fail=1; continue ;;
+      fail=1; hard=1; continue ;;
   esac
   if [ -n "${listed[$entry]:-}" ]; then
     echo "::error file=$LEDGER_REL,line=$lineno::ledger entry '$entry' is listed twice"
-    fail=1; continue
+    fail=1; hard=1; continue
   fi
   listed[$entry]="$lineno"
 done < <(ledger_entries < "$LEDGER")
@@ -108,7 +120,7 @@ if [ -n "$BASE" ]; then
       if [ -n "${moved_from[$entry]:-}" ] && [ -n "${was[${moved_from[$entry]}]:-}" ]; then continue; fi
       if [ -z "${was[$entry]:-}" ]; then
         echo "::error file=$LEDGER_REL,line=${listed[$entry]}::ledger entry '$entry' is not in the ledger at $BASE: nothing joins it (A2ML is retired)"
-        fail=1
+        fail=1; hard=1
       fi
     done
   else
@@ -128,16 +140,43 @@ while IFS= read -r -d '' f; do
     live=$((live + 1))
   else
     echo "::error file=$f::A2ML file not in $LEDGER_REL. A2ML is retired, archive included: write a .deed or .k9.ncl instead, or record it in 9-archive/A2ML-REMOVED.adoc and delete it"
-    fail=1
+    fail=1; hard=1
   fi
 done < <(list_files | grep -zE "$A2ML_RE" || true)
 
+PLAN=""
 for entry in "${!listed[@]}"; do
   if [ -z "${present[$entry]:-}" ]; then
-    echo "::error file=$LEDGER_REL,line=${listed[$entry]}::ledger entry '$entry' names no A2ML file; remove it (the ledger only shrinks)"
+    if $PRUNE; then
+      PLAN+="${listed[$entry]}"$'\t'delete$'\t'$'\t'"ledger entry '$entry' names no A2ML file"$'\n'
+    else
+      echo "::error file=$LEDGER_REL,line=${listed[$entry]}::ledger entry '$entry' names no A2ML file; remove it (the ledger only shrinks)"
+    fi
     fail=1
   fi
 done
+
+if $PRUNE; then
+  echo "a2ml archive gate: $live live (ledgered)"
+  if [ "$hard" -ne 0 ]; then
+    echo "a2ml archive gate: prune refused: a violation pruning may not hide; $LEDGER_REL is unchanged"
+    echo "a2ml archive gate: FAIL"
+    exit 1
+  fi
+  if [ -z "$PLAN" ]; then
+    echo "prune: $LEDGER_REL: nothing stale"
+  else
+    # shellcheck source=SCRIPTDIR/lib/ledger-prune.sh
+    . "$(dirname "${BASH_SOURCE[0]}")/lib/ledger-prune.sh"
+    planfile=$(mktemp)
+    printf '%s' "$PLAN" > "$planfile"
+    rc=0; ledger_prune_apply "$LEDGER" "$LEDGER_REL" "$planfile" || rc=$?
+    rm -f "$planfile"
+    [ "$rc" -eq 0 ] || exit 2
+  fi
+  echo "a2ml archive gate: OK"
+  exit 0
+fi
 
 echo "a2ml archive gate: $live live (ledgered)"
 if [ "$fail" -ne 0 ]; then

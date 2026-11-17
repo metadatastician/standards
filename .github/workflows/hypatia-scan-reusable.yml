@@ -59,11 +59,13 @@ on:
           Name of an artifact, uploaded earlier in the same run, holding the
           gitbot-fleet report-back envelopes (one <member>.json each; produced by
           hyperpolymath/gitbot-fleet fleet-report-back-reusable.yml). It is
-          downloaded into .gitbot-fleet/report-backs/ before the verdict grid
-          renders, so each enrolled member's row carries its evidence instead of
-          "enrolled, but no report-back was received". A missing artifact is
-          tolerated and leaves those rows orange. Set to an empty string to
-          skip the download.
+          downloaded into a fresh directory under the runner's temp directory,
+          outside the checkout, before the verdict grid renders, so each
+          enrolled member's row carries its evidence instead of "enrolled, but
+          no report-back was received". A missing artifact is tolerated and
+          leaves those rows orange. Set to an empty string to skip the
+          download; the renderer then reads an empty directory, never the
+          checkout.
         type: string
         required: false
         default: "fleet-report-backs"
@@ -930,33 +932,60 @@ jobs:
       # fleet-report-back-reusable.yml, or the same driver inline) and reach this
       # job only as an artifact: they are evidence about THIS commit and are never
       # committed. `continue-on-error`: a caller with no fleet job, or a fleet job
-      # that died, leaves every enrolled row orange, which is the truth. The
-      # directory is the one the renderer reads (--report-backs below); the
-      # committed README.md in it is not *.json and stays inert.
-      # Nothing committed may pose as evidence: only files the artifact supplies
-      # are read. The committed README.md is not *.json and is left alone.
-      - name: Clear any checked-out fleet report-backs
-        if: ${{ always() && inputs.report-backs-artifact != '' }}
+      # that died, leaves every enrolled row orange, which is the truth.
+      #
+      # Nothing committed may pose as evidence. Two layers hold that:
+      # 1. The renderer reads $RUNNER_TEMP/fleet-report-backs, a directory this
+      #    job creates empty and only the artifact download writes to. No path
+      #    in the checkout is read, whatever it is (file, directory or symlink),
+      #    and an opted-out caller (empty input) renders from the empty directory.
+      # 2. The checkout's .gitbot-fleet/report-backs is still cleared, so a
+      #    later step or a future change that reads it finds no envelope. A
+      #    committed symlink there is removed as a link and never followed:
+      #    `find` does not descend into a symlinked starting point, so a symlink
+      #    to a directory of forged envelopes would survive a plain sweep.
+      #    A directory that resolves outside the checkout is left untouched.
+      # scripts/tests/report-backs-isolation-test.sh runs both steps.
+      - name: Isolate the fleet report-backs from the checkout
+        id: report-backs
+        if: ${{ always() }}
         run: |
           set -euo pipefail
-          mkdir -p .gitbot-fleet/report-backs
-          # Every entry named *.json goes, symlinks and directories included: a committed
-          # symlink survives a -type f filter and the renderer follows it to its target.
-          find .gitbot-fleet/report-backs -mindepth 1 -maxdepth 1 -name '*.json' -print -exec rm -rf -- {} +
+          backs="$RUNNER_TEMP/fleet-report-backs"
+          rm -rf -- "$backs"
+          mkdir -p -- "$backs"
+          echo "dir=$backs" >> "$GITHUB_OUTPUT"
+          committed=.gitbot-fleet/report-backs
+          if [ -L "$committed" ]; then
+            echo "::warning::$committed is a committed symlink; removed as a link, its target untouched."
+            rm -f -- "$committed"
+          elif [ -d "$committed" ]; then
+            workspace=$(realpath -- "${GITHUB_WORKSPACE:-$PWD}")
+            resolved=$(realpath -- "$committed")
+            case "$resolved/" in
+              "$workspace"/*)
+                # Every entry named *.json goes, symlinks and directories included.
+                find "$committed" -mindepth 1 -maxdepth 1 -name '*.json' -print -exec rm -rf -- {} + ;;
+              *)
+                echo "::warning::$committed resolves outside the checkout ($resolved); left untouched and never read." ;;
+            esac
+          fi
 
       - name: Download the fleet report-backs
-        if: ${{ always() && inputs.report-backs-artifact != '' }}
+        if: ${{ always() && inputs.report-backs-artifact != '' && steps.report-backs.outputs.dir != '' }}
         continue-on-error: true
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: ${{ inputs.report-backs-artifact }}
-          path: .gitbot-fleet/report-backs
+          path: ${{ steps.report-backs.outputs.dir }}
 
       - name: Render the verdict grid
         id: grid
         if: ${{ always() }}
         env:
           HYPATIA_REF: ${{ steps.hypatia-rev.outputs.sha }}
+          # Never a checkout path: empty when isolation failed, so rows go orange.
+          REPORT_BACKS_DIR: ${{ steps.report-backs.outputs.dir }}
           PR_NUMBER: ${{ github.event.pull_request.number || 'local' }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           SCOPE_MODE: ${{ steps.scope.outputs.mode }}
@@ -1011,7 +1040,7 @@ jobs:
           done
           if ! bash "$renderer" render --out verdict-grid \
             --hypatia "$findings" --hypatia-sarif hypatia.sarif --panic panic-attack-findings.json --pons pons-findings.json \
-            --report-backs .gitbot-fleet/report-backs --enrolment "$enrolment" \
+            --report-backs "${REPORT_BACKS_DIR:-}" --enrolment "$enrolment" \
             --previous "$RUNNER_TEMP/grid-previous.md" \
             --sha "$HEAD_SHA" --run "$GITHUB_RUN_ID" \
             --url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \

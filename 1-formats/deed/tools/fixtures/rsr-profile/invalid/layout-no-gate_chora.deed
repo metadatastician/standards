@@ -1,0 +1,5 @@
+;; SPDX-License-Identifier: CC-BY-SA-4.0
+(repo-deed :schema-version "1.0.0" :canonical-name "layout-no-gate" :repo-uuid #uuid"00000000-0000-8000-8000-000000000747" :beholding-chora #uuid"00000000-0000-8000-8000-0000000000e5"
+  (identity :primary-forge github :owner "o")
+  (rsr-profile :version "1.0.0" :capabilities ("abi")
+    (layout (module :at ("a/abi.ipkg")))))
