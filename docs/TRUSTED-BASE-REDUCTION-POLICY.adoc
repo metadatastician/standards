@@ -100,8 +100,14 @@ reason) and an owner.
 
 == `docs/proof-debt.md` schema
 
-Every proof-bearing repo MUST maintain a `docs/proof-debt.md` (or `.adoc`)
-with the following structure:
+Every proof-bearing repo MUST maintain a proof-debt index with the
+following structure. The index is either `docs/proof-debt.md` (or `.adoc`)
+or a proof-debt section of the repo's proof-status file (PROOF-POLICY
+§8.5), `PROOF-STATUS.adoc` at the root or in `docs/`, `docs/status/` or
+`3-practice/`. Where this document says `docs/proof-debt.md`, either form
+is meant. `scripts/check-trusted-base.sh` searches both (added 2026-11-17,
+when standards retired its `docs/proof-debt.adoc` in favour of
+`3-practice/PROOF-STATUS.adoc`).
 
 [source,markdown]
 ----
@@ -453,7 +459,8 @@ as a `trusted-base` job. The script:
 . Verifies each is one of:
 .. preceded by a `TRUSTED:`, `AXIOM:`, `OWED:`, `JUSTIFIED:` or `DEBT:` leading
    comment (the comment block is walked back up to 15 lines), OR
-.. enumerated by path in `docs/proof-debt.md` (or `.adoc`, or `PROOF-NEEDS.md`), OR
+.. enumerated by path in `docs/proof-debt.md` (or `.adoc`, or `PROOF-NEEDS.md`), or in a
+   `PROOF-STATUS.adoc` at the root or in `docs/`, `docs/status/` or `3-practice/`, OR
 .. exempted via a path-fragment substring match in `.trusted-base-ignore`.
 . Fails CI when a *core* marker is naked (no annotation, no proof-debt entry, no
   ignore-file exemption). Extended markers are reported, and their disposition

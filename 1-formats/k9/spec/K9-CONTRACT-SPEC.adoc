@@ -646,7 +646,7 @@ that a verified signature alone never authorises Hunt (PROOF-POLICY §1:
 Idris2). `spec/proofs/hunt-gate-exhaustive.ncl` checks that both Nickel
 copies compute that model on all 32 evidence inputs; `k9-validate.sh
 --self-test` runs it. The proof covers the model and the enumeration covers
-the bridge; the ledger is `3-practice/PROOF-NEEDS.adoc`.
+the bridge; the ledger is `3-practice/PROOF-STATUS.adoc`.
 
 === Evidence provenance
 

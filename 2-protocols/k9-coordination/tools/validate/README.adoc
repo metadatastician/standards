@@ -87,5 +87,5 @@ The proof is about the grammar's language. That apg-js, an ordered-choice
 parser with greedy repetition, accepts exactly that language on this grammar
 is *tested* by the self-test, not proved. The two editorial rewrites of
 2026-11-09 exist because it did not: before them, no date-time and no
-`deed_ref` validated. `3-practice/PROOF-NEEDS.adoc`, the repository's proof-status file, records the status of
+`deed_ref` validated. `3-practice/PROOF-STATUS.adoc`, the repository's proof-status file, records the status of
 every claim.

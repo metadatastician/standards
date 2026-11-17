@@ -6,7 +6,7 @@
 ||| Dependent type definitions stating the Overlay Protocol's core invariants
 ||| as obligations. Every overlay (o-extension or aggregate-library) must
 ||| satisfy these constraints to be protocol-conformant. The file does not
-||| prove them: see 3-practice/PROOF-NEEDS.adoc for what is and is not
+||| prove them: see 3-practice/PROOF-STATUS.adoc for what is and is not
 ||| established, including why Non-Modification is not enforced as stated.
 |||
 ||| The five core invariants:
