@@ -53,6 +53,90 @@ is the thing that decides whether any of the other guardrails can bite.
   promise that the requirement cannot be satisfied; the gate warns when an
   entry goes stale, so it cannot quietly become permanent.
 
+[[ledger-prune]]
+=== Shrink-only ledgers: the prune mode
+
+A shrink-only ledger fails its checker on a new offender and on a stale line,
+so a fix has to remove its line in the same commit. The prune mode does that
+removal, and nothing else (owner decision 2026-11-17).
+
+*The prune contract.* Any prune command that cites this section keeps it.
+
+. *Invariant.* A prune deletes only lines that the checker's own check
+  reports as stale (resolved), and, where a ledger carries `key:count`
+  entries, lowers only a count the check reports as too high, to the value
+  the check measured. It never adds a line, never raises a count, never
+  reorders lines, and copies every other byte unchanged: comment lines, blank
+  lines, a missing final newline. The output is a subsequence of the input
+  lines, apart from lowered counts. The decision comes from the check's own
+  code path, not a second implementation, so check and prune cannot disagree.
+. *Nothing hidden.* If the check finds any problem that is not staleness (a
+  new offender, a grown count, a malformed or duplicated entry), the prune
+  changes nothing and exits 1. A prune never turns a new problem green.
+. *Idempotent.* A second prune changes nothing. After a successful prune the
+  check passes, if staleness was its only finding.
+. *Exit codes.* `0`: nothing was stale, or the stale lines were removed and
+  no other problem remains. `1`: refused; a problem that pruning may not hide
+  is present, and the ledger is unchanged. `2`: usage or setup error; the
+  ledger is unchanged.
+. *Output.* One line on stdout per change, in ledger order, then a summary:
++
+----
+prune: delete <ledger>:<line>: <line as it was> [<reason>]
+prune: lower <ledger>:<line>: <line as it was> -> <new line> [<reason>]
+prune: <ledger>: <d> line(s) deleted, <l> count(s) lowered
+----
++
+`<line>` is the line number in the ledger before the prune; `<reason>` is the
+check's own finding for that line. When nothing is stale the command prints
+`prune: <ledger>: nothing stale`.
+
+*Which ledgers have it.* The writer is `scripts/lib/ledger-prune.sh`; each
+checker builds the plan and the writer refuses any plan that breaks the
+invariant.
+
+[cols="2,3,3"]
+|===
+|Ledger |Prune command |Stale means
+
+|`.machine_readable/inline-python-allow.txt`
+|`scripts/check-inline-python.sh --prune`
+|the file has no inline Python left (line deleted), or fewer lines than the
+count (count lowered)
+
+|`.machine_readable/a2ml-legacy-allow.txt`
+|`scripts/check-a2ml-archived.sh --prune`
+|the entry names no A2ML file
+
+|`.machine_readable/k9-contract-debt.txt`
+|`.githooks/validate-k9.sh --prune`
+|a checked file in the ledger now conforms (layer L1 by default). An entry
+whose file is gone is reported by the k9-conformance grid, not by this hook,
+so this prune does not remove it.
+|===
+
+`lock-allow.txt`, `pipeline-allow.txt` and `required-contexts-allow.txt` have
+no prune mode. Their lines go stale because of state outside this tree (a
+lockfile on another repository's default branch, a pipeline run in another
+repository, the live rulesets), and an offline prune could only guess.
+
+*The pre-commit hook.* `.githooks/validate-ledger-prune.sh`, run by
+`.githooks/pre-commit` on every commit before the K9 gate, applies the prune
+to what the commit will contain:
+
+* It does nothing unless a staged path (added, changed or deleted) appears
+  in the text of one of the three ledgers, or a ledger itself is staged.
+* It judges the index, not the working tree: the index is checked out into a
+  throwaway repository and the checker runs there.
+* When a line is stale it writes the pruned ledger, stages it, and prints the
+  `prune:` lines, so the deletion is visible and lands in the same commit.
+* It refuses (exit 1), names the stale lines and edits nothing when the
+  ledger has unstaged edits (a partly staged ledger included), when the
+  commit is made as `git commit <path>` (git commits a temporary index then),
+  and when the checker refuses to prune.
+
+The suite is `scripts/tests/ledger-prune-test.sh`.
+
 == Learning path
 
 === 1. Drift / staleness automation
