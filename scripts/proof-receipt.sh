@@ -221,6 +221,19 @@ _receipt_echo_ref() { local c="$1"; awk -F'|' -v c="$c" '$1==c{print $4}' "$_rec
 # ── Ledger rows ───────────────────────────────────────────────────────────────
 # Validate one row; print nothing.  A field may not hold " or \ (deed strings)
 # and may not be empty, except the reason of a current receipt and the axioms.
+# An image reference as the reader (deed_lint.js, readProofReceipt) accepts
+# it, so that a row --run-row writes is never refused later by --emit-run:
+# the distribution/reference grammar, with an optional registry host (a DNS
+# name or a bracketed IPv6 address, with an optional port), non-empty
+# lower-case path components, an optional tag of up to 128 characters, a
+# lower-case sha256 digest, and a NAME (host and path) of at most 255
+# characters.
+_receipt_image_ok() {
+  local comp='[a-z0-9]+(([._]|__|-+)[a-z0-9]+)*'
+  local domain='([a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)*|\[[a-fA-F0-9:]+\])'
+  local re="^((${domain}(:[0-9]+)?/)?${comp}(/${comp})*)(:[A-Za-z0-9_][A-Za-z0-9_.-]{0,127})?@sha256:[0-9a-f]{64}\$"
+  [[ "$1" =~ $re ]] && (( ${#BASH_REMATCH[1]} <= 255 ))
+}
 _receipt_check_row() {
   local row="$1" prover run commit checker inv dig said state reason axioms imports tb img x n
   local -a a
@@ -244,7 +257,7 @@ _receipt_check_row() {
     [[ "$tb" =~ ^[0-9a-f]{64}$ ]] || receipt_die "a row's trusted-base binding must be a sha256: $row"
   fi
   if [[ "$n" == 12 ]]; then
-    [[ "$img" =~ ^[^@[:space:]]+@sha256:[0-9a-f]{64}$ ]] || receipt_die "a row's image must be NAME[:TAG]@sha256:<64 hex>: $row"
+    _receipt_image_ok "$img" || receipt_die "a row's image must be NAME[:TAG]@sha256:<64 hex>, NAME as the reader accepts it: $row"
   fi
   [[ "$row" != *'"'* && "$row" != *'\'* ]] || receipt_die "a ledger row holds a quote or backslash: $row"
   [[ "$row" != *[[:cntrl:]]* ]] || receipt_die "a ledger row holds a control character, which a deed string cannot: $row"
