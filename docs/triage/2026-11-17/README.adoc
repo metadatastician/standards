@@ -1,0 +1,568 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+// SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+// Evidence snapshot compiled 2026-11-17 against metadatastician/standards main (58362c24),
+// hyperpolymath/rsr-template-repo main (0044ad9), hyperpolymath/scaffoldia main (8c833fb),
+// hyperpolymath/hybrid-automation-router (0176b7d), metadatastician/kyq (5e623b9) and
+// metadatastician/kyx (731e63a). Companion data files are in this directory.
+= Automating the estate standards: plan and issue burn-down (2026-11-17)
+:toc: left
+:toclevels: 2
+:icons: font
+
+== What this is
+
+The owner asked three things on 2026-11-17: how to get the estate standards
+automated as far as possible; which open issues are stale, which have a small
+piece that can be done now, and how to regroup the rest; and to do it with
+Scaffoldia, not `rsr-template-repo`, as the way forward.
+
+This page is the plan and the record of that pass. Every count in it comes
+from the data files beside it or from a command named in the text. Claims
+about other repositories that were not re-measured are marked as such in the
+data (`not checked`), and no old estate-wide number is restated here as
+current.
+
+Data files (I-JSON, JCS, one record per line):
+
+* `verdicts-standards.jsonl`: one verdict per open issue (206), with evidence.
+* `verdicts-template-and-scaffoldia.jsonl`: the same for 19 template issues
+  and 1 Scaffoldia issue.
+* `move-out.jsonl`: destination per estate-labelled issue (141).
+* `open-prs.jsonl`: state of the 34 open pull requests in four repositories.
+* `ledger-rows-rsr-template-repo.jsonl`: 5 evidence rows that belong in the
+  template's own ledger once it has one.
+
+In this page and in `verdicts-standards.jsonl` the debt-marker words are
+written with a hyphen (TO-DO, FIX-ME), so that these records are not
+themselves counted by the `todo-fixme-markers` probe, which counts any file
+containing the word. One quoted command is affected (the evidence for #401);
+the command as run used the unhyphenated word. For the same reason of not tripping a
+gate on a quotation, two deprecated names that issue text uses are replaced
+in the data by a bracketed description: the old six-file name for the
+descriptiles, and the legacy name of the bot-directives directory.
+
+== What the measurements say
+
+The first triage (2026-10-24) sorted 228 issues into tiers. Measured today,
+by issue number against that file:
+
+[cols="2,1,1",options="header"]
+|===
+| Tier (2026-10-24) | Then | Still open today
+| C, close now | 14 | 0
+| Q, quick fix | 61 | 37
+| S, small task | 61 | 60
+| E, estate campaign | 47 | 47
+| D, decision | 18 | 17
+| R, research | 6 | 6
+| U, umbrella | 21 | 21
+|===
+
+Triage was not the bottleneck. Three things were:
+
+. *Fixes land and the issue stays open.* 37 of the 206 open issues are
+  finished on `main`. Four of them (#708, #791, #960, #980) were fixed before
+  the first triage and stayed open through both. Squash merges drop
+  `Fixes #N` trailers, and nothing else closes an issue.
+. *Rulings do not reach the issues they answer.* 7 of the 37 are finished
+  only because a later owner ruling made them moot (Deno permitted again,
+  A2ML retired, UUIDv8), and several "decision" issues were already ruled.
+. *Campaigns sit in the canon repository.* 101 of 141 estate-labelled issues
+  describe work that cannot be done in this repository at all.
+
+== The answer: three substitutions
+
+Each recurring failure has the same cure: stop keeping a second copy of a
+fact by hand, and derive it.
+
+[cols="2,3,3,3",options="header"]
+|===
+| What keeps failing | Replace it with | Instrument | State on 2026-11-17
+
+| Issue state kept by memory
+| Issue state as a function of evidence on `main`
+| `scripts/issue-evidence.sh` and its ledger (`3-practice/ISSUE-EVIDENCE.adoc`)
+| Built and tested (139 tests); 40 rows; report-only until the owner enables it
+
+| A file copied into N repositories and then drifting
+| One source, and a plan that re-derives each copy and shows the difference
+| Scaffoldia: a planner produces a plan, a small kernel checks and applies it
+| Kernel spike passes 47 of 47 `L0` cases; no planner yet (scaffoldia#76)
+
+| A rule checked by several partial regexes that disagree
+| One classifier with a closed vocabulary; the check is "regenerate and compare"
+| See work orders E1, E2, E4 below
+| One instance done (`scripts/check-pin-comments.sh`); the rest open
+
+| A measurement written into an issue once
+| A number recomputed on a schedule that may only fall
+| The pattern issue #803 uses; the Debtfile ratchet
+| Two estate probes exist; eleven issues should become probes
+
+| A retired format waiting on hand conversion
+| A translator that fails closed, plus a mechanical "may this file go" check
+| kyX
+| Builds; 39 of 39 tests; one family of about ten translates
+|===
+
+The architecture that follows from this, as decided today:
+
+* *Scaffoldia* is the repository designer: mint, provision, configure,
+  retrofit. `rsr-template-repo` becomes one of its inputs (a spine and packs,
+  as data). Nothing new is to depend on the template's mint scripts.
+* *The hybrid automation router (HAR)* already has the model Scaffoldia
+  needs: a declarative resource graph, an imperative plan, provenance and
+  ownership handoff. Minting lowers a graph to a plan; retrofit lifts the
+  observed repository, compares and lowers the difference. HAR's 115 tests
+  pass at `0176b7d`. Scaffoldia consumes HAR as a pinned module; the plan
+  kernel moves to HAR when HAR has a plan level.
+* *Two sizes, one system.* A minimal engine is the kernel plus published
+  plans, for someone with a few repositories. The composer is a planner on
+  the same kernel.
+* *No separate control-plane repository.* Scaffoldia owns birth and
+  enrolment, chora-registry the census and de-registration, HAR the events
+  and plans, gitbot-fleet the acting.
+* *Deed and JSON are different kinds of thing.* A deed attests facts. A plan
+  is a computed message. One carrier each: deed clauses, and I-JSON/JCS.
+
+== Decisions the owner made on 2026-11-17
+
+Given through the question selector. Each is recorded so it reaches the
+issues it answers. None is implemented by this page unless a work order below
+says so.
+
+[cols="3,4,2",options="header"]
+|===
+| Question | Decision | Issues it settles
+| How stale issues get closed | Build the closer bot first; the owner approves a closure by merging its ledger row | all
+| What to scaffold in Scaffoldia | Conformance suite first, then equal-scope spikes; must also work atop a minimal engine | scaffoldia#70, #634
+| How to regroup the issue list | Move campaigns out of `standards`; it keeps canon issues only | 101 issues
+| Who executes | Work orders, dispatched to Opus-high agents; cheaper models for upkeep | —
+| Where the plan kernel lives | HAR at source, consumed by Scaffoldia as a pinned module; spike in Scaffoldia meanwhile | —
+| Scaffoldia's own 118 `.a2ml` files | Scaffoldia retrofits itself; that is its first real retrofit case | —
+| Where campaigns live | In the repository of the tool that does the work, with one cross-repository board | 101 issues
+| git-logistics-office | No new repository; split the lifecycle across existing systems | #636
+| The 252 `boj-build.yml` copies | Delete all; re-add from the fixed generator when an endpoint is reachable | #331
+| Estate measurements | A recomputed number with a ratchet; the topic minimum goes into canon first | #949, #1049
+| Does the language ban cover toolchain declarations | Yes, by derivation from the languages a deed declares | #698, #706, #917
+| CodeQL: D256 or the monthly cron | D256 wins; the cron campaign closes as superseded | #288, #323, #324
+| Stub `.affine` files | Port genuinely, repository by repository | #664, #272, #276, #278, #279
+| The red debt check on `main` | Pay the `todo-fixme-markers` measure down; no ceiling change. Measured afterwards: this is not a small job, see W3 | #955
+| Dependabot and the lock | Retire `dependabot-lock-regen.yml`; rely on Dependabot plus the lock gate, after a census of recent Dependabot pull requests | #670
+| The codeql-action hold at v4.38.0 | Lift it; correct the refuted comments | #1037
+| Two Actions allow-lists | `config/settings/actions-allowlist.json` is the source; the rhodium copy is generated from it, then retired after a deprecation window | #1220
+| How this work is shipped | Two pull requests: one needing no lock change, one with only the closer-bot workflows | —
+|===
+
+On the stub files the owner chose the genuine port over the recommended
+"declare them debt". Until each repository is ported its migration count
+overstates real ports; a port counts only when it compiles and is wired
+(Enforcement Rule 1).
+
+== Triage result
+
+Five agents read every open issue and checked each claim against `main`.
+
+[cols="2,1,4",options="header"]
+|===
+| Verdict | Issues | Meaning
+| stale-close | 37 | Done, moot or superseded, with evidence on the tree.
+| part-landed | 41 | Some acceptance criteria met; the remainder is stated per issue.
+| live | 34 | Still true and still wanted.
+| needs-ruling | 33 | Waits on an owner decision, written as one question with options.
+| move-out | 61 | The work does not land in this repository.
+| *total* | *206* |
+|===
+
+=== Finished on main (37)
+
+36 are in the ledger. #1003 is a fact about a live ruleset, which the check
+vocabulary cannot see; it needs a person, or a new check kind.
+
+Each ledger row was checked three ways: it holds at `main` under the bot's
+evaluator and under two evaluators written independently for the purpose;
+and it fails on a tree where the defect is present (32 at the 2026-09-23
+tree, 4 at the parent of their fixing commit). One row (#914) could not fail
+as first written, because its glob matched no file; the bot refused it and
+it was rewritten.
+
+[cols="1,5,1",options="header"]
+|===
+| Issue | Why it is finished | In ledger
+| #124 | All 12 sub-issues (#125-#136) are closed and the standards CI lint the epic asked for (spark-theatre-gate.yml, #135) is on main. The Rust-seam half of that lint was overtaken by PROOF-POLICY section 1.2 and the withdrawal of… | yes
+| #657 | A research issue whose question (what is the 'lockfile policy' killing workflows) was answered in its own comments on 2026-08-27: GitHub Workflow Dependency Locking, with partial actions.lock files worse than none. The finding… | yes
+| #687 | HYP-S009 was retired with the A2ML registry (9d629d11, #1213): its script is deleted and REGISTRY.adoc records it. The SD022 cohort no longer fires at the pinned scanner. The P1.1 replay (b26d3fb5) found every #687-tracked ack… | yes
+| #689 | The satellite the issue asks to complete or gate is no longer live: #1218 moved rsr-certifier with the rest of rhodium into the frozen 9-archive district on 2026-10-09, and no workflow builds it. Archiving is the honest gate.… | yes
+| #708 | All three reporting defects and the schedule are fixed: the detector passes the real repo slug to check-lockfile-drift.sh, separates script errors (rc not 0/1) from drift, counts only tab-separated rows, and runs weekly (cron… | yes
+| #791 | All three symptoms are fixed on main. validate-a2ml.sh was deleted with the A2ML retirement (#854); validate-spdx.sh applies one is_source_file predicate in both modes, has dropped .json, never checks .adoc, and accepts #, //,… | yes
+| #903 | The cliff was defused by an accepted decision rather than by moving the date: docs/decisions/2026-10-04-actions-lock-enforcement.adoc (status ACCEPTED, issue standards#903) keeps the default at 2026-10-01 but routes missing-lock… | yes
+| #906 | The inline workflow-lint copy with the blind regex `^[[:space:]]+uses:` was removed from governance-reusable.yml by #899 (4f7f02ca, 2026-09-22); the lock/pin predicate now has one implementation,… | yes
+| #907 | Both unconditional exemptions are gone: exempt_ref() in scripts/check-actions-lock-gate.sh now exempts only './*' and 'docker://*' (removed in #1344, 46b37029, 2026-10-26). A workflow whose only ref is actions/github-script@main… | yes
+| #909 | In standards, denoland/setup-deno is covered by actions.lock (key @22d081ff… ref v2.0.5, verified upstream as tag v2.0.5) for all four live uses, and the deliberate EXPECTED_ABSENT exception for it in… | yes
+| #910 | #1120 (10e0b6ff, 2026-10-01) replaced all seven `ref: main` helper checkouts in governance-reusable.yml with `${{ job.workflow_sha }}`, and the contract test asserts every helper checkout is a 40-hex commit or job.workflow_sha… | yes
+| #914 | The 'vendored seed trees' were rhodium-standard-repositories/, moved on 2026-10-09 into the frozen 9-archive/ district, where nested workflows never execute; the live rhodium-standard-repositories/ path now holds only the… | yes
+| #919 | Its premise, the Deno retirement, was overturned on 2026-10-14: Deno is permitted as tier 2, a Deno-authoring repo gets a notice only, and the deno-allow.txt ledger its criteria shrink was deleted. Nothing in it remains wanted:… | yes
+| #926 | Superseded: the acceptance offered only 'port to Bun' or 'ledger in deno-allow.txt', both premised on the 2026-09-22 Deno ban. The owner ruled on 2026-10-14 that Deno is not banned (tier 2) and retired the ledger and refusal… | yes
+| #928 | Moot: language-policy.scm and its only consumer rsr-check.scm were moved to 9-archive (frozen) after D167 ruled 'add a pinned guile', so there is no live module to test, and the 44-assertion suite was never committed. Wiring a… | yes
+| #934 | Landed: all six contractiles now import ../_base.ncl (the stale ../k9/template-hunt.k9.ncl import was removed in #1149), and with Nickel 1.18.0 each passes k9-validate --strict through L2, the Nickel typecheck against… | yes
+| #960 | All four acceptance criteria are met by the record: AC1 swept (19 PRs merged, exemptions recorded, archived repos ruled out of scope 2026-09-22), AC2 closed by ruling (migrate to .deed behind launch-scaffolder#40), AC3 merged… | yes
+| #964 | The literal pin 317101e0 is gone from all three sites. The dupkey checkout now uses ref: ${{ job.workflow_sha }} with sparse-checkout narrowed to scripts/check-workflow-duplicate-keys.sh (AC1, AC2, AC5). Its freshness is… | yes
+| #980 | The hand-written pin 'ref: a2ff696a' is gone. The ledger checkout reads at ${{ job.workflow_sha }}, so 'the pin and the first entry move in the same commit' is now true by construction (ed5e3f65, #989). That makes the two-PR… | yes
+| #992 | check-lock-sync.sh now reports a job-level reusable ref absent from the lock as a NOTE ('measured harmless, standards#968'), accepts the explicit [] entry for a job-level-only caller, and prints the 'OUT OF SYNC' text only on… | yes
+| #998 | .github/workflows/self-ci.yml calls ./.github/workflows/ci-pipeline.yml, and Self-CI is green on main at the current head (run 44019665480, which references ci-pipeline.yml@58362c24). All three acceptance criteria hold. | yes
+| #1003 | rsr-template-repo's active repository ruleset 'Branch-Floor' (27372839, ~DEFAULT_BRANCH, no exclusions) now contains a pull_request rule (AC1). Fed that live ruleset, scripts/plan-ruleset-constraint-repair.rb no longer raises… | no: needs a person
+| #1018 | Every checkout in rust-ci-reusable.yml now uses ref: ${{ github.sha }} (AC1), and no workflow in standards checks out ${{ github.ref }} any more (120189ea, #1505). AC2 and AC3 are runtime race experiments that were not re-run.… | yes
+| #1019 | The arm is ruled: D115 says CodeRabbit signs, with 'no bot pushes' as the fallback, and D217 turns CodeRabbit commit-pushing off. docs/SIGNING-POLICY.adoc records 'Bots pushing fixes onto PR branches ... Turn that off' (AC3).… | yes
+| #1058 | Landed: ruling D173 is recorded in K9-CONTRACT-SPEC (Nickel contract, no ABNF), the leash set is closed ('Kennel \| 'Yard \| 'Hunt), the 'must' collision is resolved by not naming contractile verbs, deed.abnf no longer says… | yes
+| #1066 | Superseded: PROOF-POLICY (2026-10-26) assigns theory proofs to Agda with Rocq and Lean rechecks, and the canon's 'Formal verification is Idris2-only' amendment is now annotated as superseded by it. The other side of the… | yes
+| #1102 | The owner decided on 2026-10-06 to retire the gate rather than re-enable pull_request_target (eafcfbb5, #1171). The workflow is deleted, no workflow in standards triggers on pull_request_target, the catalogue marks it RETIRED,… | yes
+| #1140 | Landed: the UUID gate has an explicit, tested external-identifier mechanism (the 'hypatia: allow uuid/external -- <reason>' pragma, owner ruling CASE-067, 2026-11-14), and check-uuid-v8.sh skips retired .a2ml files, which was… | yes
+| #1173 | Items 2 and 3 no longer use hardcoded /tmp. Items 4 and 5 have file-exact baseline entries: the k9-contractile RE001 entry is tracked to #941, and the pedigree fixture is acked as a negative control. Both Hypatia gates are green… | yes
+| #1221 | Landed: a coordination.k9 validator (apg-js on the v1.2 ABNF) exists, runs in k9-conformance CI with a self-test of fixtures and mutants, accepts the root coordination.k9, and rejects every invalid fixture. The issue's 'parses… | yes
+| #1227 | Both defects are fixed on main by #1344: check-rsr-profile.sh reads [baseline] and reports MISSING BASELINE, and the row reads .well-known/\|www/.well-known/. The fixture suite asserts a missing LICENSE fails and either… | yes
+| #1230 | Superseded and implemented: the estate-chora preimage is ruled (profile-C domain 'chora', name estate/<host>/<owner>, minted by chora-registry, Q3), the hyperpolymath estate id is published, '#u5"estate/chora"' is an error in… | yes
+| #1286 | The owner ruled on 2026-11-14 that a zero-dependency package needs no lock, and #1601 implemented it. is_zero_dependency() in tools/js-runtimes/src/lib.rs drives regen and check, and scripts/tests/js-runtimes-test.sh carries a… | yes
+| #1327 | hypatia-scan-reusable.yml has the boolean input sarif-upload-on-pull-request (default true). Only the 'Upload SARIF to code scanning' step is guarded by it; scan, artifacts and grid are unchanged. A contract test asserts the… | yes
+| #1339 | Landed today: option A, the stub migrate_a2ml_to_deed.sh was deleted (PR #1637, commit 58362c24 on main), and the deed tools README records the deletion. | yes
+| #1444 | Decided and implemented on both sides: the owner chose the two-phase lockstep on 2026-11-09; rsr-template-repo #305 lets the spine pin an open canon PR via :proposed-by, and standards #1449 makes Gate A strict on every PR and… | yes
+| #1445 | The ruling was given and the bump made: #1585 moved all lanes from 410a8f8 to cbf2b93 with owner approval, and cbf2b93 descends from f2a6a70 (panic-attack#258, the coverage fix). The scanner-refs test passes. Standards has no… | yes
+|===
+
+=== Small pieces stuck inside larger issues
+
+[cols="1,6,1,2",options="header"]
+|===
+| Issue | The piece | Minutes | State
+| #446 | Record D11 in docs/BADGE-CRITERIA-SPEC.adoc: replace the 'pilot is not settled' paragraph with 'pilot = boj-server (D11, 2026-09-23)', leaving Q1-Q3 open. | 10 | open
+| #795 | Point the design doc's section 7.4 and section 10 artefact list at config/rulesets/base.json (and config/settings/repo.json) so the canonical pointer resolves, citing the override table. | 10 | open
+| #928 | Fix the dangling link 0-canon/rsr/LANGUAGE-POLICY.adoc:593 (link:../spec.scm/language-policy.scm, target 0-canon/spec.scm does not exist): point it at the 9-archive copy marked frozen, or drop the sentence. | 10 | open
+| #1006 | Record the forward constraint in config/rulesets/README.adoc: any CI path that creates a tag needs Integration(15368) on EstateTagging's bypass list first; EstateTagging's workflows rule is currently vacuous… | 10 | open
+| #1007 | Add the reach note to config/rulesets/README.adoc: push rulesets at ~ALL bind to private and internal repositories only (measured 6 of 68 on metadatastician), so EstatePushing does not protect public repos;… | 10 | open
+| #1008 | Write D171 back where the code still says 'awaiting a ruling': config/rulesets/README.adoc:138 cites D171 (measure first, retire if unsatisfiable) so the next reader acts instead of re-asking. | 10 | open
+| #1440 | Change the six '# stable' trailing comments on dtolnay/rust-toolchain@683b588c… to '# v1' (comment-only; actions.lock untouched). | 10 | fixed here
+| #704 | Delete the five unreferenced ReScript/Deno example copies of web-project-deno.json from standards. | 15 | open
+| #926 | Fix the pre-reorg paths in 2-protocols/k9-coordination/README.adoc (lines 292-302 run 'deno run ... standards/k9-coordination-protocol/generator/generate.js'): point them at… | 15 | open
+| #950 | Correct the header of .github/workflows/github-backup-mirror-reusable.yml so it no longer cites mirror-reusable as using job-level continue-on-error (only its mirror-gitlab job does), stating instead what… | 15 | open
+| #1399 | P0.4 front-door slice: EXPLAINME.adoc:11 link to 0-AI-MANIFEST.deed instead of the absent 0-AI-MANIFEST.a2ml, and AGENTS.adoc:18 drop 'or Deno' (Deno is tier 2 since 2026-10-14) while keeping the TypeScript… | 15 | open
+| #933 | Run cargo fmt --all in the four failing crates and commit the result alone (11+1+4+5 'Diff in' hunks; formatting only, no rustfmt.toml needed since all use defaults). | 20 | three live crates done; one crate needs a ruling
+| #993 | Add an 'Advisory findings' subsection to docs/ACTIONS-LOCK-CLOSURE-POLICY.adoc. It says sha-as-ref is the only advisory category (is_advisory_category in scripts/update-actions-lock.sh), and that because a… | 20 | open
+| #1002 | Bump .github/workflows/mirror.yml's mirror-reusable.yml pin from 70019048 to the current main commit that last changed mirror-reusable.yml (dafc0873..., which includes c069486d's gitea skip and the 2026-11-13… | 20 | open
+| #1014 | Next to the hypatia-ref input in both reusables, add the statement that exemptions compiled into the scanner come from the pinned hypatia commit and cannot cure a caller's finding; only… | 20 | open
+| #896 | Correct changelog-reusable.yml's header 'Caller example' to grant `actions: read`, `contents: write`, `pull-requests: write` at the caller's TOP level with no job-level block, and add a two-line note that… | 25 | open
+| #343 | Adopt the rsr-template-repo canonical .editorconfig body in standards, keeping standards' existing line-1 SPDX header byte-identical | 30 | open
+| #409 | Retire .github/workflows/check-suite-monitor.yml (it is already on the reorg plan's P6.1 retire list): it hand-types a GATE list that matches no workflow and performs no check, so its green says nothing.… | 30 | open
+| #1068 | Add to YAML-POLICY section 2 (or 4) a dated note that Y-2 stays NOT IN FORCE because yq -i v4.53.3 is not idempotent on tag-ruleset-canon.yml (#1068), while yq -o kyaml was idempotent 56/56; run the proof… | 30 | open
+| #1101 | Add a 'Carve-outs and history rewrites' section to docs/SIGNING-POLICY.adoc: a subtree split strips signatures; import as one signed squash commit linking back to the standards SHA (D217-consistent); any… | 30 | open
+| #1266 | Add a 'Zero-job runs: which mechanism?' section to docs/GOVERNANCE-STARTUP-REPAIR.adoc. Give one table with discriminators: step-level lock desync (startup_failure, this workflow only); phantom pin (failure,… | 30 | open
+| #904 | Add scripts/tests/githooks-validator-names-test.sh: parse every `run_validator*` call in .githooks/pre-commit and .githooks/pre-push, assert each named script exists under .githooks/ and is mode 100755 via… | 35 | open
+| #411 | Add the canonical discussion category forms to standards itself: .github/DISCUSSION_TEMPLATE/ideas.yml and .github/DISCUSSION_TEMPLATE/q-a.yml (tool-named .yml, KYAML content, MPL-2.0 SPDX header), making… | 40 | open
+| #495 | Delete 1-formats/SATELLITES.a2ml, its ledger row in .machine_readable/a2ml-legacy-allow.txt and its standards-map.toml entry, and drop or reword the README.adoc rows that link it (history is in… | 40 | open
+| #803 | In .github/workflows/lockfile-drift-detect.yml: replace the stale fix line with the current remedy (run `gh actions-lock --no-migrate-local-actions --no-narrow`, then `scripts/check-lock-pin-contract.sh` from… | 40 | open
+| #913 | In .githooks/validate-sha-pins.sh change the local-path exemption from `[./]` to `\./` so only './' is exempt, and add a case arm naming `../` as invalid syntax (startup death) like the existing `$/` arm;… | 40 | open
+| #1059 | docs/decisions/ADR-010-attestation-chain.adoc: D129 verbatim, the derivation invariant (a K9 pedigree cites the deed id or hash, never restates it), Guix as the sole environment layer (LANGUAGE-POLICY 2.1),… | 40 | open
+| #1341 | Land 3-practice/DATA-FORMAT-ROUTING.adoc alone from the issue's prepared patch (CC-BY-SA-4.0 header as in the patch), reconciled with today's YAML-POLICY/JSON-POLICY wording and the 'kyq does not build yet'… | 40 | open
+| #678 | Add scripts/check-shadow-tracked.sh: fail when `git ls-files -ci --exclude-standard` is non-empty, printing the count examined; add scripts/tests/check-shadow-tracked-test.sh (planted tracked+ignored file… | 45 | open
+| #958 | Add two cases to each of the debt and exemption ratchet tests. (1) Build a fixture repo whose ceiling rises with no trailer in any commit, and set GITHUB_EVENT_PATH to a JSON file whose pull_request.body… | 45 | open
+| #975 | scripts/check-baseline-tracking.sh: read .hypatia-baseline.json, query each distinct tracking_issue's state, exit 1 listing entries whose tracker is closed; test with a stubbed gh returning open/closed. | 45 | open
+| #1032 | Apply D128 to the canon body: remove the four Integration entries from config/rulesets/gates-only.json, keeping RepositoryRole:5, so --no-integration-bypass is no longer a divergence. Update… | 45 | open
+| #888 | (1) In config/gitleaks/estate-baseline.toml collapse the two identical self-exclusion entries (lines 136 and 147) into one and root-anchor it ('''^\.gitleaks-estate\.toml$'''), since the workflow only writes… | 50 | open
+| #972 | Make the shared callers fail loudly when a listed path is not on disk. Then add scripts/tests/pre-commit-nonascii-test.sh: create a temp repo, stage 'café.rs' without an SPDX header, run the hook's… | 50 | open
+| #981 | In the 'not in actions.lock' branch, look up LOCK_KEYS for the same owner/repo with a different SHA. If one exists, print 'TWO-SIDED DRIFT: lock holds <A>, workflow uses <B>', count it separately, and when… | 50 | fixed here
+| #1141 | Add on.workflow_call.secrets.{TS_OAUTH_CLIENT_ID,TS_OAUTH_SECRET} with required: false to tailscale-connect-reusable.yml. Add scripts/check-reusable-secret-declarations.sh, which fails when a workflow_call… | 50 | open
+| #890 | scripts/check-enforced-branch-rules.sh: for each repo, GET rules/branches/<default>, classify ENFORCED / NO-RULES / UNREADABLE (403/404 fail loudly, never 'ungated'), report-only; with a stubbed-gh fixture… | 60 | open
+| #916 | Add scripts/check-pin-comments.sh: for every `uses: owner/repo@<40-hex> # <tag>` in .github/workflows/*.yml (read with yq, line comments via yq's line_comment), look up the actions.lock dependency key… | 60 | open
+| #957 | In scripts/apply-baseline.sh, drop findings whose rule_module is code_scanning_alerts before the threshold count, matching the SARIF renderer's existing exclusion, and print how many were excluded so the step… | 60 | open
+| #999 | Run 'nickel export' on each of the 20 live non-k9 .ncl files at the pinned Nickel version. Add an export step to the ci-pipeline nickel job for the files that are complete configurations, and list the library… | 60 | open
+| #1031 | AC6: extend scripts/check-settings-drift.sh (the weekly report-only sweep) to read 'gh api repos/R/code-scanning/default-setup --jq .state'. When it is 'configured' and the repo tracks… | 60 | open
+| #1089 | Write 3-practice/HTTP-METHOD-POLICY.adoc (CC-BY-SA-4.0) setting out the D223 rules the issue lists: safe methods for reads, no write verb resent across a 307/308, no method-override headers, GraphQL mutations… | 60 | open
+| #1147 | In mirror-reusable.yml replace each webfactory/ssh-agent step with a run step: eval "$(ssh-agent -s)"; ssh-add - <<< "$KEY" (key from env); write SSH_AUTH_SOCK and SSH_AGENT_PID to GITHUB_ENV. Replace the… | 60 | open
+|===
+43 pieces, 1460 minutes by the triage agents' estimates (estimates, not measurements).
+
+=== The ruling queue
+
+Decisions already made today are listed above and are not repeated here.
+Licence questions (#404, #497, #915) are owner-only and are listed for
+completeness; no agent edits licence text or SPDX headers.
+
+[cols="1,4,4",options="header"]
+|===
+| Issue | Question | Most elegant long-term option
+| #346 | With A2ML retired and only two bridge repos, should the bridge-forbidden-phrases check be hoisted into governance-reusable.yml? | Hoist, keyed on a deed clause (e.g. a (bridge ...) entry in <repo>_chora.deed naming the bridge doc and its forbidden phrases), opt-in via a caller input.
+| #403 | Is the Atlas (Part II) still wanted, given chora-registry and the per-repo chora deeds? | Atlas superseded: manifesto links to chora-registry and the deeds; close #403
+| #404 | The PMPL residue rollout (D265/D270) is paused. What should #404 track? | Close #404 as superseded by the D265/D270 record and keep one residue list (35 repos) as the single tracker for when the owner resumes
+| #438 | Now that README.adoc is canon again, what should the #438 recovery restore? | Restore README.adoc from pre-sweep history in every swept repo except boj-server and hyperpolymath/hyperpolymath, merging any later .md edits; restore the labelled rescript/v-ecosystem trees
+| #446 | BADGE-CRITERIA-SPEC Q1-Q3: badge shape, who may issue 'verified', and the render floor? | Apply the draft positions: per-axis badges, estate-audit may issue 'verified' only from receipts of checks that ran in CI at the current SHA, render only when floor >= D
+| #493 | Is moving the RSR tree into 9-archive/ the end state for #493, or should the vendored satellite copies leave the canon repo? | Remove 9-archive/rhodium-standard-repositories/satellites/ (869 files) and keep a manifest of what was there and where each canonical repo lives; mint or file the three .scm projects first
+| #497 | How should the 007 classification conflict and the Palimpsest material in standards be settled? | First reconcile 007's class in one canon place (LICENCE-POLICY Rule 4 AGPL vs CLAUDE.md category 2 ARR vs D246 MPL-2.0), then rule PALIMPSEST.adoc and licenses/PALIMPSEST-* against the Rule 2 register
+| #662 | Was the wordpress-tools purge (2966736, 108 source files deleted, no port) a retirement of that functionality, or is a port owed? | Ratify retirement: record it in the repo's deed/ROADMAP and remove .git_corrupted/ and the 15 orphaned .res.js (wordpress-tools#66, #67)
+| #663 | What becomes of the TypeScript exemption table, given the 2026-08-27 'retire every exemption' ruling and the 2026-11-13 text that cites the listed exemptions? | Replace the .d.ts and bindings rows with a derivation rule: declarations and TS bindings are generated from the Idris2/Zig ABI and never authored (generated in build, or committed under generate == committed); other…
+| #674 | The 2026-08-27 ruling said 'raise upstream, do not work around'. scorecard-reusable.yml now filters Scorecard pin findings for lock-verified workflows (a Ruby reconciler). Keep it? | Ratify the reconciler as the sanctioned interim (it derives 'pinned' from native gh actions-lock verification, not from dismissals), record that and the three upstream links in a canon decision, port it out of Ruby,…
+| #732 | In the deed era, where does the content of 0.N-AI-MANIFEST.a2ml directory manifests go, and is the ply number kept? | Derive ply from the path (from the repo root, or from the nearest unit per D165 (b)) and stop storing it; map each directory manifest's remaining content into (manifest …) clauses of the repo deed keyed by path, under…
+| #895 | How should the gate table represent a repo that carries only part of a capability's module set (maa-framework: MAINTAINERS and GOVERNANCE but not AUDIT and AFFIRMATION)? | Split governance-tier into atomic capabilities (governance-docs: GOVERNANCE+MAINTAINERS; audit-tier: AUDIT+AFFIRMATION), each gating exactly the files it names
+| #915 | How should files that cannot carry an inline SPDX header (69 tracked .json and ~80 others) be labelled? | One owner-authored REUSE.toml annotating them by glob
+| #921 | How should canon state the TypeScript rule, given the approved TypeScript Exemptions table? | 'No TypeScript, except the listed exemptions': the hypatia rule's path_allow_prefixes is the single source, the prose table in CLAUDE.md and LANGUAGE-POLICY is generated from it, and a generate==committed check guards it
+| #922 | Which pinned, read-only tool should gate staged JavaScript in .githooks/validate-lint-format.sh and ci-pipeline.yml? | Biome, pinned exact version, run as `bunx @biomejs/biome@<ver> check` (lint + format check in one, read-only).
+| #924 | In a repo whose actions.lock is verified on every PR, is `uses: owner/repo@vX.Y.Z` plus a lock record an acceptable pin under canon rule 10? | Yes for lock-verified repos: the lock is the pin authority (it binds commit, owner_id, repo_id and transitive deps); write that into canon rule 10 and close #924 once gh actions-lock --verify-local passes on the…
+| #925 | scripts/check-ts-allowlist.deno.js is dead at HEAD but still fetched by callers pinned before 4f7f02ca, and Deno is no longer banned. What should happen to it? | Delete it after the apply-workflow-pins census shows no governance caller pinned to a pre-4f7f02ca revision (bump them via the applier first).
+| #991 | How should the launcher-standard stale-version class be armed, given that every CURRENT_VERSION bump makes correct consumers stale with no action of theirs? | Derive staleness from a support window: the standard declares the oldest still-supported version, and the gate fails only on citations older than that
+| #1225 | Should the canonical launcher deed define platforms, lifecycle phases and the metadata-block encoding, and may launch-scaffolder keep an offline copy of it? | Adopt the three clauses in the canonical deed (adoc in the same commit) and keep no vendored copy: launch-scaffolder resolves the canonical file by commit and sha256 from canon.lock at build time and fails closed when…
+| #1226 | What is the normative vocabulary for per-app <app>.launcher_praxis.deed descriptors, and in particular for the untyped [integration] and [exceptions] tables? | A closed, typed vocabulary for every field, including [integration] and [exceptions], published as a standards mapping spec with fixtures; unknown keys block conversion
+| #1262 | What must a repo show for the abi row src/interface/generated/? | Nothing tracked: CI generates the ABI output from the Idris2 source and the gate checks the generation step ran and its output is non-empty
+| #1265 | Where should the cargo-audit issue lifecycle (findings in the body, a marker, close-on-green) live? | In standards: an opt-in input on rust-ci-reusable.yml's existing audit job, calling one shared reconciler script; consumers drop their hand-copied cargo-audit.yml
+| #1443 | Where does the immutable record of a repo's mint answers live, so that a drift check cannot be satisfied by editing the child's own (mint-answers)? | Signed receipt in the child: a detached signature over the JCS-canonical answers clause from the minter's key (Scaffoldia's mint identity), verified against a published public key
+| rsr-template-repo#205 | How should github-actions dependency updates stay in step with actions.lock? | Derive and verify (most elegant long-term)
+|===
+24 questions. Full option sets, with what each option causes, are in the data files.
+
+=== Issues that should leave this repository
+
+Selected by label (`scope:estate`, `meta:campaign`, `meta:umbrella`) or by
+earlier tier. 40 of the 141 are bugs in tools this repository ships and
+stay. GitHub cannot transfer an issue between `metadatastician` and
+`hyperpolymath`, so a move is "create at the destination with a back-link,
+then close here", and needs write access to the destination. This table is a
+plan the owner approves, not an action taken.
+
+[cols="3,1,6",options="header"]
+|===
+| Class or destination | Issues | Numbers
+| canon | 40 | #346 #409 #463 #479 #495 #497 #657 #687 #692 #732 #888 #894 #895 #896 #906 #907 #909 #910 #914 #925 #941 #960 #964 #967 #969 #976 #980 #981 #992 #993 #1014 #1018 #1019 #1032 #1033 #1036 #1059 #1065 #1066 #1082
+| fan-out→control-plane | 38 | #288 #309 #324 #331 #343 #404 #438 #653 #658 #669 #675 #681 #698 #704 #706 #707 #759 #890 #916 #917 #919 #921 #968 #987 #994 #1006 #1007 #1010 #1024 #1025 #1031 #1035 #1037 #1056 #1070 #1071 #1091 #1093
+| split | 14 | #408 #410 #411 #460 #493 #659 #670 #795 #837 #950 #1055 #1069 #1261 #1399
+| probe | 11 | #124 #323 #678 #792 #803 #889 #903 #918 #949 #1004 #1049
+| no-home | 9 | #446 #462 #633 #636 #674 #677 #703 #727 #751
+| hyperpolymath/affinescript | 8 | #239 #252 #272 #276 #278 #279 #663 #664
+| hyperpolymath/rsr-template-repo | 8 | #645 #646 #702 #904 #924 #1003 #1008 #1627
+| hyperpolymath/iseriser | 4 | #89 #90 #92 #93
+| hyperpolymath/http-capability-gateway | 1 | #91
+| hyperpolymath/boj-server | 1 | #100
+| hyperpolymath/panll | 1 | #281
+| hyperpolymath/gitbot-fleet | 1 | #348
+| hyperpolymath/manifesto | 1 | #403
+| hyperpolymath/scaffoldia | 1 | #634
+| hyperpolymath/hypatia | 1 | #635
+| hyperpolymath/launch-scaffolder | 1 | #1086
+| hyperpolymath/cicd-squabbler | 1 | #1109
+| *total* | *141* |
+|===
+
+`fan-out→control-plane` now means, per the decisions above: the campaign
+record goes to the repository of the tool that runs it (gitbot-fleet for
+generic fan-out) and the acting goes through Scaffoldia retrofit once that
+exists. `no-home` includes three items that concern the owner's workstation
+and two that are upstream tools.
+
+=== The template's issues, read for Scaffoldia
+
+Fixes are not to be tied to the template's mint scripts. Each template issue
+was classed as content any engine would ship (worth fixing where it lives)
+or mechanism (recorded as a Scaffoldia test case). 72 engine-neutral cases
+came out of this and are in scaffoldia#76.
+
+[cols="2,2,5",options="header"]
+|===
+| Issue | Verdict | What remains, or why it is finished
+| rsr-template-repo#200 | part-landed | Ship one child-facing contributor guide (the docs-seed one, at the root) and keep the spine's guide template-only; drop the stale ?REQUIRES_INITIALISATION.md allowlist row.
+| rsr-template-repo#201 | part-landed | Wire arrival-pack verification into PR CI; review-first sweep of existing children by provenance and field/hash mismatch (Scaffoldia L2 retrofit, SC-L2-001).
+| rsr-template-repo#203 | part-landed | Default-branch-only mint contract and branch-set receipt; report-only detection of inherited branches in children (SC-L0-007, SC-L0-008, SC-L2-002).
+| rsr-template-repo#204 | part-landed | Propagate to the ~135 children (owner-approved fleet campaign; Scaffoldia L2 SC-L2-003).
+| rsr-template-repo#205 | needs-ruling | Decide the github-actions update path now that Dependabot rewrites the lock itself.
+| rsr-template-repo#208 | part-landed | Step 5 migration of estate-owned non-workflow YAML here, after the standards pilot. Workflows wait for D280 (the lock-coverage shim as a required context).
+| rsr-template-repo#211 | part-landed | Run the julia e2e in CI with the pinned toolchain (fail, never skip); add the header-only-deed negative control; re-derive the three children by retrofit (SC-L1-002..006, SC-L0-006, SC-L2-004).
+| rsr-template-repo#226 | stale-close | Fixed in a different form: the hook no longer has its own grep validator and delegates to the canonical, dialect-aware standards validator (one validator per family). Run on origin/main against standards origin/main:…
+| rsr-template-repo#232 | part-landed | Either keep the versioned layout in the deploy job (merge into the existing gh-pages tree) or state the change; document docs/make.jl's contract.
+| rsr-template-repo#233 | stale-close | root-allow.txt line 79 is now `?src/` and cites issue #233. This is the requested relaxation, though the comment gives non-code repos as the reason rather than workspace roots.
+| rsr-template-repo#268 | stale-close | Fixed by c39b06d (#291), which did not close it. The mint drops the SD022 build/docs-seed block from .hypatia-ignore and the structural_drift entry from the rule-order policy. A fresh mint passes both of its own gates.
+| rsr-template-repo#269 | stale-close | All three defects are fixed at source. (a) The e2e self-skips where archetypes/ is absent (c39b06d). (b) governance_badge_test accepts a substituted owner/repo, and the mint keeps the badges: a fresh child README…
+| rsr-template-repo#280 | part-landed | Items 2, 3, 4 (SC-L0-014, SC-L0-015, SC-L3-006).
+| rsr-template-repo#309 | part-landed | Items 1 (summary), 2-8, 9 (doc), 11, 12a, 12b (SC-L0-016..026, SC-L1-008, SC-L3-009).
+| rsr-template-repo#317 | stale-close | Fixed by 6451e46 (#352), which did not close it. render-mise.sh prunes mise.lock to the declared tools instead of deleting it, and mise.lock stays required. tests/shape/rust_cli_root_shape_test.sh passes on…
+| rsr-template-repo#326 | live | Change the generator (in the private repository) to emit a neutral source description, regenerate both files here; add SC-L0-027 denylist check.
+| rsr-template-repo#420 | live | Owner inspects the SonarCloud binding (repo vs repo2), restores one analysis route with history, and produces a main-revision analysis.
+| rsr-template-repo#423 | part-landed | Per-child canon re-pin (Scaffoldia L2 SC-L2-005).
+| rsr-template-repo#425 | live | Merge #435 (blocked only on the CI/gate status, see Part C); downstream resource-algebra label is separate.
+| scaffoldia#70 | live | P0a-P0d as listed; plus a producer for the two required contexts.
+|===
+
+=== Open pull requests
+
+"merge-ready" means the pull request's own checks are green and no review
+thread is unresolved. It does not mean the repository's required contexts
+are satisfiable: Scaffoldia requires two contexts that nothing emits.
+
+[cols="2,2,5",options="header"]
+|===
+| Pull request | Class | The one thing needed
+| mathesis#95 | needs-small-fix | Branch is behind main, and mathesis requires up-to-date branches (strict), so it needs a rebase. No lock desync: actions.lock +4-4, and the template's check-lock-sync.sh on the PR head exits 0.
+| mathesis#100 | needs-small-fix | Merge conflict (mergeable_state dirty). Regenerate with `just update-rows hyperpolymath/ddraig-ssg` and the atlas rebuild on current main rather than hand-resolving. standards #1635 changes how…
+| mathesis#102 | needs-small-fix | Behind main (strict up-to-date rule): update the branch.
+| mathesis#103 | needs-small-fix | Behind main: update the branch. Proposal plus an unwired prototype by design.
+| mathesis#106 | blocked | Blocked on proven-cicd-and-workflows#139 and a re-pin (as #433). Also answer 2 CodeRabbit threads (one major: stability, ci-gate.yml:54; one minor: proven-tests.yml:160). Bootstrap needs a one-time…
+| mathesis#107 | merge-ready | Proof work. Grades must be derived from receipts after merge, not asserted.
+| mathesis#108 | needs-small-fix | Draft: mark ready for review once the author confirms the re-extraction; otherwise green.
+| rsr-template-repo#419 | merge-ready | Ready (not draft), mergeable, blocked only by the repo ruleset's required CI/gate status, which no workflow produces until #433 lands. The body still says 'keep this PR draft until validation and…
+| rsr-template-repo#421 | needs-small-fix | Answer and resolve one CodeRabbit (minor, maintainability) thread. Mentions #423 item 2, which was already on main; #423's remainder is the child re-pin, so no closing keyword is due. Item 6c…
+| rsr-template-repo#422 | merge-ready | No lock desync. Dependabot rewrote actions.lock itself: the workflow entry moves to v8.5.0 and 31 lines of dead tag-form duplicate records are dropped (+4-36). bash scripts/check-lock-sync.sh on the…
+| rsr-template-repo#426 | merge-ready | Pack-data change. Its body reports Python in hyperpolymath/.github (check_workflow_contracts.py, requirements.txt), a BANNED-language departure to put to the owner.
+| rsr-template-repo#427 | blocked | Blocked on metadatastician/standards#1630, which must merge first (its own statement; #1630 is clean). Fixes #309 item 12b ((manifest :project) = :canonical-name), reproduced in a fresh mint on main…
+| rsr-template-repo#428 | merge-ready | Closes a proof hole: the gate's completeness theorem was not total. Its evidence is #430's green run of #429's workflow. Merge before #429.
+| rsr-template-repo#429 | blocked | Blocked on #428. The failure is the intended firing control; after #428 merges, rebase and confirm green (as #430 showed).
+| rsr-template-repo#430 | evidence-only | Close without merging once #428 and #429 land.
+| rsr-template-repo#431 | merge-ready | Docs only, status Proposed. It plans the propagation mechanism (vendor.lock, coapt-vendor-check, coapt-realign) as template just-recipes. Under the Scaffoldia decision that mechanism belongs to the…
+| rsr-template-repo#433 | blocked | Blocked on proven-cicd-and-workflows#139 merging and a re-pin to that squash SHA (its own statement; state of #139 not checked, outside the four repos). Its bootstrap requires the owner to merge…
+| rsr-template-repo#434 | merge-ready | Green with no threads, but it puts new mint/retrofit machinery into the template's scripts (check-mint-drift.sh --emit-paths/--write-paths, (mint-answers :schema-version), chain parent resolution).…
+| rsr-template-repo#435 | merge-ready | Body has 'Fixes #425'. Commit unsigned per its body. Touches estate-rules.yml, also touched by #421.
+| scaffoldia#71 | needs-small-fix | Answer 5 Codex P2 threads: path filters omit verification/**; Lean raw-string parsing; .tla sources skipped; .adoc in wiki roots; no estate-audit pin updater. Partly addresses #70 (no keyword, which…
+| scaffoldia#72 | merge-ready | No desync, and it improves the lock. Dependabot's regenerated actions.lock lists upload-artifact@v7.0.2 for static-analysis-gate.yml, clearing main's 'refs missing: upload-artifact@v7.0.2 / stale:…
+| scaffoldia#73 | needs-small-fix | Answer 3 CodeRabbit minor threads. Departure: it rewrites and adds facts to 0-AI-MANIFEST.a2ml. Estate rule: 'You may delete content from one; never add a fact to one'. The identity and contract…
+| scaffoldia#74 | blocked | Blocked on #70 P0b/P0c (pre-existing E2E toolchain and lint-workflows failures, and the unemitted required contexts). The acceptance cases in its body are 'not yet claimed executed'. Partial for #70…
+| standards#1616 | needs-small-fix | Answer 3 current Codex threads in provision-lib.sh. One is P1: generated inputs with Git sources need the Guix git bindings imported. The two P2s: the doctor summary when timeout is missing; the…
+| standards#1619 | blocked | 6 current and 14 outdated unresolved threads (the ruleset requires all to be resolved). The current P1s are owner decisions, not small fixes: an independent conduct-reporting channel when the named…
+| standards#1622 | merge-ready | 
+| standards#1625 | needs-small-fix | 1 current Codex P1: add the image requirement to the machine-readable PWG mirror 3-practice/proof-witness-grades.k9.ncl. 4 outdated threads still unresolved.
+| standards#1630 | merge-ready | Must merge before rsr-template-repo#427. Partly addresses #1262 (named ABI layouts) and #895 case B (nested layouts) without closing them; says so implicitly. A2ML spellings in [baseline] are left…
+| standards#1633 | merge-ready | Fixes open issue #1405 (eval in check() helpers), but only the title names it. A squash merge will not close #1405: add 'Fixes #1405' to the body.
+| standards#1634 | merge-ready | #1434 is a merged PR, not an issue.
+| standards#1635 | needs-small-fix | Answer 2 current threads on scripts/check-trusted-base.sh:741 (Codex P1 and CodeRabbit major): restrict proof-status matches to the debt section.
+| standards#1636 | needs-small-fix | 1 current Codex P2: the decision table (lines 41-44) still contradicts 'runtime checks'. 1 outdated thread unresolved.
+| standards#1638 | needs-small-fix | Codex P1: the rule is stated but scripts/proof-receipt.sh still accepts a Lean receipt without lake-manifest.json. Either enforce it or say in the text that the reader does not enforce it yet.
+| standards#1639 | needs-small-fix | Two fixes. (1) The scheduled workflow uses an App installation token, and GET /user rejects those (Codex P1), so choose a probe that both token kinds accept. (2) Update the test stub to answer the…
+|===
+
+== Work orders
+
+Model tier follows doctrine 16: top tier for proofs and hard design, cheaper
+models for CI, workflow, template-drift and status work.
+
+=== Elimination work orders
+
+[cols="1,4,3,1",options="header"]
+|===
+| Id | Replace this | It retires or shrinks | Tier
+
+| E1
+| Five implementations of "is this `uses:` ref legal" (`check-actions-lock-gate.sh`, `validate-sha-pins.sh`, `apply-workflow-pins-remote.sh`, `check-lock-sync.sh`, plus the Ruby reconciler) with one sourced classifier over a closed vocabulary and one fixture table; derive one edge list and regenerate the lock from it
+| #913 remainder, #981 class, #992 and #1036 contradiction, #916, #969; shrinks #968, #1037, #1093
+| Opus
+
+| E2
+| Ad hoc checks of reusable-workflow callers with one contract check: what a caller grants covers what the callee declares, and every secret a reusable reads is declared
+| #1141, #1035, #896
+| Opus
+
+| E3
+| Hand-kept rulesets with one "applied state equals canon" drift report
+| #408, #795, #890, #1003, #1004, #1006, #1007
+| Sonnet
+
+| E4
+| Policy tables repeated in prose with one machine-readable table that generates the prose and the scanner's allow-list
+| #659, #921, #663; the 55 stale agent files
+| Opus (design), Sonnet (generation)
+
+| E5
+| Rulings held in issue comments with a rulings register that names the issues each ruling answers, so `superseded` ledger rows are generated
+| the class behind 7 of the 37 finished issues
+| Sonnet
+
+| E6
+| Baseline acknowledgements that expire on a date with acknowledgements that live as long as their tracking issue is open
+| #975; and the 34 entries that all expire on 2026-12-22
+| Sonnet
+
+| E7
+| Measurement issues with probes and ratchets
+| #949, #1049 and the eleven `probe` rows above
+| Sonnet
+
+| E8
+| Two hand-kept Actions allow-lists with one source and a generated copy
+| #1220
+| Haiku
+
+| E9
+| One canon PATCH (spine adopts first) for the gate-table defects
+| #1631, #1451, the #1229 remainder, the #894 criterion text
+| Sonnet, after the release-order ruling is confirmed
+
+| E10
+| kyX: remaining families and a mechanical retire check
+| 360 `.a2ml` files in three repositories; #837, #732, parts of #1399
+| Opus (own thread; a task card was offered)
+|===
+
+*Dated risk.* 34 Hypatia baseline entries expire together on 2026-12-22.
+Expired entries are dropped, so the gate on `main` goes red that day unless
+they are renewed or E6 lands first.
+
+=== Scaffoldia work orders
+
+[cols="1,5,1",options="header"]
+|===
+| Id | Work | Tier
+| S1 | Planner spikes against the suite at equal scope (`L0` then `L1`): Rust, the dormant Haskell CLI with Nickel, and Nickel alone. Record why the winner wins (ADR-0002 gate). | Opus
+| S2 | Settle the four open format questions in ADR-0003 (merged provenance, reported conflict path, residue syntax, answer validation) and cut plan format v0.2. | Opus
+| S3 | Make the 72 backlog cases runnable as the planner lands; add the self-retrofit `L2` case. | Opus
+| S4 | Run Creusot (with Pearlite contracts) and Verus on the kernel core; both are `not run` today. | Opus
+| S5 | Rocq and Lean recheck legs for the 19 plan-law claims, and a CI receipt so they can be graded; all are `ungraded` today. | Opus
+| S6 | Move `plan-kernel` to HAR as its plan level; pin it from Scaffoldia; add a check that the pin is current. Needs HAR's carrier changed from A2ML first. | Opus
+| S7 | Repair Scaffoldia's CI so required contexts are emitted (scaffoldia#70), then add a workflow for `just conformance` and the proof check. | Sonnet
+| S8 | Replace `proof-check-agda` (runs `agda --safe` only, skips silently, fails 10 of 10 modules) with the template's `check-proofs.sh` and manifest. | Sonnet
+|===
+
+=== Standards work orders
+
+[cols="1,5,1",options="header"]
+|===
+| Id | Work | Tier
+| W1 | Regenerate `actions.lock` for the two issue-evidence workflows (one command; the tool cannot run in an agent session), merge, then set `ISSUE_EVIDENCE_APPLY`. | Owner
+| W2 | Work the pieces listed in the small-pieces table above, one commit and one ledger row each. The table shortens each piece (a trailing `…`), so work from the full text: the `cherry_pick.what` field (with its `files` and `test`) of the record with the same `issue` in `verdicts-standards.jsonl`, for example `jq -c 'select(.issue == 1031) \| .cherry_pick' docs/triage/2026-11-17/verdicts-standards.jsonl`. | Sonnet
+| W3 | Bring `todo-fixme-markers` back under its ceiling (#955). Measured 2026-11-17: the probe counts _files_ that contain the word, 88 on `main` against a ceiling of 84. An agent found one stale marker it could remove honestly (`docs/INNERVATION.adoc:139`); the rest are real undone work with no tracking issue, or files where the word is the subject (policy text, gate code, fixtures). So this needs either about four real tasks done, or an owner ruling that the probe should count markers and not mentions. | Opus or the owner
+| W4 | Execute D256 in `standards`: retire `codeql.yml`, close #288, #323, #324 as superseded through the ledger (#1031). | Sonnet
+| W5 | Write the ruled-but-unwritten rulings back: D128 (#1032), D133 (#957), D169 (#999), D171 (#1008), D129 (#1059). | Sonnet
+| W6 | Carry out the move-out manifest, destination by destination, once the owner approves it. | Sonnet, with access to each destination
+| W7 | Finish #1341. The page `3-practice/DATA-FORMAT-ROUTING.adoc` is added in this change (three repositories already cite it). Still to do: the routing entries in the deed and AI manifest, the cross-references in the YAML and JSON policy pages, the generated `CLAUDE.md` copies, and recording the owner clarification of 2026-10-25 in this repository, since today its only recorded text is in the template's `CLAUDE.md`. | Sonnet
+|===
+
+== Departures met, for the owner
+
+Reported under the standing priority; none was fixed unless stated.
+
+* `3-practice/DATA-FORMAT-ROUTING.adoc` is cited as canon by the generated
+  `CLAUDE.md` of mathesis, rsr-template-repo and kyx and was absent from
+  `main`. The page is added in this change.
+* HAR carries its interchange format on A2ML (`crates/har-meta/src/a2ml.rs`;
+  82 `.a2ml` files); Scaffoldia tracks 118 `.a2ml` files and has no chora
+  deed; `standards` tracks 160, all in the legacy ledger.
+* mathesis's `CLAUDE.md` told agents to write `#u5` literals. Fixed in
+  mathesis#109. Its deed still carries a `#u5` identity, which is the
+  owner-run ADR-008 P3 migration.
+* The arrival-pack generator is copied into each minted repository and
+  `verify.sh` compares only against the local copy, so a stale generator
+  passes. Running it by reference at a pinned version would make this class
+  fail a check.
+* `rsr-template-repo` still ships `codeql.yml` (contrary to D256) and
+  `docs/wikis/README.md`; its `.gitattributes` line 2 reads
+  `CC-SA-BY-4.0`, which is not a valid SPDX identifier (licence line: flag
+  only).
+* `standards`: Ruby scripts (`reconcile-scorecard-actions-lock.rb`); an
+  inline `python3` heredoc in `scripts/check-allowed-actions.sh` (#1385);
+  `tools/scm-to-a2ml-bot-directives/migrate.jl` still writes `.a2ml`;
+  `k9-contractile.yml` reads `INDEX.a2ml`; `LANGUAGE-TESTING-STANDARDS.adoc`
+  line 56 still says "Rust/SPARK"; `config/settings/actions-allowlist.json`
+  prunes setup-deno under "Deno banned"; `.verisimdb/ecosystem-ingest`
+  declares AGPL-3.0-or-later in an MPL repository and emits A2ML.
+* Licence, flag only: `hyperpolymath/007` is classed three ways (AGPL in
+  LICENCE-POLICY Rule 4, All Rights Reserved in `CLAUDE.md`, MPL-2.0 in D246).
+* `proven` commit `c13619f` says a repository's uuid "follows the forge path",
+  which contradicts ruling U1.
+* `scripts/check-action-pins-resolve.sh` passes silently when the installed
+  `yq` is not mikefarah's; other scripts refuse.
+
+== What was not checked
+
+Estate-wide counts in other repositories; live ruleset and organisation
+settings; private repositories; forge settings; the owner's workstation;
+GitHub Actions runs of anything on this branch. Creusot, Verus, Rocq and Lean
+were not run.

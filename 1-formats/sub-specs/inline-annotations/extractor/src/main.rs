@@ -26,9 +26,10 @@ const KINDS: &[&str] = &["trust", "contract", "grade"];
 /// Languages that use `//` or `#` or `--` — we match any of these prefixes on each line.
 fn comment_prefixes_for(ext: &str) -> &'static [&'static str] {
     match ext {
-        "rs" | "zig" | "gleam" | "ml" | "mli" | "js" | "mjs" | "ts" | "res" | "resi"
-        | "idr" | "idr2" | "scala" | "java" | "kt" | "swift" | "go" | "c" | "h"
-        | "cpp" | "hpp" | "cs" => &["//"],
+        "rs" | "zig" | "gleam" | "ml" | "mli" | "js" | "mjs" | "ts" | "res" | "resi" | "idr"
+        | "idr2" | "scala" | "java" | "kt" | "swift" | "go" | "c" | "h" | "cpp" | "hpp" | "cs" => {
+            &["//"]
+        }
         "sh" | "bash" | "ncl" | "scm" | "jl" | "py" | "rb" | "toml" | "yaml" | "yml" => &["#"],
         "adb" | "ads" | "agda" | "hs" | "lhs" | "lean" | "elm" => &["--"],
         _ => &[],
