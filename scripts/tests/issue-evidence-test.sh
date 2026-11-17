@@ -109,12 +109,17 @@ printf 'rule one\n--count is a flag\n' >docs/a.adoc
 printf '#!/usr/bin/env bash\nexit 0\n' >scripts/pass.sh
 printf '#!/usr/bin/env bash\nexit 1\n' >scripts/fail.sh
 printf '#!/usr/bin/env bash\nexit 2\n' >scripts/cannot.sh
+printf '#!/usr/bin/env bash\necho "SKIP: tool missing"\nexit 77\n' >scripts/skip.sh
+printf '#!/usr/bin/env bash\nexit 3\n' >scripts/exit3.sh
 cat >scripts/argv.sh <<'EOF'
 #!/usr/bin/env bash
-printf "%s\n" "$@" > "$ARGV_OUT"
+printf "argc=%s\n" "$#" > "$ARGV_OUT"
 EOF
 printf 'not executable\n' >scripts/plain.sh
-chmod +x scripts/pass.sh scripts/fail.sh scripts/cannot.sh scripts/argv.sh
+# dirty.sh passes but leaves an untracked file in the checkout (its cwd).
+printf '#!/usr/bin/env bash\n: >litter.txt\n' >scripts/dirty.sh
+printf 'build/\n' >.gitignore
+chmod +x scripts/pass.sh scripts/fail.sh scripts/cannot.sh scripts/skip.sh scripts/exit3.sh scripts/argv.sh scripts/dirty.sh
 git add .
 git commit -qm "one: helper uses eval"
 C1="$(git rev-parse HEAD)"
@@ -167,6 +172,21 @@ ledger "$(row 1 '[{"kind":"script","path":"scripts/fail.sh"}]')"
 expect_holds "script fails (exit 1)" false "$L"
 ledger "$(row 1 '[{"kind":"script","path":"scripts/cannot.sh"}]')"
 expect_holds "script exit 2 (could not run) is unevaluated" null "$L"
+# Exit 77 is a skip (the automake convention): the script ran nothing, so it
+# is never evidence either way. A row whose only problem is a skipped script
+# is neither closed nor reopened.
+ledger "$(row 1 '[{"kind":"script","path":"scripts/skip.sh"}]')"
+expect_holds "script exit 77 (skipped) is unevaluated, never holds" null "$L"
+echo '[{"number":1,"state":"open"}]' >"$WORK/o-skip.json"
+run bash "$IE" decide --repo o/r --open "$WORK/o-skip.json" "$L"
+verdict "a skipped script check does not close an open issue" \
+  rc0_and [ "$OUT" = '{"action":"none","disposition":"landed","issue":1,"reason":"unevaluated","repo":"o/r"}' ]
+echo '[{"number":1,"state":"closed","closed_by_bot":true}]' >"$WORK/o-skip.json"
+run bash "$IE" decide --repo o/r --open "$WORK/o-skip.json" "$L"
+verdict "a skipped script check does not reopen an issue the bot closed" \
+  rc0_and [ "$OUT" = '{"action":"none","disposition":"landed","issue":1,"reason":"unevaluated","repo":"o/r"}' ]
+ledger "$(row 1 '[{"kind":"script","path":"scripts/exit3.sh"}]')"
+expect_holds "script exit 3 (any other code below 124) fails" false "$L"
 ledger "$(row 1 '[{"kind":"script","path":"scripts/pass.sh"},{"kind":"path-present","path":"scripts/gone.sh"}]')"
 run bash "$IE" evaluate "$L"
 verdict "failed lists the failing check's index" [ "$OUT" = '{"disposition":"landed","failed":[1],"holds":false,"issue":1,"repo":"o/r","unevaluated":[]}' ]
@@ -185,12 +205,48 @@ expect_holds "script is unevaluated when REF is not the checkout" null --ref "$C
 printf '#!/usr/bin/env bash\nexit 1\n' >scripts/pass.sh
 expect_holds "script is unevaluated when the checkout's copy is modified" null "$L"
 git checkout -q -- scripts/pass.sh
+# A script may read any file in the checkout, so it counts as evidence only
+# when the checkout IS the committed tree (Codex finding on #1651).
+printf 'edited\n' >>docs/a.adoc
+expect_holds "script is unevaluated when another tracked file is modified" null "$L"
+git checkout -q -- docs/a.adoc
+printf 'staged\n' >>docs/a.adoc
+git add docs/a.adoc
+git show HEAD:docs/a.adoc >docs/a.adoc # the working file is the committed one again
+expect_holds "script is unevaluated when the index differs from the commit" null "$L"
+git reset -q -- docs/a.adoc
+git checkout -q -- docs/a.adoc
+printf 'x\n' >docs/new.adoc
+expect_holds "script is unevaluated with an untracked file in the checkout" null "$L"
+rm -f docs/new.adoc
+git update-index --assume-unchanged docs/a.adoc
+printf 'hidden\n' >>docs/a.adoc
+expect_holds "script is unevaluated when an index entry hides a change (assume-unchanged)" null "$L"
+git update-index --no-assume-unchanged docs/a.adoc
+git checkout -q -- docs/a.adoc
+mkdir -p build
+printf 'x\n' >build/out.txt
+expect_holds "a path the committed .gitignore ignores does not block a script" true "$L"
+rm -rf build
+ledger "$(row 1 '[{"kind":"script","path":"scripts/dirty.sh"},{"kind":"script","path":"scripts/pass.sh"}]')"
+run bash "$IE" evaluate "$L"
+verdict "a script that litters the checkout leaves later script checks unevaluated" \
+  rc0_and [ "$OUT" = '{"disposition":"landed","failed":[],"holds":null,"issue":1,"repo":"o/r","unevaluated":[1]}' ]
+rm -f litter.txt
+verdict "the fixture checkout is clean again" [ -z "$(git status --porcelain)" ]
+ledger "$(row 1 '[{"kind":"script","path":"scripts/pass.sh"}]')"
 git clone -q --depth 1 "file://$R" "$WORK/shallow"
 ledger "$(row 1 "[{\"kind\":\"commit-on-main\",\"sha\":\"$C1\"}]")"
-(cd "$WORK/shallow" && expect_holds "commit-on-main is unevaluated in a shallow clone" null "$L")
+# Assertions run in this shell (never in a subshell), so their counts reach
+# the summary; the directory is restored after each.
+cd "$WORK/shallow" || exit 2
+expect_holds "commit-on-main is unevaluated in a shallow clone" null "$L"
+cd "$R" || exit 2
 ledger "$(row 1 '[{"kind":"path-present","path":"scripts/helper.sh"}]')"
 expect_rc "an unresolvable --ref is an internal error (3)" 3 bash "$IE" evaluate --ref no-such-ref "$L"
-(cd "$WORK" && expect_rc "outside a git repository is an internal error (3)" 3 bash "$IE" evaluate "$L")
+cd "$WORK" || exit 2
+expect_rc "outside a git repository is an internal error (3)" 3 bash "$IE" evaluate "$L"
+cd "$R" || exit 2
 
 echo "=== validate: every rejection names its line ==="
 GOOD="$(row 2 '[{"kind":"path-present","path":"docs/a.adoc"}]')"
@@ -224,13 +280,28 @@ ledger "$(row 3 '[{"kind":"tree-grep-absent","glob":":(exclude)x","pattern":"x"}
 expect_err "glob choosing pathspec magic" 'checks[0].glob starts with ":"' bash "$IE" validate "$L"
 ledger "$(row 3 '[{"kind":"script","path":"docs/a.adoc"}]')"
 expect_err "script outside scripts/ and tests/" "checks[0].path must be under scripts/ or tests/" bash "$IE" validate "$L"
+# Schema validation never reads the tree: a script that is absent or not
+# executable is a FAILED check at evaluation (a regression), and `lint` is the
+# separate pre-merge check that names it.
 printf '#!/usr/bin/env bash\nexit 0\n' >scripts/untracked.sh
 chmod +x scripts/untracked.sh
 ledger "$(row 3 '[{"kind":"script","path":"scripts/untracked.sh"}]')"
-expect_err "untracked script" "is not tracked in git at HEAD" bash "$IE" validate "$L"
+expect_rc "validate does not read the tree: an untracked script is schema-valid" 0 bash "$IE" validate "$L"
+expect_err "lint: untracked script" "is not tracked in git at HEAD" bash "$IE" lint "$L"
+expect_holds "evaluate: an untracked script is a failed check" false "$L"
 rm -f scripts/untracked.sh
 ledger "$(row 3 '[{"kind":"script","path":"scripts/plain.sh"}]')"
-expect_err "script without the executable bit" "without the executable bit" bash "$IE" validate "$L"
+expect_rc "validate does not read the tree: a non-executable script is schema-valid" 0 bash "$IE" validate "$L"
+expect_err "lint: script without the executable bit" "without the executable bit" bash "$IE" lint "$L"
+expect_holds "evaluate: a non-executable script is a failed check" false "$L"
+ledger "$(row 3 '[{"kind":"script","path":"scripts/pass.sh"}]')"
+expect_rc "lint passes a tracked executable script" 0 bash "$IE" lint "$L"
+ledger "$(row 3 '[{"kind":"script","path":"scripts/gone.sh"}]')" "$(row 4 '[{"kind":"path-present","path":"docs/a.adoc"}]')"
+run bash "$IE" evaluate "$L"
+verdict "one row's missing script does not stop the other rows" rc0_and [ "$OUT" = '{"disposition":"landed","failed":[0],"holds":false,"issue":3,"repo":"o/r","unevaluated":[]}
+{"disposition":"landed","failed":[],"holds":true,"issue":4,"repo":"o/r","unevaluated":[]}' ]
+ledger "$(row 3 '[{"kind":"script","path":"scripts/gone.sh"}]')"
+expect_holds "a script absent at another ref is failed, not unevaluated" false --ref "$C1" "$L"
 ledger "$(row 3 '[{"kind":"path-present","path":"x"}]' duplicate)"
 expect_err "duplicate without duplicate_of" "disposition duplicate requires duplicate_of" bash "$IE" validate "$L"
 ledger "$(row 3 '[{"kind":"path-present","path":"x"}]' duplicate '{"duplicate_of":3}')"
@@ -325,33 +396,35 @@ ledger "$(row 5 '[{"kind":"path-present","path":"-rf"}]')"
 expect_err "a leading - in path is refused" 'checks[0].path starts with "-"' bash "$IE" validate "$L"
 ledger "$(row 5 '[{"kind":"tree-grep-absent","glob":"--all-match","pattern":"x"}]')"
 expect_err "a leading - in glob is refused" 'checks[0].glob starts with "-"' bash "$IE" validate "$L"
-for f in pattern path glob args claim evidence; do
+for f in pattern path glob claim evidence; do
   case "$f" in
     pattern) r="$(row 5 '[{"kind":"grep-absent","path":"docs/a.adoc","pattern":"a\nb"}]')" ;;
     path) r="$(row 5 '[{"kind":"path-present","path":"docs/a\nb"}]')" ;;
     glob) r="$(row 5 '[{"kind":"tree-grep-absent","glob":"docs/*\nb","pattern":"x"}]')" ;;
-    args) r="$(row 5 '[{"kind":"script","path":"scripts/pass.sh","args":["a\nb"]}]')" ;;
     claim) r="$(row 5 '[{"kind":"path-present","path":"x"}]' landed '{"claim":"a\n<!-- x -->"}')" ;;
     evidence) r="$(row 5 '[{"kind":"path-present","path":"x"}]' landed '{"evidence":["a\nb"]}')" ;;
   esac
   ledger "$r"
   expect_err "a newline in $f is refused" "control character" bash "$IE" validate "$L"
 done
-# The argv of a script check is passed as an array: the script sees the exact
-# strings, unexpanded.
+# A script check takes no arguments from the ledger (code-scanning finding on
+# #1651): no row value reaches a script's argv. `args` is refused, even empty.
+ledger "$(row 6 '[{"kind":"script","path":"scripts/argv.sh","args":["-x"]}]')"
+expect_err "script args are refused" 'checks[0]: unknown field "args"' bash "$IE" validate "$L"
+ledger "$(row 6 '[{"kind":"script","path":"scripts/argv.sh","args":[]}]')"
+expect_err "an empty args array is refused too" 'checks[0]: unknown field "args"' bash "$IE" validate "$L"
+ledger "$(row 6 '[{"kind":"script","path":"scripts/argv.sh"}]')"
+export ARGV_OUT="$WORK/argv.txt"
+run bash "$IE" evaluate "$L"
+unset ARGV_OUT
+if [ "$RC" = 0 ] && [ "$(cat "$WORK/argv.txt" 2>/dev/null)" = "argc=0" ]; then
+  ok "a script check runs its script with no arguments"
+else ko "script argv — rc=$RC argv=$(tr '\n' '|' <"$WORK/argv.txt" 2>/dev/null)"; fi
 # The payloads, as data: a quoted here-doc expands nothing.
 PAYLOAD="$(cat <<'EOF'
 $(touch PWNED) `touch PWNED`
 EOF
 )"
-ARGS="$(jq -c -n --arg p "$PAYLOAD" '[$p, "; rm -rf /", "-x", "a b"]')"
-ledger "$(row 6 "[{\"kind\":\"script\",\"path\":\"scripts/argv.sh\",\"args\":$ARGS}]")"
-export ARGV_OUT="$WORK/argv.txt"
-run bash "$IE" evaluate "$L"
-unset ARGV_OUT
-if [ "$RC" = 0 ] && [ "$(jq -R . "$WORK/argv.txt" | jq -c -s .)" = "$ARGS" ] && sentinel_absent; then
-  ok "script args reach the script as literal argv"
-else ko "script args — rc=$RC argv=$(tr '\n' '|' <"$WORK/argv.txt" 2>/dev/null)"; fi
 ledger "$(row 7 '[{"kind":"path-present","path":"docs/a.adoc"}]' landed \
   "$(jq -c -n --arg p "$PAYLOAD" '{claim: ($p + " @owner ; rm -rf /"), evidence: ["@someone #12"]}')")"
 run bash "$IE" render-comment --issue 7 --action close "$L"
@@ -390,22 +463,35 @@ cat >"$WORK/want.jsonl" <<'EOF'
 {"action":"none","disposition":"landed","issue":21,"reason":"no-issue-state","repo":"o/r"}
 {"action":"none","disposition":"landed","issue":22,"reason":"evidence-does-not-hold","repo":"o/r"}
 EOF
-run bash "$IE" decide --open "$WORK/open.json" --evaluated "$WORK/ev.jsonl"
+run bash "$IE" decide --repo o/r --open "$WORK/open.json" --evaluated "$WORK/ev.jsonl"
 if [ "$RC" = 0 ] && [ "$OUT" = "$(cat "$WORK/want.jsonl")" ]; then ok "decide truth table (12 cases)"
 else ko "decide truth table — rc=$RC"; diff <(printf '%s\n' "$OUT") "$WORK/want.jsonl" | head -20; fi
 echo '{"number":1}' >"$WORK/bad-open.json"
-expect_err "decide refuses an --open that is not an array" "not a JSON array" bash "$IE" decide --open "$WORK/bad-open.json" --evaluated "$WORK/ev.jsonl"
+expect_err "decide refuses an --open that is not an array" "not a JSON array" bash "$IE" decide --repo o/r --open "$WORK/bad-open.json" --evaluated "$WORK/ev.jsonl"
 echo '[{"number":11,"state":"closed"}]' >"$WORK/bad-open.json"
-expect_err "decide refuses a closed issue without closed_by_bot" "needs closed_by_bot" bash "$IE" decide --open "$WORK/bad-open.json" --evaluated "$WORK/ev.jsonl"
+expect_err "decide refuses a closed issue without closed_by_bot" "needs closed_by_bot" bash "$IE" decide --repo o/r --open "$WORK/bad-open.json" --evaluated "$WORK/ev.jsonl"
 echo '[{"number":11,"state":"open"},{"number":11,"state":"open"}]' >"$WORK/bad-open.json"
-expect_err "decide refuses a repeated issue" "appears twice" bash "$IE" decide --open "$WORK/bad-open.json" --evaluated "$WORK/ev.jsonl"
+expect_err "decide refuses a repeated issue" "appears twice" bash "$IE" decide --repo o/r --open "$WORK/bad-open.json" --evaluated "$WORK/ev.jsonl"
+# --open lists ONE repository's issues by number, so a row of another
+# repository with the same number must never yield an action here.
+expect_err "decide needs --repo (with --evaluated)" "decide needs --repo" bash "$IE" decide --open "$WORK/open.json" --evaluated "$WORK/ev.jsonl"
+expect_err "decide needs --repo (from the ledger)" "decide needs --repo" bash "$IE" decide --open "$WORK/open.json" "$L"
+{
+  printf '{"disposition":"landed","failed":[],"holds":true,"issue":11,"repo":"other/r","unevaluated":[]}\n'
+  printf '{"disposition":"landed","failed":[0],"holds":false,"issue":12,"repo":"other/r","unevaluated":[]}\n'
+  printf '{"disposition":"landed","failed":[],"holds":true,"issue":14,"repo":"O/R","unevaluated":[]}\n'
+} >"$WORK/ev-mixed.jsonl"
+echo '[{"number":11,"state":"open"},{"number":12,"state":"closed","closed_by_bot":true},{"number":14,"state":"open"}]' >"$WORK/open-mixed.json"
+run bash "$IE" decide --repo o/r --open "$WORK/open-mixed.json" --evaluated "$WORK/ev-mixed.jsonl"
+verdict "decide --evaluated ignores another repository's rows (case-insensitive match)" \
+  rc0_and [ "$OUT" = '{"action":"close","disposition":"landed","issue":14,"reason":"evidence-holds","repo":"O/R"}' ]
 # decide straight from the ledger: evaluate and decide agree on the tree.
 ledger "$(row 1405 '[{"kind":"grep-absent","path":"scripts/helper.sh","pattern":"eval"}]')"
 echo '[{"number":1405,"state":"open"}]' >"$WORK/o1405.json"
-run bash "$IE" decide --open "$WORK/o1405.json" --ref "$C2" "$L"
+run bash "$IE" decide --repo o/r --open "$WORK/o1405.json" --ref "$C2" "$L"
 verdict "decide from the ledger: close at the fixing commit" [ "$OUT" = '{"action":"close","disposition":"landed","issue":1405,"reason":"evidence-holds","repo":"o/r"}' ]
 echo '[{"number":1405,"state":"closed","closed_by_bot":true}]' >"$WORK/o1405.json"
-run bash "$IE" decide --open "$WORK/o1405.json" --ref "$C1" "$L"
+run bash "$IE" decide --repo o/r --open "$WORK/o1405.json" --ref "$C1" "$L"
 verdict "decide from the ledger: reopen at the parent (regression)" [ "$OUT" = '{"action":"reopen","disposition":"landed","issue":1405,"reason":"regression","repo":"o/r"}' ]
 
 echo "=== render-comment ==="
@@ -418,6 +504,18 @@ verdict "close comment ends with the row-hash marker" rc0_and [ "$last" = "<!-- 
 verdict "close comment names the evaluated commit" out_has "commit $C2"
 run bash "$IE" render-comment --issue 1405 --action reopen --ref "$C1" "$L"
 verdict "reopen comment marks the failing check" out_has '[0] no line of the file "scripts/helper.sh" matches the regular expression "eval" - DOES NOT HOLD'
+# A check that could not be evaluated is labelled so, never "holds".
+ledger "$(row 9 '[{"kind":"script","path":"scripts/cannot.sh"},{"kind":"path-present","path":"scripts/gone.sh"},{"kind":"path-present","path":"docs/a.adoc"}]')"
+run bash "$IE" render-comment --issue 9 --action reopen "$L"
+verdict "reopen comment labels an unevaluated check as not evaluated" out_has '[0] the tracked script "scripts/cannot.sh" exits 0 - NOT EVALUATED'
+verdict "reopen comment still marks the failing check" out_has '[1] the path "scripts/gone.sh" exists - DOES NOT HOLD'
+verdict "reopen comment marks a holding check" out_has '[2] the path "docs/a.adoc" exists - holds'
+printf '{"disposition":"landed","failed":[1],"holds":false,"issue":9,"repo":"o/r","unevaluated":[0]}\n' >"$WORK/ev9.jsonl"
+run bash "$IE" render-comment --issue 9 --action reopen --evaluated "$WORK/ev9.jsonl" "$L"
+verdict "reopen comment from --evaluated labels the unevaluated check" out_has '[0] the tracked script "scripts/cannot.sh" exits 0 - NOT EVALUATED'
+printf '{"disposition":"landed","failed":[1],"holds":false,"issue":9,"repo":"o/r"}\n' >"$WORK/ev9.jsonl"
+expect_err "an --evaluated record without unevaluated is refused" "is not an evaluate record" \
+  bash "$IE" render-comment --issue 9 --action reopen --evaluated "$WORK/ev9.jsonl" "$L"
 ledger "$(row 8 '[{"kind":"grep-absent","path":"docs/a.adoc","pattern":"```x"}]')"
 run bash "$IE" render-comment --issue 8 --action close "$L"
 verdict "the check block's fence outgrows a backtick run in a pattern" out_line "````"
@@ -448,7 +546,7 @@ same() { # LABEL CMD...
 }
 same "evaluate" bash "$IE" evaluate "$L"
 echo '[{"number":1,"state":"open"},{"number":2,"state":"closed","closed_by_bot":true},{"number":3,"state":"open"}]' >"$WORK/det-open.json"
-same "decide" bash "$IE" decide --open "$WORK/det-open.json" "$L"
+same "decide" bash "$IE" decide --repo o/r --open "$WORK/det-open.json" "$L"
 same "render-comment" bash "$IE" render-comment --issue 2 --action close "$L"
 same "candidates" bash "$IE" candidates --log "$WORK/log" --open "$WORK/cand-open.json" --repo o/r "$L"
 run bash "$IE" evaluate "$L"
@@ -459,7 +557,9 @@ run bash "$IE" evaluate --repo o/other "$L"
 verdict "--repo filters out other repositories' rows" rc0_and [ -z "$OUT" ]
 
 echo "=== the live ledger ==="
-(cd "$REPO_ROOT" && expect_rc "the repository's own ledger validates" 0 bash "$IE" validate .machine_readable/issue-evidence.jsonl)
+cd "$REPO_ROOT" || exit 2
+expect_rc "the repository's own ledger passes lint (schema, and every script tracked and executable)" 0 bash "$IE" lint .machine_readable/issue-evidence.jsonl
+cd "$R" || exit 2
 
 if [ -z "${ISSUE_EVIDENCE_NEGATIVE_CONTROL:-}" ]; then
   echo "=== negative control: the suite catches a broken check ==="

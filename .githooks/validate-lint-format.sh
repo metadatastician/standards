@@ -92,14 +92,35 @@ RS="$(staged_matching '\.rs$|(^|/)Cargo\.toml$')"
 # A staged .rs with no enclosing manifest (a snippet in docs, a ReScript tree)
 # is not a crate cargo can check: it is named in the ledger as unchecked, not
 # failed as unformatted.
+#
+# MANIFESTS COME FROM THE INDEX. Only a Cargo.toml that is part of the commit
+# can make a staged file part of a crate: an untracked or not-yet-added
+# manifest in the working tree is not, so the lookup reads `git ls-files
+# --cached`, never a working-tree `-f` test.
+#
+# ONE PACKAGE PER MANIFEST. cargo fmt is given the manifest explicitly
+# (`--manifest-path`), which formats the package that manifest defines and
+# nothing else. Run bare from a workspace root that is also a package, it
+# checks EVERY workspace member, so an unformatted member the commit never
+# touched blocked it (measured with cargo 1.97 / rustfmt 1.9). A member's own
+# staged file resolves to the member's manifest, which is nearer.
+#
+# A VIRTUAL WORKSPACE MANIFEST (no [package]) defines no package, so there is
+# nothing of its own to format: cargo fmt answers "Failed to find targets".
+# A staged file whose nearest indexed manifest is virtual (the manifest itself,
+# or a .rs inside no member) is named in the ledger as unchecked, and clippy
+# is not run for it either.
+
+RS_MANIFESTS="$(git ls-files --cached -- 'Cargo.toml' '*/Cargo.toml' 2>/dev/null || true)"
 
 # nearest_crate <repo-relative path> — prints the repo-relative directory of
-# the nearest enclosing Cargo.toml (`.` for the root), or nothing.
+# the nearest enclosing Cargo.toml in the index (`.` for the root), or nothing.
 nearest_crate() {
-  local d
+  local d m
   d="$(dirname -- "$1")"
   while :; do
-    if [ -f "$d/Cargo.toml" ]; then printf '%s\n' "$d"; return 0; fi
+    if [ "$d" = "." ]; then m="Cargo.toml"; else m="$d/Cargo.toml"; fi
+    if printf '%s\n' "$RS_MANIFESTS" | grep -qxF -- "$m"; then printf '%s\n' "$d"; return 0; fi
     [ "$d" = "." ] && return 0
     d="$(dirname -- "$d")"
   done
@@ -122,11 +143,14 @@ if [ -n "$RS" ]; then
         # rustfmt reports a formatting difference as "Diff in <file>"; any other
         # non-zero exit is cargo failing to run (bad manifest, missing
         # component), which is a tooling/scope error and is named as one.
-        if fmt_out="$(cd "$c" && cargo fmt --check 2>&1)"; then
+        if fmt_out="$(cd "$c" && cargo fmt --check --manifest-path Cargo.toml 2>&1)"; then
           note "Rust: $c: formatted"
         elif printf '%s' "$fmt_out" | grep -q '^Diff in '; then
           printf '%s\n' "$fmt_out" >&2
           fail "Rust: $c: sources are not formatted (cargo fmt --check)"
+        elif printf '%s' "$fmt_out" | grep -q '^Failed to find targets'; then
+          LEDGER+=("rust ($c): NOT checked, nearest Cargo.toml is a virtual workspace manifest (no package of its own)")
+          continue
         else
           printf '%s\n' "$fmt_out" >&2
           fail "Rust: $c: cargo could not run 'cargo fmt --check' here (tooling/scope error, not a formatting verdict)"

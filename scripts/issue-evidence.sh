@@ -17,21 +17,34 @@
 #
 # THIS SCRIPT IS A TOTAL, SIDE-EFFECT-FREE FUNCTION of (ledger, git tree at a
 # ref). It never calls the network and never writes to the repository. The
-# GitHub reads and writes live in .github/workflows/issue-evidence-reusable.yml.
+# GitHub reads and writes belong to .github/workflows/issue-evidence.yml and
+# issue-evidence-reusable.yml, which the follow-up pull request (#1652) adds;
+# they are not in this tree until it merges. Until then the ledger is
+# evaluated only by hand (the subcommands below) and by the test suite.
 #
 # SUBCOMMANDS (LEDGER defaults to .machine_readable/issue-evidence.jsonl)
 #   validate [LEDGER]
 #       Schema check against the closed vocabulary. Each error names the line.
+#       It never reads the git tree, so one row cannot invalidate the ledger
+#       by naming a script that is later deleted: evaluation reports that
+#       check as failed (a regression) and still evaluates every other row.
+#   lint [LEDGER]
+#       validate, and also: every `script` check names a file tracked at HEAD
+#       with the executable bit. For a pull request author before merge (the
+#       test suite runs it on the live ledger); the bot does not need it.
 #   evaluate [--repo OWNER/NAME] [--ref REF] [LEDGER]
 #       One JCS line per row (ledger order): {disposition, failed, holds,
 #       issue, repo, unevaluated}. holds is true when every check holds, false
 #       when any check fails, null when none fails but one could not be
 #       evaluated. failed/unevaluated are 0-based check indices.
-#   decide --open FILE [--evaluated FILE | --repo R --ref REF] [LEDGER]
+#   decide --repo OWNER/NAME --open FILE [--evaluated FILE | --ref REF] [LEDGER]
 #       Pure decision table. FILE is a JSON array of {number, state} with
 #       state open|closed, closed_by_bot (bool) for closed issues, and
 #       optionally reopened_by_human (bool) for open ones. One JCS line per
 #       row: {action: close|reopen|none, disposition, issue, reason, repo}.
+#       --repo is required: FILE describes that repository's issues by
+#       number, so rows (or --evaluated records) of any other repository
+#       are dropped and never yield an action.
 #   render-comment --issue N --action close|reopen [--repo R] [--ref REF]
 #                  [--evaluated FILE] [LEDGER]
 #       The Markdown comment for a close or reopen. Its last line is the
@@ -43,9 +56,12 @@
 #
 # CHECKS ARE EVALUATED AT THE REF, NOT IN THE WORKING TREE. Every check reads
 # the committed tree through git (ls-tree, cat-file, grep at the commit,
-# merge-base). The one exception is `script`, which must run in a checkout: it
-# runs only when REF is the checked-out commit and the script file is
-# unmodified there, and is otherwise UNEVALUATED (null), never guessed.
+# merge-base). The one exception is `script`, which must run in a checkout and
+# may read any file there: it runs only when REF is the checked-out commit and
+# the checkout is exactly that commit (no staged, unstaged or hidden change to
+# a tracked file, and no untracked file the .gitignore files do not ignore),
+# and is otherwise UNEVALUATED (null), never guessed. Ignored files are not
+# compared: a script that reads one reads something outside the commit.
 #
 # SAFETY BOUNDARY (why no ledger value is ever code)
 #   Issue #1405 is about `eval` in test helpers: a value that reaches eval,
@@ -61,7 +77,8 @@
 #     with the :(glob) magic this script chooses (a glob that starts with ":"
 #     is refused, so a row cannot pick its own pathspec magic);
 #   * `script` runs a path tracked in git under scripts/ or tests/, executable
-#     in git, with `args` as an argv array; never through a shell string;
+#     in git, with NO arguments (a row cannot carry `args`), never through a
+#     shell string: a row chooses which reviewed script runs, nothing else;
 #   * control characters (newline, tab, NUL, DEL) are refused in every string,
 #     so a value cannot split a grep pattern list or forge a comment line.
 #   scripts/tests/issue-evidence-test.sh plants $(…), backticks, `; rm -rf`,
@@ -170,18 +187,10 @@ def check($i):
       (if (.sha | type) == "string" and (.sha | test("^[0-9a-f]{12,40}$")) then empty
        else "\($p).sha must be 12 to 40 lower-case hex digits" end)
     elif .kind == "script" then
-      (keyset(["kind", "path"]; ["args"]) | "\($p): \(.)"),
+      (keyset(["kind", "path"]; []) | "\($p): \(.)"),
       relpath("\($p).path"; .path),
       (if (.path | type) == "string" and ((.path | startswith("scripts/")) or (.path | startswith("tests/")))
-       then empty else "\($p).path must be under scripts/ or tests/" end),
-      (if has("args") then
-         if (.args | type) != "array" then "\($p).args must be an array of strings"
-         else .args | to_entries[]
-           | if (.value | type) != "string" then "\($p).args[\(.key)] must be a string"
-             elif (.value | ctrl) then "\($p).args[\(.key)] contains a control character (newline, tab, NUL and DEL are refused)"
-             else empty end
-         end
-       else empty end)
+       then empty else "\($p).path must be under scripts/ or tests/" end)
     else "\($p).kind is not in the vocabulary: \(.kind | tojson)" end;
 def row:
   if type != "object" then "the line is not a JSON object"
@@ -257,10 +266,14 @@ entry_at() {
   return 0
 }
 
-# validate_ledger LEDGER: prints one error per line to stderr; returns 1 when
-# the ledger is invalid.
+# validate_ledger LEDGER [SCRIPTS_AT]: prints one error per line to stderr;
+# returns 1 when the ledger is invalid. Schema validation never reads the git
+# tree, so a script deleted or renamed after its row merged cannot make the
+# whole ledger invalid: evaluation reports that check as FAILED. Only `lint`
+# passes SCRIPTS_AT (a commit), adding "each script check names a tracked,
+# executable file there" for a pull request author to see before merge.
 validate_ledger() {
-  local ledger="$1" bad=0 i tag n val rc stream
+  local ledger="$1" scripts_at="${2:-}" bad=0 i tag n val rc stream
   if [ ! -f "$ledger" ]; then
     printf '%s: ledger not found\n' "$ledger" >&2
     return 1
@@ -299,7 +312,8 @@ validate_ledger() {
         fi
         ;;
       S)
-        if ! entry_at HEAD "$val" || [ "$E_TYPE" != blob ]; then
+        [ -n "$scripts_at" ] || continue
+        if ! entry_at "$scripts_at" "$val" || [ "$E_TYPE" != blob ]; then
           printf '%s:%s: script %s is not tracked in git at HEAD\n' "$ledger" "$n" "$(jq -n --arg v "$val" '$v')" >&2
           bad=1
         elif [ "$E_MODE" != 100755 ]; then
@@ -315,13 +329,12 @@ validate_ledger() {
 # --- evaluation ---------------------------------------------------------------
 
 # Per row, NUL-separated: repo, issue, disposition, check count, then per
-# check: kind, path|glob|sha, pattern, arg count, args...
+# check: kind, path|glob|sha, pattern.
 # shellcheck disable=SC2016  # jq program text, not shell
 ROW_STREAM_JQ='
 def z: ., "\u0000";
 (.repo | z), (.issue | tostring | z), (.disposition | z), (.checks | length | tostring | z),
-(.checks[] | (.kind | z), ((.path // .glob // .sha) | z), ((.pattern // "") | z),
-  ((.args // []) | length | tostring | z), ((.args // [])[] | z))
+(.checks[] | (.kind | z), ((.path // .glob // .sha) | z), ((.pattern // "") | z))
 '
 
 # Check results: 0 holds, 1 does not hold, 2 not evaluated.
@@ -384,51 +397,71 @@ check_commit_on_main() { # SHA
   esac
 }
 
-check_script() { # PATH ARGS...
+# checkout_is_commit: 0 when the working tree and index are exactly HEAD's
+# tree: no staged or unstaged change to a tracked file, no index entry that
+# hides a change (assume-unchanged, skip-worktree) or is unmerged, and no
+# untracked file except one the checkout's .gitignore files ignore. Neither
+# core.excludesFile nor .git/info/exclude is honoured, so a file hidden only
+# by a personal exclude still counts as untracked.
+checkout_is_commit() {
+  git -C "$ROOT" diff --quiet --no-ext-diff --no-textconv HEAD -- 2>/dev/null || return 1
+  git -C "$ROOT" diff --cached --quiet --no-ext-diff --no-textconv HEAD -- 2>/dev/null || return 1
+  # `ls-files -v` tags a plain entry "H "; every other tag is refused.
+  [ -z "$(git -C "$ROOT" ls-files -z -v | tr '\0' '\n' | grep -v '^H ' | head -c 1)" ] || return 1
+  [ -z "$(git -C "$ROOT" ls-files -z --others --exclude-per-directory=.gitignore | head -c 1)" ] || return 1
+}
+
+check_script() { # PATH
   local path="$1" rc=0
-  shift
   # Only explicitly allowlisted repository scripts are runnable.
   # This prevents ledger data from triggering arbitrary code execution.
   case "$path" in
     scripts/*|tests/*) ;;
     *) return 2 ;;
   esac
-  # A script runs in the checkout, so it is evaluated only when the checkout
-  # IS the evaluated commit and the file there is the committed one.
-  [ "$COMMIT" = "$HEAD_COMMIT" ] || return 2
+  # The script must be a tracked, executable regular file AT THE EVALUATED
+  # COMMIT. Read from the commit, so absence (deleted, renamed, never added) or
+  # a lost executable bit is a FAILED check (a regression) whichever commit is
+  # checked out, never an invalid ledger and never "not evaluated".
   entry_at "$COMMIT" "$path" || return 1
   [ "$E_TYPE" = blob ] && [ "$E_MODE" = 100755 ] || return 1
-  GIT_LITERAL_PATHSPECS=1 git diff --quiet HEAD -- "$path" 2>/dev/null || return 2
-  (cd "$ROOT" && timeout "$SCRIPT_TIMEOUT" "./$path" "$@" </dev/null >&2) || rc=$?
-  # 0 holds; 2 is this estate's "could not run", and 124+ is a timeout or a
-  # signal: neither is evidence either way.
+  # A script runs in the checkout and may read any file there, so it counts
+  # as evidence only when the checkout IS the evaluated commit: HEAD is that
+  # commit and checkout_is_commit holds. Re-checked before every script, so a
+  # script that litters the checkout leaves the later ones unevaluated.
+  [ "$COMMIT" = "$HEAD_COMMIT" ] || return 2
+  checkout_is_commit || return 2
+  # No argument: nothing from the ledger reaches the script's argv.
+  (cd "$ROOT" && timeout "$SCRIPT_TIMEOUT" "./$path" </dev/null >&2) || rc=$?
+  # 0 holds. 2 is this estate's "could not run", 77 is a skip (the automake
+  # convention: a test that ran nothing, e.g. a missing toolchain), and 124+
+  # is a timeout or a signal: none of them is evidence either way, so the
+  # check is unevaluated and the bot neither closes nor reopens on it.
   case "$rc" in
     0) return 0 ;;
-    2) return 2 ;;
+    2 | 77) return 2 ;;
     *) [ "$rc" -ge 124 ] && return 2 || return 1 ;;
   esac
 }
 
 # eval_row LINE: sets R_REPO R_ISSUE R_DISP R_HOLDS R_FAILED R_UNEVAL (JSON).
 eval_row() {
-  local f=() k=0 nchecks i kind a pat nargs args rc any_false=0 any_null=0
+  local f=() k=0 nchecks i kind a pat rc any_false=0 any_null=0
   local failed=() uneval=()
   printf '%s\n' "$1" | jq -j "$ROW_STREAM_JQ" >"$TMPD/row.stream" || fail_internal "jq could not read a validated row"
   mapfile -d '' -t f <"$TMPD/row.stream"
   R_REPO="${f[0]}" R_ISSUE="${f[1]}" R_DISP="${f[2]}" nchecks="${f[3]}"
   k=4
   for ((i = 0; i < nchecks; i++)); do
-    kind="${f[k]}" a="${f[k + 1]}" pat="${f[k + 2]}" nargs="${f[k + 3]}"
-    k=$((k + 4))
-    args=("${f[@]:k:nargs}")
-    k=$((k + nargs))
+    kind="${f[k]}" a="${f[k + 1]}" pat="${f[k + 2]}"
+    k=$((k + 3))
     rc=0
     case "$kind" in
       path-absent | path-present) check_path "$kind" "$a" || rc=$? ;;
       grep-absent | grep-present) check_grep "$kind" "$a" "$pat" || rc=$? ;;
       tree-grep-absent) check_tree_grep_absent "$a" "$pat" || rc=$? ;;
       commit-on-main) check_commit_on_main "$a" || rc=$? ;;
-      script) check_script "$a" "${args[@]}" || rc=$? ;;
+      script) check_script "$a" || rc=$? ;;
       *) fail_internal "unvalidated check kind reached evaluation" ;;
     esac
     case "$rc" in
@@ -476,6 +509,16 @@ cmd_validate() {
   printf '%s: %s rows valid\n' "$ledger" "$(grep -c '' "$ledger" || true)" >&2
 }
 
+cmd_lint() {
+  [ "$#" -le 1 ] || fail_input "lint takes at most one LEDGER"
+  local ledger="${1:-$DEFAULT_LEDGER}" head
+  need_repo
+  head="$(git rev-parse --verify --quiet HEAD 2>/dev/null)" || fail_internal "HEAD does not resolve to a commit"
+  validate_ledger "$ledger" "$head" || exit 2
+  printf '%s: %s rows valid; every script check names a tracked, executable file at HEAD\n' \
+    "$ledger" "$(grep -c '' "$ledger" || true)" >&2
+}
+
 REPO_FILTER="" REF="HEAD" OPEN_FILE="" EVAL_FILE="" LOG_FILE="" ISSUE="" ACTION=""
 LEDGER_ARG=()
 parse_opts() {
@@ -515,6 +558,7 @@ def posint: type == "number" and . == floor and . >= 1;
 if type == "object" and (.issue | posint) and (.repo | type) == "string"
    and (.holds == true or .holds == false or .holds == null)
    and (.disposition | type) == "string" and (.failed | type) == "array"
+   and (.unevaluated | type) == "array"
 then . else error("--evaluated: line \(input_line_number) is not an evaluate record") end
 '
 
@@ -565,8 +609,14 @@ cmd_decide() {
   parse_opts "$@"
   [ -n "$OPEN_FILE" ] || fail_input "decide needs --open FILE"
   [ -f "$OPEN_FILE" ] || fail_input "--open file not found: $OPEN_FILE"
+  # --open names one repository's issues by number only, so decide is always
+  # about one repository: rows of any other repository are dropped, whether
+  # the records come from --evaluated or from evaluating the ledger.
+  [ -n "$REPO_FILTER" ] || fail_input "decide needs --repo OWNER/NAME (the repository --open describes)"
   load_evaluated
-  jq -n -c -S --slurpfile open "$OPEN_FILE" --slurpfile ev "$EVALUATED" "$DECIDE_JQ" 2>"$TMPD/decide.err" ||
+  jq -c --arg r "$REPO_FILTER" 'select((.repo | ascii_downcase) == ($r | ascii_downcase))' \
+    "$EVALUATED" >"$TMPD/evaluated-repo.jsonl" || fail_internal "jq could not filter the evaluate records"
+  jq -n -c -S --slurpfile open "$OPEN_FILE" --slurpfile ev "$TMPD/evaluated-repo.jsonl" "$DECIDE_JQ" 2>"$TMPD/decide.err" ||
     fail_input "$(head -c 300 "$TMPD/decide.err")"
 }
 
@@ -579,15 +629,19 @@ def plain:
   elif .kind == "grep-absent" then "no line of the file \(.path | tojson) matches the regular expression \(.pattern | tojson)"
   elif .kind == "tree-grep-absent" then "no tracked file matching \(.glob | tojson) has a line matching \(.pattern | tojson)"
   elif .kind == "commit-on-main" then "commit \(.sha) is an ancestor of the evaluated commit"
-  elif .kind == "script" then "the tracked script \(.path | tojson) exits 0 with arguments \((.args // []) | tojson)"
+  elif .kind == "script" then "the tracked script \(.path | tojson) exits 0"
   else "unknown check" end;
 # GitHub notifies every @name in a comment; a zero-width space after "@" keeps
 # the text readable and notifies nobody.
 def inert: gsub("@"; "@​");
 ($ev.failed // []) as $failed
+| ($ev.unevaluated // []) as $uneval
 | [ $row.checks | to_entries[]
     | "[\(.key)] \(.value | plain)"
-      + (if $action == "reopen" then (if (.key | IN($failed[])) then " - DOES NOT HOLD" else " - holds" end) else "" end) ]
+      + (if $action != "reopen" then ""
+         elif (.key | IN($failed[])) then " - DOES NOT HOLD"
+         elif (.key | IN($uneval[])) then " - NOT EVALUATED"
+         else " - holds" end) ]
   as $lines
 | ([($lines | join("\n")) | scan("`+") | length] | max // 0) as $run
 | ("`" * ([3, $run + 1] | max)) as $fence
@@ -702,6 +756,7 @@ main() {
   need_tools
   case "$sub" in
     validate) cmd_validate "$@" ;;
+    lint) cmd_lint "$@" ;;
     evaluate) cmd_evaluate "$@" ;;
     decide) cmd_decide "$@" ;;
     render-comment) cmd_render_comment "$@" ;;

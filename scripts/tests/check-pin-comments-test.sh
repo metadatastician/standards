@@ -10,6 +10,14 @@ set -uo pipefail
 
 root=$(cd "$(dirname "$0")/../.." && pwd)
 checker="$root/scripts/check-pin-comments.sh"
+
+# The checker needs mikefarah yq v4. Without it nothing here can run, and that
+# is exit 2 ("could not run"), not a failure of the checker and not a pass.
+"${YQ_BIN:-yq}" --version 2>/dev/null | grep -q 'mikefarah' || {
+  echo "check-pin-comments-test: could not run, mikefarah yq v4 is required (YQ_BIN=${YQ_BIN:-yq})" >&2
+  exit 2
+}
+
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
 wf="$tmp/workflows"
 mkdir -p "$wf"
@@ -55,6 +63,13 @@ jobs:
       - uses: dtolnay/rust-toolchain@$A # v1
 EOF
 
+expect "quoted trailing text leaves the first comment token intact" 0 "1 judged" <<EOF
+jobs:
+  a:
+    steps:
+      - uses: dtolnay/rust-toolchain@$A # v1 described as "stable release"
+EOF
+
 expect "a branch name (#1440: # stable) is refused" 1 "Write '# v1'" <<EOF
 jobs:
   a:
@@ -95,6 +110,37 @@ jobs:
   a:
     steps:
       - uses: swatinem/rust-cache@$B # v2.9.
+EOF
+
+# The comment's first word is taken by the parser, not by decoding a TSV row:
+# yq quotes a TSV field that holds a quote or a tab, and a reader that splits
+# the quoted field takes `"v1` as the first word.
+expect "quoted trailing text passes (# v1 (alias \"stable\"))" 0 "1 judged" <<EOF
+jobs:
+  a:
+    steps:
+      - uses: dtolnay/rust-toolchain@$A # v1 (alias "stable")
+EOF
+
+expect "a tab inside the comment passes (# v1<TAB>pinned)" 0 "1 judged" <<EOF
+jobs:
+  a:
+    steps:
+      - uses: dtolnay/rust-toolchain@$A # v1	pinned
+EOF
+
+expect "a comment that is only the ref passes (# v2.9.3)" 0 "1 judged" <<EOF
+jobs:
+  a:
+    steps:
+      - uses: swatinem/rust-cache@$B # v2.9.3
+EOF
+
+expect "a wrong ref with quoted trailing text is refused" 1 "'stable' does not name it" <<EOF
+jobs:
+  a:
+    steps:
+      - uses: dtolnay/rust-toolchain@$A # stable (not "v1")
 EOF
 
 expect "an uncommented pin is counted, not judged" 0 "1 without a comment" <<EOF
