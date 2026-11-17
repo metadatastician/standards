@@ -10,9 +10,15 @@ rulings, and the reusable CI gates that enforce them.
 ----
 git clone https://github.com/metadatastician/standards.git
 cd standards
-guix shell -D -f guix.scm just  # guix.scm inputs, plus just
-just hooks-install              # the pre-commit guard, see below
+guix shell -D -f guix.scm just jq  # guix.scm inputs, plus just and jq
+just hooks-install                 # the pre-commit guard, see below
 ----
+
+The test suite also needs Mike Farah’s `yq`, version 4 (the Go one, not the
+Python wrapper of the same name). Some tests exit with status 2 without `jq` or
+`yq` v4, and `just test` counts that as a failure. Install `yq` v4 from
+https://github.com/mikefarah/yq/releases[its releases] if your system does not
+provide it.
 
 `just hooks-install` installs `hooks/pre-commit`, which checks staged files
 before a commit leaves your machine. It blocks banned languages and Makefiles,
