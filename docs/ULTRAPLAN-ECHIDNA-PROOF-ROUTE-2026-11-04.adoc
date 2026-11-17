@@ -1296,8 +1296,10 @@ theory PRs with their Rocq and Lean legs in `hyperpolymath/mathesis` for
 ladder rows 2 and 12 (D-10) and in residual-evidence-types for row 7.
 |Idris2 and Agda green on an owned runner; accept/reject gate; generated
 output byte-stable; each theorem's Agda witness is at `PWG-3` (checks under
-§2.1, with a receipt) and both theory legs count (kernel-accepted and
-`RECONCILED`), giving `PWG-2ii`; an `OPEN` or `ASSUMED` Agda source, or one
+§2.1, with a receipt) and both theory legs count (the target kernel
+accepted each as `PROVEN` or `PROVEN-WITH-AXIOMS`, every axiom it reports is
+admissible under disposition (c), and it is `RECONCILED`; §8.2, §8.4),
+giving `PWG-2ii`; an `OPEN` or `ASSUMED` Agda source, or one
 with no receipt, leaves the theorem `ungraded` whatever its legs; an approved
 §4 waiver lowers the reported
 target to the grade the counted legs support.
@@ -1320,10 +1322,11 @@ recorded.
 Size: P0-P4 fit one session of under ten agents per phase and run in a
 cloud container with Lean, z3, Elixir and cargo. P6-P8 need an owned runner
 (the estate's GitHub runners are billing-blocked), the ECHIDNA receipt `/2`
-upstream, and Idris2, Agda, Rocq, Creusot, Verus and TLC. Verus is pinned
-to one release together with the Rust toolchain that release names and the
-Z3 solver version it expects (release 0.2026.11.05.31e44e6, for example,
-needs Rust 1.99.1).
+upstream, and Idris2, Agda, Rocq, Creusot, Verus and TLC. Verus is pinned to
+release 0.2026.11.05.31e44e6 with the Rust toolchain it names, 1.99.1, and
+the Z3 it ships, 4.16.0 (`verus --version` and `z3 --version` from that
+release, read 2026-11-17). Receipts record all three (PROOF-POLICY §1.2). A
+later release replaces all three pins together.
 
 [[decisions]]
 == Decisions for the owner
@@ -1399,7 +1402,7 @@ gate and phase.
 |12 |standards |Widen ADR-008 proof domains; register the versioned obligation domain |XS |9, content-id agreement (P3) |Identical ids from Rust and Elixir; a changed target digest gives a new obligation id
 |13 |echidnabot + hypatia (draft) |The pipe: read-back, drain, stub ECHIDNA with real Lean in the shared sandbox, `ProofRoute`, report-back and SARIF; auth, sandbox, line-binding and burrower-compatibility experiments |L |1-5, 7, 8 |All controls print; stub row orange; PRs stay draft
 |14 |standards |Proof-route spec (PROPOSED) and Idris2 package, generated fixtures, CI on an owned runner |L |8, 13 |Idris2 green; rejects refused; generated output byte-stable
-|15 |mathesis (ladder rows 2 and 12, D-10); residual-evidence-types (row 7) |Token order and meet, level monotonicity, fold join, retraction never raises: Agda, Rocq leg, Lean leg re-proved |M |8 |The Agda witness is at `PWG-3` and both legs count (kernel-accepted and `RECONCILED`), giving `PWG-2ii`; without `PWG-3` the theorem is `ungraded`; route recorded; an approved §4 waiver lowers the reported target (`PWG-2i` with one leg waived)
+|15 |mathesis (ladder rows 2 and 12, D-10); residual-evidence-types (row 7) |Token order and meet, level monotonicity, fold join, retraction never raises: Agda, Rocq leg, Lean leg re-proved |M |8 |The Agda witness is at `PWG-3` and both legs count (`PROVEN` or `PROVEN-WITH-AXIOMS` in the target kernel, every reported axiom admissible under disposition (c), and `RECONCILED`; §8.2, §8.4), giving `PWG-2ii`; without `PWG-3` the theorem is `ungraded`; route recorded; an approved §4 waiver lowers the reported target (`PWG-2i` with one leg waived)
 |16 |hypatia |`ProverRecheck` v2 with span and rule binding; sandboxed artefact re-run |M |13, 14 |`RecheckOfOtherLineIsNotSound` refused; `LeanHoleRecheckSound` still accepted
 |17 |echidnabot, proof-burrower |Dual-accept `prove.result` `/1` and `/2`; Creusot/Pearlite and Verus on proof-burrower's `echidna_contract.rs` (ladder row 8) |M |14 |Golden `/2` accepted by both; burrower's parser rows recorded in its proof-status file, each discharged or `open` with its reason
 |18 |echidnabot |Lifecycle store, `proofObligation` query, sandboxed drain; Creusot/Pearlite and Verus; TLA+ |L |1, 13, 14, 17 |Illegal transitions refused; sandbox off means refused; TLC bounds recorded
