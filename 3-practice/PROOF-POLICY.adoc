@@ -705,6 +705,12 @@ gate lists them.
 +
 Modules supplied with the prover are not in the input set. The `:checker`
 and the `(trusted-base …)` clause cover them.
++
+*A Lean `lake-manifest.json` is a pinned input.* Owner ruling. A repository
+with a Lean leg commits its `lake-manifest.json` and treats it as a
+lockfile, not as build output. The receipt cites it by hash: it is in the
+input set above, so it is a `(file …)` of `(inputs-manifest …)`, and its
+SHA-256 is covered by `:inputs-sha256`.
 . Write the *manifest*: one line per file, sorted by path in bytewise (C
 locale) order. Each line is the SHA-256 of the file's bytes as 64 lowercase
 hex, two spaces, the path relative to the repository root with `/`
