@@ -97,6 +97,37 @@ jobs:
       - uses: swatinem/rust-cache@$B # v2.9.
 EOF
 
+# The comment's first word is taken by the parser, not by decoding a TSV row:
+# yq quotes a TSV field that holds a quote or a tab, and a reader that splits
+# the quoted field takes `"v1` as the first word.
+expect "quoted trailing text passes (# v1 (alias \"stable\"))" 0 "1 judged" <<EOF
+jobs:
+  a:
+    steps:
+      - uses: dtolnay/rust-toolchain@$A # v1 (alias "stable")
+EOF
+
+expect "a tab inside the comment passes (# v1<TAB>pinned)" 0 "1 judged" <<EOF
+jobs:
+  a:
+    steps:
+      - uses: dtolnay/rust-toolchain@$A # v1	pinned
+EOF
+
+expect "a comment that is only the ref passes (# v2.9.3)" 0 "1 judged" <<EOF
+jobs:
+  a:
+    steps:
+      - uses: swatinem/rust-cache@$B # v2.9.3
+EOF
+
+expect "a wrong ref with quoted trailing text is refused" 1 "'stable' does not name it" <<EOF
+jobs:
+  a:
+    steps:
+      - uses: dtolnay/rust-toolchain@$A # stable (not "v1")
+EOF
+
 expect "an uncommented pin is counted, not judged" 0 "1 without a comment" <<EOF
 jobs:
   a:

@@ -54,15 +54,21 @@ fi
 files=0 pins=0 judged=0 uncommented=0 unrecorded=0 bad=0
 while IFS= read -r -d '' wf; do
   files=$((files + 1))
-  if ! rows="$("$yq_bin" -r '.. | select(tag == "!!map") | select(has("uses")) | .uses | select(tag == "!!str") | [., line_comment] | @tsv' "$wf")"; then
+  # One row per `uses:` value: the value, a unit separator (0x1F), and the
+  # comment's FIRST WORD. yq cuts the word itself, so the row needs no
+  # decoding: @tsv quotes a field that holds a quote or a tab, and splitting
+  # the quoted field made `"v1` the first word of `# v1 (alias "stable")`.
+  # yq keeps the `#` in line_comment when a tab follows it, so the capture
+  # drops a leading `#` as well as whitespace. 0x1F is not IFS whitespace, so
+  # an empty comment stays an empty field.
+  if ! rows="$(US=$'\x1f' "$yq_bin" -r '.. | select(tag == "!!map") | select(has("uses")) | .uses | select(tag == "!!str") | [., (line_comment | capture("^#?[[:space:]]*(?P<w>[^[:space:]]*)").w)] | join(strenv(US))' "$wf")"; then
     echo "check-pin-comments: cannot parse $wf" >&2; exit 2
   fi
-  while IFS=$'\t' read -r ref comment; do
+  while IFS=$'\x1f' read -r ref word; do
     [[ "$ref" =~ ^([^/@]+)/([^/@]+)(/[^@]*)?@([0-9a-fA-F]{40})$ ]] || continue
     pins=$((pins + 1))
     key="$(printf '%s/%s@%s' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}" "${BASH_REMATCH[4]}" | tr '[:upper:]' '[:lower:]')"
     sha="${BASH_REMATCH[4],,}"
-    word="${comment%%[[:space:]]*}"
     if [ -z "$word" ]; then uncommented=$((uncommented + 1)); continue; fi
     reviewed="$(printf '%s\n' "$locked" | awk -F'\t' -v k="$key" '$1 == k { print $2; exit }')"
     if [ -z "$reviewed" ] || [ "${reviewed,,}" = "$sha" ]; then
@@ -72,7 +78,7 @@ while IFS= read -r -d '' wf; do
     if [ "$word" = "$reviewed" ] || [ "${reviewed#"$word".}" != "$reviewed" ]; then
       continue
     fi
-    echo "$wf: uses: $ref # $comment — the lock reviewed this pin as '$reviewed'; '$word' does not name it. Write '# $reviewed'." >&2
+    echo "$wf: uses: $ref # $word … — the lock reviewed this pin as '$reviewed'; '$word' does not name it. Write '# $reviewed'." >&2
     bad=$((bad + 1))
   done <<< "$rows"
 done < <(find "$workflows" -maxdepth 1 -type f \( -name '*.yml' -o -name '*.yaml' \) -print0 | sort -z)
