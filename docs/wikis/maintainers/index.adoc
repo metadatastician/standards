@@ -163,6 +163,23 @@ above the ledger and on a stale line, and `scripts/check-pipe-grep-q.sh --prune`
 lowers or deletes the entries a fix made stale (the pre-commit hook does the
 same).
 
+*Gates fixed on 2026-11-17.* Each of these passed, or skipped a check, when
+the writer's output was larger than a pipe buffer and the match came early;
+each fix has a test with such a fixture. `scripts/check-exemption-ratchet.sh`:
+a `**` on an early line of a large `.hypatia-ignore` was not seen.
+`.githooks/pre-commit`: a commit that staged `actions.lock` among many files
+skipped the lock-closure check. `.github/workflows/spark-theatre-gate.yml`: a
+SPARK_Mode-On unit with a long body after the aspect was skipped.
+`3-practice/provisioning/templates/build/just/provision-lib.sh`: in a
+repository that tracks many files, `lang-run test` reported N/A instead of
+running `bun test`. `scripts/update-actions-lock.sh --verify-local`: a
+`not-pinned` finding was accepted for a workflow with many remote `uses:`.
+`3-practice/release-pre-flight/v1-audit.sh`: a long list of placeholder
+fuzz or bench files printed PASS. `.githooks/validate-lint-format.sh` and the
+ReScript step of `.github/workflows/ci-pipeline.yml`: a `format --help`
+written in several writes skipped the format gate (shown with a stub; the
+real help text is short). The ledger now holds 70 lines, 182 pipes in all.
+
 *The pre-commit hook.* `.githooks/validate-ledger-prune.sh`, run by
 `.githooks/pre-commit` on every commit before the K9 gate, applies the prune
 to what the commit will contain:
