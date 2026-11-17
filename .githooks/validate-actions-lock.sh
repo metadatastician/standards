@@ -142,7 +142,19 @@ lock_has_self_sha() {
   return 1
 }
 
+# Lock keys for the same owner/repo as $1 (owner/repo@sha) but another SHA.
+# Non-empty means the drift is TWO-SIDED: the lock already records a version
+# of this action, so either side may be the stale one (standards#981).
+lock_other_shas() {
+  local repo="${1%@*}" sha="${1##*@}" k
+  for k in "${LOCK_KEYS[@]}"; do
+    [ "${k%@*}" = "$repo" ] && [ "${k##*@}" != "$sha" ] && printf '%s\n' "${k##*@}"
+  done
+  return 0
+}
+
 ERRORS=0
+TWO_SIDED=0
 CHECKED=0
 declare -a SEEN_ABSENT=()
 
@@ -222,6 +234,19 @@ for ref in "${RAW[@]}"; do
   if ! lock_has "$norm"; then
     echo -e "${RED}[validate-actions-lock] ERROR: not in actions.lock: ${ref}${NC}" >&2
     echo "    normalised to: $norm" >&2
+    others="$(lock_other_shas "$norm")"
+    if [ -n "$others" ]; then
+      # Do not assume the workflow is right. A workflow reverted to a version
+      # the estate holds back (codeql-action 4.38.1, nexia-list#100) looks
+      # exactly like this, and regenerating the lock would re-legitimise it.
+      for o in $others; do
+        echo "    actions.lock holds ${norm%@*}@${o}, the workflow requests @${sha}" >&2
+      done
+      echo "    Which side is stale? If the lock is right (e.g. a held or reverted version)," >&2
+      echo "    set the workflow ref to the locked SHA and leave actions.lock untouched." >&2
+      echo "    Only a deliberate upgrade changes both, the workflow and the lock, in one PR." >&2
+      TWO_SIDED=$((TWO_SIDED + 1))
+    fi
     ERRORS=$((ERRORS + 1))
   elif lock_has_self_sha "$norm"; then
     echo -e "${RED}[validate-actions-lock] ERROR: self-SHA ref in actions.lock dependencies: ${norm}${NC}" >&2
@@ -245,9 +270,17 @@ done
 
 if [ "$ERRORS" -gt 0 ]; then
   echo -e "${RED}[validate-actions-lock] ${ERRORS} ref(s) missing from the lockfile${NC}" >&2
-  echo "    Regenerate with the LOCKFILE ONLY, and verify the *.yml diff is empty:" >&2
-  echo "      gh actions-lock <workflow paths> --no-migrate-local-actions --no-narrow" >&2
-  echo "      git diff --stat -- '.github/workflows/*.yml'   # MUST be empty" >&2
+  if [ "$TWO_SIDED" -lt "$ERRORS" ]; then
+    # Single-sided drift: the action is new to the lock, so the lock is behind.
+    [ "$TWO_SIDED" -gt 0 ] && echo "    For the $((ERRORS - TWO_SIDED)) ref(s) whose action the lock has never recorded:" >&2
+    echo "    Regenerate with the LOCKFILE ONLY, and verify the *.yml diff is empty:" >&2
+    echo "      gh actions-lock <workflow paths> --no-migrate-local-actions --no-narrow" >&2
+    echo "      git diff --stat -- '.github/workflows/*.yml'   # MUST be empty" >&2
+  fi
+  if [ "$TWO_SIDED" -gt 0 ]; then
+    echo "    ${TWO_SIDED} ref(s) disagree with a version the lock already records (named above):" >&2
+    echo "    decide which side is stale before regenerating anything (standards#981)." >&2
+  fi
   exit 1
 fi
 

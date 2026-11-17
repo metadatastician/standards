@@ -165,6 +165,11 @@ done
   && die '--no-integration-bypass applies to the CREATED ruleset only; pass --create-gates (the update path may not alter bypass_actors)'
 command -v gh >/dev/null || die 'gh is required'
 command -v jq >/dev/null || die 'jq is required'
+# Workflow triggers are read with a YAML parser; there is no line-matching
+# fallback (a quoted `"paths":` key defeated the one that existed).
+if ! { command -v yq >/dev/null && yq --version 2>/dev/null | grep -Eq 'github.com/mikefarah/yq/.*version v4\.'; }; then
+  die 'mikefarah yq v4 is required to read workflow triggers (YAML-POLICY Y-1)'
+fi
 
 WORK="$(mktemp -d)"; trap 'rm -rf "$WORK"' EXIT
 
@@ -194,159 +199,70 @@ is_never_ctx() {
   return 1
 }
 
-# Verify that a workflow YAML's uncommented `on:` block triggers on
+# Decide whether a workflow definition (YAML on stdin) triggers on
 # `pull_request` or `pull_request_target` targeting the default branch ($1).
 # Prevents deriving required_status_checks from push/schedule/dispatch-only
 # workflows on $DEF that never fire on pull requests (standards#1040).
+#
+# The definition is read by mikefarah yq v4, a YAML parser, and never by
+# matching key spellings on lines: a quoted key (`"paths": [...]`, or the flow
+# form `pull_request: {"paths": [...]}`) is the same key as a bare one, and a
+# line matcher that misses it derives a context that never reports. yq v4
+# reads a bare `on` key as the string "on", not as the boolean true.
+# `on` may be a string, a sequence or a mapping; all three are handled.
+#
+# Exit 0 = every PR to $DEF emits the workflow's contexts; 1 = no PR trigger
+# for $DEF; 3 = a PR trigger for $DEF that carries `paths` or `paths-ignore`
+# (standards#1065). A path-filtered workflow reports only on PRs touching
+# those paths, so a context required from it waits forever on every other
+# PR. 3 is a refusal to derive, reported in its own bucket, never a pass.
+# 5 = the definition is not one parseable YAML mapping: a failed read, which
+# the caller turns into a derivation failure, never into a verdict.
 yaml_has_pr_trigger() {
-  local def="$1"
-  awk -v def="$def" '
-    function trim(s) {
-      sub(/^[[:space:]]+/, "", s)
-      sub(/[[:space:]]+$/, "", s)
-      return s
-    }
-    function unquote(s) {
-      s = trim(s)
-      if ((substr(s, 1, 1) == "\"" && substr(s, length(s), 1) == "\"") ||
-          (substr(s, 1, 1) == "\x27" && substr(s, length(s), 1) == "\x27")) {
-        s = substr(s, 2, length(s) - 2)
-      }
-      return s
-    }
-    function branch_matches(pat, b) {
-      pat = unquote(pat)
-      return (pat == b || pat == "*" || pat == "**")
-    }
-    {
-      line = $0
-      sub(/[[:space:]]*#.*/, "", line)
-      if (line ~ /^[[:space:]]*$/) next
-      match(line, /^[[:space:]]*/)
-      ind = RLENGTH
-      rest = substr(line, ind + 1)
-
-      if (in_on && ind <= on_ind) {
-        in_on = 0; in_pr = 0; in_br = 0; in_bi = 0
-      }
-      if (in_pr && ind <= pr_ind) {
-        in_pr = 0; in_br = 0; in_bi = 0
-      }
-      if ((in_br || in_bi) && ind <= br_ind) {
-        in_br = 0; in_bi = 0
-      }
-
-      if (!in_on && ind == 0 && rest ~ /^("on"|\x27on\x27|on)[[:space:]]*:/) {
-        val = rest
-        sub(/^("on"|\x27on\x27|on)[[:space:]]*:[[:space:]]*/, "", val)
-        val = trim(val)
-        if (val != "") {
-          if (val ~ /(^|\[|,|[[:space:]])pull_request(_target)?($|\]|,|[[:space:]])/) {
-            has_pr = 1
-          }
-        } else {
-          in_on = 1
-          on_ind = ind
-        }
-        next
-      }
-
-      if (in_on && !in_pr) {
-        if (rest ~ /^-[[:space:]]*pull_request(_target)?([[:space:]]*$)/) {
-          has_pr = 1
-          next
-        }
-        if (rest ~ /^pull_request(_target)?[[:space:]]*:/) {
-          has_pr = 1
-          in_pr = 1
-          pr_ind = ind
-          next
-        }
-      }
-
-      if (in_pr) {
-        if (rest ~ /^branches[[:space:]]*:/) {
-          has_br_filter = 1
-          val = rest
-          sub(/^branches[[:space:]]*:[[:space:]]*/, "", val)
-          val = trim(val)
-          if (val ~ /^\[.*\]$/) {
-            gsub(/^\[|\]$/, "", val)
-            n = split(val, arr, ",")
-            for (i = 1; i <= n; i++) {
-              if (branch_matches(arr[i], def)) br_matched = 1
-            }
-          } else if (val != "") {
-            if (branch_matches(val, def)) br_matched = 1
-          } else {
-            in_br = 1
-            br_ind = ind
-          }
-          next
-        }
-        if (rest ~ /^branches-ignore[[:space:]]*:/) {
-          val = rest
-          sub(/^branches-ignore[[:space:]]*:[[:space:]]*/, "", val)
-          val = trim(val)
-          if (val ~ /^\[.*\]$/) {
-            gsub(/^\[|\]$/, "", val)
-            n = split(val, arr, ",")
-            for (i = 1; i <= n; i++) {
-              if (unquote(arr[i]) == def) br_ignored = 1
-            }
-          } else if (val != "") {
-            if (unquote(val) == def) br_ignored = 1
-          } else {
-            in_bi = 1
-            br_ind = ind
-          }
-          next
-        }
-        if (in_br && rest ~ /^-[[:space:]]*/) {
-          item = rest
-          sub(/^-[[:space:]]*/, "", item)
-          if (branch_matches(item, def)) br_matched = 1
-          next
-        }
-        if (in_bi && rest ~ /^-[[:space:]]*/) {
-          item = rest
-          sub(/^-[[:space:]]*/, "", item)
-          if (unquote(item) == def) br_ignored = 1
-          next
-        }
-      }
-    }
-    END {
-      if (!has_pr) exit 1
-      if (br_ignored) exit 1
-      if (has_br_filter && !br_matched) exit 1
-      exit 0
-    }
-  '
+  local def="$1" doc verdict
+  doc=$(yq -o=json -I=0 '.' 2>/dev/null) || return 5
+  verdict=$(printf '%s\n' "$doc" | jq -rs --arg def "$def" '
+    def lst(x): if x == null then [] elif (x | type) == "array" then x else [x] end;
+    def matches_def: tostring as $p | ($p == $def or $p == "*" or $p == "**");
+    if length != 1 or (.[0] | type) != "object" then "unparseable"
+    else
+      .[0].on as $on
+      | ( if   ($on | type) == "string" then {($on): null}
+          elif ($on | type) == "array"  then ($on | map({(tostring): null}) | add // {})
+          elif ($on | type) == "object" then $on
+          else {} end ) as $events
+      | [ $events | to_entries[]
+          | select(.key == "pull_request" or .key == "pull_request_target")
+          | (if (.value | type) == "object" then .value else {} end) as $c
+          | select(($c | has("branches") | not) or any(lst($c.branches)[]; matches_def))
+          | select(any(lst($c["branches-ignore"])[]; tostring == $def) | not)
+          | {path_filtered: (($c | has("paths")) or ($c | has("paths-ignore")))} ] as $reach
+      | if ($reach | length) == 0 then "no-pr-trigger"
+        elif any($reach[]; .path_filtered) then "path-filtered"
+        else "reachable" end
+    end') || return 5
+  case "$verdict" in
+    reachable)     return 0 ;;
+    no-pr-trigger) return 1 ;;
+    path-filtered) return 3 ;;
+    *)             return 5 ;;
+  esac
 }
 
+# Read the workflow definition from the default branch and classify it.
+# Exit codes as yaml_has_pr_trigger, plus 4 = the definition could not be read
+# (API failure, or a body that is not inline base64 content). There is no
+# fallback to run history: a past pull_request run shows the workflow CAN run
+# on a PR, not that it runs on EVERY PR, because a paths filter lives only in
+# the definition. An unread definition is a failed read, like any other here.
 wf_triggers_on_pr() {
-  local repo="$1" wfn="$2" def="$3" revent="$4" raw decoded pr_rid
-  if raw=$(gh api "repos/$repo/contents/.github/workflows/$wfn" 2>/dev/null) && [ -n "$raw" ]; then
-    if printf '%s' "$raw" | jq -e 'type == "object" and (.content | type == "string")' >/dev/null 2>&1; then
-      decoded=$(printf '%s' "$raw" | jq -r '.content' | tr -d '\n\r ' | base64 -d 2>/dev/null || true)
-    else
-      decoded="$raw"
-    fi
-    printf '%s\n' "$decoded" | yaml_has_pr_trigger "$def"
-    return $?
-  fi
-  case "$revent" in
-    schedule|workflow_dispatch|push)
-      pr_rid=$(gh api "repos/$repo/actions/workflows/$wfn/runs?event=pull_request&per_page=1" \
-                 --jq '.workflow_runs[0].id // empty' 2>/dev/null || true)
-      [ -n "$pr_rid" ]
-      return $?
-      ;;
-    *)
-      return 0
-      ;;
-  esac
+  local repo="$1" wfn="$2" def="$3" raw decoded
+  raw=$(gh api "repos/$repo/contents/.github/workflows/$wfn" 2>/dev/null) || return 4
+  printf '%s' "$raw" \
+    | jq -e 'type == "object" and (.content | type) == "string" and .encoding == "base64"' >/dev/null 2>&1 \
+    || return 4
+  decoded=$(printf '%s' "$raw" | jq -r '.content' | tr -d '\n\r ' | base64 -d 2>/dev/null) || return 4
+  printf '%s\n' "$decoded" | yaml_has_pr_trigger "$def"
 }
 
 # ---------------------------------------------------------------- repo list
@@ -427,16 +343,24 @@ while IFS= read -r R; do
   # every other line of output still reports success.  (Measured 2026-09-22:
   # this dropped 2 of 18 required contexts on standards/main.)  So capture
   # the exit status of every fetch and refuse to write if any one failed.
-  : > "$WORK/ctx"; : > "$WORK/gatewf3"; NORUN=''; NOPR=''; DERIVEFAIL=''
+  : > "$WORK/ctx"; : > "$WORK/gatewf3"; NORUN=''; NOPR=''; PATHF=''; DERIVEFAIL=''
   while IFS= read -r WFN; do
     [ -n "$WFN" ] || continue
-    if ! RUN_META=$(gh api "repos/$R/actions/workflows/$WFN/runs?branch=$DEF&per_page=1" \
-                 --jq '.workflow_runs[0] | select(. != null) | "\(.id // "")\t\(.event // "")"'); then
+    if ! RID=$(gh api "repos/$R/actions/workflows/$WFN/runs?branch=$DEF&per_page=1" \
+                 --jq '.workflow_runs[0] | select(. != null) | "\(.id // "")"'); then
       DERIVEFAIL="${DERIVEFAIL:+$DERIVEFAIL,}$WFN(runs-query-failed)"; continue
     fi
-    IFS=$'\t' read -r RID REVENT <<< "$RUN_META"
     if [ -z "$RID" ]; then NORUN="${NORUN:+$NORUN,}$WFN"; continue; fi
-    if ! wf_triggers_on_pr "$R" "$WFN" "$DEF" "$REVENT"; then
+    PRRC=0; wf_triggers_on_pr "$R" "$WFN" "$DEF" || PRRC=$?
+    if [ "$PRRC" -eq 4 ]; then
+      DERIVEFAIL="${DERIVEFAIL:+$DERIVEFAIL,}$WFN(workflow-definition-unreadable)"; continue
+    elif [ "$PRRC" -eq 5 ]; then
+      DERIVEFAIL="${DERIVEFAIL:+$DERIVEFAIL,}$WFN(workflow-definition-unparseable)"; continue
+    elif [ "$PRRC" -eq 3 ]; then
+      # Reachable only from PRs touching its paths (standards#1065): exclude,
+      # never silently require.
+      PATHF="${PATHF:+$PATHF,}$WFN"; continue
+    elif [ "$PRRC" -ne 0 ]; then
       NOPR="${NOPR:+$NOPR,}$WFN"; continue
     fi
     if ! gh api "repos/$R/actions/runs/$RID/jobs?per_page=100" --paginate \
@@ -525,6 +449,7 @@ while IFS= read -r R; do
   [ -n "$NOTGREEN" ] && DETAIL="$DETAIL not_green=[$NOTGREEN]"
   [ -n "$NORUN" ]    && DETAIL="$DETAIL no_run=[$NORUN]"
   [ -n "$NOPR" ]     && DETAIL="$DETAIL no_pr_trigger=[$NOPR]"
+  [ -n "$PATHF" ]    && DETAIL="$DETAIL path_filtered=[$PATHF]"
   [ -n "$EXCLUDED" ] && DETAIL="$DETAIL excluded=[$EXCLUDED]"
 
   # ---- THE OTHER REFUSAL: a gate derived from an incomplete read --------
