@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 = Decision spec — per-directory `0.N-AI-MANIFEST.a2ml` ply manifests → deed era
 Campaign: standards#837 · Frame: link:README.adoc[mappings/README] ·
-Status: **RULED in part** (owner, 2026-11-17, by selector): option D, split
+Status: **RULED** (owner, 2026-11-17, by selector): option D, split
 by kind (§2); a populated invariant list refuses the file (ask 2); a
 dangling parent link is reported (ask 3); the two prose manifests that
-describe a directory translate under §3.4 (ask 5). **Ask 4 is open**, so the
-rows it touches are not yet implementable. Written 2026-11-17 because a
+describe a directory translate under §3.4 (ask 5); a location entry that
+names a retired `.a2ml` file is dropped and recorded as residue (ask 4).
+Every ask is ruled. Written 2026-11-17 because a
 census of three repositories found that this is the largest unmapped A2ML
 group: 127 of 360 files.
 
@@ -217,6 +218,12 @@ The target of the descriptive members is one top-level `(ply …)` clause of
 | `(directory … (canonical-locations :role "path" …))`
 | one field per entry, the key verbatim as the keyword, the value a verbatim
   STRING, ordered by key. A comment inside the map is dropped (§4).
+  **Ruled 2026-11-17 (owner): an entry whose value ends in `.a2ml` is not
+  written.** It is residue: reported with its file, line, key and value, and
+  listed in the retirement table as "dropped by ply-manifest-decision
+  §3.1". It states where a retired file lives, which is false in the deed
+  era. The test is on the value only, and is exact: the last five
+  characters are `.a2ml`.
 
 | `invariants` (in `[AI_MANIFEST]` or `[STAPELN_ECOSYSTEM]`)
 | — (not written)
@@ -349,11 +356,11 @@ this spec made, as noted.
   a retired file lives, which is false in the deed era, and the test is
   mechanical); (b) everything carried verbatim and reported; (c) the file is
   refused until its source no longer names A2ML (deleting content from a
-  legacy file is permitted; adding to one is not). **Open.** The owner
-  answered with a question, on the place of echo-types and
-  residual-evidence-types; §8 answers it. Until this is ruled, a translator
-  refuses a file that has such an entry, which is option (c) in effect and
-  the fail-closed default, not a ruling.
+  legacy file is permitted; adding to one is not). **Ruled: (a)**, after
+  the owner asked about the place of echo-types and
+  residual-evidence-types (§8). The 2 invariants that mention A2ML fall
+  under ask 2 and are refused with their lists. A description that
+  mentions A2ML is carried and reported.
 . *Prose shapes.* For the 2 that describe a directory: (a) §3.4's rule
   (recommended), or (b) refused, and retired under Q7 with a removal record.
   **Ruled: (a)**, for the 2 that describe a directory.
@@ -369,7 +376,8 @@ this spec made, as noted.
   `9226f7e`, with a `Mustfile.deed` that holds every invariant of that tree,
   the translator's `(ply …)` clause equals the clause of
   `rsr-template-repo_chora.deed` at `d49e4c8` with each `:invariants` member
-  removed, and with whatever difference ask 4 rules. Each difference is
+  removed, and each canonical-location entry that names an `.a2ml` file
+  removed (ask 4). Each difference is
   listed, with its ask, in the test.
 * *Invariants refuse.* Without that `Mustfile.deed`, exactly the 13 files of
   the tree that hold an invariant list are refused, each entry named, and
@@ -416,7 +424,13 @@ code.
   report show that the field is lost silently. Each family's tests should
   hold one such pair for each dropped row.
 
-For ask 4 this names the three options and does not choose among them. A
+For ask 4 this named the three options and did not choose among them. A
 pointer carried verbatim is identified by the deed. A pointer dropped and
 reported is identified by the deed with its record. A refused file has no
-translation at all. Which of these a stale pointer should be is policy.
+translation at all. Which of these a stale pointer should be is policy, and
+the owner then ruled the second (ask 4).
+
+The owner also ruled on 2026-11-17 that this reading is to be the written
+specification of kyX's retirement check: cited, tested per family, and
+modelled in Agda for the smallest family as an experiment before any wider
+commitment. That model would prove a field table, not a translator's code.
