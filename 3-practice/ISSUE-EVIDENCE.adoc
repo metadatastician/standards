@@ -51,6 +51,14 @@ per line, each line I-JSON serialised by JCS (`JSON-POLICY.adoc` J-1, J-2).
 No other field is accepted. Strings may not contain control characters, and
 `claim` and `evidence` may not contain `<!--` or `-->`.
 
+Lengths are bounded, in characters: `claim` 1,500; each `evidence` item 400,
+and at most 16 items; at most 16 checks; each `pattern` 400; each `path` and
+`glob` 256. The bounds keep every comment the bot writes under GitHub's limit
+of 65,536 characters (the test suite renders a row at every bound: about
+38,600 characters) and keep the hand-off between the workflow's jobs small.
+The live ledger's largest values on 2026-11-17 were 411, 163, 6, 5, 116 and
+75 (path) / 41 (glob).
+
 == 2. The check vocabulary
 
 Paths and globs are repository-relative: not absolute, no `.` or `..`
@@ -108,6 +116,17 @@ not guaranteed: ignored files (build output, caches) are not compared, so a
 script that reads an ignored path reads something outside the commit; the
 reviewer of a row should not choose such a script.
 
+The evaluator can keep the scripts apart from everything else
+(`evaluate --scripts-only`, `--script-results FILE`, `--no-scripts`; its
+header documents them). `--scripts-only` runs only the script checks and
+prints one record per check: the row, the check's index, the script's path
+and blob id at the commit, and `holds`, `failed` or `unevaluated`.
+`--script-results` runs no script and takes those outcomes as data. It refuses
+the whole evaluation unless every record is exactly such a record of a real
+script check at that commit, each at most once; a check with no record is
+unevaluated. The two together give the same verdict on every row as a plain
+`evaluate` (the test suite checks it).
+
 A `script` whose file is absent at the evaluated commit, or is there without
 the executable bit, *fails*: deleting or renaming an evidence script is a
 regression of that row. It never makes the ledger invalid, and every other row
@@ -147,26 +166,54 @@ reintroduced).
 | unevaluated | any | none: nothing is done on what was not evaluated
 |===
 
-"Closed by the bot" means closed by `github-actions[bot]` with the bot's marker
-comment from that same account. Each comment the bot writes ends with
+"Closed by the bot" means the latest close was by `github-actions[bot]` and a
+marker comment from that same account follows the latest reopen, so a close by
+that account for another reason does not count. Each comment the bot writes ends with
 `<!-- issue-evidence-bot: row-sha256=HASH -->`, where HASH is the SHA-256 of the
 row's ledger line. To dispute a closure, change or remove the row in a reviewed
 pull request, or reopen the issue: the bot does not re-close an issue a person
-reopened.
+reopened. When a row is removed after the bot closed its issue, the bot
+reopens the issue, within the cap, with a comment saying the row was removed;
+it finds such issues from every version of the ledger in the history of the
+default branch.
 
 == 5. Running it
 
-IMPORTANT: The two workflows this section and §6 describe,
-`.github/workflows/issue-evidence.yml` and
-`.github/workflows/issue-evidence-reusable.yml`, are added by the follow-up
-pull request #1652, not by the change that introduced this page. Until #1652
-merges they are not in the repository, no bot closes or reopens anything, and
-the ledger is evaluated only by hand (`scripts/issue-evidence.sh`) and by its
-test suite. The bullets below and §6 describe the workflows as #1652 adds them.
+NOTE: The two workflows, `.github/workflows/issue-evidence.yml` and
+`.github/workflows/issue-evidence-reusable.yml`, were added by pull request
+#1652, after the ledger and the evaluator. Everything that reads or changes
+an issue is in `scripts/issue-evidence-apply.sh`, which the reusable workflow
+calls; its tests are `scripts/tests/issue-evidence-apply-test.sh`.
+`scripts/tests/issue-evidence-workflow-test.sh` runs the `run:` bodies of all
+three jobs in order, each on its own simulated runner, joined only by the job
+outputs, including a run with a malicious evidence script. Those tests use a
+stand-in for `gh` and a simulated checkout. Until one report-only run on
+`main` has been read by a person, the bot's reading of real issue state is
+untested.
 
-* `.github/workflows/issue-evidence.yml` (from #1652) runs on a push to `main` that touches
-  the ledger or the bot, weekly, and by hand. Every run writes the decision
-  table, and a report-only list of candidate rows, to the job summary.
+* `.github/workflows/issue-evidence.yml` runs on a push to `main` that touches
+  the ledger, either script or either workflow, weekly, and by hand. Every
+  run writes the decision table, and a report-only list of candidate rows, to
+  the job summary.
+* The reusable workflow has three jobs, so that code of the evaluated
+  repository can change the outcome only through one bit per `script` check:
+** `scripts` (contents: read, no issue permission) runs the script checks and
+   nothing else. Its only output is the script results (at most 64 KiB). If
+   it fails, the other two jobs do not run.
+** `evaluate` (contents and issues: read) runs no code of the evaluated
+   repository: git and jq read the checkout as data, and the evaluator takes
+   the script results with `--script-results`, which refuses the run if any
+   record is not a real script check at the commit. It reads issue state,
+   decides, and hands `apply` a plan of numbers and hashes only (per action:
+   issue, action, close reason, row hash, and the failed and unevaluated
+   check indices), at most 32 KiB.
+** `apply` (issues: write) checks nothing out. It fetches the two scripts
+   from the reusable's own commit, and the ledger at the evaluated commit, by
+   API. It checks every plan entry against that ledger: the row exists and
+   hashes to the planned hash, the close reason follows its disposition, the
+   indices fit it, and a removed-row reopen names an issue with no row. One
+   mismatch refuses the whole run. It renders every comment itself from that
+   ledger, then acts.
 * It applies nothing unless the repository variable `ISSUE_EVIDENCE_APPLY` is
   `true`. Unset, it only reports.
 * One run takes at most `max_actions` actions (default 10). Beyond the cap it
@@ -182,8 +229,7 @@ from, never an action.
 
 == 6. Adopting it in another repository
 
-These steps need the reusable workflow from #1652; until that pull request
-merges there is no commit of it to pin.
+These steps use the reusable workflow, pinned by commit.
 
 . Add an empty `.machine_readable/issue-evidence.jsonl`.
 . Add a caller that pins the reusable to a full commit SHA, and record that
@@ -214,9 +260,33 @@ changes only when it moves its pin.
   landed, not that it fixed the issue; a `grep-absent` passes if the defect
   moved to another file. The reviewer of the row judges that the checks
   capture the claim.
-* GitHub's own state is read once per run. A person acting between the read
-  and the action is caught by a re-read just before each action, not by a
-  lock.
+* GitHub's own state is read once per run, and again just before each
+  action: the issue's state and who closed or reopened it last. A person who
+  reopened or closed it since the plan was made is not overridden. This is a
+  re-read, not a lock: a person acting in the moment between the re-read and
+  the action is not caught. A failed or malformed read stops the run.
+* Before it acts, the apply job reads the head of the default branch again.
+  If the branch has moved since the commit that was evaluated, it reports
+  "stale; nothing done" and acts on nothing. It reads the head again before
+  every write; if the branch moves during the run, it stops there, keeps what
+  it did, and says so in the summary. The next run evaluates the new head: a
+  push that touches the ledger or the bot, the weekly run, or a run by hand.
+* What a merged evidence script can still do. A script on the default branch
+  runs in the `scripts` job with the job's read-only token, and nothing stops
+  it from taking over that job: it can set the outcome of *every* script
+  check of that run, not only its own, and it can read the job's token
+  (contents: read). It cannot invent a check, name another issue, change the
+  action, the close reason or any comment text, exceed the cap, act on a
+  branch other than the default one, or reach the other two jobs, which run
+  on fresh runners and take only the job outputs. So it can close an open
+  issue whose row has a script check and whose other checks hold, keep such
+  a row from closing or reopening, or reopen an issue the bot closed on such
+  a row; rows without a script check are out of its reach. A comment's
+  per-check labels follow those outcomes.
+* What the other two jobs still trust: the `evaluate` job reads the caller's
+  checkout with git and jq, as data; the job outputs are GitHub Actions'
+  channel between jobs; and the `apply` job trusts the GitHub API's answers
+  for the ledger, the scripts and the issues.
 
 == 8. Change log
 
@@ -229,4 +299,19 @@ changes only when it moves its pin.
 | Ledger format, check vocabulary and evaluator. The reusable workflow and
   its caller follow in #1652; the caller is report-only until
   `ISSUE_EVIDENCE_APPLY` is set.
+
+| 2026-11-17
+| Workflows added (#1652)
+| The caller and the reusable workflow, with `scripts/issue-evidence-apply.sh`
+  for every read and change of an issue: a re-read before each action, a
+  refusal when a read fails or the branch head has moved, and a reopen when a
+  row the bot acted on is removed.
+
+| 2026-11-17
+| Scripts in a job of their own (#1652 review)
+| Script checks run in a `scripts` job with no issue permission; the plan is
+  built in a job that runs no repository code and holds no text; the write
+  job checks the plan against the ledger at the commit and renders the
+  comments itself. Ledger text fields have length bounds. The head is
+  re-read before every write.
 |===
