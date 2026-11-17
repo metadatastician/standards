@@ -93,7 +93,7 @@ jobs:
         env:
           SELF_WORKFLOW_SHA: ${{ job.workflow_sha }}
         run: |
-          if ! printf '%s' "$SELF_WORKFLOW_SHA" | grep -Eq '^[0-9a-f]{40}$'; then
+          if ! grep -Eq '^[0-9a-f]{40}$' <<<"$SELF_WORKFLOW_SHA"; then
             echo "::error::job.workflow_sha resolved to '${SELF_WORKFLOW_SHA:-<empty>}', not a 40-hex commit, so the evaluator checkout below would follow the default branch."
             exit 1
           fi
@@ -159,7 +159,7 @@ jobs:
         env:
           SELF_WORKFLOW_SHA: ${{ job.workflow_sha }}
         run: |
-          if ! printf '%s' "$SELF_WORKFLOW_SHA" | grep -Eq '^[0-9a-f]{40}$'; then
+          if ! grep -Eq '^[0-9a-f]{40}$' <<<"$SELF_WORKFLOW_SHA"; then
             echo "::error::job.workflow_sha resolved to '${SELF_WORKFLOW_SHA:-<empty>}', not a 40-hex commit, so the evaluator checkout below would follow the default branch."
             exit 1
           fi
@@ -382,14 +382,14 @@ jobs:
           SELF_WORKFLOW_SHA: ${{ job.workflow_sha }}
         run: |
           set -euo pipefail
-          if ! printf '%s' "$SELF_WORKFLOW_SHA" | grep -Eq '^[0-9a-f]{40}$'; then
+          if ! grep -Eq '^[0-9a-f]{40}$' <<<"$SELF_WORKFLOW_SHA"; then
             echo "::error::job.workflow_sha resolved to '${SELF_WORKFLOW_SHA:-<empty>}', not a 40-hex commit; refusing to act."
             exit 1
           fi
           for s in issue-evidence-apply.sh issue-evidence.sh; do
             gh api -H 'Accept: application/vnd.github.raw' \
               "repos/metadatastician/standards/contents/scripts/$s?ref=$SELF_WORKFLOW_SHA" >"$RUNNER_TEMP/$s"
-            head -n 1 "$RUNNER_TEMP/$s" | grep -qx '#!/usr/bin/env bash' || {
+            grep -qx '#!/usr/bin/env bash' <<<"$(head -n 1 "$RUNNER_TEMP/$s")" || {
               echo "::error::the fetched $s is not the expected script; refusing to act."
               exit 1
             }
