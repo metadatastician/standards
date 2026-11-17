@@ -138,7 +138,8 @@ an extension of AcceleratorGate.jl and no term of the 16 said so:
 
 *Written down 2026-11-17.* Three of DESCRIPTILE-SPEC's four observed terms
 were in the closed set with no definition. These record how the estate
-already uses them. They change no ruling and admit no new term:
+already uses them and admit no new term. The one ruling among them, on
+`parent` and `standard-source`, is marked:
 
 * `code-dependency`: this repo builds against, links or imports the
   related repo's code as a declared dependency (a package pinned in a
@@ -150,7 +151,8 @@ already uses them. They change no ruling and admit no new term:
 * `parent`: this repo belongs to or is part of the related repo, which
   contains it or is the parent its anchor named (the former `(parents …)`,
   A7 J26). The template a repo was minted from is `minted-from`, not
-  `parent`.
+  `parent`. A repo that only follows the related repo's standard uses
+  `standard-source`, not `parent` (owner-ruled 2026-11-17).
 
 The fourth observed term, `sibling-language`, and the 2026-09-19 terms
 other than `minted-from` and `registry` have no written definition yet.
