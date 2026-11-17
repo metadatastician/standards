@@ -341,9 +341,15 @@ fi
 # steady — the failure this whole check exists to prevent. Architectural
 # exemptions belong in .hypatia-baseline.json with a note explaining them.
 if [ -f .hypatia-ignore ]; then
-  if grep -vE '^\s*(#|$)' .hypatia-ignore | grep -q '\*\*'; then
+  # ⚠ One awk, no pipe. `grep -vE … | grep -q '\*\*'` under pipefail missed a
+  # wildcard on an early line of a ledger above the pipe buffer (the filter
+  # died of SIGPIPE, status 141 read as "no match") and the gate passed. awk
+  # exits 0 whether or not a line matches, so under `set -e` an awk that cannot
+  # read the file stops the script instead of reading as "no wildcard".
+  wild="$(awk '!/^[[:space:]]*(#|$)/ && /\*\*/' .hypatia-ignore)"
+  if [ -n "$wild" ]; then
     note "WILDCARD       .hypatia-ignore contains a '**' pattern"
-    grep -vE '^\s*(#|$)' .hypatia-ignore | grep '\*\*' | sed 's/^/                 /'
+    printf '%s\n' "$wild" | sed 's/^/                 /'
     note "               A migration ledger must list paths individually so it can"
     note "               only shrink. Put architectural exemptions in"
     note "               .hypatia-baseline.json with a note instead."

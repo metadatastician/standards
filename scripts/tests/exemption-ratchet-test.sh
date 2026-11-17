@@ -183,6 +183,23 @@ git commit -q --amend -m "grow the migration ledger
 Ratchet-exception: .hypatia-ignore — correct ledger named"
 expect 0 "exception naming THIS ledger licenses it"
 
+
+# ⚠ A wildcard on an early line of a LARGE migration ledger must still fail.
+# The check used to read `grep -vE … .hypatia-ignore | grep -q '\*\*'` under
+# `set -o pipefail`: grep -q exits at its first match, the filter still writing
+# the rest of a file above the 64 KiB pipe buffer dies of SIGPIPE, the pipeline
+# reports 141, and the wildcard read as absent, so the gate passed. Same entry
+# count at both refs, so only the wildcard rule can fail it; five runs, because
+# the old form lost the race on almost every run, not every one.
+git checkout -q "$BASE" -- .hypatia-baseline.json
+seq 1 6000 | sed 's|^|cicd_rules/banned_language_file:src/legacy/module-number-|; s|$|.res|' > .hypatia-ignore
+git add -A; git commit -qm "large ledger, no wildcard"
+BASE="$(git rev-parse HEAD)"
+sed -i '1s|.*|cicd_rules/banned_language_file:docs/**|' .hypatia-ignore
+git commit -aqm "large ledger, wildcard on line 1"
+for run in 1 2 3 4 5; do
+  expect 1 "wildcard on line 1 of a ledger above the pipe buffer fails (run $run)"
+done
 echo
 echo "  ${pass} passed, ${fail} failed"
 [ "$fail" = "0" ]
