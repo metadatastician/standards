@@ -86,16 +86,6 @@ scripts/prune-stale.sh:1
 scripts/regen-dependabot-locks.sh:3
 scripts/relock-standards-pin.sh:6
 scripts/sonar-preflight.sh:2
-scripts/tests/check-standards-helper-pins-test.sh:2
-scripts/tests/check-trusted-base-test.sh:1
-scripts/tests/check-workflow-duplicate-keys-test.sh:4
-scripts/tests/check-workflow-staleness-test.sh:3
-scripts/tests/cicd-squabbler-contract-test.sh:4
-scripts/tests/close-lock-test.sh:12
-scripts/tests/deep-recon-contract-test.sh:2
-scripts/tests/dismiss-code-scanning-alerts-test.sh:3
-scripts/tests/filter-sarif-by-scope-test.sh:2
-scripts/tests/fix-required-context-name-test.sh:1
 scripts/tests/fork-governance-publish-test.sh:1
 scripts/tests/fork-governance-render-test.sh:1
 scripts/tests/gate-tiers-test.sh:2
