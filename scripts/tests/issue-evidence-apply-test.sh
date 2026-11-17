@@ -94,6 +94,7 @@ reset_fix() {
   rm -rf "$FIX"
   mkdir -p "$FIX"
   : >"$FIX/CALLS.log"
+  head_is "$SHA_A"
 }
 fkey() { printf '%s' "$1" | tr '/?&=' '____'; }
 # fx PATH JSON: GitHub answers PATH with JSON.
@@ -102,6 +103,14 @@ fx() { printf '%s\n' "$2" >"$FIX/$(fkey "$1").json"; }
 fx_fail() { printf '%s\n' "$2" >"$FIX/$(fkey "$1").fail"; }
 RATE='{"message":"API rate limit exceeded for installation ID 1.","documentation_url":"https://docs.github.com/rest/overview/rate-limits-for-the-rest-api"}'
 HASH="$(printf 'row' | sha256sum | cut -d' ' -f1)"
+# The evaluated commit, and another one the default branch can move to.
+SHA_A="$(printf a%.0s {1..40})"
+SHA_B="$(printf b%.0s {1..40})"
+# head_is SHA: the live head of the default branch (main) is SHA.
+head_is() {
+  fx "repos/$R" "{\"default_branch\":\"main\",\"full_name\":\"$R\"}"
+  fx "repos/$R/git/ref/heads/main" "{\"object\":{\"sha\":\"$1\",\"type\":\"commit\"},\"ref\":\"refs/heads/main\"}"
+}
 
 # Timeline items. ITEMS is a JSON array built from these words, oldest first:
 #   mark      a comment by the bot carrying the bot's marker
@@ -158,6 +167,7 @@ called() { grep -qF -- "$1" "$FIX/CALLS.log"; }
 # did_action "close N": that action was performed. no_action: it was not.
 did_action() { actions | grep -q "^$1\\( \\|\$\\)"; }
 no_action() { ! did_action "$1"; }
+not_called() { ! called "$1"; }
 err_has() { printf '%s\n' "$ERR" | grep -qF -- "$1"; }
 
 # --- states: the decide input ------------------------------------------------
@@ -254,7 +264,7 @@ reset_fix
 issue 21 open "$(timeline)"
 issue 22 closed "$(timeline mark closed:"$BOT")"
 plan close:21 reopen:22
-run bash "$IA" apply --repo "$R" --plan "$WORK/plan.json" --max-actions 10
+run bash "$IA" apply --repo "$R" --commit "$SHA_A" --plan "$WORK/plan.json" --max-actions 10
 check "apply: exits 0" rc_is 0
 check "apply: closes an open issue and reopens a bot-closed one" \
   test "$(actions | tr '\n' ' ')" = "close 21 completed reopen 22  "
@@ -264,13 +274,13 @@ reset_fix
 issue 21 closed "$(timeline closed:alice)"
 issue 22 open "$(timeline mark closed:"$BOT" reopened:alice)"
 plan close:21 reopen:22
-run bash "$IA" apply --repo "$R" --plan "$WORK/plan.json" --max-actions 10
+run bash "$IA" apply --repo "$R" --commit "$SHA_A" --plan "$WORK/plan.json" --max-actions 10
 check "apply: no close of an issue a person closed since, no reopen of an open one" test -z "$(actions)"
 
 reset_fix
 issue 21 open "$(timeline)"
 plan close:21 close:21 close:21
-run bash "$IA" apply --repo "$R" --plan "$WORK/plan.json" --max-actions 2
+run bash "$IA" apply --repo "$R" --commit "$SHA_A" --plan "$WORK/plan.json" --max-actions 2
 check "apply: a plan over max_actions is refused" rc_is 1
 check "apply: ... and nothing is done" test -z "$(actions)"
 
@@ -282,7 +292,7 @@ issue 31 closed "$(timeline mark closed:"$BOT" reopened:alice closed:alice)"
 issue 32 closed "$(timeline mark closed:"$BOT" reopened:alice closed:"$BOT")"
 issue 33 open "$(timeline mark closed:"$BOT" reopened:alice)"
 plan reopen:31 reopen:32 close:33
-run bash "$IA" apply --repo "$R" --plan "$WORK/plan.json" --max-actions 10
+run bash "$IA" apply --repo "$R" --commit "$SHA_A" --plan "$WORK/plan.json" --max-actions 10
 check "C2: no reopen of an issue a person reopened and closed again since the plan" \
   no_action "reopen 31"
 check "C2: no reopen when the bot account's latest close carries no marker after the last reopen" \
@@ -296,7 +306,7 @@ issue 34 open "$(timeline note:alice closed:alice reopened:alice)"
 issue 35 open "$(timeline mark closed:"$BOT" reopened:"$BOT")"
 issue 36 closed "$(timeline mark closed:"$BOT" reopened:alice closed:alice reopened:"$BOT" mark closed:"$BOT")"
 plan close:34 close:35 reopen:36
-run bash "$IA" apply --repo "$R" --plan "$WORK/plan.json" --max-actions 10
+run bash "$IA" apply --repo "$R" --commit "$SHA_A" --plan "$WORK/plan.json" --max-actions 10
 check "C3: an issue the bot never touched is closed even if a person once reopened it" \
   did_action "close 34"
 check "C3: an issue the bot itself reopened (a regression) is closed again" \
@@ -307,7 +317,7 @@ reset_fix
 issue 37 open "$(timeline)"
 fx_fail "repos/$R/issues/37/timeline?per_page=100" "$RATE"
 plan close:37
-run bash "$IA" apply --repo "$R" --plan "$WORK/plan.json" --max-actions 10
+run bash "$IA" apply --repo "$R" --commit "$SHA_A" --plan "$WORK/plan.json" --max-actions 10
 check "C2/C3: an unreadable history before an action is a refusal (exit 1)" rc_is 1
 check "C2/C3: ... with a message that says so" err_has "refusing to act"
 check "C2/C3: ... and nothing is done" test -z "$(actions)"
@@ -318,8 +328,35 @@ issue 38 open "$(timeline)"
 printf '%s\n%s\n' "$(timeline mark)" "$(jq -c 'map(.created_at = "2026-01-02T00:00:00Z")' <<<"$(timeline closed:"$BOT" reopened:alice)")" \
   >"$FIX/$(fkey "repos/$R/issues/38/timeline?per_page=100").json"
 plan close:38
-run bash "$IA" apply --repo "$R" --plan "$WORK/plan.json" --max-actions 10
+run bash "$IA" apply --repo "$R" --commit "$SHA_A" --plan "$WORK/plan.json" --max-actions 10
 check "C3: a person's reopen on the second page of the timeline is seen" test -z "$(actions)"
+
+# --- C5: nothing is applied from a commit that is no longer the branch head ------
+reset_fix
+issue 51 open "$(timeline)"
+head_is "$SHA_B"
+plan close:51
+run bash "$IA" apply --repo "$R" --commit "$SHA_A" --plan "$WORK/plan.json" --max-actions 10
+check "C5: a moved default branch exits 0" rc_is 0
+check "C5: ... reports stale; nothing done" grep -qF "stale; nothing done" "$WORK/summary.md"
+check "C5: ... and acts on nothing" test -z "$(actions)"
+check "C5: ... without reading any issue" not_called "issues/"
+
+reset_fix
+issue 51 open "$(timeline)"
+plan close:51
+run bash "$IA" apply --repo "$R" --commit "$SHA_A" --plan "$WORK/plan.json" --max-actions 10
+check "C5: an unmoved default branch proceeds" did_action "close 51"
+
+reset_fix
+issue 51 open "$(timeline)"
+fx_fail "repos/$R/git/ref/heads/main" "$RATE"
+plan close:51
+run bash "$IA" apply --repo "$R" --commit "$SHA_A" --plan "$WORK/plan.json" --max-actions 10
+check "C5: an unreadable branch head is a refusal (exit 1)" rc_is 1
+check "C5: ... and nothing is done" test -z "$(actions)"
+run bash "$IA" apply --repo "$R" --plan "$WORK/plan.json" --max-actions 10
+check "C5: apply without --commit is invalid input" rc_is 2
 
 # --- one definition of the marker ------------------------------------------------
 marker="$(sed -n "s/^MARKER='\\(.*\\)'\$/\\1/p" "$IA")"

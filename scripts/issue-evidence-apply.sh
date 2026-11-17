@@ -24,11 +24,14 @@
 #       The actions to plan this run: the decided closes and reopens, in
 #       order, at most N of them (N from 0 to 50). --counts receives
 #       "TOTAL PLANNED".
-#   apply --repo OWNER/NAME --plan FILE --max-actions N
-#       Performs the plan (a JSON array of {issue, action, close_reason,
-#       body}) with `gh issue close` / `gh issue reopen`. Just before each
-#       action it re-reads the issue and its timeline and skips the action
-#       when a person has closed or reopened the issue since the plan.
+#   apply --repo OWNER/NAME --commit SHA --plan FILE --max-actions N
+#       First re-reads the live head of the default branch: when it is not
+#       SHA (the commit the plan was made at), reports "stale; nothing done"
+#       and exits 0 without acting. Otherwise performs the plan (a JSON
+#       array of {issue, action, close_reason, body}) with `gh issue close` /
+#       `gh issue reopen`. Just before each action it re-reads the issue and
+#       its timeline and skips the action when a person has closed or
+#       reopened the issue since the plan.
 #
 # The bot's identity is one value, BOT below: the login the workflow's token
 # acts as (github-actions[bot] for GITHUB_TOKEN). --bot LOGIN overrides it.
@@ -39,6 +42,8 @@
 #       .event "commented" (.user.login or .actor.login, .body), "closed" and
 #       "reopened" (.actor.login). `gh api --paginate` prints one JSON array
 #       per page; they are read as one history.
+#   GET repos/R                     .default_branch
+#   GET repos/R/git/ref/heads/B     .object.sha, .object.type == "commit"
 #
 # EXIT
 #   0  done
@@ -60,7 +65,7 @@ refuse() {
   exit 1
 }
 
-REPO="" EVAL_FILE="" DECISIONS="" MAX_ACTIONS="" COUNTS="" PLAN_FILE=""
+REPO="" EVAL_FILE="" DECISIONS="" MAX_ACTIONS="" COUNTS="" PLAN_FILE="" COMMIT=""
 parse_opts() {
   while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -71,6 +76,7 @@ parse_opts() {
       --max-actions) [ "$#" -ge 2 ] || fail_input "--max-actions needs a value"; MAX_ACTIONS="$2"; shift 2 ;;
       --counts) [ "$#" -ge 2 ] || fail_input "--counts needs a value"; COUNTS="$2"; shift 2 ;;
       --plan) [ "$#" -ge 2 ] || fail_input "--plan needs a value"; PLAN_FILE="$2"; shift 2 ;;
+      --commit) [ "$#" -ge 2 ] || fail_input "--commit needs a value"; COMMIT="$2"; shift 2 ;;
       *) fail_input "unknown argument: $1" ;;
     esac
   done
@@ -187,16 +193,49 @@ cmd_select() {
   if [ -n "$COUNTS" ]; then echo "$total $planned" >"$COUNTS"; fi
 }
 
+# summary LINE...: to the job summary when there is one, else to stdout.
+summary() { printf '%s\n' "$@" >>"${GITHUB_STEP_SUMMARY:-/dev/stdout}"; }
+
+# head_is_current: 0 when the live head of the default branch is COMMIT, 1
+# when it has moved. A failed or malformed read is a refusal.
+head_is_current() {
+  local repo_json ref_json branch head
+  repo_json="$(gh api "repos/$REPO" 2>"$TMPD/gh.err")" ||
+    refuse "could not read the repository: $(head -c 300 "$TMPD/gh.err")"
+  branch="$(jq -r 'if type == "object" and (.default_branch | type) == "string" and .default_branch != ""
+                   then .default_branch else error("no default_branch") end' <<<"$repo_json" 2>/dev/null)" ||
+    refuse "the repository read has no default branch"
+  ref_json="$(gh api "repos/$REPO/git/ref/heads/$branch" 2>"$TMPD/gh.err")" ||
+    refuse "could not read the head of $branch: $(head -c 300 "$TMPD/gh.err")"
+  head="$(jq -r 'if type == "object" and .object.type == "commit" and (.object.sha | type) == "string"
+                 then .object.sha else error("not a branch ref") end' <<<"$ref_json" 2>/dev/null)" ||
+    refuse "the head of $branch is not a commit"
+  [[ "$head" =~ ^[0-9a-f]{40}$ ]] || refuse "the head of $branch is not a 40-hex commit"
+  LIVE_BRANCH="$branch" LIVE_HEAD="$head"
+  [ "$head" = "$COMMIT" ]
+}
+
+LIVE_BRANCH="" LIVE_HEAD=""
 cmd_apply() {
   local count i item n action reason body now done_n=0
   parse_opts "$@"
   need_repo_opt apply
   need_max_actions
   { [ -n "$PLAN_FILE" ] && [ -f "$PLAN_FILE" ]; } || fail_input "apply needs --plan FILE (an existing file)"
+  [[ "$COMMIT" =~ ^[0-9a-f]{40}$ ]] || fail_input "apply needs --commit SHA (the 40-hex commit the plan was made at)"
   count="$(jq 'if type == "array" then length else error("not an array") end' "$PLAN_FILE")" ||
     fail_input "--plan: not a JSON array"
   if [ "$count" -gt "$MAX_ACTIONS" ]; then
     refuse "the plan holds $count actions, more than max_actions ($MAX_ACTIONS)"
+  fi
+  # The plan was made from the tree at COMMIT. Runs queue and the branch can
+  # move while one evaluates; act only while COMMIT is still the head. A later
+  # run on the new head decides again.
+  if ! head_is_current; then
+    summary "## Issue evidence: applied" "" \
+      "stale; nothing done. The plan was made at $COMMIT, but $LIVE_BRANCH is now at $LIVE_HEAD. A later run on the new head decides again."
+    echo "stale: $LIVE_BRANCH moved from $COMMIT to $LIVE_HEAD; nothing done."
+    return 0
   fi
   : >"$TMPD/applied.md"
   for ((i = 0; i < count; i++)); do

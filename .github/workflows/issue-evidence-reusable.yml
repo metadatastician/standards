@@ -255,7 +255,10 @@ jobs:
     if: ${{ inputs.apply && needs.evaluate.outputs.on_default == 'true' && needs.evaluate.outputs.plan_count != '0' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # contents: read lets it read the default branch's live head (the stale-plan
+    # check below) in a private repository; it reads no file of the repository.
     permissions:
+      contents: read
       issues: write
     concurrency:
       group: issue-evidence-apply-${{ github.repository }}
@@ -288,9 +291,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           PLAN: ${{ needs.evaluate.outputs.plan }}
+          # The evaluate job checked out and evaluated exactly this commit. If the
+          # default branch has moved since, nothing is applied (stale plan).
+          EVALUATED_SHA: ${{ github.sha }}
           MAX_ACTIONS: ${{ inputs.max_actions }}
         run: |
           set -euo pipefail
           printf '%s' "$PLAN" >"$RUNNER_TEMP/plan.json"
           bash "$RUNNER_TEMP/issue-evidence-apply.sh" apply --repo "$REPO" \
-            --plan "$RUNNER_TEMP/plan.json" --max-actions "$MAX_ACTIONS"
+            --plan "$RUNNER_TEMP/plan.json" --max-actions "$MAX_ACTIONS" \
+            --commit "$EVALUATED_SHA"

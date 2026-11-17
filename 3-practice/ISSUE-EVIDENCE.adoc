@@ -183,6 +183,11 @@ changes only when it moves its pin.
   reopened or closed it since the plan was made is not overridden. This is a
   re-read, not a lock: a person acting in the moment between the re-read and
   the action is not caught. A failed or malformed read stops the run.
+* Before it acts, the apply job reads the head of the default branch again.
+  If the branch has moved since the commit that was evaluated, it reports
+  "stale; nothing done" and acts on nothing. The next run evaluates the new
+  head: a push that touches the ledger or the bot, the weekly run, or a run
+  by hand.
 
 == 8. Change log
 
