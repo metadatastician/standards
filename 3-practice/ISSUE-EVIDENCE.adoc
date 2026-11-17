@@ -81,10 +81,12 @@ component, no leading `-`. A pattern is a POSIX extended regular expression.
 | The commit S (12 to 40 hex digits) is an ancestor of the evaluated commit.
   Weak on its own: prefer a check on the tree.
 
-| `{"kind":"script","path":P,"args":[...]}`
-| The script P, tracked and executable under `scripts/` or `tests/`, exits 0.
-  Exit 1 (or another code below 124 except 2) fails. Exit 2, a timeout or a
-  signal means "could not run" and leaves the check unevaluated.
+| `{"kind":"script","path":P}`
+| The script P, tracked and executable under `scripts/` or `tests/`, exits 0
+  when run with no arguments. Exit 1 (or another code below 124 except 2)
+  fails. Exit 2, a timeout or a signal means "could not run" and leaves the
+  check unevaluated. A row cannot pass arguments: `args` is refused, so a row
+  chooses which reviewed script runs and nothing else.
 |===
 
 Every check except `script` reads the committed tree at the evaluated commit
@@ -102,8 +104,9 @@ proposing it: run its checks at the parent of the fixing commit
 
 The owner approves a closure by *merging the row* in a reviewed pull request.
 The bot acts only on rows on the default branch; a run on any other ref reports
-and does nothing. Nothing in a row is executed as code: patterns, paths and
-arguments are passed to git and grep as single arguments, and `scripts/issue-evidence.sh`
+and does nothing. Nothing in a row is executed as code: patterns and paths
+are passed to git and grep as single arguments, a `script` check runs a
+tracked script with no arguments, and `scripts/issue-evidence.sh`
 states that boundary in its header (the class of defect in #1405 is not
 reintroduced).
 

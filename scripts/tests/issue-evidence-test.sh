@@ -111,7 +111,7 @@ printf '#!/usr/bin/env bash\nexit 1\n' >scripts/fail.sh
 printf '#!/usr/bin/env bash\nexit 2\n' >scripts/cannot.sh
 cat >scripts/argv.sh <<'EOF'
 #!/usr/bin/env bash
-printf "%s\n" "$@" > "$ARGV_OUT"
+printf "argc=%s\n" "$#" > "$ARGV_OUT"
 EOF
 printf 'not executable\n' >scripts/plain.sh
 chmod +x scripts/pass.sh scripts/fail.sh scripts/cannot.sh scripts/argv.sh
@@ -331,33 +331,35 @@ ledger "$(row 5 '[{"kind":"path-present","path":"-rf"}]')"
 expect_err "a leading - in path is refused" 'checks[0].path starts with "-"' bash "$IE" validate "$L"
 ledger "$(row 5 '[{"kind":"tree-grep-absent","glob":"--all-match","pattern":"x"}]')"
 expect_err "a leading - in glob is refused" 'checks[0].glob starts with "-"' bash "$IE" validate "$L"
-for f in pattern path glob args claim evidence; do
+for f in pattern path glob claim evidence; do
   case "$f" in
     pattern) r="$(row 5 '[{"kind":"grep-absent","path":"docs/a.adoc","pattern":"a\nb"}]')" ;;
     path) r="$(row 5 '[{"kind":"path-present","path":"docs/a\nb"}]')" ;;
     glob) r="$(row 5 '[{"kind":"tree-grep-absent","glob":"docs/*\nb","pattern":"x"}]')" ;;
-    args) r="$(row 5 '[{"kind":"script","path":"scripts/pass.sh","args":["a\nb"]}]')" ;;
     claim) r="$(row 5 '[{"kind":"path-present","path":"x"}]' landed '{"claim":"a\n<!-- x -->"}')" ;;
     evidence) r="$(row 5 '[{"kind":"path-present","path":"x"}]' landed '{"evidence":["a\nb"]}')" ;;
   esac
   ledger "$r"
   expect_err "a newline in $f is refused" "control character" bash "$IE" validate "$L"
 done
-# The argv of a script check is passed as an array: the script sees the exact
-# strings, unexpanded.
+# A script check takes no arguments from the ledger (code-scanning finding on
+# #1651): no row value reaches a script's argv. `args` is refused, even empty.
+ledger "$(row 6 '[{"kind":"script","path":"scripts/argv.sh","args":["-x"]}]')"
+expect_err "script args are refused" 'checks[0]: unknown field "args"' bash "$IE" validate "$L"
+ledger "$(row 6 '[{"kind":"script","path":"scripts/argv.sh","args":[]}]')"
+expect_err "an empty args array is refused too" 'checks[0]: unknown field "args"' bash "$IE" validate "$L"
+ledger "$(row 6 '[{"kind":"script","path":"scripts/argv.sh"}]')"
+export ARGV_OUT="$WORK/argv.txt"
+run bash "$IE" evaluate "$L"
+unset ARGV_OUT
+if [ "$RC" = 0 ] && [ "$(cat "$WORK/argv.txt" 2>/dev/null)" = "argc=0" ]; then
+  ok "a script check runs its script with no arguments"
+else ko "script argv — rc=$RC argv=$(tr '\n' '|' <"$WORK/argv.txt" 2>/dev/null)"; fi
 # The payloads, as data: a quoted here-doc expands nothing.
 PAYLOAD="$(cat <<'EOF'
 $(touch PWNED) `touch PWNED`
 EOF
 )"
-ARGS="$(jq -c -n --arg p "$PAYLOAD" '[$p, "; rm -rf /", "-x", "a b"]')"
-ledger "$(row 6 "[{\"kind\":\"script\",\"path\":\"scripts/argv.sh\",\"args\":$ARGS}]")"
-export ARGV_OUT="$WORK/argv.txt"
-run bash "$IE" evaluate "$L"
-unset ARGV_OUT
-if [ "$RC" = 0 ] && [ "$(jq -R . "$WORK/argv.txt" | jq -c -s .)" = "$ARGS" ] && sentinel_absent; then
-  ok "script args reach the script as literal argv"
-else ko "script args — rc=$RC argv=$(tr '\n' '|' <"$WORK/argv.txt" 2>/dev/null)"; fi
 ledger "$(row 7 '[{"kind":"path-present","path":"docs/a.adoc"}]' landed \
   "$(jq -c -n --arg p "$PAYLOAD" '{claim: ($p + " @owner ; rm -rf /"), evidence: ["@someone #12"]}')")"
 run bash "$IE" render-comment --issue 7 --action close "$L"

@@ -61,7 +61,8 @@
 #     with the :(glob) magic this script chooses (a glob that starts with ":"
 #     is refused, so a row cannot pick its own pathspec magic);
 #   * `script` runs a path tracked in git under scripts/ or tests/, executable
-#     in git, with `args` as an argv array; never through a shell string;
+#     in git, with NO arguments (a row cannot carry `args`), never through a
+#     shell string: a row chooses which reviewed script runs, nothing else;
 #   * control characters (newline, tab, NUL, DEL) are refused in every string,
 #     so a value cannot split a grep pattern list or forge a comment line.
 #   scripts/tests/issue-evidence-test.sh plants $(…), backticks, `; rm -rf`,
@@ -170,18 +171,10 @@ def check($i):
       (if (.sha | type) == "string" and (.sha | test("^[0-9a-f]{12,40}$")) then empty
        else "\($p).sha must be 12 to 40 lower-case hex digits" end)
     elif .kind == "script" then
-      (keyset(["kind", "path"]; ["args"]) | "\($p): \(.)"),
+      (keyset(["kind", "path"]; []) | "\($p): \(.)"),
       relpath("\($p).path"; .path),
       (if (.path | type) == "string" and ((.path | startswith("scripts/")) or (.path | startswith("tests/")))
-       then empty else "\($p).path must be under scripts/ or tests/" end),
-      (if has("args") then
-         if (.args | type) != "array" then "\($p).args must be an array of strings"
-         else .args | to_entries[]
-           | if (.value | type) != "string" then "\($p).args[\(.key)] must be a string"
-             elif (.value | ctrl) then "\($p).args[\(.key)] contains a control character (newline, tab, NUL and DEL are refused)"
-             else empty end
-         end
-       else empty end)
+       then empty else "\($p).path must be under scripts/ or tests/" end)
     else "\($p).kind is not in the vocabulary: \(.kind | tojson)" end;
 def row:
   if type != "object" then "the line is not a JSON object"
@@ -315,13 +308,12 @@ validate_ledger() {
 # --- evaluation ---------------------------------------------------------------
 
 # Per row, NUL-separated: repo, issue, disposition, check count, then per
-# check: kind, path|glob|sha, pattern, arg count, args...
+# check: kind, path|glob|sha, pattern.
 # shellcheck disable=SC2016  # jq program text, not shell
 ROW_STREAM_JQ='
 def z: ., "\u0000";
 (.repo | z), (.issue | tostring | z), (.disposition | z), (.checks | length | tostring | z),
-(.checks[] | (.kind | z), ((.path // .glob // .sha) | z), ((.pattern // "") | z),
-  ((.args // []) | length | tostring | z), ((.args // [])[] | z))
+(.checks[] | (.kind | z), ((.path // .glob // .sha) | z), ((.pattern // "") | z))
 '
 
 # Check results: 0 holds, 1 does not hold, 2 not evaluated.
@@ -384,9 +376,8 @@ check_commit_on_main() { # SHA
   esac
 }
 
-check_script() { # PATH ARGS...
+check_script() { # PATH
   local path="$1" rc=0
-  shift
   # Only explicitly allowlisted repository scripts are runnable.
   # This prevents ledger data from triggering arbitrary code execution.
   case "$path" in
@@ -399,7 +390,8 @@ check_script() { # PATH ARGS...
   entry_at "$COMMIT" "$path" || return 1
   [ "$E_TYPE" = blob ] && [ "$E_MODE" = 100755 ] || return 1
   GIT_LITERAL_PATHSPECS=1 git diff --quiet HEAD -- "$path" 2>/dev/null || return 2
-  (cd "$ROOT" && timeout "$SCRIPT_TIMEOUT" "./$path" "$@" </dev/null >&2) || rc=$?
+  # No argument: nothing from the ledger reaches the script's argv.
+  (cd "$ROOT" && timeout "$SCRIPT_TIMEOUT" "./$path" </dev/null >&2) || rc=$?
   # 0 holds; 2 is this estate's "could not run", and 124+ is a timeout or a
   # signal: neither is evidence either way.
   case "$rc" in
@@ -411,24 +403,22 @@ check_script() { # PATH ARGS...
 
 # eval_row LINE: sets R_REPO R_ISSUE R_DISP R_HOLDS R_FAILED R_UNEVAL (JSON).
 eval_row() {
-  local f=() k=0 nchecks i kind a pat nargs args rc any_false=0 any_null=0
+  local f=() k=0 nchecks i kind a pat rc any_false=0 any_null=0
   local failed=() uneval=()
   printf '%s\n' "$1" | jq -j "$ROW_STREAM_JQ" >"$TMPD/row.stream" || fail_internal "jq could not read a validated row"
   mapfile -d '' -t f <"$TMPD/row.stream"
   R_REPO="${f[0]}" R_ISSUE="${f[1]}" R_DISP="${f[2]}" nchecks="${f[3]}"
   k=4
   for ((i = 0; i < nchecks; i++)); do
-    kind="${f[k]}" a="${f[k + 1]}" pat="${f[k + 2]}" nargs="${f[k + 3]}"
-    k=$((k + 4))
-    args=("${f[@]:k:nargs}")
-    k=$((k + nargs))
+    kind="${f[k]}" a="${f[k + 1]}" pat="${f[k + 2]}"
+    k=$((k + 3))
     rc=0
     case "$kind" in
       path-absent | path-present) check_path "$kind" "$a" || rc=$? ;;
       grep-absent | grep-present) check_grep "$kind" "$a" "$pat" || rc=$? ;;
       tree-grep-absent) check_tree_grep_absent "$a" "$pat" || rc=$? ;;
       commit-on-main) check_commit_on_main "$a" || rc=$? ;;
-      script) check_script "$a" "${args[@]}" || rc=$? ;;
+      script) check_script "$a" || rc=$? ;;
       *) fail_internal "unvalidated check kind reached evaluation" ;;
     esac
     case "$rc" in
@@ -579,7 +569,7 @@ def plain:
   elif .kind == "grep-absent" then "no line of the file \(.path | tojson) matches the regular expression \(.pattern | tojson)"
   elif .kind == "tree-grep-absent" then "no tracked file matching \(.glob | tojson) has a line matching \(.pattern | tojson)"
   elif .kind == "commit-on-main" then "commit \(.sha) is an ancestor of the evaluated commit"
-  elif .kind == "script" then "the tracked script \(.path | tojson) exits 0 with arguments \((.args // []) | tojson)"
+  elif .kind == "script" then "the tracked script \(.path | tojson) exits 0"
   else "unknown check" end;
 # GitHub notifies every @name in a comment; a zero-width space after "@" keeps
 # the text readable and notifies nobody.
