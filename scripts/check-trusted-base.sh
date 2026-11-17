@@ -99,9 +99,10 @@
 #                   (the canonical token for `{-# TERMINATING #-}` + a
 #                   written termination argument; see the policy doc)
 #        DEBT:      known, owned and dated — see docs/proof-debt.md §(d)
-#   2. enumeration in docs/proof-debt.md (or .adoc / PROOF-NEEDS.md), or in the
-#      repo's proof-status file (PROOF-STATUS.adoc at the root, docs/, docs/status/
-#      or 3-practice/; PROOF-POLICY §8.5)
+#   2. enumeration in docs/proof-debt.md (or .adoc / PROOF-NEEDS.md), or under
+#      `== Proof debt` in the repo's proof-status file (PROOF-STATUS.adoc at the
+#      root, docs/, docs/status/ or 3-practice/; PROOF-POLICY §8.5). Mentions
+#      elsewhere in the proof-status file (the ledger) do not count.
 #   3. path-fragment exemption in .trusted-base-ignore
 #
 # ─────────────────────────────────────────────────────────────────────────────
@@ -736,6 +737,19 @@ fi
 #   - enumerated in docs/proof-debt.md or the proof-status file (substring match on file:line OR on the
 #     identifier captured)
 # ─────────────────────────────────────────────────────────────────────────────
+# Print the part of proof-debt document $1 that counts as a debt index. A proof-status
+# file also carries the proof ledger, so a path merely mentioned there is not debt:
+# for PROOF-STATUS.adoc only the text from `== Proof debt` to the next top-level
+# heading counts. Every other document counts whole.
+debt_text() {
+  case "${1##*/}" in
+    PROOF-STATUS.adoc)
+      awk '/^== Proof debt[[:space:]]*$/ { on = 1; next }
+           on && /^==? [^=]/ { exit }
+           on { print }' "$1" 2>/dev/null ;;
+    *) cat "$1" 2>/dev/null ;;
+  esac
+}
 debt_docs=()
 for cand in docs/proof-debt.md docs/proof-debt.adoc PROOF-NEEDS.md docs/PROOF-NEEDS.md \
     PROOF-STATUS.adoc docs/PROOF-STATUS.adoc docs/status/PROOF-STATUS.adoc 3-practice/PROOF-STATUS.adoc; do
@@ -860,11 +874,11 @@ while IFS=$'\t' read -r f ln kind mtier ctx; do
   #    reference).
   documented_in=""
   for doc in ${debt_docs[@]+"${debt_docs[@]}"}; do
-    if grep -qF "$f_clean:$ln" "$doc" 2>/dev/null; then
+    if debt_text "$doc" | grep -qF -- "$f_clean:$ln"; then
       documented_in="$doc"
       break
     fi
-    if grep -qF "$f_clean" "$doc" 2>/dev/null; then
+    if debt_text "$doc" | grep -qF -- "$f_clean"; then
       documented_in="$doc"
       break
     fi

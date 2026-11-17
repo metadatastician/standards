@@ -168,6 +168,48 @@ EOS
   printf '= Proof status\n' > docs/status/PROOF-STATUS.adoc
 }
 
+setup_marker_ledger_mention_only() {
+  mkdir -p src 3-practice
+  cat > src/Foo.idr <<'EOS'
+module Foo
+%default total
+partial
+foo : Int -> Int
+foo x = x
+EOS
+  cat > 3-practice/PROOF-STATUS.adoc <<'EOS'
+= Proof status
+== Proof ledger
+* src/Foo.idr is checked by the Idris2 job.
+== Proof debt
+=== (d) DEBT, actively to be closed
+* (none)
+== Obligations that left this repository
+* src/Foo.idr:3 is mentioned here too, after the debt section.
+EOS
+}
+
+setup_marker_listed_under_debt_before_next_heading() {
+  mkdir -p src 3-practice
+  cat > src/Foo.idr <<'EOS'
+module Foo
+%default total
+partial
+foo : Int -> Int
+foo x = x
+EOS
+  cat > 3-practice/PROOF-STATUS.adoc <<'EOS'
+= Proof status
+== Proof ledger
+* nothing about the marker here.
+== Proof debt
+=== (d) DEBT, actively to be closed
+* src/Foo.idr — partial marker, owned.
+== Obligations that left this repository
+* none
+EOS
+}
+
 setup_marker_with_ignore_exact() {
   mkdir -p test/fixtures
   cat > test/fixtures/admitted.v <<'EOF'
@@ -734,6 +776,14 @@ run_case "entry in 3-practice/PROOF-STATUS.adoc passes" \
 
 run_case "PROOF-STATUS.adoc without the entry still fails the marker" \
   1 "docs/status/PROOF-STATUS.adoc" setup_marker_proof_status_without_entry
+
+# Only the `== Proof debt` section counts: a path mentioned in the ledger or in a
+# later section is not documented debt (standards#1635 review).
+run_case "path mentioned only outside == Proof debt does not count" \
+  1 "Undocumented escape hatch at src/Foo.idr:3" setup_marker_ledger_mention_only
+
+run_case "path listed under == Proof debt counts up to the next top-level heading" \
+  0 "All 1 escape hatch(es) are documented" setup_marker_listed_under_debt_before_next_heading
 
 # New .trusted-base-ignore behaviour.
 run_case "single path-fragment exempts marker (no proof-debt doc)" \
