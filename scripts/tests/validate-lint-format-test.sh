@@ -49,15 +49,11 @@ FORMATTED=$'pub fn one() -> u32 {\n    1\n}\n'
 UNFORMATTED=$'pub fn one()->u32{1}\n'
 
 # expect <label> <want-rc> <needle|-> [<absent-needle>] — stages everything in
-# $WORK/repo, runs the hook, checks the exit code, that the output contains
+# $WORK/repo (unless NO_ADD is set, see expect_as_staged), runs the hook, checks the exit code, that the output contains
 # <needle> (unless "-"), and that it does NOT contain <absent-needle> if given.
 expect() {
   local label=$1 want=$2 needle=$3 absent=${4:-} out rc
-  if [ "${STAGE_ROOT_ONLY:-0}" = 1 ]; then
-    git -C "$WORK/repo" add src/lib.rs
-  else
-    git -C "$WORK/repo" add -A
-  fi
+  [ -n "${NO_ADD:-}" ] || git -C "$WORK/repo" add -A
   out="$(cd "$WORK/repo" && INPUT_PATH="$WORK/repo" ESTATE_HOOK_SKIP_SLOW=1 bash "$HOOK" 2>&1)"; rc=$?
   if [ "$rc" -ne "$want" ]; then
     echo "FAIL: $label — expected exit $want, got $rc"
@@ -113,25 +109,6 @@ new_repo
 crate . "$FORMATTED"
 expect "root crate, clean → pass" 0 "Rust: .: formatted"
 
-# A package root and member share a workspace; only the root is staged.
-new_repo
-crate . "$FORMATTED"
-crate member "$FORMATTED"
-sed -i '/^\[workspace\]/,$d' "$WORK/repo/member/Cargo.toml"
-printf 'members = ["member"]\n' >> "$WORK/repo/Cargo.toml"
-git -C "$WORK/repo" add -A
-git -C "$WORK/repo" -c user.name=t -c user.email=t@t commit -qm base
-printf '// staged root change\n' >> "$WORK/repo/src/lib.rs"
-printf '%s' "$UNFORMATTED" > "$WORK/repo/member/src/lib.rs"
-STAGE_ROOT_ONLY=1 expect "workspace root package ignores unstaged member formatting" 0 "Rust: .: formatted"
-
-# A staged virtual workspace manifest continues checking its members.
-new_repo
-crate member "$UNFORMATTED"
-sed -i '/^\[workspace\]/,$d' "$WORK/repo/member/Cargo.toml"
-printf '[workspace]\nmembers = ["member"]\nresolver = "2"\n' > "$WORK/repo/Cargo.toml"
-expect "virtual workspace checks member formatting" 1 "Rust: .: sources are not formatted"
-
 # A .rs outside every crate is not a formatting failure: it is reported as an
 # unchecked file, by name, in the ledger of gates that did not run.
 new_repo
@@ -148,6 +125,98 @@ crate tools/a "$FORMATTED"
 printf 'this is not toml [[[\n' > "$WORK/repo/tools/a/Cargo.toml"
 expect "unloadable manifest → fail as a tooling error, not as formatting" 1 \
   "Rust: tools/a: cargo could not run" "sources are not formatted"
+
+
+echo
+echo "=== Rust arm: a workspace root checks its own package only (B3) ==="
+
+# commit_all — commit everything in $WORK/repo as the base state.
+commit_all() {
+  git -C "$WORK/repo" add -A && git -C "$WORK/repo" -c user.name=t -c user.email=t@t commit -qm base
+}
+
+# A workspace root that is also a package, with an unformatted member that the
+# commit does not touch. Running cargo fmt from the root directory checks every
+# member, so the untouched member used to block this commit.
+new_repo
+mkdir -p "$WORK/repo/src" "$WORK/repo/member/src"
+printf '[package]\nname = "rootpkg"\nversion = "0.1.0"\nedition = "2021"\n\n[workspace]\nmembers = ["member"]\n' > "$WORK/repo/Cargo.toml"
+printf '%s' "$FORMATTED" > "$WORK/repo/src/lib.rs"
+printf '[package]\nname = "member"\nversion = "0.1.0"\nedition = "2021"\n' > "$WORK/repo/member/Cargo.toml"
+printf '%s' "$UNFORMATTED" > "$WORK/repo/member/src/lib.rs"
+commit_all
+printf '// touch\n' >> "$WORK/repo/src/lib.rs"
+expect "workspace-root package staged, unformatted member untouched → pass" 0 \
+  "Rust: .: formatted" "member"
+
+# Positive control: the root package itself unformatted still fails.
+printf '%s' "$UNFORMATTED" > "$WORK/repo/src/lib.rs"
+expect "workspace-root package staged and unformatted → fail" 1 \
+  "Rust: .: sources are not formatted"
+
+# A staged file in the member is checked against the member's manifest.
+new_repo
+mkdir -p "$WORK/repo/src" "$WORK/repo/member/src"
+printf '[package]\nname = "rootpkg"\nversion = "0.1.0"\nedition = "2021"\n\n[workspace]\nmembers = ["member"]\n' > "$WORK/repo/Cargo.toml"
+printf '%s' "$UNFORMATTED" > "$WORK/repo/src/lib.rs"
+printf '[package]\nname = "member"\nversion = "0.1.0"\nedition = "2021"\n' > "$WORK/repo/member/Cargo.toml"
+printf '%s' "$FORMATTED" > "$WORK/repo/member/src/lib.rs"
+commit_all
+printf '// touch\n' >> "$WORK/repo/member/src/lib.rs"
+expect "member staged beside an unformatted root package → pass, names the member" 0 \
+  "Rust: member: formatted" "not formatted"
+
+# A virtual workspace (no [package]): a staged member file resolves to the
+# member, which inherits its edition from the workspace.
+new_repo
+mkdir -p "$WORK/repo/m1/src" "$WORK/repo/m2/src"
+printf '[workspace]\nmembers = ["m1", "m2"]\nresolver = "2"\n\n[workspace.package]\nedition = "2021"\n' > "$WORK/repo/Cargo.toml"
+printf '[package]\nname = "m1"\nversion = "0.1.0"\nedition.workspace = true\n' > "$WORK/repo/m1/Cargo.toml"
+printf '[package]\nname = "m2"\nversion = "0.1.0"\nedition.workspace = true\n' > "$WORK/repo/m2/Cargo.toml"
+printf '%s' "$FORMATTED" > "$WORK/repo/m1/src/lib.rs"
+printf '%s' "$UNFORMATTED" > "$WORK/repo/m2/src/lib.rs"
+commit_all
+printf '// touch\n' >> "$WORK/repo/m1/src/lib.rs"
+expect "virtual workspace, member staged, unformatted sibling untouched → pass" 0 \
+  "Rust: m1: formatted" "m2"
+
+# The virtual manifest itself staged: it belongs to no package, so no package
+# is formatted for it. It is named in the ledger, and the untouched unformatted
+# member does not block.
+git -C "$WORK/repo" reset -q --hard
+printf '\n' >> "$WORK/repo/Cargo.toml"
+expect "virtual workspace manifest staged alone → not checked, named, not a failure" 0 \
+  "virtual workspace manifest" "m2"
+
+echo
+echo "=== Rust arm: manifests come from the index, not the working tree (B4) ==="
+
+# expect_as_staged — like expect, but runs the hook on the index as it stands
+# (no `git add -A`), so untracked and unstaged files stay out of the commit.
+expect_as_staged() {
+  NO_ADD=1 expect "$@"
+}
+
+# An untracked Cargo.toml is not part of the commit, so it does not make the
+# staged .rs beside it a crate.
+new_repo
+mkdir -p "$WORK/repo/tools/a/src"
+printf '%s' "$FORMATTED" > "$WORK/repo/tools/a/src/lib.rs"
+git -C "$WORK/repo" add tools/a/src/lib.rs
+printf '[package]\nname = "a"\nversion = "0.1.0"\nedition = "2021"\n\n[workspace]\n' > "$WORK/repo/tools/a/Cargo.toml"
+expect_as_staged "untracked nearer Cargo.toml is not selected → staged .rs named as not checked" 0 \
+  "rust: NOT checked, no enclosing Cargo.toml: tools/a/src/lib.rs" "Rust: tools/a:"
+
+# With a tracked root crate, an untracked nested manifest is skipped and the
+# nearest INDEXED manifest (the root) is the one checked.
+new_repo
+crate . "$FORMATTED"
+mkdir -p "$WORK/repo/sub"
+printf '%s' "$FORMATTED" > "$WORK/repo/sub/extra.rs"
+git -C "$WORK/repo" add Cargo.toml src/lib.rs sub/extra.rs
+printf '[package]\nname = "sub"\nversion = "0.1.0"\nedition = "2021"\n\n[workspace]\n' > "$WORK/repo/sub/Cargo.toml"
+expect_as_staged "untracked nested Cargo.toml skipped → nearest indexed manifest (root) checked" 0 \
+  "Rust: .: formatted" "Rust: sub:"
 
 echo
 echo "passed=$pass failed=$fail"
