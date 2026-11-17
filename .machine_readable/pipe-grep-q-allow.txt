@@ -19,7 +19,6 @@
 .githooks/docstring-scan.sh:1
 .githooks/post-checkout:1
 .githooks/post-merge:1
-.githooks/pre-commit:1
 .githooks/validate-lint-format.sh:7
 .githooks/validate-spdx-workflows.sh:1
 .githooks/validate-spdx.sh:1
