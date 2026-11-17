@@ -385,6 +385,67 @@ Every suite exists to prove its gate *can fail*. This estate's recurring defect
 is the gate that cannot. Each was mutation-tested during authoring: flipping a
 single expectation must turn the suite red.
 
+== Every code marker cites an issue
+
+// Enforced-by: scripts/check-marker-issue-refs.sh
+
+The Debtfile measure `todo-fixme-markers` was retired on 2026-11-17 (owner
+decision, standards#955). Its probe counted files that contained the word
+anywhere, so a document that only mentioned the word counted, and the number
+moved for reasons unrelated to debt. In its place a gate refuses a marker that
+does not cite an issue. A marker becomes a pointer to tracked work, and the
+marker debt is the set of open issues the markers cite.
+
+What a marker is::
+The word `TODO` or `FIXME`, upper case and a whole word, where it opens the
+content of a comment: it follows a comment leader for the file's type (`#`,
+`//`, `/*` or a line inside a `/* */` block, `--`, `;`, `%`, `<!--`, and in
+AsciiDoc `//` at column 1 or a line inside a `////` block) with only whitespace
+between, and is followed by `(`, `:`, whitespace or the end of the line.
+`XXX` and `HACK` are not markers; the retired probe did not count them either.
+A mention in prose, a string, a file name, a Markdown code fence, an AsciiDoc
+listing block or a shell heredoc body is not a marker. Only the first comment
+on a line is read.
+
+The accepted form::
+The marker word followed by `(#123)` for an issue in this repository, or by
+`(owner/repo#123)` for an issue elsewhere. Any other marker is bare and is
+refused.
+
+Grandfathered markers::
+`.machine_readable/marker-allow.txt` lists, as `path:count`, the files that
+had bare markers when the gate landed (20 files, 35 markers, generated once
+with `--print`). It is shrink-only, like `inline-python-allow.txt`: a file not
+listed that gains a bare marker fails, a count that grows fails, and a line
+whose count is too high or whose file has none left is stale and fails.
+`--prune` fixes stale lines in place and never adds or raises one.
+
+A genuine example::
+Where a file must show a bare marker as an example, the line takes
+`hypatia: allow marker/example -- <reason>` in a comment, or the line before
+it takes `hypatia: allow-next-line marker/example -- <reason>`. The reason is
+required, and a pragma on a line with no bare marker fails as stale.
+
+The online half::
+`bash scripts/check-marker-issue-refs.sh --online` uses `gh` to read the state
+of every cited issue. It lists each one with the places that cite it, and fails
+when a marker cites an issue that is closed, does not exist, or is a pull
+request. It reads only, and no workflow runs it: run it by hand with a token
+that can read the cited repositories.
+
+Limits::
+The reading is line by line. Strings are not parsed: a leader preceded by
+whitespace inside a string is read as a comment (the pragma is the escape),
+and a leader inside a string before the real comment hides that comment.
+Block comments do not nest. A file type with no comment syntax known to the
+gate (JSON, plain text) is not read, and the summary line counts such files.
+The gate reads files as git tracks them; `--cached` reads the staged copies,
+which is how the pre-commit hook runs it.
+
+The offline gate runs in CI through `scripts/tests/check-marker-issue-refs-test.sh`,
+which checks this repository against its ledger, and locally in the
+pre-commit hook.
+
 == See also
 
 * `docs/EXEMPTION-MECHANISMS.adoc` — the four exemption ledgers and their ratchet

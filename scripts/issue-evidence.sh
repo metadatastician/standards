@@ -100,6 +100,13 @@
 # `script` check; a timeout is UNEVALUATED.
 #
 # TESTS: scripts/tests/issue-evidence-test.sh
+#
+# CONSUMER: scripts/departures.sh (3-practice/DEPARTURES.adoc) evaluates the
+# checks of its rows with this script and has no check engine of its own. It
+# writes an ordinary ledger of this schema and relies on: `validate` errors of
+# the form "LEDGER:LINE: message" on stderr with exit 2, and the `evaluate`
+# record {disposition, failed, holds, issue, repo, unevaluated}, one per row
+# in ledger order. scripts/tests/departures-test.sh exercises both.
 set -euo pipefail
 export LC_ALL=C
 # Pathspec behaviour is chosen here, never inherited from the caller.
