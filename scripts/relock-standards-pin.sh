@@ -107,7 +107,9 @@ oldrefs=$(grep -oE "'(hyperpolymath|metadatastician)/standards@[0-9a-f]{40}'" "$
 # is never rewritten here; the final check still compares it with its pins.
 newwf=""
 for w in "${wfs[@]}"; do
-  standards_pins "$w" | grep -q "@${TARGET}\$" || continue
+  # Captured, then matched: a pipe into grep -q let the pin writer die of
+  # SIGPIPE on a large workflow (status 141) and the caller was skipped.
+  grep -q "@${TARGET}\$" <<<"$(standards_pins "$w")" || continue
   grep -qxF "    '.github/workflows/${w##*/}':" "$L" && continue
   # An EMPTY entry (`[]`) for a workflow that calls a remote reusable is what
   # gh actions-lock <= v0.1.6 wrote, being blind to job-level `uses:`. It

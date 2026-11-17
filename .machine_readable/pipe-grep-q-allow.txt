@@ -81,7 +81,7 @@ scripts/estate-trusted-base-survey.sh:1
 scripts/propagate-hypatia-caller-id.sh:2
 scripts/prune-stale.sh:1
 scripts/regen-dependabot-locks.sh:3
-scripts/relock-standards-pin.sh:6
+scripts/relock-standards-pin.sh:5
 scripts/sonar-preflight.sh:2
 scripts/tests/spdx-header-block-test.sh:1
 scripts/triage-2026-09-29-apply.sh:2

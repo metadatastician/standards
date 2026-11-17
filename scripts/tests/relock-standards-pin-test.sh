@@ -441,6 +441,25 @@ grep -q "$OLD" "$D/actions.lock" && fail "new caller with re-key: OLD survived"
 grep -qxF "        - 'hyperpolymath/standards@$NEW'" <<<"$(grep -A1 -xF "    '.github/workflows/z-new.yml':" "$D/actions.lock")" || fail "new caller with re-key: no entry"
 echo "  PASS new caller added in the same run as the re-key"
 
+# Case B2: a new caller whose pins exceed a pipe buffer is still found. The
+# scan read `standards_pins "$w" | grep -q "@TARGET$"` under pipefail: grep -q
+# exited at the first pin, the pin writer died of SIGPIPE, the pipeline
+# reported 141 and the workflow was skipped as "not pinned at TARGET", so it
+# got no lock entry. 1500 jobs, ~140 KB of pins; five runs, each must add it.
+lost=0
+for run in 1 2 3 4 5; do
+  D=$(consumer "new-caller-large-$run")
+  { printf 'on: push\njobs:\n'
+    for j in $(seq 1 1500); do
+      printf '  j%d:\n    uses: hyperpolymath/standards/.github/workflows/x-reusable.yml@%s\n' "$j" "$NEW"
+    done; } > "$D/y-new.yml"
+  bash "$RELOCK" --to "$NEW" --standards "$S" "$D" >/dev/null 2>&1 || { lost=$((lost + 1)); continue; }
+  grep -qxF "        - 'hyperpolymath/standards@$NEW'" <<<"$(grep -A1 -xF "    '.github/workflows/y-new.yml':" "$D/actions.lock")" \
+    || lost=$((lost + 1))
+done
+[ "$lost" -eq 0 ] || fail "large new caller: $lost of 5 runs gave it no lock entry"
+echo "  PASS a new caller with ~140 KB of pins gets its entry (5 of 5 runs)"
+
 # Case C: a lock with no standards record at all. The canonical owner's ids
 # are known; the former owner's are not, so that case is refused unchanged.
 D=$(consumer new-caller-no-record)
