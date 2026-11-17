@@ -430,11 +430,13 @@ check_script() { # PATH
   checkout_is_commit || return 2
   # No argument: nothing from the ledger reaches the script's argv.
   (cd "$ROOT" && timeout "$SCRIPT_TIMEOUT" "./$path" </dev/null >&2) || rc=$?
-  # 0 holds; 2 is this estate's "could not run", and 124+ is a timeout or a
-  # signal: neither is evidence either way.
+  # 0 holds. 2 is this estate's "could not run", 77 is a skip (the automake
+  # convention: a test that ran nothing, e.g. a missing toolchain), and 124+
+  # is a timeout or a signal: none of them is evidence either way, so the
+  # check is unevaluated and the bot neither closes nor reopens on it.
   case "$rc" in
     0) return 0 ;;
-    2) return 2 ;;
+    2 | 77) return 2 ;;
     *) [ "$rc" -ge 124 ] && return 2 || return 1 ;;
   esac
 }

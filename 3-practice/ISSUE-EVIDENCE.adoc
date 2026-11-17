@@ -83,9 +83,12 @@ component, no leading `-`. A pattern is a POSIX extended regular expression.
 
 | `{"kind":"script","path":P}`
 | The script P, tracked and executable under `scripts/` or `tests/`, exits 0
-  when run with no arguments. Exit 1 (or another code below 124 except 2)
-  fails. Exit 2, a timeout or a signal means "could not run" and leaves the
-  check unevaluated. A row cannot pass arguments: `args` is refused, so a row
+  when run with no arguments. Exit 1 (or another code below 124 except 2 and
+  77) fails. Exit 2 ("could not run"), exit 77 (a skip, the automake
+  convention: the script ran nothing, for example because a toolchain is
+  missing), a timeout or a signal leaves the check unevaluated: a skip never
+  counts as holding and never as a regression, so the bot neither closes nor
+  reopens on it. A row cannot pass arguments: `args` is refused, so a row
   chooses which reviewed script runs and nothing else.
 |===
 

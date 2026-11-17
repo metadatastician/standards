@@ -109,6 +109,8 @@ printf 'rule one\n--count is a flag\n' >docs/a.adoc
 printf '#!/usr/bin/env bash\nexit 0\n' >scripts/pass.sh
 printf '#!/usr/bin/env bash\nexit 1\n' >scripts/fail.sh
 printf '#!/usr/bin/env bash\nexit 2\n' >scripts/cannot.sh
+printf '#!/usr/bin/env bash\necho "SKIP: tool missing"\nexit 77\n' >scripts/skip.sh
+printf '#!/usr/bin/env bash\nexit 3\n' >scripts/exit3.sh
 cat >scripts/argv.sh <<'EOF'
 #!/usr/bin/env bash
 printf "argc=%s\n" "$#" > "$ARGV_OUT"
@@ -117,7 +119,7 @@ printf 'not executable\n' >scripts/plain.sh
 # dirty.sh passes but leaves an untracked file in the checkout (its cwd).
 printf '#!/usr/bin/env bash\n: >litter.txt\n' >scripts/dirty.sh
 printf 'build/\n' >.gitignore
-chmod +x scripts/pass.sh scripts/fail.sh scripts/cannot.sh scripts/argv.sh scripts/dirty.sh
+chmod +x scripts/pass.sh scripts/fail.sh scripts/cannot.sh scripts/skip.sh scripts/exit3.sh scripts/argv.sh scripts/dirty.sh
 git add .
 git commit -qm "one: helper uses eval"
 C1="$(git rev-parse HEAD)"
@@ -170,6 +172,21 @@ ledger "$(row 1 '[{"kind":"script","path":"scripts/fail.sh"}]')"
 expect_holds "script fails (exit 1)" false "$L"
 ledger "$(row 1 '[{"kind":"script","path":"scripts/cannot.sh"}]')"
 expect_holds "script exit 2 (could not run) is unevaluated" null "$L"
+# Exit 77 is a skip (the automake convention): the script ran nothing, so it
+# is never evidence either way. A row whose only problem is a skipped script
+# is neither closed nor reopened.
+ledger "$(row 1 '[{"kind":"script","path":"scripts/skip.sh"}]')"
+expect_holds "script exit 77 (skipped) is unevaluated, never holds" null "$L"
+echo '[{"number":1,"state":"open"}]' >"$WORK/o-skip.json"
+run bash "$IE" decide --repo o/r --open "$WORK/o-skip.json" "$L"
+verdict "a skipped script check does not close an open issue" \
+  rc0_and [ "$OUT" = '{"action":"none","disposition":"landed","issue":1,"reason":"unevaluated","repo":"o/r"}' ]
+echo '[{"number":1,"state":"closed","closed_by_bot":true}]' >"$WORK/o-skip.json"
+run bash "$IE" decide --repo o/r --open "$WORK/o-skip.json" "$L"
+verdict "a skipped script check does not reopen an issue the bot closed" \
+  rc0_and [ "$OUT" = '{"action":"none","disposition":"landed","issue":1,"reason":"unevaluated","repo":"o/r"}' ]
+ledger "$(row 1 '[{"kind":"script","path":"scripts/exit3.sh"}]')"
+expect_holds "script exit 3 (any other code below 124) fails" false "$L"
 ledger "$(row 1 '[{"kind":"script","path":"scripts/pass.sh"},{"kind":"path-present","path":"scripts/gone.sh"}]')"
 run bash "$IE" evaluate "$L"
 verdict "failed lists the failing check's index" [ "$OUT" = '{"disposition":"landed","failed":[1],"holds":false,"issue":1,"repo":"o/r","unevaluated":[]}' ]
