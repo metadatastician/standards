@@ -198,6 +198,12 @@ is_never_ctx() {
 # `pull_request` or `pull_request_target` targeting the default branch ($1).
 # Prevents deriving required_status_checks from push/schedule/dispatch-only
 # workflows on $DEF that never fire on pull requests (standards#1040).
+#
+# Exit 0 = every PR to $DEF emits the workflow's contexts; 1 = no PR trigger
+# for $DEF; 3 = a PR trigger that carries `paths:` or `paths-ignore:`
+# (standards#1065). A path-filtered workflow reports only on PRs touching
+# those paths, so a context required from it waits forever on every other
+# PR. 3 is a refusal to derive, reported in its own bucket, never a pass.
 yaml_has_pr_trigger() {
   local def="$1"
   awk -v def="$def" '
@@ -258,6 +264,10 @@ yaml_has_pr_trigger() {
         }
         if (rest ~ /^pull_request(_target)?[[:space:]]*:/) {
           has_pr = 1
+          pval = rest
+          sub(/^pull_request(_target)?[[:space:]]*:[[:space:]]*/, "", pval)
+          # flow style: `pull_request: {branches: [main], paths: [...]}`
+          if (pval ~ /(^|[{,[:space:]])paths(-ignore)?[[:space:]]*:/) path_filtered = 1
           in_pr = 1
           pr_ind = ind
           next
@@ -265,6 +275,10 @@ yaml_has_pr_trigger() {
       }
 
       if (in_pr) {
+        if (rest ~ /^paths(-ignore)?[[:space:]]*:/) {
+          path_filtered = 1
+          next
+        }
         if (rest ~ /^branches[[:space:]]*:/) {
           has_br_filter = 1
           val = rest
@@ -320,6 +334,7 @@ yaml_has_pr_trigger() {
       if (!has_pr) exit 1
       if (br_ignored) exit 1
       if (has_br_filter && !br_matched) exit 1
+      if (path_filtered) exit 3
       exit 0
     }
   '
@@ -427,7 +442,7 @@ while IFS= read -r R; do
   # every other line of output still reports success.  (Measured 2026-09-22:
   # this dropped 2 of 18 required contexts on standards/main.)  So capture
   # the exit status of every fetch and refuse to write if any one failed.
-  : > "$WORK/ctx"; : > "$WORK/gatewf3"; NORUN=''; NOPR=''; DERIVEFAIL=''
+  : > "$WORK/ctx"; : > "$WORK/gatewf3"; NORUN=''; NOPR=''; PATHF=''; DERIVEFAIL=''
   while IFS= read -r WFN; do
     [ -n "$WFN" ] || continue
     if ! RUN_META=$(gh api "repos/$R/actions/workflows/$WFN/runs?branch=$DEF&per_page=1" \
@@ -436,7 +451,12 @@ while IFS= read -r R; do
     fi
     IFS=$'\t' read -r RID REVENT <<< "$RUN_META"
     if [ -z "$RID" ]; then NORUN="${NORUN:+$NORUN,}$WFN"; continue; fi
-    if ! wf_triggers_on_pr "$R" "$WFN" "$DEF" "$REVENT"; then
+    PRRC=0; wf_triggers_on_pr "$R" "$WFN" "$DEF" "$REVENT" || PRRC=$?
+    if [ "$PRRC" -eq 3 ]; then
+      # Reachable only from PRs touching its paths (standards#1065): exclude,
+      # never silently require.
+      PATHF="${PATHF:+$PATHF,}$WFN"; continue
+    elif [ "$PRRC" -ne 0 ]; then
       NOPR="${NOPR:+$NOPR,}$WFN"; continue
     fi
     if ! gh api "repos/$R/actions/runs/$RID/jobs?per_page=100" --paginate \
@@ -525,6 +545,7 @@ while IFS= read -r R; do
   [ -n "$NOTGREEN" ] && DETAIL="$DETAIL not_green=[$NOTGREEN]"
   [ -n "$NORUN" ]    && DETAIL="$DETAIL no_run=[$NORUN]"
   [ -n "$NOPR" ]     && DETAIL="$DETAIL no_pr_trigger=[$NOPR]"
+  [ -n "$PATHF" ]    && DETAIL="$DETAIL path_filtered=[$PATHF]"
   [ -n "$EXCLUDED" ] && DETAIL="$DETAIL excluded=[$EXCLUDED]"
 
   # ---- THE OTHER REFUSAL: a gate derived from an incomplete read --------

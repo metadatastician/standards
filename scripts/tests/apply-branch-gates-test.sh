@@ -964,7 +964,7 @@ case "$D" in *"no_pr_trigger=[codeql.yml]"*) ok "pr-reachability (commented pull
 # derived from its branch=main run and written into required_status_checks,
 # deadlocking every PR.
 MUTJ="$WORK/mutant-j.sh"
-sed 's/if ! wf_triggers_on_pr "\$R" "\$WFN" "\$DEF" "\$REVENT"; then/if false; then/' "$APPLIER" > "$MUTJ"
+sed 's/PRRC=0; wf_triggers_on_pr "\$R" "\$WFN" "\$DEF" "\$REVENT" || PRRC=\$?/PRRC=0/' "$APPLIER" > "$MUTJ"
 chmod +x "$MUTJ"
 if ! cmp -s "$MUTJ" "$APPLIER" && bash -n "$MUTJ" 2>/dev/null; then
   OUT=$(MUTANT="$MUTJ" run_applier "$R" --apply)
@@ -980,6 +980,63 @@ if ! cmp -s "$MUTJ" "$APPLIER" && bash -n "$MUTJ" 2>/dev/null; then
   fi
 else
   bad "mutant J was not applied — the sed pattern no longer matches the applier"
+fi
+
+# =============================================================== CASE 27
+# PATH-FILTERED PR TRIGGERS (standards#1065, the #1040 residual). A workflow
+# whose pull_request trigger carries `paths:`/`paths-ignore:` reports its
+# check-runs only on PRs touching those paths; requiring its contexts blocks
+# every other PR forever (metadatastician/paint-type codeql.yml). It must land
+# in a named bucket, never in required_status_checks.
+pr_case() {   # pr_case <repo> <workflow body (printf-escaped)>
+  reset_fix
+  R="$1"
+  mkfix "repos/$R" '{"default_branch":"main"}'
+  mkfix "repos/$R/contents/.github/workflows" '[{"name":"codeql.yml"}]'
+  mkfix "repos/$R/contents" '[{"name":"README.md"}]'
+  mkfix "repos/$R/contents/.github/workflows/codeql.yml" \
+    "{\"content\":\"$(printf "$2" | base64 | tr -d '\n')\",\"encoding\":\"base64\"}"
+  mkfix "repos/$R/actions/workflows/codeql.yml/runs?branch=main&per_page=1" '{"workflow_runs":[{"id":44,"event":"push"}]}'
+  mkfix "repos/$R/actions/runs/44/jobs?per_page=100" '{"jobs":[{"name":"Agda proof (INV-3)"}]}'
+  mkfix "repos/$R/rulesets" '[{"id":9,"target":"branch","enforcement":"active","source_type":"Repository"}]'
+  mkfix "repos/$R/rulesets/9" '{"id":9,"name":"Base","target":"branch","enforcement":"active","conditions":{},"bypass_actors":[],"rules":[{"type":"deletion"}]}'
+  OUT=$(run_applier "$R")
+  S=$(state_of "$OUT"); D=$(detail_of "$OUT")
+}
+expect_path_filtered() {   # expect_path_filtered <label>
+  [ "$S" = "UNGATED" ] && ok "$1: state is UNGATED" || bad "$1: state=$S (want UNGATED) — $D"
+  case "$D" in *"path_filtered=[codeql.yml]"*) ok "$1: path_filtered=[codeql.yml] reported" ;; *) bad "$1: missing path_filtered — $D" ;; esac
+}
+
+pr_case acme/paths-block 'on:\n  pull_request:\n    branches: [main]\n    paths:\n      - "verification/proofs/**"\n  push:\n    branches: [main]\n'
+expect_path_filtered "path-filtered (block paths:)"
+pr_case acme/paths-ignore 'on:\n  pull_request:\n    paths-ignore: ["docs/**"]\n'
+expect_path_filtered "path-filtered (paths-ignore:)"
+pr_case acme/paths-flow 'on:\n  pull_request: {branches: [main], paths: ["docs/**"]}\n'
+expect_path_filtered "path-filtered (flow-style pull_request mapping)"
+pr_case acme/paths-target 'on:\n  pull_request_target:\n    paths:\n      - src/**\n'
+expect_path_filtered "path-filtered (pull_request_target)"
+
+# Positive controls: a bare PR trigger is still derived, and a `paths:` under
+# push (not under pull_request) does not filter the PR trigger.
+pr_case acme/bare-pr 'on:\n  pull_request:\n    branches: [main]\n  push:\n    branches: [main]\n    paths: ["src/**"]\n'
+[ "$S" = "WOULD-GATE" ] && ok "path-filter positive control: bare pull_request still derived" || bad "path-filter positive control: state=$S (want WOULD-GATE) — $D"
+case "$D" in *"Agda proof (INV-3)"*) ok "path-filter positive control: context derived" ;; *) bad "path-filter positive control: context missing — $D" ;; esac
+case "$D" in *"path_filtered="*) bad "path-filter positive control: push paths: wrongly filtered the PR trigger — $D" ;; *) ok "path-filter positive control: push paths: does not filter the PR trigger" ;; esac
+
+# ---- MUTANT K: drop the path-filter verdict (#1065). -------------------------
+MUTK="$WORK/mutant-k.sh"
+sed 's/if (path_filtered) exit 3/if (0) exit 3/' "$APPLIER" > "$MUTK"
+if ! cmp -s "$MUTK" "$APPLIER" && bash -n "$MUTK" 2>/dev/null; then
+  pr_case acme/paths-block 'on:\n  pull_request:\n    paths:\n      - "verification/proofs/**"\n'
+  OUT=$(MUTANT="$MUTK" run_applier "$R")
+  if [ "$(state_of "$OUT")" = "WOULD-GATE" ] && [[ "$(detail_of "$OUT")" == *"Agda proof (INV-3)"* ]]; then
+    ok "mutant K killed: without the path-filter verdict the deadlocking context is derived"
+  else
+    bad "MUTANT K SURVIVED: path-filter verdict removed yet the context is still kept out — $(detail_of "$OUT")"
+  fi
+else
+  bad "mutant K was not applied — the sed pattern no longer matches the applier"
 fi
 
 echo
