@@ -296,9 +296,11 @@ Checks `ECOSYSTEM.deed` (head `descriptile-deed`) against
   `validation-tooling`, `signing-tooling`, `verification-tooling`,
   `minted-from`, `registry` (owner-ruled 2026-09-19 in the mapping) and
   `downstream-consumer`, `sibling-language`, `code-dependency`, `parent`
-  (DESCRIPTILE-SPEC), and `sibling-standard`, `data-dependency`,
+  (DESCRIPTILE-SPEC), `sibling-standard`, `data-dependency`,
   `dispatch-target`, `scanner-source`, `mcp-host` (owner-ruled
-  2026-11-14, `ecosystem.abnf` v1.1.0; defined in the mapping). `:uuid` is a version 8 chora id (`#uuid` or `#u8`; `#u5` is refused, A7 S2), and `--strict` requires
+  2026-11-14, `ecosystem.abnf` v1.1.0), and `extension-of` (owner-ruled
+  2026-11-17, `ecosystem.abnf` v1.2.0): 17 terms, with definitions in the
+  mapping's §3.1. `:uuid` is a version 8 chora id (`#uuid` or `#u8`; `#u5` is refused, A7 S2), and `--strict` requires
   it (J12). A `(:name, :relationship)` pair appears once.
 
     bun deed_lint.js --ecosystem ECOSYSTEM.deed [--root REPO] [--strict]
