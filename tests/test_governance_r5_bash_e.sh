@@ -52,7 +52,7 @@ assert() {
     echo "FAIL: $label — expected exit $want, got $status; output: $(printf '%s' "$out" | head -3 | tr '\n' '|')"
     fail=$((fail + 1)); return
   fi
-  if ! printf '%s' "$out" | grep -qF -- "$needle"; then
+  if ! grep -qF -- "$needle" <<<"$out"; then
     echo "FAIL: $label — output lacks '$needle'; output: $(printf '%s' "$out" | head -3 | tr '\n' '|')"
     fail=$((fail + 1)); return
   fi

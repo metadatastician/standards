@@ -87,17 +87,7 @@ scripts/regen-dependabot-locks.sh:3
 scripts/relock-standards-pin.sh:6
 scripts/sonar-preflight.sh:2
 scripts/tests/spdx-header-block-test.sh:1
-scripts/tests/wave8-gates-test.sh:1
 scripts/triage-2026-09-29-apply.sh:2
 scripts/triage-2026-10-23-issue-1234-apply.sh:1
 scripts/update-actions-lock.sh:1
 setup.sh:4
-tests/test_apply_workflow_pins_remote.sh:16
-tests/test_governance_r5_bash_e.sh:1
-tests/test_governance_reusable_shape.sh:11
-tests/test_k9_coordination_step.sh:1
-tests/test_secret_scanner_canary.sh:1
-tests/test_secret_scanner_no_inherit.sh:3
-tests/test_settings_drift_canon_patterns.sh:2
-tests/test_tag_ruleset_canon.sh:7
-tests/test_workflow_unique_keys.sh:1
