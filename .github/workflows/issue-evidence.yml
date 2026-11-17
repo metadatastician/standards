@@ -1,0 +1,41 @@
+# SPDX-License-Identifier: MPL-2.0
+# SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+#
+# issue-evidence.yml — run the issue-evidence ledger bot on this repository
+# (3-practice/ISSUE-EVIDENCE.adoc). Every run evaluates the ledger and writes
+# the decision table to the job summary. It closes or reopens issues ONLY when
+# the repository variable ISSUE_EVIDENCE_APPLY is the string "true"; unset or
+# anything else is report-only, so merging this workflow changes no issue.
+name: Issue evidence
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .machine_readable/issue-evidence.jsonl
+      - scripts/issue-evidence.sh
+      - .github/workflows/issue-evidence.yml
+      - .github/workflows/issue-evidence-reusable.yml
+  schedule:
+    # Weekly: evidence can stop holding without the ledger changing.
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One run at a time, never cancelled half-way through applying.
+concurrency:
+  group: issue-evidence-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  issue-evidence:
+    # The reusable's evaluate job takes contents: read + issues: read; only its
+    # apply job, which runs only when apply is on, takes issues: write.
+    permissions:
+      contents: read
+      issues: write
+    uses: ./.github/workflows/issue-evidence-reusable.yml
+    with:
+      apply: ${{ vars.ISSUE_EVIDENCE_APPLY == 'true' }}

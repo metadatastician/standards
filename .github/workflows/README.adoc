@@ -102,6 +102,7 @@ These workflows run automatically on a schedule.
 |`instant-sync.yml` |Instant sync checks |rsr-template-repo |No
 |`mirror.yml` |Repository mirroring |rsr-template-repo |No
 |`casket-pages.yml` |Casket pages deployment |rsr-template-repo |No
+|`issue-evidence.yml` |Evaluates `.machine_readable/issue-evidence.jsonl` and writes the decision table to the job summary; closes and reopens issues only when the repository variable `ISSUE_EVIDENCE_APPLY` is `true` (see `3-practice/ISSUE-EVIDENCE.adoc`) |standards |`issue-evidence-reusable.yml`
 |===
 
 === ADVISORY (Informational)

@@ -1,0 +1,340 @@
+# SPDX-License-Identifier: MPL-2.0
+# SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+#
+# issue-evidence-reusable.yml — the issue-evidence ledger bot ("closer").
+#
+# An issue's open/closed state is a function of evidence on the default branch
+# (3-practice/ISSUE-EVIDENCE.adoc). This workflow evaluates the caller's ledger
+# (.machine_readable/issue-evidence.jsonl by default) with
+# scripts/issue-evidence.sh from THIS reusable's own commit, decides, writes the
+# decision table to the job summary on every run, and only when `apply` is true
+# closes issues whose evidence holds and reopens issues IT closed whose evidence
+# no longer holds. It never acts on a branch other than the default branch, and
+# never takes more than `max_actions` actions in one run (an uncapped bot once
+# cost the estate a 3,041-notification incident).
+#
+# Caller (pin the reusable to a full commit SHA, recorded in your actions.lock):
+#   jobs:
+#     issue-evidence:
+#       uses: metadatastician/standards/.github/workflows/issue-evidence-reusable.yml@<40-hex>
+#       permissions:
+#         contents: read
+#         issues: write
+#       with:
+#         apply: ${{ vars.ISSUE_EVIDENCE_APPLY == 'true' }}
+#
+# Least privilege: the evaluate job reads (contents, issues) and runs the
+# ledger's `script` checks; it holds no write token, and its checkouts do not
+# persist credentials. Only the apply job holds `issues: write`, and it checks
+# out nothing and runs no repository code. Every `${{ }}` value reaches a
+# script through `env:`, never through the text of a `run:` body.
+name: Issue evidence (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      apply:
+        description: Close and reopen issues. When false (the default) the run only reports.
+        required: false
+        type: boolean
+        default: false
+      ledger:
+        description: Path of the ledger in the calling repository.
+        required: false
+        type: string
+        default: .machine_readable/issue-evidence.jsonl
+      max_actions:
+        description: The most closes plus reopens one run may perform (0 to 50).
+        required: false
+        type: number
+        default: 10
+
+permissions:
+  contents: read
+
+jobs:
+  evaluate:
+    name: Evaluate the issue-evidence ledger
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      issues: read
+    outputs:
+      on_default: ${{ steps.branch.outputs.on_default }}
+      plan: ${{ steps.plan.outputs.plan }}
+      plan_count: ${{ steps.plan.outputs.plan_count }}
+    steps:
+      - name: Checkout caller repository (full history, for commit-on-main checks)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      # job.workflow_sha is unavailable on GitHub Enterprise Server, where it
+      # resolves to an EMPTY string and actions/checkout then follows the
+      # default branch. Assert it is a commit before the checkout it protects.
+      - name: Assert this reusable's own commit resolved
+        env:
+          SELF_WORKFLOW_SHA: ${{ job.workflow_sha }}
+        run: |
+          if ! printf '%s' "$SELF_WORKFLOW_SHA" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "::error::job.workflow_sha resolved to '${SELF_WORKFLOW_SHA:-<empty>}', not a 40-hex commit, so the evaluator checkout below would follow the default branch."
+            exit 1
+          fi
+          echo "Evaluator source: metadatastician/standards@$SELF_WORKFLOW_SHA"
+
+      - name: Checkout the evaluator at this reusable's own commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: metadatastician/standards
+          ref: ${{ job.workflow_sha }}
+          path: .issue-evidence-standards
+          persist-credentials: false
+          sparse-checkout: |
+            scripts/issue-evidence.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Stage the evaluator outside the evaluated tree
+        run: |
+          set -euo pipefail
+          cp .issue-evidence-standards/scripts/issue-evidence.sh "$RUNNER_TEMP/issue-evidence.sh"
+          rm -rf .issue-evidence-standards
+
+      # Only rows on the default branch are ever acted on: the owner approves a
+      # closure by merging the row there. Any other ref reports only.
+      - name: Is this the default branch?
+        id: branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          default="$(gh api "repos/$REPO" --jq .default_branch)"
+          if [ "$GITHUB_REF" = "refs/heads/$default" ]; then
+            echo "on_default=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "on_default=false" >>"$GITHUB_OUTPUT"
+            echo "::notice::$GITHUB_REF is not the default branch ($default): report only, nothing will be applied."
+          fi
+
+      - name: Validate the ledger
+        env:
+          LEDGER: ${{ inputs.ledger }}
+        run: bash "$RUNNER_TEMP/issue-evidence.sh" validate "$LEDGER"
+
+      - name: Evaluate every row at this commit
+        env:
+          LEDGER: ${{ inputs.ledger }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          bash "$RUNNER_TEMP/issue-evidence.sh" evaluate --repo "$REPO" --ref HEAD "$LEDGER" >"$RUNNER_TEMP/evaluated.jsonl"
+          echo "rows evaluated: $(grep -c . "$RUNNER_TEMP/evaluated.jsonl" || true)"
+
+      # For each ledger issue: its state, whether this bot closed it (closed by
+      # github-actions[bot] AND carrying this bot's marker comment from
+      # github-actions[bot]; a marker anyone else posted does not count), and
+      # whether a person reopened it after this bot closed it.
+      - name: Read the ledger issues' states
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          bot='github-actions[bot]'
+          marker='<!-- issue-evidence-bot: row-sha256='
+          : >"$RUNNER_TEMP/states.jsonl"
+          for n in $(jq -r '.issue' "$RUNNER_TEMP/evaluated.jsonl" | sort -n -u); do
+            issue="$(gh api "repos/$REPO/issues/$n")"
+            if [ "$(jq 'has("pull_request")' <<<"$issue")" = true ]; then
+              echo "::warning::ledger row #$n names a pull request, not an issue; it is never acted on."
+              continue
+            fi
+            state="$(jq -r .state <<<"$issue")"
+            closed_by="$(jq -r '.closed_by.login // ""' <<<"$issue")"
+            markers="$(gh api --paginate "repos/$REPO/issues/$n/comments?per_page=100" \
+              --jq ".[] | select(.user.login == \"$bot\" and (.body | contains(\"$marker\"))) | .id" | grep -c . || true)"
+            closed_by_bot=false
+            reopened_by_human=false
+            if [ "$state" = closed ] && [ "$closed_by" = "$bot" ] && [ "$markers" -gt 0 ]; then
+              closed_by_bot=true
+            fi
+            if [ "$state" = open ] && [ "$markers" -gt 0 ]; then
+              last="$(gh api --paginate "repos/$REPO/issues/$n/events?per_page=100" \
+                --jq '.[] | select(.event == "closed" or .event == "reopened") | [.event, (.actor.login // "")] | @tsv' | tail -n 1)"
+              if [ "${last%%$'\t'*}" = reopened ] && [ "${last#*$'\t'}" != "$bot" ]; then
+                reopened_by_human=true
+              fi
+            fi
+            jq -c -n --argjson number "$n" --arg state "$state" \
+              --argjson cbb "$closed_by_bot" --argjson rbh "$reopened_by_human" \
+              '{number: $number, state: $state, closed_by_bot: $cbb, reopened_by_human: $rbh}' >>"$RUNNER_TEMP/states.jsonl"
+          done
+          jq -c -s . "$RUNNER_TEMP/states.jsonl" >"$RUNNER_TEMP/states.json"
+
+      - name: Decide
+        env:
+          LEDGER: ${{ inputs.ledger }}
+        run: |
+          set -euo pipefail
+          bash "$RUNNER_TEMP/issue-evidence.sh" decide --open "$RUNNER_TEMP/states.json" \
+            --evaluated "$RUNNER_TEMP/evaluated.jsonl" "$LEDGER" >"$RUNNER_TEMP/decisions.jsonl"
+
+      # The plan is the first max_actions closes and reopens, in ledger order,
+      # each with its rendered comment. Beyond the cap nothing is planned, and
+      # the summary says so.
+      - name: Plan (capped) and render comments
+        id: plan
+        env:
+          LEDGER: ${{ inputs.ledger }}
+          REPO: ${{ github.repository }}
+          MAX_ACTIONS: ${{ inputs.max_actions }}
+        run: |
+          set -euo pipefail
+          if ! [[ "$MAX_ACTIONS" =~ ^[0-9]+$ ]] || [ "$MAX_ACTIONS" -gt 50 ]; then
+            echo "::error::max_actions must be an integer from 0 to 50 (got '$MAX_ACTIONS')."
+            exit 1
+          fi
+          jq -c 'select(.action != "none")' "$RUNNER_TEMP/decisions.jsonl" >"$RUNNER_TEMP/actions.jsonl"
+          total="$(grep -c . "$RUNNER_TEMP/actions.jsonl" || true)"
+          : >"$RUNNER_TEMP/plan.jsonl"
+          head -n "$MAX_ACTIONS" "$RUNNER_TEMP/actions.jsonl" | while IFS= read -r d; do
+            n="$(jq -r .issue <<<"$d")"
+            action="$(jq -r .action <<<"$d")"
+            body="$(bash "$RUNNER_TEMP/issue-evidence.sh" render-comment --issue "$n" --action "$action" \
+              --repo "$REPO" --evaluated "$RUNNER_TEMP/evaluated.jsonl" "$LEDGER")"
+            jq -c -n --argjson d "$d" --arg body "$body" \
+              '{issue: $d.issue, action: $d.action,
+                close_reason: (if $d.disposition == "landed" then "completed" else "not planned" end),
+                body: $body}' >>"$RUNNER_TEMP/plan.jsonl"
+          done
+          planned="$(grep -c . "$RUNNER_TEMP/plan.jsonl" || true)"
+          echo "plan=$(jq -c -s . "$RUNNER_TEMP/plan.jsonl")" >>"$GITHUB_OUTPUT"
+          echo "plan_count=$planned" >>"$GITHUB_OUTPUT"
+          echo "$total $planned" >"$RUNNER_TEMP/counts"
+
+      - name: Candidate rows (report only)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LEDGER: ${{ inputs.ledger }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          git log --format='%H%x09%s%x09%b%x1e' HEAD >"$RUNNER_TEMP/log.txt"
+          gh issue list --repo "$REPO" --state open --limit 2000 --json number \
+            --jq '[.[] | {number, state: "open"}]' >"$RUNNER_TEMP/open-issues.json"
+          bash "$RUNNER_TEMP/issue-evidence.sh" candidates --log "$RUNNER_TEMP/log.txt" \
+            --open "$RUNNER_TEMP/open-issues.json" --repo "$REPO" "$LEDGER" >"$RUNNER_TEMP/candidates.jsonl"
+
+      - name: Job summary (always)
+        if: always()
+        env:
+          APPLY: ${{ inputs.apply }}
+          ON_DEFAULT: ${{ steps.branch.outputs.on_default }}
+          MAX_ACTIONS: ${{ inputs.max_actions }}
+        run: |
+          {
+            echo "## Issue evidence"
+            echo
+            if [ ! -f "$RUNNER_TEMP/decisions.jsonl" ]; then
+              echo "**No decision table: an earlier step failed (see its log). Nothing was applied.**"
+            else
+              read -r total planned 2>/dev/null <"$RUNNER_TEMP/counts" || { total="?"; planned=0; }
+              if [ "$APPLY" = true ] && [ "$ON_DEFAULT" = true ]; then
+                echo "Mode: **apply** (the apply job performs the planned actions)."
+              elif [ "$APPLY" = true ]; then
+                echo "Mode: **report only**: this is not the default branch."
+              else
+                echo "Mode: **report only** (apply is off; the caller turns it on)."
+              fi
+              echo
+              echo "Actions decided: $total. Planned this run: $planned (cap $MAX_ACTIONS)."
+              if [ "$total" != "?" ] && [ "$total" -gt "$planned" ]; then
+                echo
+                echo "**Cap reached: $((total - planned)) further action(s) were NOT planned. They are taken on later runs, $MAX_ACTIONS at a time.**"
+              fi
+              echo
+              echo "| Issue | Disposition | Holds | Failed checks | Action | Reason |"
+              echo "|---|---|---|---|---|---|"
+              jq -r -s --slurpfile ev "$RUNNER_TEMP/evaluated.jsonl" '
+                ($ev | map({key: (.issue | tostring), value: .}) | from_entries) as $e
+                | .[] | ($e[.issue | tostring]) as $r
+                | "| #\(.issue) | \(.disposition) | \($r.holds) | \($r.failed | map(tostring) | join(", ")) | \(.action) | \(.reason) |"' \
+                "$RUNNER_TEMP/decisions.jsonl"
+            fi
+            if [ -s "$RUNNER_TEMP/candidates.jsonl" ]; then
+              echo
+              echo "### Candidate rows (report only, top 20)"
+              echo
+              echo "Open issues with no ledger row that commits on this branch mention. A row is written by a person, checked, and merged in a reviewed PR."
+              echo
+              echo "| Issue | Commits | Closing keyword |"
+              echo "|---|---|---|"
+              head -n 20 "$RUNNER_TEMP/candidates.jsonl" | jq -r '"| #\(.issue) | \(.mentions) | \(.closing_keyword) |"'
+            fi
+          } >>"$GITHUB_STEP_SUMMARY"
+
+  apply:
+    name: Apply closes and reopens (capped)
+    needs: evaluate
+    if: ${{ inputs.apply && needs.evaluate.outputs.on_default == 'true' && needs.evaluate.outputs.plan_count != '0' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      issues: write
+    concurrency:
+      group: issue-evidence-apply-${{ github.repository }}
+      cancel-in-progress: false
+    steps:
+      - name: Close and reopen
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PLAN: ${{ needs.evaluate.outputs.plan }}
+          MAX_ACTIONS: ${{ inputs.max_actions }}
+        run: |
+          set -euo pipefail
+          count="$(jq 'length' <<<"$PLAN")"
+          if ! [[ "$MAX_ACTIONS" =~ ^[0-9]+$ ]] || [ "$count" -gt "$MAX_ACTIONS" ]; then
+            echo "::error::the plan holds $count actions, more than max_actions ($MAX_ACTIONS); refusing to act."
+            exit 1
+          fi
+          done_n=0
+          for ((i = 0; i < count; i++)); do
+            item="$(jq -c --argjson i "$i" '.[$i]' <<<"$PLAN")"
+            n="$(jq -r .issue <<<"$item")"
+            action="$(jq -r .action <<<"$item")"
+            reason="$(jq -r .close_reason <<<"$item")"
+            body="$(jq -r .body <<<"$item")"
+            [[ "$n" =~ ^[1-9][0-9]*$ ]] || { echo "::error::bad issue number in plan"; exit 1; }
+            # Re-read the state right before acting: a person may have acted
+            # since the evaluate job read it.
+            now="$(gh issue view "$n" --repo "$REPO" --json state --jq .state)"
+            case "$action" in
+              close)
+                if [ "$now" != OPEN ]; then echo "#$n is $now now; not closing."; continue; fi
+                gh issue close "$n" --repo "$REPO" --reason "$reason" --comment "$body"
+                ;;
+              reopen)
+                if [ "$now" != CLOSED ]; then echo "#$n is $now now; not reopening."; continue; fi
+                gh issue reopen "$n" --repo "$REPO" --comment "$body"
+                ;;
+              *) echo "::error::unknown action in plan: $action"; exit 1 ;;
+            esac
+            done_n=$((done_n + 1))
+            echo "| #$n | $action |" >>"$RUNNER_TEMP/applied.md"
+          done
+          {
+            echo "## Issue evidence: applied"
+            echo
+            echo "$done_n of $count planned action(s) performed."
+            if [ -s "$RUNNER_TEMP/applied.md" ]; then
+              echo
+              echo "| Issue | Action |"
+              echo "|---|---|"
+              cat "$RUNNER_TEMP/applied.md"
+            fi
+          } >>"$GITHUB_STEP_SUMMARY"
