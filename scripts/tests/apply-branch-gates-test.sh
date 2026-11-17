@@ -186,14 +186,13 @@ mkfix "repos/$R/rulesets/9" '{"name":"Base","target":"branch","enforcement":"act
 
 # MUTANT B: the body-builder also drops required_signatures.
 MUTB="$WORK/mutant-b.sh"
-python3 - "$APPLIER" "$MUTB" <<'MUTPY'
-import sys
-src, dst = sys.argv[1], sys.argv[2]
-s = open(src).read()
-old = '| .rules = ((.rules // []) | map(select(.type!="required_status_checks")))'
-new = '| .rules = ((.rules // []) | map(select(.type!="required_status_checks" and .type!="required_signatures")))'
-open(dst, "w").write(s.replace(old, new, 1) if old in s else s)
-MUTPY
+# A literal, first-occurrence replacement in bash (no pattern characters are
+# interpreted: both operands are quoted). If the old text is gone the copy is
+# identical and the check below reports that the mutant was not applied.
+mutb_old='| .rules = ((.rules // []) | map(select(.type!="required_status_checks")))'
+mutb_new='| .rules = ((.rules // []) | map(select(.type!="required_status_checks" and .type!="required_signatures")))'
+mutb_src="$(cat "$APPLIER"; printf x)"; mutb_src="${mutb_src%x}"
+printf '%s' "${mutb_src/"$mutb_old"/"$mutb_new"}" > "$MUTB"
 if ! diff -q "$APPLIER" "$MUTB" >/dev/null; then
   OUT=$(MUTANT="$MUTB" run_applier "$R" --apply)
   if [ "$(state_of "$OUT")" = "REFUSED" ]; then
@@ -202,7 +201,7 @@ if ! diff -q "$APPLIER" "$MUTB" >/dev/null; then
     bad "MUTANT B SURVIVED: required_signatures silently dropped, state=$(state_of "$OUT")"
   fi
 else
-  bad "mutant B was not applied — the sed pattern no longer matches the applier"
+  bad "mutant B was not applied: the replaced text is no longer in the applier"
 fi
 
 # ================================================================ CASE 4
