@@ -61,7 +61,8 @@ RECEIPT_DEFAULT_BRANCH=main
 RECEIPT_CANONICAL_NAME=t-proof-receipt
 RECEIPT_SCRIPT=scripts/grade-receipt.sh
 SIB="$SIB"
-receipt_claims() { printf '%s\n' 'T-1|proven|theorem|re-proved|RECONCILED|re-proved|RECONCILED||' 'T-2|tested-only|demonstration|n/a|n/a|n/a|n/a||'; }
+receipt_claims() { printf '%s\n' 'T-1|proven|theorem|re-proved|RECONCILED|re-proved|RECONCILED||' 'T-2|tested-only|demonstration|n/a|n/a|n/a|n/a||'; [ -z "\${SECOND:-}" ] || printf '%s\n' 'T-3|proven|theorem|re-proved|RECONCILED|re-proved|RECONCILED||'; }
+receipt_run_scope() { [ -z "\${SCOPE:-}" ] || printf '%s\n' "\$SCOPE"; }
 receipt_runs() { if [ -n "\${PARTIAL_FAIL:-}" ]; then cat runs.rows; return 3; fi; [ -z "\${FAIL_RUNS:-}" ] || return 4; cat "\${RUNS_FILE:-runs.rows}"; }
 receipt_echoes() { if [ -n "\${ECHO_ROW:-}" ]; then printf "%s\\n" "\$ECHO_ROW"; fi; }
 receipt_header() { printf ';; SPDX-License-Identifier: CC-BY-SA-4.0\n;; test receipt (a comment may say :pwg PWG-1 without moving the control)\n'; }
@@ -334,6 +335,56 @@ grep -q ':pwg PWG-3' "$R/verification/receipts/t_praxis.deed" && ok "the receipt
 grep -q '(inputs :prover rocq' "$R/verification/receipts/t_praxis.deed" && bad "the echo carries a witness for a leg with no current receipt" || ok "the echo carries witnesses only for current legs"
 gitq -C "$R" add -A; gitq -C "$R" commit -qm "pwg3 receipt"
 RUNS_FILE="$WORK/agda.rows" ECHO_ROW="$C|$IMG|inputs-sha256|refs/pull/1/head" expect "its --check passes the git checks of the echo" 0 "PASS: negative control" --check
+
+# Run scope (receipt_run_scope): a superseded run that checked only some
+# claims is listed under those claims alone.  T-3 joins T-1 as a theorem
+# with the same legs; run 1 (at C) is superseded by run 9 (at N), and run 1
+# of the Rocq leg is scoped to T-1.
+printf '| T-3 | proven\n' >>"$R/STATUS.adoc"
+printf '| T-3 | RECONCILED | RECONCILED\n' >>"$R/legs/README.adoc"
+gitq -C "$R" add -A; gitq -C "$R" commit -qm "a second theorem"
+git -C "$R" fetch -q origin
+N=$(git -C "$R" rev-parse HEAD)
+sed 's/|current||/|superseded|replaced by run 9|/' "$WORK/rows" >"$WORK/scope.rows"
+for p in agda rocq lean; do
+  (cd "$R" && SECOND=1 bash scripts/grade-receipt.sh --run-row "$p" --run "https://ci.example/run/9" --commit "$N" --checker "$p 1" --reported ok) >>"$WORK/scope.rows" \
+    || bad "--run-row $p at N"
+done
+# The lines of one leg of one claim in the receipt.
+leg_of() {
+  awk -v c="(claim :id \"$1\"" -v l="(leg :prover $2 " '
+    index($0, "(claim :id") == 3 { inc = (index($0, c) == 3); inl = 0 }
+    inc && index($0, "(leg :prover") == 5 { inl = (index($0, l) == 5) }
+    inc && inl' "$R/verification/receipts/t_praxis.deed"
+}
+RUNS_FILE="$WORK/scope.rows" SECOND=1 expect "two theorems and a superseded run write without a scope" 0 "WROTE" --write
+leg_of T-3 rocq | grep -q 'run/1"' && ok "without a scope, the superseded run is listed under every claim with its leg" || bad "the unscoped run is missing under T-3"
+SC1='rocq|https://ci.example/run/1|T-1'
+RUNS_FILE="$WORK/scope.rows" SECOND=1 SCOPE="$SC1" expect "a run scoped to T-1 writes" 0 "WROTE" --write
+leg_of T-1 rocq | grep -q 'run/1"' && ok "the scoped run is listed under the claim it checked" || bad "the scoped run is missing under T-1"
+leg_of T-3 rocq | grep -q 'run/1"' && bad "the scoped run is listed under a claim it did not check" || ok "and not under a claim it did not check"
+leg_of T-3 rocq | grep -q 'run/9"' && ok "that claim keeps its current receipt" || bad "T-3 lost its current Rocq receipt"
+leg_of T-3 agda | grep -q 'run/1"' && ok "a scope on one leg leaves the other legs' runs alone" || bad "the Agda run 1 is missing under T-3"
+[ "$(grep -c '^  (claim :id "T-[13]" :pwg PWG-1 ' "$R/verification/receipts/t_praxis.deed")" = 2 ] && ok "a scope changes no grade: both theorems derive PWG-1" || bad "a scope moved a grade"
+gitq -C "$R" add -A; gitq -C "$R" commit -qm "scoped receipt"
+git -C "$R" fetch -q origin
+RUNS_FILE="$WORK/scope.rows" SECOND=1 SCOPE="$SC1" expect "--check passes on a scoped receipt" 0 "PASS: negative control" --check
+# A leg whose only run is scoped to another claim has no receipt under this
+# one: the leg is written without receipts, and the reader accepts it.
+{ grep '^agda|https://ci.example/run/9|' "$WORK/scope.rows"; grep '^rocq|https://ci.example/run/1|' "$WORK/scope.rows"; } >"$WORK/scope-only.rows"
+RUNS_FILE="$WORK/scope-only.rows" SECOND=1 SCOPE="$SC1" expect "a leg left with no receipt under a claim writes, and the reader accepts it" 0 "WROTE" --write
+leg_of T-3 rocq | grep -q '(receipt' && bad "T-3's Rocq leg lists a run scoped away from it" || ok "that leg is written with no receipt"
+leg_of T-1 rocq | grep -q 'run/1"' && ok "the claim the run checked still lists it" || bad "T-1 lost its scoped Rocq run"
+gitq -C "$R" checkout -q -- verification/receipts/t_praxis.deed
+RUNS_FILE="$WORK/scope.rows" SECOND=1 SCOPE='rocq|https://ci.example/run/9|T-1' expect "a scope on a current run is refused" 1 "a current run checks every claim with its leg" --check
+RUNS_FILE="$WORK/scope.rows" SECOND=1 SCOPE='rocq|https://ci.example/run/7|T-1' expect "a scope on a run the ledger lacks is refused" 1 "names no run of the rocq ledger" --check
+RUNS_FILE="$WORK/scope.rows" SECOND=1 SCOPE='rocq|https://ci.example/run/1|T-9' expect "a scope naming an unknown claim is refused" 1 "T-9, which is no theorem claim" --check
+RUNS_FILE="$WORK/scope.rows" SECOND=1 SCOPE='rocq|https://ci.example/run/1|T-2' expect "a scope naming a demonstration is refused" 1 "T-2, which is no theorem claim" --check
+RUNS_FILE="$WORK/scope.rows" SECOND=1 SCOPE='rocq|https://ci.example/run/1| ' expect "a scope naming no claim is refused" 1 "a run scope names no claim" --check
+RUNS_FILE="$WORK/scope.rows" SECOND=1 SCOPE='rocq|https://ci.example/run/1' expect "a scope with two fields is refused" 1 "a run scope needs 3 fields" --check
+RUNS_FILE="$WORK/scope.rows" SECOND=1 SCOPE="$SC1"$'\n'"$SC1" expect "two scopes of one run are refused" 1 "a run has two run scopes" --check
+RUNS_FILE="$WORK/scope.rows" SECOND=1 SCOPE='coq|https://ci.example/run/1|T-1' expect "a scope naming an unknown prover is refused" 1 "a run scope names an unknown prover" --check
+RUNS_FILE="$WORK/scope.rows" SECOND=1 expect "dropping the scope makes the receipt stale for --check" 1 "does not match the tree and the ledgers" --check
 
 echo "proof-receipt-test: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

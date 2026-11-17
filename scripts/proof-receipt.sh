@@ -81,6 +81,15 @@
 #                           (§8.5.1, Imported repositories).  Default: none.
 #   receipt_ensure_import R C D   make commit C of R present in clone D.
 #                           Default: refuse when it is not there.
+#   receipt_run_scope       the claims a superseded or regressed run checked,
+#                           when it did not check every claim with its leg,
+#                           one run a line: prover | run | claim ids
+#                           (space-separated).  That run's receipt is then
+#                           listed under those claims only, so a claim's
+#                           lineage never names a run that did not check it.
+#                           A current run checks every claim with its leg,
+#                           and is refused here.  Default: every run covers
+#                           every claim with its leg.
 #   receipt_extra_legs      legs outside dependent type theory (§8.3), one a
 #                           line: claim id | prover | route | §2.2 state |
 #                           reason.  The prover is a lowercase name other than
@@ -327,7 +336,49 @@ _receipt_is_prover() { local x; for x in "${_receipt_provers[@]}"; do [[ "$x" !=
 # ── Grade (§8.2 and §8.5.2, the same rules as readProofReceipt) ───────────────
 _receipt_has_current() { awk -F'|' -v p="$1" '$1==p && $8=="current"{f=1} END{exit !f}' "$_receipt_ledger_file"; }
 _receipt_current_field() { awk -F'|' -v p="$1" -v f="$2" '$1==p && $8=="current"{print $f}' "$_receipt_ledger_file"; }
-_receipt_has_any() { awk -F'|' -v p="$1" '$1==p{f=1} END{exit !f}' "$_receipt_ledger_file"; }
+_receipt_has_any() {
+  local row p run state
+  while IFS= read -r row; do
+    IFS='|' read -r p run _ _ _ _ _ state _ <<< "$row"
+    [[ "$p" == "$1" ]] && _receipt_in_scope "$p" "$run" "$state" && return 0
+  done < "$_receipt_ledger_file"
+  return 1
+}
+
+# ── Run scope (receipt_run_scope) ─────────────────────────────────────────────
+# $_receipt_scope_file holds "prover|run|claim ids" rows, checked; the claim
+# being emitted is $_receipt_claim (empty outside a claim: every row counts).
+_receipt_scope_file=
+_receipt_claim=
+_receipt_load_scope() {
+  local row prover run ids id
+  _receipt_scope_file="$(mktemp)"; _receipt_tmpfiles+=("$_receipt_scope_file" "$_receipt_scope_file.raw")
+  : > "$_receipt_scope_file.raw"
+  declare -F receipt_run_scope >/dev/null && _receipt_hook "$_receipt_scope_file.raw" receipt_run_scope
+  grep . "$_receipt_scope_file.raw" > "$_receipt_scope_file" || true
+  while IFS= read -r row; do
+    [[ "$(tr -cd '|' <<< "$row" | wc -c)" == 2 ]] || receipt_die "a run scope needs 3 fields (prover | run | claim ids): $row"
+    IFS='|' read -r prover run ids <<< "$row"
+    _receipt_is_prover "$prover" || receipt_die "a run scope names an unknown prover: $row"
+    awk -F'|' -v p="$prover" -v r="$run" '$1==p && $2==r{f=1} END{exit !f}' "$_receipt_ledger_file" \
+      || receipt_die "a run scope names no run of the $prover ledger: $row"
+    ! awk -F'|' -v p="$prover" -v r="$run" '$1==p && $2==r && $8=="current"{f=1} END{exit !f}' "$_receipt_ledger_file" \
+      || receipt_die "a current run checks every claim with its leg, so it takes no run scope: $row"
+    [[ -n "${ids// /}" ]] || receipt_die "a run scope names no claim: $row"
+    for id in $ids; do
+      awk -F'|' -v i="$id" '$1==i && $3=="theorem"{f=1} END{exit !f}' "$_receipt_claims_file" \
+        || receipt_die "a run scope names $id, which is no theorem claim of receipt_claims: $row"
+    done
+  done < "$_receipt_scope_file"
+  [[ "$(cut -d'|' -f1,2 "$_receipt_scope_file" | sort | uniq -d | wc -l)" == 0 ]] || receipt_die 'a run has two run scopes'
+}
+# Whether the run (prover, run, state) belongs under the claim being emitted.
+_receipt_in_scope() {
+  local prover="$1" run="$2" state="$3" ids
+  [[ -n "$_receipt_claim" && "$state" != current && -s "$_receipt_scope_file" ]] || return 0
+  ids="$(awk -F'|' -v p="$prover" -v r="$run" '$1==p && $2==r{print $3}' "$_receipt_scope_file")"
+  [[ -z "$ids" || " $ids " == *" $_receipt_claim "* ]]
+}
 # PROOF-POLICY §2.1: the Agda invocation is at least the estate default.
 _receipt_canonical() {
   local w
@@ -448,6 +499,7 @@ _receipt_emit_receipts() {
       IFS='|' read -r p run commit checker inv dig said state reason axioms imports <<< "$row"
       [[ "$p" == "$prover" ]] || continue
       if [[ $want == current ]]; then [[ $state == current ]] || continue; else [[ $state != current ]] || continue; fi
+      _receipt_in_scope "$p" "$run" "$state" || continue
       printf '      ; the run reported: %s\n' "$said"
       printf '      (receipt :run "%s"\n' "$run"
       printf '               :commit "%s"\n' "$commit"
@@ -524,6 +576,7 @@ _receipt_emit() {
     if [[ "$token" == proven-with-postulates ]] && _receipt_has_current agda && [[ -z "$(_receipt_current_field agda 10)" ]]; then
       receipt_die "claim $id: its token proven-with-postulates names axioms, but the current Agda run reported none"
     fi
+    _receipt_claim="$id"
     printf '  (claim :id "%s" :pwg %s :foundation-diverse %s\n' "$id" "$(_receipt_pwg_of "$token" "$coq" "$coq_state" "$lean" "$lean_state")" "$(_receipt_diverse_of "$id")"
     printf '    (leg :prover agda :route source :token %s :state AGDA-VERIFIED' "$token"
     if _receipt_has_any agda; then printf '\n'; _receipt_emit_receipts_closed agda ')'; else printf ')\n'; fi
@@ -541,6 +594,7 @@ _receipt_emit() {
     else
       _receipt_emit_leg lean "$lean" "$lean_state" "$lean_reason" '))'
     fi
+    _receipt_claim=
   done < "$_receipt_claims_file"
   printf ')\n'
 }
@@ -591,6 +645,7 @@ _receipt_prepare() {
   _receipt_manifest_dir="$(mktemp -d)"
   _receipt_tmpfiles+=("$_receipt_ledger_file" "$_receipt_echo_file" "$_receipt_echo_digest_file" "$_receipt_manifest_dir")
   _receipt_ledger > "$_receipt_ledger_file"
+  _receipt_load_scope
   _receipt_trusted_base_file="$(mktemp)"; _receipt_tmpfiles+=("$_receipt_trusted_base_file")
   _receipt_hook "$_receipt_trusted_base_file" receipt_trusted_base
   grep . "$_receipt_echoes_file" > "$_receipt_echo_file" || true
