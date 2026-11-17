@@ -51,7 +51,7 @@ hooks/validate-spdx.sh:1
 scripts/apply-branch-gates.sh:1
 scripts/apply-protection-floor.sh:3
 scripts/apply-tag-ruleset-canon.sh:7
-scripts/apply-workflow-pins-remote.sh:4
+scripts/apply-workflow-pins-remote.sh:3
 scripts/check-baseline-expiry.sh:2
 scripts/check-canon-lockstep.sh:2
 scripts/check-canonical-names.sh:2
