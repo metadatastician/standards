@@ -1017,6 +1017,11 @@ expect_path_filtered "path-filtered (flow-style pull_request mapping)"
 pr_case acme/paths-target 'on:\n  pull_request_target:\n    paths:\n      - src/**\n'
 expect_path_filtered "path-filtered (pull_request_target)"
 
+pr_case acme/quoted-paths 'on:\n  pull_request:\n    "paths": ["src/**"]\n'
+expect_path_filtered "quoted nested paths key"
+pr_case acme/quoted-flow 'on: {pull_request: {"paths-ignore": ["docs/**"]}}\n'
+expect_path_filtered "quoted flow paths-ignore key"
+
 # Positive controls: a bare PR trigger is still derived, and a `paths:` under
 # push (not under pull_request) does not filter the PR trigger.
 pr_case acme/bare-pr 'on:\n  pull_request:\n    branches: [main]\n  push:\n    branches: [main]\n    paths: ["src/**"]\n'
@@ -1026,7 +1031,7 @@ case "$D" in *"path_filtered="*) bad "path-filter positive control: push paths: 
 
 # ---- MUTANT K: drop the path-filter verdict (#1065). -------------------------
 MUTK="$WORK/mutant-k.sh"
-sed 's/if (path_filtered) exit 3/if (0) exit 3/' "$APPLIER" > "$MUTK"
+sed 's/if (path_filtered == "true") exit 3/if (0) exit 3/' "$APPLIER" > "$MUTK"
 if ! cmp -s "$MUTK" "$APPLIER" && bash -n "$MUTK" 2>/dev/null; then
   pr_case acme/paths-block 'on:\n  pull_request:\n    paths:\n      - "verification/proofs/**"\n'
   OUT=$(MUTANT="$MUTK" run_applier "$R")
@@ -1038,6 +1043,19 @@ if ! cmp -s "$MUTK" "$APPLIER" && bash -n "$MUTK" 2>/dev/null; then
 else
   bad "mutant K was not applied — the sed pattern no longer matches the applier"
 fi
+
+# Missing/unsupported YAML parser fails before deriving or writing checks.
+reset_fix
+printf '#!/usr/bin/env bash\nexit 127\n' > "$BIN/yq"
+chmod +x "$BIN/yq"
+OUT=$(run_applier acme/no-parser --apply); RC=$?
+if [ "$RC" = 1 ] && command grep -q 'mikefarah yq v4 is required' "$WORK/err"; then
+  ok "missing YAML parser fails clearly"
+else
+  bad "missing YAML parser: expected a dependency error, rc=$RC"
+fi
+[ ! -s "$FIX/PUTS.log" ] && ok "missing YAML parser performs no writes" || bad "missing YAML parser wrote rules"
+rm "$BIN/yq"
 
 echo
 echo "passed=$pass failed=$fail"

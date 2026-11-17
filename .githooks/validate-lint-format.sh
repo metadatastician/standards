@@ -116,13 +116,23 @@ if [ -n "$RS" ]; then
   [ -n "$RS_ORPHANS" ] && LEDGER+=("rust: NOT checked, no enclosing Cargo.toml: ${RS_ORPHANS% }")
   if [ -n "$CRATES" ]; then
     note "Rust: $(echo "$RS" | grep -c .) staged file(s) in $(echo "$CRATES" | grep -c .) crate(s)"
-    if require_tool cargo Rust "https://rustup.rs"; then
+    if require_tool cargo Rust "https://rustup.rs" && require_tool jq Rust "jq"; then
       while IFS= read -r c; do
         [ -z "$c" ] && continue
         # rustfmt reports a formatting difference as "Diff in <file>"; any other
         # non-zero exit is cargo failing to run (bad manifest, missing
         # component), which is a tooling/scope error and is named as one.
-        if fmt_out="$(cd "$c" && cargo fmt --check 2>&1)"; then
+        if fmt_out="$(
+          cd "$c" || exit 1
+          # read-manifest returns a package only for a package manifest.
+          # Virtual manifests retain the workspace formatting check.
+          if package_json=$(cargo read-manifest --manifest-path Cargo.toml 2>/dev/null); then
+            package_name=$(printf '%s' "$package_json" | jq -er '.name') || exit 1
+            cargo fmt --check --package "$package_name"
+          else
+            cargo fmt --check
+          fi
+        )"; then
           note "Rust: $c: formatted"
         elif printf '%s' "$fmt_out" | grep -q '^Diff in '; then
           printf '%s\n' "$fmt_out" >&2

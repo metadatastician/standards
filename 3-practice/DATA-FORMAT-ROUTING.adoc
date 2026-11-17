@@ -48,8 +48,9 @@ ____
   dependabot).
 | D280 and D307, `YAML-POLICY.adoc` §3.4. Workflows convert only once the
   lock-coverage precondition holds (`YAML-POLICY.adoc` §3.4, step 6).
-| Rule in force for new estate-owned files. Gate is the transitional `yq` and
-  `scripts/kyaml-format.sh` (§4).
+| Rule in force for new estate-owned files. The transitional `yq` gate,
+  `scripts/kyaml-format.sh --check` (§4), covers only the converted-file
+  ratchet. There is no estate-wide gate.
 
 | JSON, NDJSON/JSONL, JSON-LD
 | I-JSON serialised by JCS, using the profile in `hyperpolymath/ijson-jcs`
@@ -58,7 +59,8 @@ ____
   carved out.
 | D306, `JSON-POLICY.adoc` J-1 and J-2.
 | Rule in force for new or rewritten files, report-only gate
-  (`scripts/check-ijson-jcs.sh`, §4).
+  (`scripts/check-ijson-jcs.sh`, §4), scanning only `*.json` and `*.jsonl`.
+  `*.ndjson` and `*.jsonld` are not covered.
 
 | Wider projection
 | kyX, not extra kyq formats. kyX was named kcX before D334.

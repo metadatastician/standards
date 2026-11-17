@@ -165,6 +165,7 @@ done
   && die '--no-integration-bypass applies to the CREATED ruleset only; pass --create-gates (the update path may not alter bypass_actors)'
 command -v gh >/dev/null || die 'gh is required'
 command -v jq >/dev/null || die 'jq is required'
+yq --version 2>/dev/null | grep -q mikefarah || die 'mikefarah yq v4 is required to parse workflow YAML'
 
 WORK="$(mktemp -d)"; trap 'rm -rf "$WORK"' EXIT
 
@@ -205,8 +206,13 @@ is_never_ctx() {
 # those paths, so a context required from it waits forever on every other
 # PR. 3 is a refusal to derive, reported in its own bucket, never a pass.
 yaml_has_pr_trigger() {
-  local def="$1"
-  awk -v def="$def" '
+  local def="$1" parsed path_filtered
+  parsed=$(yq -o=json '.' -) || { echo 'cannot parse workflow YAML' >&2; return 1; }
+  path_filtered=$(printf '%s' "$parsed" | jq -r '
+    [.on | select(type == "object") | (.pull_request, .pull_request_target)
+     | select(type == "object") | has("paths") or has("paths-ignore")] | any') || return 1
+  # Normalise quoted keys and flow mappings before the branch-scope check.
+  printf '%s' "$parsed" | yq -P -p=json '.' - | awk -v def="$def" -v path_filtered="$path_filtered" '
     function trim(s) {
       sub(/^[[:space:]]+/, "", s)
       sub(/[[:space:]]+$/, "", s)
@@ -267,7 +273,7 @@ yaml_has_pr_trigger() {
           pval = rest
           sub(/^pull_request(_target)?[[:space:]]*:[[:space:]]*/, "", pval)
           # flow style: `pull_request: {branches: [main], paths: [...]}`
-          if (pval ~ /(^|[{,[:space:]])paths(-ignore)?[[:space:]]*:/) path_filtered = 1
+
           in_pr = 1
           pr_ind = ind
           next
@@ -275,10 +281,6 @@ yaml_has_pr_trigger() {
       }
 
       if (in_pr) {
-        if (rest ~ /^paths(-ignore)?[[:space:]]*:/) {
-          path_filtered = 1
-          next
-        }
         if (rest ~ /^branches[[:space:]]*:/) {
           has_br_filter = 1
           val = rest
@@ -334,7 +336,7 @@ yaml_has_pr_trigger() {
       if (!has_pr) exit 1
       if (br_ignored) exit 1
       if (has_br_filter && !br_matched) exit 1
-      if (path_filtered) exit 3
+      if (path_filtered == "true") exit 3
       exit 0
     }
   '

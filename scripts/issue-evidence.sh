@@ -12,12 +12,13 @@
 #   the default branch. A row in .machine_readable/issue-evidence.jsonl says
 #   "issue N is done (or moot) because these machine-checkable facts hold".
 #   The owner approves a closure by merging the row in a reviewed PR; the
-#   workflow closes the issue while the facts hold, and reopens an issue IT
-#   closed when they stop holding. Doctrine: 3-practice/ISSUE-EVIDENCE.adoc.
+#   workflow added by #1652 will close the issue while the facts hold, and
+#   reopen an issue IT closed when they stop holding. Doctrine: 3-practice/ISSUE-EVIDENCE.adoc.
 #
 # THIS SCRIPT IS A TOTAL, SIDE-EFFECT-FREE FUNCTION of (ledger, git tree at a
 # ref). It never calls the network and never writes to the repository. The
-# GitHub reads and writes live in .github/workflows/issue-evidence-reusable.yml.
+# GitHub reads and writes belong to the reusable workflow added by follow-up
+# #1652: .github/workflows/issue-evidence-reusable.yml.
 #
 # SUBCOMMANDS (LEDGER defaults to .machine_readable/issue-evidence.jsonl)
 #   validate [LEDGER]
@@ -27,7 +28,7 @@
 #       issue, repo, unevaluated}. holds is true when every check holds, false
 #       when any check fails, null when none fails but one could not be
 #       evaluated. failed/unevaluated are 0-based check indices.
-#   decide --open FILE [--evaluated FILE | --repo R --ref REF] [LEDGER]
+#   decide --open FILE [--repo R --evaluated FILE | --repo R --ref REF] [LEDGER]
 #       Pure decision table. FILE is a JSON array of {number, state} with
 #       state open|closed, closed_by_bot (bool) for closed issues, and
 #       optionally reopened_by_human (bool) for open ones. One JCS line per
@@ -548,6 +549,7 @@ def posint: type == "number" and . == floor and . >= 1;
 | if ($entries | map(.key) | unique | length) != ($entries | length) then error("--open: an issue number appears twice") else . end
 | ($entries | from_entries) as $state
 | $ev[]
+| select($repo == "" or (.repo | ascii_downcase) == ($repo | ascii_downcase))
 | . as $r
 | $state[$r.issue | tostring] as $s
 | (if $s == null then {action: "none", reason: "no-issue-state"}
@@ -565,8 +567,9 @@ cmd_decide() {
   parse_opts "$@"
   [ -n "$OPEN_FILE" ] || fail_input "decide needs --open FILE"
   [ -f "$OPEN_FILE" ] || fail_input "--open file not found: $OPEN_FILE"
+  [ -z "$EVAL_FILE" ] || [ -n "$REPO_FILTER" ] || fail_input "decide --evaluated requires --repo"
   load_evaluated
-  jq -n -c -S --slurpfile open "$OPEN_FILE" --slurpfile ev "$EVALUATED" "$DECIDE_JQ" 2>"$TMPD/decide.err" ||
+  jq -n -c -S --arg repo "$REPO_FILTER" --slurpfile open "$OPEN_FILE" --slurpfile ev "$EVALUATED" "$DECIDE_JQ" 2>"$TMPD/decide.err" ||
     fail_input "$(head -c 300 "$TMPD/decide.err")"
 }
 

@@ -187,10 +187,14 @@ expect_holds "script is unevaluated when the checkout's copy is modified" null "
 git checkout -q -- scripts/pass.sh
 git clone -q --depth 1 "file://$R" "$WORK/shallow"
 ledger "$(row 1 "[{\"kind\":\"commit-on-main\",\"sha\":\"$C1\"}]")"
-(cd "$WORK/shallow" && expect_holds "commit-on-main is unevaluated in a shallow clone" null "$L")
+cd "$WORK/shallow"
+expect_holds "commit-on-main is unevaluated in a shallow clone" null "$L"
+cd "$R"
 ledger "$(row 1 '[{"kind":"path-present","path":"scripts/helper.sh"}]')"
 expect_rc "an unresolvable --ref is an internal error (3)" 3 bash "$IE" evaluate --ref no-such-ref "$L"
-(cd "$WORK" && expect_rc "outside a git repository is an internal error (3)" 3 bash "$IE" evaluate "$L")
+cd "$WORK"
+expect_rc "outside a git repository is an internal error (3)" 3 bash "$IE" evaluate "$L"
+cd "$R"
 
 echo "=== validate: every rejection names its line ==="
 GOOD="$(row 2 '[{"kind":"path-present","path":"docs/a.adoc"}]')"
@@ -390,22 +394,28 @@ cat >"$WORK/want.jsonl" <<'EOF'
 {"action":"none","disposition":"landed","issue":21,"reason":"no-issue-state","repo":"o/r"}
 {"action":"none","disposition":"landed","issue":22,"reason":"evidence-does-not-hold","repo":"o/r"}
 EOF
-run bash "$IE" decide --open "$WORK/open.json" --evaluated "$WORK/ev.jsonl"
+run bash "$IE" decide --repo o/r --open "$WORK/open.json" --evaluated "$WORK/ev.jsonl"
 if [ "$RC" = 0 ] && [ "$OUT" = "$(cat "$WORK/want.jsonl")" ]; then ok "decide truth table (12 cases)"
 else ko "decide truth table — rc=$RC"; diff <(printf '%s\n' "$OUT") "$WORK/want.jsonl" | head -20; fi
 echo '{"number":1}' >"$WORK/bad-open.json"
-expect_err "decide refuses an --open that is not an array" "not a JSON array" bash "$IE" decide --open "$WORK/bad-open.json" --evaluated "$WORK/ev.jsonl"
+expect_err "decide refuses an --open that is not an array" "not a JSON array" bash "$IE" decide --repo o/r --open "$WORK/bad-open.json" --evaluated "$WORK/ev.jsonl"
 echo '[{"number":11,"state":"closed"}]' >"$WORK/bad-open.json"
-expect_err "decide refuses a closed issue without closed_by_bot" "needs closed_by_bot" bash "$IE" decide --open "$WORK/bad-open.json" --evaluated "$WORK/ev.jsonl"
+expect_err "decide refuses a closed issue without closed_by_bot" "needs closed_by_bot" bash "$IE" decide --repo o/r --open "$WORK/bad-open.json" --evaluated "$WORK/ev.jsonl"
 echo '[{"number":11,"state":"open"},{"number":11,"state":"open"}]' >"$WORK/bad-open.json"
-expect_err "decide refuses a repeated issue" "appears twice" bash "$IE" decide --open "$WORK/bad-open.json" --evaluated "$WORK/ev.jsonl"
+expect_err "decide refuses a repeated issue" "appears twice" bash "$IE" decide --repo o/r --open "$WORK/bad-open.json" --evaluated "$WORK/ev.jsonl"
+expect_err "evaluated decisions require a repository" "requires --repo" bash "$IE" decide --open "$WORK/open.json" --evaluated "$WORK/ev.jsonl"
+# Same issue numbers in another repository must not create decisions here.
+sed 's|"o/r"|"other/repo"|g' "$WORK/ev.jsonl" >> "$WORK/ev.jsonl.copy"
+cat "$WORK/ev.jsonl.copy" >> "$WORK/ev.jsonl"
+run bash "$IE" decide --repo o/r --open "$WORK/open.json" --evaluated "$WORK/ev.jsonl"
+verdict "evaluated decisions filter repositories before matching numbers" [ "$OUT" = "$(cat "$WORK/want.jsonl")" ]
 # decide straight from the ledger: evaluate and decide agree on the tree.
 ledger "$(row 1405 '[{"kind":"grep-absent","path":"scripts/helper.sh","pattern":"eval"}]')"
 echo '[{"number":1405,"state":"open"}]' >"$WORK/o1405.json"
-run bash "$IE" decide --open "$WORK/o1405.json" --ref "$C2" "$L"
+run bash "$IE" decide --repo o/r --open "$WORK/o1405.json" --ref "$C2" "$L"
 verdict "decide from the ledger: close at the fixing commit" [ "$OUT" = '{"action":"close","disposition":"landed","issue":1405,"reason":"evidence-holds","repo":"o/r"}' ]
 echo '[{"number":1405,"state":"closed","closed_by_bot":true}]' >"$WORK/o1405.json"
-run bash "$IE" decide --open "$WORK/o1405.json" --ref "$C1" "$L"
+run bash "$IE" decide --repo o/r --open "$WORK/o1405.json" --ref "$C1" "$L"
 verdict "decide from the ledger: reopen at the parent (regression)" [ "$OUT" = '{"action":"reopen","disposition":"landed","issue":1405,"reason":"regression","repo":"o/r"}' ]
 
 echo "=== render-comment ==="
@@ -448,7 +458,7 @@ same() { # LABEL CMD...
 }
 same "evaluate" bash "$IE" evaluate "$L"
 echo '[{"number":1,"state":"open"},{"number":2,"state":"closed","closed_by_bot":true},{"number":3,"state":"open"}]' >"$WORK/det-open.json"
-same "decide" bash "$IE" decide --open "$WORK/det-open.json" "$L"
+same "decide" bash "$IE" decide --repo o/r --open "$WORK/det-open.json" "$L"
 same "render-comment" bash "$IE" render-comment --issue 2 --action close "$L"
 same "candidates" bash "$IE" candidates --log "$WORK/log" --open "$WORK/cand-open.json" --repo o/r "$L"
 run bash "$IE" evaluate "$L"
@@ -459,7 +469,9 @@ run bash "$IE" evaluate --repo o/other "$L"
 verdict "--repo filters out other repositories' rows" rc0_and [ -z "$OUT" ]
 
 echo "=== the live ledger ==="
-(cd "$REPO_ROOT" && expect_rc "the repository's own ledger validates" 0 bash "$IE" validate .machine_readable/issue-evidence.jsonl)
+cd "$REPO_ROOT"
+expect_rc "the repository's own ledger validates" 0 bash "$IE" validate .machine_readable/issue-evidence.jsonl
+cd "$R"
 
 if [ -z "${ISSUE_EVIDENCE_NEGATIVE_CONTROL:-}" ]; then
   echo "=== negative control: the suite catches a broken check ==="

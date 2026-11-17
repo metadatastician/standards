@@ -53,7 +53,11 @@ UNFORMATTED=$'pub fn one()->u32{1}\n'
 # <needle> (unless "-"), and that it does NOT contain <absent-needle> if given.
 expect() {
   local label=$1 want=$2 needle=$3 absent=${4:-} out rc
-  git -C "$WORK/repo" add -A
+  if [ "${STAGE_ROOT_ONLY:-0}" = 1 ]; then
+    git -C "$WORK/repo" add src/lib.rs
+  else
+    git -C "$WORK/repo" add -A
+  fi
   out="$(cd "$WORK/repo" && INPUT_PATH="$WORK/repo" ESTATE_HOOK_SKIP_SLOW=1 bash "$HOOK" 2>&1)"; rc=$?
   if [ "$rc" -ne "$want" ]; then
     echo "FAIL: $label — expected exit $want, got $rc"
@@ -108,6 +112,25 @@ expect "staged clean crate beside an unstaged dirty one → pass" 0 \
 new_repo
 crate . "$FORMATTED"
 expect "root crate, clean → pass" 0 "Rust: .: formatted"
+
+# A package root and member share a workspace; only the root is staged.
+new_repo
+crate . "$FORMATTED"
+crate member "$FORMATTED"
+sed -i '/^\[workspace\]/,$d' "$WORK/repo/member/Cargo.toml"
+printf 'members = ["member"]\n' >> "$WORK/repo/Cargo.toml"
+git -C "$WORK/repo" add -A
+git -C "$WORK/repo" -c user.name=t -c user.email=t@t commit -qm base
+printf '// staged root change\n' >> "$WORK/repo/src/lib.rs"
+printf '%s' "$UNFORMATTED" > "$WORK/repo/member/src/lib.rs"
+STAGE_ROOT_ONLY=1 expect "workspace root package ignores unstaged member formatting" 0 "Rust: .: formatted"
+
+# A staged virtual workspace manifest continues checking its members.
+new_repo
+crate member "$UNFORMATTED"
+sed -i '/^\[workspace\]/,$d' "$WORK/repo/member/Cargo.toml"
+printf '[workspace]\nmembers = ["member"]\nresolver = "2"\n' > "$WORK/repo/Cargo.toml"
+expect "virtual workspace checks member formatting" 1 "Rust: .: sources are not formatted"
 
 # A .rs outside every crate is not a formatting failure: it is reported as an
 # unchecked file, by name, in the ledger of gates that did not run.

@@ -55,6 +55,13 @@ jobs:
       - uses: dtolnay/rust-toolchain@$A # v1
 EOF
 
+expect "quoted trailing text leaves the first comment token intact" 0 "1 judged" <<EOF
+jobs:
+  a:
+    steps:
+      - uses: dtolnay/rust-toolchain@$A # v1 described as "stable release"
+EOF
+
 expect "a branch name (#1440: # stable) is refused" 1 "Write '# v1'" <<EOF
 jobs:
   a:

@@ -517,7 +517,7 @@ they are renewed or E6 lands first.
 |===
 | Id | Work | Tier
 | W1 | Regenerate `actions.lock` for the two issue-evidence workflows (one command; the tool cannot run in an agent session), merge, then set `ISSUE_EVIDENCE_APPLY`. | Owner
-| W2 | Work the small-pieces table above, one commit and one ledger row each. | Sonnet
+| W2 | Work the small-pieces table above, one commit and one ledger row each. For every row, consult the matching record’s complete `cherry_pick.what` text in `verdicts-standards.jsonl`; table entries are truncated and may omit required work. | Sonnet
 | W3 | Bring `todo-fixme-markers` back under its ceiling (#955). Measured 2026-11-17: the probe counts _files_ that contain the word, 88 on `main` against a ceiling of 84. An agent found one stale marker it could remove honestly (`docs/INNERVATION.adoc:139`); the rest are real undone work with no tracking issue, or files where the word is the subject (policy text, gate code, fixtures). So this needs either about four real tasks done, or an owner ruling that the probe should count markers and not mentions. | Opus or the owner
 | W4 | Execute D256 in `standards`: retire `codeql.yml`, close #288, #323, #324 as superseded through the ledger (#1031). | Sonnet
 | W5 | Write the ruled-but-unwritten rulings back: D128 (#1032), D133 (#957), D169 (#999), D171 (#1008), D129 (#1059). | Sonnet

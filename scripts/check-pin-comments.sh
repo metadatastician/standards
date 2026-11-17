@@ -54,7 +54,7 @@ fi
 files=0 pins=0 judged=0 uncommented=0 unrecorded=0 bad=0
 while IFS= read -r -d '' wf; do
   files=$((files + 1))
-  if ! rows="$("$yq_bin" -r '.. | select(tag == "!!map") | select(has("uses")) | .uses | select(tag == "!!str") | [., line_comment] | @tsv' "$wf")"; then
+  if ! rows="$("$yq_bin" -r '.. | select(tag == "!!map") | select(has("uses")) | .uses | select(tag == "!!str") | [., (line_comment | split(" ") | map(select(. != "")) | .[0] // "")] | @tsv' "$wf")"; then
     echo "check-pin-comments: cannot parse $wf" >&2; exit 2
   fi
   while IFS=$'\t' read -r ref comment; do
