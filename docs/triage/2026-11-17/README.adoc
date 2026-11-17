@@ -159,6 +159,10 @@ says so.
 | The 42 metadata files of the seven former A2ML sub-projects | Remove the whole retired format tree `1-formats/a2ml/`, after its inbound links are redirected (W11) | —
 | 84 per-directory AI manifests with no mapping spec | Derive them from the deed on demand; store none (S9) | —
 | Tools that still write or require A2ML | Record each as a departures row now; retire the writers next, one by one (W12) | —
+| The two A2ML files the retire-check reports deletable in `standards` | Delete both, each in its own commit, then wire the retire-check into CI (W10) | —
+| The 71 directory manifests deletable in Scaffoldia | Remove them as Scaffoldia's first real retrofit: one plan, checked by the kernel, opened as a pull request with the plan and the kernel's verdict (S10) | —
+| Archived A2ML: `CLAUDE.md` against the STATE option-B and scorecard R5 clauses | `CLAUDE.md` governs. Git history is the archive: the 37 files (8 STATE, 29 scorecards) are deleted with a record of what each held and a tag on the last commit that contains them; the two mapping decisions are amended (W14) | —
+| The second root deed, `0-AI-MANIFEST.deed` | Generate it from the chora deed at build time; never commit it (W15) | —
 |===
 
 On the stub files the owner chose the genuine port over the recommended
@@ -517,6 +521,7 @@ they are renewed or E6 lands first.
 | S7 | Repair Scaffoldia's CI so required contexts are emitted (scaffoldia#70), then add a workflow for `just conformance` and the proof check. | Sonnet
 | S8 | Replace `proof-check-agda` (runs `agda --safe` only, skips silently, fails 10 of 10 modules) with the template's `check-proofs.sh` and manifest. | Sonnet
 | S9 | Derived directory guidance (owner, 2026-11-17): generate any per-directory AI manifest from the deed on demand, as the arrival pack generates `CLAUDE.md`, and store none. Scaffoldia's 82 stored manifests then go in its self-retrofit, once nothing reads them. Needs the list of tools that still expect the stored files. | Opus for the generator's contract; Sonnet after
+| S10 | The first retrofit (owner, 2026-11-17): express the removal of Scaffoldia's 71 deletable directory manifests as one plan in the plan format, check it with the kernel, and open a pull request whose description carries the plan and the kernel's verdict, with the files deleted in it. Needs `delete` operations with `expect` hashes for each file, so the plan refuses if a file changed. After scaffoldia#76 merges. | Opus
 |===
 
 === Standards work orders
@@ -537,6 +542,8 @@ they are renewed or E6 lands first.
 | W11 | Remove `1-formats/a2ml/` (owner, 2026-11-17): inventory and redirect every inbound link and reader first, record what each file held in `9-archive/A2ML-REMOVED.adoc`, delete, and prune the legacy ledger in the same commits. Its own pull request. | Opus to scope; Sonnet to execute
 | W12 | Retire the A2ML writers and readers recorded as departures rows, in the order that unblocks deletions; each with its replacement input and a test. The Debtfile writer waits on the Debtfile's deed form. | Sonnet, one tool at a time
 | W13 | Test-suite robustness: several `scripts/tests/*.sh` files pipe into `grep -q` under `pipefail`, which fails intermittently on a loaded machine (seen in `check-inline-python-test.sh` and `wave4-dyadt-test.sh`). Capture, then match. | Sonnet
+| W14 | Git history is the archive (owner, 2026-11-17): delete the 37 archived `.a2ml` files (8 STATE journals, 29 scorecards) by the retire-check's deletion recipe, record what each held in `9-archive/A2ML-REMOVED.adoc`, tag the last commit that contains them, and amend `state-v1-decision.adoc` and the scorecard ruling so they no longer require an `.a2ml` archive. | Sonnet, after W10
+| W15 | One deed (owner, 2026-11-17): the content of `0-AI-MANIFEST.deed` becomes derivable from `standards_chora.deed`; a generator writes the file where a tool still needs it, and the committed copy is removed. First find every reader of the file; its route to `docs/wikis/0.2-AI-MANIFEST.deed` names a file that does not exist. Touches the identity file, so its own pull request with the full deed checks. | Opus
 |===
 
 == Departures met, for the owner
