@@ -121,6 +121,11 @@ so this prune does not remove it.
 |the file has no bare code marker left (line deleted), or fewer than the count
 (count lowered)
 
+|`.machine_readable/pipe-grep-q-allow.txt`
+|`scripts/check-pipe-grep-q.sh --prune`
+|the file has no pipe into a quiet grep left (line deleted), or fewer than the
+count (count lowered)
+
 |`.machine_readable/departures.jsonl` (JSON Lines; the output shows each row's
 `id`)
 |`scripts/departures.sh prune [--ref REV]`
