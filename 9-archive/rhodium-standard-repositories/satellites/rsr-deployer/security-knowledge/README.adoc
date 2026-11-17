@@ -6,7 +6,6 @@
 Knowledge base for GitHub workflow security analysis, designed for use with:
 
 * **Virtuoso Open Source** - RDF triple store and SPARQL engine
-* **Logtalk** - Object-oriented logic programming
 * **Qwen3 SLM** - Small language model for code augmentation
 
 == Directory Structure
@@ -14,9 +13,6 @@ Knowledge base for GitHub workflow security analysis, designed for use with:
 [source]
 ----
 security-knowledge/
-├── logtalk/           # Logtalk objects for Prolog-based reasoning
-│   ├── loader.lgt     # Loader file
-│   └── security_errors.lgt  # Error catalog object
 ├── virtuoso/          # Virtuoso/SPARQL files
 │   ├── security-ontology.ttl  # RDF ontology (Turtle format)
 │   └── queries.sparql # Example SPARQL queries
@@ -64,15 +60,6 @@ security-knowledge/
 |===
 
 == Usage
-
-=== Logtalk
-
-[source,prolog]
-----
-?- logtalk_load('security-knowledge/logtalk/loader').
-?- security_error_catalog::get_critical_errors(Errors).
-?- security_error_catalog::get_sha_for_action('actions/checkout', 'v4.2.2', SHA).
-----
 
 === Virtuoso
 
