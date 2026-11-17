@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MPL-2.0
 # SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell
 #
-# test_retire_phantom_contexts.sh -- scripts/retire-phantom-contexts.sh must
+# retire-phantom-contexts-test.sh -- scripts/retire-phantom-contexts.sh must
 # remove ONLY the phantom context, never another rule or field, and refuse
 # every case where it cannot see or own what it would overwrite.
 #
@@ -18,7 +18,7 @@
 # No network: `gh` is a stub on PATH that answers from fixtures.
 set -euo pipefail
 
-here=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+here=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 script="$here/scripts/retire-phantom-contexts.sh"
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
@@ -157,4 +157,4 @@ set +e; out=$(PATH="$tmp/bin:$PATH" bash "$script" --repos "$tmp/repos.txt" 2>/d
 [ "$(row "$out" phantom-only)" = WOULD-RETIRE ] && pass "the last line of --repos is read without a trailing newline" \
   || bad "repos file: last line dropped: $out"
 
-[ "$fail" = 0 ] && echo "test_retire_phantom_contexts: all passed" || { echo "test_retire_phantom_contexts: FAILED"; exit 1; }
+[ "$fail" = 0 ] && echo "retire-phantom-contexts-test: all passed" || { echo "retire-phantom-contexts-test: FAILED"; exit 1; }
