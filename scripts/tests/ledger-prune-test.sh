@@ -42,6 +42,9 @@ S_A2ML="$REAL/scripts/check-a2ml-archived.sh"
 S_LIB="$REAL/scripts/lib/ledger-prune.sh"
 S_K9="$REAL/.githooks/validate-k9.sh"
 S_HOOK="$REAL/.githooks/validate-ledger-prune.sh"
+S_MARK="$REAL/scripts/check-marker-issue-refs.sh"
+S_DEP="$REAL/scripts/departures.sh"
+S_IE="$REAL/scripts/issue-evidence.sh"
 export K9_VALIDATOR="$REAL/1-formats/k9/tools/k9-validate.sh"
 K9_GOOD="$REAL/1-formats/k9/tools/fixtures/valid/kennel-data.k9.ncl"
 K9_BAD="$REAL/1-formats/k9/tools/fixtures/invalid/L1-K9-S001-no-pedigree.k9.ncl"
@@ -76,6 +79,9 @@ tools() {
   cp "$S_LIB" "$1/scripts/lib/ledger-prune.sh"
   cp "$S_K9" "$1/.githooks/validate-k9.sh"
   cp "$S_HOOK" "$1/.githooks/validate-ledger-prune.sh"
+  cp "$S_MARK" "$1/scripts/check-marker-issue-refs.sh"
+  cp "$S_DEP" "$1/scripts/departures.sh"
+  cp "$S_IE" "$1/scripts/issue-evidence.sh"
 }
 
 # dir <name> — a fresh plain directory (not a git repository).
@@ -116,7 +122,7 @@ run_hook() {
   return "$rc"
 }
 
-has() { printf '%s' "$OUT" | grep -qF -- "$1"; }
+has() { grep -qF -- "$1" <<< "$OUT"; }
 staged_ledger() { git -C "$1" show ":$2"; }
 
 # subseq <orig> <new> — 0 when <new> is <orig> with some non-comment,
@@ -434,9 +440,9 @@ c_hook_nov17() {
   has "stale ledger entry $ABG:1 — no inline Python left; delete the line" || return 1
   run_hook "$d" || return 1
   has "prune: delete $IPY_L:3: $ABG:1" || return 1
-  staged_ledger "$d" "$IPY_L" | grep -qxF "$ABG:1" && return 1
-  staged_ledger "$d" "$IPY_L" | grep -qx 'w.yml:1' || return 1
-  git -C "$d" diff --cached --name-only | grep -qxF "$IPY_L" || return 1
+  grep -qxF "$ABG:1" <<< "$(staged_ledger "$d" "$IPY_L")" && return 1
+  grep -qx 'w.yml:1' <<< "$(staged_ledger "$d" "$IPY_L")" || return 1
+  grep -qxF "$IPY_L" <<< "$(git -C "$d" diff --cached --name-only)" || return 1
   git -C "$d" diff --quiet -- "$IPY_L" || return 1          # working tree = index
   git -C "$d" commit -q --no-verify -m fix || return 1
   ipy "$d"
@@ -446,7 +452,7 @@ c_hook_through_git_commit() {
   clean_abg "$d"; git -C "$d" add "$ABG"
   OUT="$(git -C "$d" commit -m fix 2>&1)" || return 1
   has "prune: delete $IPY_L:3: $ABG:1" || return 1
-  git -C "$d" show "HEAD:$IPY_L" | grep -qxF "$ABG:1" && return 1
+  grep -qxF "$ABG:1" <<< "$(git -C "$d" show "HEAD:$IPY_L")" && return 1
   [ -z "$(git -C "$d" status --porcelain)" ] || { OUT+=$'\n'"status: $(git -C "$d" status --porcelain)"; return 1; }
   ipy "$d"
 }
@@ -454,7 +460,7 @@ c_hook_commit_all() {
   local d; d=$(nov17_repo h3)
   clean_abg "$d"
   OUT="$(git -C "$d" commit -a -m fix 2>&1)" || return 1
-  git -C "$d" show "HEAD:$IPY_L" | grep -qxF "$ABG:1" && return 1
+  grep -qxF "$ABG:1" <<< "$(git -C "$d" show "HEAD:$IPY_L")" && return 1
   [ -z "$(git -C "$d" status --porcelain)" ]
 }
 c_hook_commit_only_paths_refused() {
@@ -471,13 +477,13 @@ c_hook_index_not_worktree() {
   clean_abg "$d"; git -C "$d" add "$ABG"
   printf 'x=$(%s -c 1)\n' "$PY" >> "$d/$ABG"
   run_hook "$d" || return 1
-  staged_ledger "$d" "$IPY_L" | grep -qxF "$ABG:1" && return 1
+  grep -qxF "$ABG:1" <<< "$(staged_ledger "$d" "$IPY_L")" && return 1
   # Converse: removal only in the working tree, a ledgered file staged.
   d=$(nov17_repo h5b)
   clean_abg "$d"
   printf 'a: |\n  %s -c 1\n# edit\n' "$PY" > "$d/w.yml"; git -C "$d" add w.yml
   run_hook "$d" || return 1
-  staged_ledger "$d" "$IPY_L" | grep -qxF "$ABG:1" && grep -qxF "$ABG:1" "$d/$IPY_L"
+  grep -qxF "$ABG:1" <<< "$(staged_ledger "$d" "$IPY_L")" && grep -qxF "$ABG:1" "$d/$IPY_L"
 }
 c_hook_unstaged_ledger_refused() {
   local d; d=$(nov17_repo h6)
@@ -486,7 +492,7 @@ c_hook_unstaged_ledger_refused() {
   cp "$d/$IPY_L" "$WORK/h6.wt"
   run_hook "$d" && return 1
   has "$ABG:1" && has "unstaged" && cmp -s "$WORK/h6.wt" "$d/$IPY_L" \
-    && staged_ledger "$d" "$IPY_L" | grep -qxF "$ABG:1"
+    && grep -qxF "$ABG:1" <<< "$(staged_ledger "$d" "$IPY_L")"
 }
 c_hook_partially_staged_ledger_refused() {
   local d; d=$(nov17_repo h7)
@@ -494,14 +500,14 @@ c_hook_partially_staged_ledger_refused() {
   printf '# staged note\n' >> "$d/$IPY_L"; git -C "$d" add "$IPY_L"
   printf '# unstaged note\n' >> "$d/$IPY_L"
   run_hook "$d" && return 1
-  has "unstaged" && staged_ledger "$d" "$IPY_L" | grep -qxF "$ABG:1"
+  has "unstaged" && grep -qxF "$ABG:1" <<< "$(staged_ledger "$d" "$IPY_L")"
 }
 c_hook_new_offender_refused() {
   local d; d=$(nov17_repo h8)
   clean_abg "$d"; git -C "$d" add "$ABG"
   printf 'x=$(%s -c 1)\n' "$PY" > "$d/new.sh"; git -C "$d" add new.sh
   run_hook "$d" && return 1
-  has "new inline Python in new.sh" && staged_ledger "$d" "$IPY_L" | grep -qxF "$ABG:1"
+  has "new inline Python in new.sh" && grep -qxF "$ABG:1" <<< "$(staged_ledger "$d" "$IPY_L")"
 }
 c_hook_noop_when_nothing_ledgered() {
   local d; d=$(nov17_repo h9)
@@ -511,7 +517,7 @@ c_hook_noop_when_nothing_ledgered() {
   git -C "$d" add README.adoc other.sh
   run_hook "$d" || return 1
   [ ! -e "$WORK/h9.ran" ] && git -C "$d" diff --quiet -- "$IPY_L" \
-    && ! git -C "$d" diff --cached --name-only | grep -qxF "$IPY_L"
+    && ! grep -qxF "$IPY_L" <<< "$(git -C "$d" diff --cached --name-only)"
 }
 c_hook_a2ml_deletion() {
   local d; d=$(repo h10)
@@ -521,8 +527,8 @@ c_hook_a2ml_deletion() {
   git -C "$d" rm -q OLD.a2ml
   run_hook "$d" || return 1
   has "prune: delete $A2ML_L:4: OLD.a2ml" \
-    && ! staged_ledger "$d" "$A2ML_L" | grep -qx 'OLD.a2ml' \
-    && staged_ledger "$d" "$A2ML_L" | grep -qx 'LIVE.a2ml   # trailing' \
+    && ! grep -qx 'OLD.a2ml' <<< "$(staged_ledger "$d" "$A2ML_L")" \
+    && grep -qx 'LIVE.a2ml   # trailing' <<< "$(staged_ledger "$d" "$A2ML_L")" \
     && git -C "$d" diff --quiet -- "$A2ML_L"
 }
 c_hook_k9_fixed_file() {
@@ -531,7 +537,7 @@ c_hook_k9_fixed_file() {
   cp "$K9_GOOD" "$d/conf/debt.k9.ncl"; git -C "$d" add conf/debt.k9.ncl
   run_hook "$d" || return 1
   has "prune: delete $K9_L:2: conf/debt.k9.ncl" \
-    && ! staged_ledger "$d" "$K9_L" | grep -qx 'conf/debt.k9.ncl'
+    && ! grep -qx 'conf/debt.k9.ncl' <<< "$(staged_ledger "$d" "$K9_L")"
 }
 
 # Wiring: .githooks/pre-commit dispatches the prune hook for every commit
@@ -559,6 +565,88 @@ check "hook: a new offender beside a stale line fails the hook"                 
 check "hook: no checker runs when nothing ledgered is staged"                     c_hook_noop_when_nothing_ledgered
 check "hook: deleting a ledgered A2ML file prunes its line"                       c_hook_a2ml_deletion
 check "hook: fixing a ledgered K9 file prunes its line"                           c_hook_k9_fixed_file
+
+# ── the hook on the two newer ledgers ─────────────────────────────────────
+
+MK="TO""DO"
+MARK_L=.machine_readable/marker-allow.txt
+DEP_L=.machine_readable/departures.jsonl
+
+c_hook_marker_cited() {
+  local d; d=$(repo h12)
+  printf '# %s: a\necho x\n' "$MK" > "$d/a.sh"
+  printf '# %s: b\n' "$MK" > "$d/b.sh"
+  printf '# ledger\na.sh:1\nb.sh:1\n' > "$d/$MARK_L"
+  commit_all "$d"
+  printf '# %s(#955): a\necho x\n' "$MK" > "$d/a.sh"; git -C "$d" add a.sh
+  run_hook "$d" || return 1
+  has "prune: delete $MARK_L:2: a.sh:1" \
+    && ! grep -qx 'a.sh:1' <<< "$(staged_ledger "$d" "$MARK_L")" \
+    && grep -qx 'b.sh:1' <<< "$(staged_ledger "$d" "$MARK_L")" \
+    && bash "$d/scripts/check-marker-issue-refs.sh" --root "$d" --cached >/dev/null
+}
+
+# drow ID CHECKS_JSON — one canonical departures row.
+drow() {
+  jq -c -S -n --arg id "$1" --argjson checks "$2" \
+    '{id: $id, repo: "o/r", ruling: "Test ruling", claim: "The defect is present.",
+      checks: $checks, fix: "open", added: "2026-11-17"}'
+}
+dep_repo() {
+  local d; d=$(repo "$1")
+  mkdir -p "$d/docs"
+  printf 'defect A\ndefect B\n' > "$d/docs/a.adoc"
+  printf '#!/usr/bin/env bash\nexit 1\n' > "$d/scripts/gone.sh"; chmod +x "$d/scripts/gone.sh"
+  {
+    drow defect-a '[{"kind":"grep-present","path":"docs/a.adoc","pattern":"^defect A$"}]'
+    drow defect-b '[{"kind":"grep-present","path":"docs/a.adoc","pattern":"^defect B$"}]'
+    drow by-script '[{"kind":"grep-present","path":"docs/a.adoc","pattern":"^defect A$"},{"kind":"script","path":"scripts/gone.sh"}]'
+  } > "$d/$DEP_L"
+  commit_all "$d"
+  printf '%s' "$d"
+}
+c_hook_departures_commit() {
+  local d; d=$(dep_repo h13)
+  printf 'defect A\n' > "$d/docs/a.adoc"; git -C "$d" add docs/a.adoc
+  OUT="$(git -C "$d" commit -m "fix: defect B" 2>&1)" || return 1
+  has "prune: delete $DEP_L:2: defect-b [RESOLVED: [0] grep-present docs/a.adoc no longer holds]" || return 1
+  grep -qF '"id":"defect-b"' <<< "$(git -C "$d" show "HEAD:$DEP_L")" && return 1
+  grep -qF '"id":"defect-a"' <<< "$(git -C "$d" show "HEAD:$DEP_L")" || return 1
+  [ -z "$(git -C "$d" status --porcelain)" ] || return 1
+  # The row whose only failing check is a script was not judged at commit
+  # time (left for CI); on the real checkout `check` evaluates it.
+  grep -qF '"id":"by-script"' <<< "$(git -C "$d" show "HEAD:$DEP_L")" || return 1
+  OUT="$(cd "$d" && bash scripts/departures.sh check 2>&1)"
+  has "by-script: RESOLVED"
+}
+c_hook_departures_glob() {
+  local d; d=$(repo h14)
+  mkdir -p "$d/docs"; printf 'fine\n' > "$d/docs/a.adoc"
+  drow no-ok '[{"kind":"tree-grep-absent","glob":"docs/**","pattern":"^ok$"}]' > "$d/$DEP_L"
+  commit_all "$d"
+  # docs/new.adoc is spelled nowhere in the ledger; the glob still reaches it.
+  printf 'ok\n' > "$d/docs/new.adoc"; git -C "$d" add docs/new.adoc
+  run_hook "$d" || return 1
+  has "prune: delete $DEP_L:1: no-ok" && [ -z "$(staged_ledger "$d" "$DEP_L")" ]
+}
+
+echo
+echo "== the hook on marker-allow.txt and departures.jsonl =="
+check "hook: citing an issue on a ledgered marker prunes its line"                c_hook_marker_cited
+check "hook: departures — fixing a defect removes its row from the commit"        c_hook_departures_commit
+check "hook: departures — a glob row is judged though no path is spelled"         c_hook_departures_glob
+c_hook_departures_history() {
+  local d sha; d=$(dep_repo h15); sha=$(git -C "$d" rev-parse HEAD)
+  # A row that holds while a commit is in the history: the throwaway commit
+  # must have HEAD as its parent, or this row would read RESOLVED and go.
+  drow history "[{\"kind\":\"commit-on-main\",\"sha\":\"$sha\"}]" >> "$d/$DEP_L"
+  commit_all "$d" ledger
+  printf 'defect A\n' > "$d/docs/a.adoc"; git -C "$d" add docs/a.adoc
+  run_hook "$d" || return 1
+  grep -qF '"id":"history"' <<< "$(staged_ledger "$d" "$DEP_L")" \
+    && ! grep -qF '"id":"defect-b"' <<< "$(staged_ledger "$d" "$DEP_L")"
+}
+check "hook: departures — a history row survives (the index commit has HEAD as parent)" c_hook_departures_history
 
 # ── mutants: the suite must see each regression ───────────────────────────
 
@@ -596,6 +684,14 @@ mutant S_HOOK 's/git add -- "\$ledger"/: "$ledger"/' \
   "the hook prunes but does not stage" c_hook_nov17
 mutant S_HOOK 's/^is_partial_commit() {$/is_partial_commit() { return 1/' \
   "the hook edits a 'git commit <path>' commit" c_hook_commit_only_paths_refused
+mutant S_HOOK '/^  .machine_readable\/departures.jsonl$/d' \
+  "the hook forgets the departures ledger" c_hook_departures_commit
+mutant S_HOOK 's/grep -qF '"'"'"glob":'"'"' <<< "$text"/false/' \
+  "the hook judges a glob row only when a path is spelled" c_hook_departures_glob
+mutant S_HOOK 's/ ${parent:+-p "$parent"}//' \
+  "the index commit has no parent" c_hook_departures_history
+mutant S_HOOK '/^  .machine_readable\/marker-allow.txt$/d' \
+  "the hook forgets the marker ledger" c_hook_marker_cited
 
 echo
 echo "ledger-prune: $pass passed, $fail failed"

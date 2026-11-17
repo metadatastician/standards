@@ -188,14 +188,14 @@ fresh
 printf '# %s: a\n' "$T" | plant w.sh
 printf '# %s: a\n# %s: b\n' "$T" "$T" | plant g.sh
 printf '# keep me\nw.sh:3\ngone.sh:1\ng.sh:2\n' | ledger
-expect "prune: stale lines are fixed" 0 "2 ledger line(s) changed" "$GATE" --prune
+expect "prune: stale lines are fixed" 0 "prune: .machine_readable/marker-allow.txt: 1 line(s) deleted, 1 count(s) lowered" "$GATE" --prune
 if [ "$(cat "$WORK/t/.machine_readable/marker-allow.txt")" = "$(printf '# keep me\nw.sh:1\ng.sh:2')" ]; then
   echo "PASS: prune lowered w.sh, deleted gone.sh, kept the comment and order"; pass=$((pass + 1))
 else
   echo "FAIL: prune wrote the wrong ledger"; sed 's/^/      | /' "$WORK/t/.machine_readable/marker-allow.txt"; fail=$((fail + 1))
 fi
 cp "$WORK/t/.machine_readable/marker-allow.txt" "$WORK/before"
-expect "prune: a second run changes nothing" 0 "0 ledger line(s) changed" "$GATE" --prune
+expect "prune: a second run changes nothing" 0 "prune: .machine_readable/marker-allow.txt: nothing stale" "$GATE" --prune
 if cmp -s "$WORK/before" "$WORK/t/.machine_readable/marker-allow.txt"; then
   echo "PASS: prune is idempotent (byte-identical)"; pass=$((pass + 1))
 else echo "FAIL: prune is not idempotent"; fail=$((fail + 1)); fi
@@ -207,6 +207,36 @@ if cmp -s "$WORK/before" "$WORK/t/.machine_readable/marker-allow.txt"; then
   echo "PASS: prune neither added n.sh nor raised g.sh"; pass=$((pass + 1))
 else echo "FAIL: prune hid an offender"; sed 's/^/      | /' "$WORK/t/.machine_readable/marker-allow.txt"; fail=$((fail + 1)); fi
 expect "prune does not combine with --cached" 2 "does not combine" "$GATE" --prune --cached
+# The contract: a stale line beside a new offender is NOT pruned; the ledger is
+# left byte for byte and the exit is 1. Likewise beside a pragma defect.
+fresh
+printf '# %s: a\n' "$T" | plant w.sh
+printf '# %s: c\n' "$T" | plant n.sh
+printf '# keep\nw.sh:1\ngone.sh:1\n' | ledger
+cp "$WORK/t/.machine_readable/marker-allow.txt" "$WORK/before"
+expect "prune: a stale line beside a new offender is refused" 1 "prune refused" "$GATE" --prune
+if cmp -s "$WORK/before" "$WORK/t/.machine_readable/marker-allow.txt"; then
+  echo "PASS: prune left the ledger unchanged beside a new offender"; pass=$((pass + 1))
+else echo "FAIL: prune changed the ledger beside a new offender"; fail=$((fail + 1)); fi
+rm "$WORK/t/n.sh"
+printf 'echo %s\n# %s\n' "$T" "$PK" | plant p.sh
+expect "prune: a stale line beside a pragma defect is refused" 1 "prune refused" "$GATE" --prune
+if cmp -s "$WORK/before" "$WORK/t/.machine_readable/marker-allow.txt"; then
+  echo "PASS: prune left the ledger unchanged beside a pragma defect"; pass=$((pass + 1))
+else echo "FAIL: prune changed the ledger beside a pragma defect"; fail=$((fail + 1)); fi
+rm "$WORK/t/p.sh"
+expect "prune: the contract line names the deleted line and its reason" 0 \
+  "prune: delete .machine_readable/marker-allow.txt:3: gone.sh:1 [stale ledger entry gone.sh:1 — no bare marker left]" "$GATE" --prune
+printf '# keep\nw.sh:1\ngone.sh:1' | ledger
+expect "prune: a ledger with no final newline" 0 "1 line(s) deleted" "$GATE" --prune
+if [ "$(cat "$WORK/t/.machine_readable/marker-allow.txt"; printf x)" = "$(printf '# keep\nw.sh:1\nx')" ]; then
+  echo "PASS: prune copies every other byte (the kept lines keep their newlines)"; pass=$((pass + 1))
+else echo "FAIL: prune changed bytes it did not delete"; od -c "$WORK/t/.machine_readable/marker-allow.txt" | sed 's/^/      | /'; fail=$((fail + 1)); fi
+printf '# keep\ngone.sh:1\nw.sh:1' | ledger
+bash "$GATE" --root "$WORK/t" --prune >/dev/null 2>&1
+if [ "$(cat "$WORK/t/.machine_readable/marker-allow.txt"; printf x)" = "$(printf '# keep\nw.sh:1x')" ]; then
+  echo "PASS: prune keeps a missing final newline missing"; pass=$((pass + 1))
+else echo "FAIL: prune added a final newline"; od -c "$WORK/t/.machine_readable/marker-allow.txt" | sed 's/^/      | /'; fail=$((fail + 1)); fi
 
 echo
 echo "== --cached reads the staged copy =="
@@ -280,14 +310,23 @@ mutant glued-leader 's/if (q == 1 || substr(s, q - 1, 1) ~ \/\[ \\t\]\/) return 
   "a leader glued to text is no longer refused as a leader" 1 "new bare marker"
 fresh; printf '# %s: a\n' "$T" | plant w.sh; printf 'w.sh:3\n' | ledger
 m="$WORK/mutant-prune-raises.sh"
+mkdir -p "$WORK/lib"; cp "$SCRIPT_DIR/../lib/ledger-prune.sh" "$WORK/lib/"
 # shellcheck disable=SC2016 # the $ is sed text to match, not an expansion
-sed 's/LOWER) lower\[\$f\]=\$b/LOWER) lower[$f]=$((b + 5))/' "$GATE" > "$m"
+sed 's/lower$'"'"'\\t'"'"'"$f:$b"/lower$'"'"'\\t'"'"'"$f:$((b + 5))"/' "$GATE" > "$m"
 if bash -n "$m" && ! cmp -s "$m" "$GATE"; then
-  bash "$m" --root "$WORK/t" --prune >/dev/null 2>&1
-  expect "mutant killed (prune-raises): the real gate refuses what a raising prune wrote" 1 "stale ledger entry w.sh:6"
+  bash "$m" --root "$WORK/t" --prune >/dev/null 2>&1; rc=$?
+  if [ "$rc" -eq 2 ] && [ "$(cat "$WORK/t/.machine_readable/marker-allow.txt")" = "w.sh:3" ]; then
+    echo "PASS: a gate mutated to raise a count is stopped by the writer (exit 2, ledger unchanged)"; pass=$((pass + 1))
+  else echo "FAIL: a raising prune got through (exit $rc)"; fail=$((fail + 1)); fi
 else
   echo "FAIL: mutant prune-raises is invalid or identical to the gate"; fail=$((fail + 1))
 fi
+fresh; printf '# %s: a\n' "$T" | plant w.sh; printf '# %s: c\n' "$T" | plant n.sh; printf 'w.sh:3\n' | ledger
+expect "control: prune refuses beside a new offender under the real gate" 1 "marker-allow.txt is unchanged" "$GATE" --prune
+printf 'w.sh:3\n' | ledger
+# shellcheck disable=SC2016 # the $ is sed text to match, not an expansion
+mutant prune-past-offender 's/  if \[ "\$hard" -gt 0 \]; then/  if false; then/' \
+  "a prune that ignores a new offender rewrites the ledger and passes" 0 "1 count(s) lowered" --prune
 
 echo
 echo "== this repository matches its ledger =="

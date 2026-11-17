@@ -89,7 +89,9 @@ prune: <ledger>: <d> line(s) deleted, <l> count(s) lowered
 +
 `<line>` is the line number in the ledger before the prune; `<reason>` is the
 check's own finding for that line. When nothing is stale the command prints
-`prune: <ledger>: nothing stale`.
+`prune: <ledger>: nothing stale`. In a JSON Lines ledger, where a row is long,
+`<line as it was>` is the row's `id` (the stated form for JSON Lines ledgers);
+the line number still names the row exactly.
 
 *Which ledgers have it.* The writer is `scripts/lib/ledger-prune.sh`; each
 checker builds the plan and the writer refuses any plan that breaks the
@@ -113,6 +115,17 @@ count (count lowered)
 |a checked file in the ledger now conforms (layer L1 by default). An entry
 whose file is gone is reported by the k9-conformance grid, not by this hook,
 so this prune does not remove it.
+
+|`.machine_readable/marker-allow.txt`
+|`scripts/check-marker-issue-refs.sh --prune`
+|the file has no bare code marker left (line deleted), or fewer than the count
+(count lowered)
+
+|`.machine_readable/departures.jsonl` (JSON Lines; the output shows each row's
+`id`)
+|`scripts/departures.sh prune [--ref REV]`
+|some check of the row no longer holds at REV: the departure is gone
+(RESOLVED). A row that could not be evaluated is never pruned.
 |===
 
 `lock-allow.txt`, `pipeline-allow.txt` and `required-contexts-allow.txt` have
@@ -125,15 +138,28 @@ repository, the live rulesets), and an offline prune could only guess.
 to what the commit will contain:
 
 * It does nothing unless a staged path (added, changed or deleted) appears
-  in the text of one of the three ledgers, or a ledger itself is staged.
+  in the text of one of the five ledgers, or a ledger itself is staged. A
+  departures ledger with a `glob` check is judged whenever a path is staged,
+  because a glob can match a path it does not spell.
 * It judges the index, not the working tree: the index is checked out into a
   throwaway repository and the checker runs there.
+* Departures are judged at a commit made from the index in that throwaway
+  repository, with HEAD as its parent, so every tree check and every
+  `commit-on-main` check is decided as the commit will have it. A `script`
+  check is left unevaluated there (the throwaway checkout is not that commit),
+  so a row that only a script would resolve is not pruned at commit time:
+  `departures.sh check`, run by the shell-test suite on the real checkout,
+  reports it.
 * When a line is stale it writes the pruned ledger, stages it, and prints the
   `prune:` lines, so the deletion is visible and lands in the same commit.
 * It refuses (exit 1), names the stale lines and edits nothing when the
   ledger has unstaged edits (a partly staged ledger included), when the
   commit is made as `git commit <path>` (git commits a temporary index then),
   and when the checker refuses to prune.
+
+Pruning happens only in this hook. The marker gate's own block in
+`.githooks/pre-commit` (`check-marker-issue-refs.sh --cached`) runs later,
+checks the staged copies, and so reads the ledger this hook pruned.
 
 The suite is `scripts/tests/ledger-prune-test.sh`.
 
