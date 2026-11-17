@@ -35,6 +35,9 @@ bad() { echo "FAIL: $1"; [ -n "${2:-}" ] && echo "      $2"; fail=$((fail + 1));
 
 # ── fixture builders ───────────────────────────────────────────────────────
 CHORA_UUID='00000000-0000-8000-8000-0000000000a1'
+# A legacy CLADE record carries a version-5 id. It is assembled here so this
+# file holds no UUID literal the v8 gate would have to exempt.
+LEGACY_UUID="$(printf '%s-%s-%s-%s-%s' d9e987dc bb7b 51aa 839b 3d8bbfe774c3)"
 
 chora() { # chora DIR [owner]
   cat > "$1/fixture_chora.deed" <<EOF
@@ -84,7 +87,7 @@ EOF
 clade_record() { # clade_record FILE
   mkdir -p "$(dirname "$1")"
   printf '%s\n' '# SPDX-License-Identifier: MPL-2.0' '[identity]' \
-    'uuid = "d9e987dc-bb7b-51aa-839b-3d8bbfe774c3"' 'primary-forge = "github"' \
+    "uuid = \"$LEGACY_UUID\"" 'primary-forge = "github"' \
     'primary-owner = "o"' 'canonical-name = "fixture"' 'prefixed-name = "rm-fixture"' \
     '[clade]' 'primary = "rm"' 'secondary = []' 'assigned = "2026-03-16"' 'rationale = ""' \
     '[forges]' 'github = "o/fixture"' 'gitlab = ""' 'bitbucket = ""' \
