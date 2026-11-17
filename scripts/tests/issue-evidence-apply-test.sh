@@ -21,7 +21,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 IA="${ISSUE_EVIDENCE_APPLY_SH:-$SCRIPT_DIR/../issue-evidence-apply.sh}"
 WORK="$(mktemp -d)"
-trap 'rm -rf "$WORK"' EXIT
+if [ -n "${IA_KEEP:-}" ]; then echo "keeping $WORK"; else trap 'rm -rf "$WORK"' EXIT; fi
 pass=0
 fail=0
 ok() { echo "PASS: $1"; pass=$((pass + 1)); }
@@ -82,6 +82,11 @@ case "${1:-}" in
       close | reopen)
         printf '%s %s %s\n' "$sub" "$n" "$reason" >>"$GH_FIX/ACTIONS.log"
         printf '%s' "$body" >"$GH_FIX/body-$sub-$n.txt"
+        # A test can make the default branch move as a side effect of a write.
+        if [ -f "$GH_FIX/MOVE_HEAD_TO" ]; then
+          printf '{"object":{"sha":"%s","type":"commit"},"ref":"refs/heads/main"}\n' "$(cat "$GH_FIX/MOVE_HEAD_TO")" \
+            >"$GH_FIX/$(key "repos/$repo/git/ref/heads/main").json"
+        fi
         ;;
     esac
     ;;
@@ -381,6 +386,30 @@ removed_rows
 check "C4: a failed read while listing bot-closed issues is a refusal (exit 1)" rc_is 1
 check "C4: ... with no partial list" test -z "$OUT"
 
+# F5: the first read of a candidate answers 200 but with a body that is not an
+# issue (an error object, or not JSON). It is a refusal, as in read_issue,
+# never a silent skip that would leave the issue closed on a removed row.
+for peek in "$RATE" 'not json' '[]' '{"number":61,"state":"locked"}'; do
+  reset_fix
+  issue 61 closed "$(timeline mark closed:"$BOT")"
+  issue 64 closed "$(timeline closed:alice)"
+  issue 65 open "$(timeline)"
+  fx "repos/$R/issues/61" "$peek"
+  removed_rows
+  check "F5: removed-rows refuses a 200 peek that is not an issue ($(printf '%s' "$peek" | head -c 24))" rc_is 1
+  check "F5: ... says it refuses" err_has "refusing to act"
+  check "F5: ... with no partial list" test -z "$OUT"
+done
+# The shape check comes before the filter: a well-formed issue the bot did
+# not close is still skipped without a refusal.
+reset_fix
+issue 61 closed "$(timeline closed:alice)"
+issue 64 closed "$(timeline closed:alice)"
+issue 65 open "$(timeline)"
+removed_rows
+check "F5: a well-formed issue closed by a person is still skipped (exit 0, nothing listed)" \
+  test "$RC/$OUT" = "0/"
+
 # The removed-row reopen shares the cap with the ledger's own actions.
 reset_fix
 decisions close close
@@ -425,10 +454,186 @@ check "C5: ... and nothing is done" test -z "$(actions)"
 run bash "$IA" apply --repo "$R" --plan "$WORK/plan.json" --max-actions 10
 check "C5: apply without --commit is invalid input" rc_is 2
 
+# F6: the default branch moves after the first write. The head is re-read
+# before every write, so the loop stops there: the first action stays done,
+# the second is not performed, and the summary says so.
+reset_fix
+issue 71 open "$(timeline)"
+issue 72 open "$(timeline)"
+printf '%s\n' "$SHA_B" >"$FIX/MOVE_HEAD_TO"
+plan close:71 close:72
+: >"$WORK/summary.md"
+run bash "$IA" apply --repo "$R" --commit "$SHA_A" --plan "$WORK/plan.json" --max-actions 10
+check "F6: a branch that moves mid-run exits 0" rc_is 0
+check "F6: ... the action before the move stays done" did_action "close 71"
+check "F6: ... the action after the move is not performed" no_action "close 72"
+check "F6: ... the summary says the run stopped and what was done" \
+  grep -qF "stopped: main moved from $SHA_A to $SHA_B after 1 of 2 planned action(s)" "$WORK/summary.md"
+
+# --- F1/F2: the plan hand-off (plan, verify-plan) --------------------------------
+# A caller repository whose ledger holds #81 (holds: close), #82 (a check
+# fails and the bot closed it: regression reopen) and, in its history only,
+# #83 (the bot closed it; the row was removed: removed-row reopen).
+IE="$REPO_ROOT/scripts/issue-evidence.sh"
+VREPO="$WORK/vrepo"
+mkdir -p "$VREPO/.machine_readable"
+git -C "$VREPO" init -q -b main
+git -C "$VREPO" config user.email t@example.invalid
+git -C "$VREPO" config user.name test
+git -C "$VREPO" config commit.gpgsign false
+printf '= x\n' >"$VREPO/README.adoc"
+full_row() { # N DISPOSITION CHECKS
+  jq -c -S -n --argjson n "$1" --arg d "$2" --argjson c "$3" --arg r "$R" \
+    '{issue: $n, repo: $r, disposition: $d, claim: "Row \($n) for @someone.", checks: $c,
+      evidence: ["e\($n)"], added: "2026-11-17"}'
+}
+V81="$(full_row 81 landed '[{"kind":"path-present","path":"README.adoc"}]')"
+V82="$(full_row 82 moot '[{"kind":"path-present","path":"gone.txt"},{"kind":"path-present","path":"README.adoc"}]')"
+V83="$(full_row 83 superseded '[{"kind":"path-present","path":"README.adoc"}]')"
+printf '%s\n' "$V81" "$V82" "$V83" >"$VREPO/$LEDGER_PATH"
+git -C "$VREPO" add -A && git -C "$VREPO" commit -q -m rows
+printf '%s\n' "$V81" "$V82" >"$VREPO/$LEDGER_PATH"
+git -C "$VREPO" commit -q -am "remove row 83"
+VSHA="$(git -C "$VREPO" rev-parse HEAD)"
+hash_of() { printf '%s' "$1" | sha256sum | cut -d' ' -f1; }
+CONTENTS="repos/$R/contents/$LEDGER_PATH?ref=$VSHA"
+v_fixtures() { # the GitHub side: issue states, the head, and the ledger by API
+  reset_fix
+  head_is "$VSHA"
+  local save="$HASH"
+  issue 81 open "$(timeline)"
+  HASH="$(hash_of "$V82")"; issue 82 closed "$(timeline mark closed:"$BOT")"
+  HASH="$(hash_of "$V83")"; issue 83 closed "$(timeline mark closed:"$BOT")"
+  HASH="$save"
+  git -C "$VREPO" show "$VSHA:$LEDGER_PATH" >"$FIX/$(fkey "$CONTENTS").json"
+}
+v_fixtures
+# The evaluate job's half, run in the caller's checkout.
+(cd "$VREPO" && bash "$IE" evaluate --repo "$R" --no-scripts "$LEDGER_PATH") >"$WORK/v-evaluated.jsonl"
+printf '%s\n' '[{"number":81,"state":"open"},{"number":82,"state":"closed","closed_by_bot":true}]' >"$WORK/v-open.json"
+(cd "$VREPO" && bash "$IE" decide --repo "$R" --open "$WORK/v-open.json" --evaluated "$WORK/v-evaluated.jsonl" "$LEDGER_PATH") >"$WORK/v-decisions.jsonl"
+cd "$VREPO" || exit 2
+run bash "$IA" removed-rows --repo "$R" --ledger "$LEDGER_PATH" --commit HEAD
+cd "$REPO_ROOT" || exit 2
+printf '%s\n' "$OUT" >"$WORK/v-removed.jsonl"
+check "removed-rows: the record carries the marker's row hash" \
+  test "$(jq -r .hash "$WORK/v-removed.jsonl")" = "$(hash_of "$V83")"
+run bash "$IA" select --decisions "$WORK/v-decisions.jsonl" --removed "$WORK/v-removed.jsonl" --max-actions 10
+printf '%s\n' "$OUT" >"$WORK/v-selected.jsonl"
+cd "$VREPO" || exit 2
+run bash "$IA" plan --repo "$R" --selected "$WORK/v-selected.jsonl" --evaluated "$WORK/v-evaluated.jsonl" \
+  --ledger "$LEDGER_PATH" --commit HEAD
+cd "$REPO_ROOT" || exit 2
+WANT_PLAN="$(jq -c -n --arg h81 "$(hash_of "$V81")" --arg h82 "$(hash_of "$V82")" --arg h83 "$(hash_of "$V83")" '[
+  {action: "close", close_reason: "completed", failed: [], hash: $h81, issue: 81, reason: "evidence-holds", unevaluated: []},
+  {action: "reopen", close_reason: "not planned", failed: [0], hash: $h82, issue: 82, reason: "regression", unevaluated: []},
+  {action: "reopen", close_reason: "not planned", failed: [], hash: $h83, issue: 83, reason: "row-removed", unevaluated: []}]')"
+check "plan: per action only issue, action, close reason, row hash and check indices" test "$OUT" = "$WANT_PLAN"
+check "plan: ... and no free text from the ledger" test -z "$(grep -F 'someone' <<<"$OUT" || true)"
+printf '%s\n' "$OUT" >"$WORK/v-plan.json"
+# Over the cap: 300 removed-row reopens (select would stop at 50; plan does
+# not rely on it).
+for n in $(seq 1000 1299); do
+  jq -c -n --argjson n "$n" --arg r "$R" --arg h "$HASH" '{action: "reopen", hash: $h, issue: $n, reason: "row-removed", repo: $r}'
+done >"$WORK/v-many.jsonl"
+cd "$VREPO" || exit 2
+run bash "$IA" plan --repo "$R" --selected "$WORK/v-many.jsonl" --evaluated "$WORK/v-evaluated.jsonl" --ledger "$LEDGER_PATH"
+cd "$REPO_ROOT" || exit 2
+check "plan: over the 32,768-byte cap it refuses, with a message, and prints nothing" \
+  test "$RC/${OUT:-}" = "1/"
+check "plan: ... the message names the cap" err_has "over the 32768-byte cap"
+
+verify() { # PLAN-FILE [MAX]
+  run bash "$IA" verify-plan --repo "$R" --commit "$VSHA" --ledger "$LEDGER_PATH" --plan "$1" \
+    --max-actions "${2:-10}" --evaluator "$IE"
+}
+v_fixtures
+verify "$WORK/v-plan.json"
+check "verify-plan: a plan that matches the fetched ledger passes" rc_is 0
+check "verify-plan: ... reading the ledger by API at the evaluated commit" called "$CONTENTS"
+printf '%s\n' "$OUT" >"$WORK/v-full.json"
+body_of() { jq -r --argjson n "$1" '.[] | select(.issue == $n) | .body' "$WORK/v-full.json"; }
+old81="$(cd "$VREPO" && bash "$IE" render-comment --issue 81 --action close --repo "$R" --evaluated "$WORK/v-evaluated.jsonl" "$LEDGER_PATH")"
+old82="$(cd "$VREPO" && bash "$IE" render-comment --issue 82 --action reopen --repo "$R" --evaluated "$WORK/v-evaluated.jsonl" "$LEDGER_PATH")"
+check "verify-plan: the close comment is byte-identical to the evaluate-job rendering" test "$(body_of 81)" = "$old81"
+check "verify-plan: the regression reopen comment is byte-identical too" test "$(body_of 82)" = "$old82"
+check "verify-plan: the removed-row comment is byte-identical to removed-rows'" \
+  test "$(body_of 83)" = "$(jq -r .body "$WORK/v-removed.jsonl")"
+run bash "$IA" apply --repo "$R" --commit "$VSHA" --plan "$WORK/v-full.json" --max-actions 10
+check "apply: the verified plan is performed" test "$(actions | tr '\n' '|')" = "close 81 completed|reopen 82 |reopen 83 |"
+check "apply: ... with the rendered comments" test "$(cat "$FIX/body-close-81.txt")" = "$old81"
+v_fixtures
+jq -c '.[0].body = null' "$WORK/v-full.json" >"$WORK/v-nobody.json"
+run bash "$IA" apply --repo "$R" --commit "$VSHA" --plan "$WORK/v-nobody.json" --max-actions 10
+check "apply: an entry without a comment body is invalid input, and nothing is done" test "$RC/$(actions)" = "2/"
+
+# Every way a plan can disagree with the ledger refuses the WHOLE run.
+bad_plan() { # LABEL NEEDLE JQ-ON-THE-PLAN [MAX]
+  v_fixtures
+  jq -c "$3" "$WORK/v-plan.json" >"$WORK/v-bad.json"
+  verify "$WORK/v-bad.json" "${4:-10}"
+  check "verify-plan refuses $1" test "$RC/${OUT:-}" = "1/"
+  check "... saying so" err_has "$2"
+}
+bad_plan "a wrong row hash" "the hash is not that of the row" '.[0].hash = ("0" * 64)'
+bad_plan "an issue with no row" "has no row in the ledger" '.[0].issue = 999'
+bad_plan "a removed-row reopen of an issue whose row is present" "so it is no removed row" '.[2].issue = 81 | del(.[0])'
+bad_plan "an extra field in an entry" "the fields must be exactly" '.[0].body = "PWNED"'
+bad_plan "a missing field" "the fields must be exactly" 'del(.[0].hash)'
+bad_plan "a close with a failed check" "a close needs every check to hold" '.[0].failed = [0]'
+bad_plan "a regression with no failed check" "needs a failed check" '.[1].failed = []'
+bad_plan "a check index out of range" "out of range" '.[1].failed = [0, 5]'
+bad_plan "a close reason that does not follow the disposition" "close_reason does not follow" '.[0].close_reason = "not planned"'
+bad_plan "an action and reason that do not go together" "is not a planned action" '.[0].action = "reopen"'
+bad_plan "the same issue twice" "appears twice" '. + [.[0]]'
+bad_plan "more actions than max_actions" "more than max_actions" '.' 2
+bad_plan "unsorted check indices" "sorted lists" '.[1].failed = [1, 0]'
+v_fixtures
+head -c 40000 /dev/zero | tr '\0' ' ' >"$WORK/v-huge.json"
+verify "$WORK/v-huge.json"
+check "verify-plan refuses a plan over the 32,768-byte cap" test "$RC/${OUT:-}" = "1/"
+v_fixtures
+rm -f "$FIX/$(fkey "$CONTENTS").json"
+verify "$WORK/v-plan.json"
+check "verify-plan refuses when the ledger cannot be read at the commit" test "$RC/${OUT:-}" = "1/"
+v_fixtures
+printf 'not a ledger\n' >"$FIX/$(fkey "$CONTENTS").json"
+verify "$WORK/v-plan.json"
+check "verify-plan refuses a ledger that does not validate" test "$RC/${OUT:-}" = "1/"
+run bash "$IA" verify-plan --repo "$R" --commit "$VSHA" --ledger "../x" --plan "$WORK/v-plan.json" --max-actions 10 --evaluator "$IE"
+check "verify-plan refuses a ledger path with a .. component" rc_is 2
+
+# A removed-row reopen undoes the bot's close on that row only.
+v_fixtures
+issue 83 closed "$(timeline mark closed:"$BOT")"
+jq -c '[.[] | select(.issue == 83)]' "$WORK/v-full.json" >"$WORK/v-83.json"
+run bash "$IA" apply --repo "$R" --commit "$VSHA" --plan "$WORK/v-83.json" --max-actions 10
+check "apply: no removed-row reopen when the bot's marker names another row" no_action "reopen 83"
+
 # --- one definition of the marker ------------------------------------------------
 marker="$(sed -n "s/^MARKER='\\(.*\\)'\$/\\1/p" "$IA")"
 check "marker: the applier's marker is the one issue-evidence.sh writes" \
   grep -qF -- "${marker:-<none>}" "$REPO_ROOT/scripts/issue-evidence.sh"
+
+if [ -z "${IA_NEGATIVE_CONTROL:-}" ]; then
+  # NEGATIVE CONTROL: the suite, run against an applier whose verify-plan no
+  # longer compares the row hash, must report failures.
+  BROKEN="$WORK/broken-issue-evidence-apply.sh"
+  # shellcheck disable=SC2016  # a sed program over jq text
+  sed 's/^          elif \$r\.hash != \$e\.hash then /          elif false then /' "$IA" >"$BROKEN"
+  if cmp -s "$IA" "$BROKEN"; then
+    ko "negative control: the mutation did not apply (the text changed?)"
+  else
+    nc_rc=0
+    nc_out="$(ISSUE_EVIDENCE_APPLY_SH="$BROKEN" IA_NEGATIVE_CONTROL=1 bash "$SCRIPT_DIR/$(basename "$0")" 2>&1)" || nc_rc=$?
+    nc_fail="$(printf '%s\n' "$nc_out" | grep -c '^FAIL:' || true)"
+    if [ "$nc_rc" -ne 0 ] && [ "$nc_fail" -gt 0 ]; then
+      ok "negative control: verify-plan without its hash check makes the suite fail ($nc_fail failures)"
+    else
+      ko "negative control: the suite passed against verify-plan without its hash check (exit $nc_rc)"
+    fi
+  fi
+fi
 
 echo
 echo "passed=$pass failed=$fail"

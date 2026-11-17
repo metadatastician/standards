@@ -23,14 +23,24 @@
 #       with:
 #         apply: ${{ vars.ISSUE_EVIDENCE_APPLY == 'true' }}
 #
-# Least privilege: the evaluate job reads (contents, issues) and runs the
-# ledger's `script` checks; it holds no write token, and its checkouts do not
-# persist credentials. Only the apply job holds `issues: write`; it checks out
-# nothing and runs no code of the calling repository, only
-# scripts/issue-evidence-apply.sh fetched from this reusable's own commit
-# (the GitHub reads and writes, tested by
-# scripts/tests/issue-evidence-apply-test.sh). Every `${{ }}` value reaches a
-# script through `env:`, never through the text of a `run:` body.
+# Three jobs, so that code of the evaluated repository can change the outcome
+# only through one bit per `script` check, never which issue is acted on, how,
+# or what is posted:
+#   scripts   runs the ledger's `script` checks, and nothing else. contents:
+#             read only. Its one product is a script result per check (the
+#             check's identity and holds|failed|unevaluated), at most 64 KiB.
+#   evaluate  runs NO code of the evaluated repository: git and jq read the
+#             checkout as data, and the evaluator takes the script outcomes as
+#             supplied data, which it refuses unless every record matches a
+#             real script check at this commit. It reads issue state and hands
+#             `apply` a plan of numbers and hashes only, at most 32 KiB.
+#   apply     checks nothing out. It fetches the two scripts from this
+#             reusable's own commit and the ledger at the evaluated commit by
+#             API, checks every plan entry against that ledger, renders every
+#             comment itself, and only then closes and reopens.
+# Every `${{ }}` value reaches a script through `env:`, never through the text
+# of a `run:` body. scripts/tests/issue-evidence-workflow-test.sh runs the
+# three jobs' run: bodies end to end, including a malicious evidence script.
 name: Issue evidence (reusable)
 
 on:
@@ -56,10 +66,79 @@ permissions:
   contents: read
 
 jobs:
-  evaluate:
-    name: Evaluate the issue-evidence ledger
+  scripts:
+    name: Run the ledger's script checks
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # Only this job runs code of the evaluated repository. It holds no issue
+    # permission, and nothing it leaves behind reaches another job: each job
+    # is a fresh runner, and its one output is checked by the evaluate job.
+    permissions:
+      contents: read
+    outputs:
+      results: ${{ steps.run.outputs.results }}
+    steps:
+      - name: Checkout caller repository (full history, as for every evaluation)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      # job.workflow_sha is unavailable on GitHub Enterprise Server, where it
+      # resolves to an EMPTY string and actions/checkout then follows the
+      # default branch. Assert it is a commit before the checkout it protects.
+      - name: Assert this reusable's own commit resolved
+        env:
+          SELF_WORKFLOW_SHA: ${{ job.workflow_sha }}
+        run: |
+          if ! printf '%s' "$SELF_WORKFLOW_SHA" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "::error::job.workflow_sha resolved to '${SELF_WORKFLOW_SHA:-<empty>}', not a 40-hex commit, so the evaluator checkout below would follow the default branch."
+            exit 1
+          fi
+          echo "Evaluator source: metadatastician/standards@$SELF_WORKFLOW_SHA"
+
+      - name: Checkout the evaluator at this reusable's own commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: metadatastician/standards
+          ref: ${{ job.workflow_sha }}
+          path: .issue-evidence-standards
+          persist-credentials: false
+          sparse-checkout: |
+            scripts/issue-evidence.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Stage the evaluator outside the evaluated tree
+        run: |
+          set -euo pipefail
+          cp .issue-evidence-standards/scripts/issue-evidence.sh "$RUNNER_TEMP/issue-evidence.sh"
+          rm -rf .issue-evidence-standards
+
+      # One record per script check whose script is tracked and executable at
+      # this commit. The evaluator refuses, before any script runs, when the
+      # records could exceed 65,536 bytes, so the output stays small.
+      - name: Run the script checks (only these)
+        id: run
+        env:
+          LEDGER: ${{ inputs.ledger }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          bash "$RUNNER_TEMP/issue-evidence.sh" evaluate --scripts-only --repo "$REPO" --ref HEAD "$LEDGER" \
+            >"$RUNNER_TEMP/script-results.jsonl"
+          echo "script checks run: $(grep -c . "$RUNNER_TEMP/script-results.jsonl" || true)"
+          echo "results=$(jq -c -s . "$RUNNER_TEMP/script-results.jsonl")" >>"$GITHUB_OUTPUT"
+
+  evaluate:
+    name: Evaluate the issue-evidence ledger
+    needs: scripts
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # This job runs no code of the evaluated repository: no evidence script,
+    # and the evaluator only with --script-results (never `decide` without
+    # --evaluated, `render-comment` or `lint`, which would run them).
     permissions:
       contents: read
       issues: read
@@ -76,9 +155,6 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      # job.workflow_sha is unavailable on GitHub Enterprise Server, where it
-      # resolves to an EMPTY string and actions/checkout then follows the
-      # default branch. Assert it is a commit before the checkout it protects.
       - name: Assert this reusable's own commit resolved
         env:
           SELF_WORKFLOW_SHA: ${{ job.workflow_sha }}
@@ -130,13 +206,27 @@ jobs:
           LEDGER: ${{ inputs.ledger }}
         run: bash "$RUNNER_TEMP/issue-evidence.sh" validate "$LEDGER"
 
-      - name: Evaluate every row at this commit
+      # The scripts job's output came from a job that ran repository code, so
+      # it is data to check, not to trust: the evaluator refuses the whole run
+      # unless every record is a script result of a real script check at this
+      # commit (scripts/issue-evidence.sh --script-results). A check with no
+      # record is unevaluated, so it never closes or reopens anything.
+      - name: Evaluate every row at this commit, with the scripts job's outcomes
         env:
           LEDGER: ${{ inputs.ledger }}
           REPO: ${{ github.repository }}
+          SCRIPT_RESULTS: ${{ needs.scripts.outputs.results }}
         run: |
           set -euo pipefail
-          bash "$RUNNER_TEMP/issue-evidence.sh" evaluate --repo "$REPO" --ref HEAD "$LEDGER" >"$RUNNER_TEMP/evaluated.jsonl"
+          if [ -z "$SCRIPT_RESULTS" ]; then
+            echo "::error::the scripts job published no results; refusing to evaluate."
+            exit 1
+          fi
+          printf '%s' "$SCRIPT_RESULTS" >"$RUNNER_TEMP/script-results.json"
+          jq -c 'if type == "array" then .[] else error("the scripts job output is not a JSON array") end' \
+            "$RUNNER_TEMP/script-results.json" >"$RUNNER_TEMP/script-results.jsonl"
+          bash "$RUNNER_TEMP/issue-evidence.sh" evaluate --repo "$REPO" --ref HEAD \
+            --script-results "$RUNNER_TEMP/script-results.jsonl" "$LEDGER" >"$RUNNER_TEMP/evaluated.jsonl"
           echo "rows evaluated: $(grep -c . "$RUNNER_TEMP/evaluated.jsonl" || true)"
 
       # For each ledger issue: its state, whether this bot closed it, and whether
@@ -176,9 +266,10 @@ jobs:
             --evaluated "$RUNNER_TEMP/evaluated.jsonl" "$LEDGER" >"$RUNNER_TEMP/decisions.jsonl"
 
       # The plan is the first max_actions closes and reopens, in ledger order,
-      # then the removed-row reopens, each with its comment. Beyond the cap
-      # nothing is planned, and the summary says so.
-      - name: Plan (capped) and render comments
+      # then the removed-row reopens. Beyond the cap nothing is planned, and the
+      # summary says so. It holds numbers and hashes only, no text: the apply
+      # job renders every comment from the ledger it fetches itself.
+      - name: Plan (capped)
         id: plan
         env:
           LEDGER: ${{ inputs.ledger }}
@@ -189,24 +280,10 @@ jobs:
           bash "$RUNNER_TEMP/issue-evidence-apply.sh" select --decisions "$RUNNER_TEMP/decisions.jsonl" \
             --max-actions "$MAX_ACTIONS" --removed "$RUNNER_TEMP/removed.jsonl" \
             --counts "$RUNNER_TEMP/counts" >"$RUNNER_TEMP/selected.jsonl"
-          : >"$RUNNER_TEMP/plan.jsonl"
-          while IFS= read -r d; do
-            if jq -e 'has("body")' <<<"$d" >/dev/null; then
-              jq -c '{issue, action, close_reason, body}' <<<"$d" >>"$RUNNER_TEMP/plan.jsonl"
-              continue
-            fi
-            n="$(jq -r .issue <<<"$d")"
-            action="$(jq -r .action <<<"$d")"
-            body="$(bash "$RUNNER_TEMP/issue-evidence.sh" render-comment --issue "$n" --action "$action" \
-              --repo "$REPO" --evaluated "$RUNNER_TEMP/evaluated.jsonl" "$LEDGER")"
-            jq -c -n --argjson d "$d" --arg body "$body" \
-              '{issue: $d.issue, action: $d.action,
-                close_reason: (if $d.disposition == "landed" then "completed" else "not planned" end),
-                body: $body}' >>"$RUNNER_TEMP/plan.jsonl"
-          done <"$RUNNER_TEMP/selected.jsonl"
-          planned="$(grep -c . "$RUNNER_TEMP/plan.jsonl" || true)"
-          echo "plan=$(jq -c -s . "$RUNNER_TEMP/plan.jsonl")" >>"$GITHUB_OUTPUT"
-          echo "plan_count=$planned" >>"$GITHUB_OUTPUT"
+          bash "$RUNNER_TEMP/issue-evidence-apply.sh" plan --repo "$REPO" --selected "$RUNNER_TEMP/selected.jsonl" \
+            --evaluated "$RUNNER_TEMP/evaluated.jsonl" --ledger "$LEDGER" --commit HEAD >"$RUNNER_TEMP/plan.json"
+          echo "plan=$(cat "$RUNNER_TEMP/plan.json")" >>"$GITHUB_OUTPUT"
+          echo "plan_count=$(jq length "$RUNNER_TEMP/plan.json")" >>"$GITHUB_OUTPUT"
 
       - name: Candidate rows (report only)
         env:
@@ -279,14 +356,16 @@ jobs:
             fi
           } >>"$GITHUB_STEP_SUMMARY"
 
+
   apply:
     name: Apply closes and reopens (capped)
     needs: evaluate
     if: ${{ inputs.apply && needs.evaluate.outputs.on_default == 'true' && needs.evaluate.outputs.plan_count != '0' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # contents: read lets it read the default branch's live head (the stale-plan
-    # check below) in a private repository; it reads no file of the repository.
+    # contents: read lets it read the ledger at the evaluated commit and the
+    # default branch's live head (the stale-plan check) in a private
+    # repository; it checks nothing out and runs no file of the repository.
     permissions:
       contents: read
       issues: write
@@ -294,11 +373,10 @@ jobs:
       group: issue-evidence-apply-${{ github.repository }}
       cancel-in-progress: false
     steps:
-      # The apply job checks out nothing. It runs one script, fetched from this
-      # reusable's own commit in metadatastician/standards (immutable at a
-      # 40-hex SHA), never from the calling repository and never from the
-      # evaluate job, whose ledger `script` checks ran code.
-      - name: Fetch the applier at this reusable's own commit
+      # The apply job runs two scripts, fetched from this reusable's own commit
+      # in metadatastician/standards (immutable at a 40-hex SHA), never from
+      # the calling repository and never from another job.
+      - name: Fetch the applier and the evaluator at this reusable's own commit
         env:
           GH_TOKEN: ${{ github.token }}
           SELF_WORKFLOW_SHA: ${{ job.workflow_sha }}
@@ -308,18 +386,24 @@ jobs:
             echo "::error::job.workflow_sha resolved to '${SELF_WORKFLOW_SHA:-<empty>}', not a 40-hex commit; refusing to act."
             exit 1
           fi
-          gh api -H 'Accept: application/vnd.github.raw' \
-            "repos/metadatastician/standards/contents/scripts/issue-evidence-apply.sh?ref=$SELF_WORKFLOW_SHA" \
-            >"$RUNNER_TEMP/issue-evidence-apply.sh"
-          head -n 1 "$RUNNER_TEMP/issue-evidence-apply.sh" | grep -qx '#!/usr/bin/env bash' || {
-            echo "::error::the fetched applier is not the expected script; refusing to act."
-            exit 1
-          }
+          for s in issue-evidence-apply.sh issue-evidence.sh; do
+            gh api -H 'Accept: application/vnd.github.raw' \
+              "repos/metadatastician/standards/contents/scripts/$s?ref=$SELF_WORKFLOW_SHA" >"$RUNNER_TEMP/$s"
+            head -n 1 "$RUNNER_TEMP/$s" | grep -qx '#!/usr/bin/env bash' || {
+              echo "::error::the fetched $s is not the expected script; refusing to act."
+              exit 1
+            }
+          done
 
-      - name: Close and reopen
+      # verify-plan reads the ledger at the evaluated commit by API, refuses the
+      # whole run if any plan entry does not match it, and renders every
+      # comment from it; apply then re-reads the branch head and each issue
+      # before each write.
+      - name: Verify the plan against the ledger, then close and reopen
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
+          LEDGER: ${{ inputs.ledger }}
           PLAN: ${{ needs.evaluate.outputs.plan }}
           # The evaluate job checked out and evaluated exactly this commit. If the
           # default branch has moved since, nothing is applied (stale plan).
@@ -328,6 +412,9 @@ jobs:
         run: |
           set -euo pipefail
           printf '%s' "$PLAN" >"$RUNNER_TEMP/plan.json"
+          bash "$RUNNER_TEMP/issue-evidence-apply.sh" verify-plan --repo "$REPO" --commit "$EVALUATED_SHA" \
+            --ledger "$LEDGER" --plan "$RUNNER_TEMP/plan.json" --max-actions "$MAX_ACTIONS" \
+            --evaluator "$RUNNER_TEMP/issue-evidence.sh" >"$RUNNER_TEMP/verified-plan.json"
           bash "$RUNNER_TEMP/issue-evidence-apply.sh" apply --repo "$REPO" \
-            --plan "$RUNNER_TEMP/plan.json" --max-actions "$MAX_ACTIONS" \
+            --plan "$RUNNER_TEMP/verified-plan.json" --max-actions "$MAX_ACTIONS" \
             --commit "$EVALUATED_SHA"

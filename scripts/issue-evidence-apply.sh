@@ -23,22 +23,44 @@
 #   removed-rows --repo OWNER/NAME --ledger PATH [--commit REV]
 #       Run in the checkout. One JSON line per issue this bot closed whose
 #       row is no longer in the ledger at REV (default HEAD): a planned
-#       reopen {issue, repo, action, close_reason, reason, body} whose comment
-#       says the row was removed. Candidates are the rows of every version of
-#       the ledger in the history of REV; a failed read prints nothing and
+#       reopen {issue, repo, action, close_reason, reason, hash, body} whose
+#       comment says the row was removed (hash: the row hash in the bot's
+#       marker). Candidates are the rows of every version of the ledger in
+#       the history of REV; a failed or malformed read prints nothing and
 #       exits 1.
 #   select --decisions FILE [--removed FILE] --max-actions N [--counts FILE]
 #       The actions to plan this run: the decided closes and reopens in
 #       order, then the removed-row reopens, at most N of them all together
 #       (N from 0 to 50). --counts receives "TOTAL PLANNED".
+#   plan --repo OWNER/NAME --selected FILE --evaluated FILE --ledger PATH
+#        [--commit REV]
+#       Run in the checkout. The hand-off to the write job, as one JSON
+#       array: per selected action {action, close_reason, failed, hash,
+#       issue, reason, unevaluated} and no text from the ledger. Refuses
+#       (exit 1, nothing printed) above 32,768 bytes.
+#   verify-plan --repo OWNER/NAME --commit SHA --ledger PATH --plan FILE
+#               --max-actions N --evaluator FILE
+#       Needs no checkout. Fetches the ledger at SHA by API, validates it
+#       with the evaluator FILE, and checks EVERY plan entry against it: the
+#       closed schema; for a close or regression reopen, one row of the
+#       issue whose line hashes to `hash`, a close reason that follows the
+#       row's disposition, check indices in range, and a vector that fits
+#       the action; for a removed-row reopen, no row for the issue. One
+#       mismatch refuses the whole run (exit 1, nothing printed). Then
+#       renders each comment itself (render-comment --commit, or the
+#       removed-row text) and prints the plan `apply` takes.
 #   apply --repo OWNER/NAME --commit SHA --plan FILE --max-actions N
 #       First re-reads the live head of the default branch: when it is not
 #       SHA (the commit the plan was made at), reports "stale; nothing done"
 #       and exits 0 without acting. Otherwise performs the plan (a JSON
-#       array of {issue, action, close_reason, body}) with `gh issue close` /
+#       array of {issue, action, close_reason, body}, optionally with
+#       reason and hash: a row-removed reopen is skipped unless the bot's
+#       latest marker still names that hash) with `gh issue close` /
 #       `gh issue reopen`. Just before each action it re-reads the issue and
 #       its timeline and skips the action when a person has closed or
-#       reopened the issue since the plan.
+#       reopened the issue since the plan, then re-reads the head again: when
+#       the branch has moved, it stops there, keeps what was done, and says
+#       so in the summary.
 #
 # The bot's identity is one value, BOT below: the login the workflow's token
 # acts as (github-actions[bot] for GITHUB_TOKEN). --bot LOGIN overrides it.
@@ -53,6 +75,8 @@
 #       per page; they are read as one history.
 #   GET repos/R                     .default_branch
 #   GET repos/R/git/ref/heads/B     .object.sha, .object.type == "commit"
+#   GET repos/R/contents/PATH?ref=SHA with Accept: application/vnd.github.raw
+#                                   the ledger's bytes at SHA (verify-plan)
 #   gh issue close N --repo R --reason completed|"not planned" --comment BODY
 #   gh issue reopen N --repo R --comment BODY
 #
@@ -77,6 +101,7 @@ refuse() {
 }
 
 REPO="" EVAL_FILE="" DECISIONS="" MAX_ACTIONS="" COUNTS="" PLAN_FILE="" COMMIT="" REMOVED="" LEDGER=""
+SELECTED="" EVALUATOR=""
 parse_opts() {
   while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -90,6 +115,8 @@ parse_opts() {
       --removed) [ "$#" -ge 2 ] || fail_input "--removed needs a value"; REMOVED="$2"; shift 2 ;;
       --ledger) [ "$#" -ge 2 ] || fail_input "--ledger needs a value"; LEDGER="$2"; shift 2 ;;
       --commit) [ "$#" -ge 2 ] || fail_input "--commit needs a value"; COMMIT="$2"; shift 2 ;;
+      --selected) [ "$#" -ge 2 ] || fail_input "--selected needs a value"; SELECTED="$2"; shift 2 ;;
+      --evaluator) [ "$#" -ge 2 ] || fail_input "--evaluator needs a value"; EVALUATOR="$2"; shift 2 ;;
       *) fail_input "unknown argument: $1" ;;
     esac
   done
@@ -211,6 +238,170 @@ cmd_select() {
   if [ -n "$COUNTS" ]; then echo "$total $planned" >"$COUNTS"; fi
 }
 
+# --- the hand-off from the plan-building job to the write job --------------------
+#
+# The job that builds the plan holds no write permission; the job that writes
+# trusts nothing it is handed beyond what it can check. So the plan carries no
+# free text: per action only
+#   {action, close_reason, failed, hash, issue, reason, unevaluated}
+# (hash: the sha256 of the row's ledger line, or for a removed-row reopen the
+# row hash in the bot's marker; failed/unevaluated: the check indices of the
+# evaluation). `verify-plan` checks every entry against the ledger it fetches
+# at the evaluated commit and renders each comment itself.
+
+# Cap on the plan, in bytes. Fifty actions of rows at the check bound take
+# about 15,000.
+PLAN_MAX_BYTES=32768
+
+# ledger_rows LEDGER-FILE: one JSON line per row, {key, hash, disposition,
+# nchecks, repo}; key is "lower-case repo#issue", hash the sha256 of the line.
+ledger_rows() {
+  local line h
+  while IFS= read -r line; do
+    h="$(printf '%s' "$line" | sha256sum | cut -d' ' -f1)"
+    jq -c --arg h "$h" '{key: "\(.repo | ascii_downcase)#\(.issue)", hash: $h, disposition,
+      nchecks: (.checks | length), repo}' <<<"$line" 2>/dev/null || return 1
+  done <"$1"
+}
+
+# shellcheck disable=SC2016  # jq program text, not shell
+PLAN_JQ='
+($rows | map({key, value: .}) | from_entries) as $row
+| ($ev | map({key: "\(.repo | ascii_downcase)#\(.issue)", value: .}) | from_entries) as $evm
+| [ $sel[]
+    | "\(.repo | ascii_downcase)#\(.issue)" as $k
+    | if .reason == "row-removed" then
+        if (.hash | type) == "string" and (.hash | test("^[0-9a-f]{64}$")) then
+          {action: "reopen", close_reason: "not planned", failed: [], hash, issue, reason, unevaluated: []}
+        else error("removed-row reopen of #\(.issue) carries no row hash") end
+      else
+        ($row[$k] // error("no ledger row for #\(.issue)")) as $r
+        | ($evm[$k] // error("no evaluate record for #\(.issue)")) as $e
+        | {action, close_reason: (if $r.disposition == "landed" then "completed" else "not planned" end),
+           failed: $e.failed, hash: $r.hash, issue, reason, unevaluated: $e.unevaluated}
+      end ]
+'
+
+# plan --selected FILE --evaluated FILE --ledger PATH --repo R [--commit REV]
+cmd_plan() {
+  local sha bytes
+  parse_opts "$@"
+  need_repo_opt plan
+  { [ -n "$SELECTED" ] && [ -f "$SELECTED" ]; } || fail_input "plan needs --selected FILE (an existing file)"
+  { [ -n "$EVAL_FILE" ] && [ -f "$EVAL_FILE" ]; } || fail_input "plan needs --evaluated FILE (an existing file)"
+  [ -n "$LEDGER" ] || fail_input "plan needs --ledger PATH"
+  sha="$(git rev-parse --verify --quiet "${COMMIT:-HEAD}^{commit}")" ||
+    fail_input "--commit does not name a commit in this repository"
+  git show "$sha:$LEDGER" >"$TMPD/ledger" 2>/dev/null || refuse "$LEDGER is not in commit $sha"
+  ledger_rows "$TMPD/ledger" >"$TMPD/rows.jsonl" || refuse "$LEDGER at $sha has a line that is not a row"
+  jq -c -n --slurpfile sel "$SELECTED" --slurpfile ev "$EVAL_FILE" --slurpfile rows "$TMPD/rows.jsonl" \
+    "$PLAN_JQ" >"$TMPD/plan.json" 2>"$TMPD/jq.err" || refuse "cannot build the plan: $(head -c 300 "$TMPD/jq.err")"
+  bytes="$(($(wc -c <"$TMPD/plan.json") - 1))"
+  if [ "$bytes" -gt "$PLAN_MAX_BYTES" ]; then
+    refuse "the plan is $bytes bytes, over the $PLAN_MAX_BYTES-byte cap of the hand-off between jobs; lower max_actions"
+  fi
+  cat "$TMPD/plan.json"
+}
+
+# shellcheck disable=SC2016  # jq program text, not shell
+VERIFY_JQ='
+def nat: type == "number" and (tojson | test("^(0|[1-9][0-9]*)$"));
+def indices: type == "array" and all(.[]; nat) and . == unique;
+($rows | map({key, value: .}) | from_entries) as $row
+| ($plan[0]) as $p
+| if ($p | type) != "array" then error("the plan is not a JSON array") else . end
+| if ($p | length) > $max then error("the plan holds \($p | length) actions, more than max_actions (\($max))") else . end
+| [ $p | to_entries[] | .key as $i | .value as $e
+    | "plan entry \($i)" as $at
+    | if ($e | type) != "object" or ($e | keys) != ["action", "close_reason", "failed", "hash", "issue", "reason", "unevaluated"]
+        then error("\($at): the fields must be exactly action, close_reason, failed, hash, issue, reason, unevaluated")
+      elif ($e.issue | nat | not) or $e.issue == 0 then error("\($at): issue is not a positive integer")
+      elif ($e.hash | type) != "string" or ($e.hash | test("^[0-9a-f]{64}$") | not) then error("\($at): hash is not 64 hex digits")
+      elif ($e.failed | indices | not) or ($e.unevaluated | indices | not)
+        then error("\($at): failed and unevaluated must be sorted lists of distinct check indices")
+      elif any($e.failed[]; IN($e.unevaluated[])) then error("\($at): a check is both failed and unevaluated")
+      elif ([$e.action, $e.reason] | IN(["close", "evidence-holds"], ["reopen", "regression"], ["reopen", "row-removed"]) | not)
+        then error("\($at): action \($e.action | tojson) with reason \($e.reason | tojson) is not a planned action")
+      else ($row["\($repo | ascii_downcase)#\($e.issue)"]) as $r
+        | if $e.reason == "row-removed" then
+            if $r != null then error("\($at): #\($e.issue) has a row in the ledger at the commit, so it is no removed row")
+            elif $e.failed != [] or $e.unevaluated != [] then error("\($at): a removed-row reopen has no check results")
+            elif $e.close_reason != "not planned" then error("\($at): close_reason must be \"not planned\"")
+            else $e end
+          elif $r == null then error("\($at): #\($e.issue) has no row in the ledger at the commit")
+          elif $r.hash != $e.hash then error("\($at): the hash is not that of the row of #\($e.issue) at the commit")
+          elif $e.close_reason != (if $r.disposition == "landed" then "completed" else "not planned" end)
+            then error("\($at): close_reason does not follow the row disposition")
+          elif any(($e.failed + $e.unevaluated)[]; . >= $r.nchecks) then error("\($at): a check index is out of range")
+          elif $e.reason == "evidence-holds" and ($e.failed != [] or $e.unevaluated != [])
+            then error("\($at): a close needs every check to hold")
+          elif $e.reason == "regression" and $e.failed == [] then error("\($at): a regression reopen needs a failed check")
+          else $e + {repo: $r.repo, disposition: $r.disposition} end
+      end ]
+| if (map(.issue) | unique | length) != length then error("an issue appears twice in the plan") else .[] end
+'
+
+# verify-plan --repo R --commit SHA --ledger PATH --plan FILE --max-actions N
+#             --evaluator FILE
+cmd_verify_plan() {
+  local at item n action reason hash body
+  parse_opts "$@"
+  need_repo_opt verify-plan
+  need_max_actions
+  [[ "$COMMIT" =~ ^[0-9a-f]{40}$ ]] || fail_input "verify-plan needs --commit SHA (the 40-hex evaluated commit)"
+  { [ -n "$PLAN_FILE" ] && [ -f "$PLAN_FILE" ]; } || fail_input "verify-plan needs --plan FILE (an existing file)"
+  { [ -n "$EVALUATOR" ] && [ -f "$EVALUATOR" ]; } || fail_input "verify-plan needs --evaluator FILE (scripts/issue-evidence.sh)"
+  if ! [[ "$LEDGER" =~ ^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$ ]] || [[ "/$LEDGER/" =~ /\.\.?/ ]]; then
+    fail_input "verify-plan needs --ledger PATH (repository-relative, no . or .. component)"
+  fi
+  [ "$(wc -c <"$PLAN_FILE")" -le "$PLAN_MAX_BYTES" ] ||
+    refuse "the plan is larger than the $PLAN_MAX_BYTES-byte cap"
+  # The ledger as data, at the evaluated commit (immutable), by API: nothing
+  # is checked out and no file of the repository is run.
+  at="$TMPD/at-commit"
+  mkdir -p "$at/$(dirname "$LEDGER")"
+  gh api -H 'Accept: application/vnd.github.raw' "repos/$REPO/contents/$LEDGER?ref=$COMMIT" \
+    >"$at/$LEDGER" 2>"$TMPD/gh.err" || refuse "could not read $LEDGER at $COMMIT: $(head -c 300 "$TMPD/gh.err")"
+  (cd "$at" && bash "$EVALUATOR" validate "$LEDGER") 2>"$TMPD/validate.err" ||
+    refuse "the ledger at $COMMIT does not validate: $(head -c 300 "$TMPD/validate.err")"
+  ledger_rows "$at/$LEDGER" >"$TMPD/rows.jsonl" || refuse "the ledger at $COMMIT has a line that is not a row"
+  jq -c -n --slurpfile plan "$PLAN_FILE" --slurpfile rows "$TMPD/rows.jsonl" --arg repo "$REPO" \
+    --argjson max "$MAX_ACTIONS" "$VERIFY_JQ" >"$TMPD/verified.jsonl" 2>"$TMPD/jq.err" ||
+    refuse "the plan does not match the ledger at $COMMIT: $(head -c 300 "$TMPD/jq.err")"
+  : >"$TMPD/full.jsonl"
+  while IFS= read -r item; do
+    n="$(jq -r .issue <<<"$item")"
+    action="$(jq -r .action <<<"$item")"
+    reason="$(jq -r .reason <<<"$item")"
+    hash="$(jq -r .hash <<<"$item")"
+    if [ "$reason" = row-removed ]; then
+      body="$(jq -r -n --arg ledger "$LEDGER" --arg sha "$COMMIT" --arg hash "$hash" "$REMOVED_BODY_JQ"' removed_body')"
+    else
+      # The evaluate record render-comment reads, made from the checked
+      # vector and the fetched row: nothing of it comes from the plan's text.
+      jq -c '{disposition, failed, holds: (.action == "close"), issue, repo, unevaluated}' <<<"$item" >"$TMPD/one.evaluated"
+      body="$(cd "$at" && bash "$EVALUATOR" render-comment --issue "$n" --action "$action" --repo "$REPO" \
+        --commit "$COMMIT" --evaluated "$TMPD/one.evaluated" "$LEDGER" 2>"$TMPD/render.err")" ||
+        refuse "could not render the comment for #$n: $(head -c 300 "$TMPD/render.err")"
+    fi
+    jq -c --arg body "$body" '{action, body: $body, close_reason, hash, issue, reason}' <<<"$item" >>"$TMPD/full.jsonl"
+  done <"$TMPD/verified.jsonl"
+  jq -c -s . "$TMPD/full.jsonl"
+}
+
+# The comment of a removed-row reopen, as a jq function of $ledger (the
+# ledger's path), $sha (the evaluated commit) and $hash (the row hash in the
+# bot's marker). removed-rows and verify-plan both render it from here.
+# shellcheck disable=SC2016  # jq program text, not shell
+REMOVED_BODY_JQ='
+def removed_body:
+  [ "**issue-evidence:** reopening this issue. The issue-evidence bot closed it on a row of `\($ledger)`, and at commit \($sha) the ledger has no row for it: the row was removed, so the closure no longer has evidence behind it.",
+    "",
+    "Removing a row is how a closure is disputed. To close the issue again, add a row whose checks hold in a reviewed pull request, or close it by hand: the bot does not reopen an issue a person closed.",
+    "",
+    "<!-- issue-evidence-bot: row-sha256=\($hash) -->" ] | join("\n");
+'
+
 # removed-rows: the issues this bot closed whose ledger row is gone. Removing a
 # row is the documented way to dispute a closure, and such an issue no longer
 # appears in the evaluation, so it is found here instead: from every version
@@ -250,8 +441,12 @@ cmd_removed_rows() {
     [[ "$n" =~ ^[1-9][0-9]*$ ]] || continue
     gh api "repos/$REPO/issues/$n" >"$TMPD/peek.json" 2>"$TMPD/gh.err" ||
       refuse "could not read issue #$n: $(head -c 300 "$TMPD/gh.err")"
-    jq -e --arg bot "$BOT" 'type == "object" and .state == "closed" and (.closed_by.login // "") == $bot
-      and (has("pull_request") | not)' "$TMPD/peek.json" >/dev/null 2>&1 || continue
+    # A 200 whose body is not an issue (an error object, not JSON) is a
+    # refusal, as in read_issue: it must not read as "not closed by the bot".
+    jq -e 'type == "object" and (.state == "open" or .state == "closed")' "$TMPD/peek.json" >/dev/null 2>&1 ||
+      refuse "issue #$n: the read is not an issue object with state open or closed"
+    jq -e --arg bot "$BOT" '.state == "closed" and (.closed_by.login // "") == $bot
+      and (has("pull_request") | not)' "$TMPD/peek.json" >/dev/null || continue
     read_issue "$n"
     [ "$(fact closed_by_bot)" = true ] || continue
     hash="$(fact hash)"
@@ -259,14 +454,10 @@ cmd_removed_rows() {
       echo "::warning::#$n: the bot's marker carries no row hash; not reopening it." >&2
       continue
     fi
-    jq -c -n --argjson n "$n" --arg repo "$REPO" --arg ledger "$LEDGER" --arg sha "$sha" --arg hash "$hash" '
+    jq -c -n --argjson n "$n" --arg repo "$REPO" --arg ledger "$LEDGER" --arg sha "$sha" --arg hash "$hash" \
+      "$REMOVED_BODY_JQ"'
       {issue: $n, repo: $repo, action: "reopen", close_reason: "not planned", reason: "row-removed",
-       body: ([
-         "**issue-evidence:** reopening this issue. The issue-evidence bot closed it on a row of `\($ledger)`, and at commit \($sha) the ledger has no row for it: the row was removed, so the closure no longer has evidence behind it.",
-         "",
-         "Removing a row is how a closure is disputed. To close the issue again, add a row whose checks hold in a reviewed pull request, or close it by hand: the bot does not reopen an issue a person closed.",
-         "",
-         "<!-- issue-evidence-bot: row-sha256=\($hash) -->"] | join("\n"))}' >>"$TMPD/removed.jsonl"
+       hash: $hash, body: removed_body}' >>"$TMPD/removed.jsonl"
   done <"$TMPD/removed.n"
   cat "$TMPD/removed.jsonl"
 }
@@ -295,7 +486,7 @@ head_is_current() {
 
 LIVE_BRANCH="" LIVE_HEAD=""
 cmd_apply() {
-  local count i item n action reason body now done_n=0
+  local count i item n action reason body now done_n=0 stopped="" why marked
   parse_opts "$@"
   need_repo_opt apply
   need_max_actions
@@ -321,7 +512,10 @@ cmd_apply() {
     n="$(jq -r .issue <<<"$item")"
     action="$(jq -r .action <<<"$item")"
     reason="$(jq -r .close_reason <<<"$item")"
-    body="$(jq -r .body <<<"$item")"
+    body="$(jq -r 'if (.body | type) == "string" and .body != "" then .body else error("no comment") end' <<<"$item")" ||
+      fail_input "plan entry $i has no comment body"
+    why="$(jq -r '.reason // ""' <<<"$item")"
+    marked="$(jq -r '.hash // ""' <<<"$item")"
     [[ "$n" =~ ^[1-9][0-9]*$ ]] || fail_input "bad issue number in plan"
     # Re-read the issue and who closed or reopened it last, right before
     # acting: the plan was made from an earlier read, a person may have acted
@@ -340,18 +534,38 @@ cmd_apply() {
           echo "#$n was reopened by $(fact last_actor) after the bot closed it; not closing."
           continue
         fi
-        gh issue close "$n" --repo "$REPO" --reason "$reason" --comment "$body" ||
-          refuse "closing #$n failed; $done_n of $count planned action(s) were performed"
         ;;
       reopen)
         if [ "$(fact closed_by_bot)" != true ]; then
           echo "#$n is now $now, not a close by this bot; not reopening."
           continue
         fi
+        # A removed-row reopen undoes the bot's close on THAT row: its marker
+        # must still name the row hash the plan names.
+        if [ "$why" = row-removed ] && [ "$(fact hash)" != "$marked" ]; then
+          echo "#$n: the bot's latest marker names another row than the plan; not reopening."
+          continue
+        fi
+        ;;
+      *) fail_input "unknown action in plan: $action" ;;
+    esac
+    # The head was current when the loop started, but the branch can move
+    # while it runs; the plan is then stale for every later action. Re-read
+    # it right before each write and stop, keeping what was already done.
+    if ! head_is_current; then
+      stopped="stopped: $LIVE_BRANCH moved from $COMMIT to $LIVE_HEAD after $done_n of $count planned action(s); the rest were not performed. A later run on the new head decides again."
+      echo "$stopped"
+      break
+    fi
+    case "$action" in
+      close)
+        gh issue close "$n" --repo "$REPO" --reason "$reason" --comment "$body" ||
+          refuse "closing #$n failed; $done_n of $count planned action(s) were performed"
+        ;;
+      reopen)
         gh issue reopen "$n" --repo "$REPO" --comment "$body" ||
           refuse "reopening #$n failed; $done_n of $count planned action(s) were performed"
         ;;
-      *) fail_input "unknown action in plan: $action" ;;
     esac
     done_n=$((done_n + 1))
     echo "| #$n | $action |" >>"$TMPD/applied.md"
@@ -360,6 +574,10 @@ cmd_apply() {
     echo "## Issue evidence: applied"
     echo
     echo "$done_n of $count planned action(s) performed."
+    if [ -n "$stopped" ]; then
+      echo
+      echo "$stopped"
+    fi
     if [ -s "$TMPD/applied.md" ]; then
       echo
       echo "| Issue | Action |"
@@ -375,13 +593,15 @@ done
 TMPD="$(mktemp -d)"
 trap 'rm -rf -- "$TMPD"' EXIT
 
-[ "$#" -ge 1 ] || fail_input "usage: $PROG states|removed-rows|select|apply [OPTIONS]"
+[ "$#" -ge 1 ] || fail_input "usage: $PROG states|removed-rows|select|plan|verify-plan|apply [OPTIONS]"
 sub="$1"
 shift
 case "$sub" in
   states) cmd_states "$@" ;;
   removed-rows) cmd_removed_rows "$@" ;;
   select) cmd_select "$@" ;;
+  plan) cmd_plan "$@" ;;
+  verify-plan) cmd_verify_plan "$@" ;;
   apply) cmd_apply "$@" ;;
   *) fail_input "unknown subcommand: $sub" ;;
 esac

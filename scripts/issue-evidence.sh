@@ -23,10 +23,11 @@
 #
 # SUBCOMMANDS (LEDGER defaults to .machine_readable/issue-evidence.jsonl)
 #   validate [LEDGER]
-#       Schema check against the closed vocabulary. Each error names the line.
-#       It never reads the git tree, so one row cannot invalidate the ledger
-#       by naming a script that is later deleted: evaluation reports that
-#       check as failed (a regression) and still evaluates every other row.
+#       Schema check against the closed vocabulary, length bounds included.
+#       Each error names the line. It never reads the git tree (and works
+#       outside a repository), so one row cannot invalidate the ledger by
+#       naming a script that is later deleted: evaluation reports that check
+#       as failed (a regression) and still evaluates every other row.
 #   lint [LEDGER]
 #       validate, and also: every `script` check names a file tracked at HEAD
 #       with the executable bit. For a pull request author before merge (the
@@ -36,6 +37,32 @@
 #       issue, repo, unevaluated}. holds is true when every check holds, false
 #       when any check fails, null when none fails but one could not be
 #       evaluated. failed/unevaluated are 0-based check indices.
+#       Script checks apart (one of these at a time; evaluate only):
+#       --no-scripts      run no script. A script check whose script is
+#                         tracked and executable at REF is unevaluated, and
+#                         each record also lists such checks in `deferred`.
+#       --scripts-only    run only the script checks, and print one JCS
+#                         script result per script check whose script is
+#                         tracked and executable at REF:
+#                         {blob, check, issue, outcome, path, repo}, blob the
+#                         script's blob id at REF, outcome holds|failed|
+#                         unevaluated. Nothing else is evaluated. Refuses
+#                         (exit 2, nothing printed) when the results could
+#                         exceed 65,536 bytes, before any script runs.
+#       --script-results FILE
+#                         run no script: take each script check's outcome
+#                         from FILE, script result records as --scripts-only
+#                         prints them. FILE is checked first, and the whole
+#                         run is refused (exit 2, nothing printed) unless it
+#                         is at most 65,536 bytes of UTF-8 and every line is
+#                         a JCS record of that closed schema that matches a
+#                         real script check of a row of --repo at REF (same
+#                         repo, issue, check, path and blob), each at most
+#                         once. A script check with no record is unevaluated.
+#       In every mode a script that is not tracked and executable at REF is
+#       a failed check, decided from the tree. `evaluate` then equals
+#       `--scripts-only` followed by `--script-results` (the test suite
+#       checks it on every row).
 #   decide --repo OWNER/NAME --open FILE [--evaluated FILE | --ref REF] [LEDGER]
 #       Pure decision table. FILE is a JSON array of {number, state} with
 #       state open|closed, closed_by_bot (bool) for closed issues, and
@@ -45,10 +72,13 @@
 #       number, so rows (or --evaluated records) of any other repository
 #       are dropped and never yield an action.
 #   render-comment --issue N --action close|reopen [--repo R] [--ref REF]
-#                  [--evaluated FILE] [LEDGER]
+#                  [--evaluated FILE] [--commit SHA] [LEDGER]
 #       The Markdown comment for a close or reopen. Its last line is the
 #       marker <!-- issue-evidence-bot: row-sha256=HASH --> (HASH = sha256 of
 #       the row's ledger line), by which the workflow recognises its own work.
+#       --commit SHA (a full commit id, with --evaluated) names the evaluated
+#       commit as data instead of resolving --ref: no git repository is read,
+#       which is how the workflow's apply job renders from a fetched ledger.
 #   candidates --log FILE --open FILE [--repo R] [LEDGER]
 #       REPORT ONLY. Open issues with no ledger row that commits mention, most
 #       mentioned first. FILE is `git log --format='%H%x09%s%x09%b%x1e'`.
@@ -166,6 +196,16 @@ def relpath($f; $v):
   elif ($v | split("/") | any(. == "" or . == "." or . == "..")) then "\($f) has an empty, \".\" or \"..\" component: \($v | tojson)"
   else empty end;
 def posint: type == "number" and (tojson | test("^[1-9][0-9]*$")) and . <= 9007199254740991;
+# Length bounds, in characters. They keep every comment the bot renders under
+# the GitHub limit of 65,536 characters (the test suite renders the worst-case
+# row) and keep the plan the workflow hands between its jobs small.
+def longer($f; $v; $n):
+  if ($v | type) == "string" and ($v | length) > $n then "\($f) is longer than \($n) characters" else empty end;
+def toomany($f; $v; $n):
+  if ($v | type) == "array" and ($v | length) > $n then "\($f) has more than \($n) items" else empty end;
+def checkbounds($i):
+  objects | "checks[\($i)]" as $p
+  | longer("\($p).path"; .path; 256), longer("\($p).glob"; .glob; 256), longer("\($p).pattern"; .pattern; 400);
 def check($i):
   "checks[\($i)]" as $p
   | if type != "object" then "\($p) is not an object"
@@ -202,10 +242,12 @@ def row:
      then empty else "repo must be OWNER/NAME" end),
     (if (.disposition | IN("landed", "superseded", "moot", "duplicate", "expired")) then empty
      else "disposition is not in the vocabulary: \(.disposition | tojson)" end),
-    text("claim"; .claim), nocomment("claim"; .claim),
+    text("claim"; .claim), nocomment("claim"; .claim), longer("claim"; .claim; 1500),
     (if (.evidence | type) != "array" or (.evidence | length) == 0
      then "evidence must be a non-empty array of strings"
-     else .evidence | to_entries[] | text("evidence[\(.key)]"; .value), nocomment("evidence[\(.key)]"; .value) end),
+     else .evidence | to_entries[] | text("evidence[\(.key)]"; .value), nocomment("evidence[\(.key)]"; .value),
+       longer("evidence[\(.key)]"; .value; 400) end),
+    toomany("evidence"; .evidence; 16), toomany("checks"; .checks; 16),
     (if (.added | type) == "string" and (.added | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}$"))
         and ((.added | try (strptime("%Y-%m-%d") | mktime | strftime("%Y-%m-%d")) catch "") == .added)
      then empty else "added must be a real calendar date YYYY-MM-DD" end),
@@ -215,7 +257,7 @@ def row:
      elif has("duplicate_of") then "duplicate_of is allowed only with disposition duplicate"
      else empty end),
     (if (.checks | type) != "array" or (.checks | length) == 0 then "checks must be a non-empty array"
-     else .checks | to_entries[] | .key as $i | .value | check($i) end)
+     else .checks | to_entries[] | .key as $i | .value | check($i), checkbounds($i) end)
   end;
 def emit($tag; $n; $v): $tag, "\u0000", ($n | tostring), "\u0000", $v, "\u0000";
 [inputs] | to_entries
@@ -410,20 +452,27 @@ checkout_is_commit() {
   [ -z "$(git -C "$ROOT" ls-files -z --others --exclude-per-directory=.gitignore | head -c 1)" ] || return 1
 }
 
-check_script() { # PATH
-  local path="$1" rc=0
+# script_tracked PATH: 0 when PATH is a tracked, executable regular file AT
+# THE EVALUATED COMMIT (E_OID is then its blob id); 1 when it is not, which is
+# a FAILED check; 2 for a path outside scripts/ and tests/.
+script_tracked() {
   # Only explicitly allowlisted repository scripts are runnable.
   # This prevents ledger data from triggering arbitrary code execution.
-  case "$path" in
+  case "$1" in
     scripts/*|tests/*) ;;
     *) return 2 ;;
   esac
-  # The script must be a tracked, executable regular file AT THE EVALUATED
-  # COMMIT. Read from the commit, so absence (deleted, renamed, never added) or
-  # a lost executable bit is a FAILED check (a regression) whichever commit is
-  # checked out, never an invalid ledger and never "not evaluated".
-  entry_at "$COMMIT" "$path" || return 1
+  # Read from the commit, so absence (deleted, renamed, never added) or a lost
+  # executable bit is a FAILED check (a regression) whichever commit is checked
+  # out and in every script mode, never an invalid ledger and never "not
+  # evaluated". No script runs to decide it.
+  entry_at "$COMMIT" "$1" || return 1
   [ "$E_TYPE" = blob ] && [ "$E_MODE" = 100755 ] || return 1
+}
+
+# run_script PATH: runs a tracked script (script_tracked held) in the checkout.
+run_script() {
+  local path="$1" rc=0
   # A script runs in the checkout and may read any file there, so it counts
   # as evidence only when the checkout IS the evaluated commit: HEAD is that
   # commit and checkout_is_commit holds. Re-checked before every script, so a
@@ -443,10 +492,37 @@ check_script() { # PATH
   esac
 }
 
-# eval_row LINE: sets R_REPO R_ISSUE R_DISP R_HOLDS R_FAILED R_UNEVAL (JSON).
+# check_script PATH INDEX: a script check of the row eval_row is reading
+# (R_REPO, R_ISSUE), by SCRIPT_MODE:
+#   run       run the script (the default);
+#   none      never run it: 3 (unevaluated, reported as `deferred`);
+#   supplied  never run it: the outcome loaded by load_script_results, or 2
+#             (unevaluated) when none was supplied.
+# In every mode a script that is not tracked and executable at the commit is
+# a failed check (script_tracked), decided from the tree alone.
+check_script() {
+  local rc=0
+  script_tracked "$1" || return $?
+  case "$SCRIPT_MODE" in
+    run) run_script "$1" || rc=$?; return "$rc" ;;
+    none) return 3 ;;
+    supplied)
+      case "${SUPPLIED["$R_REPO#$R_ISSUE#$2"]:-}" in
+        holds) return 0 ;;
+        failed) return 1 ;;
+        *) return 2 ;;
+      esac
+      ;;
+    *) fail_internal "check_script in script mode $SCRIPT_MODE" ;;
+  esac
+}
+
+# eval_row LINE: sets R_REPO R_ISSUE R_DISP R_HOLDS R_FAILED R_UNEVAL and
+# R_DEFERRED (JSON). R_DEFERRED lists the script checks SCRIPT_MODE none did
+# not run; they are in R_UNEVAL too.
 eval_row() {
   local f=() k=0 nchecks i kind a pat rc any_false=0 any_null=0
-  local failed=() uneval=()
+  local failed=() uneval=() deferred=()
   printf '%s\n' "$1" | jq -j "$ROW_STREAM_JQ" >"$TMPD/row.stream" || fail_internal "jq could not read a validated row"
   mapfile -d '' -t f <"$TMPD/row.stream"
   R_REPO="${f[0]}" R_ISSUE="${f[1]}" R_DISP="${f[2]}" nchecks="${f[3]}"
@@ -460,12 +536,13 @@ eval_row() {
       grep-absent | grep-present) check_grep "$kind" "$a" "$pat" || rc=$? ;;
       tree-grep-absent) check_tree_grep_absent "$a" "$pat" || rc=$? ;;
       commit-on-main) check_commit_on_main "$a" || rc=$? ;;
-      script) check_script "$a" || rc=$? ;;
+      script) check_script "$a" "$i" || rc=$? ;;
       *) fail_internal "unvalidated check kind reached evaluation" ;;
     esac
     case "$rc" in
       0) ;;
       1) any_false=1; failed+=("$i") ;;
+      3) any_null=1; uneval+=("$i"); deferred+=("$i") ;;
       *) any_null=1; uneval+=("$i") ;;
     esac
   done
@@ -474,6 +551,7 @@ eval_row() {
   else R_HOLDS=true; fi
   R_FAILED="[$(IFS=,; printf '%s' "${failed[*]}")]"
   R_UNEVAL="[$(IFS=,; printf '%s' "${uneval[*]}")]"
+  R_DEFERRED="[$(IFS=,; printf '%s' "${deferred[*]}")]"
 }
 
 # resolve_ref REF: sets COMMIT, HEAD_COMMIT, SHALLOW.
@@ -484,26 +562,169 @@ resolve_ref() {
   SHALLOW="$(git rev-parse --is-shallow-repository 2>/dev/null)" || fail_internal "git rev-parse failed"
 }
 
-# evaluate_into LEDGER OUT: writes the evaluate output for LEDGER to OUT.
+# in_repo_filter LINE: 0 when the row is of --repo (or there is no --repo).
+in_repo_filter() {
+  printf '%s\n' "$1" | jq -e --arg r "$REPO_FILTER" \
+    '$r == "" or (.repo | ascii_downcase) == ($r | ascii_downcase)' >/dev/null
+}
+
+# evaluate_into LEDGER OUT: writes the evaluate output for LEDGER to OUT. With
+# SCRIPT_MODE none each record also carries `deferred`.
 evaluate_into() {
   local ledger="$1" out="$2" line
   : >"$out"
+  [ "$SCRIPT_MODE" != supplied ] || load_script_results "$ledger"
   while IFS= read -r line; do
-    printf '%s\n' "$line" | jq -e --arg r "$REPO_FILTER" \
-      '$r == "" or (.repo | ascii_downcase) == ($r | ascii_downcase)' >/dev/null || continue
+    in_repo_filter "$line" || continue
     eval_row "$line"
     jq -c -n -S --arg repo "$R_REPO" --argjson issue "$R_ISSUE" --arg disposition "$R_DISP" \
       --argjson holds "$R_HOLDS" --argjson failed "$R_FAILED" --argjson unevaluated "$R_UNEVAL" \
-      '{repo: $repo, issue: $issue, disposition: $disposition, holds: $holds, failed: $failed, unevaluated: $unevaluated}' >>"$out"
+      --argjson deferred "$R_DEFERRED" --arg mode "$SCRIPT_MODE" \
+      '{repo: $repo, issue: $issue, disposition: $disposition, holds: $holds, failed: $failed, unevaluated: $unevaluated}
+       + (if $mode == "none" then {deferred: $deferred} else {} end)' >>"$out"
   done <"$ledger"
+}
+
+# --- script checks apart from the rest (--scripts-only, --script-results) -------
+#
+# The workflow runs the ledger's scripts in a job of their own, which holds no
+# issue permission and whose only product is one outcome per script check, and
+# builds the plan in another job that runs no code of the evaluated
+# repository. These two modes are the two halves; their meeting point is a
+# SCRIPT RESULT record, one JCS line per script check:
+#   {blob, check, issue, outcome, path, repo}
+# blob is the script's blob id at the commit, check the 0-based check index,
+# outcome holds|failed|unevaluated. Only a script check whose script is
+# tracked and executable at the commit has a record: the tree alone decides
+# the others (failed), in every mode.
+
+# Cap on the script results, in bytes (each record is under 450 bytes).
+SCRIPT_RESULTS_MAX_BYTES=65536
+
+# script_checks_into LEDGER OUT: one JCS line {blob, check, issue, path, repo}
+# per script check, of the rows of --repo, whose script is tracked and
+# executable at COMMIT. Nothing is run.
+script_checks_into() {
+  local ledger="$1" out="$2" line f=() k nchecks i
+  : >"$out"
+  while IFS= read -r line; do
+    in_repo_filter "$line" || continue
+    printf '%s\n' "$line" | jq -j "$ROW_STREAM_JQ" >"$TMPD/row.stream" || fail_internal "jq could not read a validated row"
+    mapfile -d '' -t f <"$TMPD/row.stream"
+    nchecks="${f[3]}" k=4
+    for ((i = 0; i < nchecks; i++)); do
+      if [ "${f[k]}" = script ] && script_tracked "${f[k + 1]}"; then
+        jq -c -n -S --arg blob "$E_OID" --argjson check "$i" --argjson issue "${f[1]}" \
+          --arg path "${f[k + 1]}" --arg repo "${f[0]}" \
+          '{blob: $blob, check: $check, issue: $issue, path: $path, repo: $repo}' >>"$out"
+      fi
+      k=$((k + 3))
+    done
+  done <"$ledger"
+}
+
+# run_scripts_into LEDGER OUT: runs every script check script_checks_into
+# lists, and writes its script result record. Refuses (exit 2, nothing
+# written) when the records exceed SCRIPT_RESULTS_MAX_BYTES.
+run_scripts_into() {
+  local ledger="$1" out="$2" rec path rc outcome bound
+  script_checks_into "$ledger" "$TMPD/script-checks.jsonl"
+  # The largest the results can be is known before any script runs (each
+  # record gains at most `,"outcome":"unevaluated"`, 24 bytes): refuse first.
+  bound=$(($(wc -c <"$TMPD/script-checks.jsonl") + 24 * $(grep -c '' "$TMPD/script-checks.jsonl" || true)))
+  if [ "$bound" -gt "$SCRIPT_RESULTS_MAX_BYTES" ]; then
+    fail_input "the script results could reach $bound bytes, over $SCRIPT_RESULTS_MAX_BYTES; refusing to run the scripts"
+  fi
+  : >"$TMPD/script-results.jsonl"
+  while IFS= read -r rec; do
+    path="$(jq -r .path <<<"$rec")"
+    rc=0
+    run_script "$path" || rc=$?
+    case "$rc" in 0) outcome=holds ;; 1) outcome=failed ;; *) outcome=unevaluated ;; esac
+    jq -c -S --arg o "$outcome" '. + {outcome: $o}' <<<"$rec" >>"$TMPD/script-results.jsonl"
+  done <"$TMPD/script-checks.jsonl"
+  if [ "$(wc -c <"$TMPD/script-results.jsonl")" -gt "$SCRIPT_RESULTS_MAX_BYTES" ]; then
+    fail_input "the script results exceed $SCRIPT_RESULTS_MAX_BYTES bytes; refusing to emit them"
+  fi
+  cp "$TMPD/script-results.jsonl" "$out"
+}
+
+# The trusted boundary: a supplied script result is used only if it is
+# exactly a script result record (closed schema, JCS, known outcome) of a
+# real script check at this commit, at most once.
+# shellcheck disable=SC2016  # jq program text, not shell
+SCRIPT_RESULTS_JQ='
+def canon: walk(if type == "object" then to_entries | sort_by(.key) | from_entries else . end) | tojson;
+def natural: type == "number" and (tojson | test("^(0|[1-9][0-9]*)$"));
+($exp | map({key: "\(.repo)#\(.issue)#\(.check)", value: .}) | from_entries) as $want
+| [inputs] | to_entries
+| map((.key + 1) as $n | .value as $raw
+    | if $raw == "" then {n: $n, err: "blank line"}
+      else (try {ok: true, v: ($raw | fromjson)} catch {ok: false}) as $p
+      | if ($p.ok | not) then {n: $n, err: "not a single JSON value"}
+        else $p.v as $v
+        | if ($v | type) != "object" then {n: $n, err: "not a JSON object"}
+          elif ($v | keys) != ["blob", "check", "issue", "outcome", "path", "repo"]
+            then {n: $n, err: "the fields must be exactly blob, check, issue, outcome, path, repo"}
+          elif ($v.outcome | IN("holds", "failed", "unevaluated") | not)
+            then {n: $n, err: "outcome must be holds, failed or unevaluated"}
+          elif ($v.check | natural | not) or ($v.issue | natural | not) or ($v.issue == 0)
+            then {n: $n, err: "check and issue must be integers written plainly"}
+          elif (($v.blob | type) != "string") or (($v.path | type) != "string") or (($v.repo | type) != "string")
+            then {n: $n, err: "blob, path and repo must be strings"}
+          elif ($v | canon) != $raw then {n: $n, err: "not JCS canonical"}
+          elif $want["\($v.repo)#\($v.issue)#\($v.check)"] != ($v | del(.outcome))
+            then {n: $n, err: "matches no script check of the ledger at this commit (repo, issue, check, path and blob)"}
+          else {n: $n, key: "\($v.repo)#\($v.issue)#\($v.check)", outcome: $v.outcome} end
+        end
+      end)
+| reduce .[] as $r ({seen: {}, out: []};
+    if $r.key != null and .seen[$r.key] != null
+    then .out += [{n: $r.n, err: "duplicate: the same script check is already on line \(.seen[$r.key])"}]
+    else (if $r.key != null then .seen[$r.key] = $r.n else . end) | .out += [$r] end)
+| .out
+| if any(.[]; has("err")) then (.[] | select(has("err")) | "E\t\(.n)\t\(.err)")
+  else (.[] | "K\t\(.key)\t\(.outcome)") end
+'
+
+# load_script_results LEDGER: fills SUPPLIED (key REPO#ISSUE#CHECK, value the
+# outcome) from SCRIPT_RESULTS_FILE, or refuses (exit 2, nothing emitted).
+declare -A SUPPLIED=()
+load_script_results() {
+  local file="$SCRIPT_RESULTS_FILE" tag a b bad=0 n
+  [ -f "$file" ] || fail_input "--script-results file not found: $file"
+  [ "$(wc -c <"$file")" -le "$SCRIPT_RESULTS_MAX_BYTES" ] ||
+    fail_input "--script-results: larger than $SCRIPT_RESULTS_MAX_BYTES bytes"
+  [ "$(tr -d '\000' <"$file" | wc -c)" = "$(wc -c <"$file")" ] || fail_input "--script-results: contains a NUL byte"
+  while IFS= read -r n; do
+    printf '%s:%s: not valid UTF-8\n' "$file" "${n%%:*}" >&2
+    bad=1
+  done < <(LC_ALL=C.UTF-8 grep -a -n -x -v '.*' "$file" || true)
+  [ "$bad" -eq 0 ] || exit 2
+  script_checks_into "$1" "$TMPD/script-checks.jsonl"
+  jq -n -R -r --slurpfile exp "$TMPD/script-checks.jsonl" "$SCRIPT_RESULTS_JQ" <"$file" \
+    >"$TMPD/script-results.checked" 2>"$TMPD/script-results.err" ||
+    fail_internal "jq could not check the script results: $(head -c 300 "$TMPD/script-results.err")"
+  while IFS=$'\t' read -r tag a b; do
+    case "$tag" in
+      E) printf '%s:%s: %s\n' "$file" "$a" "$b" >&2; bad=1 ;;
+      K) SUPPLIED["$a"]="$b" ;;
+      *) fail_internal "unexpected line from the script results check" ;;
+    esac
+  done <"$TMPD/script-results.checked"
+  if [ "$bad" -ne 0 ]; then
+    SUPPLIED=()
+    exit 2
+  fi
 }
 
 # --- subcommands --------------------------------------------------------------
 
+# validate reads no git tree (it works outside a repository, as in the
+# workflow's apply job, which checks nothing out).
 cmd_validate() {
   [ "$#" -le 1 ] || fail_input "validate takes at most one LEDGER"
   local ledger="${1:-$DEFAULT_LEDGER}"
-  need_repo
   validate_ledger "$ledger" || exit 2
   printf '%s: %s rows valid\n' "$ledger" "$(grep -c '' "$ledger" || true)" >&2
 }
@@ -519,7 +740,13 @@ cmd_lint() {
 }
 
 REPO_FILTER="" REF="HEAD" OPEN_FILE="" EVAL_FILE="" LOG_FILE="" ISSUE="" ACTION=""
+SCRIPT_MODE="run" SCRIPT_RESULTS_FILE="" COMMIT_ARG=""
 LEDGER_ARG=()
+# set_script_mode MODE OPTION: the script options exclude one another.
+set_script_mode() {
+  [ "$SCRIPT_MODE" = run ] || fail_input "$2: --no-scripts, --scripts-only and --script-results exclude one another"
+  SCRIPT_MODE="$1"
+}
 parse_opts() {
   while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -530,6 +757,12 @@ parse_opts() {
       --log) [ "$#" -ge 2 ] || fail_input "--log needs a value"; LOG_FILE="$2"; shift 2 ;;
       --issue) [ "$#" -ge 2 ] || fail_input "--issue needs a value"; ISSUE="$2"; shift 2 ;;
       --action) [ "$#" -ge 2 ] || fail_input "--action needs a value"; ACTION="$2"; shift 2 ;;
+      --no-scripts) set_script_mode none "$1"; shift ;;
+      --scripts-only) set_script_mode only "$1"; shift ;;
+      --script-results)
+        [ "$#" -ge 2 ] || fail_input "--script-results needs a value"
+        set_script_mode supplied "$1"; SCRIPT_RESULTS_FILE="$2"; shift 2 ;;
+      --commit) [ "$#" -ge 2 ] || fail_input "--commit needs a value"; COMMIT_ARG="$2"; shift 2 ;;
       --) shift; LEDGER_ARG+=("$@"); break ;;
       -*) fail_input "unknown option: $1" ;;
       *) LEDGER_ARG+=("$1"); shift ;;
@@ -541,12 +774,27 @@ parse_opts() {
     fail_input "--repo must be OWNER/NAME"
   fi
 }
+# only_for SUBCOMMAND: refuses the options that belong to another subcommand.
+only_for() {
+  if [ "$1" != evaluate ] && [ "$SCRIPT_MODE" != run ]; then
+    fail_input "--no-scripts, --scripts-only and --script-results are options of evaluate only"
+  fi
+  if [ "$1" != render-comment ] && [ -n "$COMMIT_ARG" ]; then
+    fail_input "--commit is an option of render-comment only"
+  fi
+}
 
 cmd_evaluate() {
   parse_opts "$@"
+  only_for evaluate
   need_repo
   validate_ledger "$LEDGER" || exit 2
   resolve_ref "$REF"
+  if [ "$SCRIPT_MODE" = only ]; then
+    run_scripts_into "$LEDGER" "$TMPD/script-results.out"
+    cat "$TMPD/script-results.out"
+    return 0
+  fi
   evaluate_into "$LEDGER" "$TMPD/evaluated.jsonl"
   cat "$TMPD/evaluated.jsonl"
 }
@@ -606,6 +854,7 @@ def posint: type == "number" and . == floor and . >= 1;
 
 cmd_decide() {
   parse_opts "$@"
+  only_for decide
   [ -n "$OPEN_FILE" ] || fail_input "decide needs --open FILE"
   [ -f "$OPEN_FILE" ] || fail_input "--open file not found: $OPEN_FILE"
   # --open names one repository's issues by number only, so decide is always
@@ -678,7 +927,16 @@ cmd_render_comment() {
   parse_opts "$@"
   [[ "$ISSUE" =~ ^[1-9][0-9]*$ ]] || fail_input "render-comment needs --issue N (a positive integer)"
   case "$ACTION" in close | reopen) ;; *) fail_input "render-comment needs --action close|reopen" ;; esac
-  need_repo
+  only_for render-comment
+  # --commit SHA: the evaluated commit is given as data, and no git repository
+  # is read (the workflow's apply job renders from a ledger it fetched). It
+  # needs --evaluated, since nothing can be evaluated without the tree.
+  if [ -n "$COMMIT_ARG" ]; then
+    [[ "$COMMIT_ARG" =~ ^[0-9a-f]{40}([0-9a-f]{24})?$ ]] || fail_input "--commit must be a full commit id (40 or 64 lower-case hex digits)"
+    [ -n "$EVAL_FILE" ] || fail_input "--commit needs --evaluated FILE"
+  else
+    need_repo
+  fi
   validate_ledger "$LEDGER" || exit 2
   while IFS= read -r l; do
     if printf '%s\n' "$l" | jq -e --argjson n "$ISSUE" --arg r "$REPO_FILTER" \
@@ -688,7 +946,7 @@ cmd_render_comment() {
     fi
   done <"$LEDGER"
   [ "$found" -eq 1 ] || fail_input "render-comment: expected exactly one row for issue $ISSUE${REPO_FILTER:+ in $REPO_FILTER}, found $found (pass --repo)"
-  resolve_ref "$REF"
+  if [ -n "$COMMIT_ARG" ]; then COMMIT="$COMMIT_ARG"; else resolve_ref "$REF"; fi
   if [ -n "$EVAL_FILE" ]; then
     load_evaluated
     ev="$(jq -c -s --argjson n "$ISSUE" --arg r "$(printf '%s\n' "$line" | jq -r .repo)" \
@@ -739,6 +997,7 @@ def posint: type == "number" and . == floor and . >= 1;
 
 cmd_candidates() {
   parse_opts "$@"
+  only_for candidates
   { [ -n "$LOG_FILE" ] && [ -f "$LOG_FILE" ]; } || fail_input "candidates needs --log FILE (an existing file)"
   { [ -n "$OPEN_FILE" ] && [ -f "$OPEN_FILE" ]; } || fail_input "candidates needs --open FILE (an existing file)"
   need_repo

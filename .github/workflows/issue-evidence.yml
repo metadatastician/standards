@@ -11,9 +11,14 @@ name: Issue evidence
 on:
   push:
     branches: [main]
+    # Every file that changes what a run decides or does. Their tests and the
+    # page change nothing a run does, so they do not trigger one. A ledger
+    # row's own evidence script is not listed either: the weekly run catches
+    # a change to it.
     paths:
       - .machine_readable/issue-evidence.jsonl
       - scripts/issue-evidence.sh
+      - scripts/issue-evidence-apply.sh
       - .github/workflows/issue-evidence.yml
       - .github/workflows/issue-evidence-reusable.yml
   schedule:
