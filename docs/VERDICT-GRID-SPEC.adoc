@@ -214,6 +214,16 @@ manifest. A member whose adapter is missing, crashed or timed out is `error`
 with the reason, so the orange row says why rather than saying nothing.
 Paths are repository-relative with no `./`, so delta scoping can match them.
 
+The rules for turning an envelope and an enrolment entry into a row are
+proved for a model in `3-practice/fork-governance/proofs/ReportBack.idr`
+(Idris2): missing evidence is never green, a malformed or unrecognised
+envelope or an unknown severity is orange, green means a readable `ran` with
+no graded finding, grey comes only from `not_applicable` or a member not
+enrolled, standing and excluded findings never change the colour, and a
+graded critical is always purple. `scripts/tests/report-back-model-test.sh`
+checks that this renderer computes the model on every case the model's `main`
+prints. Status and bounds: `3-practice/PROOF-NEEDS.adoc`, report-back ledger.
+
 === The enrolment manifest
 
 [source,json]
