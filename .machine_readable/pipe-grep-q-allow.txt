@@ -56,7 +56,6 @@ scripts/check-canon-lockstep.sh:2
 scripts/check-canonical-names.sh:2
 scripts/check-debt-ratchet.sh:2
 scripts/check-doctrine-coverage.sh:2
-scripts/check-exemption-ratchet.sh:2
 scripts/check-language-guide.sh:1
 scripts/check-launcher-standard-currency.sh:2
 scripts/check-licence-consistency.sh:1

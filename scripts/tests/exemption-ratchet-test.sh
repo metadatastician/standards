@@ -183,6 +183,21 @@ git commit -q --amend -m "grow the migration ledger
 Ratchet-exception: .hypatia-ignore — correct ledger named"
 expect 0 "exception naming THIS ledger licenses it"
 
+# A declaration is found however many declaration lines the messages carry.
+# declared_for read `printf … | grep -iE '^Ratchet-exception' | grep -qF LEDGER`
+# under pipefail: with the matching line first and more than a pipe buffer of
+# declarations, grep -q exited, the filter died of SIGPIPE, the pipeline
+# reported 141 and a declared growth read as undeclared (a false block).
+git checkout -q "$BASE" -- .hypatia-baseline.json .hypatia-ignore
+printf 'cicd_rules/banned_language_file:src/A.res\ncicd_rules/banned_language_file:src/C.res\n' > .hypatia-ignore
+{ printf 'grow the migration ledger\n\n'
+  for i in $(seq 1 3000); do printf 'Ratchet-exception: .hypatia-ignore — declared reason number %d\n' "$i"; done
+} > "$WORK/long-msg"
+git commit -aq -F "$WORK/long-msg"
+for run in 1 2 3 4 5; do
+  expect 0 "a declaration among ~180 KB of declaration lines licenses growth (run $run)"
+done
+
 
 # ⚠ A wildcard on an early line of a LARGE migration ledger must still fail.
 # The check used to read `grep -vE … .hypatia-ignore | grep -q '\*\*'` under

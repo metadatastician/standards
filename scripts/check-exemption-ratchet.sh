@@ -128,8 +128,13 @@ declared_for() {
   local ledger="$1" msgs
   msgs="$(git log --format=%B "${BASE_REF}..HEAD" 2>/dev/null || true)"
   
-  # Check commit messages
-  if printf '%s' "$msgs" | grep -iE '^Ratchet-exception' | grep -qF "$ledger"; then
+  # Check commit messages. The declarations are captured, then matched: a
+  # three-stage pipe into grep -q lost the race to SIGPIPE on a long message
+  # (status 141) and a declared growth read as undeclared. grep exits 1 when
+  # no line declares anything, which is a normal outcome here.
+  local decl
+  decl="$(grep -iE '^Ratchet-exception' <<<"$msgs")" || [ $? -eq 1 ]
+  if grep -qF "$ledger" <<<"$decl"; then
     return 0
   fi
   
@@ -137,7 +142,8 @@ declared_for() {
   if [ -n "${GITHUB_EVENT_PATH:-}" ] && [ -f "${GITHUB_EVENT_PATH}" ]; then
     local pr_body
     pr_body="$(jq -r '.pull_request.body // ""' "${GITHUB_EVENT_PATH}" 2>/dev/null || true)"
-    if printf '%s' "$pr_body" | grep -iE '^Ratchet-exception' | grep -qF "$ledger"; then
+    decl="$(grep -iE '^Ratchet-exception' <<<"$pr_body")" || [ $? -eq 1 ]
+    if grep -qF "$ledger" <<<"$decl"; then
       return 0
     fi
   fi
