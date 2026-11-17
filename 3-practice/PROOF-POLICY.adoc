@@ -797,6 +797,17 @@ receipts through it and catalogues the result as a census (§8.4).
 
 `echo_praxis.deed` in the same directory is a worked example of §8.5.2.
 
+The shared generator is
+link:../scripts/proof-receipt.sh[`scripts/proof-receipt.sh`]. A home
+repository's receipt script defines its ledgers (claims, runs, echoes) and the
+hooks that name each leg's invocation, input set and imported files, then
+sources the generator, which writes the receipt, checks it and runs the
+reader and the git checker of §8.5.3. A home repository pins it with the
+reader, the reference digest and the checker at one standards commit, each
+file by its sha256. `scripts/tests/proof-receipt-test.sh` tests it, including
+an `(import …)` of a pinned sibling. Using it is a convenience, not a rule:
+the reader decides what a receipt is.
+
 ==== 8.5.2 Echoes: receipts across a history rewrite
 
 Owner ruling 2026-11-13. A receipt is earned on a commit. A squash merge or a

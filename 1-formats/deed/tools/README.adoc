@@ -15,7 +15,9 @@ it may be written; every `.deed` committed in this repo is linted in CI.
 
 The Python linter `deed_lint.py` (frozen at deed.abnf v1.0.0) and the
 Python translator `a2ml_to_deed.py` were deleted on 2026-11-13 (owner
-ruling; D313, Python banned). Conversion of A2ML is kyX's first front end,
+ruling; D313, Python banned). The leftover wrapper stub
+`migrate_a2ml_to_deed.sh`, which planned to call them, was deleted on
+2026-11-17 (owner ruling; standards#1339). Conversion of A2ML is kyX's first front end,
 and the mapping specs in `../mappings/` stay the authority for where each
 family's content goes.
 
