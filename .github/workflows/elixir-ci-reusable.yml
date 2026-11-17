@@ -80,10 +80,13 @@ on:
         required: false
         default: ubuntu-latest
       otp-version:
-        description: OTP version selector for erlef/setup-beam
+        description: >-
+          OTP version selector for erlef/setup-beam. The default is the first
+          27 release whose :httpc drops both an authorization header and URL
+          credentials on a cross-origin redirect; no OTP 26 release does.
         type: string
         required: false
-        default: "26"
+        default: "27.3.4.19"
       elixir-version:
         description: Elixir version selector for erlef/setup-beam
         type: string
