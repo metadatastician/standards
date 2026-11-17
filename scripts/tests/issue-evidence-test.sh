@@ -230,13 +230,28 @@ ledger "$(row 3 '[{"kind":"tree-grep-absent","glob":":(exclude)x","pattern":"x"}
 expect_err "glob choosing pathspec magic" 'checks[0].glob starts with ":"' bash "$IE" validate "$L"
 ledger "$(row 3 '[{"kind":"script","path":"docs/a.adoc"}]')"
 expect_err "script outside scripts/ and tests/" "checks[0].path must be under scripts/ or tests/" bash "$IE" validate "$L"
+# Schema validation never reads the tree: a script that is absent or not
+# executable is a FAILED check at evaluation (a regression), and `lint` is the
+# separate pre-merge check that names it.
 printf '#!/usr/bin/env bash\nexit 0\n' >scripts/untracked.sh
 chmod +x scripts/untracked.sh
 ledger "$(row 3 '[{"kind":"script","path":"scripts/untracked.sh"}]')"
-expect_err "untracked script" "is not tracked in git at HEAD" bash "$IE" validate "$L"
+expect_rc "validate does not read the tree: an untracked script is schema-valid" 0 bash "$IE" validate "$L"
+expect_err "lint: untracked script" "is not tracked in git at HEAD" bash "$IE" lint "$L"
+expect_holds "evaluate: an untracked script is a failed check" false "$L"
 rm -f scripts/untracked.sh
 ledger "$(row 3 '[{"kind":"script","path":"scripts/plain.sh"}]')"
-expect_err "script without the executable bit" "without the executable bit" bash "$IE" validate "$L"
+expect_rc "validate does not read the tree: a non-executable script is schema-valid" 0 bash "$IE" validate "$L"
+expect_err "lint: script without the executable bit" "without the executable bit" bash "$IE" lint "$L"
+expect_holds "evaluate: a non-executable script is a failed check" false "$L"
+ledger "$(row 3 '[{"kind":"script","path":"scripts/pass.sh"}]')"
+expect_rc "lint passes a tracked executable script" 0 bash "$IE" lint "$L"
+ledger "$(row 3 '[{"kind":"script","path":"scripts/gone.sh"}]')" "$(row 4 '[{"kind":"path-present","path":"docs/a.adoc"}]')"
+run bash "$IE" evaluate "$L"
+verdict "one row's missing script does not stop the other rows" rc0_and [ "$OUT" = '{"disposition":"landed","failed":[0],"holds":false,"issue":3,"repo":"o/r","unevaluated":[]}
+{"disposition":"landed","failed":[],"holds":true,"issue":4,"repo":"o/r","unevaluated":[]}' ]
+ledger "$(row 3 '[{"kind":"script","path":"scripts/gone.sh"}]')"
+expect_holds "a script absent at another ref is failed, not unevaluated" false --ref "$C1" "$L"
 ledger "$(row 3 '[{"kind":"path-present","path":"x"}]' duplicate)"
 expect_err "duplicate without duplicate_of" "disposition duplicate requires duplicate_of" bash "$IE" validate "$L"
 ledger "$(row 3 '[{"kind":"path-present","path":"x"}]' duplicate '{"duplicate_of":3}')"
@@ -468,7 +483,7 @@ verdict "--repo filters out other repositories' rows" rc0_and [ -z "$OUT" ]
 
 echo "=== the live ledger ==="
 cd "$REPO_ROOT" || exit 2
-expect_rc "the repository's own ledger validates" 0 bash "$IE" validate .machine_readable/issue-evidence.jsonl
+expect_rc "the repository's own ledger passes lint (schema, and every script tracked and executable)" 0 bash "$IE" lint .machine_readable/issue-evidence.jsonl
 cd "$R" || exit 2
 
 if [ -z "${ISSUE_EVIDENCE_NEGATIVE_CONTROL:-}" ]; then

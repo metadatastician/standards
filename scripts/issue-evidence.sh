@@ -22,6 +22,13 @@
 # SUBCOMMANDS (LEDGER defaults to .machine_readable/issue-evidence.jsonl)
 #   validate [LEDGER]
 #       Schema check against the closed vocabulary. Each error names the line.
+#       It never reads the git tree, so one row cannot invalidate the ledger
+#       by naming a script that is later deleted: evaluation reports that
+#       check as failed (a regression) and still evaluates every other row.
+#   lint [LEDGER]
+#       validate, and also: every `script` check names a file tracked at HEAD
+#       with the executable bit. For a pull request author before merge (the
+#       test suite runs it on the live ledger); the bot does not need it.
 #   evaluate [--repo OWNER/NAME] [--ref REF] [LEDGER]
 #       One JCS line per row (ledger order): {disposition, failed, holds,
 #       issue, repo, unevaluated}. holds is true when every check holds, false
@@ -250,10 +257,14 @@ entry_at() {
   return 0
 }
 
-# validate_ledger LEDGER: prints one error per line to stderr; returns 1 when
-# the ledger is invalid.
+# validate_ledger LEDGER [SCRIPTS_AT]: prints one error per line to stderr;
+# returns 1 when the ledger is invalid. Schema validation never reads the git
+# tree, so a script deleted or renamed after its row merged cannot make the
+# whole ledger invalid: evaluation reports that check as FAILED. Only `lint`
+# passes SCRIPTS_AT (a commit), adding "each script check names a tracked,
+# executable file there" for a pull request author to see before merge.
 validate_ledger() {
-  local ledger="$1" bad=0 i tag n val rc stream
+  local ledger="$1" scripts_at="${2:-}" bad=0 i tag n val rc stream
   if [ ! -f "$ledger" ]; then
     printf '%s: ledger not found\n' "$ledger" >&2
     return 1
@@ -292,7 +303,8 @@ validate_ledger() {
         fi
         ;;
       S)
-        if ! entry_at HEAD "$val" || [ "$E_TYPE" != blob ]; then
+        [ -n "$scripts_at" ] || continue
+        if ! entry_at "$scripts_at" "$val" || [ "$E_TYPE" != blob ]; then
           printf '%s:%s: script %s is not tracked in git at HEAD\n' "$ledger" "$n" "$(jq -n --arg v "$val" '$v')" >&2
           bad=1
         elif [ "$E_MODE" != 100755 ]; then
@@ -384,11 +396,15 @@ check_script() { # PATH
     scripts/*|tests/*) ;;
     *) return 2 ;;
   esac
+  # The script must be a tracked, executable regular file AT THE EVALUATED
+  # COMMIT. Read from the commit, so absence (deleted, renamed, never added) or
+  # a lost executable bit is a FAILED check (a regression) whichever commit is
+  # checked out, never an invalid ledger and never "not evaluated".
+  entry_at "$COMMIT" "$path" || return 1
+  [ "$E_TYPE" = blob ] && [ "$E_MODE" = 100755 ] || return 1
   # A script runs in the checkout, so it is evaluated only when the checkout
   # IS the evaluated commit and the file there is the committed one.
   [ "$COMMIT" = "$HEAD_COMMIT" ] || return 2
-  entry_at "$COMMIT" "$path" || return 1
-  [ "$E_TYPE" = blob ] && [ "$E_MODE" = 100755 ] || return 1
   GIT_LITERAL_PATHSPECS=1 git diff --quiet HEAD -- "$path" 2>/dev/null || return 2
   # No argument: nothing from the ledger reaches the script's argv.
   (cd "$ROOT" && timeout "$SCRIPT_TIMEOUT" "./$path" </dev/null >&2) || rc=$?
@@ -464,6 +480,16 @@ cmd_validate() {
   need_repo
   validate_ledger "$ledger" || exit 2
   printf '%s: %s rows valid\n' "$ledger" "$(grep -c '' "$ledger" || true)" >&2
+}
+
+cmd_lint() {
+  [ "$#" -le 1 ] || fail_input "lint takes at most one LEDGER"
+  local ledger="${1:-$DEFAULT_LEDGER}" head
+  need_repo
+  head="$(git rev-parse --verify --quiet HEAD 2>/dev/null)" || fail_internal "HEAD does not resolve to a commit"
+  validate_ledger "$ledger" "$head" || exit 2
+  printf '%s: %s rows valid; every script check names a tracked, executable file at HEAD\n' \
+    "$ledger" "$(grep -c '' "$ledger" || true)" >&2
 }
 
 REPO_FILTER="" REF="HEAD" OPEN_FILE="" EVAL_FILE="" LOG_FILE="" ISSUE="" ACTION=""
@@ -692,6 +718,7 @@ main() {
   need_tools
   case "$sub" in
     validate) cmd_validate "$@" ;;
+    lint) cmd_lint "$@" ;;
     evaluate) cmd_evaluate "$@" ;;
     decide) cmd_decide "$@" ;;
     render-comment) cmd_render_comment "$@" ;;

@@ -93,6 +93,13 @@ Every check except `script` reads the committed tree at the evaluated commit
 through git, never the working directory. `script` runs only in a checkout of
 that commit with the script unmodified; otherwise it is unevaluated.
 
+A `script` whose file is absent at the evaluated commit, or is there without
+the executable bit, *fails*: deleting or renaming an evidence script is a
+regression of that row. It never makes the ledger invalid, and every other row
+is still evaluated. Schema validation (`validate`) does not read the tree;
+`lint` adds "every script is tracked and executable at HEAD" so the author of
+a pull request learns before merge that a row names a missing script.
+
 A row's verdict is `true` when every check holds, `false` when any check fails,
 and `null` when none fails but one could not be evaluated.
 
@@ -141,9 +148,10 @@ reopened.
   `true`. Unset, it only reports.
 * One run takes at most `max_actions` actions (default 10). Beyond the cap it
   stops and says so; later runs continue.
-* Locally: `bash scripts/issue-evidence.sh validate`, `evaluate`, `decide`,
-  `render-comment` and `candidates`; the script's header documents each. Its
-  tests are `scripts/tests/issue-evidence-test.sh`.
+* Locally: `bash scripts/issue-evidence.sh validate`, `lint`, `evaluate`,
+  `decide`, `render-comment` and `candidates`; the script's header documents
+  each. Its tests are `scripts/tests/issue-evidence-test.sh`, which also runs
+  `lint` on this repository's own ledger (self-test runs that suite).
 
 `candidates` lists open issues with no row that commits mention, most mentioned
 first, and flags a closing keyword. It is a queue for people to write rows
