@@ -34,7 +34,7 @@
 .github/workflows/sonarqube-reusable.yml:1
 1-formats/k9/tools/k9-validate.sh:9
 2-protocols/overlay/scripts/check-conformance.sh:1
-3-practice/provisioning/templates/build/just/provision-lib.sh:6
+3-practice/provisioning/templates/build/just/provision-lib.sh:5
 3-practice/provisioning/tests/doctor-summary.sh:2
 3-practice/release-pre-flight/v1-audit.sh:2
 9-archive/rhodium-standard-repositories/rsr-audit.sh:2
