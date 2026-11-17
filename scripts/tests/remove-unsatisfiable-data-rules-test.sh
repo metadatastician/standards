@@ -95,7 +95,7 @@ check() { local l="$1" w="$2" g="$3"
   if [ "$g" = "$w" ]; then pass=$((pass+1)); echo "PASS $l"
   else fail=$((fail+1)); echo "FAIL $l — want $w got $g"; printf '%s\n' "$out" | tail -4; fi; }
 check_says() { local l="$1" w="$2"
-  if printf '%s' "$out" | grep -qF "$w"; then pass=$((pass+1)); echo "PASS $l"
+  if grep -qF "$w" <<<"$out"; then pass=$((pass+1)); echo "PASS $l"
   else fail=$((fail+1)); echo "FAIL $l — output lacks: $w"; printf '%s\n' "$out" | tail -4; fi; }
 
 # 1. report-only: names the data rules, writes nothing

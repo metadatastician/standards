@@ -16,7 +16,7 @@ fail() { echo "FAIL: $*" >&2; exit 1; }
 # optional integration check runs only where all three are present.
 sync_tools_ok() {
   command -v gawk >/dev/null 2>&1 && command -v jq >/dev/null 2>&1 \
-    && yq --version 2>/dev/null | grep -q "mikefarah.* v4"
+    && grep -q "mikefarah.* v4" <<<"$(yq --version 2>/dev/null)"
 }
 
 # Synthetic standards: OLD's reusable uses checkout + old/dep; NEW's uses
@@ -300,7 +300,7 @@ Y
   short_rec "$L" | cmp -s - "$T/short-before" || fail "$length-hex pin: its own record was changed"
   grep -q "^        - 'hyperpolymath/standards@$SHORT'\$" "$L" || fail "$length-hex pin: its workflow entry was re-keyed"
   grep -q "$OLD" "$L" && fail "$length-hex pin: OLD left in the lock"
-  awk -v k="    'hyperpolymath/standards@$NEW':" '$0==k{f=1;next} f&&/^    [^ ]/{exit} f' "$L" | grep -q zeta/only \
+  grep -q zeta/only <<<"$(awk -v k="    'hyperpolymath/standards@$NEW':" '$0==k{f=1;next} f&&/^    [^ ]/{exit} f' "$L")" \
     && fail "$length-hex pin: a reusable called only by the short pin fed the full record"
   grep -q "^    'zeta/only@7777777777777777777777777777777777777777':\$" "$L" || fail "$length-hex pin: its record's dependency was pruned"
   if sync_tools_ok; then
@@ -344,7 +344,7 @@ bash "$RELOCK" --to "$NEW" --standards "$S" "$D" >/dev/null || fail "case varian
 L="$D/actions.lock"
 [ "$(acme_keys "$L")" = 1 ] || fail "case variant self-SHA: the record is keyed $(acme_keys "$L") times"
 grep -q "ref: '3333333333333333333333333333333333333333'" "$L" && fail "case variant self-SHA: the self-SHA ref survived"
-awk "/^    'ACME\\/Tool@3333333333333333333333333333333333333333':\$/{f=1;next} f&&/^    [^ ]/{exit} f" "$L" | grep -qx "        ref: 'v3'" \
+grep -qx "        ref: 'v3'" <<<"$(awk "/^    'ACME\\/Tool@3333333333333333333333333333333333333333':\$/{f=1;next} f&&/^    [^ ]/{exit} f" "$L")" \
   || fail "case variant self-SHA: not repaired to standards' symbolic ref"
 echo "  PASS self-SHA record held under another owner/repo case is repaired in place"
 
@@ -380,8 +380,8 @@ bash "$RELOCK" --to "$NEW" --standards "$S" "$D" >/dev/null || fail "canonical t
 L="$D/actions.lock"
 grep -q "^        - 'metadatastician/standards@$NEW'\$" "$L" || fail "canonical workflow ref not migrated"
 grep -q "^    'metadatastician/standards@$NEW':\$" "$L" || fail "canonical record absent"
-grep -A4 "^    'metadatastician/standards@$NEW':\$" "$L" | grep -qx '        owner_id: 297579217' || fail "canonical owner ID absent"
-grep -A5 "^    'metadatastician/standards@$NEW':\$" "$L" | grep -qx '        repo_id: 1116521501' || fail "repository ID changed"
+grep -qx '        owner_id: 297579217' <<<"$(grep -A4 "^    'metadatastician/standards@$NEW':\$" "$L")" || fail "canonical owner ID absent"
+grep -qx '        repo_id: 1116521501' <<<"$(grep -A5 "^    'metadatastician/standards@$NEW':\$" "$L")" || fail "repository ID changed"
 grep -q 'hyperpolymath/standards@' "$L" && fail "legacy records survived canonical transfer"
 cp "$L" "$T/canonical-once"
 bash "$RELOCK" --to "$NEW" --standards "$S" "$D" >/dev/null || fail "canonical idempotent repeat refused"
@@ -423,7 +423,7 @@ D=$(consumer new-caller-fresh)
 bash "$RELOCK" --to "$NEW" --standards "$S" "$D" >/dev/null
 printf 'on: push\njobs:\n  sq:\n    uses: hyperpolymath/standards/.github/workflows/x-reusable.yml@%s\n' "$NEW" > "$D/a-new.yml"
 bash "$RELOCK" --to "$NEW" --standards "$S" "$D" >/dev/null 2>&1 || fail "a new caller in a FRESH lock was refused"
-grep -A1 -xF "    '.github/workflows/a-new.yml':" "$D/actions.lock" | grep -qxF "        - 'hyperpolymath/standards@$NEW'" || fail "new caller: no entry naming its pin"
+grep -qxF "        - 'hyperpolymath/standards@$NEW'" <<<"$(grep -A1 -xF "    '.github/workflows/a-new.yml':" "$D/actions.lock")" || fail "new caller: no entry naming its pin"
 [ "$(awk '/^workflows:$/{f=1;next} /^dependencies:$/{f=0} f && /^    \x27/' "$D/actions.lock" | LC_ALL=C sort -c 2>&1; echo $?)" = 0 ] || fail "new caller: workflows not in C-locale key order"
 cp "$D/actions.lock" "$T/nc-once"; bash "$RELOCK" --to "$NEW" --standards "$S" "$D" >/dev/null
 cmp -s "$T/nc-once" "$D/actions.lock" || fail "new caller: second run changed the lock"
@@ -438,7 +438,7 @@ D=$(consumer new-caller-with-rekey)
 printf 'on: push\njobs:\n  sq:\n    uses: hyperpolymath/standards/.github/workflows/x-reusable.yml@%s\n' "$NEW" > "$D/z-new.yml"
 bash "$RELOCK" --to "$NEW" --standards "$S" "$D" >/dev/null 2>&1 || fail "a new caller with a re-key was refused"
 grep -q "$OLD" "$D/actions.lock" && fail "new caller with re-key: OLD survived"
-grep -A1 -xF "    '.github/workflows/z-new.yml':" "$D/actions.lock" | grep -qxF "        - 'hyperpolymath/standards@$NEW'" || fail "new caller with re-key: no entry"
+grep -qxF "        - 'hyperpolymath/standards@$NEW'" <<<"$(grep -A1 -xF "    '.github/workflows/z-new.yml':" "$D/actions.lock")" || fail "new caller with re-key: no entry"
 echo "  PASS new caller added in the same run as the re-key"
 
 # Case C: a lock with no standards record at all. The canonical owner's ids
@@ -449,7 +449,7 @@ sed -i "/'.github\/workflows\/caller.yml':/,+1d; /'hyperpolymath\/standards@/,/r
 cp "$D/actions.lock" "$T/norec"
 printf 'on: push\njobs:\n  sq:\n    uses: metadatastician/standards/.github/workflows/x-reusable.yml@%s\n' "$NEW" > "$D/sq.yml"
 bash "$RELOCK" --to "$NEW" --standards "$S" "$D" >/dev/null 2>&1 || fail "a new canonical caller in a lock with no standards record was refused"
-grep -A4 -xF "    'metadatastician/standards@$NEW':" "$D/actions.lock" | grep -qx '        repo_id: 1116521501' || fail "no-record: canonical ids not used"
+grep -qx '        repo_id: 1116521501' <<<"$(grep -A4 -xF "    'metadatastician/standards@$NEW':" "$D/actions.lock")" || fail "no-record: canonical ids not used"
 cp "$T/norec" "$D/actions.lock"
 sed -i 's#metadatastician/standards/#hyperpolymath/standards/#' "$D/sq.yml"
 if bash "$RELOCK" --to "$NEW" --standards "$S" "$D" >"$T/norec-log" 2>&1; then fail "former-owner new caller with no record accepted"; fi
@@ -465,7 +465,7 @@ bash "$RELOCK" --to "$NEW" --standards "$S" "$D" >/dev/null
 awk -v k="    '.github/workflows/caller.yml':" '$0==k{print "    \x27.github/workflows/caller.yml\x27: []"; getline; next} {print}' "$D/actions.lock" > "$T/blind" && cp "$T/blind" "$D/actions.lock"
 grep -qxF "    '.github/workflows/caller.yml': []" "$D/actions.lock" || fail "blind fixture not built"
 bash "$RELOCK" --to "$NEW" --standards "$S" "$D" >/dev/null 2>&1 || fail "a blind [] entry was refused"
-grep -A1 -xF "    '.github/workflows/caller.yml':" "$D/actions.lock" | grep -qxF "        - 'hyperpolymath/standards@$NEW'" || fail "blind entry not filled"
+grep -qxF "        - 'hyperpolymath/standards@$NEW'" <<<"$(grep -A1 -xF "    '.github/workflows/caller.yml':" "$D/actions.lock")" || fail "blind entry not filled"
 grep -qF "caller.yml': []" "$D/actions.lock" && fail "blind [] entry left beside the filled one"
 echo "  PASS a blind [] entry for a reusable caller is filled"
 
@@ -515,7 +515,7 @@ echo "  PASS a poisoned leaf that the prune removes is not reported"
 D=$(consumer edge-no-uses)
 bash "$RELOCK" --to "$NEW" --standards "$S" "$D" >/dev/null
 awk -v k="    'hyperpolymath/standards@$NEW':" '$0==k{f=1;print;next} f&&/^    [^ ]/{f=0} f&&(/^        uses:$/||/^            - /){next} {print}' "$D/actions.lock" > "$T/nouses" && cp "$T/nouses" "$D/actions.lock"
-grep -A5 -xF "    'hyperpolymath/standards@$NEW':" "$D/actions.lock" | grep -q 'uses:' && fail "edge fixture still has uses:"
+grep -q 'uses:' <<<"$(grep -A5 -xF "    'hyperpolymath/standards@$NEW':" "$D/actions.lock")" && fail "edge fixture still has uses:"
 cp "$D/actions.lock" "$T/edge-before"
 bash "$RELOCK" --to "$NEW" --standards "$S" "$D" >"$T/edge-log" 2>&1 || fail "an edge record without uses: refused the relock"
 grep -q 'SELF-SHA-LEAF' "$T/edge-log" && fail "a reusable edge was reported as a poisoned leaf"
@@ -549,16 +549,16 @@ echo "  PASS a run: string naming a reusable path does not exempt a poisoned lea
 D=$(consumer composite-poisoned)
 bash "$RELOCK" --to "$NEW" --standards "$S" "$D" >/dev/null
 awk '/^    \x27actions\/checkout@1111111111111111111111111111111111111111\x27:$/{f=1} f&&/^        ref:/{print "        ref: \x271111111111111111111111111111111111111111\x27"; next} f&&/^        repo_id:/{print; print "        uses:"; print "            - \x27acme/tool@3333333333333333333333333333333333333333\x27"; f=0; next} {print}' "$D/actions.lock" > "$T/comp" && cp "$T/comp" "$D/actions.lock"
-grep -A8 -xF "    'actions/checkout@1111111111111111111111111111111111111111':" "$D/actions.lock" | grep -qx '        uses:' || fail "composite fixture has no nested uses:"
+grep -qx '        uses:' <<<"$(grep -A8 -xF "    'actions/checkout@1111111111111111111111111111111111111111':" "$D/actions.lock")" || fail "composite fixture has no nested uses:"
 bash "$RELOCK" --to "$NEW" --standards "$S" "$D" >/dev/null 2>"$T/comp-log" || { cat "$T/comp-log" >&2; fail "composite poisoned lock refused"; }
-grep -A8 -xF "    'actions/checkout@1111111111111111111111111111111111111111':" "$D/actions.lock" | grep -qxF "        ref: 'v1'" || fail "composite self-SHA record not repaired"
-grep -A8 -xF "    'actions/checkout@1111111111111111111111111111111111111111':" "$D/actions.lock" | grep -qx '        uses:' && fail "repair kept the consumer's invented nested uses: (source has none)"
+grep -qxF "        ref: 'v1'" <<<"$(grep -A8 -xF "    'actions/checkout@1111111111111111111111111111111111111111':" "$D/actions.lock")" || fail "composite self-SHA record not repaired"
+grep -qx '        uses:' <<<"$(grep -A8 -xF "    'actions/checkout@1111111111111111111111111111111111111111':" "$D/actions.lock")" && fail "repair kept the consumer's invented nested uses: (source has none)"
 echo "  PASS a composite record (nested uses:) with ref == SHA is repaired to the source record like a leaf"
 
 # Case N: a job-level reusable edge WITH nested uses: and ref == SHA is left alone.
 D=$(consumer edge-with-uses)
 bash "$RELOCK" --to "$NEW" --standards "$S" "$D" >/dev/null
-grep -A8 -xF "    'hyperpolymath/standards@$NEW':" "$D/actions.lock" | grep -qx '        uses:' || fail "edge fixture has no nested uses:"
+grep -qx '        uses:' <<<"$(grep -A8 -xF "    'hyperpolymath/standards@$NEW':" "$D/actions.lock")" || fail "edge fixture has no nested uses:"
 grep -qxF "        ref: '$NEW'" "$D/actions.lock" || fail "edge fixture ref is not the SHA"
 cp "$D/actions.lock" "$T/edgeu-before"
 bash "$RELOCK" --to "$NEW" --standards "$S" "$D" >"$T/edgeu-log" 2>&1 || fail "an edge record with uses: refused the relock"
@@ -618,8 +618,8 @@ Y
 D=$(consumer2 composite-unrequired)
 bash "$RELOCK" --to "$NEW2" --standards "$S2" "$D" >/dev/null 2>"$T/m2-log" || { cat "$T/m2-log" >&2; fail "M2 relock refused"; }
 rec=$(grep -A8 -xF "    'example/composite@5555555555555555555555555555555555555555':" "$D/actions.lock")
-printf '%s\n' "$rec" | grep -qxF "        ref: 'v5'" || fail "M2: unrequired composite not repaired to v5"
-printf '%s\n' "$rec" | grep -qx '        uses:' || fail "M2: repair dropped the nested uses:"
+grep -qxF "        ref: 'v5'" <<<"$rec" || fail "M2: unrequired composite not repaired to v5"
+grep -qx '        uses:' <<<"$rec" || fail "M2: repair dropped the nested uses:"
 echo "  PASS a composite record the reusable does not require (nested uses:) is repaired"
 
 # Case O: a record for a reusable that a standards reusable at TARGET calls
@@ -632,7 +632,7 @@ echo "  PASS a nested reusable called by a standards reusable is not treated as 
 # ends up identical to the source record after the repair.
 D=$(consumer2 composite-extra-edge)
 awk '/^    \x27example\/composite@5555/{f=1} f&&/^            - \x27acme\/tool@3333/{print; print "            - \x27actions/checkout@1111111111111111111111111111111111111111\x27"; f=0; next} {print}' "$D/actions.lock" > "$T/p-lock" && cp "$T/p-lock" "$D/actions.lock"
-grep -A9 -xF "    'example/composite@5555555555555555555555555555555555555555':" "$D/actions.lock" | grep -qF "actions/checkout@1111" || fail "P fixture has no extra edge"
+grep -qF "actions/checkout@1111" <<<"$(grep -A9 -xF "    'example/composite@5555555555555555555555555555555555555555':" "$D/actions.lock")" || fail "P fixture has no extra edge"
 bash "$RELOCK" --to "$NEW2" --standards "$S2" "$D" >/dev/null 2>"$T/p-log" || { cat "$T/p-log" >&2; fail "P relock refused"; }
 git -C "$S2" show "$NEW2:.github/workflows/actions.lock" | awk '/^    \x27example\/composite@5555/{f=1;print;next} f&&/^    [^ ]/{exit} f' > "$T/p-src"
 awk '/^    \x27example\/composite@5555/{f=1;print;next} f&&/^    [^ ]/{exit} f' "$D/actions.lock" > "$T/p-got"

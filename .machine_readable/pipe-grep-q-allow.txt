@@ -86,16 +86,6 @@ scripts/prune-stale.sh:1
 scripts/regen-dependabot-locks.sh:3
 scripts/relock-standards-pin.sh:6
 scripts/sonar-preflight.sh:2
-scripts/tests/list-existing-a2ml-test.sh:2
-scripts/tests/lock-selfcheck-test.sh:1
-scripts/tests/propagate-workflow-pins-test.sh:1
-scripts/tests/prune-stale-test.sh:1
-scripts/tests/relock-standards-pin-nested-test.sh:6
-scripts/tests/relock-standards-pin-test.sh:17
-scripts/tests/remove-ruleset-bypass-test.sh:2
-scripts/tests/remove-unsatisfiable-data-rules-test.sh:1
-scripts/tests/retire-phantom-contexts-test.sh:2
-scripts/tests/run-required-test-suite-test.sh:2
 scripts/tests/sonarqube-reusable-contract-test.sh:4
 scripts/tests/spdx-header-block-test.sh:1
 scripts/tests/triage-2026-10-23-issue-1234-apply-test.sh:3

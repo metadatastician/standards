@@ -32,7 +32,7 @@ assert_case() { # label expected_status required_text command...
   status=$?
   set -e
 
-  if [ "$status" -eq "$expected_status" ] && printf '%s' "$output" | grep -Fq "$required_text" && ! printf '%s' "$output" | grep -Fq 'SKIP'; then
+  if [ "$status" -eq "$expected_status" ] && grep -Fq "$required_text" <<<"$output" && ! grep -Fq 'SKIP' <<<"$output"; then
     ok "$label"
   else
     bad "$label (wanted exit $expected_status and '$required_text'; got exit $status: $output)"
@@ -60,7 +60,7 @@ assert_case "missing target fails before tool invocation" 66 "MISSING TARGET: mi
   env "PATH=$TMP/bin:$PATH" "$RUNNER" "missing target suite" "$TMP/absent" passing-tool --test
 
 test_recipe="$(sed -n '/^test:/,/^# Regression test/p' "$ROOT/Justfile")"
-if printf '%s\n' "$test_recipe" | grep -Eq '\|\|[[:space:]]*echo.*SKIP|not available or tests failed'; then
+if grep -Eq '\|\|[[:space:]]*echo.*SKIP|not available or tests failed' <<<"$test_recipe"; then
   bad "Justfile does not reintroduce a false-soft test aggregate"
 else
   ok "Justfile does not reintroduce a false-soft test aggregate"
