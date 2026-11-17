@@ -11,6 +11,9 @@ dedicated kyX session ("measure first, then start it", owner, 2026-11-17).
 The data is `a2ml-measure-files.jsonl` beside this page: one row per file,
 produced by `scripts/a2ml-retire-check.sh` (how it works:
 `docs/wikis/maintainers/index.adoc`, section `[[a2ml-retire-check]]`).
+It is a dated record of that day: nothing reads or compares against it. The
+live numbers are `.machine_readable/a2ml-retire-counts.json`, which the shell
+suite holds to the tree.
 
 == Method
 
@@ -22,10 +25,11 @@ produced by `scripts/a2ml-retire-check.sh` (how it works:
 * *Two passes.* A first, scripted measurement (same day) classed every file
   by hand-written path rules and judgement about content (fixture, example,
   registry data). Its class and note are kept in each row as
-  `first_measure`. The `class` field is the tool's, recomputed from the tree
-  and the rulings file, and it is what the shell suite compares with the
-  tree. The tool has no `not-metadata` class: whether a file is content or
-  metadata is judgement, so it reports such a file as `no-mapping-spec`
+  `first_measure`. The `class` field is the tool's, computed from the tree
+  and the rulings file as they stood when this record was made (13 rows;
+  the same day's "git history is the archive" decision changed the rulings
+  file afterwards, and this record was not regenerated). The tool has no
+  `not-metadata` class: whether a file is content or metadata is judgement, so it reports such a file as `no-mapping-spec`
   unless a ruling drops it.
 * *Controls.* `hyperpolymath/rsr-template-repo` (`origin/main` `0044ad92`)
   and `hyperpolymath/mathesis` (`e3d30d5c`) track 0 A2ML files, as each claims.
@@ -111,7 +115,10 @@ No file was `deletable-now` before the 2026-11-17 decisions.
 
 == Where CLAUDE.md and the mapping documents disagree
 
-Reported, not resolved. Each is a `ruling-needed` row where it blocks a file.
+Reported, not resolved, when this record was made. The owner settled the first
+two later the same day ("git history is the archive": CLAUDE.md governs; the
+37 files are deleted with a record in `9-archive/A2ML-REMOVED.adoc` and a tag
+marking the last commit that holds them), and the rulings file now says so.
 
 * `state-v1-decision.adoc` option B archives each v1 journal as an `.a2ml`
   record; CLAUDE.md (2026-11-13) says archived copies go too

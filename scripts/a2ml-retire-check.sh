@@ -35,21 +35,32 @@
 #     come from the rulings file (`external-reader:`).
 #   * Rulings that the tree cannot show (owner decisions, known spec gaps,
 #     open questions, readers in other repositories, which families kyX
-#     translates) come from ONE data file, by default
-#     .machine_readable/a2ml-retire-rulings.jsonl under ROOT. Change a row and
-#     the classes move; nothing about a ruling is written in this script.
+#     translates) come from rulings files: each --rulings FILE adds its rows,
+#     and with none given, ROOT's .machine_readable/a2ml-retire-rulings.jsonl
+#     is read if it exists. Rows never override one another: every row that
+#     matches a path applies, and an id given twice is an error. Change a row
+#     and the classes move; nothing about a ruling is written in this script.
+#     A dropped or decision row may name a `record` file of the tree that must
+#     name the path exactly before the file can go (`record-missing:<file>`).
 #
-# Usage: a2ml-retire-check.sh [--root DIR] [--repo NAME] [--rulings FILE]
-#                             [--json | --summary | --check]
+# Usage: a2ml-retire-check.sh [--root DIR] [--repo NAME] [--rulings FILE]...
+#                             [--counts FILE] [--base REV]
+#                             [--json | --summary | --write-counts | --check]
 #   (default)   a table: class, path, blockers
 #   --json      one JCS object per line (sorted keys), ordered by path
 #   --summary   counts per class and per blocker, each "n of N"
+#   --write-counts  write the live counts (JCS) to --counts FILE, by default
+#               ROOT/.machine_readable/a2ml-retire-counts.json
 #   --check     the gate: exit 1 when a file is deletable-now (prints the
-#               `git rm` and the ledger line to delete) or unclassified
+#               `git rm` and the ledger line to delete), when a file is
+#               unclassified, when the counts file is missing or stale, and,
+#               with --base REV, when an A2ML path joined since REV (only an
+#               unchanged rename, git R100, may keep its place)
 #   --repo      the repository name rulings rows are scoped by (default: the
 #               stem of the single <name>_chora.deed at ROOT, else ROOT's name)
-# Exit: 0 done (--check: nothing deletable or unclassified) · 1 --check found
-#       a file · 2 setup error (missing tool, malformed rulings, bad root).
+# Exit: 0 done (--check: no finding) · 1 --check found a deletable or unclassified
+#       file, stale counts or a joined path · 2 setup error (missing tool,
+#       malformed rulings, bad root or --base).
 # Needs bash 4, git, jq, awk, grep; bun as soon as one target deed exists.
 
 set -euo pipefail
@@ -62,13 +73,17 @@ SELF_TOOL="scripts/a2ml-retire-check.sh"
 SELF_TEST="scripts/tests/a2ml-retire-check-test.sh"
 A2ML_RE='\.a2ml(\.in|\.template|\.v[0-9]+\.template)?$'
 LEDGER_REL=".machine_readable/a2ml-legacy-allow.txt"
+COUNTS_REL=".machine_readable/a2ml-retire-counts.json"
 
-ROOT=.; REPO=""; RULINGS=""; MODE=table
+ROOT=.; REPO=""; RULINGS=(); MODE=table; BASE_REV=""; COUNTS=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --root) ROOT="${2:?--root needs a directory}"; shift 2 ;;
     --repo) REPO="${2:?--repo needs a name}"; shift 2 ;;
-    --rulings) RULINGS="${2:?--rulings needs a file}"; shift 2 ;;
+    --rulings) RULINGS+=("${2:?--rulings needs a file}"); shift 2 ;;
+    --base) BASE_REV="${2:?--base needs a revision}"; shift 2 ;;
+    --write-counts) MODE=write-counts; shift ;;
+    --counts) COUNTS="${2:?--counts needs a file}"; shift 2 ;;
     --json) MODE=json; shift ;;
     --summary) MODE=summary; shift ;;
     --check) MODE=check; shift ;;
@@ -81,7 +96,8 @@ die() { echo "ERROR: $*" >&2; exit 2; }
 for t in git jq awk grep; do command -v "$t" >/dev/null 2>&1 || die "$t is required"; done
 [ -d "$ROOT" ] || die "$ROOT is not a directory"
 ROOT="$(cd "$ROOT" && pwd)"
-[ -n "$RULINGS" ] || RULINGS="$ROOT/.machine_readable/a2ml-retire-rulings.jsonl"
+REPO_ARG=$REPO; RULINGS_ARG=("${RULINGS[@]}"); COUNTS_ARG=$COUNTS
+[ -n "$COUNTS" ] || COUNTS="$ROOT/$COUNTS_REL"
 
 T="$(mktemp -d)"
 trap 'rm -rf "$T"' EXIT
@@ -101,14 +117,24 @@ if [ -z "$REPO" ]; then
   if [ "${#choras[@]}" -eq 1 ]; then REPO="$(basename "${choras[0]}" _chora.deed)"; else REPO="$(basename "$ROOT")"; fi
 fi
 
-# ── the rulings file ──────────────────────────────────────────────────────
+# ── the rulings files ─────────────────────────────────────────────────────
+# Each --rulings FILE adds its rows; with none, ROOT's own file is read if it
+# exists. Rows never override one another: every row that matches a path
+# applies, and the same id in two rows (one file or two) is an error.
 KINDS='["dropped","decision","spec-gap","ruling-needed","pending","external-reader","kyx-family"]'
-if [ -f "$RULINGS" ]; then
-  jq -c . "$RULINGS" > "$T/rulings.all" 2>/dev/null || die "rulings file $RULINGS is not JSON Lines"
-  bad=$(jq -r --argjson kinds "$KINDS" '
+FIELDS='["date","family","id","key","kind","match","record","recorded","repo","requires","summary"]'
+if [ "${#RULINGS[@]}" -eq 0 ] && [ -f "$ROOT/.machine_readable/a2ml-retire-rulings.jsonl" ]; then
+  RULINGS=("$ROOT/.machine_readable/a2ml-retire-rulings.jsonl")
+fi
+: > "$T/rulings.all"
+bad=""
+for rf in "${RULINGS[@]}"; do
+  [ -f "$rf" ] || die "rulings file $rf not found"
+  jq -c . "$rf" > "$T/rulings.one" 2>/dev/null || die "rulings file $rf is not JSON Lines"
+  one=$(jq -r --argjson kinds "$KINDS" --argjson fields "$FIELDS" --arg f "$rf" '
     def ok_key: (type == "string") and test("^[a-z0-9][a-z0-9-]*$");
     (if type != "object" then "not an object"
-     elif (keys - ["date","family","id","key","kind","match","recorded","repo","requires","summary"]) != [] then "unknown field(s) \(keys - ["date","family","id","key","kind","match","recorded","repo","requires","summary"])"
+     elif (keys - $fields) != [] then "unknown field(s) \(keys - $fields)"
      elif (.id | ok_key | not) then "id must be lower-case words joined by -"
      elif (. as $row | $kinds | index($row.kind)) == null then "kind \(.kind | tojson) is not one of \($kinds | join(", "))"
      elif ((.date // "") | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}$") | not) then "date must be YYYY-MM-DD"
@@ -118,20 +144,24 @@ if [ -f "$RULINGS" ]; then
      elif ((.kind == "decision" or .kind == "kyx-family") and .family == null) then "\(.kind) needs family"
      elif ((.kind | IN("spec-gap","ruling-needed","pending","external-reader")) and (.key | ok_key | not)) then "\(.kind) needs a key"
      elif (.requires != null and (.kind != "dropped" or (.requires | ok_key | not))) then "requires is a key, on a dropped row only"
-     else empty end) as $e | "line \(input_line_number): \($e)"' "$T/rulings.all") || die "rulings file $RULINGS could not be checked"
-  # each match pattern must compile
-  while IFS= read -r m; do
-    [ -z "$m" ] && continue
-    jq -n --arg m "$m" '"" | test($m)' >/dev/null 2>&1 || bad="${bad}${bad:+$'\n'}match '$m' is not a regular expression"
-  done < <(jq -r '.match // empty' "$T/rulings.all")
-  dups=$(jq -r '.id' "$T/rulings.all" | sort | uniq -d)
-  [ -z "$dups" ] || bad="${bad}${bad:+$'\n'}duplicate id(s): $dups"
-  [ -z "$bad" ] || die "rulings file $RULINGS: $bad"
-  jq -c --arg repo "$REPO" 'select(.repo == null or .repo == $repo)' "$T/rulings.all" > "$T/rulings"
+     elif (.record != null and ((.kind | IN("dropped","decision") | not) or (.record | type) != "string" or (.record | test("^/|(^|/)\\.\\.(/|$)")))) then "record is a repository-relative file, on a dropped or decision row only"
+     else empty end) as $e | "\($f) line \(input_line_number): \($e)"' "$T/rulings.one") || die "rulings file $rf could not be checked"
+  bad="${bad}${one:+${bad:+$'\n'}$one}"
+  cat "$T/rulings.one" >> "$T/rulings.all"
+done
+# each match pattern must compile
+while IFS= read -r m; do
+  [ -z "$m" ] && continue
+  jq -n --arg m "$m" '"" | test($m)' >/dev/null 2>&1 || bad="${bad}${bad:+$'\n'}match '$m' is not a regular expression"
+done < <(jq -r '.match // empty' "$T/rulings.all")
+dups=$(jq -r '.id' "$T/rulings.all" | sort | uniq -d)
+[ -z "$dups" ] || bad="${bad}${bad:+$'\n'}id(s) given twice: $dups"
+[ -z "$bad" ] || die "rulings: $bad"
+jq -c --arg repo "$REPO" 'select(.repo == null or .repo == $repo)' "$T/rulings.all" > "$T/rulings"
+if [ "${#RULINGS[@]}" -gt 0 ]; then
   RULINGS_NOTE="$(grep -c . "$T/rulings" || true) of $(grep -c . "$T/rulings.all" || true) rulings rows apply to '$REPO'"
 else
-  : > "$T/rulings"
-  RULINGS_NOTE="no rulings file at $RULINGS: no owner rulings applied"
+  RULINGS_NOTE="no rulings file: no owner rulings applied"
 fi
 
 # ── pass 1: family, governing spec, base directory ────────────────────────
@@ -174,14 +204,14 @@ done < "$T/a2ml"
 jq -R -r --slurpfile R "$T/rulings" '
   split("\u001f") as [$p, $f] | $R[] | . as $row
   | select(($row.match == null or ($p | test($row.match))) and ($row.family == null or $row.family == $f))
-  | [$p, .id, .kind, (.key // ""), (.requires // "")] | join("\u001f")' < <(cut -d $'\x1f' -f1,2 "$T/fam.tsv") > "$T/rul.tsv"
+  | [$p, .id, .kind, (.key // ""), (.requires // ""), (.record // "")] | join("\u001f")' < <(cut -d $'\x1f' -f1,2 "$T/fam.tsv") > "$T/rul.tsv"
 declare -A KYX=()
 while IFS= read -r f; do KYX[$f]=1; done < <(jq -r 'select(.kind == "kyx-family") | .family' "$T/rulings")
 
 # ── readers: two grep passes over the candidate files ─────────────────────
 tr '\0' '\n' < "$T/all" | grep -vE "$A2ML_RE" \
   | grep -vE '\.(adoc|md|txt|html|jsonl|csv|tsv|svg)$|^9-archive/|^docs/archive/|^\.machine_readable/archive/' \
-  | grep -vxF -e "$SELF_TOOL" -e "$SELF_TEST" > "$T/cands" || true
+  | grep -vxF -e "$SELF_TOOL" -e "$SELF_TEST" -e "$COUNTS_REL" > "$T/cands" || true
 cut -d $'\x1f' -f1 "$T/fam.tsv" > "$T/pat.path"
 awk -F/ '{print $NF}' "$T/pat.path" | LC_ALL=C sort -u > "$T/pat.name"
 : > "$T/exact.tsv"; : > "$T/name.tsv"
@@ -355,12 +385,13 @@ JQ_STATE='
 
 # ── pass 2: targets, conditions, blockers, class ──────────────────────────
 S=$'\x1f'
-declare -A RULIDS=() DROPPED=() DECIDED=() REQS=() RBLOCK=()
-while IFS=$'\x1f' read -r p id kind key req; do
+declare -A RULIDS=() DROPPED=() DECIDED=() REQS=() RECS=() RBLOCK=()
+while IFS=$'\x1f' read -r p id kind key req rec; do
   RULIDS[$p]+="$id$S"
   case $kind in
-    dropped) DROPPED[$p]=1; [ -n "$req" ] && REQS[$p]+="ruling-condition:$req$S" ;;
-    decision) DECIDED[$p]=1 ;;
+    dropped) DROPPED[$p]=1; [ -n "$req" ] && REQS[$p]+="ruling-condition:$req$S"
+             [ -n "$rec" ] && RECS[$p]+="$rec$S" ;;
+    decision) DECIDED[$p]=1; [ -n "$rec" ] && RECS[$p]+="$rec$S" ;;
     spec-gap) RBLOCK[$p]+="gap:spec-gap:$key$S" ;;
     ruling-needed) RBLOCK[$p]+="ruling-needed:$key$S" ;;
     pending) RBLOCK[$p]+="pending:$key$S" ;;
@@ -368,6 +399,13 @@ while IFS=$'\x1f' read -r p id kind key req; do
   esac
 done < "$T/rul.tsv"
 
+# named_in PATH FILE: FILE names PATH exactly (not as part of a longer path)
+named_in() {
+  local re
+  [ -f "$2" ] || return 1
+  re=$(printf '%s' "$1" | sed 's/[][\.*^$+?(){}|]/\\&/g')
+  grep -qE "(^|[^A-Za-z0-9_./-])$re([^A-Za-z0-9_./-]|$)" "$2"
+}
 has() { local x; for x in "${blockers[@]}"; do case $x in "$1"*) return 0 ;; esac; done; return 1; }
 : > "$T/out.tsv"
 while IFS=$'\x1f' read -r p fam spec base uncl; do
@@ -466,6 +504,13 @@ while IFS=$'\x1f' read -r p fam spec base uncl; do
   # An owner ruling that drops the file settles conditions 1 and 2.
   if [ -n "${DROPPED[$p]:-}" ]; then blockers=(); ftruth=true; ltruth=null; fi
   if [ -n "${REQS[$p]:-}" ]; then IFS="$S" read -r -a extra <<< "${REQS[$p]}"; blockers+=("${extra[@]}"); fi
+  # A dropped row may require a record line naming the exact path in a file of the tree.
+  if [ -n "${RECS[$p]:-}" ]; then
+    IFS="$S" read -r -a extra <<< "${RECS[$p]}"
+    for rec in "${extra[@]}"; do
+      named_in "$p" "$ROOT/$rec" || blockers+=("record-missing:$rec")
+    done
+  fi
   if [ -n "${RBLOCK[$p]:-}" ]; then
     IFS="$S" read -r -a extra <<< "${RBLOCK[$p]}"
     for b in "${extra[@]}"; do
@@ -511,7 +556,7 @@ while IFS=$'\x1f' read -r p fam spec base uncl; do
         + (if .[3] != "" then {lint: .[3]} else {} end))')
   bj=$(printf '%s\n' "${blockers[@]}" | jq -R -s -c 'split("\n") | map(select(length > 0))')
   printf '%s\t' "$p" "$bytes" "$fam" "$spec" "$chora" "$class" "$note" "$ftruth" "$ltruth" "$rtruth" \
-    "${RULIDS[$p]:-}" "$rx" "$rn" "$facts" "$tj" >> "$T/out.tsv"
+    "$(printf '%s' "${RULIDS[$p]:-}" | tr "$S" '\n' | grep . | LC_ALL=C sort -u | tr '\n' "$S")" "$rx" "$rn" "$facts" "$tj" >> "$T/out.tsv"
   printf '%s\n' "$bj" >> "$T/out.tsv"
 done < "$T/fam.tsv"
 
@@ -530,8 +575,33 @@ jq -R -c -S 'split("\t") as $c
 # ── output ────────────────────────────────────────────────────────────────
 CLASSES=(deletable-now covered-but-read needs-kyx-supported needs-kyx-unsupported no-target-deed \
   facts-unchecked ruling-needed decision-drops no-mapping-spec unclassified)
+
+# The live counts (JCS): per class and per blocker kind, each a count of
+# files out of `total`, and the deletable-now paths.
+counts_json() {
+  jq -s -c -S --argjson classes "$(printf '%s\n' "${CLASSES[@]}" | jq -R . | jq -s -c .)" '
+    {total: length,
+     classes: ([$classes[] as $c | {key: $c, value: (map(select(.class == $c)) | length)}] | from_entries),
+     blocker_kinds: ([.[] | [.blockers[] | sub(":.*$"; "")] | unique[]] | group_by(.)
+                     | map({key: .[0], value: length}) | from_entries),
+     deletable_now: [.[] | select(.class == "deletable-now") | .path]}' "$T/out.jsonl"
+}
+# The command that regenerates the counts file with the same inputs.
+regen_cmd() {
+  local cmd="bash scripts/a2ml-retire-check.sh" r
+  [ "$ROOT" = "$(pwd)" ] || cmd+=" --root $ROOT"
+  [ -z "$REPO_ARG" ] || cmd+=" --repo $REPO_ARG"
+  for r in "${RULINGS_ARG[@]}"; do cmd+=" --rulings $r"; done
+  [ -z "$COUNTS_ARG" ] || cmd+=" --counts $COUNTS_ARG"
+  printf '%s --write-counts' "$cmd"
+}
+
 case $MODE in
   json) cat "$T/out.jsonl" ;;
+  write-counts)
+    mkdir -p "$(dirname "$COUNTS")"
+    counts_json > "$COUNTS"
+    echo "a2ml-retire-check: wrote $COUNTS ($N file(s); $RULINGS_NOTE)" ;;
   table)
     jq -r '[.class, .path, (.blockers | join(", "))] | @tsv' "$T/out.jsonl" \
       | awk -F'\t' '{ printf "%-22s %s\n%22s   %s\n", $1, $2, "", ($3 == "" ? "(no blockers)" : $3) }'
@@ -550,9 +620,11 @@ case $MODE in
     jq -r '.blockers[] | select(test("^(reader|name-reader):") | not)' "$T/out.jsonl" | sort | uniq -c \
       | awk -v n="$N" '{ printf "  %s %d of %d\n", $2, $1, n }' ;;
   check)
+    failed=0
     n_deletable=$(jq -r 'select(.class == "deletable-now") | .path' "$T/out.jsonl" | grep -c . || true)
     n_uncl=$(jq -r 'select(.class == "unclassified") | .path' "$T/out.jsonl" | grep -c . || true)
     if [ "$n_deletable" -gt 0 ]; then
+      failed=1
       echo "::error::$n_deletable A2ML file(s) meet all three deletion conditions, so they must go (one owner-visible commit each):"
       while IFS= read -r p; do
         echo "  git rm -- $p"
@@ -562,9 +634,39 @@ case $MODE in
       done < <(jq -r 'select(.class == "deletable-now") | .path' "$T/out.jsonl")
     fi
     if [ "$n_uncl" -gt 0 ]; then
+      failed=1
       echo "::error::$n_uncl A2ML file(s) could not be classified:"
       jq -r 'select(.class == "unclassified") | "  \(.path): \(.note)"' "$T/out.jsonl"
     fi
-    if [ "$n_deletable" -gt 0 ] || [ "$n_uncl" -gt 0 ]; then exit 1; fi
-    echo "a2ml-retire-check: OK ($N file(s); none deletable now, none unclassified; $RULINGS_NOTE)" ;;
+    # The live counts must be what the tree gives now.
+    if [ ! -f "$COUNTS" ]; then
+      failed=1; echo "::error::no counts file at $COUNTS: run $(regen_cmd)"
+    elif ! jq -e -n --slurpfile a "$COUNTS" --argjson b "$(counts_json)" '$a == [$b]' >/dev/null 2>&1; then
+      failed=1; echo "::error::counts are stale: $COUNTS differs from the tree; run $(regen_cmd)"
+    fi
+    # The ratchet (--base REV): no A2ML path may join. A path tracked now must
+    # have been tracked at REV, or be an unchanged rename (git R100) of one, so
+    # the total can only fall. Class counts are not ratcheted: files move
+    # between blocked classes as rulings land and readers change.
+    if [ -n "$BASE_REV" ]; then
+      git -C "$ROOT" rev-parse --verify -q "$BASE_REV^{commit}" >/dev/null || die "--base $BASE_REV does not resolve to a commit in $ROOT"
+      git -C "$ROOT" ls-tree -r -z --name-only "$BASE_REV" | tr '\0' '\n' | grep -E "$A2ML_RE" | LC_ALL=C sort > "$T/base" || true
+      declare -A renamed=()
+      while IFS= read -r -d '' st && IFS= read -r -d '' old && IFS= read -r -d '' new; do
+        [ "$st" = R100 ] && renamed[$new]="$old"
+      done < <(git -C "$ROOT" diff -z --find-renames=100% --diff-filter=R --name-status "$BASE_REV" 2>/dev/null)
+      joined=()
+      while IFS= read -r p; do
+        if [ -n "${renamed[$p]:-}" ] && grep -qxF -- "${renamed[$p]}" "$T/base"; then continue; fi
+        joined+=("$p")
+      done < <(LC_ALL=C comm -13 "$T/base" "$T/a2ml")
+      nb=$(grep -c . "$T/base" || true)
+      if [ "${#joined[@]}" -gt 0 ]; then
+        failed=1
+        echo "::error::${#joined[@]} A2ML path(s) joined since $BASE_REV ($nb then, $N now); A2ML only shrinks:"
+        printf '  %s\n' "${joined[@]}"
+      fi
+    fi
+    [ "$failed" -eq 0 ] || exit 1
+    echo "a2ml-retire-check: OK ($N file(s); none deletable now, none unclassified; counts current${BASE_REV:+; no A2ML path joined since $BASE_REV}; $RULINGS_NOTE)" ;;
 esac
