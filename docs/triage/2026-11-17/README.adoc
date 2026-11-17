@@ -155,6 +155,10 @@ says so.
 | A ledger line left stale by the commit that removed its offender (this turned `main` red on 2026-11-17) | Give the shrink-only ledgers a mode that only deletes stale lines, run by the pre-commit hook (W8) | —
 | kyX | Measure first which `.a2ml` files hold only facts their deeds already carry and can be deleted without a translator; then start a dedicated kyX session briefed with what is left (E10) | #837, #732
 | Departures that cannot be fixed on the spot | A departures ledger that closes itself: one row per departure with a check that the defect is still present; the row goes when the defect does (W9) | —
+| kyX, after the measurement (0 of 278 `.a2ml` files deletable; kyX alone unblocks none) | A live retire-check first: a tool that recomputes the three deletion conditions for every `.a2ml` file and names what blocks each; every later session works from that list (W10) | #837, #732
+| The 42 metadata files of the seven former A2ML sub-projects | Remove the whole retired format tree `1-formats/a2ml/`, after its inbound links are redirected (W11) | —
+| 84 per-directory AI manifests with no mapping spec | Derive them from the deed on demand; store none (S9) | —
+| Tools that still write or require A2ML | Record each as a departures row now; retire the writers next, one by one (W12) | —
 |===
 
 On the stub files the owner chose the genuine port over the recommended
@@ -512,6 +516,7 @@ they are renewed or E6 lands first.
 | S6 | Move `plan-kernel` to HAR as its plan level; pin it from Scaffoldia; add a check that the pin is current. Needs HAR's carrier changed from A2ML first. | Opus
 | S7 | Repair Scaffoldia's CI so required contexts are emitted (scaffoldia#70), then add a workflow for `just conformance` and the proof check. | Sonnet
 | S8 | Replace `proof-check-agda` (runs `agda --safe` only, skips silently, fails 10 of 10 modules) with the template's `check-proofs.sh` and manifest. | Sonnet
+| S9 | Derived directory guidance (owner, 2026-11-17): generate any per-directory AI manifest from the deed on demand, as the arrival pack generates `CLAUDE.md`, and store none. Scaffoldia's 82 stored manifests then go in its self-retrofit, once nothing reads them. Needs the list of tools that still expect the stored files. | Opus for the generator's contract; Sonnet after
 |===
 
 === Standards work orders
@@ -528,6 +533,10 @@ they are renewed or E6 lands first.
 | W7 | Finish #1341. The page `3-practice/DATA-FORMAT-ROUTING.adoc` is added in this change (three repositories already cite it). Still to do: the routing entries in the deed and AI manifest, the cross-references in the YAML and JSON policy pages, the generated `CLAUDE.md` copies, and recording the owner clarification of 2026-10-25 in this repository, since today its only recorded text is in the template's `CLAUDE.md`. | Sonnet
 | W8 | Self-pruning shrink-only ledgers (owner, 2026-11-17). Each ledger checker that can decide staleness from the tree gets a mode that deletes stale lines and nothing else; the pre-commit hook runs it on the staged tree, so the commit that removes an offender also removes its ledger line. Cause: 1fb72f74 removed inline Python from a test and left its allowlist line; the light shard on `main` failed until #1653. | Opus for the invariant; Sonnet after
 | W9 | The departures ledger (owner, 2026-11-17): `.machine_readable/departures.jsonl`, evaluated by the issue-evidence check engine, with `report`, `check` and `prune`. A row says a defect exists and how to see it; it is not a waiver. The section below becomes rows where a mechanical check exists. Rows for other repositories are kept as data for those repositories to adopt. | Opus for the design; Sonnet for rows
+| W10 | The retire-check (owner, 2026-11-17): `scripts/a2ml-retire-check.sh` recomputes, per `.a2ml` file, family, target deeds, the three deletion conditions and a closed list of blockers; rulings that are not derivable from the tree live in one small data file, so a ruling moves classes without a code change. The measurement that prompted it is `a2ml-measure.adoc` in this directory. | Opus
+| W11 | Remove `1-formats/a2ml/` (owner, 2026-11-17): inventory and redirect every inbound link and reader first, record what each file held in `9-archive/A2ML-REMOVED.adoc`, delete, and prune the legacy ledger in the same commits. Its own pull request. | Opus to scope; Sonnet to execute
+| W12 | Retire the A2ML writers and readers recorded as departures rows, in the order that unblocks deletions; each with its replacement input and a test. The Debtfile writer waits on the Debtfile's deed form. | Sonnet, one tool at a time
+| W13 | Test-suite robustness: several `scripts/tests/*.sh` files pipe into `grep -q` under `pipefail`, which fails intermittently on a loaded machine (seen in `check-inline-python-test.sh` and `wave4-dyadt-test.sh`). Capture, then match. | Sonnet
 |===
 
 == Departures met, for the owner
