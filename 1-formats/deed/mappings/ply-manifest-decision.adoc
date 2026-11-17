@@ -1,9 +1,13 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 = Decision spec — per-directory `0.N-AI-MANIFEST.a2ml` ply manifests → deed era
 Campaign: standards#837 · Frame: link:README.adoc[mappings/README] ·
-Status: **PROPOSAL, not ruled.** Nothing here may be implemented until the
-owner rules on §6. Written 2026-11-17 because a census of three repositories
-found that this is the largest unmapped A2ML group: 127 of 360 files.
+Status: **RULED in part** (owner, 2026-11-17, by selector): option D, split
+by kind (§2); a populated invariant list refuses the file (ask 2); a
+dangling parent link is reported (ask 3); the two prose manifests that
+describe a directory translate under §3.4 (ask 5). **Ask 4 is open**, so the
+rows it touches are not yet implementable. Written 2026-11-17 because a
+census of three repositories found that this is the largest unmapped A2ML
+group: 127 of 360 files.
 
 The per-directory manifests were folded into a deed once, by hand-driven
 tooling, in the #837 pilot (`hyperpolymath/rsr-template-repo#176`, merged
@@ -151,9 +155,16 @@ yet, and 127 files wait on the answer. The transition is the one J30 and J33
 set: when the `clade` module can hold the content, a chora `(ply …)` is warned
 for one release and then refused in strict mode. For the invariants, see ask 2.
 
-== 3. Field table (option A; a translator refuses anything else — P-2a)
+**Ruled 2026-11-17 (owner): option D.** The descriptive members go to the
+`(ply …)` clause now and to `CLADE.deed` once its module can hold them; the
+transition above applies to them. An invariant is an edict and never a member
+of the clause (§3.1, ask 2). A, B and C are not taken as stated: D uses A's
+clause for the descriptive half and keeps B as its destination.
 
-The target is one top-level `(ply …)` clause of `<repo>_chora.deed`.
+== 3. Field table (option D, ruled; a translator refuses anything else — P-2a)
+
+The target of the descriptive members is one top-level `(ply …)` clause of
+`<repo>_chora.deed`. An invariant has no target in that clause.
 
 === 3.1 META-shape
 
@@ -208,9 +219,18 @@ The target is one top-level `(ply …)` clause of `<repo>_chora.deed`.
   STRING, ordered by key. A comment inside the map is dropped (§4).
 
 | `invariants` (in `[AI_MANIFEST]` or `[STAPELN_ECOSYSTEM]`)
-| `(directory … :invariants ("…" "…"))`
-| list of STRINGs, order kept: the text is the contract, as for the policy
-  rules of ai-manifest-decision §3. Subject to ask 2.
+| — (not written)
+| **Ruled 2026-11-17 (owner): refused while populated.** A populated
+  constraint is an edict, a `(rule …)` of `Mustfile.deed`, and a descriptive
+  clause never restates one (A7 YL3). A file with a populated `invariants`
+  list is refused, each entry named with its line, until a `Mustfile.deed`
+  rule holds each. *How a translator tells* (this spec's reading of the
+  ruling, open to correction): the repository's
+  `.machine_readable/contractiles/must/Mustfile.deed` is given to it, and an
+  entry is held when it equals, character for character, the `:text` of a
+  `(rule …)` there. A held entry is not written to the deed and is reported
+  with the rule's `:id`. The translator never writes a rule: it cannot supply
+  `(applies-when …)` or `(requires …)`. An empty list is dropped.
 
 | `[FILE_RELATIONSHIPS] files`
 | `(directory … (file-relationships (file :name "…" :role "…" :description "…" :depends-on ("…")) …))`
@@ -224,7 +244,7 @@ The target is one top-level `(ply …)` clause of `<repo>_chora.deed`.
 
 Member order inside a `(directory …)` is fixed: `:id`, `:ply`, `:path`,
 `:version`, `:description`, `:purpose`, `:overview`, `:context`,
-`(canonical-locations …)`, `:invariants`, `(file-relationships …)`, then the
+`(canonical-locations …)`, `(file-relationships …)`, then the
 nested directories ordered by `:path`. Sibling directories are ordered by
 `:path`. A fixed order makes the output deterministic; deed order carries no
 meaning.
@@ -257,7 +277,12 @@ exactly those headings: a prose file with a `## Purpose` paragraph, an
 optional `## Invariants` bullet list, and otherwise only the headings
 `## Canonical Locations`, `## Multiple Versions` and `## Protocol`, whose
 bodies are dropped as instructions (§4). Any other heading is refused.
-Subject to ask 5.
+
+**Ruled 2026-11-17 (owner): this rule stands** (ask 5 a), with the invariant
+ruling applied to it. `## Purpose` becomes `:description`, and `:ply` is the
+ply in the file name. Each bullet under `## Invariants` is an `invariants`
+entry of §3.1: both files have such a list, so both are refused until a
+`Mustfile.deed` rule holds each bullet.
 
 == 4. Drop doctrine
 
@@ -286,7 +311,12 @@ Subject to ask 5.
   a departure. kyX's own deed shows what a person did with them after its
   mint: `:anchor "kyx_chora.deed (anchor)"`. A translator cannot make that
   rewrite. Ask 4.
-. **Invariants are constraints.** See option D and ask 2.
+. **Invariants are constraints.** See option D and ask 2. Measured
+  2026-11-17: 22 files hold a list (20 META-shape and 2 prose; scaffoldia 13,
+  hybrid-automation-router 9), and neither repository has a `Mustfile.deed`.
+  So those 22 are refused today, and the other 111 directory manifests of the
+  two repositories (107 META-shape and 4 stubs) do not depend on any rule
+  being written.
 . **The two layers.** Whatever ask 1 rules, the clause never carries identity,
   and nothing in the chora deed's identity clauses is read from a manifest.
 . **Generator first.** The template stopped shipping the tree on 2026-09-19,
@@ -295,48 +325,98 @@ Subject to ask 5.
 
 == 6. Ruling asks
 
+Asks 1, 2, 3 and 5 were ruled by the owner on 2026-11-17, through the
+question selector. Each ruling departs from, or confirms, the recommendation
+this spec made, as noted.
+
 . *Home.* A (`(ply …)` on the chora deed, transitional, recommended), B
   (`CLADE.deed`: the most elegant long-term home, blocked until the `clade`
   module lands and grows), C (not translated; removal record) or D (split by
-  kind).
+  kind). **Ruled: D.** (The recommendation was A.)
 . *Invariants.* (a) carried verbatim as `:invariants` and each one reported
   as a candidate edict (recommended: nothing is lost, and the report feeds
   the `Mustfile.deed` work); (b) refused while populated, until a
   `Mustfile.deed` rule holds each (the strict reading of YL3: most correct,
   and it blocks 20 files); (c) carried with no report (the pilot).
+  **Ruled: (b).** (The recommendation was (a).) With the 2 prose files, 22
+  files are refused until their rules exist.
 . *A `parent` link that does not resolve.* (a) nest by containment, report
   the link (recommended; the template's own tree has one, so (b) would refuse
-  the pilot's golden source); (b) refuse the file.
+  the pilot's golden source); (b) refuse the file. **Ruled: (a).**
 . *Stale `.a2ml` pointers.* (a) a canonical-location entry whose value ends
   in `.a2ml` is dropped and reported, and an invariant or description that
   mentions A2ML is carried and reported (recommended: the entry states where
   a retired file lives, which is false in the deed era, and the test is
   mechanical); (b) everything carried verbatim and reported; (c) the file is
   refused until its source no longer names A2ML (deleting content from a
-  legacy file is permitted; adding to one is not).
+  legacy file is permitted; adding to one is not). **Open.** The owner
+  answered with a question, on the place of echo-types and
+  residual-evidence-types; §8 answers it. Until this is ruled, a translator
+  refuses a file that has such an entry, which is option (c) in effect and
+  the fail-closed default, not a ruling.
 . *Prose shapes.* For the 2 that describe a directory: (a) §3.4's rule
   (recommended), or (b) refused, and retired under Q7 with a removal record.
+  **Ruled: (a)**, for the 2 that describe a directory.
   The other 4 are not directory manifests: the root front door of
   hybrid-automation-router (Q15 makes that file a pointer-only
   `0-AI-MANIFEST.deed`), and three files of this repository's
   `0-ai-gatekeeper` and `ensaid-config` specs, which describe the retired
   protocol and retire with it. This spec proposes to leave all four out.
 
-== 7. Acceptance (once ruled; written for option A)
+== 7. Acceptance (option D, as ruled)
 
 * *Golden parity.* From the 82 directory manifests of `rsr-template-repo` at
-  `9226f7e`, the translator's `(ply …)` clause equals the clause of
-  `rsr-template-repo_chora.deed` at `d49e4c8`, except where asks 2 to 4 rule
-  a difference; each difference is listed, with its ask, in the test.
+  `9226f7e`, with a `Mustfile.deed` that holds every invariant of that tree,
+  the translator's `(ply …)` clause equals the clause of
+  `rsr-template-repo_chora.deed` at `d49e4c8` with each `:invariants` member
+  removed, and with whatever difference ask 4 rules. Each difference is
+  listed, with its ask, in the test.
+* *Invariants refuse.* Without that `Mustfile.deed`, exactly the 13 files of
+  the tree that hold an invariant list are refused, each entry named, and
+  nothing is written.
 * *Count.* `(directory ` occurrences in a repository's `(ply …)` equal the
   number of its source manifests of the three shapes of §3.
-* *Order-sensitive invariants.* For each directory, the `:invariants` list
-  equals the source list, in order.
+* *No invariant in the clause.* No `(ply …)` clause holds `:invariants`.
 * *No rename.* No `0.N-AI-MANIFEST.deed` exists: the grammar dispatches no
   such name, and `deed_lint.js` refuses one.
 * *Lint.* The chora deed that receives the clause passes
   `bun 1-formats/deed/tools/deed_lint.js`. `(ply …)` has no clause module, so
-  the linter checks its grammar only; a module is A7 M3 work if ask 1 rules A
-  for longer than the transition.
+  the linter checks its grammar only; a module for it is A7 M3 work, should
+  the transition to `CLADE.deed` last longer than one release.
 * *Refusals.* A file with a key outside §3.1, a `level` that contradicts its
   name, and a duplicate `id` are each refused, with the line.
+
+== 8. What a dropped fact is: the echo reading (answer to the owner, 2026-11-17)
+
+Asked on ask 4, the owner asked what place `hyperpolymath/echo-types` has
+here, and whether `hyperpolymath/residual-evidence-types` is relevant. Both
+are, as the statement of what a translation with drops owes. Read at
+echo-types `6bc52b8` and residual-evidence-types `6f94640`; nothing below was
+run through Agda for this spec, and nothing is proved about a translator's
+code.
+
+* *Echo.* A family's translation is a map from source files to deeds, and it
+  is not injective, because the spec drops things. `Echo f y := Σ (x : A),
+  (f x ≡ y)` is then the set of sources that give one deed. A deed alone
+  keeps none of that (the glossary's *sans fibre*); a deed with its drop
+  report keeps what the report names (*avec fibre*).
+* *Residual evidence.* `Candidate observe r E = Σ world, (observe world ≡ r)
+  × E world` adds evidence to the fibre. With `observe` the translation, `r`
+  the deed and `E` the recorded evidence, `Identified c query` says that
+  every candidate source agrees on a fact. That is the deletion rule of
+  `.claude/CLAUDE.md` stated for one fact: it may leave the tree when it is
+  identified by the deed, or by the deed with recorded evidence, or when the
+  spec drops it by ruling.
+* *The removal record is that evidence.* A sha256 and a blob id narrow the
+  candidates to one source, so every fact of a deleted file is identified
+  without being copied. That is why the removal record can replace an
+  archive (link:state-v1-decision.adoc[state-v1-decision] §6).
+* *The test it implies.* `different-candidates-refute-identification`: two
+  sources that differ in one field and yet give the same deed and the same
+  report show that the field is lost silently. Each family's tests should
+  hold one such pair for each dropped row.
+
+For ask 4 this names the three options and does not choose among them. A
+pointer carried verbatim is identified by the deed. A pointer dropped and
+reported is identified by the deed with its record. A refused file has no
+translation at all. Which of these a stale pointer should be is policy.
