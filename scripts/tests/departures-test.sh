@@ -59,15 +59,15 @@ expect_err() {
   local label="$1" needle="$2"
   shift 2
   run "$@"
-  if [ "$RC" = 2 ] && printf '%s' "$ERR" | grep -qF -- "$needle"; then ok "$label"
+  if [ "$RC" = 2 ] && grep -qF -- "$needle" <<<"$ERR"; then ok "$label"
   else ko "$label — expected exit 2 with '$needle', got $RC; stderr: $(printf '%s' "$ERR" | head -3 | tr '\n' '|')"; fi
 }
 # out_line LINE: $OUT has exactly the line LINE.
-out_line() { printf '%s\n' "$OUT" | grep -qFx -- "$1"; }
+out_line() { grep -qFx -- "$1" <<<"$OUT"; }
 # out_has TEXT: $OUT contains TEXT.
-out_has() { printf '%s\n' "$OUT" | grep -qF -- "$1"; }
+out_has() { grep -qF -- "$1" <<<"$OUT"; }
 # err_has TEXT: $ERR contains TEXT.
-err_has() { printf '%s\n' "$ERR" | grep -qF -- "$1"; }
+err_has() { grep -qF -- "$1" <<<"$ERR"; }
 # rc_and WANT CMD...: RC is WANT and CMD succeeds.
 rc_and() { local want="$1"; shift; [ "$RC" = "$want" ] && "$@"; }
 
@@ -182,7 +182,7 @@ for f in id ruling claim blocked_on pattern; do
   esac
   ledger "$r"
   run bash "$DS" validate "$L"
-  if [ "$RC" = 2 ] && printf '%s' "$ERR" | grep -qE 'control character|lower-case slug'; then ok "a newline in $f is refused"
+  if [ "$RC" = 2 ] && grep -qE 'control character|lower-case slug' <<<"$ERR"; then ok "a newline in $f is refused"
   else ko "a newline in $f — rc=$RC stderr=$(printf '%s' "$ERR" | head -2 | tr '\n' '|')"; fi
 done
 
@@ -253,20 +253,26 @@ ledger "$A_PRESENT" "$B_GONE" "$UNEVAL" "$MIXED"
 cp "$L" "$WORK/before.jsonl"
 run bash "$DS" prune "$L"
 verdict "prune exits 0" [ "$RC" = 0 ]
-verdict "prune prints each removed row as LEDGER:LINE ID" \
-  [ "$OUT" = "removed $L:2 defect-b
-removed $L:4 mixed" ]
+verdict "prune prints each removed row in the ledger-prune contract form (id for the row)" \
+  [ "$OUT" = "prune: delete $L:2: defect-b [RESOLVED: [0] grep-present docs/a.adoc no longer holds]
+prune: delete $L:4: mixed [RESOLVED: [1] path-present docs/gone.adoc no longer holds]
+prune: $L: 2 line(s) deleted, 0 count(s) lowered" ]
 sed -n '1p;3p' "$WORK/before.jsonl" >"$WORK/want.jsonl"
 verdict "prune keeps every other line byte for byte" cmp -s "$L" "$WORK/want.jsonl"
 cp "$L" "$WORK/after1.jsonl"
 run bash "$DS" prune "$L"
-verdict "prune is idempotent: a second run removes nothing" rc_and 0 [ -z "$OUT" ]
+verdict "prune is idempotent: a second run removes nothing" rc_and 0 [ "$OUT" = "prune: $L: nothing stale" ]
 verdict "prune is idempotent: a second run leaves the bytes alone" cmp -s "$L" "$WORK/after1.jsonl"
 expect_rc "check passes after prune" 0 bash "$DS" check "$L"
 ledger "$A_PRESENT" "$B_GONE" "not json"
 cp "$L" "$WORK/bad.jsonl"
-expect_rc "prune refuses a malformed ledger (2)" 2 bash "$DS" prune "$L"
+expect_rc "prune refuses a malformed ledger (1: a problem pruning may not hide)" 1 bash "$DS" prune "$L"
 verdict "prune leaves a malformed ledger untouched" cmp -s "$L" "$WORK/bad.jsonl"
+ledger "$A_PRESENT" "$B_GONE"
+cp "$L" "$WORK/ie.jsonl"
+expect_rc "prune: an unresolvable --ref is a setup error (2, not check's 3)" 2 bash "$DS" prune --ref no-such-ref "$L"
+verdict "prune leaves the ledger untouched on a setup error" cmp -s "$L" "$WORK/ie.jsonl"
+expect_rc "prune: an unknown option is a usage error (2)" 2 bash "$DS" prune --bogus "$L"
 ledger "$A_PRESENT" "$B_GONE"
 cp "$L" "$WORK/ref.jsonl"
 run bash "$DS" prune --ref "$C1" "$L"
@@ -324,6 +330,8 @@ if [ -z "${DEPARTURES_MUTANT:-}" ]; then
   echo "=== mutants: the suite kills a broken gate ==="
   mkdir -p "$WORK/mut"
   cp "$SCRIPT_DIR/../issue-evidence.sh" "$WORK/mut/issue-evidence.sh"
+  mkdir -p "$WORK/mut/lib"
+  cp "$SCRIPT_DIR/../lib/ledger-prune.sh" "$WORK/mut/lib/ledger-prune.sh"
   # mutant LABEL SED_EXPR: the suite, run against the script with SED_EXPR applied, must fail.
   mutant() {
     local label="$1" m="$WORK/mut/departures.sh" rc=0 out nf

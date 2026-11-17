@@ -19,6 +19,10 @@
 #
 # Plan format, one change per line, TAB-separated:
 #   <line number> <TAB> delete|lower <TAB> <new line, empty for delete> <TAB> <reason>
+#   [<TAB> <shown as>]
+# The optional last field is what the output prints in place of the line as it
+# was: a JSON Lines ledger passes the row's id, because a whole row is long.
+# It changes only the report, never what is written.
 #
 # Output, one line per change on stdout, then a summary:
 #   prune: delete <ledger>:<line>: <line as it was> [<reason>]
@@ -29,22 +33,24 @@
 # Returns 0 when applied, 2 when the plan breaks the invariant (nothing written).
 ledger_prune_apply() {
   local ledger=$1 name=$2 plan=$3
-  local -A act=() new=() why=()
-  local n a l r row line nl out k_old c_old k_new c_new deleted=0 lowered=0
+  local -A act=() new=() why=() shown=()
+  local n a l r s row line nl out k_old c_old k_new c_new deleted=0 lowered=0
   while IFS= read -r row; do
     [ -n "$row" ] || continue
     # Split by hand: `read` with IFS=TAB merges the empty third field of a
     # delete row into its neighbours, because TAB is IFS whitespace.
     n=${row%%$'\t'*}; row=${row#*$'\t'}
     a=${row%%$'\t'*}; row=${row#*$'\t'}
-    l=${row%%$'\t'*}; r=${row#*$'\t'}
+    l=${row%%$'\t'*}; row=${row#*$'\t'}
+    r=${row%%$'\t'*}; s=""
+    [ "$r" = "$row" ] || s=${row#*$'\t'}
     if ! [[ "$n" =~ ^[1-9][0-9]*$ ]] || { [ "$a" != delete ] && [ "$a" != lower ]; }; then
       echo "ledger-prune: bad plan row: $n $a" >&2; return 2
     fi
     if [ -n "${act[$n]:-}" ] && { [ "${act[$n]}" != "$a" ] || [ "${new[$n]}" != "$l" ]; }; then
       echo "ledger-prune: conflicting plan rows for line $n" >&2; return 2
     fi
-    act[$n]=$a; new[$n]=$l; why[$n]=$r
+    act[$n]=$a; new[$n]=$l; why[$n]=$r; shown[$n]=$s
   done < "$plan"
 
   out="$(mktemp)" || return 2
@@ -63,7 +69,7 @@ ledger_prune_apply() {
           echo "ledger-prune: refusing to delete comment or blank line $n of $name" >&2
           rm -f "$out"; return 2
         fi
-        report+=("prune: delete $name:$n: $line [${why[$n]}]")
+        report+=("prune: delete $name:$n: ${shown[$n]:-$line} [${why[$n]}]")
         deleted=$((deleted + 1)) ;;
       lower)
         if ! [[ "$line" =~ ^(.+):([1-9][0-9]*)$ ]]; then
@@ -81,7 +87,7 @@ ledger_prune_apply() {
           rm -f "$out"; return 2
         fi
         printf '%s%s' "${new[$n]}" "$nl" >> "$out"
-        report+=("prune: lower $name:$n: $line -> ${new[$n]} [${why[$n]}]")
+        report+=("prune: lower $name:$n: ${shown[$n]:-$line} -> ${new[$n]} [${why[$n]}]")
         lowered=$((lowered + 1)) ;;
     esac
     unset 'act[$n]'

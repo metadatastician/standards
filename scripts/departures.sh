@@ -40,10 +40,16 @@
 #       malformed. A present or unevaluated row passes.
 #   prune [--ref REV] [--repo OWNER/NAME] [LEDGER]
 #       Deletes exactly the rows `check` reports RESOLVED, through the same
-#       decision. Every other line is kept byte for byte; no row is added or
-#       edited; a second run removes nothing. A malformed ledger is refused (2)
-#       and left untouched. Prints one line per removed row on stdout:
-#       "removed LEDGER:LINE ID" (LINE numbers the file as it was before).
+#       decision, with the shared writer scripts/lib/ledger-prune.sh. Every
+#       other line is kept byte for byte; no row is added or edited; a second
+#       run removes nothing. Keeps the shrink-only ledger prune contract
+#       (docs/wikis/maintainers/index.adoc, "Shrink-only ledgers"): a
+#       malformed ledger is refused (1) and left untouched; usage and internal
+#       errors exit 2. Prints on stdout, one line per removed row, then a summary:
+#         prune: delete LEDGER:LINE: ID [RESOLVED: <checks> no longer holds]
+#         prune: LEDGER: N line(s) deleted, 0 count(s) lowered
+#       (LINE numbers the file as it was before; the id stands for the row),
+#       or "prune: LEDGER: nothing stale".
 #   --repo evaluates only the rows of that repository (case-insensitive); the
 #   others are counted as not evaluated and are never pruned.
 #
@@ -58,9 +64,11 @@
 #
 # EXIT
 #   0  done (check: no RESOLVED row; prune: the RESOLVED rows are gone)
-#   1  check only: a RESOLVED row
-#   2  invalid ledger or invalid input (usage)
-#   3  internal error (no jq/git, not a git repository, REV does not resolve)
+#   1  check: a RESOLVED row. prune: refused, the ledger is malformed
+#   2  check, report, validate: invalid ledger or invalid input (usage).
+#      prune: invalid input (usage) or an internal error (the contract has no 3)
+#   3  internal error (no jq/git, not a git repository, REV does not resolve);
+#      not used by prune, which reports these as 2
 #
 # TESTS: scripts/tests/departures-test.sh
 set -euo pipefail
@@ -79,10 +87,11 @@ fail_input() {
   printf '%s: %s\n' "$PROG" "$*" >&2
   exit 2
 }
-# fail_internal MESSAGE: the tool could not run; exit 3.
+# fail_internal MESSAGE: the tool could not run; exit INTERNAL_RC (3, or 2 for prune).
+INTERNAL_RC=3
 fail_internal() {
   printf '%s: internal error: %s\n' "$PROG" "$*" >&2
-  exit 3
+  exit "$INTERNAL_RC"
 }
 
 TMPD=""
@@ -379,26 +388,32 @@ cmd_check() {
 
 # cmd_prune [OPTIONS] [LEDGER]: deletes the rows cmd_check reports RESOLVED, and nothing else.
 cmd_prune() {
-  local drop
+  local plan wrote rc=0
   parse_opts "$@"
   need_repo
   snapshot
   if ! validate_ledger "$TMPD/ledger.jsonl" "$LEDGER"; then
     printf '%s: prune refused: the ledger is malformed; nothing was changed\n' "$PROG" >&2
-    exit 2
+    exit 1
   fi
   classify "$TMPD/ledger.jsonl"
-  drop="$(jq -r 'select(.status == "RESOLVED") | .n' "$TMPD/classified.jsonl" | tr '\n' ' ')"
-  if [ -z "$drop" ]; then
-    printf '%s: nothing to prune\n' "$PROG" >&2
+  # The plan for the shared writer: delete each RESOLVED line, shown by its id.
+  plan="$(jq -r 'select(.status == "RESOLVED") | .n as $n
+    | "\($n)\tdelete\t\tRESOLVED: \(.named | join(", ")) no longer holds\t\(.id)"' "$TMPD/classified.jsonl")"
+  if [ -z "$plan" ]; then
+    printf 'prune: %s: nothing stale\n' "$LEDGER"
     return 0
   fi
-  awk -v drop=" $drop" 'index(drop, " " FNR " ") == 0' "$TMPD/ledger.jsonl" >"$TMPD/pruned.jsonl"
+  printf '%s\n' "$plan" >"$TMPD/plan.tsv"
+  cp -- "$TMPD/ledger.jsonl" "$TMPD/judged.jsonl" || fail_internal "cannot copy the snapshot"
+  # shellcheck source=SCRIPTDIR/lib/ledger-prune.sh
+  . "$(dirname "${BASH_SOURCE[0]}")/lib/ledger-prune.sh" || fail_internal "scripts/lib/ledger-prune.sh not found beside this script"
+  wrote="$(ledger_prune_apply "$TMPD/ledger.jsonl" "$LEDGER" "$TMPD/plan.tsv")" || rc=$?
+  [ "$rc" -eq 0 ] || fail_internal "the ledger writer refused the plan (exit $rc); nothing was changed"
   # The file must still be the bytes that were judged.
-  cmp -s -- "$LEDGER" "$TMPD/ledger.jsonl" || fail_internal "$LEDGER changed while it was being pruned; nothing was changed"
-  cat -- "$TMPD/pruned.jsonl" >"$LEDGER" || fail_internal "cannot write $LEDGER"
-  jq -r --arg l "$LEDGER" 'select(.status == "RESOLVED") | "removed \($l):\(.n) \(.id)"' "$TMPD/classified.jsonl"
-  printf '%s: pruned %s of %s rows\n' "$PROG" "$(printf '%s' "$drop" | wc -w)" "$TOTAL" >&2
+  cmp -s -- "$LEDGER" "$TMPD/judged.jsonl" || fail_internal "$LEDGER changed while it was being pruned; nothing was changed"
+  cat -- "$TMPD/ledger.jsonl" >"$LEDGER" || fail_internal "cannot write $LEDGER"
+  printf '%s\n' "$wrote"
 }
 
 # main SUBCOMMAND ARGS...: dispatch.
@@ -406,6 +421,8 @@ main() {
   [ "$#" -ge 1 ] || { usage; exit 2; }
   local sub="$1"
   shift
+  # prune keeps the ledger prune contract: setup errors are 2, never 3.
+  if [ "$sub" = prune ]; then INTERNAL_RC=2; fi
   need_tools
   case "$sub" in
     validate) cmd_validate "$@" ;;

@@ -132,9 +132,17 @@ finds only the files that carry it.
   passes.
 * `prune [--ref REV] [--repo R] [LEDGER]`: deletes exactly the rows `check`
   reports RESOLVED, through the same decision, and keeps every other line byte
-  for byte. It never adds or edits a row, a second run removes nothing, and a
-  malformed ledger is refused and left untouched. It prints
-  `removed LEDGER:LINE ID` for each row it removes.
+  for byte. It never adds or edits a row, and a second run removes nothing. It
+  keeps the
+  link:../docs/wikis/maintainers/index.adoc#ledger-prune[prune contract of the shrink-only ledgers]
+  and writes through the same writer,
+  `scripts/lib/ledger-prune.sh`. Exit 0 when nothing is stale or the stale rows
+  are gone; 1 when the ledger is malformed (refused, left untouched); 2 on a
+  usage or setup error (where `check` says 3). It prints one line per removed
+  row, `prune: delete LEDGER:LINE: ID [RESOLVED: <checks> no longer holds]`,
+  with the row's id in place of the whole JSON row, then
+  `prune: LEDGER: N line(s) deleted, 0 count(s) lowered`, or
+  `prune: LEDGER: nothing stale`.
 
 `scripts/tests/departures-test.sh` runs `check` on this repository's ledger, so
 the shell-test suite fails on a stale row. The canonical-JSON job of
@@ -144,7 +152,7 @@ the shell-test suite fails on a stale row. The canonical-JSON job of
 
 . Copy `scripts/departures.sh` and `scripts/issue-evidence.sh` into the
   repository's `scripts/`, side by side; `departures.sh` runs the
-  `issue-evidence.sh` beside it.
+  `issue-evidence.sh` beside it. `prune` also needs `scripts/lib/ledger-prune.sh`.
 . Add `.machine_readable/departures.jsonl`, empty or with rows whose `repo` is
   that repository.
 . Run `scripts/departures.sh check` where the repository runs its gates (its

@@ -89,7 +89,9 @@ prune: <ledger>: <d> line(s) deleted, <l> count(s) lowered
 +
 `<line>` is the line number in the ledger before the prune; `<reason>` is the
 check's own finding for that line. When nothing is stale the command prints
-`prune: <ledger>: nothing stale`.
+`prune: <ledger>: nothing stale`. In a JSON Lines ledger, where a row is long,
+`<line as it was>` is the row's `id` (the stated form for JSON Lines ledgers);
+the line number still names the row exactly.
 
 *Which ledgers have it.* The writer is `scripts/lib/ledger-prune.sh`; each
 checker builds the plan and the writer refuses any plan that breaks the
