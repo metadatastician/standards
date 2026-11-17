@@ -157,6 +157,12 @@ if [ -f "$REPO_ROOT/scripts/check-canonical-names.sh" ]; then
   fi
 fi
 
+# Code markers cite an issue (standards#955); reads the staged copies.
+if [ -f "$REPO_ROOT/scripts/check-marker-issue-refs.sh" ]; then
+  echo -e "${BLUE}[pre-commit]${NC} Checking code markers cite an issue..."
+  bash "$REPO_ROOT/scripts/check-marker-issue-refs.sh" --root "$REPO_ROOT" --cached || ERRORS=$((ERRORS + 1))
+fi
+
 echo ""
 if [ $ERRORS -gt 0 ]; then
   echo -e "${RED}Pre-commit check FAILED with $ERRORS error(s)${NC}"
