@@ -250,8 +250,12 @@ cmd_removed_rows() {
     [[ "$n" =~ ^[1-9][0-9]*$ ]] || continue
     gh api "repos/$REPO/issues/$n" >"$TMPD/peek.json" 2>"$TMPD/gh.err" ||
       refuse "could not read issue #$n: $(head -c 300 "$TMPD/gh.err")"
-    jq -e --arg bot "$BOT" 'type == "object" and .state == "closed" and (.closed_by.login // "") == $bot
-      and (has("pull_request") | not)' "$TMPD/peek.json" >/dev/null 2>&1 || continue
+    # A 200 whose body is not an issue (an error object, not JSON) is a
+    # refusal, as in read_issue: it must not read as "not closed by the bot".
+    jq -e 'type == "object" and (.state == "open" or .state == "closed")' "$TMPD/peek.json" >/dev/null 2>&1 ||
+      refuse "issue #$n: the read is not an issue object with state open or closed"
+    jq -e --arg bot "$BOT" '.state == "closed" and (.closed_by.login // "") == $bot
+      and (has("pull_request") | not)' "$TMPD/peek.json" >/dev/null || continue
     read_issue "$n"
     [ "$(fact closed_by_bot)" = true ] || continue
     hash="$(fact hash)"

@@ -381,6 +381,30 @@ removed_rows
 check "C4: a failed read while listing bot-closed issues is a refusal (exit 1)" rc_is 1
 check "C4: ... with no partial list" test -z "$OUT"
 
+# F5: the first read of a candidate answers 200 but with a body that is not an
+# issue (an error object, or not JSON). It is a refusal, as in read_issue,
+# never a silent skip that would leave the issue closed on a removed row.
+for peek in "$RATE" 'not json' '[]' '{"number":61,"state":"locked"}'; do
+  reset_fix
+  issue 61 closed "$(timeline mark closed:"$BOT")"
+  issue 64 closed "$(timeline closed:alice)"
+  issue 65 open "$(timeline)"
+  fx "repos/$R/issues/61" "$peek"
+  removed_rows
+  check "F5: removed-rows refuses a 200 peek that is not an issue ($(printf '%s' "$peek" | head -c 24))" rc_is 1
+  check "F5: ... says it refuses" err_has "refusing to act"
+  check "F5: ... with no partial list" test -z "$OUT"
+done
+# The shape check comes before the filter: a well-formed issue the bot did
+# not close is still skipped without a refusal.
+reset_fix
+issue 61 closed "$(timeline closed:alice)"
+issue 64 closed "$(timeline closed:alice)"
+issue 65 open "$(timeline)"
+removed_rows
+check "F5: a well-formed issue closed by a person is still skipped (exit 0, nothing listed)" \
+  test "$RC/$OUT" = "0/"
+
 # The removed-row reopen shares the cap with the ledger's own actions.
 reset_fix
 decisions close close
