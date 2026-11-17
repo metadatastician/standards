@@ -92,16 +92,18 @@ member written `:x` is a top-level member of `META.deed`; a clause is named.
 | `[pipeline] chain` | `(ecosystem :chain "standards → rsr-template-repo → (every estate repo)")` | verbatim STRING (arrow prose stays prose)
 | `[pipeline] notes` | `(ecosystem :pipeline-notes "…")` | verbatim STRING
 | `[pipeline] coordination` | `(ecosystem :coordination standards)` | **the #726 hub-pointer, carried VERBATIM** — hub repo name → SYMBOL; empty string (standalone) stays `:coordination ""`
-| `[related-projects] projects[]` | repeated clauses: `(related :name "standards" :relationship standard-source :notes "…")` | name → STRING, relationship → SYMBOL (`standard-source build-tooling validation-tooling signing-tooling verification-tooling minted-from registry` — closed set, **owner-ruled 2026-09-19** per the first estate conversion report (marid): `minted-from` = the rsr-template parent edge every minted repo carries, `registry` = the gv-clade-index registration edge; the template-instance seen-set could never contain them, so the gap was structural, not incidental; extended by DESCRIPTILE-SPEC's four observed terms `downstream-consumer sibling-language code-dependency parent` and, **owner-ruled 2026-11-14**, by `sibling-standard data-dependency dispatch-target scanner-source mcp-host`, 16 terms in all, defined in §3.1), notes → STRING; one `(related …)` per array element, order-free (deed order is not semantic)
+| `[related-projects] projects[]` | repeated clauses: `(related :name "standards" :relationship standard-source :notes "…")` | name → STRING, relationship → SYMBOL (`standard-source build-tooling validation-tooling signing-tooling verification-tooling minted-from registry` — closed set, **owner-ruled 2026-09-19** per the first estate conversion report (marid): `minted-from` = the rsr-template parent edge every minted repo carries, `registry` = the gv-clade-index registration edge; the template-instance seen-set could never contain them, so the gap was structural, not incidental; extended by DESCRIPTILE-SPEC's four observed terms `downstream-consumer sibling-language code-dependency parent`, **owner-ruled 2026-11-14**, by `sibling-standard data-dependency dispatch-target scanner-source mcp-host` and, **owner-ruled 2026-11-17**, by `extension-of`, 17 terms in all; §3.1 defines those six and three of the observed four), notes → STRING; one `(related …)` per array element, order-free (deed order is not semantic)
 | `[[related-projects.<group>]]` entries (`name`, `relationship`, `description`) | the same repeated `(related :name "…" :relationship … :notes "…")` clauses | the grouped spelling (hypatia's `sibling` and `infrastructure` groups): `description` → `:notes` STRING; the group name is not carried (the relationship already says what the group did); relationship from the same closed set. Added 2026-11-14 with the five terms, so the hypatia edges translate by table, not ad hoc
 |===
 
-=== 3.1 The `:relationship` vocabulary added 2026-11-14
+=== 3.1 The `:relationship` vocabulary: defined terms
 
-The owner extended the closed set on 2026-11-14, when hypatia's
-`ECOSYSTEM.a2ml` migration found seven edges whose relationships it could
-not carry (`clauses/ecosystem.abnf` v1.1.0). Each term reads from this
-repo towards the related one:
+Each term reads from this repo towards the related one. A term of the
+closed set that this section does not list has no written definition yet.
+
+*Added 2026-11-14.* The owner extended the closed set on 2026-11-14, when
+hypatia's `ECOSYSTEM.a2ml` migration found seven edges whose relationships
+it could not carry (`clauses/ecosystem.abnf` v1.1.0):
 
 * `sibling-standard`: a peer that works to the same standard or protocol
   family as this repo; neither is the other's source, tooling or consumer.
@@ -114,7 +116,48 @@ repo towards the related one:
 * `mcp-host`: the related repo serves this repo's capabilities over the
   Model Context Protocol; this repo runs no MCP server of its own.
 
-The set stays closed: a term outside the 16 is refused, and a new one
+*Added 2026-11-17.* The owner added one term on 2026-11-17
+(`clauses/ecosystem.abnf` v1.2.0), when CoprocessorRuntime.jl was kept as
+an extension of AcceleratorGate.jl and no term of the 16 said so:
+
+* `extension-of`: this repo extends the related repo's behaviour and is
+  loaded with or by it (a package extension or a plugin, for example); the
+  related repo does not depend on this one. The edge is written in the
+  extension's deed and points at the repo it extends.
+
+`extension-of` differs from three nearby terms:
+
+* `code-dependency` says only that code is linked. It makes no claim that
+  this repo extends the related one, and an extension may hold the related
+  repo as a weak or optional dependency only.
+* `parent` says this repo belongs to or is part of the related one. An
+  extension is a repo in its own right, not a part of the repo it extends.
+* `downstream-consumer` is written in a provider's deed about a repo that
+  uses it. Using a repo is not extending it, and that edge runs the other
+  way.
+
+*Written down 2026-11-17.* Three of DESCRIPTILE-SPEC's four observed terms
+were in the closed set with no definition. These record how the estate
+already uses them and admit no new term. The one ruling among them, on
+`parent` and `standard-source`, is marked:
+
+* `code-dependency`: this repo builds against, links or imports the
+  related repo's code as a declared dependency (a package pinned in a
+  manifest, for example). Compare `data-dependency`, where no code is
+  linked.
+* `downstream-consumer`: the related repo uses what this repo provides
+  (its code, its output or a contract it publishes); this repo does not
+  depend on it. The edge is written in the provider's deed.
+* `parent`: this repo belongs to or is part of the related repo, which
+  contains it or is the parent its anchor named (the former `(parents …)`,
+  A7 J26). The template a repo was minted from is `minted-from`, not
+  `parent`. A repo that only follows the related repo's standard uses
+  `standard-source`, not `parent` (owner-ruled 2026-11-17).
+
+The fourth observed term, `sibling-language`, and the 2026-09-19 terms
+other than `minted-from` and `registry` have no written definition yet.
+
+The set stays closed: a term outside the 17 is refused, and a new one
 needs an owner ruling and a minor version of `clauses/ecosystem.abnf`.
 
 == 4. Drop doctrine
