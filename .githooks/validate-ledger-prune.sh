@@ -13,6 +13,8 @@
 #   inline-python-allow.txt  scripts/check-inline-python.sh --prune
 #   a2ml-legacy-allow.txt    scripts/check-a2ml-archived.sh --prune
 #   k9-contract-debt.txt     .githooks/validate-k9.sh --prune (staged K9 files)
+#   marker-allow.txt         scripts/check-marker-issue-refs.sh --prune
+#   departures.jsonl         scripts/departures.sh prune --ref <the index as a commit>
 # lock-allow.txt, pipeline-allow.txt and required-contexts-allow.txt have no
 # prune: what makes their lines stale lives on GitHub, not in the tree.
 #
@@ -23,8 +25,17 @@
 # when the commit was made as `git commit <path>` (git commits a temporary
 # index then, so a staged prune would land in the commit and not in yours).
 #
+# Departures are judged at a commit: the hook commits the throwaway index (its
+# parent is HEAD, so ancestry checks see the real history) and runs prune at
+# that commit. Every tree check is decided there. A `script` check is left
+# UNEVALUATED, because the throwaway repository's HEAD is not that commit, so
+# a row whose only failing evidence is a script is not pruned here; the
+# shell-test suite and CI run `departures.sh check` on the real checkout.
+#
 # Fast no-op: nothing runs unless a staged path (added, changed, deleted) is
-# named in a ledger, or the ledger itself is staged.
+# named in a ledger, or the ledger itself is staged. A departures row with a
+# `glob` (tree-grep-absent) can match a path it does not spell, so a departures
+# ledger that holds one is judged on every commit with a staged path.
 #
 # Exit: 0 nothing to do or pruned and staged · 1 refused or a checker failed.
 set -euo pipefail
@@ -36,6 +47,8 @@ LEDGERS=(
   .machine_readable/inline-python-allow.txt
   .machine_readable/a2ml-legacy-allow.txt
   .machine_readable/k9-contract-debt.txt
+  .machine_readable/marker-allow.txt
+  .machine_readable/departures.jsonl
 )
 
 # Git commands for the throwaway repository must not see the variables git
@@ -51,8 +64,10 @@ git -c core.quotePath=false diff --cached --name-only --no-renames > "$WORK/stag
 relevant=()
 for ledger in "${LEDGERS[@]}"; do
   git cat-file -e ":$ledger" 2>/dev/null || continue
+  text="$(git show ":$ledger")"
   if grep -qxF -- "$ledger" "$WORK/staged" \
-     || grep -qF -f "$WORK/staged" <<< "$(git show ":$ledger")"; then
+     || grep -qF -f "$WORK/staged" <<< "$text" \
+     || { [ "${ledger##*/}" = departures.jsonl ] && grep -qF '"glob":' <<< "$text"; }; then
     relevant+=("$ledger")
   fi
 done
@@ -65,6 +80,20 @@ clean git init -q "$T"
 echo "$objects" > "$T/.git/objects/info/alternates"
 git ls-files -s -z | (cd "$T" && clean git update-index -z --index-info)
 clean git -C "$T" checkout-index -a -q
+
+# index_commit: the materialised index as a commit of the throwaway repository,
+# made once, with HEAD as its parent when there is one. Its HEAD is not moved.
+index_commit() {
+  if [ ! -s "$WORK/commit" ]; then
+    local tree parent
+    tree="$(clean git -C "$T" write-tree)"
+    parent="$(git rev-parse -q --verify HEAD || true)"
+    clean env GIT_AUTHOR_NAME=ledger-prune GIT_AUTHOR_EMAIL=ledger-prune@invalid \
+      GIT_COMMITTER_NAME=ledger-prune GIT_COMMITTER_EMAIL=ledger-prune@invalid \
+      git -C "$T" commit-tree --no-gpg-sign ${parent:+-p "$parent"} -m "staged index" "$tree" > "$WORK/commit"
+  fi
+  cat "$WORK/commit"
+}
 
 # `git commit <path>` hands the hook a temporary index; plain, -a and -i
 # commits use <git-dir>/index or its .lock.
@@ -92,6 +121,12 @@ for ledger in "${relevant[@]}"; do
       cmd=(env INPUT_PATH="$T" K9_VALIDATOR="$k9v" K9_CHANGED_FILES=
            INPUT_STAGED_FILES="$(git -c core.quotePath=false diff --cached --name-only --diff-filter=ACM)"
            bash "$HOOK_DIR/validate-k9.sh" --prune) ;;
+    *marker-allow.txt)
+      [ -f scripts/check-marker-issue-refs.sh ] || { echo "[ledger-prune] $ledger: no checker here, skipped"; continue; }
+      cmd=(bash "$REPO_ROOT/scripts/check-marker-issue-refs.sh" --root "$T" --prune) ;;
+    *departures.jsonl)
+      [ -f scripts/departures.sh ] || { echo "[ledger-prune] $ledger: no checker here, skipped"; continue; }
+      cmd=(bash "$REPO_ROOT/scripts/departures.sh" prune --ref "$(index_commit)" "$ledger") ;;
   esac
   rc=0; out="$(cd "$T" && clean "${cmd[@]}" 2>&1)" || rc=$?
   if [ "$rc" -ne 0 ]; then
