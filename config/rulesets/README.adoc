@@ -139,3 +139,22 @@ has no enforcement surface in either estate. Left in place deliberately: `946600
 
 Consequence for any future applier: PUT the live object minus the removals, re-read before writing
 so a concurrent owner edit is skipped, and dry-run first — never delete-then-create.
+== A phantom required context is removed by its own script
+
+A required status check that nothing emits can never turn green, so every pull request
+on that branch waits for ever. `apply-branch-gates.sh` never writes one, and it never
+removes one it did not write either. `scripts/retire-phantom-contexts.sh` does that one
+job. By default it removes `CI/gate`. Pass `--context` to name others.
+
+* It changes only the phantom contexts. If the list becomes empty, it drops the rule,
+  because an empty list is a vacuous gate. An exactness guard refuses the write if
+  anything else would change.
+* It reports the retired `code_coverage`, `code_quality` and `required_deployments`
+  rules as further blockers, and leaves them in place.
+* It never writes org-inherited, disabled, or unreadable-bypass rulesets.
+* It is report-only unless you pass `--apply`. With `--apply` it backs up each live body
+  first, then re-reads it after the PUT.
+
+Measured 2026-11-17: 368 of 443 open estate pull requests were `pending` on `CI/gate`
+alone. Its interim publisher (proven-cicd-and-workflows#139) never merged, and it had
+profiles for only three repositories.
