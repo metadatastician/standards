@@ -187,10 +187,16 @@ expect_holds "script is unevaluated when the checkout's copy is modified" null "
 git checkout -q -- scripts/pass.sh
 git clone -q --depth 1 "file://$R" "$WORK/shallow"
 ledger "$(row 1 "[{\"kind\":\"commit-on-main\",\"sha\":\"$C1\"}]")"
-(cd "$WORK/shallow" && expect_holds "commit-on-main is unevaluated in a shallow clone" null "$L")
+# Assertions run in this shell (never in a subshell), so their counts reach
+# the summary; the directory is restored after each.
+cd "$WORK/shallow" || exit 2
+expect_holds "commit-on-main is unevaluated in a shallow clone" null "$L"
+cd "$R" || exit 2
 ledger "$(row 1 '[{"kind":"path-present","path":"scripts/helper.sh"}]')"
 expect_rc "an unresolvable --ref is an internal error (3)" 3 bash "$IE" evaluate --ref no-such-ref "$L"
-(cd "$WORK" && expect_rc "outside a git repository is an internal error (3)" 3 bash "$IE" evaluate "$L")
+cd "$WORK" || exit 2
+expect_rc "outside a git repository is an internal error (3)" 3 bash "$IE" evaluate "$L"
+cd "$R" || exit 2
 
 echo "=== validate: every rejection names its line ==="
 GOOD="$(row 2 '[{"kind":"path-present","path":"docs/a.adoc"}]')"
@@ -459,7 +465,9 @@ run bash "$IE" evaluate --repo o/other "$L"
 verdict "--repo filters out other repositories' rows" rc0_and [ -z "$OUT" ]
 
 echo "=== the live ledger ==="
-(cd "$REPO_ROOT" && expect_rc "the repository's own ledger validates" 0 bash "$IE" validate .machine_readable/issue-evidence.jsonl)
+cd "$REPO_ROOT" || exit 2
+expect_rc "the repository's own ledger validates" 0 bash "$IE" validate .machine_readable/issue-evidence.jsonl
+cd "$R" || exit 2
 
 if [ -z "${ISSUE_EVIDENCE_NEGATIVE_CONTROL:-}" ]; then
   echo "=== negative control: the suite catches a broken check ==="
