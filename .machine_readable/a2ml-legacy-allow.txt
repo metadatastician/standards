@@ -80,7 +80,6 @@ hypatia-rules/workflow-allowlist-gap.a2ml
 1-formats/sub-specs/ensaid-config/0-AI-MANIFEST.a2ml
 2-protocols/0-ai-gatekeeper/0-AI-MANIFEST.a2ml
 2-protocols/0-ai-gatekeeper/examples/0-AI-MANIFEST.a2ml
-docs/wikis/0.2-AI-MANIFEST.a2ml
 
 # ── The A2ML format family ──
 # The retired format's own grammar, specs and examples. It describes every

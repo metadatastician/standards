@@ -417,4 +417,10 @@ on `main` that holds every file in this table.
 | `6b4256dc8d1f44838bc192bcd3f7e6a23a6f2a9c5b79ab9e7a56af9c83cc3563`
 | `867da4f1f02aca3206f5bfb65e3dee5c26123a89`
 | Directory manifest for the cartridge format: named the directory's purpose, its three files, the two mirrors (boj-server, panll) and ADR-002. The same facts are in `CARTRIDGE-FORMAT.adoc` and ADR-002. Removed under the owner's ruling of 2026-11-17 that directory manifests are derived and not stored.
+
+| `docs/wikis/0.2-AI-MANIFEST.a2ml`
+| 1635
+| `2636c4ef1ec20e72e49fbc61f8bbe738344ed9b94a28e90b17f582b2cfe45d8d`
+| `c43fc02e3a571649d7f2fd993250eb581ea6b086`
+| Directory manifest for the wiki track (`docs/wikis/`): an id, a scaffold status, the three audience tracks with their home pages and quickstarts, and a to-do list. The same structure is in `docs/wikis/README.adoc`, which it mirrored. Removed under the owner's ruling of 2026-11-17 that directory manifests are derived and not stored.
 |===
