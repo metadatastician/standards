@@ -86,16 +86,6 @@ scripts/prune-stale.sh:1
 scripts/regen-dependabot-locks.sh:3
 scripts/relock-standards-pin.sh:6
 scripts/sonar-preflight.sh:2
-scripts/tests/check-launcher-standard-currency-test.sh:4
-scripts/tests/check-lock-gate-pin-freshness-test.sh:2
-scripts/tests/check-lock-pin-contract-test.sh:1
-scripts/tests/check-lockfile-drift-test.sh:1
-scripts/tests/check-manifest-ply-test.sh:2
-scripts/tests/check-no-new-a2ml-test.sh:1
-scripts/tests/check-package-policy-test.sh:1
-scripts/tests/check-pin-comments-test.sh:2
-scripts/tests/check-retired-names-test.sh:14
-scripts/tests/check-rsr-profile-test.sh:1
 scripts/tests/check-standards-helper-pins-test.sh:2
 scripts/tests/check-trusted-base-test.sh:1
 scripts/tests/check-workflow-duplicate-keys-test.sh:4

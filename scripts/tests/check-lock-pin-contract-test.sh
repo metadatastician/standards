@@ -24,7 +24,7 @@ GUARD="$ROOT/scripts/check-lock-pin-contract.sh"
 SELF_REPO='metadatastician/standards'
 
 command -v yq >/dev/null 2>&1 || { echo 'SKIP(2): yq not installed' >&2; exit 2; }
-yq --version 2>/dev/null | grep -q mikefarah || { echo 'SKIP(2): mikefarah yq v4 required' >&2; exit 2; }
+grep -q mikefarah <<<"$(yq --version 2>/dev/null)" || { echo 'SKIP(2): mikefarah yq v4 required' >&2; exit 2; }
 command -v jq >/dev/null 2>&1 || { echo 'SKIP(2): jq not installed' >&2; exit 2; }
 
 tmp="$(mktemp -d)"

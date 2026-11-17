@@ -46,7 +46,7 @@ mk "$NEW_REPO/plain"
 printf 'nothing to see\n' > "$NEW_REPO/plain/README.adoc"
 ( cd "$NEW_REPO/plain" && git add -A && git commit -qm base )
 out=$(run "$NEW_REPO/plain"); rc=$?
-if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'no retired-name register'; then
+if [ "$rc" -eq 0 ] && grep -q 'no retired-name register' <<<"$out"; then
   ok "no register is a clean no-op"
 else
   bad "no register should be a no-op (rc=$rc)"; printf '%s\n' "$out"
@@ -60,7 +60,7 @@ cat > "$NEW_REPO/empty/docs/naming/retired-names.txt" <<'EOF'
 EOF
 ( cd "$NEW_REPO/empty" && git add -A && git commit -qm base )
 out=$(run "$NEW_REPO/empty" --strict); rc=$?
-if [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'declares no retired names'; then
+if [ "$rc" -eq 1 ] && grep -q 'declares no retired names' <<<"$out"; then
   ok "empty register fails under --strict"
 else
   bad "empty register should fail under --strict (rc=$rc)"; printf '%s\n' "$out"
@@ -77,14 +77,14 @@ printf 'const OLD = "juliapackage-reuse-audit_init"\n' > "$NEW_REPO/dirty/src/ff
 ( cd "$NEW_REPO/dirty" && git add -A && git commit -qm base )
 
 out=$(run "$NEW_REPO/dirty"); rc=$?
-if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'report-only'; then
+if [ "$rc" -eq 0 ] && grep -q 'report-only' <<<"$out"; then
   ok "tree mode defaults to report-only"
 else
   bad "tree mode should be report-only by default (rc=$rc)"; printf '%s\n' "$out"
 fi
 
 out=$(run "$NEW_REPO/dirty" --strict); rc=$?
-if [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'src/ffi.zig'; then
+if [ "$rc" -eq 1 ] && grep -q 'src/ffi.zig' <<<"$out"; then
   ok "--strict fails and names the offending file"
 else
   bad "--strict should fail naming src/ffi.zig (rc=$rc)"; printf '%s\n' "$out"
@@ -99,7 +99,7 @@ printf 'Renamed from JuliaPackage-Reuse-Audit.jl\n' > "$NEW_REPO/dirty/CHANGELOG
 ( cd "$NEW_REPO/dirty" && git add -A && git commit -qm allow )
 
 out=$(run "$NEW_REPO/dirty" --strict); rc=$?
-if [ "$rc" -eq 1 ] && ! printf '%s' "$out" | grep -q 'CHANGELOG.adoc:'; then
+if [ "$rc" -eq 1 ] && ! grep -q 'CHANGELOG.adoc:' <<<"$out"; then
   ok "allowlisted file is exempt and the real violation still fails"
 else
   bad "allowlist exemption wrong (rc=$rc)"; printf '%s\n' "$out"
@@ -109,7 +109,7 @@ fi
 printf 'juliapackage-reuse-audit again\n' > "$NEW_REPO/dirty/CHANGELOG.adoc.bak"
 ( cd "$NEW_REPO/dirty" && git add -A && git commit -qm bak )
 out=$(run "$NEW_REPO/dirty" --strict); rc=$?
-if [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'CHANGELOG.adoc.bak'; then
+if [ "$rc" -eq 1 ] && grep -q 'CHANGELOG.adoc.bak' <<<"$out"; then
   ok "allowlist does not act as a path prefix"
 else
   bad "allowlist acted as a prefix (rc=$rc)"; printf '%s\n' "$out"
@@ -126,7 +126,7 @@ EOF
 printf 'clean contents\n' > "$NEW_REPO/pathname/juliapackage-reuse-audit-old/README.adoc"
 ( cd "$NEW_REPO/pathname" && git add -A && git commit -qm base )
 out=$(run "$NEW_REPO/pathname" --strict); rc=$?
-if [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'retired name in the path itself'; then
+if [ "$rc" -eq 1 ] && grep -q 'retired name in the path itself' <<<"$out"; then
   ok "a retired name in a path name is a violation"
 else
   bad "path-name scan missed the retired directory name (rc=$rc)"; printf '%s\n' "$out"
@@ -144,7 +144,7 @@ printf 'See JULIAPACKAGE_REUSE_AUDIT for the old tool name.\n' > "$NEW_REPO/spel
 ( cd "$NEW_REPO/spell" && git add -A && git commit -qm base )
 
 out=$(run "$NEW_REPO/spell" --spellings); rc=$?
-if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'unregistered spelling'; then
+if [ "$rc" -eq 0 ] && grep -q 'unregistered spelling' <<<"$out"; then
   ok "--spellings reports a spelling the register missed, without failing"
 else
   bad "--spellings missed the unregistered spelling (rc=$rc)"; printf '%s\n' "$out"
@@ -168,7 +168,7 @@ fi
 printf 'juliapackage-reuse-audit added now\n' > "$NEW_REPO/diffmode/new.txt"
 ( cd "$NEW_REPO/diffmode" && git add -A && git commit -qm add )
 out=$(run "$NEW_REPO/diffmode" --diff HEAD~1); rc=$?
-if [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'new.txt'; then
+if [ "$rc" -eq 1 ] && grep -q 'new.txt' <<<"$out"; then
   ok "diff mode fails on an added retired name"
 else
   bad "diff mode missed an added retired name (rc=$rc)"; printf '%s\n' "$out"
@@ -182,7 +182,7 @@ mkdir -p "$NEW_REPO/diffmode/juliapackage-reuse-audit"
 printf 'clean contents\n' > "$NEW_REPO/diffmode/juliapackage-reuse-audit/README.adoc"
 ( cd "$NEW_REPO/diffmode" && git add -A && git commit -qm addpath )
 out=$(run "$NEW_REPO/diffmode" --diff HEAD~1); rc=$?
-if [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'added path'; then
+if [ "$rc" -eq 1 ] && grep -q 'added path' <<<"$out"; then
   ok "diff mode fails on an added path carrying a retired name"
 else
   bad "diff mode missed a retired name in an added path (rc=$rc)"; printf '%s\n' "$out"
@@ -202,7 +202,7 @@ fi
 printf 'binary\0content\n' > "$NEW_REPO/diffmode/juliapackage-reuse-audit/binary file.bin"
 git -C "$NEW_REPO/diffmode" add -A
 out=$(run "$NEW_REPO/diffmode" --diff HEAD); rc=$?
-if [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'added path juliapackage-reuse-audit/binary file.bin'; then
+if [ "$rc" -eq 1 ] && grep -q 'added path juliapackage-reuse-audit/binary file.bin' <<<"$out"; then
   ok "diff mode detects an added binary path with spaces"
 else
   bad "diff mode missed an added binary path (rc=$rc)"; printf '%s\n' "$out"
@@ -212,7 +212,7 @@ git -C "$NEW_REPO/diffmode" commit -qm binary
 printf 'rename content\n' > "$NEW_REPO/diffmode/clean-source.txt"
 ( cd "$NEW_REPO/diffmode" && git add -A && git commit -qm source && git mv clean-source.txt juliapackage-reuse-audit/renamed.txt )
 out=$(run "$NEW_REPO/diffmode" --diff HEAD); rc=$?
-if [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'added path juliapackage-reuse-audit/renamed.txt'; then
+if [ "$rc" -eq 1 ] && grep -q 'added path juliapackage-reuse-audit/renamed.txt' <<<"$out"; then
   ok "diff mode detects a renamed destination path"
 else
   bad "diff mode missed a renamed destination (rc=$rc)"; printf '%s\n' "$out"
@@ -223,7 +223,7 @@ fi
 # and suppressed its stderr, so a typo or a shallow checkout produced zero
 # lines and the gate printed OK.
 out=$(run "$NEW_REPO/diffmode" --diff no-such-ref-xyz); rc=$?
-if [ "$rc" -eq 2 ] && printf '%s' "$out" | grep -q 'does not resolve'; then
+if [ "$rc" -eq 2 ] && grep -q 'does not resolve' <<<"$out"; then
   ok "diff mode fails closed on an unresolvable base"
 else
   bad "unresolvable diff base should exit 2 (rc=$rc)"; printf '%s\n' "$out"
@@ -239,7 +239,7 @@ printf 'juliapackage-reuse-audit\n' > "$NEW_REPO/spell/docs/naming/retired-names
 printf 'clean contents\n' > "$NEW_REPO/spell/JuliaPackage_Reuse_Audit/README.adoc"
 ( cd "$NEW_REPO/spell" && git init -q && git config user.email t@example.invalid && git config user.name t && git add -A && git commit -qm base )
 out=$(run "$NEW_REPO/spell" --spellings); rc=$?
-if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'in the PATH'; then
+if [ "$rc" -eq 0 ] && grep -q 'in the PATH' <<<"$out"; then
   ok "spellings scan normalises the path"
 else
   bad "spellings scan missed a spelling in the path (rc=$rc)"; printf '%s\n' "$out"
