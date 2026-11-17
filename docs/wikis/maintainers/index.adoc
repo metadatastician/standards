@@ -163,6 +163,99 @@ checks the staged copies, and so reads the ledger this hook pruned.
 
 The suite is `scripts/tests/ledger-prune-test.sh`.
 
+[[a2ml-retire-check]]
+=== A2ML retirement: the retire-check
+
+`.claude/CLAUDE.md` lets an `.a2ml` file be deleted only when three
+conditions hold: every fact is in a target deed (or its mapping spec drops
+it), every target deed passes `deed_lint.js`, and nothing reads, writes or
+generates the file. `scripts/a2ml-retire-check.sh` recomputes the three for
+every tracked A2ML file (`*.a2ml`, `*.a2ml.in`, `*.a2ml.template`,
+`*.a2ml.vN.template`) and prints what still blocks each one (owner decision,
+2026-11-17). It reads only; it never deletes or edits an A2ML file or a ledger.
+
+----
+bash scripts/a2ml-retire-check.sh              # table: class, path, blockers
+bash scripts/a2ml-retire-check.sh --summary    # counts per class and blocker, "n of N"
+bash scripts/a2ml-retire-check.sh --json       # one JCS object per file, by path
+bash scripts/a2ml-retire-check.sh --check      # the gate (below)
+bash scripts/a2ml-retire-check.sh --root DIR --repo NAME --rulings FILE   # another checkout
+----
+
+It needs bash, git, jq and awk, and bun as soon as a target deed exists (it
+runs `deed_lint.js` from this repository); without bun it stops with exit 2.
+
+*What is compared and what is not.* The family and its mapping spec come
+from the path (and, for a root `0-AI-MANIFEST.a2ml`, the `[ai-allocation]`
+shape `ai-manifest-decision.adoc` names). Facts are compared field by field
+only for CLADE (`clade-to-repo-deed.adoc` §3) and, when the rulings file
+carries their decision rows, for STATE (phase and maturity) and the scorecard
+corpus (nothing is translated). For any other family whose target deeds
+exist, the tool reports `facts-unchecked:<family>` and never classes the file
+deletable; the kyX front end for that family is what makes it checkable. A
+record that is not TOML-shaped is also `facts-unchecked`. A reader is a
+tracked file that is not prose, data, A2ML or an archive and that names the
+file's exact path, or only its basename; a writer or generator is reported
+as a reader. The tool does not see glob readers or readers in other
+repositories, except those the rulings file names.
+
+*Blockers* (the closed vocabulary; a file with none is `deletable-now`):
+
+[cols="2,5"]
+|===
+|Blocker |Meaning
+
+|`no-mapping-spec` |No mapping spec covers the file. Keep it and report it.
+|`no-target-deed:<deed>` |A target deed the comparison needs is absent; alternatives are joined by `\|`, a clause is `<deed>#<clause>`.
+|`facts-missing:<n>` |`n` facts are not in their target deed (unlisted fields count).
+|`facts-unchecked:<family>` |The comparison for this family is not mechanised, or a target deed or the record cannot be read.
+|`needs-kyx:<family>` |Translation is still owed, and it is kyX's work (D313).
+|`lint-fail:<deed>` |A target deed fails `deed_lint.js` (with its profile and `--root` for a descriptile).
+|`reader:<file>` / `name-reader:<file>` |A file in this tree names the path / only the basename.
+|`external-reader:<key>` |A reader outside the tree, from the rulings file.
+|`spec-gap:<key>` |The spec lacks rows this file needs (rulings file); shown only while facts are missing.
+|`ruling-needed:<key>` |An open owner question (rulings file).
+|`pending:<key>` |Ruled work not yet done (rulings file).
+|`ruling-condition:<key>` |A `dropped` ruling's precondition not yet met (rulings file).
+|===
+
+*Classes*, derived from the blockers in this order: `unclassified` (the tool
+cannot class it: several chora deeds, a missing mapping spec), `deletable-now`
+(no blockers), `covered-but-read` (only reader blockers), `decision-drops` (a
+`dropped` or `decision` ruling governs it), `no-mapping-spec`,
+`no-target-deed` (the record's base directory has no chora deed),
+`facts-unchecked`, `needs-kyx-supported` / `needs-kyx-unsupported` (by the
+rulings file's `kyx-family` rows), and `ruling-needed` for the rest.
+
+*The rulings file*, `.machine_readable/a2ml-retire-rulings.jsonl` (JCS, one
+row per line), holds what the tree cannot show. Each row has `id`, `kind`,
+`date`, `recorded` (where the ruling is written), `summary`, and a scope:
+`match` (a regular expression on the path), `family`, or both, and
+optionally `repo`. Kinds: `dropped` (conditions 1 and 2 are settled by the
+ruling; `requires` names a precondition), `decision` (the family's decision
+document governs what is compared), `spec-gap`, `ruling-needed`, `pending`,
+`external-reader` (each with a `key`), and `kyx-family`. A malformed row stops
+the tool (exit 2). When the owner rules, one row changes and the classes
+move; no ruling is written in the script.
+
+*How a file becomes deletable.* Its blockers fall one by one: kyX emits the
+target deed and the comparison passes, or a ruling drops the file; the target
+deeds lint; each reader is changed to read the deed; the open question is
+answered. When none is left the class is `deletable-now`, and `--check`
+fails and prints the `git rm` and the ledger line to delete: this can go, so
+it must go. The deletion is still its own owner-visible commit, which lists
+the file and the deed field that holds each fact and removes the ledger line
+(then `check-a2ml-archived.sh` passes). `--check` also fails on an
+`unclassified` file.
+
+The suite is `scripts/tests/a2ml-retire-check-test.sh`. It also runs the tool
+on this repository and compares the class counts with
+`docs/triage/2026-11-17/a2ml-measure-files.jsonl`, so a change that moves a
+class must regenerate that file in the same commit. No count ratchet is kept:
+the Debtfile, where this repository's ratchets live, is itself a legacy
+`.a2ml` file to which nothing may be added, so a new measure has no home until
+the Debtfile has a deed form.
+
 == Learning path
 
 === 1. Drift / staleness automation
