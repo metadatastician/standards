@@ -86,16 +86,6 @@ scripts/prune-stale.sh:1
 scripts/regen-dependabot-locks.sh:3
 scripts/relock-standards-pin.sh:6
 scripts/sonar-preflight.sh:2
-scripts/tests/fork-governance-publish-test.sh:1
-scripts/tests/fork-governance-render-test.sh:1
-scripts/tests/gate-tiers-test.sh:2
-scripts/tests/gh-actions-lock-contract-test.sh:1
-scripts/tests/governance-canary-test.sh:3
-scripts/tests/governance-gates-505-test.sh:1
-scripts/tests/governance-reusable-contract-test.sh:7
-scripts/tests/issue-evidence-test.sh:5
-scripts/tests/k9-grid-test.sh:11
-scripts/tests/kyaml-format-test.sh:1
 scripts/tests/list-existing-a2ml-test.sh:2
 scripts/tests/lock-selfcheck-test.sh:1
 scripts/tests/propagate-workflow-pins-test.sh:1

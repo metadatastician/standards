@@ -34,7 +34,7 @@ check() {
 has()    { grep -q  -- "$1" "$2"; }
 hasF()   { grep -Fq -- "$1" "$2"; }
 lacks()  { [ -f "$2" ] && ! grep -q -- "$1" "$2"; }
-first_line_has() { head -1 "$2" | grep -q -- "$1"; }
+first_line_has() { grep -q -- "$1" <<<"$(head -1 "$2")"; }
 # before A B: both are non-empty line numbers and A < B.
 before() { [ -n "$1" ] && [ -n "$2" ] && [ "$1" -lt "$2" ]; }
 
