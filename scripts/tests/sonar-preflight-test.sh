@@ -160,6 +160,23 @@ reset; F_VALIDATE="$VALID"; F_ORGS="$ORG_FOUND"; F_COMP="$COMP_ELSEWHERE"
 run mismatch SONAR_TOKEN="$TOKEN"
 expect "project-org-mismatch" project-org-mismatch 1
 
+echo "== server-unavailable: invalid project responses"
+for response in '' '{' '{}' 'null' '[]' '{"component":null}' \
+  '{"component":[]}' '{"component":{}}' '{"component":{"key":null}}' \
+  '{"component":{"key":42}}' '{"component":{"key":""}}' \
+  "$COMP_OK"$'\n{}'; do
+  reset; F_VALIDATE="$VALID"; F_ORGS="$ORG_FOUND"; F_COMP="$response"
+  run malformed SONAR_TOKEN="$TOKEN"
+  expect "invalid project response ($response)" server-unavailable 1
+  grep -q '^### SonarQube preflight: `server-unavailable`' "$FIX/summary" \
+    && ok "invalid project response: summary written" \
+    || bad "invalid project response: summary written" "heading" "$(head -1 "$FIX/summary")"
+done
+
+reset; F_VALIDATE="$VALID"; F_ORGS="$ORG_FOUND"; F_COMP='{"component":{"key":"acme_widget"}}'
+run no_org_metadata SONAR_TOKEN="$TOKEN"
+expect "project without optional organisation metadata" ok 0
+
 echo "== server-unavailable: 503, 429 and transport failure"
 reset; F_VALIDATE_CODE=503
 run s503 SONAR_TOKEN="$TOKEN"

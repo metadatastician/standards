@@ -195,6 +195,14 @@ case "$HTTP" in
   401|403) finish project-forbidden 1 "The token is valid but cannot see project '$KEY'. The token's account has no access to it, for example because the project stayed in another organisation after a repository transfer." ;;
   *) finish server-unavailable 1 "Unexpected answer from components/show (HTTP $HTTP)." ;;
 esac
+# Require one project response before reading optional organisation metadata.
+if ! jq -e -s '
+  length == 1 and (.[0] |
+    type == "object" and (.component | type == "object") and
+    (.component.key | type == "string" and length > 0))
+' "$body" >/dev/null 2>&1; then
+  finish server-unavailable 1 "Unexpected project response from components/show (HTTP $HTTP): invalid JSON or missing project structure. Re-run, and report it if it persists."
+fi
 actual="$(jq -r '.component.organization // empty' "$body")"
 if [ -n "$actual" ] && [ "$actual" != "$ORG" ]; then
   finish project-org-mismatch 1 "Project '$KEY' belongs to organisation '$actual', but the configuration says '$ORG'. Move the project, or fix sonar.organization and sonar.projectKey together."
