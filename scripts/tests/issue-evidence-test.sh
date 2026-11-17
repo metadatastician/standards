@@ -474,6 +474,18 @@ verdict "close comment ends with the row-hash marker" rc0_and [ "$last" = "<!-- 
 verdict "close comment names the evaluated commit" out_has "commit $C2"
 run bash "$IE" render-comment --issue 1405 --action reopen --ref "$C1" "$L"
 verdict "reopen comment marks the failing check" out_has '[0] no line of the file "scripts/helper.sh" matches the regular expression "eval" - DOES NOT HOLD'
+# A check that could not be evaluated is labelled so, never "holds".
+ledger "$(row 9 '[{"kind":"script","path":"scripts/cannot.sh"},{"kind":"path-present","path":"scripts/gone.sh"},{"kind":"path-present","path":"docs/a.adoc"}]')"
+run bash "$IE" render-comment --issue 9 --action reopen "$L"
+verdict "reopen comment labels an unevaluated check as not evaluated" out_has '[0] the tracked script "scripts/cannot.sh" exits 0 - NOT EVALUATED'
+verdict "reopen comment still marks the failing check" out_has '[1] the path "scripts/gone.sh" exists - DOES NOT HOLD'
+verdict "reopen comment marks a holding check" out_has '[2] the path "docs/a.adoc" exists - holds'
+printf '{"disposition":"landed","failed":[1],"holds":false,"issue":9,"repo":"o/r","unevaluated":[0]}\n' >"$WORK/ev9.jsonl"
+run bash "$IE" render-comment --issue 9 --action reopen --evaluated "$WORK/ev9.jsonl" "$L"
+verdict "reopen comment from --evaluated labels the unevaluated check" out_has '[0] the tracked script "scripts/cannot.sh" exits 0 - NOT EVALUATED'
+printf '{"disposition":"landed","failed":[1],"holds":false,"issue":9,"repo":"o/r"}\n' >"$WORK/ev9.jsonl"
+expect_err "an --evaluated record without unevaluated is refused" "is not an evaluate record" \
+  bash "$IE" render-comment --issue 9 --action reopen --evaluated "$WORK/ev9.jsonl" "$L"
 ledger "$(row 8 '[{"kind":"grep-absent","path":"docs/a.adoc","pattern":"```x"}]')"
 run bash "$IE" render-comment --issue 8 --action close "$L"
 verdict "the check block's fence outgrows a backtick run in a pattern" out_line "````"

@@ -550,6 +550,7 @@ def posint: type == "number" and . == floor and . >= 1;
 if type == "object" and (.issue | posint) and (.repo | type) == "string"
    and (.holds == true or .holds == false or .holds == null)
    and (.disposition | type) == "string" and (.failed | type) == "array"
+   and (.unevaluated | type) == "array"
 then . else error("--evaluated: line \(input_line_number) is not an evaluate record") end
 '
 
@@ -620,9 +621,13 @@ def plain:
 # the text readable and notifies nobody.
 def inert: gsub("@"; "@​");
 ($ev.failed // []) as $failed
+| ($ev.unevaluated // []) as $uneval
 | [ $row.checks | to_entries[]
     | "[\(.key)] \(.value | plain)"
-      + (if $action == "reopen" then (if (.key | IN($failed[])) then " - DOES NOT HOLD" else " - holds" end) else "" end) ]
+      + (if $action != "reopen" then ""
+         elif (.key | IN($failed[])) then " - DOES NOT HOLD"
+         elif (.key | IN($uneval[])) then " - NOT EVALUATED"
+         else " - holds" end) ]
   as $lines
 | ([($lines | join("\n")) | scan("`+") | length] | max // 0) as $run
 | ("`" * ([3, $run + 1] | max)) as $fence
