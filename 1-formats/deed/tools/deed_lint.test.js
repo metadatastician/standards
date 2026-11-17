@@ -432,12 +432,14 @@ describe("proof-receipt profile (PROOF-POLICY §8.5)", () => {
     // doubled separator, two tags, an upper-case path (distribution/reference).
     const d = "a".repeat(64);
     for (const bad of ["ubuntu:24.04", "ubuntu@sha256:abc", "ubuntu:24.04@sha256:" + "A".repeat(64), "@sha256:" + d,
-      "debian:@sha256:" + d, "debian/@sha256:" + d, "a//b@sha256:" + d, "a:b:c@sha256:" + d, "Ubuntu@sha256:" + d]) {
+      "debian:@sha256:" + d, "debian/@sha256:" + d, "a//b@sha256:" + d, "a:b:c@sha256:" + d, "Ubuntu@sha256:" + d,
+      "a".repeat(256) + "@sha256:" + d, "[2001:db8::1:5000/coq@sha256:" + d]) {
       expect(() => read(doc(claim("PWG-1", at({ rocq: { image: bad } }))))).toThrow(/:image must be an image reference pinned by digest/);
     }
     // Valid forms: a registry host with a port, a tag with upper case, no tag at all.
     for (const good of ["ghcr.io/o/coq:8.18@sha256:" + "b".repeat(64), "ghcr.io/o/checker:RC1@sha256:" + d,
-      "localhost:5000/coq@sha256:" + d, "ubuntu@sha256:" + d, "docker.io/library/debian:trixie-slim@sha256:" + d]) {
+      "localhost:5000/coq@sha256:" + d, "ubuntu@sha256:" + d, "docker.io/library/debian:trixie-slim@sha256:" + d,
+      "[2001:db8::1]:5000/checker@sha256:" + d, "a".repeat(255) + "@sha256:" + d]) {
       expect(read(doc(claim("PWG-1", at({ rocq: { image: good } })))).claims[0].pwg).toBe("PWG-1");
     }
   });

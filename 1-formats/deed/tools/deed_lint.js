@@ -123,7 +123,15 @@ export class LintError extends Error {
     this.line = line;
   }
 
-  /** Render as `line N: message`, like the Python __str__. */
+  /** Render as `line N: message`, like the Python   // A host is a DNS name or a bracketed IPv6 address, either with a port. A tag
+  // may hold upper case; the digest is lower-case hex. NAME (host and path) is
+  // at most 255 characters, as the grammar's NameTotalLengthMax says.
+  const IMG_COMPONENT = "[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*";
+  const IMG_DOMAIN = "(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?)*|\\[[a-fA-F0-9:]+\\])";
+  const IMG_HOST = `(?:${IMG_DOMAIN}(?::[0-9]+)?/)`;
+  const IMAGE_RE = new RegExp(`^(${IMG_HOST}?${IMG_COMPONENT}(?:/${IMG_COMPONENT})*)(?::[A-Za-z0-9_][A-Za-z0-9_.-]{0,127})?@sha256:[0-9a-f]{64}$`);
+  const IMAGE = { test: (s) => { const m = IMAGE_RE.exec(s); return m !== null && m[1].length <= 255; } };
+str__. */
   toString() {
     return `line ${this.line}: ${this.msg}`;
   }
@@ -887,10 +895,14 @@ export function readProofReceipt(text, filename = null) {
   // with NAME and TAG as the distribution/reference grammar defines them: an
   // optional registry host (with port), then path components of lower-case
   // alphanumerics joined by one separator ("." "_" "__" or "-" runs), none empty.
-  // A tag may hold upper case; the digest is lower-case hex.
+  // A host is a DNS name or a bracketed IPv6 address, either with a port. A tag
+  // may hold upper case; the digest is lower-case hex. NAME (host and path) is
+  // at most 255 characters, the grammar's NameTotalLengthMax.
   const IMG_COMPONENT = "[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*";
-  const IMG_HOST = "(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?)*(?::[0-9]+)?/)";
-  const IMAGE = new RegExp(`^${IMG_HOST}?${IMG_COMPONENT}(?:/${IMG_COMPONENT})*(?::[A-Za-z0-9_][A-Za-z0-9_.-]{0,127})?@sha256:[0-9a-f]{64}$`);
+  const IMG_DOMAIN = "(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?)*|\\[[a-fA-F0-9:]+\\])";
+  const IMG_HOST = `(?:${IMG_DOMAIN}(?::[0-9]+)?/)`;
+  const IMAGE_RE = new RegExp(`^(${IMG_HOST}?${IMG_COMPONENT}(?:/${IMG_COMPONENT})*)(?::[A-Za-z0-9_][A-Za-z0-9_.-]{0,127})?@sha256:[0-9a-f]{64}$`);
+  const IMAGE = { test: (s) => { const m = IMAGE_RE.exec(s); return m !== null && m[1].length <= 255; } };
 
   // Collect a clause's fields, refusing unknown, duplicate and mistyped ones.
   const fieldsOf = (where, members, spec, allowedClauses) => {
