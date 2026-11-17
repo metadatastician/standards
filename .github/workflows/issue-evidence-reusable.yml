@@ -152,6 +152,20 @@ jobs:
           bash "$RUNNER_TEMP/issue-evidence-apply.sh" states --repo "$REPO" \
             --evaluated "$RUNNER_TEMP/evaluated.jsonl" >"$RUNNER_TEMP/states.json"
 
+      # Removing a row is how a closure is disputed, but an issue with no row is
+      # not in the evaluation. List the issues this bot closed whose row is gone
+      # (every ledger version in this commit's history, minus today's rows) so
+      # they are reopened, within the same cap. A failed read fails this step.
+      - name: Issues the bot closed whose row was removed
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LEDGER: ${{ inputs.ledger }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          bash "$RUNNER_TEMP/issue-evidence-apply.sh" removed-rows --repo "$REPO" --ledger "$LEDGER" \
+            --commit HEAD >"$RUNNER_TEMP/removed.jsonl"
+
       - name: Decide
         env:
           LEDGER: ${{ inputs.ledger }}
@@ -161,8 +175,8 @@ jobs:
             --evaluated "$RUNNER_TEMP/evaluated.jsonl" "$LEDGER" >"$RUNNER_TEMP/decisions.jsonl"
 
       # The plan is the first max_actions closes and reopens, in ledger order,
-      # each with its rendered comment. Beyond the cap nothing is planned, and
-      # the summary says so.
+      # then the removed-row reopens, each with its comment. Beyond the cap
+      # nothing is planned, and the summary says so.
       - name: Plan (capped) and render comments
         id: plan
         env:
@@ -172,9 +186,14 @@ jobs:
         run: |
           set -euo pipefail
           bash "$RUNNER_TEMP/issue-evidence-apply.sh" select --decisions "$RUNNER_TEMP/decisions.jsonl" \
-            --max-actions "$MAX_ACTIONS" --counts "$RUNNER_TEMP/counts" >"$RUNNER_TEMP/selected.jsonl"
+            --max-actions "$MAX_ACTIONS" --removed "$RUNNER_TEMP/removed.jsonl" \
+            --counts "$RUNNER_TEMP/counts" >"$RUNNER_TEMP/selected.jsonl"
           : >"$RUNNER_TEMP/plan.jsonl"
           while IFS= read -r d; do
+            if jq -e 'has("body")' <<<"$d" >/dev/null; then
+              jq -c '{issue, action, close_reason, body}' <<<"$d" >>"$RUNNER_TEMP/plan.jsonl"
+              continue
+            fi
             n="$(jq -r .issue <<<"$d")"
             action="$(jq -r .action <<<"$d")"
             body="$(bash "$RUNNER_TEMP/issue-evidence.sh" render-comment --issue "$n" --action "$action" \
@@ -236,6 +255,16 @@ jobs:
                 | .[] | ($e[.issue | tostring]) as $r
                 | "| #\(.issue) | \(.disposition) | \($r.holds) | \($r.failed | map(tostring) | join(", ")) | \(.action) | \(.reason) |"' \
                 "$RUNNER_TEMP/decisions.jsonl"
+            fi
+            if [ -s "$RUNNER_TEMP/removed.jsonl" ]; then
+              echo
+              echo "### Rows removed after the bot closed their issue"
+              echo
+              echo "Each is reopened, within the cap, with a comment saying its row was removed."
+              echo
+              echo "| Issue | Action |"
+              echo "|---|---|"
+              jq -r '"| #\(.issue) | reopen (row removed) |"' "$RUNNER_TEMP/removed.jsonl"
             fi
             if [ -s "$RUNNER_TEMP/candidates.jsonl" ]; then
               echo

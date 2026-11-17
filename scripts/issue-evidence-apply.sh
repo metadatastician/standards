@@ -20,10 +20,17 @@
 #       left out (so nothing is decided for it). Any failed or malformed read
 #       prints nothing and exits 1: a lookup that failed is never read as
 #       "no marker".
-#   select --decisions FILE --max-actions N [--counts FILE]
-#       The actions to plan this run: the decided closes and reopens, in
-#       order, at most N of them (N from 0 to 50). --counts receives
-#       "TOTAL PLANNED".
+#   removed-rows --repo OWNER/NAME --ledger PATH [--commit REV]
+#       Run in the checkout. One JSON line per issue this bot closed whose
+#       row is no longer in the ledger at REV (default HEAD): a planned
+#       reopen {issue, repo, action, close_reason, reason, body} whose comment
+#       says the row was removed. Candidates are the rows of every version of
+#       the ledger in the history of REV; a failed read prints nothing and
+#       exits 1.
+#   select --decisions FILE [--removed FILE] --max-actions N [--counts FILE]
+#       The actions to plan this run: the decided closes and reopens in
+#       order, then the removed-row reopens, at most N of them all together
+#       (N from 0 to 50). --counts receives "TOTAL PLANNED".
 #   apply --repo OWNER/NAME --commit SHA --plan FILE --max-actions N
 #       First re-reads the live head of the default branch: when it is not
 #       SHA (the commit the plan was made at), reports "stale; nothing done"
@@ -37,13 +44,17 @@
 # acts as (github-actions[bot] for GITHUB_TOKEN). --bot LOGIN overrides it.
 #
 # GITHUB API RELIED ON (exercised here only against a fake `gh`)
-#   GET repos/R/issues/N            .state (open|closed), has("pull_request")
+#   GET repos/R/issues/N            .state (open|closed), has("pull_request"),
+#                                   .closed_by.login (removed-rows only, a
+#                                   pre-filter; the timeline decides)
 #   GET repos/R/issues/N/timeline   paginated, oldest first; entries with
 #       .event "commented" (.user.login or .actor.login, .body), "closed" and
 #       "reopened" (.actor.login). `gh api --paginate` prints one JSON array
 #       per page; they are read as one history.
 #   GET repos/R                     .default_branch
 #   GET repos/R/git/ref/heads/B     .object.sha, .object.type == "commit"
+#   gh issue close N --repo R --reason completed|"not planned" --comment BODY
+#   gh issue reopen N --repo R --comment BODY
 #
 # EXIT
 #   0  done
@@ -65,7 +76,7 @@ refuse() {
   exit 1
 }
 
-REPO="" EVAL_FILE="" DECISIONS="" MAX_ACTIONS="" COUNTS="" PLAN_FILE="" COMMIT=""
+REPO="" EVAL_FILE="" DECISIONS="" MAX_ACTIONS="" COUNTS="" PLAN_FILE="" COMMIT="" REMOVED="" LEDGER=""
 parse_opts() {
   while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -76,6 +87,8 @@ parse_opts() {
       --max-actions) [ "$#" -ge 2 ] || fail_input "--max-actions needs a value"; MAX_ACTIONS="$2"; shift 2 ;;
       --counts) [ "$#" -ge 2 ] || fail_input "--counts needs a value"; COUNTS="$2"; shift 2 ;;
       --plan) [ "$#" -ge 2 ] || fail_input "--plan needs a value"; PLAN_FILE="$2"; shift 2 ;;
+      --removed) [ "$#" -ge 2 ] || fail_input "--removed needs a value"; REMOVED="$2"; shift 2 ;;
+      --ledger) [ "$#" -ge 2 ] || fail_input "--ledger needs a value"; LEDGER="$2"; shift 2 ;;
       --commit) [ "$#" -ge 2 ] || fail_input "--commit needs a value"; COMMIT="$2"; shift 2 ;;
       *) fail_input "unknown argument: $1" ;;
     esac
@@ -187,10 +200,75 @@ cmd_select() {
   need_max_actions
   { [ -n "$DECISIONS" ] && [ -f "$DECISIONS" ]; } || fail_input "select needs --decisions FILE (an existing file)"
   jq -c 'select(.action != "none")' "$DECISIONS" >"$TMPD/actions.jsonl" || fail_input "--decisions: not JSON Lines"
+  if [ -n "$REMOVED" ]; then
+    [ -f "$REMOVED" ] || fail_input "--removed file not found: $REMOVED"
+    jq -c 'select(.action == "reopen" and (.body | type) == "string")' "$REMOVED" >>"$TMPD/actions.jsonl" ||
+      fail_input "--removed: not JSON Lines"
+  fi
   total="$(grep -c . "$TMPD/actions.jsonl" || true)"
   head -n "$MAX_ACTIONS" "$TMPD/actions.jsonl"
   planned=$((total < MAX_ACTIONS ? total : MAX_ACTIONS))
   if [ -n "$COUNTS" ]; then echo "$total $planned" >"$COUNTS"; fi
+}
+
+# removed-rows: the issues this bot closed whose ledger row is gone. Removing a
+# row is the documented way to dispute a closure, and such an issue no longer
+# appears in the evaluation, so it is found here instead: from every version
+# of the ledger in the history of COMMIT (the bot only ever closes an issue
+# on a row of the default branch, so every issue it closed had a row in that
+# history), minus the rows at COMMIT. Each candidate costs one issue read;
+# only one this bot closed (by `closed_by`) costs a timeline read, and only
+# one whose newest close is the bot's marked close is listed.
+cmd_removed_rows() {
+  local sha c n hash
+  parse_opts "$@"
+  need_repo_opt removed-rows
+  [ -n "$LEDGER" ] || fail_input "removed-rows needs --ledger PATH"
+  command -v git >/dev/null 2>&1 || refuse "git not found on PATH"
+  sha="$(git rev-parse --verify --quiet "${COMMIT:-HEAD}^{commit}")" ||
+    fail_input "--commit does not name a commit in this repository"
+  # rows FILE: the issue numbers of this repository's rows in a ledger text.
+  rows() {
+    jq -R -r --arg r "$REPO" 'fromjson? | select(type == "object" and (.issue | type) == "number"
+      and (.repo | type) == "string" and (.repo | ascii_downcase) == ($r | ascii_downcase)) | .issue' "$1" |
+      sort -u
+  }
+  : >"$TMPD/current"
+  if git cat-file -e "$sha:$LEDGER" 2>/dev/null; then git show "$sha:$LEDGER" >"$TMPD/current"; fi
+  git log --full-history --format=%H "$sha" -- "$LEDGER" >"$TMPD/commits" ||
+    refuse "could not read the history of $LEDGER"
+  : >"$TMPD/history"
+  while IFS= read -r c; do
+    if git cat-file -e "$c:$LEDGER" 2>/dev/null; then git show "$c:$LEDGER" >>"$TMPD/history"; fi
+  done <"$TMPD/commits"
+  rows "$TMPD/current" >"$TMPD/current.n"
+  rows "$TMPD/history" >"$TMPD/history.n"
+  comm -23 "$TMPD/history.n" "$TMPD/current.n" | sort -n >"$TMPD/removed.n"
+  : >"$TMPD/removed.jsonl"
+  # Nothing is printed until every candidate has been read (as in states).
+  while IFS= read -r n; do
+    [[ "$n" =~ ^[1-9][0-9]*$ ]] || continue
+    gh api "repos/$REPO/issues/$n" >"$TMPD/peek.json" 2>"$TMPD/gh.err" ||
+      refuse "could not read issue #$n: $(head -c 300 "$TMPD/gh.err")"
+    jq -e --arg bot "$BOT" 'type == "object" and .state == "closed" and (.closed_by.login // "") == $bot
+      and (has("pull_request") | not)' "$TMPD/peek.json" >/dev/null 2>&1 || continue
+    read_issue "$n"
+    [ "$(fact closed_by_bot)" = true ] || continue
+    hash="$(fact hash)"
+    if ! [[ "$hash" =~ ^[0-9a-f]{64}$ ]]; then
+      echo "::warning::#$n: the bot's marker carries no row hash; not reopening it." >&2
+      continue
+    fi
+    jq -c -n --argjson n "$n" --arg repo "$REPO" --arg ledger "$LEDGER" --arg sha "$sha" --arg hash "$hash" '
+      {issue: $n, repo: $repo, action: "reopen", close_reason: "not planned", reason: "row-removed",
+       body: ([
+         "**issue-evidence:** reopening this issue. The issue-evidence bot closed it on a row of `\($ledger)`, and at commit \($sha) the ledger has no row for it: the row was removed, so the closure no longer has evidence behind it.",
+         "",
+         "Removing a row is how a closure is disputed. To close the issue again, add a row whose checks hold in a reviewed pull request, or close it by hand: the bot does not reopen an issue a person closed.",
+         "",
+         "<!-- issue-evidence-bot: row-sha256=\($hash) -->"] | join("\n"))}' >>"$TMPD/removed.jsonl"
+  done <"$TMPD/removed.n"
+  cat "$TMPD/removed.jsonl"
 }
 
 # summary LINE...: to the job summary when there is one, else to stdout.
@@ -297,11 +375,12 @@ done
 TMPD="$(mktemp -d)"
 trap 'rm -rf -- "$TMPD"' EXIT
 
-[ "$#" -ge 1 ] || fail_input "usage: $PROG states|select|apply [OPTIONS]"
+[ "$#" -ge 1 ] || fail_input "usage: $PROG states|removed-rows|select|apply [OPTIONS]"
 sub="$1"
 shift
 case "$sub" in
   states) cmd_states "$@" ;;
+  removed-rows) cmd_removed_rows "$@" ;;
   select) cmd_select "$@" ;;
   apply) cmd_apply "$@" ;;
   *) fail_input "unknown subcommand: $sub" ;;

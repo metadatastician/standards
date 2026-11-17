@@ -169,6 +169,8 @@ did_action() { actions | grep -q "^$1\\( \\|\$\\)"; }
 no_action() { ! did_action "$1"; }
 not_called() { ! called "$1"; }
 err_has() { printf '%s\n' "$ERR" | grep -qF -- "$1"; }
+out_has() { printf '%s\n' "$OUT" | grep -qF -- "$1"; }
+not_out_has() { ! out_has "$1"; }
 
 # --- states: the decide input ------------------------------------------------
 reset_fix
@@ -330,6 +332,71 @@ printf '%s\n%s\n' "$(timeline mark)" "$(jq -c 'map(.created_at = "2026-01-02T00:
 plan close:38
 run bash "$IA" apply --repo "$R" --commit "$SHA_A" --plan "$WORK/plan.json" --max-actions 10
 check "C3: a person's reopen on the second page of the timeline is seen" test -z "$(actions)"
+
+# --- C4: a removed row reopens the issue the bot closed on it ---------------------
+# A ledger history: #61..#65 had rows; the second commit removes every row but
+# #62. #63's row was for another repository.
+GREPO="$WORK/repo"
+mkdir -p "$GREPO/.machine_readable"
+git -C "$GREPO" init -q
+git -C "$GREPO" config user.email t@example.invalid
+git -C "$GREPO" config user.name test
+LEDGER_PATH=".machine_readable/issue-evidence.jsonl"
+row() { jq -c -n --argjson n "$1" --arg r "$2" '{issue: $n, repo: $r}'; }
+{ row 61 "$R"; row 62 "$R"; row 63 x/y; row 64 "$R"; row 65 O/R; } >"$GREPO/$LEDGER_PATH"
+git -C "$GREPO" add -A && git -C "$GREPO" commit -q -m rows
+row 62 "$R" >"$GREPO/$LEDGER_PATH"
+git -C "$GREPO" commit -q -am "remove rows"
+GHEAD="$(git -C "$GREPO" rev-parse HEAD)"
+# Runs in this shell (not a subshell), so RC, OUT and ERR reach the checks.
+removed_rows() {
+  cd "$GREPO" || return 1
+  run bash "$IA" removed-rows --repo "$R" --ledger "$LEDGER_PATH" --commit "$GHEAD"
+  cd "$OLDPWD" || return 1
+}
+
+reset_fix
+issue 61 closed "$(timeline mark closed:"$BOT")"
+issue 64 closed "$(timeline mark closed:"$BOT" reopened:alice closed:alice)"
+issue 65 open "$(timeline mark closed:"$BOT" reopened:alice)"
+removed_rows
+check "C4: removed-rows exits 0" rc_is 0
+check "C4: the bot-closed issue whose row was removed is planned for reopening" \
+  test "$(jq -r '"\(.action) \(.issue)"' <<<"$OUT" | tr '\n' ' ')" = "reopen 61 "
+check "C4: ... with a comment that says the row was removed" \
+  out_has "the row was removed"
+check "C4: ... ending with the bot's marker for the row it closed on" \
+  test "$(jq -r .body <<<"$OUT" | tail -n 1)" = "<!-- issue-evidence-bot: row-sha256=$HASH -->"
+check "C4: an issue a person closed (after the bot) is never touched" not_called "issues/64/timeline"
+check "C4: an issue that is still open is not planned" not_out_has "\"issue\":65"
+check "C4: an issue whose row is still there is not read" not_called "issues/62"
+check "C4: a removed row of another repository is not read" not_called "issues/63"
+
+reset_fix
+issue 61 closed "$(timeline mark closed:"$BOT")"
+issue 64 closed "$(timeline closed:alice)"
+issue 65 open "$(timeline)"
+fx_fail "repos/$R/issues/61/timeline?per_page=100" "$RATE"
+removed_rows
+check "C4: a failed read while listing bot-closed issues is a refusal (exit 1)" rc_is 1
+check "C4: ... with no partial list" test -z "$OUT"
+
+# The removed-row reopen shares the cap with the ledger's own actions.
+reset_fix
+decisions close close
+jq -c -n --arg r "$R" '{issue: 61, action: "reopen", close_reason: "not planned", body: "row removed", repo: $r}' >"$WORK/removed.jsonl"
+run bash "$IA" select --decisions "$WORK/decisions.jsonl" --removed "$WORK/removed.jsonl" --max-actions 2 --counts "$WORK/counts"
+check "C4: a removed-row reopen counts toward max_actions (cap 2: not planned)" \
+  test "$(jq -r .issue <<<"$OUT" | tr '\n' ' ')/$(cat "$WORK/counts")" = "11 12 /3 2"
+run bash "$IA" select --decisions "$WORK/decisions.jsonl" --removed "$WORK/removed.jsonl" --max-actions 3
+check "C4: ... and is planned when the cap allows" test "$(jq -r .issue <<<"$OUT" | tr '\n' ' ')" = "11 12 61 "
+
+reset_fix
+issue 61 closed "$(timeline mark closed:"$BOT")"
+jq -c -s . "$WORK/removed.jsonl" >"$WORK/plan.json"
+run bash "$IA" apply --repo "$R" --commit "$SHA_A" --plan "$WORK/plan.json" --max-actions 10
+check "C4: apply reopens it with the removed-row comment" \
+  test "$(actions)/$(cat "$FIX/body-reopen-61.txt" 2>/dev/null)" = "reopen 61 /row removed"
 
 # --- C5: nothing is applied from a commit that is no longer the branch head ------
 reset_fix

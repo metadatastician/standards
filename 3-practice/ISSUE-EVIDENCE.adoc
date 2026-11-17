@@ -128,7 +128,10 @@ that account for another reason does not count. Each comment the bot writes ends
 `<!-- issue-evidence-bot: row-sha256=HASH -->`, where HASH is the SHA-256 of the
 row's ledger line. To dispute a closure, change or remove the row in a reviewed
 pull request, or reopen the issue: the bot does not re-close an issue a person
-reopened.
+reopened. When a row is removed after the bot closed its issue, the bot
+reopens the issue, within the cap, with a comment saying the row was removed;
+it finds such issues from every version of the ledger in the history of the
+default branch.
 
 == 5. Running it
 
