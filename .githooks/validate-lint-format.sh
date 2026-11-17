@@ -78,25 +78,71 @@ require_tool() {
 
 # ── Rust ────────────────────────────────────────────────────────────────
 RS="$(staged_matching '\.rs$|(^|/)Cargo\.toml$')"
-# The ecosystem gate is the MANIFEST, not the extension. A stray `.rs` staged in
-# a ReScript tree with no Cargo.toml would otherwise run `cargo fmt --all`, which
-# exits non-zero with "error: could not find `Cargo.toml`" — a RED gate for a
-# reason that has nothing to do with the code. Confinement means the Rust gate
-# does not fire in a non-Rust repo at all.
-# `tracks` reads the INDEX, so a Cargo.toml added in THIS commit does count.
-if [ -n "$RS" ] && tracks 'Cargo.toml' '*/Cargo.toml'; then
-  note "Rust: $(echo "$RS" | grep -c .) staged file(s)"
-  if require_tool cargo Rust "https://rustup.rs"; then
-    cargo fmt --all --check || fail "Rust: sources are not formatted (cargo fmt --check)"
-    if [ "${ESTATE_HOOK_SKIP_SLOW:-0}" = "1" ]; then
-      warn "Rust: clippy SKIPPED via ESTATE_HOOK_SKIP_SLOW=1. A skip is not a pass — CI will still run it."
-      LEDGER+=("rust-clippy: SKIPPED (ESTATE_HOOK_SKIP_SLOW)")
-    else
-      cargo clippy --all-targets -- -D warnings || fail "Rust: clippy reported warnings (treated as errors)"
+# The ecosystem gate is the MANIFEST, not the extension, and it is asked the
+# question cargo itself asks: which Cargo.toml encloses THIS file? Each staged
+# file is mapped to its nearest ancestor manifest (its crate), and cargo runs
+# once per crate, from that crate's directory (standards#932).
+#
+# The old arm asked "does the repo track a Cargo.toml anywhere?" and then ran
+# `cargo fmt --all` from the repo ROOT. In a repo whose crates live in
+# subdirectories (standards: 14 manifests, none at the root) cargo answered
+# "could not find `Cargo.toml`", and the hook reported "sources are not
+# formatted" on every commit that staged a .rs, whatever the code looked like.
+#
+# A staged .rs with no enclosing manifest (a snippet in docs, a ReScript tree)
+# is not a crate cargo can check: it is named in the ledger as unchecked, not
+# failed as unformatted.
+
+# nearest_crate <repo-relative path> — prints the repo-relative directory of
+# the nearest enclosing Cargo.toml (`.` for the root), or nothing.
+nearest_crate() {
+  local d
+  d="$(dirname -- "$1")"
+  while :; do
+    if [ -f "$d/Cargo.toml" ]; then printf '%s\n' "$d"; return 0; fi
+    [ "$d" = "." ] && return 0
+    d="$(dirname -- "$d")"
+  done
+}
+
+if [ -n "$RS" ]; then
+  CRATES=""; RS_ORPHANS=""
+  while IFS= read -r f; do
+    [ -z "$f" ] && continue
+    c="$(nearest_crate "$f")"
+    if [ -n "$c" ]; then CRATES+="$c"$'\n'; else RS_ORPHANS+="$f "; fi
+  done <<< "$RS"
+  CRATES="$(printf '%s' "$CRATES" | sort -u)"
+  [ -n "$RS_ORPHANS" ] && LEDGER+=("rust: NOT checked, no enclosing Cargo.toml: ${RS_ORPHANS% }")
+  if [ -n "$CRATES" ]; then
+    note "Rust: $(echo "$RS" | grep -c .) staged file(s) in $(echo "$CRATES" | grep -c .) crate(s)"
+    if require_tool cargo Rust "https://rustup.rs"; then
+      while IFS= read -r c; do
+        [ -z "$c" ] && continue
+        # rustfmt reports a formatting difference as "Diff in <file>"; any other
+        # non-zero exit is cargo failing to run (bad manifest, missing
+        # component), which is a tooling/scope error and is named as one.
+        if fmt_out="$(cd "$c" && cargo fmt --check 2>&1)"; then
+          note "Rust: $c: formatted"
+        elif printf '%s' "$fmt_out" | grep -q '^Diff in '; then
+          printf '%s\n' "$fmt_out" >&2
+          fail "Rust: $c: sources are not formatted (cargo fmt --check)"
+        else
+          printf '%s\n' "$fmt_out" >&2
+          fail "Rust: $c: cargo could not run 'cargo fmt --check' here (tooling/scope error, not a formatting verdict)"
+        fi
+        if [ "${ESTATE_HOOK_SKIP_SLOW:-0}" = "1" ]; then
+          warn "Rust: $c: clippy SKIPPED via ESTATE_HOOK_SKIP_SLOW=1. A skip is not a pass — CI will still run it."
+          LEDGER+=("rust-clippy ($c): SKIPPED (ESTATE_HOOK_SKIP_SLOW)")
+        else
+          (cd "$c" && cargo clippy --all-targets -- -D warnings) \
+            || fail "Rust: $c: clippy reported warnings (treated as errors)"
+        fi
+      done <<< "$CRATES"
     fi
   fi
 else
-  LEDGER+=("rust: not staged, or repo tracks no Cargo.toml")
+  LEDGER+=("rust: not staged")
 fi
 
 # ── Nickel ──────────────────────────────────────────────────────────────
