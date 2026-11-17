@@ -228,13 +228,13 @@ below were re-run on 2026-11-16 and all passed.
 [cols="1,3"]
 |===
 | Checker | Idris2 0.7.0, built from `idris-lang/Idris2` tag `v0.7.0` (`27780073c8631826d846499840b3857d9b9a4fd5`) with Chez Scheme 9.5.8
-| Source | `2-protocols/overlay/src/abi/OverlayProtocol.idr` as changed by the commit that rewrote this file, whose only change to it is the header comment. Before it, at `9bdf864cc7f2c8e24b4df84bf00d04158eee3ad5` (sha256 `89064f9ade81ffc5bfdeeb3fab28b778cb74f46a28b68276366318d5284419a1`), the file checked with the same result.
-| Input digest | `2-protocols/overlay/src/abi/OverlayProtocol.idr`, sha256 `2e30a9169cbc1dece6159a5721495e917a9044359a6e6aa78a5fbecc7abd918f`
+| Source | `2-protocols/overlay/src/abi/OverlayProtocol.idr` as changed by the commit that renamed this file to `PROOF-STATUS.adoc`, whose only change to it is the header comment's pointer to this file. The two earlier versions checked with the same result: sha256 `2e30a9169cbc1dece6159a5721495e917a9044359a6e6aa78a5fbecc7abd918f` (header rewritten on 2026-11-09) and, before that, `9bdf864cc7f2c8e24b4df84bf00d04158eee3ad5` (sha256 `89064f9ade81ffc5bfdeeb3fab28b778cb74f46a28b68276366318d5284419a1`).
+| Input digest | `2-protocols/overlay/src/abi/OverlayProtocol.idr`, sha256 `dfdd2b1aca68b2416de7d67ef614a9cc62d76811260f02470208ecbd9e0aada2`
 | Invocation | `idris2 --check --total Overlay/ABI/OverlayProtocol.idr`, from a scratch directory holding an unchanged copy of the file at the path its module name requires
 | Result | exit 0; `%default total`
 | Escape hatches | None in `2-protocols/overlay/src/abi/OverlayProtocol.idr`: no `believe_me`, `assert_total`, `assert_smaller`, `postulate` or holes. Its import cone is a different matter: 44 occurrences in 7 of 34 library modules, recorded as the `argued` row.
 | Import cone | Computed from the `import` lines of the Idris2 0.7.0 `libs/prelude` and `libs/base` sources, starting at `Prelude`, `Data.So` and `Decidable.Equality`: `Builtin`, `Control.Function`, `Control.Ord`, `Control.Order`, `Control.Relation`, `Data.Bool`, `Data.Either`, `Data.Fin`, `Data.List`, `Data.List1`, `Data.List1.Properties`, `Data.Maybe`, `Data.Nat`, `Data.SnocList`, `Data.So`, `Data.These`, `Data.Zippable`, `Decidable.Equality`, `Decidable.Equality.Core`, `Prelude`, `Prelude.Basics`, `Prelude.Cast`, `Prelude.EqOrd`, `Prelude.IO`, `Prelude.Interfaces`, `Prelude.Interpolation`, `Prelude.Num`, `Prelude.Ops`, `Prelude.Show`, `Prelude.Types`, `Prelude.Uninhabited`, `PrimIO`, `Syntax.PreorderReasoning`, `Syntax.PreorderReasoning.Generic`
-| Run | one-off, 2026-11-09, in an agent session. No CI lane runs this check, so a regression would not be caught.
+| Run | one-off, in an agent session: 2026-11-09 on the earlier digests, and 2026-11-17 on the current digest with the same checker (Idris2 0.7.0 built from the tag above with Chez Scheme 9.5.8), "Building Overlay.ABI.OverlayProtocol", exit 0. A negative control (the same file with an ill-typed definition appended) exited 1. No CI lane runs this check, so a regression would not be caught.
 |===
 
 The file cannot be checked where it sits. It declares
