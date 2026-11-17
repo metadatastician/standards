@@ -19,7 +19,7 @@ Every command below is also a `just` recipe:: run `just` to list them
 [[prerequisites]]
 == 1. Prerequisites
 
-You need three things from your operating system. Everything else is installed
+You need four things from your operating system. Everything else is installed
 for you in step 3.
 
 [cols="1,2,3"]
@@ -29,6 +29,10 @@ for you in step 3.
 |git
 |to fetch the repository
 |Fedora `sudo dnf install git` · Debian/Ubuntu `sudo apt install git` · macOS `xcode-select --install` · Windows `winget install Git.Git`
+
+|GNU coreutils
+|to bound provisioning probes and imports with `timeout` (or `gtimeout`)
+|Linux: install your distribution's `coreutils` package · macOS: `brew install coreutils` · Windows: included in Git Bash · Guix: included in the development shell
 
 |a C toolchain
 |some language toolchains link native code
