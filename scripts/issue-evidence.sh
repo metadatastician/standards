@@ -166,6 +166,16 @@ def relpath($f; $v):
   elif ($v | split("/") | any(. == "" or . == "." or . == "..")) then "\($f) has an empty, \".\" or \"..\" component: \($v | tojson)"
   else empty end;
 def posint: type == "number" and (tojson | test("^[1-9][0-9]*$")) and . <= 9007199254740991;
+# Length bounds, in characters. They keep every comment the bot renders under
+# the GitHub limit of 65,536 characters (the test suite renders the worst-case
+# row) and keep the plan the workflow hands between its jobs small.
+def longer($f; $v; $n):
+  if ($v | type) == "string" and ($v | length) > $n then "\($f) is longer than \($n) characters" else empty end;
+def toomany($f; $v; $n):
+  if ($v | type) == "array" and ($v | length) > $n then "\($f) has more than \($n) items" else empty end;
+def checkbounds($i):
+  objects | "checks[\($i)]" as $p
+  | longer("\($p).path"; .path; 256), longer("\($p).glob"; .glob; 256), longer("\($p).pattern"; .pattern; 400);
 def check($i):
   "checks[\($i)]" as $p
   | if type != "object" then "\($p) is not an object"
@@ -202,10 +212,12 @@ def row:
      then empty else "repo must be OWNER/NAME" end),
     (if (.disposition | IN("landed", "superseded", "moot", "duplicate", "expired")) then empty
      else "disposition is not in the vocabulary: \(.disposition | tojson)" end),
-    text("claim"; .claim), nocomment("claim"; .claim),
+    text("claim"; .claim), nocomment("claim"; .claim), longer("claim"; .claim; 1500),
     (if (.evidence | type) != "array" or (.evidence | length) == 0
      then "evidence must be a non-empty array of strings"
-     else .evidence | to_entries[] | text("evidence[\(.key)]"; .value), nocomment("evidence[\(.key)]"; .value) end),
+     else .evidence | to_entries[] | text("evidence[\(.key)]"; .value), nocomment("evidence[\(.key)]"; .value),
+       longer("evidence[\(.key)]"; .value; 400) end),
+    toomany("evidence"; .evidence; 16), toomany("checks"; .checks; 16),
     (if (.added | type) == "string" and (.added | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}$"))
         and ((.added | try (strptime("%Y-%m-%d") | mktime | strftime("%Y-%m-%d")) catch "") == .added)
      then empty else "added must be a real calendar date YYYY-MM-DD" end),
@@ -215,7 +227,7 @@ def row:
      elif has("duplicate_of") then "duplicate_of is allowed only with disposition duplicate"
      else empty end),
     (if (.checks | type) != "array" or (.checks | length) == 0 then "checks must be a non-empty array"
-     else .checks | to_entries[] | .key as $i | .value | check($i) end)
+     else .checks | to_entries[] | .key as $i | .value | check($i), checkbounds($i) end)
   end;
 def emit($tag; $n; $v): $tag, "\u0000", ($n | tostring), "\u0000", $v, "\u0000";
 [inputs] | to_entries

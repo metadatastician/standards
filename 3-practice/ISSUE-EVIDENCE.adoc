@@ -51,6 +51,14 @@ per line, each line I-JSON serialised by JCS (`JSON-POLICY.adoc` J-1, J-2).
 No other field is accepted. Strings may not contain control characters, and
 `claim` and `evidence` may not contain `<!--` or `-->`.
 
+Lengths are bounded, in characters: `claim` 1,500; each `evidence` item 400,
+and at most 16 items; at most 16 checks; each `pattern` 400; each `path` and
+`glob` 256. The bounds keep every comment the bot writes under GitHub's limit
+of 65,536 characters (the test suite renders a row at every bound: about
+38,600 characters) and keep the hand-off between the workflow's jobs small.
+The live ledger's largest values on 2026-11-17 were 411, 163, 6, 5, 116 and
+75 (path) / 41 (glob).
+
 == 2. The check vocabulary
 
 Paths and globs are repository-relative: not absolute, no `.` or `..`

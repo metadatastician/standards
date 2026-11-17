@@ -340,6 +340,44 @@ ledger "$(row 3 '[{"kind":"path-present","path":"x"}]' landed '{"claim":"a <!-- 
 expect_err "claim cannot forge the marker comment" "claim contains an HTML comment delimiter" bash "$IE" validate "$L"
 ledger "$GOOD" "$(row 3 '[{"kind":"path-anywhere","path":"x"}]')"
 expect_err "evaluate refuses an invalid ledger (exit 2)" "path-anywhere" bash "$IE" evaluate "$L"
+
+echo "=== validate: length bounds (comment size, plan size) ==="
+# rep N CHAR: CHAR repeated N times.
+rep() { printf "%${1}s" "" | tr ' ' "$2"; }
+bound_case() { # FIELD LIMIT ROW-AT-LIMIT ROW-OVER-LIMIT NEEDLE
+  ledger "$3"
+  expect_rc "$1 at its bound ($2) validates" 0 bash "$IE" validate "$L"
+  ledger "$4"
+  expect_err "$1 over its bound ($2) is refused" "$5" bash "$IE" validate "$L"
+}
+P1='[{"kind":"path-present","path":"x"}]'
+bound_case claim 1500 "$(row 3 "$P1" landed "{\"claim\":\"$(rep 1500 a)\"}")" \
+  "$(row 3 "$P1" landed "{\"claim\":\"$(rep 1501 a)\"}")" ":1: claim is longer than 1500 characters"
+bound_case "an evidence item" 400 "$(row 3 "$P1" landed "{\"evidence\":[\"$(rep 400 e)\"]}")" \
+  "$(row 3 "$P1" landed "{\"evidence\":[\"$(rep 401 e)\"]}")" ":1: evidence[0] is longer than 400 characters"
+bound_case "the evidence count" 16 "$(row 3 "$P1" landed "$(jq -c -n '{evidence: [range(16) | "e\(.)"]}')")" \
+  "$(row 3 "$P1" landed "$(jq -c -n '{evidence: [range(17) | "e\(.)"]}')")" ":1: evidence has more than 16 items"
+bound_case "the check count" 16 "$(row 3 "$(jq -c -n '[range(16) | {kind: "path-present", path: "p\(.)"}]')")" \
+  "$(row 3 "$(jq -c -n '[range(17) | {kind: "path-present", path: "p\(.)"}]')")" ":1: checks has more than 16 items"
+bound_case "a pattern" 400 "$(row 3 "[{\"kind\":\"grep-present\",\"path\":\"x\",\"pattern\":\"$(rep 400 p)\"}]")" \
+  "$(row 3 "[{\"kind\":\"grep-present\",\"path\":\"x\",\"pattern\":\"$(rep 401 p)\"}]")" "checks[0].pattern is longer than 400 characters"
+bound_case "a path" 256 "$(row 3 "[{\"kind\":\"path-present\",\"path\":\"$(rep 256 q)\"}]")" \
+  "$(row 3 "[{\"kind\":\"path-present\",\"path\":\"$(rep 257 q)\"}]")" "checks[0].path is longer than 256 characters"
+bound_case "a glob" 256 "$(row 3 "[{\"kind\":\"tree-grep-absent\",\"glob\":\"$(rep 256 g)\",\"pattern\":\"x\"}]")" \
+  "$(row 3 "[{\"kind\":\"tree-grep-absent\",\"glob\":\"$(rep 257 g)\",\"pattern\":\"x\"}]")" "checks[0].glob is longer than 256 characters"
+# The bounds keep every comment under GitHub's 65,536-character limit. The
+# worst row: every bound reached with characters that grow when rendered
+# ("@" gains a zero-width space; '"' and "\" are escaped by tojson).
+WORST="$(jq -c -S -n --arg a "$(rep 1500 @)" --arg e "$(rep 400 @)" --arg q "$(rep 256 '"')" \
+  --arg p "$(printf '\\\\%.0s' $(seq 200))" '
+  {issue: 3, repo: "o/r", disposition: "landed", added: "2026-11-17", claim: $a,
+   evidence: [range(16) | $e], checks: [range(16) | {kind: "grep-absent", path: $q, pattern: $p}]}')"
+ledger "$WORST"
+expect_rc "the worst-case row validates" 0 bash "$IE" validate "$L"
+run bash "$IE" render-comment --issue 3 --action reopen "$L"
+chars="$(printf '%s' "$OUT" | jq -R -s length)"
+verdict "the worst-case comment ($chars characters) is under GitHub's 65,536-character limit" \
+  rc0_and [ "${chars:-99999}" -lt 65536 ]
 if command -v ijson-jcs >/dev/null 2>&1; then
   ledger "$GOOD" "$(row 4 '[{"kind":"grep-present","path":"docs/a.adoc","pattern":"é|\\\\d"}]' landed '{"claim":"Ünïcode \" quote"}')"
   bad=0
