@@ -2,12 +2,20 @@
 ; SPDX-License-Identifier: MPL-2.0
 ; SPDX-License-Identifier: CC-BY-SA-4.0
 ;
-; DEED clause profile: ECOSYSTEM.deed, v1.1.0 (DRAFT)
+; DEED clause profile: ECOSYSTEM.deed, v1.2.0 (DRAFT)
 ; Prose and rationale: docs/estate-reconciliation/A7-contractiles-descriptiles-anchor.adoc
 ; sections 7.1 (files and the affirmation members) and 7.2 (the ECOSYSTEM.deed
 ; row); rulings J12, J14, J20; the field mapping is
 ; 1-formats/deed/mappings/meta-ecosystem-to-repo-deed.adoc. M3 module order:
 ; section 11.
+;
+; CHANGELOG (v1.1.0 → v1.2.0, owner ruling 2026-11-17, from the
+; CoprocessorRuntime.jl and AcceleratorGate.jl decision):
+;   - The closed :relationship list gains one term, extension-of (17 in
+;     all): this repo extends the related repo and is loaded with or by it.
+;     Defined in mappings/meta-ecosystem-to-repo-deed.adoc 3.1. Additive:
+;     every v1.1.0 (related …) is still accepted, and an unknown term is
+;     still refused.
 ;
 ; CHANGELOG (v1.0.0 → v1.1.0, owner ruling 2026-11-14, from hypatia's
 ; ECOSYSTEM.a2ml migration):
@@ -66,8 +74,10 @@ relationship    = %s"standard-source" / %s"build-tooling" / %s"validation-toolin
                 / %s"code-dependency" / %s"parent"
                 / %s"sibling-standard" / %s"data-dependency" / %s"dispatch-target"
                 / %s"scanner-source" / %s"mcp-host"
+                / %s"extension-of"
                 ; The closed list of A7 7.2: the seven terms the owner ruled
                 ; on 2026-09-19 (mappings/meta-ecosystem-to-repo-deed.adoc),
                 ; the four DESCRIPTILE-SPEC observed, parent among them, and
-                ; the five the owner ruled on 2026-11-14 (v1.1.0).
+                ; the five the owner ruled on 2026-11-14 (v1.1.0) and
+                ; extension-of, ruled on 2026-11-17 (v1.2.0).
                 ; SEMANTIC: the whole symbol, so "registry-x" is refused.

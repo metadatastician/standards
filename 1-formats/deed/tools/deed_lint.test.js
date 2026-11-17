@@ -1348,8 +1348,9 @@ describe("ecosystem fixtures", () => {
     const t = readFileSync(join(FIX_ECO, "valid", "minimal", "ECOSYSTEM.deed"), "utf8");
     expect(checkEcosystem(t, "STATE.deed")).toBeNull();
   });
-  test("the closed relationship list has the 7 mapped terms, DESCRIPTILE-SPEC's 4 and the 5 ruled 2026-11-14", () => {
-    expect(ECOSYSTEM_RELATIONSHIPS.size).toBe(16);
+  test("the closed relationship list has the 7 mapped terms, DESCRIPTILE-SPEC's 4, the 5 ruled 2026-11-14 and extension-of", () => {
+    expect(ECOSYSTEM_RELATIONSHIPS.size).toBe(17);
+    expect(ECOSYSTEM_RELATIONSHIPS.has("extension-of")).toBe(true);
     for (const t of ["standard-source", "minted-from", "registry", "parent", "downstream-consumer"]) expect(ECOSYSTEM_RELATIONSHIPS.has(t)).toBe(true);
     for (const t of ["sibling-standard", "data-dependency", "dispatch-target", "scanner-source", "mcp-host"]) expect(ECOSYSTEM_RELATIONSHIPS.has(t)).toBe(true);
   });
@@ -1359,6 +1360,23 @@ describe("ecosystem fixtures", () => {
     expect(r.related.map((x) => x.relationship)).toEqual(["sibling-standard", "data-dependency", "dispatch-target", "scanner-source", "mcp-host"]);
     const q = join(FIX_ECO, "invalid", "relationship-near-miss", "ECOSYSTEM.deed");
     expect(() => checkEcosystem(readFileSync(q, "utf8"), q, { today: FIXTURE_TODAY })).toThrow(/:relationship must be one of/);
+  });
+  test("extension-of (ruled 2026-11-17) is accepted, and a near miss and an unknown term are still refused", () => {
+    const p = join(FIX_ECO, "valid", "extension-of", "ECOSYSTEM.deed");
+    const t = readFileSync(p, "utf8");
+    const r = checkEcosystem(t, p, { today: FIXTURE_TODAY });
+    expect(r.related.map((x) => x.relationship)).toEqual(["extension-of", "code-dependency"]);
+    for (const c of ["relationship-extension-near-miss", "relationship-unknown"]) {
+      const q = join(FIX_ECO, "invalid", c, "ECOSYSTEM.deed");
+      expect(() => checkEcosystem(readFileSync(q, "utf8"), q, { today: FIXTURE_TODAY })).toThrow(/:relationship must be one of/);
+    }
+    // The same deed with any other spelling of the term is refused, and the message lists the new term.
+    for (const bad of ["extends", "extension", "extension-for", "extensionof", "Extension-Of"]) {
+      expect(() => checkEcosystem(t.replace(":relationship extension-of", `:relationship ${bad}`), p, { today: FIXTURE_TODAY })).toThrow(/:relationship must be one of .*extension-of/);
+    }
+    // The command line passes the valid case and fails the invalid one.
+    expect(cli("--ecosystem", p).code).toBe(0);
+    expect(cli("--ecosystem", join(FIX_ECO, "invalid", "relationship-extension-near-miss", "ECOSYSTEM.deed")).code).not.toBe(0);
   });
   test("the summary lists project and related entries", () => {
     const p = join(FIX_ECO, "valid", "template-model", "ECOSYSTEM.deed");
