@@ -159,8 +159,8 @@ validate:
 
 # Print role-appropriate LLM warm-up context (machine front door)
 llm-context role="dev":
-    @echo "# Front door: 0-AI-MANIFEST.a2ml (machine) + README.adoc (human)"
-    @cat "llm-warmup-{{role}}.adoc" 2>/dev/null || cat 0-AI-MANIFEST.a2ml
+    @echo "# Front door: 0-AI-MANIFEST.deed (machine) + README.adoc (human)"
+    @cat "llm-warmup-{{role}}.adoc" 2>/dev/null || cat 0-AI-MANIFEST.deed
 
 # Build all sub-project artefacts. The canon ships specs, not products: the k9
 # Rust binding moved to hyperpolymath/k9-ecosystem (#491) and the groove ipv6t
