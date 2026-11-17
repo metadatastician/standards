@@ -1797,7 +1797,7 @@ $epu" >&2; rc=1; fi
 # NETWORK LAYER
 # ---------------------------------------------------------------------------
 
-gh_ok() { command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; }
+gh_ok() { command -v gh >/dev/null 2>&1 && gh api user >/dev/null 2>&1; }  # probe by exit code of a real API call; `gh auth status` rejects tokens the API accepts (e.g. proxied sessions)
 
 # resolve_target — pick the SHA every consumer should point at.
 # NEVER a feature-branch head: the applier would propagate unmerged work.
