@@ -400,3 +400,21 @@ Size is in bytes. The sha256 is of the file as it was tracked.
 | `54f3a9082df007a5e45b238ed8a376d4218c46b5`
 | Next-gen language comparison and strategy for the cccp nextgen-languages satellite.
 |===
+
+== Removed after 2026-11-13, outside `9-archive/`
+
+Files the retire-check (`scripts/a2ml-retire-check.sh`) reported as meeting
+all three deletion conditions, each deleted in a commit of its own. The
+contents are not copied here; git history keeps them. `c955a30b979d8dc4a689d87fdb1ead7ce4973df1` is a commit
+on `main` that holds every file in this table.
+
+[cols="4,1,3,3,4",options="header"]
+|===
+| Path | Size | sha256 | Git blob id | What it was
+
+| `1-formats/sub-specs/cartridges/0.2-AI-MANIFEST.a2ml`
+| 1165
+| `6b4256dc8d1f44838bc192bcd3f7e6a23a6f2a9c5b79ab9e7a56af9c83cc3563`
+| `867da4f1f02aca3206f5bfb65e3dee5c26123a89`
+| Directory manifest for the cartridge format: named the directory's purpose, its three files, the two mirrors (boj-server, panll) and ADR-002. The same facts are in `CARTRIDGE-FORMAT.adoc` and ADR-002. Removed under the owner's ruling of 2026-11-17 that directory manifests are derived and not stored.
+|===

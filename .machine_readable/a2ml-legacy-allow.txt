@@ -77,7 +77,6 @@ hypatia-rules/workflow-allowlist-gap.a2ml
 .machine_readable/descriptiles/STATE.a2ml
 
 # ── 0-AI-MANIFEST: decision open (1-formats/deed/mappings/ai-manifest-decision.adoc) ──
-1-formats/sub-specs/cartridges/0.2-AI-MANIFEST.a2ml
 1-formats/sub-specs/ensaid-config/0-AI-MANIFEST.a2ml
 2-protocols/0-ai-gatekeeper/0-AI-MANIFEST.a2ml
 2-protocols/0-ai-gatekeeper/examples/0-AI-MANIFEST.a2ml
