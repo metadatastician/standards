@@ -67,6 +67,12 @@ if [ "$METHOD" = POST ]; then
   exit 0
 fi
 F="$GH_FIX/$KEY.json"
+# A workflow definition with no fixture of its own is served from DEFAULT_WF,
+# which reset_fix writes (a bare pull_request trigger). A case that models a
+# FAILED contents read removes it: a missing fixture is an API failure.
+case "$APIPATH" in
+  repos/*/contents/.github/workflows/?*) [ -r "$F" ] || F="$GH_FIX/DEFAULT_WF.json" ;;
+esac
 [ -r "$F" ] || exit 1
 if [ -n "$JQF" ]; then jq -r "$JQF" "$F"; else cat "$F"; fi
 SHIM
@@ -86,7 +92,8 @@ G
 
 mkfix() { printf '%s' "$2" > "$FIX/$(printf '%s' "$1" | tr '/?&=' '____').json"; }
 
-reset_fix() { rm -f "$FIX"/*.json; cp "$GATES" "$WORK/gates.json"; : > "$FIX/PUTS.log"; : > "$FIX/POSTS.log"; }
+DEFAULT_WF_JSON="{\"content\":\"$(printf 'on: [push, pull_request]\n' | base64 | tr -d '\n')\",\"encoding\":\"base64\"}"
+reset_fix() { rm -f "$FIX"/*.json; cp "$GATES" "$WORK/gates.json"; : > "$FIX/PUTS.log"; : > "$FIX/POSTS.log"; printf '%s' "$DEFAULT_WF_JSON" > "$FIX/DEFAULT_WF.json"; }
 
 run_applier() {           # run_applier <repo> [extra flags...]
   local repo="$1"; shift
@@ -179,14 +186,13 @@ mkfix "repos/$R/rulesets/9" '{"name":"Base","target":"branch","enforcement":"act
 
 # MUTANT B: the body-builder also drops required_signatures.
 MUTB="$WORK/mutant-b.sh"
-python3 - "$APPLIER" "$MUTB" <<'MUTPY'
-import sys
-src, dst = sys.argv[1], sys.argv[2]
-s = open(src).read()
-old = '| .rules = ((.rules // []) | map(select(.type!="required_status_checks")))'
-new = '| .rules = ((.rules // []) | map(select(.type!="required_status_checks" and .type!="required_signatures")))'
-open(dst, "w").write(s.replace(old, new, 1) if old in s else s)
-MUTPY
+# A literal, first-occurrence replacement in bash (no pattern characters are
+# interpreted: both operands are quoted). If the old text is gone the copy is
+# identical and the check below reports that the mutant was not applied.
+mutb_old='| .rules = ((.rules // []) | map(select(.type!="required_status_checks")))'
+mutb_new='| .rules = ((.rules // []) | map(select(.type!="required_status_checks" and .type!="required_signatures")))'
+mutb_src="$(cat "$APPLIER"; printf x)"; mutb_src="${mutb_src%x}"
+printf '%s' "${mutb_src/"$mutb_old"/"$mutb_new"}" > "$MUTB"
 if ! diff -q "$APPLIER" "$MUTB" >/dev/null; then
   OUT=$(MUTANT="$MUTB" run_applier "$R" --apply)
   if [ "$(state_of "$OUT")" = "REFUSED" ]; then
@@ -195,7 +201,7 @@ if ! diff -q "$APPLIER" "$MUTB" >/dev/null; then
     bad "MUTANT B SURVIVED: required_signatures silently dropped, state=$(state_of "$OUT")"
   fi
 else
-  bad "mutant B was not applied — the sed pattern no longer matches the applier"
+  bad "mutant B was not applied: the replaced text is no longer in the applier"
 fi
 
 # ================================================================ CASE 4
@@ -931,6 +937,8 @@ R=acme/schedule-only
 mkfix "repos/$R" '{"default_branch":"main"}'
 mkfix "repos/$R/contents/.github/workflows" '[{"name":"codeql.yml"}]'
 mkfix "repos/$R/contents" '[{"name":"README.md"}]'
+SCHEDULE_WF_B64=$(printf '%s\n' 'name: CodeQL' 'on:' '  schedule:' '    - cron: "0 0 * * 0"' | base64 | tr -d '\n')
+mkfix "repos/$R/contents/.github/workflows/codeql.yml" "{\"content\":\"$SCHEDULE_WF_B64\",\"encoding\":\"base64\"}"
 mkfix "repos/$R/actions/workflows/codeql.yml/runs?branch=main&per_page=1" '{"workflow_runs":[{"id":22,"event":"schedule"}]}'
 mkfix "repos/$R/actions/runs/22/jobs?per_page=100" '{"jobs":[{"name":"CodeQL Security Analysis"}]}'
 mkfix "repos/$R/rulesets" '[{"id":9,"target":"branch","enforcement":"active","source_type":"Repository"}]'
@@ -964,7 +972,7 @@ case "$D" in *"no_pr_trigger=[codeql.yml]"*) ok "pr-reachability (commented pull
 # derived from its branch=main run and written into required_status_checks,
 # deadlocking every PR.
 MUTJ="$WORK/mutant-j.sh"
-sed 's/if ! wf_triggers_on_pr "\$R" "\$WFN" "\$DEF" "\$REVENT"; then/if false; then/' "$APPLIER" > "$MUTJ"
+sed 's/PRRC=0; wf_triggers_on_pr "\$R" "\$WFN" "\$DEF" || PRRC=\$?/PRRC=0/' "$APPLIER" > "$MUTJ"
 chmod +x "$MUTJ"
 if ! cmp -s "$MUTJ" "$APPLIER" && bash -n "$MUTJ" 2>/dev/null; then
   OUT=$(MUTANT="$MUTJ" run_applier "$R" --apply)
@@ -980,6 +988,148 @@ if ! cmp -s "$MUTJ" "$APPLIER" && bash -n "$MUTJ" 2>/dev/null; then
   fi
 else
   bad "mutant J was not applied — the sed pattern no longer matches the applier"
+fi
+
+# =============================================================== CASE 27
+# PATH-FILTERED PR TRIGGERS (standards#1065, the #1040 residual). A workflow
+# whose pull_request trigger carries `paths:`/`paths-ignore:` reports its
+# check-runs only on PRs touching those paths; requiring its contexts blocks
+# every other PR forever (metadatastician/paint-type codeql.yml). It must land
+# in a named bucket, never in required_status_checks.
+pr_case() {   # pr_case <repo> <workflow body (printf-escaped)>
+  reset_fix
+  R="$1"
+  mkfix "repos/$R" '{"default_branch":"main"}'
+  mkfix "repos/$R/contents/.github/workflows" '[{"name":"codeql.yml"}]'
+  mkfix "repos/$R/contents" '[{"name":"README.md"}]'
+  mkfix "repos/$R/contents/.github/workflows/codeql.yml" \
+    "{\"content\":\"$(printf "$2" | base64 | tr -d '\n')\",\"encoding\":\"base64\"}"
+  mkfix "repos/$R/actions/workflows/codeql.yml/runs?branch=main&per_page=1" '{"workflow_runs":[{"id":44,"event":"push"}]}'
+  mkfix "repos/$R/actions/runs/44/jobs?per_page=100" '{"jobs":[{"name":"Agda proof (INV-3)"}]}'
+  mkfix "repos/$R/rulesets" '[{"id":9,"target":"branch","enforcement":"active","source_type":"Repository"}]'
+  mkfix "repos/$R/rulesets/9" '{"id":9,"name":"Base","target":"branch","enforcement":"active","conditions":{},"bypass_actors":[],"rules":[{"type":"deletion"}]}'
+  OUT=$(run_applier "$R")
+  S=$(state_of "$OUT"); D=$(detail_of "$OUT")
+}
+expect_path_filtered() {   # expect_path_filtered <label>
+  [ "$S" = "UNGATED" ] && ok "$1: state is UNGATED" || bad "$1: state=$S (want UNGATED) — $D"
+  case "$D" in *"path_filtered=[codeql.yml]"*) ok "$1: path_filtered=[codeql.yml] reported" ;; *) bad "$1: missing path_filtered — $D" ;; esac
+}
+
+pr_case acme/paths-block 'on:\n  pull_request:\n    branches: [main]\n    paths:\n      - "verification/proofs/**"\n  push:\n    branches: [main]\n'
+expect_path_filtered "path-filtered (block paths:)"
+pr_case acme/paths-ignore 'on:\n  pull_request:\n    paths-ignore: ["docs/**"]\n'
+expect_path_filtered "path-filtered (paths-ignore:)"
+pr_case acme/paths-flow 'on:\n  pull_request: {branches: [main], paths: ["docs/**"]}\n'
+expect_path_filtered "path-filtered (flow-style pull_request mapping)"
+pr_case acme/paths-target 'on:\n  pull_request_target:\n    paths:\n      - src/**\n'
+expect_path_filtered "path-filtered (pull_request_target)"
+
+# Positive controls: a bare PR trigger is still derived, and a `paths:` under
+# push (not under pull_request) does not filter the PR trigger.
+pr_case acme/bare-pr 'on:\n  pull_request:\n    branches: [main]\n  push:\n    branches: [main]\n    paths: ["src/**"]\n'
+[ "$S" = "WOULD-GATE" ] && ok "path-filter positive control: bare pull_request still derived" || bad "path-filter positive control: state=$S (want WOULD-GATE) — $D"
+case "$D" in *"Agda proof (INV-3)"*) ok "path-filter positive control: context derived" ;; *) bad "path-filter positive control: context missing — $D" ;; esac
+case "$D" in *"path_filtered="*) bad "path-filter positive control: push paths: wrongly filtered the PR trigger — $D" ;; *) ok "path-filter positive control: push paths: does not filter the PR trigger" ;; esac
+
+# ---- MUTANT K: drop the path-filter verdict (#1065). -------------------------
+MUTK="$WORK/mutant-k.sh"
+sed 's/elif any(\$reach\[\]; \.path_filtered) then/elif false then/' "$APPLIER" > "$MUTK"
+if ! cmp -s "$MUTK" "$APPLIER" && bash -n "$MUTK" 2>/dev/null; then
+  pr_case acme/paths-block 'on:\n  pull_request:\n    paths:\n      - "verification/proofs/**"\n'
+  OUT=$(MUTANT="$MUTK" run_applier "$R")
+  if [ "$(state_of "$OUT")" = "WOULD-GATE" ] && [[ "$(detail_of "$OUT")" == *"Agda proof (INV-3)"* ]]; then
+    ok "mutant K killed: without the path-filter verdict the deadlocking context is derived"
+  else
+    bad "MUTANT K SURVIVED: path-filter verdict removed yet the context is still kept out — $(detail_of "$OUT")"
+  fi
+else
+  bad "mutant K was not applied — the sed pattern no longer matches the applier"
+fi
+
+# =============================================================== CASE 28
+# THE TRIGGER IS READ BY A YAML PARSER, NOT BY KEY SPELLING. Quoted keys are
+# valid YAML; a line matcher that knows only bare `paths:` reads a quoted one
+# as no filter at all and derives a context that never reports on most PRs.
+pr_case acme/paths-quoted-block 'on:\n  pull_request:\n    "paths": ["docs/**"]\n'
+expect_path_filtered "path-filtered (quoted block key)"
+pr_case acme/paths-quoted-flow 'on:\n  pull_request: {"paths": ["docs/**"]}\n'
+expect_path_filtered "path-filtered (quoted flow key)"
+pr_case acme/paths-ignore-squoted 'on:\n  pull_request:\n    \x27paths-ignore\x27:\n      - docs/**\n'
+expect_path_filtered "path-filtered (single-quoted paths-ignore key)"
+pr_case acme/paths-quoted-event '"on":\n  "pull_request":\n    "paths": ["docs/**"]\n'
+expect_path_filtered "path-filtered (quoted on: and event keys)"
+
+expect_reachable() {   # expect_reachable <label>
+  [ "$S" = "WOULD-GATE" ] && ok "$1: state is WOULD-GATE" || bad "$1: state=$S (want WOULD-GATE) — $D"
+  case "$D" in *"Agda proof (INV-3)"*) ok "$1: context derived" ;; *) bad "$1: context missing — $D" ;; esac
+}
+pr_case acme/on-seq 'on: [push, pull_request]\n'
+expect_reachable "PR trigger (on: sequence)"
+pr_case acme/on-str 'on: pull_request\n'
+expect_reachable "PR trigger (on: string)"
+pr_case acme/on-null-pr 'on:\n  pull_request:\n  push:\n    paths: ["src/**"]\n'
+expect_reachable "PR trigger (null pull_request mapping)"
+
+pr_case acme/no-pr 'on:\n  push:\n    branches: [main]\n  schedule:\n    - cron: "0 0 * * 0"\n'
+[ "$S" = "UNGATED" ] && ok "no PR trigger: state is UNGATED" || bad "no PR trigger: state=$S (want UNGATED) — $D"
+case "$D" in *"no_pr_trigger=[codeql.yml]"*) ok "no PR trigger: no_pr_trigger=[codeql.yml] reported" ;; *) bad "no PR trigger: missing no_pr_trigger — $D" ;; esac
+pr_case acme/branch-miss 'on:\n  pull_request:\n    branches: ["release/*"]\n'
+case "$D" in *"no_pr_trigger=[codeql.yml]"*) ok "PR trigger for another branch: no_pr_trigger reported" ;; *) bad "PR trigger for another branch: missing no_pr_trigger — $D" ;; esac
+
+# A workflow definition that does not parse is a failed read, never "reachable"
+# and never "no PR trigger": either verdict would be a guess.
+pr_case acme/malformed 'on:\n  pull_request: [unclosed\n    paths: : x\n'
+[ "$S" = "REFUSED" ] && ok "malformed workflow YAML: state is REFUSED" || bad "malformed workflow YAML: state=$S (want REFUSED) — $D"
+case "$D" in *"derive_failed=[codeql.yml("*) ok "malformed workflow YAML: derive_failed names the workflow" ;; *) bad "malformed workflow YAML: derive_failed missing — $D" ;; esac
+pr_case acme/empty-def ''
+[ "$S" = "REFUSED" ] && ok "empty workflow definition: state is REFUSED" || bad "empty workflow definition: state=$S (want REFUSED) — $D"
+
+# =============================================================== CASE 29
+# AN UNREADABLE WORKFLOW DEFINITION IS A DERIVATION FAILURE. Run history can
+# show that a workflow once ran on a PR; it cannot show that the workflow runs
+# on EVERY PR, because a paths: filter lives only in the definition. So a
+# failed contents read must REFUSE, not fall back to run history.
+unreadable_case() {   # unreadable_case <repo> <run event> [contents fixture]
+  reset_fix
+  rm -f "$FIX/DEFAULT_WF.json"   # no definition is readable at all
+  R="$1"
+  mkfix "repos/$R" '{"default_branch":"main"}'
+  mkfix "repos/$R/contents/.github/workflows" '[{"name":"codeql.yml"}]'
+  mkfix "repos/$R/contents" '[{"name":"README.md"}]'
+  [ -n "${3:-}" ] && mkfix "repos/$R/contents/.github/workflows/codeql.yml" "$3"
+  mkfix "repos/$R/actions/workflows/codeql.yml/runs?branch=main&per_page=1" "{\"workflow_runs\":[{\"id\":44,\"event\":\"$2\"}]}"
+  mkfix "repos/$R/actions/workflows/codeql.yml/runs?event=pull_request&per_page=1" '{"workflow_runs":[{"id":45}]}'
+  mkfix "repos/$R/actions/runs/44/jobs?per_page=100" '{"jobs":[{"name":"Agda proof (INV-3)"}]}'
+  mkfix "repos/$R/rulesets" '[{"id":9,"target":"branch","enforcement":"active","source_type":"Repository"}]'
+  mkfix "repos/$R/rulesets/9" '{"id":9,"name":"Base","target":"branch","enforcement":"active","conditions":{},"bypass_actors":[],"rules":[{"type":"deletion"}]}'
+  OUT=$(run_applier "$R" --apply)
+  S=$(state_of "$OUT"); D=$(detail_of "$OUT")
+}
+expect_unreadable_refused() {   # expect_unreadable_refused <label>
+  [ "$S" = "REFUSED" ] && ok "$1: state is REFUSED" || bad "$1: state=$S (want REFUSED) — $D"
+  case "$D" in *"derive_failed=[codeql.yml("*) ok "$1: derive_failed names the workflow" ;; *) bad "$1: derive_failed missing — $D" ;; esac
+  [ -s "$FIX/PUTS.log" ] && bad "$1: PUT happened from run history alone" || ok "$1: no PUT"
+}
+unreadable_case acme/unreadable-push push
+expect_unreadable_refused "contents read failed (push run, PR runs exist)"
+unreadable_case acme/unreadable-pr pull_request
+expect_unreadable_refused "contents read failed (pull_request run)"
+unreadable_case acme/too-large push '{"content":"","encoding":"none"}'
+expect_unreadable_refused "contents not inline (encoding none)"
+unreadable_case acme/bad-b64 push '{"content":"!!!not-base64!!!","encoding":"base64"}'
+expect_unreadable_refused "contents not decodable"
+
+# =============================================================== CASE 30
+# yq is required, and it must be mikefarah yq v4: there is no regex fallback.
+FAKEYQ="$WORK/fake-yq"; mkdir -p "$FAKEYQ"
+printf '#!/usr/bin/env bash\necho "yq 3.4.1"\n' > "$FAKEYQ/yq"; chmod +x "$FAKEYQ/yq"
+reset_fix
+if PATH="$FAKEYQ:$BIN:$PATH" GH_FIX="$FIX" bash "$APPLIER" --gates-file "$WORK/gates.json" --repo acme/x >/dev/null 2>"$WORK/err"; then
+  bad "non-mikefarah yq: exited 0 instead of refusing"
+else
+  command grep -q 'mikefarah yq v4' "$WORK/err" && ok "non-mikefarah yq: refused with a clear message" \
+    || bad "non-mikefarah yq: refused without naming the requirement — $(cat "$WORK/err")"
 fi
 
 echo

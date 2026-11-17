@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 = Decision spec — `STATE.a2ml` v1 → deed era (family 3)
 Campaign: standards#837 · Frame: link:README.adoc[mappings/README] ·
-Status: **RULED: option B** (owner, 2026-11-10). Extract the state,
+Status: **RULED: option B** (owner, 2026-11-10), with the archive replaced by
+the removal record (owner, 2026-11-17; §6). Extract the state,
 archive the journal (§2 B). Maturity goes to its own clause, as ruled
 2026-10-02 (§3).
 
@@ -88,3 +89,28 @@ re-appearing.
 * Every milestone row dropped is matched by an archive-file line holding
   the same text (nothing silently lost — the ledger discipline from the
   estate-residue-ledger pattern).
+
+== 6. No A2ML archive: the removal record (owner ruling 2026-11-17)
+
+Option B (§2) keeps each v1 file as an archive, such as
+`.machine_readable/archive/state-v1.a2ml`. The owner ruled on 2026-11-13 that
+A2ML is entirely gone, archived copies included, so that surface can no
+longer be made: renaming a file into it would create an `.a2ml` file. Asked
+on 2026-11-17 what replaces the archive, the owner ruled: *the removal record
+and git history*, the form standards#1524 used for `9-archive/`.
+
+* A retired STATE v1 file is deleted, not renamed and not copied.
+* The commit that deletes it records one row per file: path, size in bytes,
+  sha256, git blob id, and what the file was. In this repository the rows go
+  into `9-archive/A2ML-REMOVED.adoc`. A repository with no such record
+  carries the same rows in the deletion commit's message, which
+  `.claude/CLAUDE.md` already requires to list each deleted file.
+* The contents are not copied anywhere. `git cat-file -p <blob id>` reads
+  them.
+* The current journal continues in `docs/status/ROADMAP.adoc` (A7 J3).
+
+§5 is read accordingly. Its first item has no archive exclusion: zero
+`STATE.a2ml` v1 files remain in any tree. Its third item, "matched by an
+archive-file line holding the same text", is met by the blob the removal
+record names: every dropped row is a line of that blob. Options A and C stay
+not taken, and the maturity ruling of 2026-10-02 is unchanged.
