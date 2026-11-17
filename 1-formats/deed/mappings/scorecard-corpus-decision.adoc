@@ -8,6 +8,7 @@ Increment 1 (§4 leak clean + archive) is done; increments 2 and 3 are
 pending. See §5.
 §6, the RSR scorecard clause, is RULED (owner, 2026-11-14, ratified with
 `:assessor` and `:assessed-at`).
+§7, the retirement of the archive surface, is RULED (owner, 2026-11-17).
 
 Scorecards are the wrong shape for the naïve "translate each file" move:
 they are **time-stamped assessment records**, not repo state. Translating
@@ -203,3 +204,29 @@ both questions this section left open in v0.1.0:
 `rsr-scorecard.abnf` v0.2.0 carries the change. It is not additive: a
 v0.1.0 scorecard without the two fields is refused and is rewritten by
 rescoring. The writer is Hypatia's `RsrConformance.to_deed/2`.
+
+== 7. The archive surface retires (owner ruling 2026-11-17)
+
+R5 fixed `.machine_readable/archive/scorecards-v1/` as this corpus's archive
+(§5, increment 1). The owner ruled on 2026-11-13 that A2ML is entirely gone,
+archived copies included, and on 2026-11-17 that what replaces an A2ML
+archive is *the removal record and git history*
+(link:state-v1-decision.adoc[state-v1-decision] §6 has the same ruling for
+STATE). So the 29 archived files are deleted in their turn:
+
+* The order is unchanged: the current-verdict summaries of §2 B.2 are
+  written first, with their counts computed from the 29 records, and only
+  then are the records deleted.
+* The deleting commit adds one row per file to
+  `9-archive/A2ML-REMOVED.adoc` (path, size, sha256, git blob id, what it
+  was). The contents are not copied; git history keeps them.
+* §3's first item then reads: zero `*.scorecard.a2ml` files in any tree.
+  Its third item is met by the removal record: each row names the deed that
+  carries that spec's summary. The directory tombstone goes with the
+  directory.
+
+One question is open and is put to the owner before the summaries are
+written. §6.1 found on 2026-11-14 that an assessment record is not identity,
+so the RSR scorecard is not a clause of the chora deed. §2 B.2 still places
+the `(assessment …)` summaries on the assessed repository's chora deed. The
+same reasoning may apply to them.
