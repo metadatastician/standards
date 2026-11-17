@@ -10,6 +10,7 @@
 ;;   guix import crate --lockfile=Cargo.lock __APP_NAME__
 ;; `just toolchain-refresh` regenerates it; never hand-edit it.
 (use-modules (guix packages) (guix gexp)
+             (guix git-download) (guix base32)
              (guix build-system cargo)
              ((guix licenses) #:prefix license:))
 
