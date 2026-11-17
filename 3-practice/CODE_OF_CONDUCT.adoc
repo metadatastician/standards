@@ -122,6 +122,11 @@ The conduct team is Joshua Jewell
 (https://github.com/JoshuaJewell[@JoshuaJewell]). Reports go to
 mailto:conduct@themetadatastician.art[conduct@themetadatastician.art].
 
+A report about a member of the conduct team goes instead to the repository
+owner, Jonathan D.A. Jewell (https://github.com/hyperpolymath[@hyperpolymath]),
+at mailto:owner@themetadatastician.art[owner@themetadatastician.art]. It is
+not shared with the person it concerns.
+
 *How to Report*
 
 [width="99%",cols="30%,33%,37%",options="header",]
@@ -133,6 +138,8 @@ mailto:conduct@themetadatastician.art[conduct@themetadatastician.art].
 minor issues
 
 |*Anonymous email* |Write to the same address from one that does not identify you. We will not ask who you are. |When you need anonymity
+
+|*Email the owner* |mailto:owner@themetadatastician.art[owner@themetadatastician.art] |A report about a conduct team member
 |===
 
 *What to Include*
@@ -168,7 +175,9 @@ All reports will be handled with discretion:
 If a conduct team member is involved in an incident:
 
 * They will recuse themselves from the process
-* Another maintainer or external party will handle the report
+* A report about a conduct team member is handled by the repository owner
+  (see Reporting); a report about the owner is handled by the conduct team,
+  and the owner takes no part in it
 * We will disclose any potential conflicts
 
 '''''
@@ -257,9 +266,10 @@ Report ID]`"
 
 *Appeals Process*
 
-* Appeals are reviewed by someone other than the person who made the
-original decision: the repository owner, Jonathan D.A. Jewell
-(@hyperpolymath), or Joshua Jewell where the owner made it
+* An appeal is reviewed by someone who was neither involved in the incident
+nor responsible for the original decision. Where no one in the project meets
+both conditions, it goes to an outside person whom both you and the project
+accept
 * You will receive a response within 14 days
 * The appeals decision is final
 * You may only appeal once per incident
