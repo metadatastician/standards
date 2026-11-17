@@ -68,12 +68,15 @@ may propose it: anyone may open a pull request against any path.
 |1 Core
 |`0-canon/`, `docs/decisions/`, `.github/` (workflows, forms, CODEOWNERS),
 `3-practice/LICENCE-POLICY.adoc`, `LICENSE`, `LICENSES/`, `canon.lock`,
-`standards_chora.deed`
+`standards_chora.deed`, `CITATION.cff`, `SECURITY.md`, the code of conduct and
+this guide (root and `3-practice/` copies), and any path not listed in this
+table
 |The owner's review. A change to the canon or to a ruling needs a decision
 issue first.
 
 |2 Trusted contributors
-|`1-formats/`, `2-protocols/`, `4-readiness/`, the rest of `3-practice/`,
+|`1-formats/`, `2-protocols/`, `4-readiness/`, `3-practice/` other than the
+files named in Perimeter 1,
 `scripts/`, `tools/`, `hooks/`, `standards-map.toml`
 |A maintainer's review, and the gate that covers the path passing with its
 tests.
@@ -162,7 +165,9 @@ https://github.com/metadatastician/standards/issues/new?template=decision.yml[de
 that names the pull request and says why. In its register field, give the
 number of the open owner-decision register issue (the one labelled
 `meta:umbrella` and `decision`). The owner rules on it, and the ruling is
-recorded there. Code of conduct enforcement has its own appeal route, in
+recorded there. If the decision you challenge was the owner's own, a
+maintainer who took no part in it rules instead; where there is none, an
+outside reviewer you propose in the issue does. Code of conduct enforcement has its own appeal route, in
 link:CODE_OF_CONDUCT.adoc[the code of conduct].
 
 == Licences

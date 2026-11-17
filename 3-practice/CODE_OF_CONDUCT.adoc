@@ -137,7 +137,7 @@ not shared with the person it concerns.
 |*Private Message* |Contact any maintainer directly |Quick questions,
 minor issues
 
-|*Anonymous email* |Write to the same address from one that does not identify you. We will not ask who you are. |When you need anonymity
+|*Anonymous email* |Write from an address that does not identify you, to conduct@themetadatastician.art, or to owner@themetadatastician.art for a report about a conduct team member. We will not ask who you are. |When you need anonymity
 
 |*Email the owner* |mailto:owner@themetadatastician.art[owner@themetadatastician.art] |A report about a conduct team member
 |===
@@ -259,8 +259,10 @@ If you believe an enforcement decision was made in error:
 [arabic]
 . *Wait 7 days* after the decision (cooling-off period). A permanent ban
 is the exception: it can be appealed only after 12 months
-. *Email* conduct@themetadatastician.art with subject line "`Appeal: [Original
-Report ID]`"
+. *Email* owner@themetadatastician.art with subject line "`Appeal: [Original
+Report ID]`". If the owner was involved in the incident or made the original
+decision, email conduct@themetadatastician.art instead. Whoever receives the
+appeal passes it on, unread, to the reviewer
 . *Explain* why you believe the decision should be reconsidered
 . *Provide* any new information not previously available
 
@@ -268,8 +270,9 @@ Report ID]`"
 
 * An appeal is reviewed by someone who was neither involved in the incident
 nor responsible for the original decision. Where no one in the project meets
-both conditions, it goes to an outside person whom both you and the project
-accept
+both conditions, it goes to an outside person whom you propose and an
+uninvolved member of the project accepts. If no member is uninvolved, the
+outside person you propose reviews it
 * You will receive a response within 14 days
 * The appeals decision is final
 * You may only appeal once per incident
