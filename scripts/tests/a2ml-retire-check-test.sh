@@ -25,6 +25,11 @@ TOOL="$SCRIPT_DIR/../a2ml-retire-check.sh"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 pass=0; fail=0
+# Nothing below may write to the repository under test. Work from the scratch
+# directory, and compare the repository's state at the end.
+cd "$WORK" || exit 1
+repo_state() { { git -C "$REPO_ROOT" rev-parse HEAD; git -C "$REPO_ROOT" status --porcelain; } 2>&1 | sha256sum; }
+REPO_STATE_BEFORE=$(repo_state)
 
 for t in bun jq git; do
   command -v "$t" >/dev/null 2>&1 || { echo "FAIL: $t is required by this suite" >&2; exit 1; }
@@ -302,13 +307,22 @@ c_counts_stale_fails() {
     && grep -qF -- '--write-counts' <<<"$out"
 }
 # A git tree at two commits: <name> with the read file and current counts.
+# The path is the helper's only output. git prints "nothing to commit" on
+# stdout, and a path polluted by it would send the next `git -C` and `mkdir`
+# into the caller's directory: so every step is silenced and must succeed.
 git_tree() {
-  local d; d=$(read_tree "$1"); git -C "$d" init -q
-  git -C "$d" -c user.email=t@t -c user.name=t add -A >/dev/null
-  run --root "$d" --write-counts >/dev/null; git -C "$d" add -A
-  git -C "$d" -c user.email=t@t -c user.name=t commit -q -m base; printf '%s' "$d"
+  local d; d=$(read_tree "$1") || return 1
+  [ -n "$d" ] && [ -d "$d" ] && [ ! -e "$d/.git" ] || return 1
+  { git -C "$d" init -q && git -C "$d" -c user.email=t@t -c user.name=t add -A \
+      && run --root "$d" --write-counts && git -C "$d" add -A \
+      && git -C "$d" -c user.email=t@t -c user.name=t commit -q -m base; } >/dev/null 2>&1 || return 1
+  printf '%s' "$d"
 }
-commit_all() { run --root "$1" --write-counts >/dev/null; git -C "$1" add -A; git -C "$1" -c user.email=t@t -c user.name=t commit -q -m next >/dev/null; }
+commit_all() { # commit_all DIR: DIR must be a fixture's own repository
+  [ -d "$1/.git" ] || return 1
+  { run --root "$1" --write-counts && git -C "$1" add -A \
+      && git -C "$1" -c user.email=t@t -c user.name=t commit -q -m next; } >/dev/null 2>&1
+}
 c_base_same_tree_passes() {
   local d; d=$(git_tree base0); run --root "$d" --base HEAD --check >/dev/null 2>&1
 }
@@ -405,14 +419,27 @@ check "a named --rulings file that does not exist is refused (exit 2)"          
 check "a record line blocks until the record names the exact path"                c_record_line
 
 # ── mutants ────────────────────────────────────────────────────────────────
+# A mutant is a copy of the tool in $WORK. The tool finds deed_lint.js and the
+# mapping specs beside itself, so a copy needs both named explicitly, or every
+# case fails for want of them and each "kill" proves nothing. Before a kill
+# counts, the same case must pass against an UNMODIFIED copy at that location.
 mutant() { # mutant <sed-expr> <label> <case-fn>
-  local expr=$1 label=$2 fn=$3 m saved
+  local expr=$1 label=$2 fn=$3 m saved rc w=$WORK
   [ -f "$TOOL" ] || { bad "mutant (): the tool is missing"; return; }
-  m="$WORK/mutant-$(basename "$TOOL")"; sed "$expr" "$TOOL" > "$m"
-  if ! bash -n "$m" || cmp -s "$m" "$TOOL"; then bad "mutant ($label) is invalid or identical — it proves nothing"; return; fi
-  saved=$TOOL; TOOL=$m
-  if "$fn"; then bad "mutant survived ($label)"; else ok "mutant killed ($label)"; fi
-  TOOL=$saved
+  saved=$TOOL; m="$w/mutant-$(basename "$TOOL")"
+  export DEED_LINT="$REPO_ROOT/1-formats/deed/tools/deed_lint.js" MAPPINGS="$REPO_ROOT/1-formats/deed/mappings"
+  # The cases build fixtures under $WORK by fixed names, so each run gets its own.
+  cp "$saved" "$m"; TOOL=$m; WORK=$(mktemp -d "$w/control.XXXXXX")
+  if "$fn"; then rc=0; else rc=1; fi
+  if [ "$rc" -ne 0 ]; then
+    bad "mutant control ($label): the case fails against an unmodified copy, so a kill would prove nothing"
+  else
+    sed "$expr" "$saved" > "$m"; WORK=$(mktemp -d "$w/mutated.XXXXXX")
+    if ! bash -n "$m" || cmp -s "$m" "$saved"; then bad "mutant ($label) is invalid or identical — it proves nothing"
+    elif "$fn"; then bad "mutant survived ($label)"
+    else ok "mutant killed ($label)"; fi
+  fi
+  TOOL=$saved; WORK=$w; unset DEED_LINT MAPPINGS
 }
 echo "=== mutants ==="
 mutant 's/^\( *\)blockers+=("reader:\$r")/\1:/' "readers are ignored" c_reader
@@ -454,5 +481,8 @@ else
 fi
 
 echo
+if [ "$(repo_state)" = "$REPO_STATE_BEFORE" ]; then ok "the suite left the repository as it found it (HEAD and status)"
+else bad "the suite changed the repository under test (HEAD or status differ from the start)"; fi
+
 echo "a2ml-retire-check: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

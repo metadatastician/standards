@@ -67,7 +67,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEED_LINT="${DEED_LINT:-$SCRIPT_DIR/../1-formats/deed/tools/deed_lint.js}"
-MAPPINGS="$SCRIPT_DIR/../1-formats/deed/mappings"
+MAPPINGS="${MAPPINGS:-$SCRIPT_DIR/../1-formats/deed/mappings}"
 BUN="${BUN:-bun}"
 SELF_TOOL="scripts/a2ml-retire-check.sh"
 SELF_TEST="scripts/tests/a2ml-retire-check-test.sh"
