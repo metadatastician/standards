@@ -114,7 +114,10 @@ cat >scripts/argv.sh <<'EOF'
 printf "argc=%s\n" "$#" > "$ARGV_OUT"
 EOF
 printf 'not executable\n' >scripts/plain.sh
-chmod +x scripts/pass.sh scripts/fail.sh scripts/cannot.sh scripts/argv.sh
+# dirty.sh passes but leaves an untracked file in the checkout (its cwd).
+printf '#!/usr/bin/env bash\n: >litter.txt\n' >scripts/dirty.sh
+printf 'build/\n' >.gitignore
+chmod +x scripts/pass.sh scripts/fail.sh scripts/cannot.sh scripts/argv.sh scripts/dirty.sh
 git add .
 git commit -qm "one: helper uses eval"
 C1="$(git rev-parse HEAD)"
@@ -185,6 +188,36 @@ expect_holds "script is unevaluated when REF is not the checkout" null --ref "$C
 printf '#!/usr/bin/env bash\nexit 1\n' >scripts/pass.sh
 expect_holds "script is unevaluated when the checkout's copy is modified" null "$L"
 git checkout -q -- scripts/pass.sh
+# A script may read any file in the checkout, so it counts as evidence only
+# when the checkout IS the committed tree (Codex finding on #1651).
+printf 'edited\n' >>docs/a.adoc
+expect_holds "script is unevaluated when another tracked file is modified" null "$L"
+git checkout -q -- docs/a.adoc
+printf 'staged\n' >>docs/a.adoc
+git add docs/a.adoc
+git show HEAD:docs/a.adoc >docs/a.adoc # the working file is the committed one again
+expect_holds "script is unevaluated when the index differs from the commit" null "$L"
+git reset -q -- docs/a.adoc
+git checkout -q -- docs/a.adoc
+printf 'x\n' >docs/new.adoc
+expect_holds "script is unevaluated with an untracked file in the checkout" null "$L"
+rm -f docs/new.adoc
+git update-index --assume-unchanged docs/a.adoc
+printf 'hidden\n' >>docs/a.adoc
+expect_holds "script is unevaluated when an index entry hides a change (assume-unchanged)" null "$L"
+git update-index --no-assume-unchanged docs/a.adoc
+git checkout -q -- docs/a.adoc
+mkdir -p build
+printf 'x\n' >build/out.txt
+expect_holds "a path the committed .gitignore ignores does not block a script" true "$L"
+rm -rf build
+ledger "$(row 1 '[{"kind":"script","path":"scripts/dirty.sh"},{"kind":"script","path":"scripts/pass.sh"}]')"
+run bash "$IE" evaluate "$L"
+verdict "a script that litters the checkout leaves later script checks unevaluated" \
+  rc0_and [ "$OUT" = '{"disposition":"landed","failed":[],"holds":null,"issue":1,"repo":"o/r","unevaluated":[1]}' ]
+rm -f litter.txt
+verdict "the fixture checkout is clean again" [ -z "$(git status --porcelain)" ]
+ledger "$(row 1 '[{"kind":"script","path":"scripts/pass.sh"}]')"
 git clone -q --depth 1 "file://$R" "$WORK/shallow"
 ledger "$(row 1 "[{\"kind\":\"commit-on-main\",\"sha\":\"$C1\"}]")"
 # Assertions run in this shell (never in a subshell), so their counts reach

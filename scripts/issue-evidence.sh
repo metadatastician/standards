@@ -50,9 +50,12 @@
 #
 # CHECKS ARE EVALUATED AT THE REF, NOT IN THE WORKING TREE. Every check reads
 # the committed tree through git (ls-tree, cat-file, grep at the commit,
-# merge-base). The one exception is `script`, which must run in a checkout: it
-# runs only when REF is the checked-out commit and the script file is
-# unmodified there, and is otherwise UNEVALUATED (null), never guessed.
+# merge-base). The one exception is `script`, which must run in a checkout and
+# may read any file there: it runs only when REF is the checked-out commit and
+# the checkout is exactly that commit (no staged, unstaged or hidden change to
+# a tracked file, and no untracked file the .gitignore files do not ignore),
+# and is otherwise UNEVALUATED (null), never guessed. Ignored files are not
+# compared: a script that reads one reads something outside the commit.
 #
 # SAFETY BOUNDARY (why no ledger value is ever code)
 #   Issue #1405 is about `eval` in test helpers: a value that reaches eval,
@@ -388,6 +391,20 @@ check_commit_on_main() { # SHA
   esac
 }
 
+# checkout_is_commit: 0 when the working tree and index are exactly HEAD's
+# tree: no staged or unstaged change to a tracked file, no index entry that
+# hides a change (assume-unchanged, skip-worktree) or is unmerged, and no
+# untracked file except one the checkout's .gitignore files ignore. Neither
+# core.excludesFile nor .git/info/exclude is honoured, so a file hidden only
+# by a personal exclude still counts as untracked.
+checkout_is_commit() {
+  git -C "$ROOT" diff --quiet --no-ext-diff --no-textconv HEAD -- 2>/dev/null || return 1
+  git -C "$ROOT" diff --cached --quiet --no-ext-diff --no-textconv HEAD -- 2>/dev/null || return 1
+  # `ls-files -v` tags a plain entry "H "; every other tag is refused.
+  [ -z "$(git -C "$ROOT" ls-files -z -v | tr '\0' '\n' | grep -v '^H ' | head -c 1)" ] || return 1
+  [ -z "$(git -C "$ROOT" ls-files -z --others --exclude-per-directory=.gitignore | head -c 1)" ] || return 1
+}
+
 check_script() { # PATH
   local path="$1" rc=0
   # Only explicitly allowlisted repository scripts are runnable.
@@ -402,10 +419,12 @@ check_script() { # PATH
   # checked out, never an invalid ledger and never "not evaluated".
   entry_at "$COMMIT" "$path" || return 1
   [ "$E_TYPE" = blob ] && [ "$E_MODE" = 100755 ] || return 1
-  # A script runs in the checkout, so it is evaluated only when the checkout
-  # IS the evaluated commit and the file there is the committed one.
+  # A script runs in the checkout and may read any file there, so it counts
+  # as evidence only when the checkout IS the evaluated commit: HEAD is that
+  # commit and checkout_is_commit holds. Re-checked before every script, so a
+  # script that litters the checkout leaves the later ones unevaluated.
   [ "$COMMIT" = "$HEAD_COMMIT" ] || return 2
-  GIT_LITERAL_PATHSPECS=1 git diff --quiet HEAD -- "$path" 2>/dev/null || return 2
+  checkout_is_commit || return 2
   # No argument: nothing from the ledger reaches the script's argv.
   (cd "$ROOT" && timeout "$SCRIPT_TIMEOUT" "./$path" </dev/null >&2) || rc=$?
   # 0 holds; 2 is this estate's "could not run", and 124+ is a timeout or a

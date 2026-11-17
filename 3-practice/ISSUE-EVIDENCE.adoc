@@ -90,8 +90,20 @@ component, no leading `-`. A pattern is a POSIX extended regular expression.
 |===
 
 Every check except `script` reads the committed tree at the evaluated commit
-through git, never the working directory. `script` runs only in a checkout of
-that commit with the script unmodified; otherwise it is unevaluated.
+through git (`ls-tree`, `cat-file`, `git grep` at the commit, `merge-base`),
+never the working directory, so an uncommitted edit cannot change its result.
+
+`script` has to run in a checkout, and a script may read any file there, so it
+counts as evidence only for the committed tree. It runs only when the
+evaluated commit is the checked-out commit and the checkout is exactly that
+commit: no staged or unstaged change to a tracked file, no index entry that
+hides one (assume-unchanged, skip-worktree, unmerged), and no untracked file
+except those the checkout's `.gitignore` files ignore. This is re-checked
+before every script, so a script that leaves a file behind makes the later
+ones unevaluated. Otherwise the check is *unevaluated*, never a pass. What is
+not guaranteed: ignored files (build output, caches) are not compared, so a
+script that reads an ignored path reads something outside the commit; the
+reviewer of a row should not choose such a script.
 
 A `script` whose file is absent at the evaluated commit, or is there without
 the executable bit, *fails*: deleting or renaming an evidence script is a
