@@ -46,4 +46,6 @@ jobs:
           persist-credentials: false
       # Pinned to a commit: ijson-jcs has no releases yet.
       - run: cargo install --git https://github.com/hyperpolymath/ijson-jcs --rev 0fdeea716fd558e9807362acf6f8202d56d8d88f --locked ijson-jcs
-      - run: scripts/check-ijson-jcs.sh --enforce .hypatia-baseline.json
+      # .machine_readable/issue-evidence.jsonl is born canonical (J-2): the
+      # issue-evidence bot also refuses a non-JCS row (scripts/issue-evidence.sh).
+      - run: scripts/check-ijson-jcs.sh --enforce .hypatia-baseline.json .machine_readable/issue-evidence.jsonl
