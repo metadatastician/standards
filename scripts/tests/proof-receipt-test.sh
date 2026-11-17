@@ -53,11 +53,11 @@ cat >"$R/scripts/grade-receipt.sh" <<EOF
 set -euo pipefail
 cd -- "\$(dirname -- "\${BASH_SOURCE[0]}")/.."
 export LC_ALL=C.UTF-8
-RECEIPT_STD="$ROOT"
+RECEIPT_STD="\${STD_DIR:-$ROOT}"
 RECEIPT_STANDARDS_COMMIT=0000000000000000000000000000000000000000
 RECEIPT_OUT=verification/receipts/t_praxis.deed
 RECEIPT_REPOSITORY="\${HOME_REPOSITORY:-o/home}"
-RECEIPT_DEFAULT_BRANCH=main
+RECEIPT_DEFAULT_BRANCH="\${DEFAULT_BRANCH:-main}"
 RECEIPT_CANONICAL_NAME=t-proof-receipt
 RECEIPT_SCRIPT=scripts/grade-receipt.sh
 SIB="$SIB"
@@ -85,6 +85,8 @@ receipt_inputs() {
 }
 receipt_imports() {
   local pin; pin="\${IMPORT_COMMIT:-\$(git show "\$2:scripts/sibling.pin")}"
+  # A repin the home inputs do not see: only the hook, asked at HEAD, knows.
+  [ "\$2" != HEAD ] || pin="\${HEAD_IMPORT_COMMIT:-\$pin}"
   case "\$1" in
     agda) receipt_agda_cone src/T/A.agda src "\$SIB/src" | sed -n "s|^\$SIB/||p" \
             | while read -r p; do printf '%s|%s|%s|%s\n' "\${IMPORT_REPOSITORY:-o/sibling}" "\$pin" "\$SIB" "\$p"; done ;;
@@ -109,25 +111,25 @@ out=$(cd "$R" && bash scripts/grade-receipt.sh --inputs agda)
 # without --image derives PWG-2ii, and a malformed image is refused.
 IMG="ubuntu:24.04@sha256:$(printf 'a%.0s' $(seq 64))"
 for p in agda rocq lean; do
-  (cd "$R" && bash scripts/grade-receipt.sh --run-row "$p" --run "https://ci.example/run/1" --commit "$C" --checker "$p 1" --reported "ok") >>"$WORK/noimgrows" \
+  (cd "$R" && bash scripts/grade-receipt.sh --run-row "$p" --run "https://ci.example/run/1" --commit "$C" --checker "$p 1" --reported "ok" --axioms none) >>"$WORK/noimgrows" \
     || bad "--run-row $p without --image"
 done
 expect "a run recorded without --image derives PWG-2ii, not PWG-1" 0 "T-1  PWG-2ii" --emit-run "$WORK/noimgrows" --out "$WORK/noimg_praxis.deed"
 grep -q ':image ' "$WORK/noimg_praxis.deed" && bad "a run without --image got an :image" || ok "a run without --image carries no :image"
-expect "a run row with a tag-only image is refused" 1 "a row's image must be NAME[:TAG]@sha256" --run-row rocq --run "https://ci.example/run/1" --commit "$C" --checker "rocq 1" --reported ok --image "ubuntu:24.04"
+expect "a run row with a tag-only image is refused" 1 "a row's image must be NAME[:TAG]@sha256" --run-row rocq --run "https://ci.example/run/1" --commit "$C" --checker "rocq 1" --reported ok --axioms none --image "ubuntu:24.04"
 # The generator accepts exactly what the reader accepts, so no row it writes
 # is refused later: a malformed NAME is refused at --run-row, and the same
 # row hand-written into a rows file is refused at --emit-run.
 D64=$(printf 'a%.0s' $(seq 64))
 for bad_img in "a//b@sha256:$D64" "debian:@sha256:$D64" "$(printf 'a%.0s' $(seq 256))@sha256:$D64"; do
-  expect "a run row with image ${bad_img:0:12}… is refused" 1 "a row's image must be NAME[:TAG]@sha256" --run-row rocq --run "https://ci.example/run/1" --commit "$C" --checker "rocq 1" --reported ok --image "$bad_img"
+  expect "a run row with image ${bad_img:0:12}… is refused" 1 "a row's image must be NAME[:TAG]@sha256" --run-row rocq --run "https://ci.example/run/1" --commit "$C" --checker "rocq 1" --reported ok --axioms none --image "$bad_img"
 done
 grep '^rocq|' "$WORK/noimgrows" | sed "s/\$/|||a\/\/b@sha256:$D64/" >"$WORK/badimgrows"
 expect "a rows file with a malformed image is refused at --emit-run" 1 "a row's image must be NAME[:TAG]@sha256" --emit-run "$WORK/badimgrows" --out "$WORK/badimg_praxis.deed"
 
 # Rows for a run that passed at C in a pinned image, then a receipt for it.
 for p in agda rocq lean; do
-  (cd "$R" && bash scripts/grade-receipt.sh --run-row "$p" --run "https://ci.example/run/1" --commit "$C" --checker "$p 1" --reported "ok" --image "$IMG") >>"$WORK/rows" \
+  (cd "$R" && bash scripts/grade-receipt.sh --run-row "$p" --run "https://ci.example/run/1" --commit "$C" --checker "$p 1" --reported "ok" --axioms none --image "$IMG") >>"$WORK/rows" \
     || bad "--run-row $p"
 done
 expect "--emit-run writes a receipt the reader accepts at PWG-1" 0 "T-1  PWG-1" --emit-run "$WORK/rows" --out "$WORK/emitted_praxis.deed"
@@ -144,6 +146,45 @@ expect "--write writes the receipt" 0 "WROTE verification/receipts/t_praxis.deed
 gitq -C "$R" add -A; gitq -C "$R" commit -qm receipt
 expect "--check passes: tree, ledgers, git checks with --import, reader, control" 0 "PASS: negative control" --check
 expect "--check runs the shared checker on the import" 0 "import o/sibling: the manifest holds at $SC" --check
+
+# A run row states the axioms its run reported; it never assumes "none".
+expect "a run row without --axioms is refused" 1 "--run-row needs --axioms" --run-row rocq --run "https://ci.example/run/x" --commit "$C" --checker "rocq 1" --reported ok
+expect "a run row with a malformed axiom is refused" 1 "an axiom must be name:c" --run-row rocq --run "https://ci.example/run/x" --commit "$C" --checker "rocq 1" --reported ok --axioms Classical
+out=$(cd "$R" && bash scripts/grade-receipt.sh --run-row rocq --run "https://ci.example/run/x" --commit "$C" --checker "rocq 1" --reported ok --axioms Classical:c 2>&1)
+[ "$(cut -d'|' -f10 <<<"$out")" = Classical:c ] && ok "a run row records the axioms it was given" || bad "the axioms field: $out"
+out=$(cd "$R" && bash scripts/grade-receipt.sh --run-row rocq --run "https://ci.example/run/x" --commit "$C" --checker "rocq 1" --reported ok --axioms none 2>&1)
+[ -z "$(cut -d'|' -f10 <<<"$out")" ] && ok "--axioms none records an empty axioms field" || bad "--axioms none: $out"
+
+# The imported files count toward currency (§8.5.1).  A repin that the home
+# inputs do not see is caught by asking the hook again at HEAD: the commit is
+# another, so the binding moves even though the bytes are the same.
+SCX=$(gitq -C "$SIB" commit-tree "$SC^{tree}" -p "$SC" -m "same tree, another commit")
+HEAD_IMPORT_COMMIT="$SCX" expect "a repin the home inputs do not see makes the receipt stale" 1 "the agda imports changed since run" --check
+# And the sibling checkout must hold the pinned files: one edited since the
+# run is not taken for what the run read.
+printf -- '-- edited\n' >>"$SIB/src/Sib.agda"
+expect "an edited imported checkout makes the receipt stale" 1 "differs from o/sibling at $SC" --check
+gitq -C "$SIB" checkout -q -- src/Sib.agda
+expect "with the checkout restored, --check passes again" 0 "PASS: negative control" --check
+
+# No current run, so nothing is graded and nothing names the :source-commit.
+# HEAD is not taken for it (on a pull request it may not survive the merge):
+# --write needs --commit.
+awk -F'|' 'BEGIN{OFS="|"} {$8="superseded"; $9="by hand"; print}' "$R/runs.rows" >"$WORK/superrows"
+RUNS_FILE="$WORK/superrows" expect "--write with no current run and no --commit is refused" 1 "pass --commit with a commit on main" --write
+RUNS_FILE="$WORK/superrows" expect "--write with no current run takes --commit" 0 "WROTE verification/receipts/t_praxis.deed (source-commit $C)" --write --commit "$C"
+grep -q ':pwg' "$R/verification/receipts/t_praxis.deed" && grep -q ':pwg ungraded' "$R/verification/receipts/t_praxis.deed" \
+  && ok "and grades nothing" || bad "a receipt with no current run carries a grade"
+gitq -C "$R" checkout -q -- verification/receipts/t_praxis.deed
+
+# The git checks run against the default branch only.  A clone without it
+# cannot run them, and a checker that cannot run is exit 2, not a failed check.
+DEFAULT_BRANCH=trunk expect "a clone without the default branch cannot run the git checks (exit 2)" 2 "neither origin/trunk nor trunk" --check
+mkdir -p "$WORK/std/scripts"
+ln -s "$ROOT/1-formats" "$WORK/std/1-formats"
+for s in proof-receipt.sh proof-inputs-sha256.sh; do ln -s "$ROOT/scripts/$s" "$WORK/std/scripts/$s"; done
+printf '#!/usr/bin/env bash\necho "cannot run: jq is not installed" >&2\nexit 2\n' >"$WORK/std/scripts/check-proof-receipt.sh"
+STD_DIR="$WORK/std" expect "a checker that cannot run makes the gate exit 2, not 1" 2 "could not run" --check
 
 # A tampered receipt fails the regeneration diff.
 sed -i 's/:pwg PWG-1/:pwg PWG-2ii/' "$R/verification/receipts/t_praxis.deed"
@@ -195,7 +236,7 @@ MIXED_CASE=1 expect "an imported repository named in two spellings is refused" 1
 cp "$WORK/grade.orig" "$R/scripts/grade-receipt.sh"
 
 # An invocation hook must print one line, not have its tail dropped.
-TWO_LINES=1 expect "an invocation hook that prints two lines is refused" 1 "must print exactly one line" --run-row rocq --run "https://ci.example/run/2" --commit "$C" --checker "rocq 1" --reported ok
+TWO_LINES=1 expect "an invocation hook that prints two lines is refused" 1 "must print exactly one line" --run-row rocq --run "https://ci.example/run/2" --commit "$C" --checker "rocq 1" --reported ok --axioms none
 
 # A claim typed proven-with-postulates needs the axioms its token names.
 sed -i 's/T-1|proven|theorem/T-1|proven-with-postulates|theorem/' "$R/scripts/grade-receipt.sh"
@@ -272,7 +313,7 @@ SC_LATER=$(git -C "$SIB" rev-parse HEAD)
 IMPORT_COMMIT="$SC_LATER" expect "a hook that now imports something else is refused" 1 "the agda run recorded imports" --write
 # The run row binds the pinned bytes, so the imported clone must hold them:
 # a sibling checked out at another commit is refused at --run-row.
-expect "a run row is refused when the imported clone is not at its pin" 1 "differs from o/sibling at $SC" --run-row agda --run "https://ci.example/run/w" --commit "$C" --checker "agda 1" --reported ok
+expect "a run row is refused when the imported clone is not at its pin" 1 "differs from o/sibling at $SC" --run-row agda --run "https://ci.example/run/w" --commit "$C" --checker "agda 1" --reported ok --axioms none
 gitq -C "$SIB" checkout -q "$SC"
 
 # The gate never reads or rewrites the home EXIT handler, so one holding quotes runs as written.
@@ -283,7 +324,7 @@ cp "$WORK/grade.orig" "$R/scripts/grade-receipt.sh"
 # A changed trusted base is earned again (§8.4): the Agda row binds the list
 # its run had, and a list that differs now is refused.
 TB=1 expect "a trusted base the recorded run did not bind is refused" 1 "is earned again (§8.4)" --write
-(cd "$R" && TB=1 bash scripts/grade-receipt.sh --run-row agda --run "https://ci.example/run/3" --commit "$C" --checker "agda 1" --reported ok) >"$WORK/tbrows" || bad "--run-row agda with a trusted base"
+(cd "$R" && TB=1 bash scripts/grade-receipt.sh --run-row agda --run "https://ci.example/run/3" --commit "$C" --checker "agda 1" --reported ok --axioms none) >"$WORK/tbrows" || bad "--run-row agda with a trusted base"
 [ "$(tr -cd '|' <"$WORK/tbrows" | wc -c)" = 11 ] && ok "an Agda row with a trusted base binds its sha256 as a twelfth field" || bad "the Agda row binds no trusted base: $(cat "$WORK/tbrows")"
 grep -v '^agda|' "$R/runs.rows" >>"$WORK/tbrows"
 TB=1 expect "a run bound to its trusted base writes a receipt" 0 "PASS: the pinned reader" --emit-run "$WORK/tbrows" --out "$WORK/tb_praxis.deed"
@@ -295,7 +336,7 @@ printf 'module T.Q where\n' >"$R/src/T/Q\"uote.agda"
 gitq -C "$R" add -A; gitq -C "$R" commit -qm quote
 QC=$(git -C "$R" rev-parse HEAD)
 sed -i 's/^    rocq) printf .legs\/rocq\/T.v\\n. ;;$/    rocq) printf "legs\/rocq\/T.v\\n"; if [ -n "${QUOTE:-}" ]; then printf "src\/T\/Q\\"uote.agda\\n"; fi ;;/' "$R/scripts/grade-receipt.sh"
-(cd "$R" && QUOTE=1 bash scripts/grade-receipt.sh --run-row rocq --run "https://ci.example/run/q" --commit "$QC" --checker "rocq 1" --reported ok) >"$WORK/qrows" 2>/dev/null
+(cd "$R" && QUOTE=1 bash scripts/grade-receipt.sh --run-row rocq --run "https://ci.example/run/q" --commit "$QC" --checker "rocq 1" --reported ok --axioms none) >"$WORK/qrows" 2>/dev/null
 RUNS_FILE="$WORK/qrows" QUOTE=1 expect "an input path holding a double quote is refused" 1 "holds a double quote" --write
 cp "$WORK/grade.orig" "$R/scripts/grade-receipt.sh"
 
@@ -303,14 +344,14 @@ cp "$WORK/grade.orig" "$R/scripts/grade-receipt.sh"
 # leg re-run at a later commit still counts toward PWG-2ii, not PWG-1, and the
 # :source-commit stays the Agda leg's.
 D=$(git -C "$R" rev-parse HEAD)
-(cd "$R" && bash scripts/grade-receipt.sh --run-row rocq --run "https://ci.example/run/d" --commit "$D" --checker "rocq 1" --reported ok) >"$WORK/drows"
+(cd "$R" && bash scripts/grade-receipt.sh --run-row rocq --run "https://ci.example/run/d" --commit "$D" --checker "rocq 1" --reported ok --axioms none) >"$WORK/drows"
 expect "current legs at different commits write a receipt" 0 "T-1  PWG-2ii" --emit-run "$WORK/drows" --out "$WORK/diff_praxis.deed"
 grep -q ":source-commit \"$C\"" "$WORK/diff_praxis.deed" && ok "its :source-commit is the Agda leg's commit" || bad "the :source-commit is not the Agda leg's"
 bash "$ROOT/scripts/check-proof-receipt.sh" --branch refs/heads/main --import "o/sibling=$SIB" "$WORK/diff_praxis.deed" "$R" >/dev/null 2>&1 && ok "the shared checker holds on it" || bad "the shared checker refuses the receipt with legs at different commits"
 
 # A leg outside dependent type theory (§8.3) takes rows like any other, and
 # makes its claim foundation-diverse when it is RECONCILED with a current run.
-(cd "$R" && EXTRA=RECONCILED bash scripts/grade-receipt.sh --run-row isabelle --run "https://ci.example/run/i" --commit "$C" --checker "isabelle 1" --reported ok) >"$WORK/irows" || bad "--run-row isabelle"
+(cd "$R" && EXTRA=RECONCILED bash scripts/grade-receipt.sh --run-row isabelle --run "https://ci.example/run/i" --commit "$C" --checker "isabelle 1" --reported ok --axioms none) >"$WORK/irows" || bad "--run-row isabelle"
 cat "$WORK/rows" >>"$WORK/irows"
 EXTRA=RECONCILED expect "a RECONCILED Isabelle leg makes the claim foundation-diverse" 0 "T-1  PWG-1  foundation-diverse true" --emit-run "$WORK/irows" --out "$WORK/iso_praxis.deed"
 grep -q '(leg :prover isabelle :route re-proved :token proven :state RECONCILED' "$WORK/iso_praxis.deed" && ok "the receipt carries the Isabelle leg" || bad "no Isabelle leg in the receipt"
@@ -329,7 +370,7 @@ RUNS_FILE="$WORK/agda.rows" ECHO_ROW="$C|$D|inputs-sha256|refs/pull/2/head" expe
 cp "$R/verification/receipts/t_praxis.deed" "$WORK/before2_praxis.deed"
 gitq -C "$R" checkout -q -b side; printf 'side\n' >"$R/side.txt"; gitq -C "$R" add -A; gitq -C "$R" commit -qm side
 S=$(git -C "$R" rev-parse HEAD); gitq -C "$R" checkout -q main
-(cd "$R" && bash scripts/grade-receipt.sh --run-row agda --run "https://ci.example/run/s" --commit "$S" --checker "agda 1" --reported ok) >"$WORK/srows"
+(cd "$R" && bash scripts/grade-receipt.sh --run-row agda --run "https://ci.example/run/s" --commit "$S" --checker "agda 1" --reported ok --axioms none) >"$WORK/srows"
 RUNS_FILE="$WORK/srows" expect "--write refuses a receipt whose source is off the default branch" 1 "the git checks of PROOF-POLICY §8.5.3 failed" --write
 cmp -s "$WORK/before2_praxis.deed" "$R/verification/receipts/t_praxis.deed" \
   && ok "and leaves the existing receipt as it was" || bad "a refused --write changed the receipt"
