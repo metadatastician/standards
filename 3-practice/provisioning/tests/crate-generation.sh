@@ -12,6 +12,8 @@ cat > "$work/bin/guix-control" <<'STUB'
 set -euo pipefail
 lock=${3#--lockfile=}
 if grep -q $'\r' "$lock"; then exit 88; fi
+# A container mounted on the repository alone sees only paths under it.
+case $(cd "$(dirname "$lock")" && pwd -P) in "$REPO_FOR_STUB"/*) ;; *) exit 89 ;; esac
 printf '(define rust-a-1.0\n  (crate-source "a" "1.0" "fixture"))\n'
 case "${IMPORT_MODE:-good}" in
   missing) exit 0 ;;
@@ -23,17 +25,21 @@ STUB
 chmod +x "$work/bin/guix-control"
 export PATH="$work/bin:$PATH" GUIX=guix-control
 cd "$work/repository with spaces"
+REPO_FOR_STUB=$(pwd -P); export REPO_FOR_STUB
 printf 'version = 4\r\n[[package]]\r\nname = "a"\r\nsource = "registry+https://github.com/rust-lang/crates.io-index"\r\n[[package]]\r\nname = "b"\r\nsource = "git+https://example.invalid/b#0123456789012345678901234567890123456789"\r\n' > Cargo.lock
 cp Cargo.lock "$work/original-lock"
 printf ';; SPDX-License-Identifier: MPL-2.0\n' > guix.scm
 run() { PROVISION_ROOT="$PWD" "$BASH" "$engine" crates-scm; }
 run
 grep -q 'rust-b-1.0' build/guix/crates.scm
+clean() { [ -z "$(find build/guix -name '.tmp.*')" ] || { echo 'scratch directory left behind' >&2; exit 1; }; }
+clean
 cmp Cargo.lock "$work/original-lock"
 cp build/guix/crates.scm "$work/previous"
 for mode in failed missing duplicate; do
   if IMPORT_MODE="$mode" run; then echo "accepted broken importer: $mode" >&2; exit 1; fi
   cmp build/guix/crates.scm "$work/previous"
+  clean
 done
 rm build/guix/crates.scm
 mkdir build/guix/crates.scm
@@ -42,4 +48,4 @@ rmdir build/guix/crates.scm
 printf 'version = 4\n[[package]]\nname = "local"\nversion = "1.0.0"\n' > Cargo.lock
 run
 grep -q '(list))' build/guix/crates.scm
-printf 'passed 6 crate-generation controls\n'
+printf 'passed 8 crate-generation controls\n'

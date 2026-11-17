@@ -530,9 +530,10 @@ cmd_doctor() {
   printf '%s doctor — %s (%s; languages: %s)\n' "$REPO_NAME" "$REPO_SLUG" "$ARCHETYPE" "${LANGS[*]}"
 
   hdr "Core toolchain"
+  # Record the FAIL and carry on: probes below are bounded by `$T`, which
+  # degrades to empty output, and the PASS/WARN/FAIL summary must still print.
   if ! have timeout && ! have gtimeout; then
     fail "PV-E42 GNU coreutils is required for bounded diagnostics (macOS: brew install coreutils)"
-    return 1
   fi
   have git && pass "git $($T git --version 2>/dev/null | awk '{print $3}')" || fail "PV-E01 git not found — install git from your OS package manager"
   if have just; then
@@ -798,7 +799,12 @@ GUIX="${GUIX:-guix}"
 cmd_crates_scm() {
   local dst=build/guix/crates.scm want got unique tmp spdx staged status=0
   [ -f Cargo.lock ] || { info "no Cargo.lock — no crate inputs"; return 0; }
-  tmp=$(mktemp -d) || return 1
+  # The scratch directory sits inside the repository: a GUIX wrapper that runs in a
+  # container mounted on the repository alone cannot see a system temp directory.
+  # Its own `*` .gitignore keeps it out of any commit; it is removed on every path.
+  mkdir -p build/guix || return 1
+  tmp=$(mktemp -d build/guix/.tmp.XXXXXX) || return 1
+  printf '*\n' >"$tmp/.gitignore" || { rm -rf -- "$tmp"; return 1; }
   sed $'s/\r$//' Cargo.lock >"$tmp/Cargo.lock" || { rm -rf -- "$tmp"; return 1; }
   want=$(awk '/^source = / { n++ } END { print n+0 }' "$tmp/Cargo.lock")
   : >"$tmp/sources"

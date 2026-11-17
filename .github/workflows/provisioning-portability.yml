@@ -35,3 +35,6 @@ jobs:
       - name: Refuse failed or incomplete crate imports without replacing prior inputs
         shell: bash
         run: bash 3-practice/provisioning/tests/crate-generation.sh
+      - name: Print the doctor summary even without timeout or gtimeout
+        shell: bash
+        run: bash 3-practice/provisioning/tests/doctor-summary.sh
