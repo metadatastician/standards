@@ -156,7 +156,15 @@ reopened.
 
 == 5. Running it
 
-* `.github/workflows/issue-evidence.yml` runs on a push to `main` that touches
+IMPORTANT: The two workflows this section and §6 describe,
+`.github/workflows/issue-evidence.yml` and
+`.github/workflows/issue-evidence-reusable.yml`, are added by the follow-up
+pull request #1652, not by the change that introduced this page. Until #1652
+merges they are not in the repository, no bot closes or reopens anything, and
+the ledger is evaluated only by hand (`scripts/issue-evidence.sh`) and by its
+test suite. The bullets below and §6 describe the workflows as #1652 adds them.
+
+* `.github/workflows/issue-evidence.yml` (from #1652) runs on a push to `main` that touches
   the ledger or the bot, weekly, and by hand. Every run writes the decision
   table, and a report-only list of candidate rows, to the job summary.
 * It applies nothing unless the repository variable `ISSUE_EVIDENCE_APPLY` is
@@ -173,6 +181,9 @@ first, and flags a closing keyword. It is a queue for people to write rows
 from, never an action.
 
 == 6. Adopting it in another repository
+
+These steps need the reusable workflow from #1652; until that pull request
+merges there is no commit of it to pin.
 
 . Add an empty `.machine_readable/issue-evidence.jsonl`.
 . Add a caller that pins the reusable to a full commit SHA, and record that
@@ -215,6 +226,7 @@ changes only when it moves its pin.
 
 | 2026-11-17
 | Created
-| Ledger format, check vocabulary, evaluator, reusable workflow and caller.
-  The caller is report-only until `ISSUE_EVIDENCE_APPLY` is set.
+| Ledger format, check vocabulary and evaluator. The reusable workflow and
+  its caller follow in #1652; the caller is report-only until
+  `ISSUE_EVIDENCE_APPLY` is set.
 |===
