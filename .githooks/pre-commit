@@ -93,6 +93,11 @@ run_validator_required "Staged secret scan (gitleaks)" "validate-gitleaks.sh" "s
 # repo actually has staged.
 run_validator_required "Ecosystem lint + format" "validate-lint-format.sh" "staged"
 
+# Shrink-only ledgers: a staged fix that makes a ledger line stale prunes that
+# line and stages the ledger (owner decision 2026-11-17). Before the K9 gate,
+# which reads the pruned ledger. Scope "always": a deletion-only commit counts.
+run_validator "Shrink-only ledger prune" "validate-ledger-prune.sh" "always"
+
 # Language Policy
 default_validator '\.(ts|tsx)$' "TypeScript files not allowed. Use AffineScript instead."
 default_validator '\.go$' "Go files not allowed. Use Rust instead."
