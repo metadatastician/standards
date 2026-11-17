@@ -104,9 +104,30 @@ expect "the Agda input set holds the home cone and the pin, not the sibling" 0 "
 out=$(cd "$R" && bash scripts/grade-receipt.sh --inputs agda)
 [ "$out" = $'scripts/sibling.pin\nsrc/T/A.agda\nsrc/T/B.agda' ] && ok "the Agda input set is exactly the home files, sorted" || bad "the Agda input set: $out"
 
-# Rows for a run that passed at C, then a receipt for that run.
+# §8.2 (owner ruling 2026-11-16): a run counts toward PWG-1 only when it
+# recorded the digest-pinned image its checker ran in.  The same run recorded
+# without --image derives PWG-2ii, and a malformed image is refused.
+IMG="ubuntu:24.04@sha256:$(printf 'a%.0s' $(seq 64))"
 for p in agda rocq lean; do
-  (cd "$R" && bash scripts/grade-receipt.sh --run-row "$p" --run "https://ci.example/run/1" --commit "$C" --checker "$p 1" --reported "ok") >>"$WORK/rows" \
+  (cd "$R" && bash scripts/grade-receipt.sh --run-row "$p" --run "https://ci.example/run/1" --commit "$C" --checker "$p 1" --reported "ok") >>"$WORK/noimgrows" \
+    || bad "--run-row $p without --image"
+done
+expect "a run recorded without --image derives PWG-2ii, not PWG-1" 0 "T-1  PWG-2ii" --emit-run "$WORK/noimgrows" --out "$WORK/noimg_praxis.deed"
+grep -q ':image ' "$WORK/noimg_praxis.deed" && bad "a run without --image got an :image" || ok "a run without --image carries no :image"
+expect "a run row with a tag-only image is refused" 1 "a row's image must be NAME[:TAG]@sha256" --run-row rocq --run "https://ci.example/run/1" --commit "$C" --checker "rocq 1" --reported ok --image "ubuntu:24.04"
+# The generator accepts exactly what the reader accepts, so no row it writes
+# is refused later: a malformed NAME is refused at --run-row, and the same
+# row hand-written into a rows file is refused at --emit-run.
+D64=$(printf 'a%.0s' $(seq 64))
+for bad_img in "a//b@sha256:$D64" "debian:@sha256:$D64" "$(printf 'a%.0s' $(seq 256))@sha256:$D64"; do
+  expect "a run row with image ${bad_img:0:12}… is refused" 1 "a row's image must be NAME[:TAG]@sha256" --run-row rocq --run "https://ci.example/run/1" --commit "$C" --checker "rocq 1" --reported ok --image "$bad_img"
+done
+grep '^rocq|' "$WORK/noimgrows" | sed "s/\$/|||a\/\/b@sha256:$D64/" >"$WORK/badimgrows"
+expect "a rows file with a malformed image is refused at --emit-run" 1 "a row's image must be NAME[:TAG]@sha256" --emit-run "$WORK/badimgrows" --out "$WORK/badimg_praxis.deed"
+
+# Rows for a run that passed at C in a pinned image, then a receipt for it.
+for p in agda rocq lean; do
+  (cd "$R" && bash scripts/grade-receipt.sh --run-row "$p" --run "https://ci.example/run/1" --commit "$C" --checker "$p 1" --reported "ok" --image "$IMG") >>"$WORK/rows" \
     || bad "--run-row $p"
 done
 expect "--emit-run writes a receipt the reader accepts at PWG-1" 0 "T-1  PWG-1" --emit-run "$WORK/rows" --out "$WORK/emitted_praxis.deed"
@@ -115,6 +136,7 @@ grep -q '(import :repository "o/sibling" :commit "'"$SC"'"' "$WORK/emitted_praxi
 grep -q '(file :path "src/Sib.agda"' "$WORK/emitted_praxis.deed" \
   && ok "the import lists the sibling file by its path in the sibling" || bad "the import does not list src/Sib.agda"
 grep -q 'T-2' "$WORK/emitted_praxis.deed" && bad "a demonstration got a claim" || ok "a demonstration has no claim"
+[ "$(grep -c ":image \"$IMG\"" "$WORK/emitted_praxis.deed")" = 3 ] && ok "each current leg receipt names its image" || bad "the receipt does not name the image on each current leg"
 
 # Record the run, write, check.
 cp "$WORK/rows" "$R/runs.rows"; gitq -C "$R" commit -qam "record the run"
