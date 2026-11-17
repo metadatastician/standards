@@ -589,7 +589,7 @@ counts_json() {
 # The command that regenerates the counts file with the same inputs.
 regen_cmd() {
   local cmd="bash scripts/a2ml-retire-check.sh" r
-  [ "$ROOT" = "$(pwd)" ] || cmd+=" --root $ROOT"
+  [ "$ROOT" = "$PWD" ] || cmd+=" --root $ROOT"
   [ -z "$REPO_ARG" ] || cmd+=" --repo $REPO_ARG"
   for r in "${RULINGS_ARG[@]}"; do cmd+=" --rulings $r"; done
   [ -z "$COUNTS_ARG" ] || cmd+=" --counts $COUNTS_ARG"
