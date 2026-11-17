@@ -27,7 +27,10 @@
 #                        lean, or a prover receipt_extra_legs names)
 #   --inputs PROVER      print the §8.5.1 input set of one leg, one path a line
 #   --run-row PROVER --run URL --commit SHA --checker TEXT --reported TEXT
+#                        [--image NAME@sha256:<64 hex>]
 #                        print one ledger row for a run that just passed
+#                        (--image: the digest-pinned image the checker ran
+#                        in; without it the run never counts toward PWG-1)
 #   --emit-run ROWS --out FILE
 #                        write a receipt for the run whose rows are in ROWS:
 #                        they become current, and the earlier current receipts
@@ -55,9 +58,14 @@
 #                           [| trusted base: the sha256 of what
 #                           receipt_trusted_base printed, on an Agda row whose
 #                           trusted base is not empty; the imports field may
-#                           then be empty]].  The gate refuses a current row
-#                           whose bindings differ from what the hooks derive
-#                           now: the run is recorded again (§8.4)
+#                           then be empty
+#                           [| image: NAME[:TAG]@sha256:<64 hex>, the
+#                           digest-pinned image the checker ran in, which
+#                           --run-row --image writes; fields 11 and 12 may
+#                           then be empty; PWG-1 needs it on all three legs]]]).
+#                           The gate refuses a current row whose bindings
+#                           differ from what the hooks derive now: the run is
+#                           recorded again (§8.4)
 #   receipt_echoes          the echo ledger: source | image | inputs-sha256 |
 #                           fetch ref
 #   receipt_header          the comment lines that open the receipt, after
@@ -214,23 +222,29 @@ _receipt_echo_ref() { local c="$1"; awk -F'|' -v c="$c" '$1==c{print $4}' "$_rec
 # Validate one row; print nothing.  A field may not hold " or \ (deed strings)
 # and may not be empty, except the reason of a current receipt and the axioms.
 _receipt_check_row() {
-  local row="$1" prover run commit checker inv dig said state reason axioms imports tb x n
+  local row="$1" prover run commit checker inv dig said state reason axioms imports tb img x n
   local -a a
-  IFS='|' read -r prover run commit checker inv dig said state reason axioms imports tb <<< "$row"
+  IFS='|' read -r prover run commit checker inv dig said state reason axioms imports tb img <<< "$row"
   # Ten fields; eleven when the run read files of an imported repository,
   # whose last field binds those files to the run (OWNER/REPO@COMMIT=SHA256,
   # comma-separated); twelve on an Agda row with a trusted base, whose last
   # field is that list's sha256 (the imports field may then be empty).  So a
-  # receipt can never re-describe what a run imported or trusted.
+  # receipt can never re-describe what a run imported or trusted.  Thirteen
+  # when the run recorded the digest-pinned image its checker ran in, the last
+  # field (fields 11 and 12 may then be empty): only such a run can count
+  # toward PWG-1 (PROOF-POLICY §8.2, owner ruling 2026-11-16).
   n="$(tr -cd '|' <<< "$row" | wc -c)"
-  [[ "$n" == 9 || "$n" == 10 || "$n" == 11 ]] || receipt_die "a ledger row needs 10 fields, 11 with imports, or 12 with a trusted base: $row"
-  if [[ "$n" == 10 || ( "$n" == 11 && -n "$imports" ) ]]; then
+  [[ "$n" == 9 || "$n" == 10 || "$n" == 11 || "$n" == 12 ]] || receipt_die "a ledger row needs 10 fields, 11 with imports, 12 with a trusted base, or 13 with an image: $row"
+  if [[ "$n" == 10 || ( "$n" -ge 11 && -n "$imports" ) ]]; then
     [[ "$imports" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+@[0-9a-f]{40}=[0-9a-f]{64}(,[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+@[0-9a-f]{40}=[0-9a-f]{64})*$ ]] \
       || receipt_die "a row's imports must be OWNER/REPO@COMMIT=SHA256, comma-separated: $row"
   fi
-  if [[ "$n" == 11 ]]; then
+  if [[ "$n" == 11 || ( "$n" == 12 && -n "$tb" ) ]]; then
     [[ "$prover" == agda ]] || receipt_die "only an Agda row binds a trusted base: $row"
     [[ "$tb" =~ ^[0-9a-f]{64}$ ]] || receipt_die "a row's trusted-base binding must be a sha256: $row"
+  fi
+  if [[ "$n" == 12 ]]; then
+    [[ "$img" =~ ^[^@[:space:]]+@sha256:[0-9a-f]{64}$ ]] || receipt_die "a row's image must be NAME[:TAG]@sha256:<64 hex>: $row"
   fi
   [[ "$row" != *'"'* && "$row" != *'\'* ]] || receipt_die "a ledger row holds a quote or backslash: $row"
   [[ "$row" != *[[:cntrl:]]* ]] || receipt_die "a ledger row holds a control character, which a deed string cannot: $row"
@@ -364,6 +378,9 @@ _receipt_describes_source() {
     c="$img"
   done
 }
+# §8.2 (owner ruling 2026-11-16): a witness counts toward PWG-1 only when its
+# current run recorded the digest-pinned image its checker ran in (field 13).
+_receipt_isolated() { [[ -n "$(_receipt_current_field "$1" 13)" ]]; }
 _receipt_pwg_of() {
   local token="$1" coq_route="$2" coq_state="$3" lean_route="$4" lean_state="$5" n=0 p route state
   [[ "$token" == proven || "$token" == proven-with-postulates ]] || { printf 'ungraded'; return; }
@@ -375,7 +392,8 @@ _receipt_pwg_of() {
   case "$n" in
     0) printf 'PWG-3' ;;
     1) printf 'PWG-2i' ;;
-    2) if _receipt_describes_source agda && _receipt_describes_source rocq && _receipt_describes_source lean; then printf 'PWG-1'; else printf 'PWG-2ii'; fi ;;
+    2) if _receipt_describes_source agda && _receipt_describes_source rocq && _receipt_describes_source lean \
+            && _receipt_isolated agda && _receipt_isolated rocq && _receipt_isolated lean; then printf 'PWG-1'; else printf 'PWG-2ii'; fi ;;
     *) receipt_die "unexpected recheck count: $n" ;;
   esac
 }
@@ -441,11 +459,11 @@ _receipt_emit_imports() {
   done < "$_receipt_manifest_dir/$prover.imports"
 }
 _receipt_emit_receipts() {
-  local prover="$1" row p run commit checker inv dig said state reason axioms imports want
+  local prover="$1" row p run commit checker inv dig said state reason axioms imports tb img want
   # Current first, then the lineage in ledger order.
   for want in current other; do
     while IFS= read -r row; do
-      IFS='|' read -r p run commit checker inv dig said state reason axioms imports <<< "$row"
+      IFS='|' read -r p run commit checker inv dig said state reason axioms imports tb img <<< "$row"
       [[ "$p" == "$prover" ]] || continue
       if [[ $want == current ]]; then [[ $state == current ]] || continue; else [[ $state != current ]] || continue; fi
       printf '      ; the run reported: %s\n' "$said"
@@ -454,6 +472,7 @@ _receipt_emit_receipts() {
       printf '               :checker "%s"\n' "$checker"
       printf '               :invocation "%s"\n' "$inv"
       if [[ $state == current ]]; then
+        [[ -z "$img" ]] || printf '               :image "%s"\n' "$img"
         printf '               :inputs-sha256 "%s"\n' "$dig"
         printf '               :state current\n'
         _receipt_emit_manifest "$prover"
@@ -824,6 +843,7 @@ _receipt_main() {
   _receipt_load_provers
   local mode=--write target="$RECEIPT_OUT" row tmp
   local r_prover= r_run= r_commit= r_checker= r_reported=
+  local r_image=""
   _receipt_fallback_commit=
   while (( $# )); do
     case "$1" in
@@ -837,6 +857,7 @@ _receipt_main() {
       --run)      r_run="${2:-}"; shift ;;
       --checker)  r_checker="${2:-}"; shift ;;
       --reported) r_reported="${2:-}"; shift ;;
+      --image)    r_image="${2:-}"; shift ;;
       *) printf 'unknown argument: %s\n' "$1" >&2; exit 2 ;;
     esac
     shift
@@ -865,7 +886,8 @@ _receipt_main() {
         tbf="$(_receipt_trusted_base_field "$imd/trusted-base")"
       fi
       row="$r_prover|$r_run|$r_commit|$r_checker|$(cat "$tmp")|$(_receipt_digest "$r_prover")|$r_reported|current||"
-      if [[ -n "$tbf" ]]; then row+="|$imf|$tbf"; elif [[ -n "$imf" ]]; then row+="|$imf"; fi
+      if [[ -n "$r_image" ]]; then row+="|$imf|$tbf|$r_image"
+      elif [[ -n "$tbf" ]]; then row+="|$imf|$tbf"; elif [[ -n "$imf" ]]; then row+="|$imf"; fi
       _receipt_check_row "$row"; printf '%s\n' "$row" ;;
     --write|--emit-run)
       _receipt_check_claim_ids; _receipt_check_leg_records
