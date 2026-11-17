@@ -512,13 +512,22 @@ Checks the `(rsr-profile …)` clause of a `<repo>_chora.deed` against
 * `(notes …)`, at most once, holds prose only (`:<name> "…"` fields such as
   `:omitted-rationale`, each once): a `:role` inside it is never the profile's
   role;
+* `(layout …)` (v1.1.0, owner ruling 2026-11-16), at most once, holds one or
+  more `(module :gate "…" :at ("…" …))`: `:gate` names a gate-table row by
+  one of its alternatives, each gate once; `:at` is a non-empty list of
+  concrete repo-relative paths, each once (no leading `/`, no `.`, `..` or
+  empty segment, no `*`, `?`, `[`, `]` or `|`, no control character or
+  backslash; a trailing `/` marks a directory). It says where this repo
+  keeps a gated module, so the check reads the layout from the deed instead
+  of the table's default locations;
 * any other field or clause refuses the clause. A reader never skips an
   unknown key (J39);
 * the clause sits once, at the top level of a `<repo>_chora.deed` (never in
   `0-AI-MANIFEST.deed`, though that is a repo-deed too).
 
-Whether a capability or preset is known is the gate table's business, checked
-by `scripts/check-rsr-profile.sh`. That script refuses a clause with an unknown
+Whether a capability or preset is known, and whether a `(layout …)` `:gate`
+names a bindable `[gates]` row of the same kind as its `:at` paths, is the
+gate table's business, checked by `scripts/check-rsr-profile.sh`. That script refuses a clause with an unknown
 key on both of its parser paths: through this profile on the AST path, and
 against its copy of the key set on the awk path, which checks keys only.
 `scripts/tests/check-rsr-profile-test.sh` holds that copy equal to
