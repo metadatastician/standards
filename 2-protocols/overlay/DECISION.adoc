@@ -8,10 +8,19 @@ Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 
 **Keep the spec. Defer implementation.**
 
-The overlay-protocol directory contains a 420-line specification
-(`OVERLAY-PROTOCOL-SPEC.md`), an Idris2 ABI skeleton
-(`src/abi/OverlayProtocol.idr`), and an empty Zig FFI scaffold. There is
-no reference implementation, no tests, no consumer.
+The overlay-protocol directory contains a specification
+(`OVERLAY-PROTOCOL-SPEC.adoc`, 429 lines), an Idris2 ABI skeleton
+(`src/abi/OverlayProtocol.idr`), a Zig FFI implementation (`ffi/zig/`),
+and a shell conformance checker (`scripts/check-conformance.sh`). There
+is no consumer, and no CI lane builds or runs the Zig code or the shell
+checker.
+
+[NOTE]
+====
+Corrected 2026-11-17. The 2026-04-05 text called the Zig FFI "an empty
+scaffold" and said there were no tests. Both were wrong: see
+<<whats-there>>. The decision itself is unchanged.
+====
 
 Three options were considered:
 
@@ -35,10 +44,69 @@ Three options were considered:
 | Standards repo lists a protocol that has no runtime — must mark clearly
 |===
 
+[[whats-there]]
+== What the Zig FFI contains (checked 2026-11-17)
+
+`ffi/zig/` is not empty:
+
+* `src/main.zig`, 575 lines. It defines `PeerType`, `Result`,
+  `ConformanceFlags`, `OverlayDeclaration` and `BaseState`, and exports 16
+  C-ABI functions (`overlay_declaration_new`, `overlay_declaration_set_field`,
+  `overlay_check_non_modification`, `overlay_check_additive`,
+  `overlay_check_switchable`, `overlay_check_idempotent`,
+  `overlay_check_declaration`, `overlay_check_conformance`,
+  `overlay_is_conformant`, `overlay_pass_count`, `overlay_check_composable`,
+  `overlay_check_mixed_composable`, `overlay_peer_type_name`,
+  `overlay_peer_types_distinct`, `overlay_last_error`, `overlay_version`).
+  They are runtime checks over caller-supplied states at one base state.
+  `VERSION` is `1.0.0-draft`.
+* `src/main.zig` also holds 17 `test` blocks (invariant pass and fail
+  cases, peer type names, the last-error buffer, version).
+* `test/integration_test.zig`, 189 lines, 7 scenario tests (conformant
+  o-extension and aggregate-library overlays, a base-modifying overlay, a
+  non-reversible activation, mixed and same peer types, a declaration
+  missing `upstream_url`).
+* `build.zig`, 68 lines. It builds a shared and a static library and has
+  `test` and `test-integration` steps.
+
+What is not established:
+
+* The 24 Zig tests were written but not run for this correction. `zig` is
+  not installed here and `ziglang.org` returns 403 through this session's
+  proxy, so they give no `tested-only` evidence.
+* No Zig version is pinned. There is no `build.zig.zon`, no
+  `.tool-versions`, and no Zig in `guix.scm`.
+* No CI lane builds or tests the Zig code or runs `check-conformance.sh`;
+  the one workflow that mentions the overlay, `echidna-verify.yml`,
+  deliberately excludes the Idris2 file.
+* No correspondence argument ties the Zig code to the Idris2 model.
+
+== Open obligations
+
+`3-practice/PROOF-NEEDS.adoc` (proof ledger) is authoritative and may have
+moved on. At the time of this correction it carries 12 open overlay rows,
+not 10:
+
+. Spec section 2.1 Non-Modification (`ConformantOverlay.nonModification` is vacuous)
+. Spec section 2.2 Additive Only
+. Spec section 2.3 Switchable
+. Spec section 2.4 Idempotent Activation
+. Spec section 2.5 Declared Relationship and the section 5 required fields
+. Spec section 3.3 o-extension activation script
+. Spec section 4.3 aggregate-library
+. Spec section 7.1 conformance checklist items no other row covers
+. Spec section 6 composition and chaining
+. The Zig implementation corresponds to the model
+. The shell conformance checker corresponds to the spec
+. Spec section 8 reference implementations conform
+
+Two Idris2 facts are `proven` (`peerTypeExhaustive`, `peerTypesDistinct`),
+relative to an `argued` row for the Idris2 library they import.
+
 == Actions taken
 
 1. This document records the decision
-2. The spec remains at `OVERLAY-PROTOCOL-SPEC.md` (unchanged)
+2. The spec remains at `OVERLAY-PROTOCOL-SPEC.adoc` (unchanged)
 3. README and ROADMAP will mark overlay-protocol as `SPEC-ONLY` status
 4. TOPOLOGY / PROTOCOLS listings should include the `SPEC-ONLY` tag
 5. CRG grade for overlay-protocol: **E** (exploratory — spec exists, no
