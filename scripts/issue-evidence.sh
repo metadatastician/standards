@@ -34,11 +34,14 @@
 #       issue, repo, unevaluated}. holds is true when every check holds, false
 #       when any check fails, null when none fails but one could not be
 #       evaluated. failed/unevaluated are 0-based check indices.
-#   decide --open FILE [--evaluated FILE | --repo R --ref REF] [LEDGER]
+#   decide --repo OWNER/NAME --open FILE [--evaluated FILE | --ref REF] [LEDGER]
 #       Pure decision table. FILE is a JSON array of {number, state} with
 #       state open|closed, closed_by_bot (bool) for closed issues, and
 #       optionally reopened_by_human (bool) for open ones. One JCS line per
 #       row: {action: close|reopen|none, disposition, issue, reason, repo}.
+#       --repo is required: FILE describes that repository's issues by
+#       number, so rows (or --evaluated records) of any other repository
+#       are dropped and never yield an action.
 #   render-comment --issue N --action close|reopen [--repo R] [--ref REF]
 #                  [--evaluated FILE] [LEDGER]
 #       The Markdown comment for a close or reopen. Its last line is the
@@ -601,8 +604,14 @@ cmd_decide() {
   parse_opts "$@"
   [ -n "$OPEN_FILE" ] || fail_input "decide needs --open FILE"
   [ -f "$OPEN_FILE" ] || fail_input "--open file not found: $OPEN_FILE"
+  # --open names one repository's issues by number only, so decide is always
+  # about one repository: rows of any other repository are dropped, whether
+  # the records come from --evaluated or from evaluating the ledger.
+  [ -n "$REPO_FILTER" ] || fail_input "decide needs --repo OWNER/NAME (the repository --open describes)"
   load_evaluated
-  jq -n -c -S --slurpfile open "$OPEN_FILE" --slurpfile ev "$EVALUATED" "$DECIDE_JQ" 2>"$TMPD/decide.err" ||
+  jq -c --arg r "$REPO_FILTER" 'select((.repo | ascii_downcase) == ($r | ascii_downcase))' \
+    "$EVALUATED" >"$TMPD/evaluated-repo.jsonl" || fail_internal "jq could not filter the evaluate records"
+  jq -n -c -S --slurpfile open "$OPEN_FILE" --slurpfile ev "$TMPD/evaluated-repo.jsonl" "$DECIDE_JQ" 2>"$TMPD/decide.err" ||
     fail_input "$(head -c 300 "$TMPD/decide.err")"
 }
 

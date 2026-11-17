@@ -446,22 +446,35 @@ cat >"$WORK/want.jsonl" <<'EOF'
 {"action":"none","disposition":"landed","issue":21,"reason":"no-issue-state","repo":"o/r"}
 {"action":"none","disposition":"landed","issue":22,"reason":"evidence-does-not-hold","repo":"o/r"}
 EOF
-run bash "$IE" decide --open "$WORK/open.json" --evaluated "$WORK/ev.jsonl"
+run bash "$IE" decide --repo o/r --open "$WORK/open.json" --evaluated "$WORK/ev.jsonl"
 if [ "$RC" = 0 ] && [ "$OUT" = "$(cat "$WORK/want.jsonl")" ]; then ok "decide truth table (12 cases)"
 else ko "decide truth table — rc=$RC"; diff <(printf '%s\n' "$OUT") "$WORK/want.jsonl" | head -20; fi
 echo '{"number":1}' >"$WORK/bad-open.json"
-expect_err "decide refuses an --open that is not an array" "not a JSON array" bash "$IE" decide --open "$WORK/bad-open.json" --evaluated "$WORK/ev.jsonl"
+expect_err "decide refuses an --open that is not an array" "not a JSON array" bash "$IE" decide --repo o/r --open "$WORK/bad-open.json" --evaluated "$WORK/ev.jsonl"
 echo '[{"number":11,"state":"closed"}]' >"$WORK/bad-open.json"
-expect_err "decide refuses a closed issue without closed_by_bot" "needs closed_by_bot" bash "$IE" decide --open "$WORK/bad-open.json" --evaluated "$WORK/ev.jsonl"
+expect_err "decide refuses a closed issue without closed_by_bot" "needs closed_by_bot" bash "$IE" decide --repo o/r --open "$WORK/bad-open.json" --evaluated "$WORK/ev.jsonl"
 echo '[{"number":11,"state":"open"},{"number":11,"state":"open"}]' >"$WORK/bad-open.json"
-expect_err "decide refuses a repeated issue" "appears twice" bash "$IE" decide --open "$WORK/bad-open.json" --evaluated "$WORK/ev.jsonl"
+expect_err "decide refuses a repeated issue" "appears twice" bash "$IE" decide --repo o/r --open "$WORK/bad-open.json" --evaluated "$WORK/ev.jsonl"
+# --open lists ONE repository's issues by number, so a row of another
+# repository with the same number must never yield an action here.
+expect_err "decide needs --repo (with --evaluated)" "decide needs --repo" bash "$IE" decide --open "$WORK/open.json" --evaluated "$WORK/ev.jsonl"
+expect_err "decide needs --repo (from the ledger)" "decide needs --repo" bash "$IE" decide --open "$WORK/open.json" "$L"
+{
+  printf '{"disposition":"landed","failed":[],"holds":true,"issue":11,"repo":"other/r","unevaluated":[]}\n'
+  printf '{"disposition":"landed","failed":[0],"holds":false,"issue":12,"repo":"other/r","unevaluated":[]}\n'
+  printf '{"disposition":"landed","failed":[],"holds":true,"issue":14,"repo":"O/R","unevaluated":[]}\n'
+} >"$WORK/ev-mixed.jsonl"
+echo '[{"number":11,"state":"open"},{"number":12,"state":"closed","closed_by_bot":true},{"number":14,"state":"open"}]' >"$WORK/open-mixed.json"
+run bash "$IE" decide --repo o/r --open "$WORK/open-mixed.json" --evaluated "$WORK/ev-mixed.jsonl"
+verdict "decide --evaluated ignores another repository's rows (case-insensitive match)" \
+  rc0_and [ "$OUT" = '{"action":"close","disposition":"landed","issue":14,"reason":"evidence-holds","repo":"O/R"}' ]
 # decide straight from the ledger: evaluate and decide agree on the tree.
 ledger "$(row 1405 '[{"kind":"grep-absent","path":"scripts/helper.sh","pattern":"eval"}]')"
 echo '[{"number":1405,"state":"open"}]' >"$WORK/o1405.json"
-run bash "$IE" decide --open "$WORK/o1405.json" --ref "$C2" "$L"
+run bash "$IE" decide --repo o/r --open "$WORK/o1405.json" --ref "$C2" "$L"
 verdict "decide from the ledger: close at the fixing commit" [ "$OUT" = '{"action":"close","disposition":"landed","issue":1405,"reason":"evidence-holds","repo":"o/r"}' ]
 echo '[{"number":1405,"state":"closed","closed_by_bot":true}]' >"$WORK/o1405.json"
-run bash "$IE" decide --open "$WORK/o1405.json" --ref "$C1" "$L"
+run bash "$IE" decide --repo o/r --open "$WORK/o1405.json" --ref "$C1" "$L"
 verdict "decide from the ledger: reopen at the parent (regression)" [ "$OUT" = '{"action":"reopen","disposition":"landed","issue":1405,"reason":"regression","repo":"o/r"}' ]
 
 echo "=== render-comment ==="
@@ -516,7 +529,7 @@ same() { # LABEL CMD...
 }
 same "evaluate" bash "$IE" evaluate "$L"
 echo '[{"number":1,"state":"open"},{"number":2,"state":"closed","closed_by_bot":true},{"number":3,"state":"open"}]' >"$WORK/det-open.json"
-same "decide" bash "$IE" decide --open "$WORK/det-open.json" "$L"
+same "decide" bash "$IE" decide --repo o/r --open "$WORK/det-open.json" "$L"
 same "render-comment" bash "$IE" render-comment --issue 2 --action close "$L"
 same "candidates" bash "$IE" candidates --log "$WORK/log" --open "$WORK/cand-open.json" --repo o/r "$L"
 run bash "$IE" evaluate "$L"
