@@ -81,7 +81,10 @@ workflow_has_nothing_to_pin() {
   [[ -f "$workflow" ]] || return 1
   refs=$(yq -r '.. | select(tag == "!!map") | select(has("uses")) | .uses | select(tag == "!!str")' "$workflow" 2>/dev/null) ||
     return 1
-  ! printf '%s\n' "$refs" | grep -v -e '^$' -e '^\./' -e '^\$/' | grep -q .
+  # One grep, no pipe: `grep -v … | grep -q .` under pipefail let the filter
+  # die of SIGPIPE on a long list (status 141), and `!` turned that into
+  # "nothing to pin". grep -qv succeeds when any line is none of the local forms.
+  ! grep -qv -e '^$' -e '^\./' -e '^\$/' <<<"$refs"
 }
 
 # Succeeds when <workflow> uses at least one same-repository `./…` action or

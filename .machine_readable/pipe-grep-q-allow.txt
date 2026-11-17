@@ -86,5 +86,4 @@ scripts/sonar-preflight.sh:2
 scripts/tests/spdx-header-block-test.sh:1
 scripts/triage-2026-09-29-apply.sh:2
 scripts/triage-2026-10-23-issue-1234-apply.sh:1
-scripts/update-actions-lock.sh:1
 setup.sh:4
