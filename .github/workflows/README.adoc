@@ -87,6 +87,7 @@ These workflows *warn* but don't block merges. They check best practices.
 |`quality.yml` |Code quality checks |rsr-template-repo |No
 |`rhodibot.yml` |RSR compliance canary |rsr-template-repo |No
 |`rsr-antipattern.yml` |RSR antipattern detection |rsr-template-repo |No
+|`sonarqube-reusable.yml` |SonarCloud CI scan behind a preflight (`scripts/sonar-preflight.sh`). When the scan cannot run, the preflight fails with a named class (`token-absent`, `token-rejected`, `project-missing`, `project-org-mismatch`, `server-unavailable` and others) instead of the scanner's unexplained exit code. The scan runs only when the class is `ok`. Dependabot and fork pull-request runs report `secrets-withheld` as a notice. Callers pass `SONAR_TOKEN` by name, never with `secrets: inherit` |standards |Yes
 |`workflow-linter.yml` |Workflow YAML linting |rsr-template-repo |No
 |`fuzz-smoke.yml` |Fuzzing smoke tests |paint-type (canonical) |No
 |===

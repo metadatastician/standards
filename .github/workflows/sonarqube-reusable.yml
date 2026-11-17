@@ -1,0 +1,143 @@
+# SPDX-License-Identifier: MPL-2.0
+# SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+#
+# sonarqube-reusable.yml — SonarCloud CI scan with a preflight that names the
+# cause when the scan cannot run.
+#
+# The estate's local sonarqube.yml copies fail in ways that look the same and
+# are not (measured 2026-11-17, see scripts/sonar-preflight.sh): an absent
+# token, a rejected token, a missing project, and a project left behind in
+# another SonarCloud organisation all end in a red scanner exit with a message
+# that names none of them. The template's presence guard turns the first into
+# a green skip and cannot see the others.
+#
+# Contract:
+#
+# * The preflight runs first and FAILS LOUDLY for every credential or
+#   configuration fault, with one named class (output `class`) and a step
+#   summary saying what to change. It never turns a fault into a pass.
+# * The one non-failing non-ok class is `secrets-withheld`: GitHub passes no
+#   Actions secrets to Dependabot or fork pull-request runs. That is a platform
+#   rule, not a repository fault, and the run says so with a notice. The push
+#   run on the default branch scans.
+# * When the preflight says `ok`, the scan runs and its own exit status
+#   decides. A failure then is the scan's (a finding, a quality gate, or a
+#   server-side refusal such as Automatic Analysis being enabled for the
+#   project), not a credential problem.
+# * No `continue-on-error`. Whether a red SonarQube check blocks a merge is
+#   the caller's ruleset's decision, not this file's.
+#
+# Caller (pass the secret by name; never `secrets: inherit`, standards#1108):
+#
+#   jobs:
+#     sonarqube:
+#       permissions:
+#         contents: read
+#       uses: metadatastician/standards/.github/workflows/sonarqube-reusable.yml@<40-hex commit>
+#       secrets:
+#         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+#
+# Egress: the preflight calls only the SonarCloud host the scanner already
+# contacts (ADR-009). The token reaches curl through a mode-600 header file,
+# never through argv.
+
+name: SonarQube (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      organization:
+        description: "SonarCloud organisation. Default: sonar.organization from sonar-project.properties."
+        required: false
+        type: string
+        default: ""
+      project-key:
+        description: "SonarCloud project key. Default: sonar.projectKey from sonar-project.properties."
+        required: false
+        type: string
+        default: ""
+      runs-on:
+        description: "Runner label."
+        required: false
+        type: string
+        default: "ubuntu-24.04"
+    secrets:
+      SONAR_TOKEN:
+        description: "SonarCloud token. Optional so that a missing secret is classified by the preflight instead of failing at startup."
+        required: false
+    outputs:
+      class:
+        description: "Preflight classification (ok, secrets-withheld, token-absent, token-rejected, organization-missing, project-missing, project-forbidden, project-org-mismatch, config-missing, config-invalid, server-unavailable)."
+        value: ${{ jobs.sonarqube.outputs.class }}
+
+permissions:
+  contents: read
+
+jobs:
+  sonarqube:
+    name: SonarQube
+    runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    outputs:
+      class: ${{ steps.preflight.outputs.class }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0   # full history for accurate new-code detection
+          persist-credentials: false
+
+      # `job.workflow_sha` resolves EMPTY on GitHub Enterprise Server, and
+      # `ref: ''` silently checks out standards' default branch. Assert it.
+      - name: Assert this reusable's own commit resolved
+        env:
+          SELF_WORKFLOW_SHA: ${{ job.workflow_sha }}
+        shell: bash
+        run: |
+          if ! printf '%s' "$SELF_WORKFLOW_SHA" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "::error::job.workflow_sha resolved to '${SELF_WORKFLOW_SHA:-<empty>}', not a 40-hex commit, so the preflight helper would come from standards' default branch."
+            exit 1
+          fi
+
+      - name: Checkout standards for the preflight helper
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: metadatastician/standards
+          # This reusable's own commit, so the helper is exactly what the
+          # caller pinned (scripts/check-standards-helper-pins.sh).
+          ref: ${{ job.workflow_sha }}
+          path: .standards-sonar
+          persist-credentials: false
+          sparse-checkout: |
+            scripts/sonar-preflight.sh
+          sparse-checkout-cone-mode: false
+
+      # Copied out and deleted before the scan, so the standards tree is never
+      # analysed as part of the caller's project.
+      - name: Preflight
+        id: preflight
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_ORGANIZATION: ${{ inputs.organization }}
+          SONAR_PROJECT_KEY: ${{ inputs.project-key }}
+          PR_HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+        shell: bash
+        run: |
+          cp .standards-sonar/scripts/sonar-preflight.sh "$RUNNER_TEMP/sonar-preflight.sh"
+          rm -rf .standards-sonar
+          bash "$RUNNER_TEMP/sonar-preflight.sh"
+
+      - name: SonarQube Scan
+        if: steps.preflight.outputs.class == 'ok'
+        uses: SonarSource/sonarqube-scan-action@59202af334b4ba7b5db01b701b8e79f8b3bef0f4 # v8.5.0
+        with:
+          # The inputs reach the scanner too, so the preflight and the scan
+          # judge the same project. Both are [A-Za-z0-9_.:-] by now: the
+          # preflight refuses anything else (config-invalid) before this step.
+          args: >-
+            ${{ inputs.organization != '' && format('-Dsonar.organization={0}', inputs.organization) || '' }}
+            ${{ inputs.project-key != '' && format('-Dsonar.projectKey={0}', inputs.project-key) || '' }}
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

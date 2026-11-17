@@ -44,6 +44,9 @@ Highest-loss-risk first — a family with no v2 surface dies first if we drift:
 7. The chora-registry seed (`gv-clade-index` `verisim/seed/repos.a2ml`) →
    `praxis-deed` — link:registry-seed-to-deed.adoc[registry-seed-to-deed]
    (the single recorded D313 exception, owner ruling 2026-11-14)
+8. Per-directory `0.N-AI-MANIFEST.a2ml` ply manifests → decision pending —
+   link:ply-manifest-decision.adoc[ply-manifest-decision] (PROPOSAL; the
+   largest unmapped group in the 2026-11-17 census)
 
 == Standing constraints (from the grammar, non-negotiable)
 
