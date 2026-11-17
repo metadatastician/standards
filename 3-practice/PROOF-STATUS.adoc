@@ -395,6 +395,33 @@ repository's Guix manifest or a container.
   pinned Idris2 and the job uses it, or when the job pins pack and the
   Idris2 version and fails on a mismatch.
 
+[[proof-debt]]
+== Proof debt
+
+This section is standards' proof-debt index in the sense of
+link:../docs/TRUSTED-BASE-REDUCTION-POLICY.adoc[`docs/TRUSTED-BASE-REDUCTION-POLICY.adoc`],
+which `scripts/check-trusted-base.sh` reads. It replaces the retired
+`docs/proof-debt.adoc`. On 2026-11-17 the scanner reported "No
+soundness-relevant escape hatches detected" for this repository, so every
+category is empty. An escape hatch added later is listed here under its
+category, as `path:line` with the identifier.
+
+=== (a) Discharged in this repo
+
+* (none: entries are removed when a proof lands)
+
+=== (b) Budgeted, tested with a refutation budget
+
+* (none)
+
+=== (c) Necessary axiom
+
+* (none)
+
+=== (d) DEBT, actively to be closed
+
+* (none)
+
 [[moved-out]]
 == Obligations that left this repository
 

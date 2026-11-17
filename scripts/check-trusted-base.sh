@@ -99,7 +99,9 @@
 #                   (the canonical token for `{-# TERMINATING #-}` + a
 #                   written termination argument; see the policy doc)
 #        DEBT:      known, owned and dated — see docs/proof-debt.md §(d)
-#   2. enumeration in docs/proof-debt.md (or .adoc / PROOF-NEEDS.md)
+#   2. enumeration in docs/proof-debt.md (or .adoc / PROOF-NEEDS.md), or in the
+#      repo's proof-status file (PROOF-STATUS.adoc at the root, docs/, docs/status/
+#      or 3-practice/; PROOF-POLICY §8.5)
 #   3. path-fragment exemption in .trusted-base-ignore
 #
 # ─────────────────────────────────────────────────────────────────────────────
@@ -731,11 +733,12 @@ fi
 # ─────────────────────────────────────────────────────────────────────────────
 # Verify each marker is documented:
 #   - inline `TRUSTED:`/`AXIOM:`/`OWED:`/`JUSTIFIED:`/`DEBT:` leading comment, OR
-#   - enumerated in docs/proof-debt.md (substring match on file:line OR on the
+#   - enumerated in docs/proof-debt.md or the proof-status file (substring match on file:line OR on the
 #     identifier captured)
 # ─────────────────────────────────────────────────────────────────────────────
 debt_docs=()
-for cand in docs/proof-debt.md docs/proof-debt.adoc PROOF-NEEDS.md docs/PROOF-NEEDS.md; do
+for cand in docs/proof-debt.md docs/proof-debt.adoc PROOF-NEEDS.md docs/PROOF-NEEDS.md \
+    PROOF-STATUS.adoc docs/PROOF-STATUS.adoc docs/status/PROOF-STATUS.adoc 3-practice/PROOF-STATUS.adoc; do
   if [ -f "$cand" ]; then
     debt_docs+=("$cand")
   fi

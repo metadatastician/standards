@@ -139,6 +139,35 @@ See src/Foo.idr:3 — documented partial marker.
 EOF
 }
 
+setup_marker_with_proof_status() {
+  mkdir -p src 3-practice
+  cat > src/Foo.idr <<'EOS'
+module Foo
+%default total
+partial
+foo : Int -> Int
+foo x = x
+EOS
+  cat > 3-practice/PROOF-STATUS.adoc <<'EOS'
+= Proof status
+== Proof debt
+=== (d) DEBT, actively to be closed
+* src/Foo.idr:3 — documented partial marker.
+EOS
+}
+
+setup_marker_proof_status_without_entry() {
+  mkdir -p src docs/status
+  cat > src/Foo.idr <<'EOS'
+module Foo
+%default total
+partial
+foo : Int -> Int
+foo x = x
+EOS
+  printf '= Proof status\n' > docs/status/PROOF-STATUS.adoc
+}
+
 setup_marker_with_ignore_exact() {
   mkdir -p test/fixtures
   cat > test/fixtures/admitted.v <<'EOF'
@@ -697,6 +726,14 @@ run_case "inline TRUSTED comment passes (regression)" \
 
 run_case "entry in proof-debt.md passes (regression)" \
   0 "All 1 escape hatch(es) are documented" setup_marker_with_proof_debt
+
+# A proof-status file is a proof-debt index too (TRUSTED-BASE-REDUCTION-POLICY,
+# schema section; standards#1635).
+run_case "entry in 3-practice/PROOF-STATUS.adoc passes" \
+  0 "All 1 escape hatch(es) are documented" setup_marker_with_proof_status
+
+run_case "PROOF-STATUS.adoc without the entry still fails the marker" \
+  1 "docs/status/PROOF-STATUS.adoc" setup_marker_proof_status_without_entry
 
 # New .trusted-base-ignore behaviour.
 run_case "single path-fragment exempts marker (no proof-debt doc)" \
