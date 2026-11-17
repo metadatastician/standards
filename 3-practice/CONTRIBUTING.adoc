@@ -15,7 +15,7 @@ just hooks-install                 # the pre-commit guard, see below
 ----
 
 The test suite also needs Mike Farah’s `yq`, version 4 (the Go one, not the
-Python wrapper of the same name). Some tests exit with status 2 without `jq` or
+Python wrapper of the same name). Some tests stop with an error without `jq` or
 `yq` v4, and `just test` counts that as a failure. Install `yq` v4 from
 https://github.com/mikefarah/yq/releases[its releases] if your system does not
 provide it.
