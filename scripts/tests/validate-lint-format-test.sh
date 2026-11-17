@@ -63,12 +63,12 @@ expect() {
     printf '%s\n' "$out" | sed 's/^/      | /'
     fail=$((fail + 1)); return
   fi
-  if [ "$needle" != "-" ] && ! printf '%s' "$out" | grep -qF -- "$needle"; then
+  if [ "$needle" != "-" ] && ! grep -qF -- "$needle" <<<"$out"; then
     echo "FAIL: $label — exit $rc correct, but output lacked '$needle'"
     printf '%s\n' "$out" | sed 's/^/      | /'
     fail=$((fail + 1)); return
   fi
-  if [ -n "$absent" ] && printf '%s' "$out" | grep -qF -- "$absent"; then
+  if [ -n "$absent" ] && grep -qF -- "$absent" <<<"$out"; then
     echo "FAIL: $label — output must not contain '$absent'"
     printf '%s\n' "$out" | sed 's/^/      | /'
     fail=$((fail + 1)); return

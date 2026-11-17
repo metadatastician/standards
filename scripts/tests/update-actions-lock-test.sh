@@ -286,8 +286,8 @@ cp "$WORK/reusable.block" .github/workflows/reusable.yml
 
 advisory_output="$(FAKE_VERIFY_FINDING=valid-advisory GH_BIN="$WORK/bin/fake-gh" \
   bash "$UPDATE" --verify-local .github/workflows)"
-printf '%s\n' "$advisory_output" | grep -q '"category":"sha-as-ref"'
-printf '%s\n' "$advisory_output" | grep -q 'valid with advisory finding'
+grep -q '"category":"sha-as-ref"' <<<"$advisory_output"
+grep -q 'valid with advisory finding' <<<"$advisory_output"
 echo "PASS: authoritative valid result accepts but preserves advisory findings"
 
 if FAKE_VERIFY_FINDING=invalid-empty GH_BIN="$WORK/bin/fake-gh" \
@@ -303,8 +303,8 @@ echo "PASS: invalid result with no explainable findings fails closed"
 # red on 7 advisories and skipped the secret-baseline controls behind it.
 mixed_output="$(FAKE_VERIFY_FINDING=invalid-advisory-and-reusable GH_BIN="$WORK/bin/fake-gh" \
   bash "$UPDATE" --verify-local .github/workflows)"
-printf '%s\n' "$mixed_output" | grep -q 'Accepted reusable-workflow lock coverage'
-printf '%s\n' "$mixed_output" | grep -q 'advisory finding(s) recorded, not blocking'
+grep -q 'Accepted reusable-workflow lock coverage' <<<"$mixed_output"
+grep -q 'advisory finding(s) recorded, not blocking' <<<"$mixed_output"
 echo "PASS: advisory finding alongside an accepted reusable false positive does not block"
 
 # The exemption must key on CATEGORY, not severity: v0.1.6 marks `stale`

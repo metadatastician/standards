@@ -86,17 +86,7 @@ scripts/prune-stale.sh:1
 scripts/regen-dependabot-locks.sh:3
 scripts/relock-standards-pin.sh:6
 scripts/sonar-preflight.sh:2
-scripts/tests/sonarqube-reusable-contract-test.sh:4
 scripts/tests/spdx-header-block-test.sh:1
-scripts/tests/triage-2026-10-23-issue-1234-apply-test.sh:3
-scripts/tests/triage-2026-10-24-apply-test.sh:2
-scripts/tests/update-actions-lock-test.sh:4
-scripts/tests/validate-actions-lock-test.sh:2
-scripts/tests/validate-codeql-test.sh:1
-scripts/tests/validate-lint-format-test.sh:2
-scripts/tests/verify-regextarget-claim-test.sh:1
-scripts/tests/wave4-dyadt-test.sh:1
-scripts/tests/wave5-language-guides-test.sh:1
 scripts/tests/wave8-gates-test.sh:1
 scripts/triage-2026-09-29-apply.sh:2
 scripts/triage-2026-10-23-issue-1234-apply.sh:1
