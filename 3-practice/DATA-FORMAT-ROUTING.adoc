@@ -1,0 +1,140 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+= Estate Data-Format Routing: kyq, ijson-jcs and kyX
+Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+:toc:
+:toc-placement: preamble
+
+Canonical routing for which tool handles which data format across all
+hyperpolymath and metadatastician repositories. This page records rulings
+already made. It adds no rule of its own: each row below quotes or restates a
+recorded ruling and names where it is recorded. Like `YAML-POLICY.adoc` and
+`JSON-POLICY.adoc`, it says what is *in force* and what is only *planned*.
+
+== 1. Scope
+
+Owner clarification, 2026-10-25 (recorded in the template `CLAUDE.md`, section
+"Estate-Wide Format Migration Directives"):
+
+____
+`metadatastician/kyq` handles repository gates, queries and migration for
+exactly *TOML, Dhall, KYAML and I-JSON/JCS*. Preserve TOML and Dhall. YAML/YML
+content migrates to KYAML; JSON variants, including NDJSON/JSONL and JSON-LD,
+use the profile in `hyperpolymath/ijson-jcs` through kyq. That name means the
+owner's actual repository, which must track standards through tested update
+proposals. Preserve framing, consumer filenames and JSON-LD semantics. Wider
+projection belongs to *kyX*, not extra kyq formats. DEED, K9 and coordination
+retain their own grammars/contracts.
+____
+
+== 2. Routing table
+
+[cols="2,3,3,3",options="header"]
+|===
+| Format | Route | Rule | Status
+
+| TOML
+| kyq. Preserved, not converted.
+| Clarification of 2026-10-25 (§1).
+| Planned. No kyq executable (§5).
+
+| Dhall
+| kyq. Preserved, not converted.
+| Clarification of 2026-10-25 (§1).
+| Planned. No kyq executable (§5).
+
+| YAML/YML
+| Content migrates to KYAML. Estate-owned configuration uses `.kyaml`; `.yml`
+  or `.yaml` stays only where a tool fixes the name (GitHub workflows,
+  dependabot).
+| D280 and D307, `YAML-POLICY.adoc` §3.4. Workflows convert only once the
+  lock-coverage precondition holds (`YAML-POLICY.adoc` §3.4, step 6).
+| Rule in force for new estate-owned files. Gate is the transitional `yq` and
+  `scripts/kyaml-format.sh` (§4).
+
+| JSON, NDJSON/JSONL, JSON-LD
+| I-JSON serialised by JCS, using the profile in `hyperpolymath/ijson-jcs`
+  through kyq. Framing, consumer filenames and JSON-LD semantics are
+  preserved. Tool-demanded JSONC (`devcontainer.json`, `.vscode/*.json`) is
+  carved out.
+| D306, `JSON-POLICY.adoc` J-1 and J-2.
+| Rule in force for new or rewritten files, report-only gate
+  (`scripts/check-ijson-jcs.sh`, §4).
+
+| Wider projection
+| kyX, not extra kyq formats. kyX was named kcX before D334.
+| D309, D313, D333/D334.
+| See §5.
+
+| DEED, K9, coordination
+| Their own grammars and contracts, not kyq.
+| `.claude/CLAUDE.md`, "Machine-Readable Artefacts".
+| In force (`deed.abnf`, `K9-CONTRACT-SPEC.adoc`, `coordination-k9-grammar_v1.2.abnf`).
+|===
+
+== 3. Not in scope
+
+* Any format outside the four families is not kyq's: wider projection belongs to
+  kyX (D309, D313, D334).
+* DEED, K9 and coordination files keep their own grammars and validators
+  (`1-formats/deed/`, `1-formats/k9/`, `2-protocols/k9-coordination/`). The four
+  data formats do not replace them.
+* Launcher provisioning keeps consuming `launcher/launcher-standard_praxis.deed`.
+* This page does not change the YAML or JSON rules. `YAML-POLICY.adoc` and
+  `JSON-POLICY.adoc` stay authoritative for them.
+* No `.a2ml` file is created or restored (D99, D269c, D312, D313).
+
+== 4. Transitional enforcement
+
+Planned support is not operational evidence. Until a pinned kyq executable
+passes positive and negative tests for the applicable format, the explicit
+transitional checks stay, and no one may claim a placeholder is a working gate
+(template `CLAUDE.md`):
+
+* YAML and KYAML: `yq` (Go version) and `scripts/kyaml-format.sh` and
+  `scripts/kyaml-migrate.sh`, per `YAML-POLICY.adoc` Y-1 and §3.4. No Python
+  YAML parser (D293).
+* JSON and JSON Lines: `scripts/check-ijson-jcs.sh`, per `JSON-POLICY.adoc`,
+  backed by `hyperpolymath/ijson-jcs`.
+
+`hyperpolymath/ijson-jcs` must track standards through tested update
+proposals (template `CLAUDE.md`).
+
+== 5. Status
+
+Measured 2026-11-17 and reported as measured. Nothing here is a claim beyond
+these measurements.
+
+[cols="1,1,4",options="header"]
+|===
+| Tool | Commit | Measured
+
+| kyq
+| `5e623b9`
+| The kyq binary does not build: `just build` fails by design, and its own
+  roadmap puts Phase 1 at 5%. Its JavaScript conformance gate v0.3.0 passes 68
+  of 68 tests under Bun and checks and canonicalises KYAML and I-JSON/JCS.
+
+| kyX
+| `731e63a`
+| Builds with its pinned compiler. 39 of 39 acceptance tests pass. It
+  translates one A2ML family (ECOSYSTEM).
+|===
+
+The 68 of 68 are tests of the JavaScript conformance gate, not of a kyq
+executable. So §4 stays in force.
+
+== 6. Sources
+
+* `.claude/CLAUDE.md` (this repository): "Machine-Readable Artefacts", and
+  "Language Policy" (Bun, no Python).
+* `rsr-template-repo/CLAUDE.md`: "Canon pointers" and "Estate-Wide Format
+  Migration Directives", including "Estate route (owner clarification,
+  2026-10-25)", "KYAML (KEP-5295, owner rulings D280/D307)" and "JSON (owner
+  ruling D306)".
+* `3-practice/YAML-POLICY.adoc` §3.4 (D280, D307, D293) and Y-1.
+* `3-practice/JSON-POLICY.adoc` J-1, J-2 (D306).
+* Rulings D309, D313, D333, D334: `docs/reorg/2026-10-14-tidy/rulings-ledger-snapshot.adoc`;
+  rename executed in commit `48e0ed9` (standards#1237).
+* Commits recording rulings: `bae58d9` (D280/D307, #1177); `d5a7cfa` (D306, #1189).
+* Proposed text: issue #1341, which this page follows with the corrections
+  listed in the commit message.

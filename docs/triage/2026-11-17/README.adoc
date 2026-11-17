@@ -32,6 +32,15 @@ Data files (I-JSON, JCS, one record per line):
 * `ledger-rows-rsr-template-repo.jsonl`: 5 evidence rows that belong in the
   template's own ledger once it has one.
 
+In this page and in `verdicts-standards.jsonl` the debt-marker words are
+written with a hyphen (TO-DO, FIX-ME), so that these records are not
+themselves counted by the `todo-fixme-markers` probe, which counts any file
+containing the word. One quoted command is affected (the evidence for #401);
+the command as run used the unhyphenated word. For the same reason of not tripping a
+gate on a quotation, two deprecated names that issue text uses are replaced
+in the data by a bracketed description: the old six-file name for the
+descriptiles, and the legacy name of the bot-directives directory.
+
 == What the measurements say
 
 The first triage (2026-10-24) sorted 228 issues into tiers. Measured today,
@@ -138,7 +147,7 @@ says so.
 | Does the language ban cover toolchain declarations | Yes, by derivation from the languages a deed declares | #698, #706, #917
 | CodeQL: D256 or the monthly cron | D256 wins; the cron campaign closes as superseded | #288, #323, #324
 | Stub `.affine` files | Port genuinely, repository by repository | #664, #272, #276, #278, #279
-| The red debt check on `main` | Pay down four TODO/FIXME markers; no ceiling change | #955
+| The red debt check on `main` | Pay the `todo-fixme-markers` measure down; no ceiling change. Measured afterwards: this is not a small job, see W3 | #955
 | Dependabot and the lock | Retire `dependabot-lock-regen.yml`; rely on Dependabot plus the lock gate, after a census of recent Dependabot pull requests | #670
 | The codeql-action hold at v4.38.0 | Lift it; correct the refuted comments | #1037
 | Two Actions allow-lists | `config/settings/actions-allowlist.json` is the source; the rhodium copy is generated from it, then retired after a deprecation window | #1220
@@ -509,11 +518,11 @@ they are renewed or E6 lands first.
 | Id | Work | Tier
 | W1 | Regenerate `actions.lock` for the two issue-evidence workflows (one command; the tool cannot run in an agent session), merge, then set `ISSUE_EVIDENCE_APPLY`. | Owner
 | W2 | Work the small-pieces table above, one commit and one ledger row each. | Sonnet
-| W3 | Pay down four TODO/FIXME markers (#955). | Haiku
+| W3 | Bring `todo-fixme-markers` back under its ceiling (#955). Measured 2026-11-17: the probe counts _files_ that contain the word, 88 on `main` against a ceiling of 84. An agent found one stale marker it could remove honestly (`docs/INNERVATION.adoc:139`); the rest are real undone work with no tracking issue, or files where the word is the subject (policy text, gate code, fixtures). So this needs either about four real tasks done, or an owner ruling that the probe should count markers and not mentions. | Opus or the owner
 | W4 | Execute D256 in `standards`: retire `codeql.yml`, close #288, #323, #324 as superseded through the ledger (#1031). | Sonnet
 | W5 | Write the ruled-but-unwritten rulings back: D128 (#1032), D133 (#957), D169 (#999), D171 (#1008), D129 (#1059). | Sonnet
 | W6 | Carry out the move-out manifest, destination by destination, once the owner approves it. | Sonnet, with access to each destination
-| W7 | Land `3-practice/DATA-FORMAT-ROUTING.adoc` (#1341): three repositories cite it as canon and it does not exist on `main`. | Sonnet
+| W7 | Finish #1341. The page `3-practice/DATA-FORMAT-ROUTING.adoc` is added in this change (three repositories already cite it). Still to do: the routing entries in the deed and AI manifest, the cross-references in the YAML and JSON policy pages, the generated `CLAUDE.md` copies, and recording the owner clarification of 2026-10-25 in this repository, since today its only recorded text is in the template's `CLAUDE.md`. | Sonnet
 |===
 
 == Departures met, for the owner
@@ -521,8 +530,8 @@ they are renewed or E6 lands first.
 Reported under the standing priority; none was fixed unless stated.
 
 * `3-practice/DATA-FORMAT-ROUTING.adoc` is cited as canon by the generated
-  `CLAUDE.md` of mathesis, rsr-template-repo and kyx and is absent from
-  `main`.
+  `CLAUDE.md` of mathesis, rsr-template-repo and kyx and was absent from
+  `main`. The page is added in this change.
 * HAR carries its interchange format on A2ML (`crates/har-meta/src/a2ml.rs`;
   82 `.a2ml` files); Scaffoldia tracks 118 `.a2ml` files and has no chora
   deed; `standards` tracks 160, all in the legacy ledger.

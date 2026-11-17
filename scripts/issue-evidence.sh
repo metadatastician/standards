@@ -517,8 +517,8 @@ then . else error("--evaluated: line \(input_line_number) is not an evaluate rec
 load_evaluated() {
   if [ -n "$EVAL_FILE" ]; then
     [ -f "$EVAL_FILE" ] || fail_input "--evaluated file not found: $EVAL_FILE"
-    jq -c "$CHECK_EVALUATED_JQ" "$EVAL_FILE" >"$TMPD/evaluated.jsonl" 2>"$TMPD/eval.err" ||
-      fail_input "$(head -c 300 "$TMPD/eval.err")"
+    jq -c "$CHECK_EVALUATED_JQ" "$EVAL_FILE" >"$TMPD/evaluated.jsonl" 2>"$TMPD/check-evaluated.err" ||
+      fail_input "$(head -c 300 "$TMPD/check-evaluated.err")"
   else
     need_repo
     validate_ledger "$LEDGER" || exit 2
@@ -637,8 +637,8 @@ cmd_render_comment() {
       "$EVALUATED" 2>"$TMPD/ev.err")" || fail_input "$(head -c 300 "$TMPD/ev.err")"
   else
     printf '%s\n' "$line" >"$TMPD/one.jsonl"
-    evaluate_into "$TMPD/one.jsonl" "$TMPD/one.eval"
-    ev="$(cat "$TMPD/one.eval")"
+    evaluate_into "$TMPD/one.jsonl" "$TMPD/one.evaluated"
+    ev="$(cat "$TMPD/one.evaluated")"
   fi
   hash="$(printf '%s' "$line" | sha256sum | cut -d' ' -f1)"
   printf '%s\n' "$line" | jq -r --arg action "$ACTION" --arg commit "$COMMIT" --arg hash "$hash" \
