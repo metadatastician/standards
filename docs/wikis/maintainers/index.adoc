@@ -238,8 +238,13 @@ runs `deed_lint.js` from this repository); without bun it stops with exit 2.
 from the path (and, for a root `0-AI-MANIFEST.a2ml`, the `[ai-allocation]`
 shape `ai-manifest-decision.adoc` names). Facts are compared field by field
 only for CLADE (`clade-to-repo-deed.adoc` §3) and, when the rulings file
-carries their decision rows, for STATE (phase and maturity) and the scorecard
-corpus (nothing is translated). For any other family whose target deeds
+carries its decision row, for STATE (phase and maturity). A scorecard under
+its decision row has no fact to compare (nothing is translated), but its
+summary still has a target: the `(assessment)` clause of the chora deed, or
+`rsr-scorecard_praxis.deed` for the RSR scorecard. An absent target is
+`no-target-deed`; a present one is `facts-unchecked:SCORECARD`, because the
+tool does not compare the summary with the record. Either way such a file is
+never `deletable-now` unless a ruling drops it. For any other family whose target deeds
 exist, the tool reports `facts-unchecked:<family>` and never classes the file
 deletable; the kyX front end for that family is what makes it checkable. A
 record that is not TOML-shaped is also `facts-unchecked`. A reader is a

@@ -247,6 +247,28 @@ c_state_decision() {
   printf '%s' "$r1" | jq -e '.blockers == ["facts-unchecked:STATE"]' >/dev/null \
     && printf '%s' "$r2" | jq -e '.class == "deletable-now" and .facts.checked == 2 and .facts.missing == 0' >/dev/null
 }
+# Scorecards under the family decision (R5 option B): the per-criterion facts
+# are dropped on purpose, but the summary's target must exist, and its content
+# is not compared here. So such a file is never deletable-now.
+scorecard_record() { mkdir -p "$(dirname "$1")"; printf '[scorecard]\nspec_id = "%s"\nscore = 71\n' "$2" > "$1"; }
+c_scorecard_needs_its_target() {
+  local d r1 r2 r3 out; d="$WORK/score"; mkdir -p "$d"; chora "$d"
+  scorecard_record "$d/.machine_readable/scorecards/rsr.scorecard.a2ml" rsr
+  scorecard_record "$d/.machine_readable/scorecards/crg.scorecard.a2ml" crg
+  printf '%s\n' '{"date":"2026-10-09","family":"SCORECARD","id":"t-r5","kind":"decision","recorded":"test","summary":"s"}' > "$WORK/score.jsonl"
+  r1=$(RULINGS="$WORK/score.jsonl" row "$d" .machine_readable/scorecards/rsr.scorecard.a2ml)
+  r2=$(RULINGS="$WORK/score.jsonl" row "$d" .machine_readable/scorecards/crg.scorecard.a2ml)
+  printf '%s' "$r1" | has_blocker "no-target-deed:.machine_readable/scorecards/rsr-scorecard_praxis.deed" || return 1
+  printf '%s' "$r1" | class_is decision-drops || return 1
+  printf '%s' "$r2" | jq -e '.class == "decision-drops" and (.blockers | map(startswith("no-target-deed:")) | any)' >/dev/null || return 1
+  out=$(RULINGS="$WORK/score.jsonl" run --root "$d" --check 2>&1) || true
+  ! grep -qF 'git rm' <<<"$out" || return 1
+  # with the praxis deed present the file is still not deletable: nothing compares the summary
+  cp "$REPO_ROOT/1-formats/deed/tools/fixtures/rsr-scorecard/valid/minimal_praxis.deed" \
+     "$d/.machine_readable/scorecards/rsr-scorecard_praxis.deed" || return 1
+  r3=$(RULINGS="$WORK/score.jsonl" row "$d" .machine_readable/scorecards/rsr.scorecard.a2ml)
+  printf '%s' "$r3" | jq -e '.class != "deletable-now" and (.blockers | index("facts-unchecked:SCORECARD") != null)' >/dev/null
+}
 c_unclassified_fails_check() {
   local d out; d=$(deletable_tree twochora); cp "$d/fixture_chora.deed" "$d/other_chora.deed"
   out=$(run --root "$d" --json 2>/dev/null | jq -r 'select(.path == ".machine_readable/CLADE.a2ml") | .class')
@@ -398,6 +420,7 @@ check "a 'dropped' row with a precondition blocks on it"                        
 check "spec-gap and kyx-family rows: blocker named, class needs-kyx-supported"     c_spec_gap_and_kyx_family
 check "external-reader and ruling-needed rows block"                               c_external_reader_and_ruling_needed
 check "STATE: unchecked without its decision row; with it, 2 facts compared"       c_state_decision
+check "SCORECARD: a decided scorecard needs its target and is never deletable-now" c_scorecard_needs_its_target
 check "a malformed rulings file is refused (exit 2)"                               c_bad_rulings_refused
 echo "=== modes and setup ==="
 check "bun absent: exit 2 with a message, never a skip"                            c_bun_absent_fails_closed
@@ -449,6 +472,7 @@ mutant 's/^\( *\)blockers+=("lint-fail:\$t")/\1:/' "lint failures are ignored" c
 mutant 's/if \[ "\${#joined\[@\]}" -gt 0 \]; then/if false; then/' "--base lets a joined path through" c_base_joined_path_fails
 mutant 's/^    elif ! jq -e -n --slurpfile a/    elif false && ! jq -e -n --slurpfile a/' "stale counts pass" c_counts_stale_fails
 mutant 's/named_in "\$p" "\$ROOT\/\$rec" ||/true ||/' "a missing record line is ignored" c_record_line
+mutant 's/^      summary_only=1$/      summary_only=1; blockers=()/' "a decided scorecard is waved through with no target" c_scorecard_needs_its_target
 
 # ── this repository ────────────────────────────────────────────────────────
 echo "=== this repository ==="
