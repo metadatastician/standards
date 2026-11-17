@@ -14,6 +14,10 @@ task, when you come across a departure from the rulings in this file:
    from which ruling. Telling the owner is the minimum, and silence is
    never acceptable.
 
+A departure that cannot be fixed on the spot is also recorded as a row in
+`.machine_readable/departures.jsonl`, with a check that shows it is still
+there (see `3-practice/DEPARTURES.adoc`).
+
 This covers code and configuration, and also docs, wikis, READMEs,
 CLAUDE.md files, templates and the connections between repos (links,
 pins, workflow `uses:`, registry rows). It applies above all to:

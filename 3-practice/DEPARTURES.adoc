@@ -1,0 +1,177 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+= Departures: a ledger that closes itself
+Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+:toc:
+:toc-placement: preamble
+
+A departure is something in a repository that departs from a ruling. The
+standing rule in `.claude/CLAUDE.md` says an agent that meets one fixes it or
+tells the owner. Some departures cannot be fixed on the spot: licence edits are
+owner-only, and A2ML waits for a translator. Written as prose in a plan page,
+they go stale. A row in the departures ledger records such a departure with a
+mechanical check that it is still there; the row goes when the departure does.
+
+This is the issue-evidence mechanism (`ISSUE-EVIDENCE.adoc`) turned round. A
+row there says "this is fixed, and these checks show it". A row here says "this
+is still wrong, and these checks show it".
+
+== 1. What a row is, and what it is not
+
+* A row is a statement that a defect exists, and a way to see it.
+* Adding a row is how an agent tells the owner, durably, about a departure it
+  cannot fix on the spot. The row is the record; no issue is opened.
+* The row disappears when the defect does: when a check stops holding, `check`
+  fails until the row is deleted, and `prune` deletes it.
+* A row is *not* an approval of the defect and *not* a waiver of any gate. A
+  gate that fails on the defect still fails.
+* Licence rows are flag-only (`fix: owner-only`). Recording a licence departure
+  never licenses an agent to edit a licence or an SPDX header.
+
+== 2. A row
+
+The ledger is `.machine_readable/departures.jsonl`: JSON Lines, one record per
+line, each line I-JSON serialised by JCS (`JSON-POLICY.adoc` J-1, J-2).
+
+[cols="2,7",options="header"]
+|===
+| Field | Meaning
+
+| `id`
+| A stable slug: lower-case letters and digits in hyphen-separated words, at
+  most 64 characters, unique in the ledger. `report`, `check` and `prune` name
+  rows by it.
+
+| `repo`
+| `owner/name` of the repository the row is about. `report`, `check` and
+  `prune` take `--repo` to evaluate only one repository's rows.
+
+| `ruling`
+| Which rule is departed from, and where it is written: a file and section,
+  or a ruling id (at most 200 characters).
+
+| `claim`
+| One or two plain sentences: what departs, and where (at most 600
+  characters).
+
+| `checks`
+| A non-empty array of checks. The vocabulary and its semantics are exactly
+  those of `ISSUE-EVIDENCE.adoc` §2; here every check holding means "the
+  departure is still present".
+
+| `fix`
+| `owner-only` (only the owner may fix it: licence and SPDX departures),
+  `blocked` (it waits on something named in `blocked_on`), or `open` (any agent
+  that meets it may fix it).
+
+| `blocked_on`
+| With `fix: blocked` only, and then required: what the fix waits on (at most
+  300 characters).
+
+| `added`
+| The date the row was written, `YYYY-MM-DD`.
+|===
+
+No other field is accepted. Strings may not contain control characters, and
+`ruling`, `claim` and `blocked_on` may not contain `<!--` or `-->`. There is no
+`where` field: every check except `script` names the paths it reads, and
+`claim` says where the departure is.
+
+== 3. Verdicts
+
+The checks of a row are evaluated at a commit by `scripts/issue-evidence.sh`;
+the departures tool does not evaluate checks itself, so a check means the same
+thing in both ledgers.
+
+[cols="2,5",options="header"]
+|===
+| Verdict | When
+
+| present
+| Every check holds: the departure is still there.
+
+| RESOLVED
+| Some check no longer holds: the departure, as recorded, is gone. The report
+  names the check. The row is now stale.
+
+| unevaluated
+| No check fails, and one could not be evaluated. A `script` check runs only
+  when the evaluated commit is the checked-out commit and the checkout is
+  exactly that commit (`ISSUE-EVIDENCE.adoc` §2); elsewhere it is unevaluated,
+  never present and never RESOLVED.
+|===
+
+One check per independent fact keeps a row honest: when any check stops
+holding the row is RESOLVED, so a row that bundles two defects resolves when
+the first is fixed. Write one row per defect.
+
+To say "some tracked, non-empty file matches the glob G", use
+`{"kind":"tree-grep-absent","glob":G,"pattern":"a^"}`. The pattern `a^` can
+match no line, so the check holds exactly while G selects at least one
+non-empty tracked file (`ISSUE-EVIDENCE.adoc` §2: a glob that selects no file
+fails).
+
+A row would stop holding on a tree where the departure is fixed. Check that
+before proposing it: fix the defect in a throwaway clone, commit, and run
+`scripts/departures.sh report --ref <that commit>`.
+
+A pattern that names an invalid licence identifier can be written so that the
+ledger itself does not contain the identifier: for example `CC-SA-[B]Y-4\.0`
+matches the transposed identifier, and a plain search of the tree for it still
+finds only the files that carry it.
+
+== 4. Running it
+
+`scripts/departures.sh` (its header documents each command and exit code):
+
+* `validate [LEDGER]`: schema only; it never reads the git tree.
+* `report [--ref REV] [--repo R] [LEDGER]`: one line per row and a summary
+  with counts and the denominator. It exits 0 whatever the verdicts, and on a
+  malformed ledger, which it reports as INVALID.
+* `check [--ref REV] [--repo R] [LEDGER]`: the gate. Exit 1 when a row is
+  RESOLVED, 2 when the ledger is malformed, 0 otherwise. An unevaluated row
+  passes.
+* `prune [--ref REV] [--repo R] [LEDGER]`: deletes exactly the rows `check`
+  reports RESOLVED, through the same decision, and keeps every other line byte
+  for byte. It never adds or edits a row, a second run removes nothing, and a
+  malformed ledger is refused and left untouched. It prints
+  `removed LEDGER:LINE ID` for each row it removes.
+
+`scripts/tests/departures-test.sh` runs `check` on this repository's ledger, so
+the shell-test suite fails on a stale row. The canonical-JSON job of
+`.github/workflows/ijson-jcs.yml` keeps the ledger JCS.
+
+== 5. Adopting it in another repository
+
+. Copy `scripts/departures.sh` and `scripts/issue-evidence.sh` into the
+  repository's `scripts/`, side by side; `departures.sh` runs the
+  `issue-evidence.sh` beside it.
+. Add `.machine_readable/departures.jsonl`, empty or with rows whose `repo` is
+  that repository.
+. Run `scripts/departures.sh check` where the repository runs its gates (its
+  shell-test suite, a pre-commit hook, or a `run:` step in CI).
+
+Rows for other repositories that were met while working here, written for them
+to adopt, are in `docs/triage/2026-11-17/departure-rows-other-repos.jsonl`.
+
+== 6. Limits
+
+* A row sees one repository's tree at one commit. A departure in another
+  repository is a row in that repository's ledger.
+* A check proves what it says and no more. A `grep-present` row turns RESOLVED
+  when the offending text moves to another file; the reviewer of the row
+  judges that the checks capture the claim, as for issue evidence.
+* The ledger records departures an agent met. It is not a census of the
+  estate, and an empty ledger does not mean there is no departure.
+
+== 7. Change log
+
+[cols="2,3,8",options="header"]
+|===
+| Date | Change | Detail
+
+| 2026-11-17
+| Created
+| Owner decision of 2026-11-17: a departures ledger that closes itself. Row
+  format, `scripts/departures.sh` on the issue-evidence check engine, and the
+  first five rows for this repository.
+|===
