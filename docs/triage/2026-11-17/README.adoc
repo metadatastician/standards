@@ -522,7 +522,7 @@ they are renewed or E6 lands first.
 | W4 | Execute D256 in `standards`: retire `codeql.yml`, close #288, #323, #324 as superseded through the ledger (#1031). | Sonnet
 | W5 | Write the ruled-but-unwritten rulings back: D128 (#1032), D133 (#957), D169 (#999), D171 (#1008), D129 (#1059). | Sonnet
 | W6 | Carry out the move-out manifest, destination by destination, once the owner approves it. | Sonnet, with access to each destination
-| W7 | Land `3-practice/DATA-FORMAT-ROUTING.adoc` (#1341): three repositories cite it as canon and it does not exist on `main`. | Sonnet
+| W7 | Finish #1341. The page `3-practice/DATA-FORMAT-ROUTING.adoc` is added in this change (three repositories already cite it). Still to do: the routing entries in the deed and AI manifest, the cross-references in the YAML and JSON policy pages, the generated `CLAUDE.md` copies, and recording the owner clarification of 2026-10-25 in this repository, since today its only recorded text is in the template's `CLAUDE.md`. | Sonnet
 |===
 
 == Departures met, for the owner
@@ -530,8 +530,8 @@ they are renewed or E6 lands first.
 Reported under the standing priority; none was fixed unless stated.
 
 * `3-practice/DATA-FORMAT-ROUTING.adoc` is cited as canon by the generated
-  `CLAUDE.md` of mathesis, rsr-template-repo and kyx and is absent from
-  `main`.
+  `CLAUDE.md` of mathesis, rsr-template-repo and kyx and was absent from
+  `main`. The page is added in this change.
 * HAR carries its interchange format on A2ML (`crates/har-meta/src/a2ml.rs`;
   82 `.a2ml` files); Scaffoldia tracks 118 `.a2ml` files and has no chora
   deed; `standards` tracks 160, all in the legacy ledger.
