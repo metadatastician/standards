@@ -189,6 +189,42 @@ evaluated 1
 run bash "$IA" states --repo "$R" --evaluated "$WORK/evaluated.jsonl"
 check "states: an unreadable issue is a refusal (non-zero exit)" test "$RC" -ne 0
 
+# --- C1: a failed marker lookup is a refusal, never a count of zero --------------
+# Issue 41 was closed by the bot and reopened by a person. Read correctly it is
+# reopened_by_human, which stops the bot closing it again; a lookup that fails
+# and is read as "no markers" would make it a plain open issue.
+c1_case() { # LABEL MODE: fail (HTTP error) | body (200 with an error object)
+  reset_fix
+  issue 41 open "$(timeline mark closed:"$BOT" reopened:alice)"
+  local p
+  for p in "repos/$R/issues/41/timeline?per_page=100" "repos/$R/issues/41/comments?per_page=100"; do
+    rm -f "$FIX/$(fkey "$p").json"
+    if [ "$2" = fail ]; then fx_fail "$p" "$RATE"; else fx "$p" "$RATE"; fi
+  done
+  evaluated 41
+  run bash "$IA" states --repo "$R" --evaluated "$WORK/evaluated.jsonl"
+  check "C1: $1: states exits non-zero" test "$RC" -ne 0
+  check "C1: $1: ... says it refuses" err_has "refusing to act"
+  check "C1: $1: ... and emits no states" test -z "$OUT"
+}
+c1_case "the marker lookup fails (HTTP error)" fail
+c1_case "the marker lookup answers 200 with a rate-limit body" body
+
+reset_fix
+issue 42 open "$(timeline)"
+evaluated 42
+run bash "$IA" states --repo "$R" --evaluated "$WORK/evaluated.jsonl"
+check "C1: a successful empty history is zero markers (plain open)" \
+  test "$(state_of 42)" = '{"number":42,"state":"open","closed_by_bot":false,"reopened_by_human":false}'
+
+reset_fix
+issue 43 open "$(timeline mark closed:"$BOT")"
+evaluated 43
+run bash "$IA" states --repo "$R" --evaluated "$WORK/evaluated.jsonl"
+check "C1: an issue whose history disagrees with its state is left out (no action)" \
+  test "$(state_of 43)" = '"absent"'
+check "C1: ... with a warning" err_has "disagrees"
+
 # --- select: the cap ---------------------------------------------------------
 decisions() { # ACTION... -> decisions file, issue numbers from 11
   local a n=10

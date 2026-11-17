@@ -15,18 +15,30 @@
 #   states --repo OWNER/NAME --evaluated FILE
 #       For each issue named by an evaluate record of FILE, one JSON array
 #       element {number, state, closed_by_bot, reopened_by_human}: the --open
-#       input of `issue-evidence.sh decide`. A pull request is never listed.
+#       input of `issue-evidence.sh decide`. A pull request is never listed;
+#       an issue whose newest close/reopen event disagrees with its state is
+#       left out (so nothing is decided for it). Any failed or malformed read
+#       prints nothing and exits 1: a lookup that failed is never read as
+#       "no marker".
 #   select --decisions FILE --max-actions N [--counts FILE]
 #       The actions to plan this run: the decided closes and reopens, in
 #       order, at most N of them (N from 0 to 50). --counts receives
 #       "TOTAL PLANNED".
 #   apply --repo OWNER/NAME --plan FILE --max-actions N
 #       Performs the plan (a JSON array of {issue, action, close_reason,
-#       body}) with `gh issue close` / `gh issue reopen`, re-reading each
-#       issue's state just before acting.
+#       body}) with `gh issue close` / `gh issue reopen`. Just before each
+#       action it re-reads the issue and its timeline and skips the action
+#       when a person has closed or reopened the issue since the plan.
 #
 # The bot's identity is one value, BOT below: the login the workflow's token
 # acts as (github-actions[bot] for GITHUB_TOKEN). --bot LOGIN overrides it.
+#
+# GITHUB API RELIED ON (exercised here only against a fake `gh`)
+#   GET repos/R/issues/N            .state (open|closed), has("pull_request")
+#   GET repos/R/issues/N/timeline   paginated, oldest first; entries with
+#       .event "commented" (.user.login or .actor.login, .body), "closed" and
+#       "reopened" (.actor.login). `gh api --paginate` prints one JSON array
+#       per page; they are read as one history.
 #
 # EXIT
 #   0  done
@@ -123,6 +135,11 @@ read_issue() {
   local n="$1"
   gh api "repos/$REPO/issues/$n" >"$TMPD/issue.json" 2>"$TMPD/gh.err" ||
     refuse "could not read issue #$n: $(head -c 300 "$TMPD/gh.err")"
+  # A pull request has no issue history to read; it is never acted on.
+  if jq -e 'type == "object" and has("pull_request")' "$TMPD/issue.json" >/dev/null 2>&1; then
+    FACTS='{"pr":true}'
+    return 0
+  fi
   gh api --paginate "repos/$REPO/issues/$n/timeline?per_page=100" >"$TMPD/timeline.json" 2>"$TMPD/gh.err" ||
     refuse "could not read the timeline of #$n: $(head -c 300 "$TMPD/gh.err")"
   FACTS="$(jq -c -n --argjson n "$n" --arg bot "$BOT" --arg marker "$MARKER" \
@@ -133,37 +150,29 @@ read_issue() {
 fact() { jq -r --arg k "$1" '.[$k]' <<<"$FACTS"; }
 
 cmd_states() {
-  local n issue state closed_by markers last closed_by_bot reopened_by_human
+  local n
   parse_opts "$@"
   need_repo_opt states
   { [ -n "$EVAL_FILE" ] && [ -f "$EVAL_FILE" ]; } || fail_input "states needs --evaluated FILE (an existing file)"
-  for n in $(jq -r '.issue' "$EVAL_FILE" | sort -n -u); do
-    issue="$(gh api "repos/$REPO/issues/$n")"
-    if [ "$(jq 'has("pull_request")' <<<"$issue")" = true ]; then
+  jq -r '.issue' "$EVAL_FILE" >"$TMPD/numbers" || fail_input "--evaluated: not JSON Lines"
+  : >"$TMPD/states.jsonl"
+  # Nothing is printed until every issue has been read: a failed read exits
+  # (refuse) with no partial table, so `decide` never sees a guess.
+  sort -n -u "$TMPD/numbers" >"$TMPD/numbers.sorted"
+  while IFS= read -r n; do
+    [[ "$n" =~ ^[1-9][0-9]*$ ]] || fail_input "--evaluated: issue '$n' is not a positive integer"
+    read_issue "$n"
+    if [ "$(fact pr)" = true ]; then
       echo "::warning::ledger row #$n names a pull request, not an issue; it is never acted on." >&2
       continue
     fi
-    state="$(jq -r .state <<<"$issue")"
-    closed_by="$(jq -r '.closed_by.login // ""' <<<"$issue")"
-    markers="$(gh api --paginate "repos/$REPO/issues/$n/comments?per_page=100" |
-      jq -r --arg bot "$BOT" --arg marker "$MARKER" \
-        '.[] | select(.user.login == $bot and (.body | contains($marker))) | .id' | grep -c . || true)"
-    closed_by_bot=false
-    reopened_by_human=false
-    if [ "$state" = closed ] && [ "$closed_by" = "$BOT" ] && [ "$markers" -gt 0 ]; then
-      closed_by_bot=true
+    if [ "$(fact consistent)" != true ]; then
+      echo "::warning::#$n is $(fact state) but its newest close/reopen event is '$(fact last_event)': the history disagrees with the state, so nothing is decided for it this run." >&2
+      continue
     fi
-    if [ "$state" = open ] && [ "$markers" -gt 0 ]; then
-      last="$(gh api --paginate "repos/$REPO/issues/$n/events?per_page=100" |
-        jq -r '.[] | select(.event == "closed" or .event == "reopened") | [.event, (.actor.login // "")] | @tsv' | tail -n 1)"
-      if [ "${last%%$'\t'*}" = reopened ] && [ "${last#*$'\t'}" != "$BOT" ]; then
-        reopened_by_human=true
-      fi
-    fi
-    jq -c -n --argjson number "$n" --arg state "$state" \
-      --argjson cbb "$closed_by_bot" --argjson rbh "$reopened_by_human" \
-      '{number: $number, state: $state, closed_by_bot: $cbb, reopened_by_human: $rbh}'
-  done | jq -c -s .
+    jq -c '{number, state, closed_by_bot, reopened_by_human}' <<<"$FACTS" >>"$TMPD/states.jsonl"
+  done <"$TMPD/numbers.sorted"
+  jq -c -s . "$TMPD/states.jsonl"
 }
 
 cmd_select() {
@@ -202,10 +211,11 @@ cmd_apply() {
     # since, and two runs can be queued. A person's close or reopen is never
     # undone.
     read_issue "$n"
+    if [ "$(fact pr)" != false ]; then echo "#$n is a pull request; not acting."; continue; fi
     now="$(fact state)/$(fact last_event)/$(fact last_actor)"
     case "$action" in
       close)
-        if [ "$(fact pr)" != false ] || [ "$(fact consistent)" != true ] || [ "$(fact state)" != open ]; then
+        if [ "$(fact consistent)" != true ] || [ "$(fact state)" != open ]; then
           echo "#$n is now $now; not closing."
           continue
         fi
@@ -217,7 +227,7 @@ cmd_apply() {
           refuse "closing #$n failed; $done_n of $count planned action(s) were performed"
         ;;
       reopen)
-        if [ "$(fact pr)" != false ] || [ "$(fact closed_by_bot)" != true ]; then
+        if [ "$(fact closed_by_bot)" != true ]; then
           echo "#$n is now $now, not a close by this bot; not reopening."
           continue
         fi

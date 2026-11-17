@@ -139,10 +139,10 @@ jobs:
           bash "$RUNNER_TEMP/issue-evidence.sh" evaluate --repo "$REPO" --ref HEAD "$LEDGER" >"$RUNNER_TEMP/evaluated.jsonl"
           echo "rows evaluated: $(grep -c . "$RUNNER_TEMP/evaluated.jsonl" || true)"
 
-      # For each ledger issue: its state, whether this bot closed it (closed by
-      # github-actions[bot] AND carrying this bot's marker comment from
-      # github-actions[bot]; a marker anyone else posted does not count), and
-      # whether a person reopened it after this bot closed it.
+      # For each ledger issue: its state, whether this bot closed it, and whether
+      # a person reopened it after this bot closed it, from its timeline
+      # (scripts/issue-evidence-apply.sh `states`). A failed read fails this
+      # step, so nothing is decided or applied on a guess.
       - name: Read the ledger issues' states
         env:
           GH_TOKEN: ${{ github.token }}
