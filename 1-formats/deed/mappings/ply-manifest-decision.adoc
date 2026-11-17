@@ -1,0 +1,342 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+= Decision spec — per-directory `0.N-AI-MANIFEST.a2ml` ply manifests → deed era
+Campaign: standards#837 · Frame: link:README.adoc[mappings/README] ·
+Status: **PROPOSAL, not ruled.** Nothing here may be implemented until the
+owner rules on §6. Written 2026-11-17 because a census of three repositories
+found that this is the largest unmapped A2ML group: 127 of 360 files.
+
+The per-directory manifests were folded into a deed once, by hand-driven
+tooling, in the #837 pilot (`hyperpolymath/rsr-template-repo#176`, merged
+2026-09-19). That pull request cites a "ratified mapping spec, Option A", but
+no such document is in this directory: the mapping lives only in the pull
+request's text and in the clause it produced. This spec writes that mapping
+down, measures it against today's corpus, and asks for the rulings the pilot
+could not have had, because the three-layer ruling of 2026-11-13 came after
+it.
+
+== 0. Naming collision (do not conflate)
+
+Files named `*-AI-MANIFEST.a2ml` hold at least five different things. A
+translator matches on the *content shape*, never on the file name (the rule
+link:ai-manifest-decision.adoc[ai-manifest-decision] §0 already set).
+
+Measured on 2026-11-17 over `metadatastician/standards` at `58362c2`,
+`hyperpolymath/scaffoldia` at `8c833fb` and
+`hyperpolymath/hybrid-automation-router` at `0176b7d`: 140 files of that name,
+out of 360 `.a2ml` files in the three repositories.
+
+[cols="3,1,4",options="header"]
+|===
+| Content shape | Files | Governed by
+
+| *META-shape*: `### [META]` and `### [AI_MANIFEST]` sections of `key: value` lines
+| 127
+| this spec (scaffoldia 77, hybrid-automation-router 50)
+
+| *Stub*: an SPDX line at most, and one comment such as `# AI Manifest - Level 1: .github`
+| 4
+| this spec, §3.3
+
+| *Prose*: Markdown headings and paragraphs under an A2ML name
+| 6
+| this spec, §3.4, for the 2 that describe a directory; §6 ask 5 for the other 4
+
+| *Allocation manifest*: `[metadata]`, `[project]`, `[ai-allocation]`, `[policy]`, `[work-allocation]`
+| 1
+| link:ai-manifest-decision.adoc[ai-manifest-decision] (ruled option A, 2026-11-10)
+
+| *Other records*: the cartridge directory manifest and the wiki-track pointer in this repository
+| 2
+| no spec; not this family (ai-manifest-decision §0)
+|===
+
+So the "0-AI-MANIFEST" family that was ruled on 2026-11-10 covers 1 of these
+140 files, not all of them.
+
+== 1. Source surface
+
+`<repo>/<directory>/0.<N>-AI-MANIFEST.a2ml`, one per directory, and
+`0-AI-MANIFEST.a2ml` in a directory other than the repository root. Every
+repository minted from `rsr-template-repo` before 2026-09-19 carries the tree
+(82 directories in the template at `9226f7e`).
+
+The META-shape is not the TOML-like record dialect of the descriptile
+families. It is YAML-like: `---` separators, `### [NAME]` section lines,
+`key: value` scalars, `key: |` block scalars, two-space-indented
+`key: "value"` maps and `- "item"` lists. That is a second reader for a
+translator, with its own fail-closed list (§3.1).
+
+[cols="2,1,4",options="header"]
+|===
+| Member (127 META-shape files) | Files | Note
+
+| `[META] id`, `[AI_MANIFEST] description`
+| 127
+| Always present.
+
+| `[META] level`, `[META] parent`
+| 126
+| `level` equals the ply in the file name in all 126. It equals the
+  directory's depth in only 100: it is a *tier* (pillar, axis, unit), not a
+  depth (pilot finding 2). `parent` resolves to an existing file in 124 and
+  dangles in 2.
+
+| `[AI_MANIFEST] canonical_locations`
+| 26
+| A map of role to relative path. 13 values in two files name a retired
+  `.a2ml` file.
+
+| `[AI_MANIFEST] invariants`
+| 20
+| A list of sentences, most containing MUST or "never".
+
+| `version`, `context`, `purpose`, `[FILE_RELATIONSHIPS] files`,
+  `[STAPELN_ECOSYSTEM] overview`, `[USAGE]`
+| 1
+| The container directory's manifest only.
+
+| *nothing but* `id`, `level`, `parent` and a one-sentence `description`
+| 97
+| Such as `description: "Sub-registry for ai metadata."`. See §2 C.
+|===
+
+No `id` repeats inside either repository.
+
+== 2. The options on the table
+
+**A. A `(ply …)` clause on the chora deed** — the pilot's form, and what the
+ultraplan of 2026-10-19 records ("Per-directory ply manifests fold into the
+deed's `(ply …)` clause, as the template already did"). One clause, one
+`(directory …)` per manifest, nested by containment (§3).
+(+ A worked, owner-merged precedent with a byte-level golden pair: 82 source
+files at `9226f7e` and the clause at `d49e4c8`. + Unblocks 127 files in two
+waiting repositories now. − The owner ruled on 2026-11-13 that the chora deed
+is identity and "is not organisation and not configuration". A directory map
+is content organisation. Option A puts it in the identity layer, as `(meta …)`
+and `(agentic …)` once sat there before J30 and J33 moved them out.)
+
+**B. `CLADE.deed`, the content-organisation layer** — where the three-layer
+ruling says a repository's own organisation belongs.
+(+ The correct layer. − It cannot be done today. The CLADE form (A7 M3, the
+`clade` module) has not landed, and `.claude/CLAUDE.md` says "Do not create it
+yet". − Its ruled members are `(scheme …)`, `(category …)` and
+`(placement :path :category)`: there is no member for a directory's
+description, its canonical locations or its invariants, so the module would
+have to grow before it could hold this content.)
+
+**C. Do not translate: retire with a removal record** — on the ground that
+the tree is derivable. 97 of 127 files state nothing but an id, a tier, a
+parent link and one sentence that restates the directory's name. Under ruling
+Q7 a file with no mapping is deleted, and the removal record
+(`9-archive/A2ML-REMOVED.adoc`'s form: path, size, sha256, blob id) keeps it
+findable in git history.
+(+ No stale boilerplate enters the deed era. − 30 files do carry content that
+is stated nowhere else: 26 canonical-location maps and 20 invariant lists.
+Those would be lost from the working tree.)
+
+**D. Split by kind (the aspect-oriented reading)** — treat the two kinds of
+content differently, as A7 already does for `AGENTIC.a2ml`:
+descriptive members (path, id, tier, description, canonical locations) go to
+the organisation layer, A now and B later; an `invariants` entry is a
+constraint, and a populated constraint is an edict, a `(rule …)` of
+`Mustfile.deed` (A7 YL3), never a descriptile member.
+(+ Each fact lands in the layer that can check it. − No translator can write
+an edict from a sentence: a rule needs `(applies-when …)` and `(requires …)`.
+So 20 files are refused until a person has written their rules.)
+
+Recommendation: *A now, as a declared transitional form, with B as its
+destination.* B is the most elegant and correct long-term home; the
+recommendation departs from it only because B cannot be written or checked
+yet, and 127 files wait on the answer. The transition is the one J30 and J33
+set: when the `clade` module can hold the content, a chora `(ply …)` is warned
+for one release and then refused in strict mode. For the invariants, see ask 2.
+
+== 3. Field table (option A; a translator refuses anything else — P-2a)
+
+The target is one top-level `(ply …)` clause of `<repo>_chora.deed`.
+
+=== 3.1 META-shape
+
+[cols="2,3,4",options="header"]
+|===
+| Source surface | Deed path | Transform / type
+
+| the file's directory, relative to the repository root
+| `(directory … :path "docs/governance")`
+| STRING. Taken from where the file sits, never from its content. One
+  `(directory …)` per source file.
+
+| `[META] id`
+| `(directory :id "governance-pillar" …)`
+| verbatim STRING, first member. An id given twice in one repository is
+  refused.
+
+| `[META] level`
+| `(directory … :ply 1)`
+| INTEGER, verbatim. A `level` that differs from the ply in the file name is
+  refused (0 of 126 today). With no `level`, the ply in the file name is used
+  (1 file; the pilot did the same).
+
+| `[META] parent`
+| — (not written)
+| Derivable, so dropped: nesting says it. Each `(directory …)` nests inside
+  the `(directory …)` of its nearest ancestor directory that has a manifest,
+  or sits at the top of `(ply …)`. The link is still *compared*: one that
+  does not resolve to that ancestor's manifest, or to the root manifest for a
+  top-level directory, is reported and never written (2 of 126 today; ask 3).
+
+| `[META] version`
+| `(directory … :version "1.0.0")`
+| verbatim STRING.
+
+| `[META] context`
+| `(directory … :context ("…" "…"))`
+| list of STRINGs, order kept.
+
+| `[AI_MANIFEST] description`
+| `(directory … :description "…")`
+| STRING. A block scalar's lines joined by `\n`, with the indentation and
+  the final line end removed.
+
+| `[AI_MANIFEST] purpose`, `[STAPELN_ECOSYSTEM] overview`
+| `(directory … :purpose "…" :overview "…")`
+| STRINGs, as `description`.
+
+| `[AI_MANIFEST] canonical_locations`
+| `(directory … (canonical-locations :role "path" …))`
+| one field per entry, the key verbatim as the keyword, the value a verbatim
+  STRING, ordered by key. A comment inside the map is dropped (§4).
+
+| `invariants` (in `[AI_MANIFEST]` or `[STAPELN_ECOSYSTEM]`)
+| `(directory … :invariants ("…" "…"))`
+| list of STRINGs, order kept: the text is the contract, as for the policy
+  rules of ai-manifest-decision §3. Subject to ask 2.
+
+| `[FILE_RELATIONSHIPS] files`
+| `(directory … (file-relationships (file :name "…" :role "…" :description "…" :depends-on ("…")) …))`
+| one `(file …)` per entry, in source order; `depends_on` → `:depends-on`,
+  a list of STRINGs, `()` when empty.
+
+| `[USAGE]` (`initialisation`, `development`, `production`)
+| — (not written)
+| Dropped: how-to text (§4).
+|===
+
+Member order inside a `(directory …)` is fixed: `:id`, `:ply`, `:path`,
+`:version`, `:description`, `:purpose`, `:overview`, `:context`,
+`(canonical-locations …)`, `:invariants`, `(file-relationships …)`, then the
+nested directories ordered by `:path`. Sibling directories are ordered by
+`:path`. A fixed order makes the output deterministic; deed order carries no
+meaning.
+
+=== 3.2 What the reader refuses
+
+Any section other than the five named above; any key not in §3.1; a key in a
+section other than the one §3.1 names for it; a scalar that is neither a
+quoted string, a bare integer nor a `|` block; a tab; a list or map nested
+deeper than §3.1 shows; a source that also parses as the record dialect. Each
+refusal names the file and the line.
+
+=== 3.3 Stub
+
+A stub states no fact beyond its own name and place. It becomes
+`(directory :ply N :path "…")`, with `N` from the file name, as the pilot
+wrote it. Its comment is not a field: `verification/tests/0.2-AI-MANIFEST.a2ml`
+in scaffoldia says "Level 1" under a ply-2 name, and the comment is the one
+that is dropped. A stub with any line that is neither an SPDX line nor that
+one comment is not a stub, and is refused.
+
+=== 3.4 Prose manifests that describe a directory
+
+Two files in the census (`.machine_readable/descriptiles/` and
+`.machine_readable/descriptiles/anchors/`, each a `0-AI-MANIFEST.a2ml`). The
+pilot mapped them by reading: the paragraph under `## Purpose` became
+`:description`, the bullet list under `## Invariants` became `:invariants`,
+`:ply` was `0`, and every other heading was dropped. That is a rule only for
+exactly those headings: a prose file with a `## Purpose` paragraph, an
+optional `## Invariants` bullet list, and otherwise only the headings
+`## Canonical Locations`, `## Multiple Versions` and `## Protocol`, whose
+bodies are dropped as instructions (§4). Any other heading is refused.
+Subject to ask 5.
+
+== 4. Drop doctrine
+
+* `parent` links: derivable from nesting (§3.1).
+* `[USAGE]`, and in prose manifests `## Canonical Locations`,
+  `## Multiple Versions` and `## Protocol`: instructions, which live in
+  documentation, never in a translated deed (frame README, drop doctrine).
+  The `## Protocol` text describes locking A2ML files for concurrent writers;
+  it has no subject once the files are gone.
+* Comments, the `---` separators and the stub comment.
+* Nothing else. A dropped line is counted and reported per file, never
+  dropped silently.
+
+== 5. Must-preserve hazards
+
+. **Match on shape, not on name** (§0). The allocation manifest at a
+  repository's root is a different family with a different target.
+. **`level` is a tier, not a depth.** 26 of 126 differ from the directory's
+  depth. A translator that "corrects" one to the depth destroys the pillar,
+  axis and unit reading. `scripts/check-manifest-ply.sh` reads file names
+  only and is unaffected.
+. **Stale `.a2ml` pointers.** 13 canonical-location values name a retired
+  descriptile (`state: "descriptiles/STATE.a2ml"`), and two invariants read
+  "Metadata files MUST follow a2ml format". Carried verbatim, they put a
+  recommendation of A2ML into a new deed, which `.claude/CLAUDE.md` names as
+  a departure. kyX's own deed shows what a person did with them after its
+  mint: `:anchor "kyx_chora.deed (anchor)"`. A translator cannot make that
+  rewrite. Ask 4.
+. **Invariants are constraints.** See option D and ask 2.
+. **The two layers.** Whatever ask 1 rules, the clause never carries identity,
+  and nothing in the chora deed's identity clauses is read from a manifest.
+. **Generator first.** The template stopped shipping the tree on 2026-09-19,
+  so no producer is left to convert. A repository that still has the tree was
+  minted before that date.
+
+== 6. Ruling asks
+
+. *Home.* A (`(ply …)` on the chora deed, transitional, recommended), B
+  (`CLADE.deed`: the most elegant long-term home, blocked until the `clade`
+  module lands and grows), C (not translated; removal record) or D (split by
+  kind).
+. *Invariants.* (a) carried verbatim as `:invariants` and each one reported
+  as a candidate edict (recommended: nothing is lost, and the report feeds
+  the `Mustfile.deed` work); (b) refused while populated, until a
+  `Mustfile.deed` rule holds each (the strict reading of YL3: most correct,
+  and it blocks 20 files); (c) carried with no report (the pilot).
+. *A `parent` link that does not resolve.* (a) nest by containment, report
+  the link (recommended; the template's own tree has one, so (b) would refuse
+  the pilot's golden source); (b) refuse the file.
+. *Stale `.a2ml` pointers.* (a) a canonical-location entry whose value ends
+  in `.a2ml` is dropped and reported, and an invariant or description that
+  mentions A2ML is carried and reported (recommended: the entry states where
+  a retired file lives, which is false in the deed era, and the test is
+  mechanical); (b) everything carried verbatim and reported; (c) the file is
+  refused until its source no longer names A2ML (deleting content from a
+  legacy file is permitted; adding to one is not).
+. *Prose shapes.* For the 2 that describe a directory: (a) §3.4's rule
+  (recommended), or (b) refused, and retired under Q7 with a removal record.
+  The other 4 are not directory manifests: the root front door of
+  hybrid-automation-router (Q15 makes that file a pointer-only
+  `0-AI-MANIFEST.deed`), and three files of this repository's
+  `0-ai-gatekeeper` and `ensaid-config` specs, which describe the retired
+  protocol and retire with it. This spec proposes to leave all four out.
+
+== 7. Acceptance (once ruled; written for option A)
+
+* *Golden parity.* From the 82 directory manifests of `rsr-template-repo` at
+  `9226f7e`, the translator's `(ply …)` clause equals the clause of
+  `rsr-template-repo_chora.deed` at `d49e4c8`, except where asks 2 to 4 rule
+  a difference; each difference is listed, with its ask, in the test.
+* *Count.* `(directory ` occurrences in a repository's `(ply …)` equal the
+  number of its source manifests of the three shapes of §3.
+* *Order-sensitive invariants.* For each directory, the `:invariants` list
+  equals the source list, in order.
+* *No rename.* No `0.N-AI-MANIFEST.deed` exists: the grammar dispatches no
+  such name, and `deed_lint.js` refuses one.
+* *Lint.* The chora deed that receives the clause passes
+  `bun 1-formats/deed/tools/deed_lint.js`. `(ply …)` has no clause module, so
+  the linter checks its grammar only; a module is A7 M3 work if ask 1 rules A
+  for longer than the transition.
+* *Refusals.* A file with a key outside §3.1, a `level` that contradicts its
+  name, and a duplicate `id` are each refused, with the line.
