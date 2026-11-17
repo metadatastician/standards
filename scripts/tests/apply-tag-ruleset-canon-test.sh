@@ -79,8 +79,10 @@ IFS=/ read -r seg1 owner name seg4 rid _ <<< "$p"
 
 if [ "$method" != GET ]; then
   [ -f "$GH_FIX/deny_writes" ] && refuse 403 "Resource not accessible by integration"
-  if [ "$inst" -eq 1 ] && ! jq -r '.repositories[].full_name' "$GH_FIX/inst.json" \
-       | grep -qxF -- "$owner/$name"; then
+  if [ "$inst" -eq 1 ]; then
+    names=$(jq -r '.repositories[].full_name' "$GH_FIX/inst.json") || names=
+  fi
+  if [ "$inst" -eq 1 ] && ! grep -qxF -- "$owner/$name" <<<"$names"; then
     refuse 403 "Resource not accessible by integration"
   fi
   # An org-inherited ruleset is listed per repo but written at /orgs/...;

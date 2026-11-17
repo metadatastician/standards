@@ -136,8 +136,8 @@ c_check_fails_on_deletable() {
   local d out; d=$(deletable_tree check-del)
   run --root "$d" --write-counts >/dev/null || return 1
   out=$(run --root "$d" --check 2>&1); [ $? -eq 1 ] || return 1
-  printf '%s' "$out" | grep -qF 'git rm -- .machine_readable/CLADE.a2ml' \
-    && printf '%s' "$out" | grep -qF '.machine_readable/a2ml-legacy-allow.txt:2: .machine_readable/CLADE.a2ml'
+  grep -qF 'git rm -- .machine_readable/CLADE.a2ml' <<<"$out" \
+    && grep -qF '.machine_readable/a2ml-legacy-allow.txt:2: .machine_readable/CLADE.a2ml' <<<"$out"
 }
 c_fact_missing() {
   local d r; d=$(deletable_tree factmiss); chora "$d" "someone-else"
@@ -250,7 +250,7 @@ c_unclassified_fails_check() {
 }
 c_bun_absent_fails_closed() {
   local d out; d=$(deletable_tree nobun)
-  out=$(BUN=/nonexistent/bun run --root "$d" --json 2>&1); [ $? -eq 2 ] && printf '%s' "$out" | grep -qF 'bun is required'
+  out=$(BUN=/nonexistent/bun run --root "$d" --json 2>&1); [ $? -eq 2 ] && grep -qF 'bun is required' <<<"$out"
 }
 c_bad_rulings_refused() {
   local d; d=$(deletable_tree badrul)
@@ -264,7 +264,7 @@ c_json_is_canonical() {
 c_summary_denominators() {
   local d out; d=$(deletable_tree summ); plain_record "$d/data/registry.a2ml"
   out=$(run --root "$d" --summary) || return 1
-  printf '%s' "$out" | grep -qF 'deletable-now 1 of 2' && printf '%s' "$out" | grep -qF 'no-mapping-spec 1 of 2'
+  grep -qF 'deletable-now 1 of 2' <<<"$out" && grep -qF 'no-mapping-spec 1 of 2' <<<"$out"
 }
 c_git_tracked_only() {
   local d r; d=$(deletable_tree gitmode); git -C "$d" init -q; plain_record "$d/untracked.a2ml"
@@ -290,16 +290,16 @@ c_counts_written_and_current() {
 }
 c_counts_missing_fails() {
   local d out; d=$(read_tree nocounts)
-  out=$(run --root "$d" --check 2>&1); [ $? -eq 1 ] && printf '%s' "$out" | grep -qF 'no counts file' \
-    && printf '%s' "$out" | grep -qF -- '--write-counts'
+  out=$(run --root "$d" --check 2>&1); [ $? -eq 1 ] && grep -qF 'no counts file' <<<"$out" \
+    && grep -qF -- '--write-counts' <<<"$out"
 }
 c_counts_stale_fails() {
   local d out; d=$(read_tree stale)
   run --root "$d" --write-counts >/dev/null || return 1
   plain_record "$d/data/registry.a2ml"                    # the tree changed; the counts did not
   out=$(run --root "$d" --check 2>&1); [ $? -eq 1 ] || return 1
-  printf '%s' "$out" | grep -qF 'counts are stale' && printf '%s' "$out" | grep -qF -- "--root $d" \
-    && printf '%s' "$out" | grep -qF -- '--write-counts'
+  grep -qF 'counts are stale' <<<"$out" && grep -qF -- "--root $d" <<<"$out" \
+    && grep -qF -- '--write-counts' <<<"$out"
 }
 # A git tree at two commits: <name> with the read file and current counts.
 git_tree() {
@@ -314,8 +314,8 @@ c_base_same_tree_passes() {
 }
 c_base_joined_path_fails() {
   local d out; d=$(git_tree base1); plain_record "$d/data/new.a2ml"; git -C "$d" add -A; commit_all "$d"
-  out=$(run --root "$d" --base HEAD~1 --check 2>&1); [ $? -eq 1 ] && printf '%s' "$out" | grep -qF 'joined since HEAD~1' \
-    && printf '%s' "$out" | grep -qF '  data/new.a2ml'
+  out=$(run --root "$d" --base HEAD~1 --check 2>&1); [ $? -eq 1 ] && grep -qF 'joined since HEAD~1' <<<"$out" \
+    && grep -qF '  data/new.a2ml' <<<"$out"
 }
 c_base_deletion_and_rename_pass() {
   local d; d=$(git_tree base2); plain_record "$d/data/a.a2ml"; git -C "$d" add -A; commit_all "$d"

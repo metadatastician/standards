@@ -49,52 +49,52 @@ echo "== counts and exit codes =="
 
 run "[$(entry a.sh 2027-06-30)]"
 check "a dated, current entry passes" "$([ "$RC" = 0 ] && echo 1)"
-check "it reports the total" "$(printf '%s' "$OUT" | grep -q '63\|1 entr' && echo 1)"
+check "it reports the total" "$(grep -q '63\|1 entr' <<<"$OUT" && echo 1)"
 
 run "[$(entry a.sh)]"
 check "an UNDATED entry fails" "$([ "$RC" = 1 ] && echo 1)"
-check "and names the entry" "$(printf '%s' "$OUT" | grep -q 'm/t @ a.sh' && echo 1)"
-check "and says what to add" "$(printf '%s' "$OUT" | grep -q 'expires_at' && echo 1)"
+check "and names the entry" "$(grep -q 'm/t @ a.sh' <<<"$OUT" && echo 1)"
+check "and says what to add" "$(grep -q 'expires_at' <<<"$OUT" && echo 1)"
 
 run "[$(entry a.sh)]" --allow-undated
 check "--allow-undated downgrades it to a warning" "$([ "$RC" = 0 ] && echo 1)"
-check "  ...without hiding it" "$(printf '%s' "$OUT" | grep -q 'UNDATED' && echo 1)"
+check "  ...without hiding it" "$(grep -q 'UNDATED' <<<"$OUT" && echo 1)"
 
 run "[$(entry a.sh 2026-10-23)]"
 check "an entry that expired YESTERDAY fails" "$([ "$RC" = 1 ] && echo 1)"
 check "  ...and says it no longer suppresses" \
-  "$(printf '%s' "$OUT" | grep -q 'no longer suppress' && echo 1)"
+  "$(grep -q 'no longer suppress' <<<"$OUT" && echo 1)"
 
 # Today is not expired: apply-baseline.sh keeps `expires_at >= today`, so the
 # sweep must agree with the gate to the day or the two report different truths.
 run "[$(entry a.sh "$TODAY")]"
 check "an entry expiring TODAY still suppresses and does not fail" "$([ "$RC" = 0 ] && echo 1)"
-check "  ...but is reported as expiring" "$(printf '%s' "$OUT" | grep -q 'EXPIRING' && echo 1)"
+check "  ...but is reported as expiring" "$(grep -q 'EXPIRING' <<<"$OUT" && echo 1)"
 
 echo
 echo "== the warning window =="
 
 run "[$(entry a.sh 2026-11-15)]"
-check "inside 45d: reported" "$(printf '%s' "$OUT" | grep -q 'EXPIRING' && echo 1)"
+check "inside 45d: reported" "$(grep -q 'EXPIRING' <<<"$OUT" && echo 1)"
 check "inside 45d: passes" "$([ "$RC" = 0 ] && echo 1)"
 
 run "[$(entry a.sh 2026-11-15)]" --warn-days 10
 check "outside a narrowed window: not reported" \
-  "$(! printf '%s' "$OUT" | grep -q 'EXPIRING' && echo 1)"
+  "$(! grep -q 'EXPIRING' <<<"$OUT" && echo 1)"
 check "outside a narrowed window: still passes" "$([ "$RC" = 0 ] && echo 1)"
 
 run "[$(entry a.sh 2026-12-22)]" --warn-days 59
 check "the boundary day is inside the window" \
-  "$(printf '%s' "$OUT" | grep -q 'EXPIRING' && echo 1)"
+  "$(grep -q 'EXPIRING' <<<"$OUT" && echo 1)"
 
 echo
 echo "== mixed buckets do not mask each other =="
 
 run "[$(entry a.sh 2027-06-30),$(entry b.sh),$(entry c.sh 2020-01-01),$(entry d.sh 2026-11-01)]"
 check "four entries in four states fails" "$([ "$RC" = 1 ] && echo 1)"
-check "  undated counted" "$(printf '%s' "$OUT" | grep -q 'undated: 1' && echo 1)"
-check "  expired counted" "$(printf '%s' "$OUT" | grep -q 'expired: 1' && echo 1)"
-check "  expiring counted" "$(printf '%s' "$OUT" | grep -q '45d: 1' && echo 1)"
+check "  undated counted" "$(grep -q 'undated: 1' <<<"$OUT" && echo 1)"
+check "  expired counted" "$(grep -q 'expired: 1' <<<"$OUT" && echo 1)"
+check "  expiring counted" "$(grep -q '45d: 1' <<<"$OUT" && echo 1)"
 
 echo
 echo "== adoption and degenerate input =="
