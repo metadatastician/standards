@@ -953,7 +953,7 @@ Fixed in #310: refuted. No verdict changed. The committed receipt was stale on
 |Had no proof. Now proved for a model in `1-formats/k9/spec/proofs/HuntGate.idr`
 (`PROVEN`). Both Nickel copies are checked against that model on all 32 inputs
 from `k9-validate.sh --self-test` (`TESTED`, the whole domain). Ledger:
-`3-practice/PROOF-NEEDS.adoc`.
+`3-practice/PROOF-STATUS.adoc`.
 
 |rsr-template-repo proof scaffold (`verification/proofs`, `src/interface`)
 |Idris2 0.7.0; Agda 2.6.3 with agda-stdlib 1.7.3; Coq 8.18.0; Lean 4.15.0; TLC 1.8.0
@@ -997,7 +997,7 @@ from Ubuntu packages.
 What stays open: no CI lane runs the template's or contractiles' prover
 checks (neither has a prover container or a Guix manifest that provides
 them), and the standards Idris2 job installs through `pack` without a pinned
-version (recorded as an open §6 deviation in `3-practice/PROOF-NEEDS.adoc`).
+version (recorded as an open §6 deviation in `3-practice/PROOF-STATUS.adoc`).
 Both are tracked in metadatastician/standards#1399.
 
 == The plan

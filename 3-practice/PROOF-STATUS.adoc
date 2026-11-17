@@ -4,9 +4,13 @@
 The proof-status file for this repository, in the sense of
 link:PROOF-POLICY.adoc[`PROOF-POLICY.adoc`] §5. It lists every proof
 obligation the repository speaks about, including the ones that are open.
-The Mathesis catalogue (`hyperpolymath/mathesis`,
-`docs/catalogue/catalogue.adoc`) names this file as standards' status
-document.
+The Mathesis catalogue (`docs/atlas/generated/catalogue.adoc` in
+`hyperpolymath/mathesis`) names this file as standards' status document.
+
+This file was named `PROOF-NEEDS.adoc` until 2026-11-17. The rename follows the
+Mathesis census ranking (PROOF-STATUS, then proof-debt, then PROOF-NEEDS) and
+PROOF-POLICY §8.5. `docs/proof-debt.adoc`, the stale 2026-05-26 ledger, was
+retired in the same change; all its entries are covered in <<moved-out>>.
 
 Rewritten 2026-11-09. The earlier version listed eleven paths that no
 longer exist here and did not mention the one proof file that does; see
@@ -405,7 +409,7 @@ or its code was deleted.
 | `lol/proofs/theories/information_theory.agda` (6 postulates), `lol/src/abi/Locale.idr`
 | Evicted with the `lol` tree in `24a12d6f` (#680, 2026-08-28)
 
-| `a2ml/src/A2ML/Proofs.idr`, `Parser.idr`, `TypedCore.idr`, `Surface.idr`
+| `a2ml/src/A2ML/Proofs.idr`, `Parser.idr`, `TypedCore.idr`, `Surface.idr`, `Converters.idr`
 | Evicted with the `a2ml` tree in `24a12d6f` (#680). A2ML is retired (D99, D269c, D312, D313)
 
 | `avow-lib/src/abi/Consent.idr`, `Unsubscribe.idr`
