@@ -154,7 +154,7 @@ read_file() {
 # of line leaders; BO/BC open and close a block comment; MODE is generic, md
 # or adoc; HD is 1 where shell heredocs occur.
 family_of() {
-  local base=${1##*/} ext
+  local base=${1##*/} ext first
   # A template keeps the syntax of what it renders: x.rs.liquid reads as x.rs.
   case "$base" in
     *.liquid|*.tmpl|*.template|*.in|*.example|*.j2) base=${base%.*} ;;
@@ -186,7 +186,8 @@ family_of() {
     adoc|asciidoc|asc) echo '|||adoc|0' ;;
     '')
       # No extension: a shell script by its shebang (hooks, tools).
-      if read_file "$1" | head -n 1 | grep -qE '^#!.*(ba|z|k|da)?sh'; then echo '#||||1'; fi ;;
+      first=$(read_file "$1" | head -n 1)
+      if [[ $first =~ ^#!.*sh ]]; then echo '#||||1'; fi ;;
   esac
 }
 
@@ -370,7 +371,7 @@ if [ "$MODE" = online ]; then
         echo "❌ $ref is $state: the work is recorded as finished but the marker is still here — ${where[$ref]}"
         fail=$((fail + 1))
       fi
-    elif printf '%s' "$out" | grep -qE 'Not Found|HTTP 404|HTTP 410'; then
+    elif grep -qE 'Not Found|HTTP 404|HTTP 410' <<<"$out"; then
       echo "❌ $ref does not exist — cited at ${where[$ref]}"; fail=$((fail + 1))
     else
       echo "⚠ $ref could not be read: $out"; unknown=$((unknown + 1))
