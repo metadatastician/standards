@@ -79,6 +79,170 @@ canon block, diff-detection at translate time (the tool hashes the
 comment block against canon) fails closed and the divergent file earns
 its own table rows.
 
+**D4-2 (owner ruling 2026-11-17): canon is every revision the template
+shipped.** D4-1 calls the comment-carried blocks "identical
+template-boilerplate across the fleet". They are not identical: the template
+revised them, and each repository carries the revision it was minted from.
+Measured on 2026-11-17, the `[agent-constraints]` and `[automation-hooks]`
+blocks of `hyperpolymath/scaffoldia` and
+`hyperpolymath/hybrid-automation-router` are four different texts, and each
+equals a revision of `hyperpolymath/rsr-template-repo`. Asked what counts as
+canon, the owner ruled: the *set* of blocks the template shipped, each pinned
+by template commit and SHA-256.
+
+* A block equal to any listed revision is derivable from canon. It is
+  dropped, and the translator reports which revision it matched.
+* A block equal to none is divergent. For `[automation-hooks]` that is the
+  `(hooks …)` row of §3. For `[agent-constraints]`, and for the
+  `[rsr-repo-skeleton]` comment inventory of PLAYBOOK, the translation fails
+  closed until the file has its own table rows.
+* A section with no comment line and no field is empty, and is dropped.
+
+*How a block is hashed.* The block is every whole-line comment between the
+section's `[header]` line and the next `[header]` line. From each line remove
+the leading spaces and tabs, the `#`, one following space if there is one,
+and trailing spaces and tabs. End each line with LF. The digest is the
+SHA-256 of that UTF-8 text. A trailing comment on a field line is not part of
+the block.
+
+The revisions, each with the first template commit that carried it. The list
+is closed: the template no longer ships these files, so no revision can be
+added, and a text not listed here is divergent.
+
+.`AGENTIC.a2ml` `[agent-constraints]`
+[cols="6,1,2,4,4",options="header"]
+|===
+| SHA-256 of the block | Lines | First shipped | Template commit | Path then
+
+| `b2ced584a5b90fa6d5ac234f63c4895569dc3a2d26c856082ba0268f81c869b4`
+| 6
+| 2026-02-14
+| `62bcf39a66eff4644aa7ebfad92dc207e5fea166`
+| `.machine_readable/AGENTIC.a2ml`
+
+| `334da29d9ff739a8ee1df8fa4da5f2136f1fc6d5408b9b7aa917ff0f71abf062`
+| 6
+| 2026-05-22
+| `04997b91647f8a702cd45841d247ea0b58752c02`
+| `.machine_readable/6a2/AGENTIC.a2ml`
+
+| `a1e2109be23676ff53aa30ca70fc9473bbd33b9c2297470ab423df309e4a3858`
+| 11
+| 2026-08-27
+| `1e69799f76a8440c275797bbed96eaf3b2f92efb`
+| `machine-readable/descriptiles/AGENTIC.a2ml`
+
+| `d38245b3815d5f72a96c5e763768b7f2103d717b81ad3698d49c32f8b37eb6c8`
+| 6
+| 2026-08-27
+| `a983c006abb150a41e6c766b26b7ee2c4a85eeef`
+| `machine-readable/descriptiles/AGENTIC.a2ml`
+
+| `a286dfdc7c99b002666224b6aca51369ba6159aafcc5e4a2b8731c50225163e7`
+| 11
+| 2026-09-17
+| `525704990159f15136bf3fec34d1cdd868916b58`
+| `.machine_readable/descriptiles/AGENTIC.a2ml`
+
+| `5b183e8448e3c2e7fe5707373bfafccdf08469035c1ddd60fb8995dba4d991ab`
+| 11
+| 2026-09-17
+| `7cb285fa7a6203afc086e9d6372924ee6662aabf`
+| `.machine_readable/descriptiles/AGENTIC.a2ml`
+
+|===
+
+.`AGENTIC.a2ml` `[automation-hooks]`
+[cols="6,1,2,4,4",options="header"]
+|===
+| SHA-256 of the block | Lines | First shipped | Template commit | Path then
+
+| `db331848b76c0dd20feb1ceda4f85c4e8791866c34cef3b961afca1d608fe350`
+| 3
+| 2026-02-14
+| `62bcf39a66eff4644aa7ebfad92dc207e5fea166`
+| `.machine_readable/AGENTIC.a2ml`
+
+| `0b4f4cb7f8cef27a39e16c3c0eb6c99ce1aaec0046cbedd61728464e004d0a9a`
+| 3
+| 2026-03-23
+| `8f7cb6f36a52c4df3d1d58e96f56b51f6ea6a6d9`
+| `.machine_readable/6a2/AGENTIC.a2ml`
+
+| `3dfc296c13f4b47876d965e7c4f4f952cc44a24bb56705bce7b18598ec58a2af`
+| 3
+| 2026-06-04
+| `fc4dc50ee16e18bb4459334f96c42245ed59789a`
+| `.machine_readable/6a2/AGENTIC.a2ml`
+
+| `2a1e007bed26407da7cc93e4eace5529f5ff7a192a45cc1f690e73d0c50a5c1b`
+| 3
+| 2026-09-19
+| `d49e4c828f03c88bd941b331457a9a28c4755c1e`
+| `.machine_readable/descriptiles/AGENTIC.a2ml`
+
+|===
+
+.`PLAYBOOK.a2ml` `[rsr-repo-skeleton]` comment inventory
+[cols="6,1,2,4,4",options="header"]
+|===
+| SHA-256 of the block | Lines | First shipped | Template commit | Path then
+
+| `1873498d100f80739254cb9d28a0b050636eaecae684c87361ea91c354b35895`
+| 87
+| 2026-04-30
+| `2c9206c6549082c7e2e330d9cbf8bb2b533d385c`
+| `.machine_readable/6a2/PLAYBOOK.a2ml`
+
+| `54570933a77c00fb1eb4ef595fa67caa1efc2d625c4da6ba1c088a002dd507b2`
+| 87
+| 2026-05-22
+| `04997b91647f8a702cd45841d247ea0b58752c02`
+| `.machine_readable/6a2/PLAYBOOK.a2ml`
+
+| `641dd949c011b06ab38236a6d06ed00f143e49fa6cc949931f2f566b6cb18631`
+| 87
+| 2026-06-22
+| `22e9b2ef1df5fc26a7d6bcf0ea2820eeb281fcaa`
+| `.machine_readable/6a2/PLAYBOOK.a2ml`
+
+| `89245f2ad69ed82644f598979df3fe38b4670944ee794fc51f242f0f03cbdff9`
+| 87
+| 2026-06-22
+| `eb9abf3233d407b622b462d299218dfa9d9bfe9e`
+| `.machine_readable/6a2/PLAYBOOK.a2ml`
+
+| `218b8e22f2ade95b0700e6f02f309bf2afcf8b333ae3e75d595e9c3db10532ba`
+| 87
+| 2026-06-29
+| `3b5b5de48b4f5350871f80ff771dbc89f7ce450a`
+| `.machine_readable/descriptiles/PLAYBOOK.a2ml`
+
+| `94ebab8bbef626b8daac7b8e4daa8c89901bd51842154f7c3e1352e401d6308e`
+| 87
+| 2026-08-27
+| `a983c006abb150a41e6c766b26b7ee2c4a85eeef`
+| `machine-readable/descriptiles/PLAYBOOK.a2ml`
+
+| `69a9bc43e94d6602f167e3fa88d89a793fab0d3cd7165b17ec32ee88bc515a51`
+| 87
+| 2026-09-17
+| `7cb285fa7a6203afc086e9d6372924ee6662aabf`
+| `.machine_readable/descriptiles/PLAYBOOK.a2ml`
+
+| `4f17592d019446a93209b25e15407ea68a8552f786100aca1716f07579155401`
+| 87
+| 2026-09-19
+| `d49e4c828f03c88bd941b331457a9a28c4755c1e`
+| `.machine_readable/descriptiles/PLAYBOOK.a2ml`
+
+|===
+
+scaffoldia's `[rsr-repo-skeleton]` inventory equals none of the eight
+(digest `a101e2bfddfbb8df8c393f92e68b8892a58547ba9969dca4d3cf135b038fd029`).
+It differs from the nearest, the revision of 2026-05-22, in one line, so
+its PLAYBOOK is refused as divergent until that line is ruled on.
+
 === NEUROSYM.a2ml → `NEUROSYM.deed` (J35)
 
 [cols="2,3,4"]
