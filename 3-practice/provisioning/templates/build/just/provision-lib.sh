@@ -31,7 +31,7 @@ DEED=".machine_readable/descriptiles/provisioning_praxis.deed"
 MIN_JUST="1.42.0"   # root→module recipe deps (`doctor: provision::doctor`); 1.41 rejects them
 # How to get mise: package managers first; the installer only as download, read, run.
 MISE_INSTALL_HINT="brew install mise | Fedora: dnf copr enable jdxcode/mise, dnf install mise | winget install jdx.mise | others: https://mise.jdx.dev/installing-mise.html — or: curl -fsSLo mise-install.sh https://mise.run, read it, sh mise-install.sh"
-T="timeout 15"      # some --version probes hang (observed 2026-09-30); never probe unbounded
+T="provision_timeout 15" # Never probe unbounded; macOS coreutils uses gtimeout.
 
 if [ -t 1 ]; then R=$'\033[31m'; G=$'\033[32m'; Y=$'\033[33m'; B=$'\033[34m'; Z=$'\033[0m'; else R=; G=; Y=; B=; Z=; fi
 PASS=0; WARN=0; FAIL=0
@@ -47,6 +47,17 @@ info() { printf '  %sinfo%s  %s\n' "$B" "$Z" "$*"; }
 hdr()  { printf '\n%s== %s ==%s\n' "$B" "$*" "$Z"; }
 # Return success when command $1 is available in the current shell.
 have() { command -v "$1" >/dev/null 2>&1; }
+
+# Homebrew installs GNU timeout under its g-prefixed name on macOS.
+# Missing time-bound support must never silently turn a bounded operation unbounded.
+provision_timeout() {
+  if have timeout; then command timeout "$@"
+  elif have gtimeout; then command gtimeout "$@"
+  else
+    printf '%s\n' 'PV-E42 timeout/gtimeout is required (macOS: brew install coreutils).' >&2
+    return 127
+  fi
+}
 
 # Where this repository keeps each part of the set. A file sits at the root only
 # when something needs it there (launcher.sh, Justfile, mise.toml, mise.lock);
@@ -118,7 +129,11 @@ detect_langs() {
   [ ${#out[@]} -eq 0 ] && out+=(docs)
   printf '%s\n' "${out[@]}"
 }
-mapfile -t LANGS < <(detect_langs)
+# Bash 3.2 is still the system shell on macOS; do not require mapfile (Bash 4).
+LANGS=()
+while IFS= read -r detected_lang; do
+  LANGS+=("$detected_lang")
+done < <(detect_langs)
 [ -z "$ARCHETYPE" ] && { [ "${LANGS[*]}" = docs ] && ARCHETYPE=docs || ARCHETYPE=library; }
 
 # Binaries each language needs, and how each is obtained.
@@ -487,6 +502,7 @@ tool_table() {
 system_deps() { # $1 adoc|ai
   local l d seen="" fed deb mac why any=0
   [ "$1" = adoc ] && printf '=== System packages\n'
+  printf '\nGNU coreutils is required for bounded commands: `timeout` on Linux/Windows Git Bash, or `gtimeout` from `brew install coreutils` on macOS. The Guix shell includes coreutils.\n'
   for l in "${LANGS[@]}"; do
     d=$(lang_sysdeps "$l"); [ -z "$d" ] && continue
     case "$seen" in *"|$d|"*) continue ;; esac; seen="$seen|$d|"; any=1
@@ -501,8 +517,8 @@ system_deps() { # $1 adoc|ai
   done
   if [ "$1" = adoc ]; then
     if [ $any -eq 1 ]; then printf '\nThe Guix development shell (`%s`) provides these itself, so inside `just dev-shell` none of them is needed.\n' "$(gpath manifest.scm)"
-    else printf '\nNone beyond git and a shell: every tool this repository needs comes from mise, or from the Guix shell.\n'; fi
-  elif [ $any -eq 0 ]; then printf '* No other OS packages: every tool comes from mise.\n'; fi
+    else printf '\nNo additional language-specific OS packages: language tools come from mise or the Guix shell.\n'; fi
+  elif [ $any -eq 0 ]; then printf '* No additional language-specific OS packages.\n'; fi
 }
 
 # Diagnose the provisioning set and toolchain, then the repository's own
@@ -514,6 +530,11 @@ cmd_doctor() {
   printf '%s doctor — %s (%s; languages: %s)\n' "$REPO_NAME" "$REPO_SLUG" "$ARCHETYPE" "${LANGS[*]}"
 
   hdr "Core toolchain"
+  # Record the FAIL and carry on: probes below are bounded by `$T`, which
+  # degrades to empty output, and the PASS/WARN/FAIL summary must still print.
+  if ! have timeout && ! have gtimeout; then
+    fail "PV-E42 GNU coreutils is required for bounded diagnostics (macOS: brew install coreutils)"
+  fi
   have git && pass "git $($T git --version 2>/dev/null | awk '{print $3}')" || fail "PV-E01 git not found — install git from your OS package manager"
   if have just; then
     local jv; jv=$($T just --version 2>/dev/null | awk '{print $2}')
@@ -632,6 +653,10 @@ cmd_doctor() {
 # launcher executable. Installation and hook failures do not skip verification.
 cmd_setup() {
   printf '%s setup — installing everything this repository needs\n' "$REPO_NAME"
+  if ! have timeout && ! have gtimeout; then
+    fail "PV-E42 GNU coreutils is required before setup (macOS: brew install coreutils)"
+    return 1
+  fi
   local rc=0
   if have mise; then
     hdr "mise toolchain"
@@ -766,42 +791,51 @@ cmd_toolchain_refresh() {
 # with this directory mounted.
 GUIX="${GUIX:-guix}"
 
-# Write build/guix/crates.scm: every registry crate in Cargo.lock as a Guix
-# origin, and %crate-inputs listing them for guix.scm. Written whole or not at
-# all. Accept importer output when its rust- definition count matches the number
-# of registry packages in Cargo.lock; the importer's exit status is not checked.
+# Write all registry and Git inputs from Cargo.lock, including their checksums.
+# Normalize CRLF in a temporary input: Guix's lockfile parser expects LF.
+# Require importer success and the expected number of unique source bindings.
 # GUIX may contain a command and arguments; import is limited to 1,800 seconds.
-# Missing Cargo.lock is a successful no-op. Return 1 for temporary-file creation
-# failure or a count mismatch; later write errors are not reliably propagated.
+# Missing Cargo.lock is a successful no-op; failures leave the prior file intact.
 cmd_crates_scm() {
-  local dst=build/guix/crates.scm want got tmp spdx
+  local dst=build/guix/crates.scm want got unique tmp spdx staged status=0
   [ -f Cargo.lock ] || { info "no Cargo.lock — no crate inputs"; return 0; }
-  want=$(grep -c '^source = "registry+' Cargo.lock)
-  tmp=$(mktemp) || return 1
+  # The scratch directory sits inside the repository: a GUIX wrapper that runs in a
+  # container mounted on the repository alone cannot see a system temp directory.
+  # Its own `*` .gitignore keeps it out of any commit; it is removed on every path.
+  mkdir -p build/guix || return 1
+  tmp=$(mktemp -d build/guix/.tmp.XXXXXX) || return 1
+  printf '*\n' >"$tmp/.gitignore" || { rm -rf -- "$tmp"; return 1; }
+  sed $'s/\r$//' Cargo.lock >"$tmp/Cargo.lock" || { rm -rf -- "$tmp"; return 1; }
+  want=$(awk '/^source = / { n++ } END { print n+0 }' "$tmp/Cargo.lock")
+  : >"$tmp/sources"
   if [ "$want" -gt 0 ]; then
     # GUIX is split on purpose: it may be a command with arguments.
     # shellcheck disable=SC2086
-    timeout 1800 $GUIX import crate --lockfile=Cargo.lock "$REPO_NAME" >"$tmp" 2>"$tmp.err"
-    got=$(grep -c '^(define rust-' "$tmp")
-    if [ "$got" != "$want" ]; then
-      fail "PV-E41 guix import crate defined $got of the $want registry crates in Cargo.lock; $dst left as-is: $(grep -m1 -i 'error' "$tmp.err" || grep -v '^+' "$tmp.err" | tail -1)"
-      rm -f "$tmp" "$tmp.err"; return 1
+    provision_timeout 1800 $GUIX import crate --lockfile="$tmp/Cargo.lock" "$REPO_NAME" >"$tmp/sources" 2>"$tmp/errors" || status=$?
+    got=$(awk '/^\(define rust-/ { n++ } END { print n+0 }' "$tmp/sources")
+    unique=$(awk '/^\(define rust-/ { seen[$2]=1 } END { for (key in seen) n++; print n+0 }' "$tmp/sources")
+    if [ "$status" -ne 0 ] || [ "$got" != "$want" ] || [ "$unique" != "$want" ]; then
+      fail "PV-E41 guix import crate exited $status and defined $unique unique inputs ($got definitions), expected $want; $dst left as-is: $(tail -1 "$tmp/errors")"
+      rm -rf -- "$tmp"; return 1
     fi
   fi
   # The licence line is guix.scm's own, so the file matches its repository.
-  spdx=$(grep -m1 'SPDX-License-Identifier' "$(gpath guix.scm)" 2>/dev/null)
-  mkdir -p build/guix
-  {
-    [ -n "$spdx" ] && printf '%s\n' "$spdx"
-    # shellcheck disable=SC2016  # the backticks are literal text
-    printf ';; Generated from Cargo.lock by `just toolchain-refresh` (guix import crate\n'
-    printf ';; --lockfile); never hand-edit it. guix.scm loads it for %%crate-inputs.\n\n'
-    grep -v '^guix (GNU Guix)' "$tmp"
-    printf '\n(define %%crate-inputs\n  (list'
-    grep -o '^(define rust-[^ ]*' "$tmp" | awk '{printf "\n    %s", $2}'
+  spdx=$(grep -m1 'SPDX-License-Identifier' "$(gpath guix.scm)" 2>/dev/null || true)
+  mkdir -p build/guix || { rm -rf -- "$tmp"; return 1; }
+  [ ! -d "$dst" ] || { fail "PV-E41 $dst is a directory"; rm -rf -- "$tmp"; return 1; }
+  staged=$(mktemp "$dst.XXXXXX") || { rm -rf -- "$tmp"; return 1; }
+  if ! {
+    { [ -z "$spdx" ] || printf '%s\n' "$spdx"; } &&
+    printf ';; Generated from Cargo.lock by just toolchain-refresh (guix import crate\n' &&
+    printf ';; --lockfile); never hand-edit it. guix.scm loads it for %%crate-inputs.\n\n' &&
+    awk '!/^guix \(GNU Guix\)/' "$tmp/sources" &&
+    printf '\n(define %%crate-inputs\n  (list' &&
+    awk '/^\(define rust-/ {printf "\n    %s", $2}' "$tmp/sources" &&
     printf '))\n'
-  } >"$dst.new" && mv "$dst.new" "$dst"
-  rm -f "$tmp" "$tmp.err"
+  } >"$staged" || ! mv -- "$staged" "$dst"; then
+    rm -f -- "$staged"; rm -rf -- "$tmp"; return 1
+  fi
+  rm -rf -- "$tmp"
   info "$dst: $want crate source(s)"
 }
 
@@ -831,7 +865,7 @@ clip() { # best-effort; silent when no clipboard exists (CI, SSH)
   elif [ -n "${WAYLAND_DISPLAY:-}" ] && have wl-copy; then c=(wl-copy)
   elif [ -n "${DISPLAY:-}" ] && have xclip; then c=(xclip -selection clipboard)
   else cat >/dev/null; return 1; fi
-  timeout 3 "${c[@]}" >/dev/null 2>&1
+  provision_timeout 3 "${c[@]}" >/dev/null 2>&1
 }
 # Print AI-assisted setup instructions and attempt to copy the setup sentence.
 # Clipboard failure is ignored.
