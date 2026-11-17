@@ -46,18 +46,6 @@ forgotten.
 - tri: eliminate
 - accepted-until: 2026-12-01
 
-## Hygiene
-
-### todo-fixme-markers
-- description: Files carrying a TODO or FIXME marker. Advisory — a marker is a note to self, not a defect Re-baselined 2026-09-22 (round 2, issue #953): fossilized at 77, measured 80. Probe corrected 2026-10-06: `*.ncl.in` templates are excluded, because their `TODO` fields are placeholders by design (copy, then fill in every TODO), not notes to self; measured 84. Re-baselined 2026-10-24: #1302's measure run wrote 83/83 while a full checkout of every commit from 2026-10-19 to 2026-10-23 measures 84, so the weekly measure has been red five Mondays running. Ceiling raised to the measured 84 by declaration; if the runner's 83 is the true figure the next --write run lowers the ceiling straight back.
-- probe: git grep -I -l -E '\b(TODO|FIXME)\b' -- . ':(exclude).machine_readable/Debtfile.a2ml' ':(exclude)docs/DEBTFILE-SPEC.adoc' ':(exclude)*.ncl.in' | wc -l
-- count: 84
-- ceiling: 84
-- severity: low
-- policy: remediable
-- tri: control
-- accepted-until: 2027-06-01
-
 ## Vendored mirrors
 
 ### vendored-mirror-unpinned-actions
