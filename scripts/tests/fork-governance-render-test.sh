@@ -33,7 +33,7 @@ check() {
 # Assertion helpers: pattern first, file second, like grep.
 has()    { grep -q  -- "$1" "$2"; }
 hasF()   { grep -Fq -- "$1" "$2"; }
-lacks()  { ! grep -q -- "$1" "$2"; }
+lacks()  { [ -f "$2" ] && ! grep -q -- "$1" "$2"; }
 first_line_has() { head -1 "$2" | grep -q -- "$1"; }
 # before A B: both are non-empty line numbers and A < B.
 before() { [ -n "$1" ] && [ -n "$2" ] && [ "$1" -lt "$2" ]; }
@@ -163,10 +163,10 @@ render_raw() { # render_raw <outdir> [args...]: render without the common flags
   bash "$RENDER" --out "$d" "$@" >/dev/null 2>&1
 }
 common=(--deed-result success --k9-result success --k9-verdict green --hypatia-result success --hypatia-verdict green)
-render_raw "$TMP/l" "${common[@]}" --hypatia-advisory none
-check "advisory=none adds nothing" -- lacks 'advisory:' "$TMP/l/body.md"
-render_raw "$TMP/m" "${common[@]}"
-check "an empty advisory adds nothing" -- lacks 'advisory:' "$TMP/m/body.md"
+# render_lacks PATTERN OUTDIR ARGS...: the render must succeed before absence is asserted.
+render_lacks() { local p="$1" d="$2"; shift 2; render_raw "$d" "$@" && lacks "$p" "$d/body.md"; }
+check "advisory=none adds nothing" -- render_lacks 'advisory:' "$TMP/l" "${common[@]}" --hypatia-advisory none
+check "an empty advisory adds nothing" -- render_lacks 'advisory:' "$TMP/m" "${common[@]}"
 render_raw "$TMP/n" "${common[@]}" --hypatia-advisory 'wat'
 check "an unparseable advisory is shown, not dropped" -- has 'advisory: wat (unparsed)' "$TMP/n/body.md"
 
