@@ -74,7 +74,7 @@ scripts/check-standards-helper-pins.sh:3
 scripts/check-standards-map.sh:2
 scripts/check-trusted-base.sh:2
 scripts/check-uuid-v8.sh:2
-scripts/close-lock.sh:8
+scripts/close-lock.sh:7
 scripts/complete-job-refs.sh:1
 scripts/conformance-k9.sh:4
 scripts/estate-trusted-base-survey.sh:1

@@ -358,6 +358,22 @@ d=$(mklock clr4 "o/q@$A" </dev/null); mkwf clr4 "o/q/.github/workflows/w.yml@$A"
 p=$(prior_rec "o/untagged@$A" gone "$A" 7 | mkprior clr4); out=$(runp "$d" "$p"); st=$?
 [ "$st" = 0 ] && grep -qF "from the lock of o/q@$A" <<<"$out" \
   && ok "a refused prior record falls through to the called repository's lock" || bad "prior → callee lock fallthrough — st=$st $out"
+# The callee's uses are read with a quiet grep. That grep used to sit after a
+# pipe (`fold < "$uf" | grep -qxF "$kf"`) under pipefail: with the key on the
+# first line of a list above the pipe buffer, grep -q exited, fold died of
+# SIGPIPE, the pipeline reported 141 and the callee's lock was passed over.
+# 5000 uses of the key (~250 KB folded); five runs.
+E=5555555555555555555555555555555555555555
+{ printf 'jobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n'
+  for i in $(seq 1 5000); do printf '      - uses: o/untagged@%s # stable\n' "$A"; done; } | plant o/q .github/workflows/w.yml "$E"
+plant o/q .github/workflows/actions.lock "$E" < "$WORK/qa.prior"
+for run in 1 2 3 4 5; do
+  d=$(mklock "clbig$run" "o/q@$E" </dev/null); mkwf "clbig$run" "o/q/.github/workflows/w.yml@$E"
+  out=$(run "$d"); st=$?
+  [ "$st" = 0 ] && grep -qF "~ o/untagged@$A ref 'v1' from the lock of o/q@$E" <<<"$out" \
+    && ok "a callee whose uses list exceeds a pipe buffer still supplies ref: (run $run)" \
+    || bad "a callee with a large uses list was passed over (run $run) — st=$st $(tail -3 <<<"$out")"
+done
 
 echo "=== moved tag: a call-site '# <tag>' comment supplies ref: ==="
 plant o/r .github/workflows/cm.yml "$A" <<EOF
