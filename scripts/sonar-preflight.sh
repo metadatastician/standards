@@ -11,7 +11,10 @@
 # had nothing in common:
 #
 #   hyperpolymath/lithoglyph   SONAR_TOKEN empty on every run, main included,
-#                              and project `hyperpolymath_lithoglyph` absent.
+#                              and sonar-project.properties names project
+#                              `hyperpolymath_lithoglyph`, which does not
+#                              exist: the repo's real project, analysed by
+#                              Automatic Analysis, is `hyperpolymath_lithoglyphdb`.
 #                              The scanner said: "Fail to load the list of
 #                              plugins installed on the server: Not authorized
 #                              or organization not found" (exit 3).
