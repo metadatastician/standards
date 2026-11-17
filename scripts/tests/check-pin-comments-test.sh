@@ -10,6 +10,14 @@ set -uo pipefail
 
 root=$(cd "$(dirname "$0")/../.." && pwd)
 checker="$root/scripts/check-pin-comments.sh"
+
+# The checker needs mikefarah yq v4. Without it nothing here can run, and that
+# is exit 2 ("could not run"), not a failure of the checker and not a pass.
+"${YQ_BIN:-yq}" --version 2>/dev/null | grep -q 'mikefarah' || {
+  echo "check-pin-comments-test: could not run, mikefarah yq v4 is required (YQ_BIN=${YQ_BIN:-yq})" >&2
+  exit 2
+}
+
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
 wf="$tmp/workflows"
 mkdir -p "$wf"

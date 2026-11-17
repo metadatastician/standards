@@ -24,9 +24,12 @@ trap 'rm -rf "$WORK"' EXIT
 pass=0 fail=0
 
 if ! command -v cargo >/dev/null 2>&1 || ! cargo fmt --version >/dev/null 2>&1; then
-  echo "SKIP: cargo/rustfmt not installed — the Rust arm cannot be exercised (a skip, not a pass)."
+  # Exit 2 is this repository's "could not run": a caller that counts exit 0
+  # as a pass (CI, or a script check in the issue-evidence ledger) must not
+  # read a run that exercised nothing as one.
+  echo "COULD NOT RUN: cargo/rustfmt not installed, so the Rust arm cannot be exercised." >&2
   echo "passed=0 failed=0 skipped=all"
-  exit 0
+  exit 2
 fi
 
 # new_repo — an empty git repo at $WORK/repo.
