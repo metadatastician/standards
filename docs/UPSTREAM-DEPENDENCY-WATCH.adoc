@@ -75,6 +75,18 @@ done
   Linux-only dependency, or one behind an opt-in feature such as a `gui`
   feature, can then look absent even though `cargo audit` finds it in
   `Cargo.lock`.
++
+Reading "absent under `--all-features`" as "absent from every build" is a
+proved theorem, THY-1 in `hyperpolymath/mathesis`: reachability in the
+dependency graph is monotone in the requested features, so a crate that no
+target reaches with every feature on is reached by no request
+(`Cargo.absent-under-all-features` in
+`verification/proofs/agda/FeatureReachability.agda`, with Rocq and Lean
+re-proofs). Its grade and receipts are in mathesis
+`docs/status/PROOF-STATUS.adoc`. The step from the model to Cargo is
+`ASSUMED` there: features unify by union, no feature removes a dependency,
+and the version graph is the one in `Cargo.lock`. A dependency that a
+feature _removes_ would break the reading, and Cargo has no such feature.
 
 == Watching
 
