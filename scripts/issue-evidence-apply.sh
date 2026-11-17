@@ -38,7 +38,9 @@
 #       array of {issue, action, close_reason, body}) with `gh issue close` /
 #       `gh issue reopen`. Just before each action it re-reads the issue and
 #       its timeline and skips the action when a person has closed or
-#       reopened the issue since the plan.
+#       reopened the issue since the plan, then re-reads the head again: when
+#       the branch has moved, it stops there, keeps what was done, and says
+#       so in the summary.
 #
 # The bot's identity is one value, BOT below: the login the workflow's token
 # acts as (github-actions[bot] for GITHUB_TOKEN). --bot LOGIN overrides it.
@@ -299,7 +301,7 @@ head_is_current() {
 
 LIVE_BRANCH="" LIVE_HEAD=""
 cmd_apply() {
-  local count i item n action reason body now done_n=0
+  local count i item n action reason body now done_n=0 stopped=""
   parse_opts "$@"
   need_repo_opt apply
   need_max_actions
@@ -344,18 +346,32 @@ cmd_apply() {
           echo "#$n was reopened by $(fact last_actor) after the bot closed it; not closing."
           continue
         fi
-        gh issue close "$n" --repo "$REPO" --reason "$reason" --comment "$body" ||
-          refuse "closing #$n failed; $done_n of $count planned action(s) were performed"
         ;;
       reopen)
         if [ "$(fact closed_by_bot)" != true ]; then
           echo "#$n is now $now, not a close by this bot; not reopening."
           continue
         fi
+        ;;
+      *) fail_input "unknown action in plan: $action" ;;
+    esac
+    # The head was current when the loop started, but the branch can move
+    # while it runs; the plan is then stale for every later action. Re-read
+    # it right before each write and stop, keeping what was already done.
+    if ! head_is_current; then
+      stopped="stopped: $LIVE_BRANCH moved from $COMMIT to $LIVE_HEAD after $done_n of $count planned action(s); the rest were not performed. A later run on the new head decides again."
+      echo "$stopped"
+      break
+    fi
+    case "$action" in
+      close)
+        gh issue close "$n" --repo "$REPO" --reason "$reason" --comment "$body" ||
+          refuse "closing #$n failed; $done_n of $count planned action(s) were performed"
+        ;;
+      reopen)
         gh issue reopen "$n" --repo "$REPO" --comment "$body" ||
           refuse "reopening #$n failed; $done_n of $count planned action(s) were performed"
         ;;
-      *) fail_input "unknown action in plan: $action" ;;
     esac
     done_n=$((done_n + 1))
     echo "| #$n | $action |" >>"$TMPD/applied.md"
@@ -364,6 +380,10 @@ cmd_apply() {
     echo "## Issue evidence: applied"
     echo
     echo "$done_n of $count planned action(s) performed."
+    if [ -n "$stopped" ]; then
+      echo
+      echo "$stopped"
+    fi
     if [ -s "$TMPD/applied.md" ]; then
       echo
       echo "| Issue | Action |"

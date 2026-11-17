@@ -82,6 +82,11 @@ case "${1:-}" in
       close | reopen)
         printf '%s %s %s\n' "$sub" "$n" "$reason" >>"$GH_FIX/ACTIONS.log"
         printf '%s' "$body" >"$GH_FIX/body-$sub-$n.txt"
+        # A test can make the default branch move as a side effect of a write.
+        if [ -f "$GH_FIX/MOVE_HEAD_TO" ]; then
+          printf '{"object":{"sha":"%s","type":"commit"},"ref":"refs/heads/main"}\n' "$(cat "$GH_FIX/MOVE_HEAD_TO")" \
+            >"$GH_FIX/$(key "repos/$repo/git/ref/heads/main").json"
+        fi
         ;;
     esac
     ;;
@@ -448,6 +453,22 @@ check "C5: an unreadable branch head is a refusal (exit 1)" rc_is 1
 check "C5: ... and nothing is done" test -z "$(actions)"
 run bash "$IA" apply --repo "$R" --plan "$WORK/plan.json" --max-actions 10
 check "C5: apply without --commit is invalid input" rc_is 2
+
+# F6: the default branch moves after the first write. The head is re-read
+# before every write, so the loop stops there: the first action stays done,
+# the second is not performed, and the summary says so.
+reset_fix
+issue 71 open "$(timeline)"
+issue 72 open "$(timeline)"
+printf '%s\n' "$SHA_B" >"$FIX/MOVE_HEAD_TO"
+plan close:71 close:72
+: >"$WORK/summary.md"
+run bash "$IA" apply --repo "$R" --commit "$SHA_A" --plan "$WORK/plan.json" --max-actions 10
+check "F6: a branch that moves mid-run exits 0" rc_is 0
+check "F6: ... the action before the move stays done" did_action "close 71"
+check "F6: ... the action after the move is not performed" no_action "close 72"
+check "F6: ... the summary says the run stopped and what was done" \
+  grep -qF "stopped: main moved from $SHA_A to $SHA_B after 1 of 2 planned action(s)" "$WORK/summary.md"
 
 # --- one definition of the marker ------------------------------------------------
 marker="$(sed -n "s/^MARKER='\\(.*\\)'\$/\\1/p" "$IA")"
