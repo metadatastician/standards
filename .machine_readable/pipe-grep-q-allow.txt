@@ -36,7 +36,6 @@
 2-protocols/overlay/scripts/check-conformance.sh:1
 3-practice/provisioning/templates/build/just/provision-lib.sh:5
 3-practice/provisioning/tests/doctor-summary.sh:2
-3-practice/release-pre-flight/v1-audit.sh:2
 9-archive/rhodium-standard-repositories/rsr-audit.sh:2
 9-archive/rhodium-standard-repositories/satellites/palimpsest-license/.git-hooks/pre-commit:2
 9-archive/rhodium-standard-repositories/satellites/palimpsest-license/.git-hooks/pre-push:3
