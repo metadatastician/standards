@@ -1,0 +1,15 @@
+;; SPDX-License-Identifier: CC-BY-SA-4.0
+;; The :relationship term the owner ruled on 2026-11-17
+;; (clauses/ecosystem.abnf v1.2.0): this repo extends the related one. It
+;; may sit beside a code-dependency entry for another repo.
+(descriptile-deed
+  :schema-version "1.0.0"
+  :canonical-name "example-game"
+  :of-chora #uuid"00000000-0000-8000-8000-0000000000a1"
+  :affirmed "2026-11-14" :affirmed-by agent
+  :project "example-game"
+  :ecosystem "hyperpolymath"
+  :position-type "extension"
+  :purpose "A small example game used by the deed fixtures."
+  (related :name "host-engine" :relationship extension-of :notes "Loaded by the engine as a package extension; the engine does not depend on this repo.")
+  (related :name "math-kit" :relationship code-dependency :notes "Linked as an ordinary library."))

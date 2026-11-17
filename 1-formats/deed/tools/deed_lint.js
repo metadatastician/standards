@@ -2662,15 +2662,17 @@ export class EcosystemError extends LintError {
 
 /**
  * The closed :relationship vocabulary (A7 7.2; clauses/ecosystem.abnf
- * v1.1.0): the seven terms owner-ruled 2026-09-19 in
+ * v1.2.0): the seven terms owner-ruled 2026-09-19 in
  * mappings/meta-ecosystem-to-repo-deed.adoc, the four DESCRIPTILE-SPEC
- * observed (parent among them), and the five owner-ruled 2026-11-14.
+ * observed (parent among them), the five owner-ruled 2026-11-14, and
+ * extension-of, owner-ruled 2026-11-17.
  */
 export const ECOSYSTEM_RELATIONSHIPS = new Set([
   "standard-source", "build-tooling", "validation-tooling", "signing-tooling",
   "verification-tooling", "minted-from", "registry",
   "downstream-consumer", "sibling-language", "code-dependency", "parent",
   "sibling-standard", "data-dependency", "dispatch-target", "scanner-source", "mcp-host",
+  "extension-of",
 ]);
 const ECOSYSTEM_STRINGS = ["project", "ecosystem", "position-type", "purpose", "pipeline-position", "chain", "pipeline-notes"];
 const ECOSYSTEM_FIELDS = [...DESCRIPTILE_HEADER, ...ECOSYSTEM_STRINGS, "not", "coordination"];
