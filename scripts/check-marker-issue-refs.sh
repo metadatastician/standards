@@ -86,8 +86,10 @@
 #   (no mode)  check against the ledger
 #   --print    write the current `path:count` set of bare markers and exit 0
 #   --prune    delete stale ledger lines and lower counts that are too high,
-#              in place; never adds a line or raises a count; a new or grown
-#              offender still fails; idempotent
+#              in place, through scripts/lib/ledger-prune.sh; never adds a line
+#              or raises a count; idempotent. With a new or grown offender or
+#              a pragma defect the ledger is left unchanged and the exit is 1.
+#              Contract: docs/wikis/maintainers/index.adoc, "Shrink-only ledgers".
 #   --online   read-only, needs gh: list every cited issue with its state and
 #              fail if a marker cites an issue that is closed, does not exist,
 #              or is a pull request. Does not check bare markers.
@@ -321,7 +323,7 @@ scan() {
 }
 
 # ---------------------------------------------------------------- measure
-declare -A actual=() allowed=()
+declare -A actual=() allowed=() lineof=()
 RECORDS=$(mktemp)
 trap 'rm -f "$RECORDS"' EXIT
 skipped=0
@@ -407,7 +409,7 @@ while IFS= read -r entry || [ -n "$entry" ]; do
     echo "::error file=$LEDGER,line=$lineno::malformed or duplicate ledger entry (want one path:count per file): $entry"
     exit 1
   fi
-  allowed[${BASH_REMATCH[1]}]=${BASH_REMATCH[2]}
+  allowed[${BASH_REMATCH[1]}]=${BASH_REMATCH[2]}; lineof[${BASH_REMATCH[1]}]=$lineno
 done <<<"$LEDGER_SNAPSHOT"
 
 # verdicts — the one place staleness is decided; check and prune both read it.
@@ -445,27 +447,35 @@ while IFS=$'\t' read -r f rec; do
 done < "$RECORDS"
 
 if [ "$MODE" = prune ]; then
-  pruned=0
-  if [ -f "$LEDGER" ]; then
-    tmp=$(mktemp)
-    declare -A drop=() lower=()
-    while read -r v f a b; do
-      case "$v" in GONE) drop[$f]=1 ;; LOWER) lower[$f]=$b ;; esac
-      : "$a"
-    done <<<"$VERDICTS"
-    while IFS= read -r entry || [ -n "$entry" ]; do
-      p=${entry%:*}
-      case "$entry" in ''|'#'*) printf '%s\n' "$entry" ;;
-        *) if [ -n "${drop[$p]:-}" ]; then pruned=$((pruned + 1)); echo "pruned: deleted $entry (no bare marker left)" >&3
-           elif [ -n "${lower[$p]:-}" ]; then pruned=$((pruned + 1)); echo "pruned: $entry -> $p:${lower[$p]}" >&3; printf '%s:%s\n' "$p" "${lower[$p]}"
-           else printf '%s\n' "$entry"; fi ;;
-      esac
-    done < "$LEDGER" 3>&1 > "$tmp"
-    if [ "$pruned" -gt 0 ]; then cat "$tmp" > "$LEDGER"; fi
-    rm -f "$tmp"
+  # The shrink-only ledger prune contract (docs/wikis/maintainers/index.adoc,
+  # "Shrink-only ledgers"): delete GONE lines and lower LOWER counts through
+  # the shared writer, and only when nothing else is wrong. A new or grown
+  # offender, or a pragma defect, leaves the ledger unchanged and fails (1).
+  name=$LEDGER
+  case "$LEDGER" in "$ROOT"/*) name=${LEDGER#"$ROOT"/} ;; esac
+  hard=$fail
+  plan=""
+  while read -r v f a b; do
+    case "$v" in
+      NEW|GREW) hard=$((hard + 1)) ;;
+      GONE)  plan+="${lineof[$f]}"$'\t'delete$'\t'$'\t'"stale ledger entry $f:$a — no bare marker left"$'\n' ;;
+      LOWER) plan+="${lineof[$f]}"$'\t'lower$'\t'"$f:$b"$'\t'"stale ledger entry $f:$a — now $b"$'\n' ;;
+    esac
+  done <<<"$VERDICTS"
+  if [ "$hard" -gt 0 ]; then
+    echo "❌ marker-issue-refs: prune refused: $hard problem(s) that pruning may not hide; $name is unchanged."
+  elif [ -z "$plan" ]; then
+    echo "prune: $name: nothing stale"
+  else
+    # shellcheck source=SCRIPTDIR/lib/ledger-prune.sh
+    . "$(dirname "${BASH_SOURCE[0]}")/lib/ledger-prune.sh" || exit 2
+    planfile=$(mktemp) || exit 2
+    printf '%s' "$plan" > "$planfile"
+    ledger_prune_apply "$LEDGER" "$name" "$planfile"; rc=$?
+    rm -f "$planfile"
+    [ "$rc" -eq 0 ] || exit 2
+    VERDICTS=""
   fi
-  echo "marker-issue-refs --prune: $pruned ledger line(s) changed."
-  VERDICTS=$(printf '%s\n' "$VERDICTS" | grep -E '^(NEW|GREW) ' || true)
 fi
 
 total=0
