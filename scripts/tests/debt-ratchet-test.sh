@@ -59,6 +59,23 @@ git commit -q --amend -m "raise alpha
 Debt-exception: alpha-debt — vendored upstream tree adds files we do not own"
 expect 0 "declared raise passes"
 
+# A declaration is found however many declaration lines the message carries.
+# declared_for read `printf … | grep -iE '^Debt-exception' | grep -qF ENTRY`
+# under pipefail: with the matching line first and more than a pipe buffer of
+# declarations, grep -q exited, the filter died of SIGPIPE, the pipeline
+# reported 141 and a declared raise read as undeclared (a false block).
+{ printf 'raise alpha\n\n'
+  for i in $(seq 1 3000); do printf 'Debt-exception: alpha-debt — declared reason number %d\n' "$i"; done
+} > "$WORK/long-msg"
+git commit -q --amend -F "$WORK/long-msg"
+for run in 1 2 3 4 5; do
+  expect 0 "a declaration among ~170 KB of declaration lines licenses the raise (run $run)"
+done
+# Restore the short message so the cases below see the range they were written for.
+git commit -q --amend -m "raise alpha
+
+Debt-exception: alpha-debt — vendored upstream tree adds files we do not own"
+
 # A declaration for a DIFFERENT entry must not license this one.
 write_debtfile 9 11
 git commit -aqm "raise beta under alpha's exception

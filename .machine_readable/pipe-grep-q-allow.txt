@@ -54,7 +54,6 @@ scripts/apply-workflow-pins-remote.sh:3
 scripts/check-baseline-expiry.sh:2
 scripts/check-canon-lockstep.sh:2
 scripts/check-canonical-names.sh:2
-scripts/check-debt-ratchet.sh:2
 scripts/check-doctrine-coverage.sh:2
 scripts/check-language-guide.sh:1
 scripts/check-launcher-standard-currency.sh:2
