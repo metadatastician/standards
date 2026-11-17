@@ -38,10 +38,25 @@ echo "{\"id\":4,\"name\":\"EstateBranching\",\"enforcement\":\"active\",$base,\"
 echo "{\"id\":5,\"name\":\"Branch-Floor\",\"enforcement\":\"active\",$base,\"rules\":[$(rsc '{"context":"CI/gate"}')]}" > "$fx/nosource.5"
 echo "{\"id\":6,\"name\":\"Branch-Floor\",\"enforcement\":\"disabled\",$base,\"rules\":[$(rsc '{"context":"CI/gate"}')]}" > "$fx/disabled.6"
 echo "{\"id\":7,\"name\":\"Branch-Floor\",\"enforcement\":\"active\",\"target\":\"branch\",\"conditions\":{},\"rules\":[$(rsc '{"context":"CI/gate"}')]}" > "$fx/nobypass.7"
+# Second-round fixtures (review of #1640): a phantom and a retired rule in DIFFERENT
+# rulesets; a phantom on page 2 of the listing; a ruleset edited between read and
+# write; a backup that cannot be written.
+echo "{\"id\":8,\"name\":\"Branch-Floor\",\"enforcement\":\"active\",$base,\"rules\":[$(rsc '{"context":"CI/gate"}')]}" > "$fx/split.8"
+echo "{\"id\":9,\"name\":\"Optimus-Extras\",\"enforcement\":\"active\",$base,\"rules\":[{\"type\":\"code_coverage\",\"parameters\":{\"minimum_coverage\":80}}]}" > "$fx/split.9"
+echo "{\"id\":10,\"name\":\"Secret-Scan-Floor\",\"enforcement\":\"active\",$base,\"rules\":[$(rsc '{"context":"scan / gitleaks"}')]}" > "$fx/paged.10"
+echo "{\"id\":11,\"name\":\"Branch-Floor\",\"enforcement\":\"active\",$base,\"rules\":[$(rsc '{"context":"CI/gate"}')]}" > "$fx/paged.11"
+echo "{\"id\":12,\"name\":\"Branch-Floor\",\"enforcement\":\"active\",$base,\"rules\":[{\"type\":\"deletion\"},$(rsc '{"context":"CI/gate"}')]}" > "$fx/racy.12"
+echo "{\"id\":13,\"name\":\"Branch-Floor\",\"enforcement\":\"active\",$base,\"rules\":[$(rsc '{"context":"CI/gate"}')]}" > "$fx/badbackup.13"
 
 cat > "$tmp/bin/gh" <<EOF
 #!/usr/bin/env bash
-fx="$fx"; puts="$tmp/puts"
+fx="$fx"; puts="$tmp/puts"; calls="$tmp/calls"
+if [ "\$1 \$2" = "repo list" ]; then      # owner enumeration
+  case "\$3" in
+    fail) echo "o/phantom-only"; echo "HTTP 502" >&2; exit 1 ;;   # partial output, then failure
+    *)    printf 'o/phantom-only\no/mixed\n' ;;
+  esac; exit 0
+fi
 if [ "\$1 \$2" = "api -X" ]; then        # api -X PUT path --input file
   path=\$4; r=\${path#repos/o/}; r=\${r%%/*}; id=\${path##*/}
   cp "\$6" "\$puts/\$r.\$id"; jq ". + {id: \$id}" "\$6"; exit 0
@@ -53,11 +68,20 @@ case "\$path" in
     case "\$r" in
       org)      echo '[{"id":4,"source_type":"Organization"}]' ;;
       nosource) echo '[{"id":5}]' ;;
+      split)    echo '[{"id":8,"source_type":"Repository"},{"id":9,"source_type":"Repository"}]' ;;
+      paged)    # Two pages, as gh --paginate prints them: the phantom is only on page 2.
+                echo '[{"id":10,"source_type":"Repository"}]'
+                [ "\$3" = "--paginate" ] && echo '[{"id":11,"source_type":"Repository"}]' ;;
       *)        id=\$(ls "\$fx" | awk -F. -v r="\$r" '\$1==r{print \$2}'); echo "[{\"id\":\$id,\"source_type\":\"Repository\"}]" ;;
     esac ;;
   repos/o/*/rulesets/*)
     id=\${path##*/}
-    if [ -f "\$puts/\$r.\$id" ]; then jq ". + {id: \$id}" "\$puts/\$r.\$id"; else cat "\$fx/\$r.\$id"; fi ;;
+    n=\$(( \$(cat "\$calls.\$r.\$id" 2>/dev/null || echo 0) + 1 )); echo "\$n" > "\$calls.\$r.\$id"
+    if [ -f "\$puts/\$r.\$id" ]; then jq ". + {id: \$id}" "\$puts/\$r.\$id"
+    elif [ "\$r" = racy ] && [ "\$n" -ge 2 ]; then
+      # Someone added non_fast_forward between the planning read and the write.
+      jq '.rules += [{"type":"non_fast_forward"}]' "\$fx/\$r.\$id"
+    else cat "\$fx/\$r.\$id"; fi ;;
   *) exit 1 ;;
 esac
 EOF
@@ -70,7 +94,7 @@ row() { printf '%s\n' "$1" | awk -F'\t' -v r="o/$2" '$1==r{print $2}'; }
 set +e; out=$(PATH="$tmp/bin:$PATH" bash "$script" "${args[@]}" 2>/dev/null); rc=$?; set -e
 [ -z "$(ls "$tmp/puts")" ] && pass "report mode writes nothing" || bad "report mode wrote: $(ls "$tmp/puts")"
 [ "$(row "$out" phantom-only)" = WOULD-RETIRE ] && pass "phantom-only reported WOULD-RETIRE" || bad "phantom-only: $(row "$out" phantom-only)"
-printf '%s' "$out" | grep -q 'also: code_coverage' && pass "retired code_coverage is surfaced as a second blocker" || bad "code_coverage not surfaced"
+printf '%s' "$out" | grep -q 'also in this repo: code_coverage' && pass "retired code_coverage is surfaced as a second blocker" || bad "code_coverage not surfaced"
 [ "$(row "$out" clean)" = CLEAN ] && pass "a real context alone is CLEAN" || bad "clean: $(row "$out" clean)"
 [ "$(row "$out" org)" = ORG-INHERITED ] && pass "org ruleset is ORG-INHERITED" || bad "org: $(row "$out" org)"
 [ "$(row "$out" nosource)" = REFUSED ] && pass "absent source_type is REFUSED" || bad "nosource: $(row "$out" nosource)"
@@ -95,5 +119,42 @@ else bad "mixed PUT body wrong"; fi
 [ -f "$tmp/bk/o__phantom-only.1.json" ] && pass "live body backed up before the write" || bad "no backup written"
 for r in clean org nosource disabled nobypass; do for f in "$tmp/puts/$r".*; do [ -e "$f" ] && bad "$r was written"; done; done
 [ "$fail" = 0 ] && pass "no write to clean, org, nosource, disabled or nobypass"
+
+# --- second round: findings from the #1640 review ---
+reset() { rm -rf "$tmp/puts" "$tmp"/calls.*; mkdir -p "$tmp/puts"; }
+
+# A phantom in one ruleset and a retired rule in ANOTHER: the retired rule is still reported.
+reset; set +e; out=$(PATH="$tmp/bin:$PATH" bash "$script" --repo o/split 2>/dev/null); set -e
+printf '%s' "$out" | grep -q 'also in this repo: code_coverage' \
+  && pass "a retired rule in a separate ruleset is reported" || bad "split: retired rule not reported: $out"
+
+# The phantom is on page 2 of the ruleset listing.
+reset; set +e; out=$(PATH="$tmp/bin:$PATH" bash "$script" --repo o/paged 2>/dev/null); set -e
+[ "$(row "$out" paged)" = WOULD-RETIRE ] && pass "a phantom on page 2 of the listing is found" || bad "paged: $(row "$out" paged)"
+
+# The ruleset changes between the planning read and the write: refuse, write nothing.
+reset; set +e; out=$(PATH="$tmp/bin:$PATH" bash "$script" --repo o/racy --apply --backup-dir "$tmp/bk" 2>/dev/null); rc=$?; set -e
+if [ "$(row "$out" racy)" = REFUSED ] && [ ! -e "$tmp/puts/racy.12" ] && [ "$rc" = 3 ]; then
+  pass "a ruleset edited after the read is refused and not overwritten"
+else bad "racy: state $(row "$out" racy), rc $rc, written: $(ls "$tmp/puts")"; fi
+
+# The backup cannot be written (a directory occupies its path): refuse, write nothing.
+reset; mkdir -p "$tmp/bk2/o__badbackup.13.json"
+set +e; out=$(PATH="$tmp/bin:$PATH" bash "$script" --repo o/badbackup --apply --backup-dir "$tmp/bk2" 2>/dev/null); set -e
+if [ "$(row "$out" badbackup)" = REFUSED ] && [ ! -e "$tmp/puts/badbackup.13" ]; then
+  pass "a failed backup stops the write"
+else bad "badbackup: state $(row "$out" badbackup), written: $(ls "$tmp/puts")"; fi
+
+# Owner enumeration fails after partial output: the run dies before any write.
+reset; set +e; out=$(PATH="$tmp/bin:$PATH" bash "$script" --owner fail --repo o/mixed --apply --backup-dir "$tmp/bk" 2>/dev/null); rc=$?; set -e
+if [ "$rc" = 2 ] && [ -z "$(ls "$tmp/puts")" ]; then
+  pass "a failed owner listing stops the run before any write"
+else bad "owner fail: rc $rc, written: $(ls "$tmp/puts")"; fi
+
+# A --repos file whose last line has no trailing newline: the last repository is kept.
+reset; printf 'o/clean\no/phantom-only' > "$tmp/repos.txt"
+set +e; out=$(PATH="$tmp/bin:$PATH" bash "$script" --repos "$tmp/repos.txt" 2>/dev/null); set -e
+[ "$(row "$out" phantom-only)" = WOULD-RETIRE ] && pass "the last line of --repos is read without a trailing newline" \
+  || bad "repos file: last line dropped: $out"
 
 [ "$fail" = 0 ] && echo "test_retire_phantom_contexts: all passed" || { echo "test_retire_phantom_contexts: FAILED"; exit 1; }

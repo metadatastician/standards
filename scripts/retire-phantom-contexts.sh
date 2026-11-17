@@ -37,6 +37,15 @@
 #     second blocker (`also:` column) but never stripped here.
 #   * It never writes an ORG-INHERITED ruleset (PUT 404s; cure once at the org).
 #   * It never edits a DISABLED ruleset. Disabled is a decision, not drift.
+#   * It never writes over a change it has not seen: the ruleset is re-read immediately
+#     before the PUT and the write is REFUSED if any writable field moved since the
+#     planning read. (A window between that re-read and the PUT remains; the rulesets
+#     API offers no conditional write.)
+#   * It never writes without a verified backup: a backup that cannot be written, or
+#     that differs from the live body, is a REFUSAL.
+#   * It never runs on a partial estate: a failed or possibly truncated `--owner`
+#     listing stops the run before any write.
+#   * It never inspects only the first page of rulesets (`gh api --paginate`).
 #   * It never writes a ruleset whose GET did not return `bypass_actors`: a PUT
 #     replaces the whole object, so an unseen bypass list could be wiped.
 #   * An absent `.source_type` is a REFUSAL, never a default to the writable arm.
@@ -79,7 +88,8 @@ while [ $# -gt 0 ]; do
     --apply)      APPLY=1 ;;
     --repo)       REPOS+=("${2:?--repo needs OWNER/NAME}"); shift ;;
     --repos)      [ -r "${2:-}" ] || die "--repos: cannot read '${2:-}'"
-                  while IFS= read -r l; do l=${l%%#*}; l=${l//[[:space:]]/}; [ -n "$l" ] && REPOS+=("$l"); done < "$2"; shift ;;
+                  # `|| [ -n "$l" ]` keeps a final line that has no trailing newline.
+                  while IFS= read -r l || [ -n "$l" ]; do l=${l%%#*}; l=${l//[[:space:]]/}; [ -n "$l" ] && REPOS+=("$l"); done < "$2"; shift ;;
     --owner)      OWNER="${2:?--owner needs a login}"; shift ;;
     --context)    CONTEXTS+=("${2:?--context needs a name}"); shift ;;
     --backup-dir) BACKUP_DIR="${2:?}"; shift ;;
@@ -93,16 +103,23 @@ command -v jq >/dev/null || die "jq is required"
 command -v "$GH" >/dev/null || die "gh is required"
 [ ${#CONTEXTS[@]} -gt 0 ] || CONTEXTS=("CI/gate")
 
+WORK=$(mktemp -d -t phantomctx.XXXXXX); trap 'rm -rf "$WORK"' EXIT
+STATES="$WORK/states"; : > "$STATES"
+
 if [ -n "$OWNER" ]; then
-  while IFS= read -r r; do [ -n "$r" ] && REPOS+=("$r"); done < <(
-    "$GH" repo list "$OWNER" --no-archived --limit 2000 --json nameWithOwner --jq '.[].nameWithOwner') \
-    || die "cannot list repositories of $OWNER"
+  # Capture the listing and check its status BEFORE using any of it: a listing that
+  # fails part-way must stop the run, not --apply over a partial estate.
+  LIMIT=2000
+  "$GH" repo list "$OWNER" --no-archived --limit "$LIMIT" --json nameWithOwner --jq '.[].nameWithOwner' \
+    > "$WORK/owner-repos" 2>"$WORK/owner-err" \
+    || die "cannot list repositories of $OWNER: $(head -c 200 "$WORK/owner-err")"
+  n=$(grep -c . "$WORK/owner-repos" || true)
+  [ "$n" -gt 0 ] || die "listing of $OWNER returned no repositories"
+  [ "$n" -lt "$LIMIT" ] || die "listing of $OWNER hit --limit $LIMIT and may be truncated"
+  while IFS= read -r r || [ -n "$r" ]; do [ -n "$r" ] && REPOS+=("$r"); done < "$WORK/owner-repos"
 fi
 [ ${#REPOS[@]} -gt 0 ] || die "no repositories: give --repo, --repos or --owner"
 for r in "${REPOS[@]}"; do [[ "$r" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || die "invalid repository '$r'"; done
-
-WORK=$(mktemp -d -t phantomctx.XXXXXX); trap 'rm -rf "$WORK"' EXIT
-STATES="$WORK/states"; : > "$STATES"
 PHANTOMS=$(printf '%s\n' "${CONTEXTS[@]}" | jq -R . | jq -sc .)
 [ "$APPLY" = 1 ] && { mkdir -p "$BACKUP_DIR" || die "cannot create $BACKUP_DIR"; }
 
@@ -136,25 +153,42 @@ guard() {
   [ "$a" = "$b" ]
 }
 
+# The fields a PUT writes; used to detect a change between the planning read and the write.
+writable() { jq -S '{name,target,enforcement,conditions,bypass_actors,rules}' "$1"; }
+
 for repo in "${REPOS[@]}"; do
-  if ! "$GH" api "repos/$repo/rulesets?includes_parents=true&per_page=100" > "$WORK/list" 2>/dev/null \
+  # --paginate: a repository can carry up to 75 repo + 75 org rulesets, more than one page.
+  # gh prints one JSON array per page; -s 'add' merges them into a single array.
+  if ! "$GH" api "repos/$repo/rulesets?includes_parents=true&per_page=100" --paginate > "$WORK/pages" 2>/dev/null \
+     || ! jq -s 'add // []' "$WORK/pages" > "$WORK/list" 2>/dev/null \
      || ! jq -e 'type == "array"' "$WORK/list" >/dev/null 2>&1; then
     emit "$repo" UNKNOWN "rulesets list unreadable"; continue
   fi
   if jq -e 'any(.[]; has("source_type") | not)' "$WORK/list" >/dev/null; then
     emit "$repo" REFUSED "a ruleset carries no source_type"; continue
   fi
-  found=0
-  while IFS=$'\t' read -r id stype; do
-    if ! "$GH" api "repos/$repo/rulesets/$id" > "$WORK/live" 2>/dev/null || ! jq -e '.rules' "$WORK/live" >/dev/null 2>&1; then
-      emit "$repo" UNKNOWN "ruleset $id unreadable"; found=1; continue
+  # Read every ruleset first, so retired rule types are reported across ALL active
+  # rulesets of the repository, not only the one that lists the phantom.
+  rm -f "$WORK"/rs.*; unreadable=0
+  while IFS=$'\t' read -r id _; do
+    if ! "$GH" api "repos/$repo/rulesets/$id" > "$WORK/rs.$id" 2>/dev/null || ! jq -e '.rules' "$WORK/rs.$id" >/dev/null 2>&1; then
+      emit "$repo" UNKNOWN "ruleset $id unreadable"; unreadable=1; rm -f "$WORK/rs.$id"
     fi
+  done < <(jq -r '.[] | [.id, .source_type] | @tsv' "$WORK/list")
+  also=""
+  if compgen -G "$WORK/rs.*" >/dev/null; then
+    also=$(jq -rs '[.[]|select(.enforcement=="active")|.rules[].type
+             |select(.=="code_coverage" or .=="code_quality" or .=="required_deployments")]|unique|join(",")' "$WORK"/rs.*)
+  fi
+  found=$unreadable
+  while IFS=$'\t' read -r id stype; do
+    [ -f "$WORK/rs.$id" ] || continue
+    cp "$WORK/rs.$id" "$WORK/live"
     hit=$(phantoms_in "$WORK/live")
     [ "$hit" = "[]" ] && continue
     found=1
     name=$(jq -r .name "$WORK/live")
-    also=$(jq -r '[.rules[].type|select(.=="code_coverage" or .=="code_quality" or .=="required_deployments")]|join(",")' "$WORK/live")
-    detail="ruleset $id '$name' lists $hit${also:+; also: $also (retired, not touched)}"
+    detail="ruleset $id '$name' lists $hit${also:+; also in this repo: $also (retired, not touched)}"
     if [ "$stype" != "Repository" ]; then emit "$repo" ORG-INHERITED "$detail; source_type=$stype"; continue; fi
     if [ "$(jq -r .enforcement "$WORK/live")" != "active" ]; then emit "$repo" DISABLED-SKIPPED "$detail"; continue; fi
     if ! jq -e 'has("bypass_actors")' "$WORK/live" >/dev/null; then emit "$repo" REFUSED "$detail; bypass_actors not returned"; continue; fi
@@ -163,12 +197,21 @@ for repo in "${REPOS[@]}"; do
     kept=$(jq '[.rules[]|select(.type=="required_status_checks")|.parameters.required_status_checks[]]|length' "$WORK/plan")
     shape=$([ "$kept" = 0 ] && echo "rule dropped" || echo "rule kept, $kept context(s) remain")
     if [ "$APPLY" = 0 ]; then emit "$repo" WOULD-RETIRE "$detail -> $shape"; continue; fi
-    cp "$WORK/live" "$BACKUP_DIR/${repo//\//__}.$id.json"
+    backup="$BACKUP_DIR/${repo//\//__}.$id.json"
+    if ! cp "$WORK/live" "$backup" 2>/dev/null || ! cmp -s "$WORK/live" "$backup"; then
+      emit "$repo" REFUSED "$detail; backup to $backup failed, nothing written"; continue
+    fi
+    # Re-read immediately before the write: a PUT replaces the whole object, so a change
+    # made since the planning read (an owner edit, another applier) would be lost.
+    if ! "$GH" api "repos/$repo/rulesets/$id" > "$WORK/fresh" 2>/dev/null \
+       || [ "$(writable "$WORK/fresh")" != "$(writable "$WORK/live")" ]; then
+      emit "$repo" REFUSED "$detail; ruleset changed or unreadable since it was read, nothing written; rerun"; continue
+    fi
     if ! "$GH" api -X PUT "repos/$repo/rulesets/$id" --input "$WORK/plan" > /dev/null 2>"$WORK/err"; then
       emit "$repo" REFUSED "$detail; PUT failed: $(head -c 200 "$WORK/err" | tr '\n\t' '  ')"; continue
     fi
     if "$GH" api "repos/$repo/rulesets/$id" > "$WORK/after" 2>/dev/null && [ "$(phantoms_in "$WORK/after")" = "[]" ]; then
-      emit "$repo" RETIRED "$detail -> $shape; backup $BACKUP_DIR/${repo//\//__}.$id.json"
+      emit "$repo" RETIRED "$detail -> $shape; backup $backup"
     else
       emit "$repo" WROTE-UNVERIFIED "$detail; verifying read failed or still lists a phantom"
     fi
