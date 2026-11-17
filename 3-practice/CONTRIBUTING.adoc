@@ -99,10 +99,18 @@ Today the owner is code owner of every path (`.github/CODEOWNERS`), so the
 owner reviews every change. The perimeters set how much review and evidence a
 change needs, and become separate reviewer sets as maintainers are added.
 
-Moving between perimeters is recorded in a decision issue that names the
-contributor and links their merged pull requests in the paths concerned. The
-owner rules on it, and anyone may challenge a move, or a refusal, in that
-issue.
+Moving between perimeters follows these criteria:
+
+* *Perimeter 3 to 2.* At least three merged pull requests in Perimeter 2
+  paths, the first merged at least 30 days before the request, and a
+  nomination by a maintainer. The nomination is a decision issue that names
+  the contributor and links those pull requests, and the owner rules on it.
+* *Perimeter 2 to 1.* The owner names the contributor in a decision issue.
+* *Moving down.* Access is reduced only through the code of conduct's
+  enforcement steps, or by a decision issue that gives the reason.
+
+Anyone may challenge a move, or a refusal, in its decision issue, as
+described under Challenging a decision.
 
 == Report a bug, propose an idea
 

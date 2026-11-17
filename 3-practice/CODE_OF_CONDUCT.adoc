@@ -127,6 +127,12 @@ owner, Jonathan D.A. Jewell (https://github.com/hyperpolymath[@hyperpolymath]),
 at mailto:owner@themetadatastician.art[owner@themetadatastician.art]. It is
 not shared with the person it concerns.
 
+A report that involves both the owner and a conduct team member goes to
+mailto:independent@themetadatastician.art[independent@themetadatastician.art].
+That address reaches only a person outside the project, and neither the owner
+nor the conduct team can read it. The same address takes any appeal that
+involves both.
+
 *How to Report*
 
 [width="99%",cols="30%,33%,37%",options="header",]
@@ -140,6 +146,8 @@ minor issues
 |*Anonymous email* |Write from an address that does not identify you, to conduct@themetadatastician.art, or to owner@themetadatastician.art for a report about a conduct team member. We will not ask who you are. |When you need anonymity
 
 |*Email the owner* |mailto:owner@themetadatastician.art[owner@themetadatastician.art] |A report about a conduct team member
+
+|*Email the outside contact* |mailto:independent@themetadatastician.art[independent@themetadatastician.art] |A report that involves both the owner and a conduct team member
 |===
 
 *What to Include*
