@@ -19,12 +19,12 @@
 .githooks/docstring-scan.sh:1
 .githooks/post-checkout:1
 .githooks/post-merge:1
-.githooks/validate-lint-format.sh:7
+.githooks/validate-lint-format.sh:6
 .githooks/validate-spdx-workflows.sh:1
 .githooks/validate-spdx.sh:1
 .github/workflows/affinescript-verify.yml:1
 .github/workflows/changelog-reusable.yml:2
-.github/workflows/ci-pipeline.yml:2
+.github/workflows/ci-pipeline.yml:1
 .github/workflows/code-coverage.yml:1
 .github/workflows/echidna-verify.yml:2
 .github/workflows/governance-reusable.yml:24

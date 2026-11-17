@@ -221,6 +221,41 @@ printf '[package]\nname = "sub"\nversion = "0.1.0"\nedition = "2021"\n\n[workspa
 expect_as_staged "untracked nested Cargo.toml skipped → nearest indexed manifest (root) checked" 0 \
   "Rust: .: formatted" "Rust: sub:"
 
+
+echo
+echo "=== ReScript arm: the format -check probe survives a long help text ==="
+
+# The arm probed for `format -check` with `bunx rescript format --help 2>&1 |
+# grep -q -- '-check'` under pipefail. grep -q exits at the match; a CLI still
+# writing its help dies of SIGPIPE, the pipeline reports 141, and the format
+# gate was skipped with a warning. A stub bunx prints `-check` first and then
+# more than a pipe buffer of help; its `format -all -check` reports the
+# sources unformatted, so a gate that runs fails the hook. The real CLI's help
+# is small, so in practice the race needs a help text written in several
+# writes and a slow reader; the stub makes it deterministic.
+STUB="$WORK/stub-bin"; mkdir -p "$STUB"
+cat > "$STUB/bunx" <<'STUBEOF'
+#!/usr/bin/env bash
+case "$*" in
+  "rescript format --help")
+    [ -n "${STUB_NO_CHECK:-}" ] || printf '  -check  Check formatting only\n'
+    for i in $(seq 1 3000); do printf '  -option-%d  a help line long enough to fill the pipe buffer\n' "$i"; done ;;
+  "rescript format -all -check") echo "stub: sources are not formatted"; exit 1 ;;
+  *) exit 0 ;;
+esac
+STUBEOF
+chmod +x "$STUB/bunx"
+new_repo
+printf '{"name":"r"}\n' > "$WORK/repo/rescript.json"
+printf 'let x = 1\n' > "$WORK/repo/A.res"
+commit_all
+printf 'let x = 2\n' > "$WORK/repo/A.res"
+for run in 1 2 3 4 5; do
+  PATH="$STUB:$PATH" expect "modified .res, -check listed before ~180 KB of help → format gate runs and fails (run $run)" 1 \
+    "ReScript: sources are not formatted" "format gate did NOT run"
+done
+PATH="$STUB:$PATH" STUB_NO_CHECK=1 expect "control: a help text without -check → skip warned, not failed" 0 \
+  "format gate did NOT run"
 echo
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

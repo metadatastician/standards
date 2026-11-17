@@ -587,7 +587,10 @@ jobs:
           # majors. Probe for the capability rather than assume it: a gate that
           # fails because the flag does not exist tells you nothing about the
           # code, and one that silently passes tells you less.
-          if bunx --no-install rescript format --help 2>&1 | grep -q -- '-check'; then
+          # Captured, then matched: a pipe into grep -q let a CLI still writing
+          # its help die of SIGPIPE (status 141), and the format gate was skipped.
+          rs_help="$(bunx --no-install rescript format --help 2>&1)" || true
+          if grep -q -- '-check' <<<"$rs_help"; then
             bunx --no-install rescript format -all -check || { echo "::error::ReScript sources are not formatted"; FAILED=1; }
             FMT='checked'
           else
