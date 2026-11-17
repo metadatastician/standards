@@ -6,7 +6,8 @@
 ;; default branch. Only the receipt, the docs and a script changed between
 ;; 1111… and aaaa…, so the tree differs but every leg's inputs digest is the
 ;; same: the echo uses :witness inputs-sha256. Both sources are in the fibre
-;; over aaaa…. The claim derives to PWG-1. Run URLs, commits and digests are
+;; over aaaa…. Each current receipt names the digest-pinned image its checker ran
+;; in (§8.2), so the claim derives to PWG-1. Run URLs, commits and digests are
 ;; illustrative.
 (praxis-deed
   :schema-version "1.0.0"
@@ -33,6 +34,7 @@
                :invocation "agda --safe --without-K --cubical-compatible"
                :inputs-sha256 "c8945990a8e4242d7eaeaa42dd4e647a4e372fdbd32714fb534744df85066248"
                :state current
+               :image "docker.io/library/debian:trixie-slim@sha256:a29215f6a35e51e22adffa17f89e9d2ef06214e64a2bad10d765c46aea49f11f"
                (inputs-manifest
                  (file :path "example.agda-lib" :sha256 "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08")
                  (file :path "src/Example.agda" :sha256 "a1b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"))
@@ -44,6 +46,7 @@
                :invocation "rocq compile"
                :inputs-sha256 "f2f95ed848340e07892c42e698b008dbed477d1a13358457a8e7128a9e21337a"
                :state current
+               :image "docker.io/library/debian:trixie-slim@sha256:a29215f6a35e51e22adffa17f89e9d2ef06214e64a2bad10d765c46aea49f11f"
                (inputs-manifest
                  (file :path "_CoqProject" :sha256 "60303ae22b998861bce3b28f33eec1be758a213c86c93c076dbe9f558c11c752")
                  (file :path "rocq/Example.v" :sha256 "fd61a03af4f77d870fc21e05e7e80678095c92d808cfb3b5c279ee04c74aca13"))
@@ -55,6 +58,7 @@
                :invocation "lake build"
                :inputs-sha256 "39064d25a19fd0854cae1bda8a3829c856f168c230fef46d333bb8150adfa78c"
                :state current
+               :image "docker.io/library/debian:trixie-slim@sha256:a29215f6a35e51e22adffa17f89e9d2ef06214e64a2bad10d765c46aea49f11f"
                (inputs-manifest
                  (file :path "lake-manifest.json" :sha256 "a4e624d686e03ed2767c0abd85c14426b0b1157d2ce81d27bb4fe4f6f01d688a")
                  (file :path "lakefile.toml" :sha256 "2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae")

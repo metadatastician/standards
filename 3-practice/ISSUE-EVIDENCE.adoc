@@ -1,0 +1,232 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+= Issue Evidence: closing issues on evidence
+Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+:toc:
+:toc-placement: preamble
+
+An issue's open or closed state is a *function of evidence on the default
+branch*, not of anyone's memory. A row in a ledger says "issue N is done, or
+moot, because these machine-checkable facts hold". A bot closes the issue while
+they hold, and reopens an issue it closed when they stop holding.
+
+== 0. Why
+
+In this repository fixes land and their issues stay open. Squash merges drop
+`Fixes #N` commit trailers (#958). Owner rulings supersede issues and nobody
+writes that back. Two manual triages did not move the open count. The owner
+chose to stop closing by hand.
+
+== 1. A row
+
+The ledger is `.machine_readable/issue-evidence.jsonl`: JSON Lines, one record
+per line, each line I-JSON serialised by JCS (`JSON-POLICY.adoc` J-1, J-2).
+
+[cols="2,7",options="header"]
+|===
+| Field | Meaning
+
+| `issue`, `repo`
+| The issue number (a plain positive integer) and `owner/name`.
+
+| `disposition`
+| `landed` (the fix is on main), `superseded` (a later owner ruling made it
+  moot), `moot` (the thing it is about no longer exists), `duplicate` (of
+  `duplicate_of`, which only this disposition carries), `expired` (a dated
+  premise has passed and what remains is covered elsewhere, named in `claim`).
+
+| `claim`
+| One or two plain sentences a person can read and agree with.
+
+| `checks`
+| A non-empty array from the closed vocabulary in §2.
+
+| `evidence`
+| A non-empty array of strings: commit SHAs, PR numbers, ruling ids with the
+  canon file and section that record them.
+
+| `added`
+| The date the row was written, `YYYY-MM-DD`.
+|===
+
+No other field is accepted. Strings may not contain control characters, and
+`claim` and `evidence` may not contain `<!--` or `-->`.
+
+== 2. The check vocabulary
+
+Paths and globs are repository-relative: not absolute, no `.` or `..`
+component, no leading `-`. A pattern is a POSIX extended regular expression.
+
+[cols="3,6",options="header"]
+|===
+| Check | Holds when
+
+| `{"kind":"path-present","path":P}`
+| P exists at the evaluated commit.
+
+| `{"kind":"path-absent","path":P}`
+| P does not exist at the evaluated commit.
+
+| `{"kind":"grep-present","path":P,"pattern":E}`
+| P is a regular file and some line of it matches E.
+
+| `{"kind":"grep-absent","path":P,"pattern":E}`
+| P is a regular file and no line of it matches E. A missing file fails: to
+  assert a removal, use `path-absent`.
+
+| `{"kind":"tree-grep-absent","glob":G,"pattern":E}`
+| No tracked file matching the git glob pathspec G has a line matching E, and G
+  selects at least one non-empty file (a mistyped glob fails).
+
+| `{"kind":"commit-on-main","sha":S}`
+| The commit S (12 to 40 hex digits) is an ancestor of the evaluated commit.
+  Weak on its own: prefer a check on the tree.
+
+| `{"kind":"script","path":P}`
+| The script P, tracked and executable under `scripts/` or `tests/`, exits 0
+  when run with no arguments. Exit 1 (or another code below 124 except 2 and
+  77) fails. Exit 2 ("could not run"), exit 77 (a skip, the automake
+  convention: the script ran nothing, for example because a toolchain is
+  missing), a timeout or a signal leaves the check unevaluated: a skip never
+  counts as holding and never as a regression, so the bot neither closes nor
+  reopens on it. A row cannot pass arguments: `args` is refused, so a row
+  chooses which reviewed script runs and nothing else.
+|===
+
+Every check except `script` reads the committed tree at the evaluated commit
+through git (`ls-tree`, `cat-file`, `git grep` at the commit, `merge-base`),
+never the working directory, so an uncommitted edit cannot change its result.
+
+`script` has to run in a checkout, and a script may read any file there, so it
+counts as evidence only for the committed tree. It runs only when the
+evaluated commit is the checked-out commit and the checkout is exactly that
+commit: no staged or unstaged change to a tracked file, no index entry that
+hides one (assume-unchanged, skip-worktree, unmerged), and no untracked file
+except those the checkout's `.gitignore` files ignore. This is re-checked
+before every script, so a script that leaves a file behind makes the later
+ones unevaluated. Otherwise the check is *unevaluated*, never a pass. What is
+not guaranteed: ignored files (build output, caches) are not compared, so a
+script that reads an ignored path reads something outside the commit; the
+reviewer of a row should not choose such a script.
+
+A `script` whose file is absent at the evaluated commit, or is there without
+the executable bit, *fails*: deleting or renaming an evidence script is a
+regression of that row. It never makes the ledger invalid, and every other row
+is still evaluated. Schema validation (`validate`) does not read the tree;
+`lint` adds "every script is tracked and executable at HEAD" so the author of
+a pull request learns before merge that a row names a missing script.
+
+A row's verdict is `true` when every check holds, `false` when any check fails,
+and `null` when none fails but one could not be evaluated.
+
+A good row would fail on a tree where the defect is present. Check that before
+proposing it: run its checks at the parent of the fixing commit
+(`scripts/issue-evidence.sh evaluate --ref <fix>^`).
+
+== 3. How a closure is approved
+
+The owner approves a closure by *merging the row* in a reviewed pull request.
+The bot acts only on rows on the default branch; a run on any other ref reports
+and does nothing. Nothing in a row is executed as code: patterns and paths
+are passed to git and grep as single arguments, a `script` check runs a
+tracked script with no arguments, and `scripts/issue-evidence.sh`
+states that boundary in its header (the class of defect in #1405 is not
+reintroduced).
+
+== 4. Decisions, regressions and people
+
+[cols="2,2,4",options="header"]
+|===
+| Verdict | Issue | Action
+
+| holds | open | close (`landed` as completed, the rest as not planned)
+| holds | open, reopened by a person after the bot closed it | none
+| holds | closed | none
+| fails | open | none
+| fails | closed by the bot | *reopen*: the evidence no longer holds (a regression)
+| fails | closed by a person | none: a person's closure is never undone
+| unevaluated | any | none: nothing is done on what was not evaluated
+|===
+
+"Closed by the bot" means closed by `github-actions[bot]` with the bot's marker
+comment from that same account. Each comment the bot writes ends with
+`<!-- issue-evidence-bot: row-sha256=HASH -->`, where HASH is the SHA-256 of the
+row's ledger line. To dispute a closure, change or remove the row in a reviewed
+pull request, or reopen the issue: the bot does not re-close an issue a person
+reopened.
+
+== 5. Running it
+
+IMPORTANT: The two workflows this section and §6 describe,
+`.github/workflows/issue-evidence.yml` and
+`.github/workflows/issue-evidence-reusable.yml`, are added by the follow-up
+pull request #1652, not by the change that introduced this page. Until #1652
+merges they are not in the repository, no bot closes or reopens anything, and
+the ledger is evaluated only by hand (`scripts/issue-evidence.sh`) and by its
+test suite. The bullets below and §6 describe the workflows as #1652 adds them.
+
+* `.github/workflows/issue-evidence.yml` (from #1652) runs on a push to `main` that touches
+  the ledger or the bot, weekly, and by hand. Every run writes the decision
+  table, and a report-only list of candidate rows, to the job summary.
+* It applies nothing unless the repository variable `ISSUE_EVIDENCE_APPLY` is
+  `true`. Unset, it only reports.
+* One run takes at most `max_actions` actions (default 10). Beyond the cap it
+  stops and says so; later runs continue.
+* Locally: `bash scripts/issue-evidence.sh validate`, `lint`, `evaluate`,
+  `decide`, `render-comment` and `candidates`; the script's header documents
+  each. Its tests are `scripts/tests/issue-evidence-test.sh`, which also runs
+  `lint` on this repository's own ledger (self-test runs that suite).
+
+`candidates` lists open issues with no row that commits mention, most mentioned
+first, and flags a closing keyword. It is a queue for people to write rows
+from, never an action.
+
+== 6. Adopting it in another repository
+
+These steps need the reusable workflow from #1652; until that pull request
+merges there is no commit of it to pin.
+
+. Add an empty `.machine_readable/issue-evidence.jsonl`.
+. Add a caller that pins the reusable to a full commit SHA, and record that
+  reference in the repository's `actions.lock`:
++
+[source,yaml]
+----
+jobs:
+  issue-evidence:
+    permissions:
+      contents: read
+      issues: write
+    uses: metadatastician/standards/.github/workflows/issue-evidence-reusable.yml@<40-hex commit>
+    with:
+      apply: ${{ vars.ISSUE_EVIDENCE_APPLY == 'true' }}
+----
+. Leave `ISSUE_EVIDENCE_APPLY` unset until the summaries look right.
+
+The evaluator is taken from the reusable's own commit, so a caller's behaviour
+changes only when it moves its pin.
+
+== 7. Limits
+
+* A row can only see *this repository's tree* at one commit. A claim about the
+  estate ("no repository still does X") cannot be a row; it needs a probe that
+  reads the other repositories.
+* A check proves what it says and no more. `commit-on-main` proves a commit
+  landed, not that it fixed the issue; a `grep-absent` passes if the defect
+  moved to another file. The reviewer of the row judges that the checks
+  capture the claim.
+* GitHub's own state is read once per run. A person acting between the read
+  and the action is caught by a re-read just before each action, not by a
+  lock.
+
+== 8. Change log
+
+[cols="2,3,8",options="header"]
+|===
+| Date | Change | Detail
+
+| 2026-11-17
+| Created
+| Ledger format, check vocabulary and evaluator. The reusable workflow and
+  its caller follow in #1652; the caller is report-only until
+  `ISSUE_EVIDENCE_APPLY` is set.
+|===

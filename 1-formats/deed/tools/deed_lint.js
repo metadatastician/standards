@@ -123,7 +123,15 @@ export class LintError extends Error {
     this.line = line;
   }
 
-  /** Render as `line N: message`, like the Python __str__. */
+  /** Render as `line N: message`, like the Python   // A host is a DNS name or a bracketed IPv6 address, either with a port. A tag
+  // may hold upper case; the digest is lower-case hex. NAME (host and path) is
+  // at most 255 characters, as the grammar's NameTotalLengthMax says.
+  const IMG_COMPONENT = "[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*";
+  const IMG_DOMAIN = "(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?)*|\\[[a-fA-F0-9:]+\\])";
+  const IMG_HOST = `(?:${IMG_DOMAIN}(?::[0-9]+)?/)`;
+  const IMAGE_RE = new RegExp(`^(${IMG_HOST}?${IMG_COMPONENT}(?:/${IMG_COMPONENT})*)(?::[A-Za-z0-9_][A-Za-z0-9_.-]{0,127})?@sha256:[0-9a-f]{64}$`);
+  const IMAGE = { test: (s) => { const m = IMAGE_RE.exec(s); return m !== null && m[1].length <= 255; } };
+str__. */
   toString() {
     return `line ${this.line}: ${this.msg}`;
   }
@@ -883,6 +891,18 @@ export function readProofReceipt(text, filename = null) {
   const V = PROOF_RECEIPT_VOCABULARY;
   const HEX40 = /^[0-9a-f]{40}$/;
   const HEX64 = /^[0-9a-f]{64}$/;
+  // An OCI image reference pinned by its manifest digest, NAME[:TAG]@sha256:<64 hex>,
+  // with NAME and TAG as the distribution/reference grammar defines them: an
+  // optional registry host (with port), then path components of lower-case
+  // alphanumerics joined by one separator ("." "_" "__" or "-" runs), none empty.
+  // A host is a DNS name or a bracketed IPv6 address, either with a port. A tag
+  // may hold upper case; the digest is lower-case hex. NAME (host and path) is
+  // at most 255 characters, the grammar's NameTotalLengthMax.
+  const IMG_COMPONENT = "[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*";
+  const IMG_DOMAIN = "(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?)*|\\[[a-fA-F0-9:]+\\])";
+  const IMG_HOST = `(?:${IMG_DOMAIN}(?::[0-9]+)?/)`;
+  const IMAGE_RE = new RegExp(`^(${IMG_HOST}?${IMG_COMPONENT}(?:/${IMG_COMPONENT})*)(?::[A-Za-z0-9_][A-Za-z0-9_.-]{0,127})?@sha256:[0-9a-f]{64}$`);
+  const IMAGE = { test: (s) => { const m = IMAGE_RE.exec(s); return m !== null && m[1].length <= 255; } };
 
   // Collect a clause's fields, refusing unknown, duplicate and mistyped ones.
   const fieldsOf = (where, members, spec, allowedClauses) => {
@@ -1061,7 +1081,13 @@ export function readProofReceipt(text, filename = null) {
       "inputs-sha256": { types: ["string"] },
       state: { types: ["symbol"], required: true, oneOf: V.receiptState },
       reason: { types: ["string"] },
+      image: { types: ["string"] },
     }, ["axioms", "inputs-manifest", "import"]);
+    // §8.2: the image the checker ran in, pinned by digest. Only a receipt that
+    // names one can make its witness count toward PWG-1 (owner ruling 2026-11-16).
+    if (rf.has("image") && !IMAGE.test(rf.get("image"))) {
+      fail(`${rw}: :image must be an image reference pinned by digest (NAME@sha256:<64 hex>)`);
+    }
     if (!HEX40.test(rf.get("commit"))) fail(`${where}: a receipt :commit must be the full 40-character commit`);
     if (rf.get("state") !== "current" && !rf.has("reason")) fail(`${where}: a ${rf.get("state")} receipt needs :reason`);
     const isCurrent = rf.get("state") === "current";
@@ -1218,7 +1244,11 @@ export function readProofReceipt(text, filename = null) {
     if (agdaCounts) {
       pwg = ["PWG-3", "PWG-2i", "PWG-2ii"][recheck.length];
       const counted = [agda, ...recheck];
-      if (recheck.length === 2 && counted.every(describesSource)) pwg = "PWG-1";
+      // §8.2: PWG-1 needs every counted witness checked at the source commit by a
+      // pinned, headless, isolated checker: its current receipt names the image,
+      // pinned by digest, that the checker ran in (owner ruling 2026-11-16).
+      const isolated = (l) => current(l).image !== undefined;
+      if (recheck.length === 2 && counted.every(describesSource) && counted.every(isolated)) pwg = "PWG-1";
     }
     if (pwg !== cl.fields.get("pwg")) {
       fail(`${where} records :pwg ${cl.fields.get("pwg")}, but its legs and receipts support ${pwg} (PROOF-POLICY §8.2, §8.4)`);
@@ -2632,15 +2662,17 @@ export class EcosystemError extends LintError {
 
 /**
  * The closed :relationship vocabulary (A7 7.2; clauses/ecosystem.abnf
- * v1.1.0): the seven terms owner-ruled 2026-09-19 in
+ * v1.2.0): the seven terms owner-ruled 2026-09-19 in
  * mappings/meta-ecosystem-to-repo-deed.adoc, the four DESCRIPTILE-SPEC
- * observed (parent among them), and the five owner-ruled 2026-11-14.
+ * observed (parent among them), the five owner-ruled 2026-11-14, and
+ * extension-of, owner-ruled 2026-11-17.
  */
 export const ECOSYSTEM_RELATIONSHIPS = new Set([
   "standard-source", "build-tooling", "validation-tooling", "signing-tooling",
   "verification-tooling", "minted-from", "registry",
   "downstream-consumer", "sibling-language", "code-dependency", "parent",
   "sibling-standard", "data-dependency", "dispatch-target", "scanner-source", "mcp-host",
+  "extension-of",
 ]);
 const ECOSYSTEM_STRINGS = ["project", "ecosystem", "position-type", "purpose", "pipeline-position", "chain", "pipeline-notes"];
 const ECOSYSTEM_FIELDS = [...DESCRIPTILE_HEADER, ...ECOSYSTEM_STRINGS, "not", "coordination"];

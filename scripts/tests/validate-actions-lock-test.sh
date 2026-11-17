@@ -23,10 +23,11 @@ UNLOCKED=1111111111111111111111111111111111111111
 
 pass=0 fail=0
 
-# expect <label> <want-rc> <needle|-> — runs the validator on $WORK/repo and
-# checks its exit code and, unless the needle is "-", a substring of its output.
+# expect <label> <want-rc> <needle|-> [<absent>] — runs the validator on
+# $WORK/repo and checks its exit code, unless the needle is "-" a substring of
+# its output, and, when <absent> is given, that the output does NOT contain it.
 expect() {
-  local label=$1 want=$2 needle=$3 out rc
+  local label=$1 want=$2 needle=$3 absent=${4:-} out rc
   out="$(INPUT_PATH="$WORK/repo" bash "$VALIDATOR" 2>&1)"; rc=$?
   if [ "$rc" -ne "$want" ]; then
     echo "FAIL: $label — expected exit $want, got $rc"
@@ -35,6 +36,11 @@ expect() {
   fi
   if [ "$needle" != "-" ] && ! printf '%s' "$out" | /usr/bin/grep -qF -- "$needle"; then
     echo "FAIL: $label — exit $rc correct, but output lacked '$needle'"
+    printf '%s\n' "$out" | sed 's/^/      | /'
+    fail=$((fail + 1)); return
+  fi
+  if [ -n "$absent" ] && printf '%s' "$out" | /usr/bin/grep -qF -- "$absent"; then
+    echo "FAIL: $label — output must not contain '$absent'"
     printf '%s\n' "$out" | sed 's/^/      | /'
     fail=$((fail + 1)); return
   fi
@@ -135,6 +141,37 @@ expect "self-SHA ref in dependencies is rejected (standards#1271)" 1 "self-SHA r
 
 sed -i "s/ref: '$LOCKED'/ref: 'v7.0.1'/" "$WORK/repo/.github/workflows/actions.lock"
 expect "symbolic tag ref in dependencies passes" 0 "1 SHA-pinned ref(s) found"
+
+# ---- Which side is stale? (standards#981) -----------------------------------
+# A missing ref has two possible stale sides. When the lock already holds a
+# DIFFERENT SHA for the same owner/repo, the workflow may be the stale side —
+# the live case was a revert to a held version (codeql-action 4.38.1,
+# nexia-list#100), where regenerating the lock as told would have written the
+# blocked SHA back. The message must name both SHAs and must not prescribe
+# bare regeneration.
+reset_repo
+cat > "$WORK/repo/.github/workflows/ci.yml" <<EOF
+jobs:
+  a:
+    steps:
+      - uses: actions/checkout@$UNLOCKED
+EOF
+expect "two-sided drift names both SHAs" 1 \
+  "actions.lock holds actions/checkout@$LOCKED, the workflow requests @$UNLOCKED"
+expect "two-sided drift does not prescribe bare regeneration" 1 \
+  "set the workflow ref to the locked SHA" "Regenerate with the LOCKFILE ONLY"
+
+# Single-sided: an action the lock has never seen keeps the existing guidance.
+reset_repo
+cat > "$WORK/repo/.github/workflows/ci.yml" <<EOF
+jobs:
+  a:
+    steps:
+      - uses: actions/checkout@$LOCKED
+      - uses: actions/setup-node@$UNLOCKED
+EOF
+expect "single-sided drift keeps the regeneration guidance" 1 \
+  "Regenerate with the LOCKFILE ONLY" "the workflow requests"
 
 echo
 echo "validate-actions-lock: $pass passed, $fail failed"
