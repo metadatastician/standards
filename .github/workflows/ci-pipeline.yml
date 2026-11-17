@@ -589,12 +589,15 @@ jobs:
           # code, and one that silently passes tells you less.
           # Captured, then matched: a pipe into grep -q let a CLI still writing
           # its help die of SIGPIPE (status 141), and the format gate was skipped.
-          rs_help="$(bunx --no-install rescript format --help 2>&1)" || true
+          # The probe is judged by what it printed; its exit status is kept and
+          # reported with a skip, not discarded.
+          rs_help_rc=0
+          rs_help="$(bunx --no-install rescript format --help 2>&1)" || rs_help_rc=$?
           if grep -q -- '-check' <<<"$rs_help"; then
             bunx --no-install rescript format -all -check || { echo "::error::ReScript sources are not formatted"; FAILED=1; }
             FMT='checked'
           else
-            echo "::warning::The installed rescript CLI has no 'format -check'; the format gate did NOT run. This is a skip, not a pass."
+            echo "::warning::The installed rescript CLI has no 'format -check' (help probe exit $rs_help_rc); the format gate did NOT run. This is a skip, not a pass."
             FMT='**SKIPPED — CLI lacks -check**'
           fi
 
