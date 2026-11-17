@@ -128,7 +128,7 @@ jobs:
           set -euo pipefail
           bash "$RUNNER_TEMP/issue-evidence.sh" evaluate --scripts-only --repo "$REPO" --ref HEAD "$LEDGER" \
             >"$RUNNER_TEMP/script-results.jsonl"
-          echo "script checks run: $(grep -c . "$RUNNER_TEMP/script-results.jsonl" || true)"
+          echo "script checks run: $(jq -s length "$RUNNER_TEMP/script-results.jsonl")"
           echo "results=$(jq -c -s . "$RUNNER_TEMP/script-results.jsonl")" >>"$GITHUB_OUTPUT"
 
   evaluate:
@@ -227,7 +227,7 @@ jobs:
             "$RUNNER_TEMP/script-results.json" >"$RUNNER_TEMP/script-results.jsonl"
           bash "$RUNNER_TEMP/issue-evidence.sh" evaluate --repo "$REPO" --ref HEAD \
             --script-results "$RUNNER_TEMP/script-results.jsonl" "$LEDGER" >"$RUNNER_TEMP/evaluated.jsonl"
-          echo "rows evaluated: $(grep -c . "$RUNNER_TEMP/evaluated.jsonl" || true)"
+          echo "rows evaluated: $(jq -s length "$RUNNER_TEMP/evaluated.jsonl")"
 
       # For each ledger issue: its state, whether this bot closed it, and whether
       # a person reopened it after this bot closed it, from its timeline
