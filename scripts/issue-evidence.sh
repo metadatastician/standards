@@ -387,6 +387,12 @@ check_commit_on_main() { # SHA
 check_script() { # PATH ARGS...
   local path="$1" rc=0
   shift
+  # Only explicitly allowlisted repository scripts are runnable.
+  # This prevents ledger data from triggering arbitrary code execution.
+  case "$path" in
+    scripts/*|tests/*) ;;
+    *) return 2 ;;
+  esac
   # A script runs in the checkout, so it is evaluated only when the checkout
   # IS the evaluated commit and the file there is the committed one.
   [ "$COMMIT" = "$HEAD_COMMIT" ] || return 2
