@@ -155,6 +155,10 @@ state_of() { # N -> the states element for N, or "absent"
 }
 actions() { cat "$FIX/ACTIONS.log" 2>/dev/null || true; }
 called() { grep -qF -- "$1" "$FIX/CALLS.log"; }
+# did_action "close N": that action was performed. no_action: it was not.
+did_action() { actions | grep -q "^$1\\( \\|\$\\)"; }
+no_action() { ! did_action "$1"; }
+err_has() { printf '%s\n' "$ERR" | grep -qF -- "$1"; }
 
 # --- states: the decide input ------------------------------------------------
 reset_fix
@@ -233,6 +237,53 @@ plan close:21 close:21 close:21
 run bash "$IA" apply --repo "$R" --plan "$WORK/plan.json" --max-actions 2
 check "apply: a plan over max_actions is refused" rc_is 1
 check "apply: ... and nothing is done" test -z "$(actions)"
+
+# --- C2/C3: who acted last is re-read just before each action ------------------
+# The plan was made from an earlier read; these fixtures are the issue as it
+# stands when the apply job reaches it.
+reset_fix
+issue 31 closed "$(timeline mark closed:"$BOT" reopened:alice closed:alice)"
+issue 32 closed "$(timeline mark closed:"$BOT" reopened:alice closed:"$BOT")"
+issue 33 open "$(timeline mark closed:"$BOT" reopened:alice)"
+plan reopen:31 reopen:32 close:33
+run bash "$IA" apply --repo "$R" --plan "$WORK/plan.json" --max-actions 10
+check "C2: no reopen of an issue a person reopened and closed again since the plan" \
+  no_action "reopen 31"
+check "C2: no reopen when the bot account's latest close carries no marker after the last reopen" \
+  no_action "reopen 32"
+check "C3: no close of an issue a person reopened after the bot closed it" \
+  no_action "close 33"
+check "C2/C3: the run still exits 0 (a skip is not a failure)" rc_is 0
+
+reset_fix
+issue 34 open "$(timeline note:alice closed:alice reopened:alice)"
+issue 35 open "$(timeline mark closed:"$BOT" reopened:"$BOT")"
+issue 36 closed "$(timeline mark closed:"$BOT" reopened:alice closed:alice reopened:"$BOT" mark closed:"$BOT")"
+plan close:34 close:35 reopen:36
+run bash "$IA" apply --repo "$R" --plan "$WORK/plan.json" --max-actions 10
+check "C3: an issue the bot never touched is closed even if a person once reopened it" \
+  did_action "close 34"
+check "C3: an issue the bot itself reopened (a regression) is closed again" \
+  did_action "close 35"
+check "C2: the bot's latest marked close is reopened" did_action "reopen 36"
+
+reset_fix
+issue 37 open "$(timeline)"
+fx_fail "repos/$R/issues/37/timeline?per_page=100" "$RATE"
+plan close:37
+run bash "$IA" apply --repo "$R" --plan "$WORK/plan.json" --max-actions 10
+check "C2/C3: an unreadable history before an action is a refusal (exit 1)" rc_is 1
+check "C2/C3: ... with a message that says so" err_has "refusing to act"
+check "C2/C3: ... and nothing is done" test -z "$(actions)"
+
+# The timeline is paginated: a history split across pages is read whole.
+reset_fix
+issue 38 open "$(timeline)"
+printf '%s\n%s\n' "$(timeline mark)" "$(jq -c 'map(.created_at = "2026-01-02T00:00:00Z")' <<<"$(timeline closed:"$BOT" reopened:alice)")" \
+  >"$FIX/$(fkey "repos/$R/issues/38/timeline?per_page=100").json"
+plan close:38
+run bash "$IA" apply --repo "$R" --plan "$WORK/plan.json" --max-actions 10
+check "C3: a person's reopen on the second page of the timeline is seen" test -z "$(actions)"
 
 # --- one definition of the marker ------------------------------------------------
 marker="$(sed -n "s/^MARKER='\\(.*\\)'\$/\\1/p" "$IA")"

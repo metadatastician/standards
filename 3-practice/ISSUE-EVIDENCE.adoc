@@ -122,8 +122,9 @@ reintroduced).
 | unevaluated | any | none: nothing is done on what was not evaluated
 |===
 
-"Closed by the bot" means closed by `github-actions[bot]` with the bot's marker
-comment from that same account. Each comment the bot writes ends with
+"Closed by the bot" means the latest close was by `github-actions[bot]` and a
+marker comment from that same account follows the latest reopen, so a close by
+that account for another reason does not count. Each comment the bot writes ends with
 `<!-- issue-evidence-bot: row-sha256=HASH -->`, where HASH is the SHA-256 of the
 row's ledger line. To dispute a closure, change or remove the row in a reviewed
 pull request, or reopen the issue: the bot does not re-close an issue a person
@@ -177,9 +178,11 @@ changes only when it moves its pin.
   landed, not that it fixed the issue; a `grep-absent` passes if the defect
   moved to another file. The reviewer of the row judges that the checks
   capture the claim.
-* GitHub's own state is read once per run. A person acting between the read
-  and the action is caught by a re-read just before each action, not by a
-  lock.
+* GitHub's own state is read once per run, and again just before each
+  action: the issue's state and who closed or reopened it last. A person who
+  reopened or closed it since the plan was made is not overridden. This is a
+  re-read, not a lock: a person acting in the moment between the re-read and
+  the action is not caught. A failed or malformed read stops the run.
 
 == 8. Change log
 

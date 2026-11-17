@@ -73,6 +73,65 @@ need_max_actions() {
   fi
 }
 
+# FACTS_JQ: what the bot needs to know about one issue, from the issue object
+# ($issue) and its whole timeline ($pages: the pages `gh api --paginate`
+# returned, oldest first). Anything of the wrong shape is an error, never a
+# default. Fields:
+#   state             open | closed
+#   pr                the number names a pull request
+#   last_event/_actor the newest closed/reopened event and who performed it
+#   markers           comments by BOT carrying MARKER
+#   closed_by_bot     closed; the newest close was by BOT; and a marker
+#                     comment by BOT follows the newest reopen (so a close by
+#                     the same account for another reason does not count)
+#   reopened_by_human open; BOT has marked it; the newest event is a reopen
+#                     by someone other than BOT
+#   consistent        the newest event agrees with the state
+#   hash              the row-sha256 of the newest marker, or null
+# shellcheck disable=SC2016  # jq program text, not shell
+FACTS_JQ='
+def login: (.user.login // .actor.login // "");
+if ($issue | type) != "object" or (($issue.state != "open") and ($issue.state != "closed"))
+  then error("the issue is not an issue object with state open or closed") else . end
+| if ($pages | map(type == "array") | all | not) or ($pages | length) == 0
+  then error("the timeline is not a list of events") else . end
+| [ $pages[][] | if type != "object" then error("a timeline entry is not an object") else . end
+    | select(.event == "commented" or .event == "closed" or .event == "reopened") ] as $ev
+| ($ev | map(select(.event == "closed" or .event == "reopened")) | last) as $last
+| ([$ev | to_entries[] | select(.value.event == "reopened") | .key] | max // -1) as $lastreopen
+| [$ev | to_entries[] | select(.value.event == "commented" and (.value | login) == $bot
+                              and ((.value.body // "") | type) == "string"
+                              and ((.value.body // "") | contains($marker)))] as $marks
+| ($issue.state) as $state
+| ($last.event // null) as $le
+| ($last | if . == null then null else login end) as $la
+| { number: $n, state: $state, pr: ($issue | has("pull_request")),
+    last_event: $le, last_actor: $la, markers: ($marks | length),
+    closed_by_bot: ($state == "closed" and $le == "closed" and $la == $bot
+                    and any($marks[]; .key > $lastreopen)),
+    reopened_by_human: ($state == "open" and ($marks | length) > 0 and $le == "reopened" and $la != $bot),
+    consistent: (if $le == null then $state == "open"
+                 elif $le == "closed" then $state == "closed" else $state == "open" end),
+    hash: ($marks | last | if . == null then null
+           else (.value.body | [scan("issue-evidence-bot: row-sha256=([0-9a-f]{64})")] | last | if . == null then null else .[0] end) end) }
+'
+
+# read_issue N: sets FACTS (see FACTS_JQ) from a fresh read of issue N. A
+# failed or malformed read is a refusal: the script exits 1, never guesses.
+FACTS=""
+read_issue() {
+  local n="$1"
+  gh api "repos/$REPO/issues/$n" >"$TMPD/issue.json" 2>"$TMPD/gh.err" ||
+    refuse "could not read issue #$n: $(head -c 300 "$TMPD/gh.err")"
+  gh api --paginate "repos/$REPO/issues/$n/timeline?per_page=100" >"$TMPD/timeline.json" 2>"$TMPD/gh.err" ||
+    refuse "could not read the timeline of #$n: $(head -c 300 "$TMPD/gh.err")"
+  FACTS="$(jq -c -n --argjson n "$n" --arg bot "$BOT" --arg marker "$MARKER" \
+    --slurpfile issue "$TMPD/issue.json" --slurpfile pages "$TMPD/timeline.json" \
+    '($issue[0]) as $issue | '"$FACTS_JQ" 2>"$TMPD/jq.err")" ||
+    refuse "unreadable state for #$n: $(head -c 300 "$TMPD/jq.err")"
+}
+fact() { jq -r --arg k "$1" '.[$k]' <<<"$FACTS"; }
+
 cmd_states() {
   local n issue state closed_by markers last closed_by_bot reopened_by_human
   parse_opts "$@"
@@ -138,17 +197,32 @@ cmd_apply() {
     reason="$(jq -r .close_reason <<<"$item")"
     body="$(jq -r .body <<<"$item")"
     [[ "$n" =~ ^[1-9][0-9]*$ ]] || fail_input "bad issue number in plan"
-    # Re-read the state right before acting: a person may have acted since
-    # the evaluate job read it.
-    now="$(gh issue view "$n" --repo "$REPO" --json state --jq .state)"
+    # Re-read the issue and who closed or reopened it last, right before
+    # acting: the plan was made from an earlier read, a person may have acted
+    # since, and two runs can be queued. A person's close or reopen is never
+    # undone.
+    read_issue "$n"
+    now="$(fact state)/$(fact last_event)/$(fact last_actor)"
     case "$action" in
       close)
-        if [ "$now" != OPEN ]; then echo "#$n is $now now; not closing."; continue; fi
-        gh issue close "$n" --repo "$REPO" --reason "$reason" --comment "$body"
+        if [ "$(fact pr)" != false ] || [ "$(fact consistent)" != true ] || [ "$(fact state)" != open ]; then
+          echo "#$n is now $now; not closing."
+          continue
+        fi
+        if [ "$(fact reopened_by_human)" = true ]; then
+          echo "#$n was reopened by $(fact last_actor) after the bot closed it; not closing."
+          continue
+        fi
+        gh issue close "$n" --repo "$REPO" --reason "$reason" --comment "$body" ||
+          refuse "closing #$n failed; $done_n of $count planned action(s) were performed"
         ;;
       reopen)
-        if [ "$now" != CLOSED ]; then echo "#$n is $now now; not reopening."; continue; fi
-        gh issue reopen "$n" --repo "$REPO" --comment "$body"
+        if [ "$(fact pr)" != false ] || [ "$(fact closed_by_bot)" != true ]; then
+          echo "#$n is now $now, not a close by this bot; not reopening."
+          continue
+        fi
+        gh issue reopen "$n" --repo "$REPO" --comment "$body" ||
+          refuse "reopening #$n failed; $done_n of $count planned action(s) were performed"
         ;;
       *) fail_input "unknown action in plan: $action" ;;
     esac
