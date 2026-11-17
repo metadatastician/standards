@@ -83,7 +83,7 @@ What is not established:
 
 == Open obligations
 
-`3-practice/PROOF-NEEDS.adoc` (proof ledger) is authoritative and may have
+`3-practice/PROOF-STATUS.adoc` (proof ledger) is authoritative and may have
 moved on. At the time of this correction it carries 12 open overlay rows,
 not 10:
 
