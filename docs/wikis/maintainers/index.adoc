@@ -261,7 +261,10 @@ deeds lint; each reader is changed to read the deed; the open question is
 answered; the record line is written. When none is left the class is
 `deletable-now`, and `--check` fails and prints the `git rm` and the ledger
 line to delete: this can go, so it must go. `--check` also fails on an
-`unclassified` file. The deletion is its own owner-visible commit:
+`unclassified` file. The gate runs on every pull request and on `main` as the
+"A2ML retire-check" step of `.github/workflows/self-test.yml` (light shard),
+with the pull request's base as `--base`. The deletion is its own
+owner-visible commit:
 
 ----
 # where a ruling names a record file: add a line naming <path> to it (for

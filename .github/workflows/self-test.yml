@@ -218,6 +218,20 @@ jobs:
           set -euo pipefail
           bash scripts/check-a2ml-archived.sh --base "${BASE_SHA:-HEAD~1}" .
 
+      # The ledger above only says which A2ML files are known. This step says
+      # what blocks each one from deletion, and fails when: a file meets all
+      # three deletion conditions and is still here (it must go, in a commit
+      # of its own); a file fits no class; the committed counts
+      # (.machine_readable/a2ml-retire-counts.json) are not the ones the tree
+      # gives; or an A2ML path joined since the base. Fixtures and mutants:
+      # scripts/tests/a2ml-retire-check-test.sh. Needs bun (set up above).
+      - name: A2ML retire-check
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          bash scripts/a2ml-retire-check.sh --check --base "${BASE_SHA:-HEAD~1}"
+
       # Not part of the offline suite: this one needs real git history, so it
       # cannot live in scripts/tests/*.sh where a contributor runs it on a
       # shallow or detached tree. On a pull request the comparison is the base
