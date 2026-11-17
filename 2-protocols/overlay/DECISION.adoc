@@ -29,7 +29,8 @@ Three options were considered:
 | Option | Pros | Cons
 
 | Complete
-| Spec gets implementation + tests
+| Spec gets a validated implementation: the Zig runtime built and tested
+  in CI, a pinned Zig version, and a correspondence argument to the model
 | No consumer yet — risk of building to no requirements; significant work
   while other protocols (AVOW, Groove) have active consumers
 
@@ -40,8 +41,10 @@ Three options were considered:
 
 | **Keep spec, defer impl** (chosen)
 | Spec remains discoverable and citable; zero maintenance cost until a
-  real consumer appears; ABI scaffold documents the intended shape
-| Standards repo lists a protocol that has no runtime — must mark clearly
+  real consumer appears; the ABI skeleton and the unvalidated Zig FFI
+  document the intended shape
+| Standards repo lists a protocol with no validated runtime (the Zig code is
+  neither built nor tested in CI) — must mark clearly
 |===
 
 [[whats-there]]
@@ -83,7 +86,8 @@ What is not established:
 
 == Open obligations
 
-`3-practice/PROOF-STATUS.adoc` (proof ledger) is authoritative and may have
+`3-practice/PROOF-NEEDS.adoc` (proof ledger; renamed `PROOF-STATUS.adoc` by
+#1635) is authoritative and may have
 moved on. At the time of this correction it carries 12 open overlay rows,
 not 10:
 
