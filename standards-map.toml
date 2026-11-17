@@ -33,7 +33,7 @@
 [map]
 repo        = "metadatastician/standards"
 version     = "1.0.0"
-entry_count = 137
+entry_count = 140
 generated   = false   # hand-curated; the district index.adoc files ARE generated
 checked_by  = "scripts/check-standards-map.sh"
 
@@ -1697,6 +1697,45 @@ canon_slot  = ""
 canonical_doc = ""
 gate        = ""
 note        = "GitHub security policy: supported versions (tip of main only) + private vulnerability reporting. Added 2026-09-22 (round 2 maps it)."
+
+[[entry]]
+from        = "CODE_OF_CONDUCT.md"
+target      = "CODE_OF_CONDUCT.md"
+district    = "root"
+kind        = "onramp"
+files       = 1
+lifecycle   = "versioned"
+canonical   = false
+canon_slot  = ""
+canonical_doc = ""
+gate        = ""
+note        = "GitHub community-profile pointer to 3-practice/CODE_OF_CONDUCT.adoc; carries no copy of the text. Added by WO-3 (plan row P1.8)."
+
+[[entry]]
+from        = "CONTRIBUTING.md"
+target      = "CONTRIBUTING.md"
+district    = "root"
+kind        = "onramp"
+files       = 1
+lifecycle   = "versioned"
+canonical   = false
+canon_slot  = ""
+canonical_doc = ""
+gate        = ""
+note        = "GitHub community-profile pointer to 3-practice/CONTRIBUTING.adoc (doc-format.yml requires the redirect form). Added by WO-3 (plan row P1.8)."
+
+[[entry]]
+from        = "CITATION.cff"
+target      = "CITATION.cff"
+district    = "root"
+kind        = "onramp"
+files       = 1
+lifecycle   = "versioned"
+canonical   = false
+canon_slot  = ""
+canonical_doc = ""
+gate        = ""
+note        = "Citation File Format 1.2.0, so GitHub shows 'Cite this repository'. No version or date-released until a canon release is tagged (canon.lock is draft). Added by WO-3 (plan row P1.8)."
 
 [[entry]]
 from        = "READINESS.md"
