@@ -123,7 +123,15 @@ export class LintError extends Error {
     this.line = line;
   }
 
-  /** Render as `line N: message`, like the Python __str__. */
+  /** Render as `line N: message`, like the Python   // A host is a DNS name or a bracketed IPv6 address, either with a port. A tag
+  // may hold upper case; the digest is lower-case hex. NAME (host and path) is
+  // at most 255 characters, as the grammar's NameTotalLengthMax says.
+  const IMG_COMPONENT = "[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*";
+  const IMG_DOMAIN = "(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?)*|\\[[a-fA-F0-9:]+\\])";
+  const IMG_HOST = `(?:${IMG_DOMAIN}(?::[0-9]+)?/)`;
+  const IMAGE_RE = new RegExp(`^(${IMG_HOST}?${IMG_COMPONENT}(?:/${IMG_COMPONENT})*)(?::[A-Za-z0-9_][A-Za-z0-9_.-]{0,127})?@sha256:[0-9a-f]{64}$`);
+  const IMAGE = { test: (s) => { const m = IMAGE_RE.exec(s); return m !== null && m[1].length <= 255; } };
+str__. */
   toString() {
     return `line ${this.line}: ${this.msg}`;
   }
@@ -862,59 +870,6 @@ export const PROOF_RECEIPT_VOCABULARY = {
 };
 
 /**
- * Derive one claim's Proof Witness Grade (PROOF-POLICY §8.2) and its
- * foundational diversity (§8.3) from its legs and their receipts. This is the
- * one definition of the derivation: readProofReceipt refuses a recorded :pwg
- * or :foundation-diverse that differs from it, and scripts/proof-receipt.js
- * writes what it returns, so the writer and the reader cannot disagree.
- *
- *   legs          [{ prover, route, token, state, receipts: [{ state, commit,
- *                 invocation, "inputs-sha256", axioms: [{ disposition }] }] }],
- *                 with exactly one agda leg
- *   sourceCommit  the receipt's :source-commit
- *   echoes        [{ source, image, witness, inputs: { prover: digest } }]
- *                 (§8.5.2), a set that readProofReceipt would accept
- *
- * Returns { pwg, foundation_diverse }.
- */
-export function deriveProofGrade(legs, sourceCommit, echoes = []) {
-  const echoOf = new Map(echoes.map((e) => [e.source, e]));
-  // A leg counts when its kernel accepted it, it is tied to the Agda statement
-  // as §2.2 requires, and it has a current receipt. §8.4: a witness counts only
-  // if each axiom it reports is admissible under disposition (c).
-  const current = (l) => l.receipts.find((r) => r.state === "current");
-  const kernelOk = (l) => (l.token === "proven" || l.token === "proven-with-postulates")
-    && (!current(l) || current(l).axioms.every((a) => a.disposition === "c"));
-  // §8.5.2: a receipt describes the :source-commit when its :commit is that
-  // commit, or when a chain of echoes leads from its :commit to that commit and
-  // every link agrees on this leg's inputs (a tree-sha256 link agrees on all).
-  const describesSource = (l) => {
-    const r = current(l);
-    for (let c = r.commit; ; c = echoOf.get(c).image) {
-      if (c === sourceCommit) return true;
-      const e = echoOf.get(c);
-      if (!e) return false;
-      if (e.witness === "inputs-sha256" && e.inputs[l.prover] !== r["inputs-sha256"]) return false;
-    }
-  };
-  const agda = legs.find((l) => l.prover === "agda");
-  const canonical = (inv) => ["--safe", "--without-K"].every((f) => inv.split(/\s+/).includes(f))
-    && (inv.split(/\s+/).includes("--cubical-compatible") || inv.split(/\s+/).includes("--cubical"));
-  const agdaCounts = kernelOk(agda) && agda.state === "AGDA-VERIFIED" && current(agda) && canonical(current(agda).invocation);
-  const recheck = legs.filter((l) => (l.prover === "rocq" || l.prover === "lean")
-    && (l.route === "transported" || l.route === "re-proved") && kernelOk(l) && l.state === "RECONCILED" && current(l));
-  let pwg = "ungraded";
-  if (agdaCounts) {
-    pwg = ["PWG-3", "PWG-2i", "PWG-2ii"][recheck.length];
-    const counted = [agda, ...recheck];
-    if (recheck.length === 2 && counted.every(describesSource)) pwg = "PWG-1";
-  }
-  // §8.3: a kernel-checked witness outside the DTT family, with a current receipt.
-  const foundation_diverse = legs.some((l) => !PROOF_RECEIPT_VOCABULARY.dttProvers.includes(l.prover) && kernelOk(l) && current(l));
-  return { pwg, foundation_diverse };
-}
-
-/**
  * Read a proof receipt (PROOF-POLICY §8.5, the proof-receipt profile of
  * praxis-deed) into a plain record, and derive every claim's Proof Witness
  * Grade from its legs and their receipts (§8.2). A recorded :pwg that the
@@ -936,6 +891,18 @@ export function readProofReceipt(text, filename = null) {
   const V = PROOF_RECEIPT_VOCABULARY;
   const HEX40 = /^[0-9a-f]{40}$/;
   const HEX64 = /^[0-9a-f]{64}$/;
+  // An OCI image reference pinned by its manifest digest, NAME[:TAG]@sha256:<64 hex>,
+  // with NAME and TAG as the distribution/reference grammar defines them: an
+  // optional registry host (with port), then path components of lower-case
+  // alphanumerics joined by one separator ("." "_" "__" or "-" runs), none empty.
+  // A host is a DNS name or a bracketed IPv6 address, either with a port. A tag
+  // may hold upper case; the digest is lower-case hex. NAME (host and path) is
+  // at most 255 characters, the grammar's NameTotalLengthMax.
+  const IMG_COMPONENT = "[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*";
+  const IMG_DOMAIN = "(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?)*|\\[[a-fA-F0-9:]+\\])";
+  const IMG_HOST = `(?:${IMG_DOMAIN}(?::[0-9]+)?/)`;
+  const IMAGE_RE = new RegExp(`^(${IMG_HOST}?${IMG_COMPONENT}(?:/${IMG_COMPONENT})*)(?::[A-Za-z0-9_][A-Za-z0-9_.-]{0,127})?@sha256:[0-9a-f]{64}$`);
+  const IMAGE = { test: (s) => { const m = IMAGE_RE.exec(s); return m !== null && m[1].length <= 255; } };
 
   // Collect a clause's fields, refusing unknown, duplicate and mistyped ones.
   const fieldsOf = (where, members, spec, allowedClauses) => {
@@ -1114,7 +1081,13 @@ export function readProofReceipt(text, filename = null) {
       "inputs-sha256": { types: ["string"] },
       state: { types: ["symbol"], required: true, oneOf: V.receiptState },
       reason: { types: ["string"] },
+      image: { types: ["string"] },
     }, ["axioms", "inputs-manifest", "import"]);
+    // §8.2: the image the checker ran in, pinned by digest. Only a receipt that
+    // names one can make its witness count toward PWG-1 (owner ruling 2026-11-16).
+    if (rf.has("image") && !IMAGE.test(rf.get("image"))) {
+      fail(`${rw}: :image must be an image reference pinned by digest (NAME@sha256:<64 hex>)`);
+    }
     if (!HEX40.test(rf.get("commit"))) fail(`${where}: a receipt :commit must be the full 40-character commit`);
     if (rf.get("state") !== "current" && !rf.has("reason")) fail(`${where}: a ${rf.get("state")} receipt needs :reason`);
     const isCurrent = rf.get("state") === "current";
@@ -1242,11 +1215,46 @@ export function readProofReceipt(text, filename = null) {
       controls.push({ path, prover, expect: kf.fields.get("expect"), receipts });
     }
 
-    // §8.2, §8.3, §8.4, §8.5.2: one derivation, shared with the writer.
-    const { pwg, foundation_diverse: diverse } = deriveProofGrade(legs, sourceCommit, echoes);
+    // §8.2: derive the grade. A leg counts when its kernel accepted it, it is
+    // tied to the Agda statement as §2.2 requires, and it has a current receipt.
+    // §8.4: a witness counts only if each axiom it reports is admissible under
+    // disposition (c).
+    const current = (l) => l.receipts.find((r) => r.state === "current");
+    const kernelOk = (l) => (l.token === "proven" || l.token === "proven-with-postulates")
+      && (!current(l) || current(l).axioms.every((a) => a.disposition === "c"));
+    // §8.5.2: a receipt describes the :source-commit when its :commit is that
+    // commit, or when a chain of echoes leads from its :commit to that commit and
+    // every link agrees on this leg's inputs (a tree-sha256 link agrees on all).
+    const describesSource = (l) => {
+      const r = current(l);
+      for (let c = r.commit; ; c = echoOf.get(c).image) {
+        if (c === sourceCommit) return true;
+        const e = echoOf.get(c);
+        if (!e) return false;
+        if (e.witness === "inputs-sha256" && e.inputs[l.prover] !== r["inputs-sha256"]) return false;
+      }
+    };
+    const agda = legs.find((l) => l.prover === "agda");
+    const canonical = (inv) => ["--safe", "--without-K"].every((f) => inv.split(/\s+/).includes(f))
+      && (inv.split(/\s+/).includes("--cubical-compatible") || inv.split(/\s+/).includes("--cubical"));
+    const agdaCounts = kernelOk(agda) && agda.state === "AGDA-VERIFIED" && current(agda) && canonical(current(agda).invocation);
+    const recheck = legs.filter((l) => (l.prover === "rocq" || l.prover === "lean")
+      && (l.route === "transported" || l.route === "re-proved") && kernelOk(l) && l.state === "RECONCILED" && current(l));
+    let pwg = "ungraded";
+    if (agdaCounts) {
+      pwg = ["PWG-3", "PWG-2i", "PWG-2ii"][recheck.length];
+      const counted = [agda, ...recheck];
+      // §8.2: PWG-1 needs every counted witness checked at the source commit by a
+      // pinned, headless, isolated checker: its current receipt names the image,
+      // pinned by digest, that the checker ran in (owner ruling 2026-11-16).
+      const isolated = (l) => current(l).image !== undefined;
+      if (recheck.length === 2 && counted.every(describesSource) && counted.every(isolated)) pwg = "PWG-1";
+    }
     if (pwg !== cl.fields.get("pwg")) {
       fail(`${where} records :pwg ${cl.fields.get("pwg")}, but its legs and receipts support ${pwg} (PROOF-POLICY §8.2, §8.4)`);
     }
+    // §8.3: a kernel-checked witness outside the DTT family, with a current receipt.
+    const diverse = legs.some((l) => !V.dttProvers.includes(l.prover) && kernelOk(l) && current(l));
     if (diverse !== (cl.fields.get("foundation-diverse") === "#t")) {
       fail(`${where} records :foundation-diverse ${cl.fields.get("foundation-diverse")}, but its legs support ${diverse ? "#t" : "#f"} (§8.3)`);
     }

@@ -21,4 +21,3 @@
 9-archive/rhodium-standard-repositories/ux-test-harness/test-repo.sh:2
 scripts/check-allowed-actions.sh:1
 scripts/cicd-census.sh:2
-scripts/tests/apply-branch-gates-test.sh:1

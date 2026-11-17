@@ -121,6 +121,12 @@ jobs:
       - name: Every setup-bun step names an exact bun-version (no API tag lookup)
         run: bash scripts/check-setup-bun-pinned.sh
 
+      # A `# <ref>` pin comment is read by Dependabot and by close-lock.sh, so
+      # it must name the release actions.lock reviewed for that SHA, not a
+      # branch or another major (standards#1440: six `# stable` on v1).
+      - name: Pin comments agree with actions.lock
+        run: bash scripts/check-pin-comments.sh
+
       # Every checkout of THIS repository from a shared workflow must name the
       # commit it came from. MEASURED 2026-10-31: three steps staged helpers
       # from the literal 317101e03b8f (2026-09-14) while main had moved 202
@@ -157,15 +163,6 @@ jobs:
           bash scripts/tests/check-standards-helper-pins-test.sh
           bash scripts/tests/check-reusable-closure-test.sh
           bash scripts/tests/governance-canary-test.sh
-
-      # PROOF-POLICY §8.5: the shared receipt writer and the git checker of
-      # §8.5.3, each on scratch repositories. Named for the same reason as the
-      # guard controls above: home gates and Mathesis run these tools.
-      - name: Proof receipt writer and checker (fixture-driven)
-        run: |
-          set -euo pipefail
-          bash scripts/tests/check-proof-receipt-test.sh
-          bash scripts/tests/proof-receipt-test.sh
 
       - name: Run tests/*.sh and scripts/tests/*.sh (light shard)
         env:

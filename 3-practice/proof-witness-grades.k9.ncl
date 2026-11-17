@@ -85,9 +85,10 @@ K9!
         requires = [
           "PWG-2ii",
           "every counted witness (Agda, Rocq, Lean) has a current receipt from a headless, isolated, pinned checker run on the exact source commit",
+          "isolated: the checker ran in a container image pinned by its digest, named on the receipt as image = NAME[:TAG]@sha256:<64 hex> (owner ruling 2026-11-16); a fresh CI runner with only package or checksum pins is not isolated",
         ],
         counted_legs = 2,
-        receipt_fields = ["checker", "checker_version", "invocation", "input_digest", "result", "axioms", "source_repository", "source_commit_40"],
+        receipt_fields = ["checker", "checker_version", "image", "invocation", "input_digest", "result", "axioms", "source_repository", "source_commit_40"],
       },
     ],
 
