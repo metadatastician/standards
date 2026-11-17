@@ -178,8 +178,10 @@ every tracked A2ML file (`*.a2ml`, `*.a2ml.in`, `*.a2ml.template`,
 bash scripts/a2ml-retire-check.sh              # table: class, path, blockers
 bash scripts/a2ml-retire-check.sh --summary    # counts per class and blocker, "n of N"
 bash scripts/a2ml-retire-check.sh --json       # one JCS object per file, by path
+bash scripts/a2ml-retire-check.sh --write-counts   # regenerate .machine_readable/a2ml-retire-counts.json
 bash scripts/a2ml-retire-check.sh --check      # the gate (below)
-bash scripts/a2ml-retire-check.sh --root DIR --repo NAME --rulings FILE   # another checkout
+bash scripts/a2ml-retire-check.sh --check --base origin/main   # the gate plus the ratchet
+bash scripts/a2ml-retire-check.sh --root DIR --repo NAME --rulings FILE [--rulings FILE]... --counts FILE
 ----
 
 It needs bash, git, jq and awk, and bun as soon as a target deed exists (it
@@ -217,6 +219,7 @@ repositories, except those the rulings file names.
 |`ruling-needed:<key>` |An open owner question (rulings file).
 |`pending:<key>` |Ruled work not yet done (rulings file).
 |`ruling-condition:<key>` |A `dropped` ruling's precondition not yet met (rulings file).
+|`record-missing:<file>` |A `dropped` or `decision` row names a record file of the tree (such as `9-archive/A2ML-REMOVED.adoc`) that does not yet name the path exactly.
 |===
 
 *Classes*, derived from the blockers in this order: `unclassified` (the tool
@@ -227,34 +230,71 @@ cannot class it: several chora deeds, a missing mapping spec), `deletable-now`
 `facts-unchecked`, `needs-kyx-supported` / `needs-kyx-unsupported` (by the
 rulings file's `kyx-family` rows), and `ruling-needed` for the rest.
 
-*The rulings file*, `.machine_readable/a2ml-retire-rulings.jsonl` (JCS, one
-row per line), holds what the tree cannot show. Each row has `id`, `kind`,
+*The rulings files.* `.machine_readable/a2ml-retire-rulings.jsonl` (JCS, one
+row per line) holds what the tree cannot show. Each row has `id`, `kind`,
 `date`, `recorded` (where the ruling is written), `summary`, and a scope:
 `match` (a regular expression on the path), `family`, or both, and
 optionally `repo`. Kinds: `dropped` (conditions 1 and 2 are settled by the
 ruling; `requires` names a precondition), `decision` (the family's decision
 document governs what is compared), `spec-gap`, `ruling-needed`, `pending`,
-`external-reader` (each with a `key`), and `kyx-family`. A malformed row stops
-the tool (exit 2). When the owner rules, one row changes and the classes
-move; no ruling is written in the script.
+`external-reader` (each with a `key`), and `kyx-family`. A `dropped` or
+`decision` row may carry `record`, a file of the tree that must name the path
+exactly before the file can go. `--rulings FILE` may be given more than once;
+each file adds rows, and with none given the tool reads ROOT's own file. Rows
+never override one another: every row that matches a path applies (a
+`dropped` row clears only the tool's own fact, target and spec blockers, never
+a blocker another row adds), so the order of the files does not matter, and
+an `id` given twice, in one file or two, stops the tool (exit 2), as does a
+malformed row or a named file that is missing. When the owner rules, one row
+changes and the classes move; no ruling is written in the script.
+
+*Tags are not checked.* "Git history is the archive" (owner, 2026-11-17)
+deletes a file once `9-archive/A2ML-REMOVED.adoc` names it and a tag marks
+the last commit that holds it. The record line is a `record` condition the
+tool checks. A tag cannot be seen from a tree checkout (and CI clones often
+fetch no tags), so the tool does not check it; the deletion recipe below
+creates it.
 
 *How a file becomes deletable.* Its blockers fall one by one: kyX emits the
 target deed and the comparison passes, or a ruling drops the file; the target
 deeds lint; each reader is changed to read the deed; the open question is
-answered. When none is left the class is `deletable-now`, and `--check`
-fails and prints the `git rm` and the ledger line to delete: this can go, so
-it must go. The deletion is still its own owner-visible commit, which lists
-the file and the deed field that holds each fact and removes the ledger line
-(then `check-a2ml-archived.sh` passes). `--check` also fails on an
-`unclassified` file.
+answered; the record line is written. When none is left the class is
+`deletable-now`, and `--check` fails and prints the `git rm` and the ledger
+line to delete: this can go, so it must go. `--check` also fails on an
+`unclassified` file. The deletion is its own owner-visible commit:
+
+----
+# where a ruling names a record file: add a line naming <path> to it (for
+# example 9-archive/A2ML-REMOVED.adoc), and tag the last commit that holds it:
+git tag <tag-name> HEAD
+git rm -- <path>                                  # the path --check printed
+# delete the ledger line --check printed from .machine_readable/a2ml-legacy-allow.txt
+bash scripts/a2ml-retire-check.sh --write-counts  # the counts move with the deletion
+bash scripts/check-a2ml-archived.sh .
+bash scripts/a2ml-retire-check.sh --check --base HEAD
+bash scripts/tests/a2ml-retire-check-test.sh
+git add .machine_readable/a2ml-legacy-allow.txt .machine_readable/a2ml-retire-counts.json  # and the record file, if any
+git commit                                        # message: the file, and the deed field that holds each fact
+----
+
+*The live counts and the ratchet.* `.machine_readable/a2ml-retire-counts.json`
+(JCS) holds `total`, the count of files in each class, the count of files
+carrying each blocker kind, and the `deletable_now` paths (normally empty).
+`--write-counts` regenerates it; `--check` fails, printing the exact
+command, when it is missing or differs from what the tree gives. With
+`--base REV`, `--check` also fails when an A2ML path joined since REV: every
+path tracked now must have been tracked at REV, or be an unchanged rename
+(git R100) of one, so the total can only fall and a swap (one file leaves,
+another joins) is caught though the total holds. Class counts are not
+ratcheted, because files move between blocked classes legitimately as rulings
+land and readers change. The Debtfile is not used for this measure: it is
+itself a legacy `.a2ml` file to which nothing may be added.
 
 The suite is `scripts/tests/a2ml-retire-check-test.sh`. It also runs the tool
-on this repository and compares the class counts with
-`docs/triage/2026-11-17/a2ml-measure-files.jsonl`, so a change that moves a
-class must regenerate that file in the same commit. No count ratchet is kept:
-the Debtfile, where this repository's ratchets live, is itself a legacy
-`.a2ml` file to which nothing may be added, so a new measure has no home until
-the Debtfile has a deed form.
+on this repository and fails when the committed counts file differs from the
+tree, so a change that moves a count regenerates the counts in the same
+commit. `docs/triage/2026-11-17/a2ml-measure-files.jsonl` is a dated record of
+the first measurement; nothing compares against it.
 
 == Learning path
 
