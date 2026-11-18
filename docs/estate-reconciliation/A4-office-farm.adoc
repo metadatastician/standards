@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 = A4: Office and Farm (the boundary, the intake envelope, work orders, the move of the scripts)
-:version: 0.2.5-draft
-:status: DRAFT v0.2.5 (an `evaluate` envelope from a pull-request run is bound to the synthetic merge commit it ran at; a non-verdict `publish` envelope names the state of its basis; the `gate-verdict` predicate carries the A3 v0.2.12 fields: `mode`, `basis` and `inlineInputs`; a `publish` envelope, signed by the A3 publisher from the default branch, is bound to its subject head through its `basis`, not through the certificate's source commit; earlier: v0.2.4, owner ruling Q3 of 2026-11-14: the generated index lives in chora-registry and the office reads it). Decisions F1 to F15 approved by the owner on 2026-11-10. Not yet ratified as a whole. Builds on A1 v0.4.1, A2 v0.2.4 and A3 v0.2.12. Consistency pass applied 2026-11-10. Proposed in standards#1474; bot-review fixes applied 2026-11-12.
+:version: 0.2.6-draft
+:status: DRAFT v0.2.6 (adds Annex A, the text of the owner's deployment schematic of 2026-11-17, informative; sections 1 to 16 are unchanged; earlier: v0.2.5: an `evaluate` envelope from a pull-request run is bound to the synthetic merge commit it ran at; a non-verdict `publish` envelope names the state of its basis; the `gate-verdict` predicate carries the A3 v0.2.12 fields: `mode`, `basis` and `inlineInputs`; a `publish` envelope, signed by the A3 publisher from the default branch, is bound to its subject head through its `basis`, not through the certificate's source commit; earlier: v0.2.4, owner ruling Q3 of 2026-11-14: the generated index lives in chora-registry and the office reads it). Decisions F1 to F15 approved by the owner on 2026-11-10. Not yet ratified as a whole. Builds on A1 v0.4.1, A2 v0.2.4 and A3 v0.2.12. Consistency pass applied 2026-11-10. Proposed in standards#1474; bot-review fixes applied 2026-11-12.
 :toc:
 
 Specification A4 of the Estate Reconciliation Plan. The office decides and the farm executes (R2). A4 defines the line between them, the one envelope in which every finding and every verdict enters the office, the work order that leaves it, and the rules for moving the farm's label and merge scripts.
@@ -599,3 +599,184 @@ I did not read: the farm (not attachable, and its audit is private), `gitbot-fle
 == 16. Out of scope
 
 A5 (rule identifier namespace, the deviation store, generated ignore files). A6 (where the ruleset canon lives). The creation of any credential (O11 is an owner action). The creation procedure of a repo (#636 phase 1). The building of the evaluator, the Kin gate wiring, the SARIF adapters, the index generator, the `cadastra` verify mode or any change to a farm script. The per-script table of the move. The trope format. Any `.a2ml` file: A4 creates none.
+
+[appendix]
+== Annex A. The deployment schematic of 2026-11-17 (informative)
+
+Status: *informative, draft v0.1*. Sections 1 to 16 are unchanged by this annex and stay normative where they are approved. The annex is the text of a picture, so that the picture has one written home.
+
+Evidence tags as in section 0, with one addition:
+
+[cols="1,4"]
+|===
+| Tag | Meaning
+
+| [S] | Read from the owner's schematic "Git Estate Logistics Office — Deployment Schematic", shown on 2026-11-17. Transcribed, not interpreted.
+|===
+
+Where the schematic names a thing and gives it no value, the value is an open question in A.9. Nothing in this annex invents one.
+
+=== A.1 What the schematic shows
+
+Subtitle [S]: "Graph reality + route lattice + fleet personnel + safety sphere". Its legend [S]:
+
+[cols="2,3"]
+|===
+| Term | Legend text
+
+| Graph | estate reality
+| Route lattice | deployment possibility space
+| Bag-of-actions | actual fleet personnel
+| Receipts | operational truth
+|===
+
+Flow [S]: three inputs feed a route lattice; the lattice is pruned into route bundles; a dispatcher executes a bundle; every outcome produces a receipt; receipts feed the map and memory.
+
+=== A.2 The safety sphere
+
+[S] "Safety sphere inflates first." It encloses everything else and has seven parts:
+
+. allowed repos;
+. allowed files;
+. allowed actions;
+. allowed credentials;
+. capacity limits;
+. stop conditions;
+. recall readiness.
+
+=== A.3 The three inputs
+
+[cols="2,2,4"]
+|===
+| Input [S] | Caption [S] | Contents [S]
+
+| `.git-private-farm`
+| Map and memory
+| Estate inventory; repo registry; current run state; receipts; local paths; policy overlays; muster rolls.
+
+| Bag-of-actions
+| Fleet personnel
+| Scouts: inspect, classify. Packers: generate, patch. Drivers: push, call APIs. Clerks: open PRs, label. Inspectors: verify, test. Safety officers: stop, quarantine, recall. Archivists: receipts, history.
+
+| Intent / work order
+| —
+| Desired change; scope; constraints; idempotent or non-idempotent; review / rollback policy.
+|===
+
+=== A.4 The route lattice
+
+[S] "Deployment decision tensor / sparse route lattice: possibility space for deployment routes." It has eleven axes. The schematic names each axis and gives no values:
+
+. repo class;
+. operation;
+. dispatch mode;
+. idempotency;
+. branch strategy;
+. review mode;
+. rollout;
+. recall;
+. capability;
+. time window;
+. risk class.
+
+=== A.5 Forbidden regions
+
+Five [S]:
+
+. archived repo × mutation;
+. estate-wide × direct default-branch push;
+. non-idempotent × all-at-once;
+. no review × destructive action;
+. unsupported by current fleet.
+
+=== A.6 Surviving route families
+
+Three [S]:
+
+. PR canary batched;
+. local branch + PR;
+. quarantine / manual lane.
+
+=== A.7 Pruning, bundles and dispatch
+
+Route pruning and selection, seven steps in this order [S]:
+
+. generate axes;
+. prune by policy;
+. prune by fleet availability;
+. prune by capacity / WIP;
+. dominance pruning;
+. score survivors;
+. build route bundles.
+
+Top route bundles [S]: a primary route, a fallback route and a quarantine route; "known options before breakage".
+
+The dispatcher [S]: assigns route legs to actions; checks authority and capacity; revalidates the fallback before use; emits deviation receipts.
+
+Execution and outcomes [S]: delivered; quarantined; recalled / corrected. Then [S] "Receipts = truth", with a line back to the map and memory.
+
+=== A.8 Where the schematic meets sections 1 to 16
+
+[cols="2,3,3"]
+|===
+| Schematic [S] | This specification | Note
+
+| Intent / work order
+| 7: the `(work-order …)` clause, its fields and tiers
+| The schematic's "review / rollback policy" has no single field. `:tier`, `(acceptance)` and `(escalate)` carry parts of it.
+
+| Branch strategy; review mode
+| 7.3: tiers `report` and `review`; no `direct` tier exists
+| A route that pushes to a default branch has no tier here.
+
+| Prune by capacity / WIP
+| 6.3 and test I08: at most one open order per `(repo, class)`; 6.3 rule 3: one change per fix class per cycle; `:batch-with`
+| The schematic gives no numbers.
+
+| PR canary batched; rollout
+| 8.2 and 8.3: actuator states `off`, `dry-run`, `canary`, `armed`; a canary repo per class
+| The schematic's canary is a route family. Here it is an actuator state and a named repo.
+
+| Capability; allowed credentials; fleet personnel
+| 4: roles `reader`, `labeler`, `pr-author`, `applier`, `merger`
+| Seven personnel kinds against five roles; no mapping is given.
+
+| Receipts; deviation receipts
+| 5: one envelope for findings, verdicts and outcomes; 8.4: the outcome
+| Whether a receipt is the `outcome:v1` envelope is not stated.
+
+| Stop conditions; recall readiness; recalled / corrected
+| 7.2 `(limits)`, `(escalate)`, `:expires`; 8.4
+| This specification has no recall procedure.
+
+| Map and memory: repo registry, estate inventory
+| 1 and ruling Q3: the generated index lives in chora-registry and the office reads it; the farm decides nothing (R2)
+| See open question 9.
+
+| Delivered
+| 7.2 `(acceptance)`: check states that must hold on the result
+| The schematic shows no acceptance step before "delivered". See open question 10.
+|===
+
+=== A.9 Open questions
+
+Each is for the owner. None is answered here.
+
+. *Axis values.* What are the values of each of the eleven axes?
+. *Estate-wide.* Which axis carries it, and does it mean every repo, or any change to more than one?
+. *Unsupported by current fleet.* Is this a forbidden region like the other four, which never change, or step 3 of the pruning ("prune by fleet availability"), which depends on the fleet at that moment? The schematic shows it as both.
+. *Time window.* The axis has no forbidden region. What may not happen outside a window?
+. *Dominance.* When does one route dominate another?
+. *Scoring.* What does "score survivors" weigh, and in what order of importance?
+. *Capacity.* What are the capacity limits, beyond one open order per `(repo, class)`?
+. *Stop conditions.* What are they, and who may stop a run?
+. *The registry.* The schematic puts "repo registry" and "estate inventory" in the farm. Ruling Q3 puts the generated index in chora-registry, and the registry is authoritative for placement. Does the farm hold a copy that is checked against the registry, or something else?
+. *Acceptance.* Where is acceptance decided: as a sixth forbidden region ("acceptance unmet × delivered"), or as a gate between execution and "delivered"? Two events of 2026-11-17 went wrong at exactly this point: a change merged with a stale ledger line it had not tested for (standards#1651), and a change merged with required checks red (standards#1652). Both travelled a reviewed branch and pull request, which the five regions permit.
+. *Personnel and roles.* How do the seven personnel kinds map to the five roles of section 4?
+. *Deviation receipts.* What is a deviation, and is its receipt the `outcome:v1` envelope of section 5?
+. *Quarantine.* Who owns a quarantined order, and what moves it out?
+. *The office's home.* Ruled on 2026-11-17: the office holds decisions and data only; `metadatastician/git-logistics-office` carries the ledger, the class table, policy overlays and work orders as data; routes are computed by the hybrid automation router and checks by the plan kernel. The schematic does not say where the route lattice itself is defined.
+
+=== A.10 What follows from this annex
+
+Nothing is built from the schematic until questions 1 to 6 are answered, because the lattice cannot be written down without them. A model of the lattice as a total function with a proof (owner, 2026-11-17: Idris2, "the dispatcher never emits a forbidden route") is to be written against this annex once they are. A first model exists outside any repository; its axis values, policy rules and scoring are its author's assumptions, so it is evidence about the method and not about the design.
