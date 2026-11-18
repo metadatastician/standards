@@ -2,46 +2,55 @@
 = Maintainers
 :toc: preamble
 
-This document lists the maintainers of this project and their responsibilities.
+This document records who maintains this repository. It summarises
+link:../0-canon/GOVERNANCE.adoc[Governance], which derives its authority from
+the link:../0-canon/constitution/README.adoc[constitutional district]. Where
+this document and either of those differ, they win.
 
-== Current Maintainers
+== Maintainer of record
 
 [cols="2,3,2",options="header"]
 |===
 | Name | Role | Contact
 
 | Jonathan D.A. Jewell
-| Lead Maintainer
+| Owner and maintainer of record
 | https://github.com/hyperpolymath[@hyperpolymath]
 |===
 
-== Responsibilities
+The estate is single-owner. There are no separate maintainers
+(link:../0-canon/GOVERNANCE.adoc[Governance], Roles). The owner reviews and
+merges pull requests, triages issues, rules on `status:needs-ruling` matters,
+and decides licence, scope and canon changes.
 
-Maintainers are responsible for:
+== Delegation
 
-* Reviewing and merging pull requests
-* Triaging issues and feature requests
-* Ensuring code quality and security standards
-* Managing releases and versioning
-* Upholding the project's code of conduct
+The owner may delegate scoped, revocable permissions. A delegation is recorded
+in the repository rulesets and branch protection, not in this document, so
+this table does not grow when one is made.
 
-== Becoming a Maintainer
+== Agents and automation
 
-Contributors who demonstrate:
+Agents and bots act under the owner's authority, within the
+link:../0-canon/constitution/CONTRIBUTION-CONSTITUTION.adoc[Contribution Constitution].
+They are not maintainers, and nothing they do creates maintainer authority.
 
-* Consistent, high-quality contributions
-* Understanding of the project's goals and standards
-* Constructive participation in discussions
-* Commitment to the project's long-term health
+== Contribution authority
 
-May be invited to become maintainers at the discretion of existing maintainers.
+Who may land a change is set by the three perimeters of the
+link:../0-canon/constitution/CONTRIBUTION-CONSTITUTION.adoc[Contribution Constitution].
+Movement between perimeters uses published criteria and can be challenged.
+link:CONTRIBUTING.adoc[The contributing guide] says how the perimeters apply
+to this repository.
 
-== Decision Making
+== Decisions
 
-* Routine decisions (bug fixes, minor improvements) can be made by any maintainer
-* Significant changes require discussion and consensus among maintainers
-* Breaking changes or major features should be discussed in issues before implementation
+Decisions follow link:../0-canon/GOVERNANCE.adoc[Governance], Decision making.
+There is no consensus procedure among maintainers, because there is one
+maintainer of record.
 
 == Contact
 
-For questions about project governance, open an issue or contact the maintainers listed above.
+For a question about governance, open a decision issue. For conduct, see
+link:CODE_OF_CONDUCT.adoc[the code of conduct]. Security problems are never
+filed in public: see `SECURITY.md`.

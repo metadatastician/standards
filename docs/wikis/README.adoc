@@ -52,8 +52,10 @@ The wiki does not replace the canonical front doors — it *teaches* them:
 
 * Primary format is **AsciiDoc (`.adoc`)** (estate doc policy; no `.md`
   duplicates).
-* The machine mirror of this track is `0.2-AI-MANIFEST.a2ml` in this
-  directory — keep it in step when tracks are added.
+* This track has no machine mirror. The A2ML one that sat in this directory
+  was removed on 2026-11-17 (`9-archive/A2ML-REMOVED.adoc`): directory
+  manifests are derived, not stored. This page is the only place to add a
+  track.
 * If/when a forge-hosted wiki (GitHub/GitLab) is adopted, this directory is
   the source of truth and is synced *out* to the forge, never hand-edited
   there. (Mirrors the estate pattern in `1-formats/k9/*/docs/wikis/`.)

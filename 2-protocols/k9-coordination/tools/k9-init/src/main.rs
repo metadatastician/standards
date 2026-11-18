@@ -82,7 +82,9 @@ fn parse_args(args: &[String]) -> Result<(PathBuf, Option<PathBuf>, bool), Strin
         match args[i].as_str() {
             "--out" => {
                 i += 1;
-                out = Some(PathBuf::from(args.get(i).ok_or("missing value after --out")?));
+                out = Some(PathBuf::from(
+                    args.get(i).ok_or("missing value after --out")?,
+                ));
             }
             "--force" => force = true,
             "-h" | "--help" => return Err("help".into()),
@@ -299,7 +301,9 @@ fn render_k9(f: &RepoFacts) -> String {
             "    rule: \"No files in banned languages: {}\"\n",
             f.banned.join(", ")
         ));
-        s.push_str("    reason: \"Repo inherited language policy from descriptile AGENTIC.a2ml\"\n");
+        s.push_str(
+            "    reason: \"Repo inherited language policy from descriptile AGENTIC.a2ml\"\n",
+        );
         s.push_str("    severity: high\n");
     }
     for (k, v) in &f.practices {
@@ -382,7 +386,10 @@ mod tests {
     fn extracts_list_from_scheme() {
         let src = r#"((languages . ("rescript" "rust" "gleam"))
                       (banned . ("typescript" "go")))"#;
-        assert_eq!(extract_list(src, "languages"), vec!["rescript", "rust", "gleam"]);
+        assert_eq!(
+            extract_list(src, "languages"),
+            vec!["rescript", "rust", "gleam"]
+        );
         assert_eq!(extract_list(src, "banned"), vec!["typescript", "go"]);
     }
 
@@ -392,8 +399,12 @@ mod tests {
                        ((code-style . "rescript")
                         (testing . "property-based")))"#;
         let got = extract_pairs(src, "development-practices");
-        assert!(got.iter().any(|(k, v)| k == "code-style" && v == "rescript"));
-        assert!(got.iter().any(|(k, v)| k == "testing" && v == "property-based"));
+        assert!(got
+            .iter()
+            .any(|(k, v)| k == "code-style" && v == "rescript"));
+        assert!(got
+            .iter()
+            .any(|(k, v)| k == "testing" && v == "property-based"));
     }
 
     #[test]

@@ -44,7 +44,10 @@ fn main() -> ExitCode {
     let repo = repo_hint.unwrap_or_else(|| infer_repo(&playbook));
     let procedures = extract_procedures(&text);
     if procedures.is_empty() {
-        eprintln!("playbook-to-recipe: no procedures found in {}", playbook.display());
+        eprintln!(
+            "playbook-to-recipe: no procedures found in {}",
+            playbook.display()
+        );
         return ExitCode::SUCCESS;
     }
 
@@ -73,11 +76,15 @@ fn parse_args(args: &[String]) -> Result<(PathBuf, PathBuf, Option<String>), Str
         match args[i].as_str() {
             "--playbook" => {
                 i += 1;
-                pb = Some(PathBuf::from(args.get(i).ok_or("missing value after --playbook")?));
+                pb = Some(PathBuf::from(
+                    args.get(i).ok_or("missing value after --playbook")?,
+                ));
             }
             "--out" => {
                 i += 1;
-                out = Some(PathBuf::from(args.get(i).ok_or("missing value after --out")?));
+                out = Some(PathBuf::from(
+                    args.get(i).ok_or("missing value after --out")?,
+                ));
             }
             "--repo" => {
                 i += 1;
@@ -113,7 +120,9 @@ fn infer_repo(playbook: &Path) -> String {
 
 /// Find the `(procedures ...)` block, then pull each `(name . ((k . v) ...))`.
 fn extract_procedures(text: &str) -> Vec<(String, Vec<(String, String)>)> {
-    let Some(start) = text.find("(procedures") else { return Vec::new() };
+    let Some(start) = text.find("(procedures") else {
+        return Vec::new();
+    };
     let tail = &text[start..];
     let region = balanced_sexp(tail);
     let bytes = region.as_bytes();
@@ -265,7 +274,11 @@ fn render_recipe(repo: &str, proc_name: &str, steps: &[(String, String)]) -> Str
     s.push_str("# Hypatia recipe (A2ML) — generated from PLAYBOOK.a2ml\n\n");
     s.push_str("@recipe(version=\"1.0\"):\n");
     s.push_str(&format!("id: recipe-{repo}-{proc_name}\n"));
-    s.push_str(&format!("name: \"{} procedure for {}\"\n", title_case(proc_name), repo));
+    s.push_str(&format!(
+        "name: \"{} procedure for {}\"\n",
+        title_case(proc_name),
+        repo
+    ));
     s.push_str(&format!(
         "description: \"Auto-generated from PLAYBOOK.a2ml procedures.{proc_name}\"\n"
     ));

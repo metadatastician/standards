@@ -6,7 +6,7 @@ import { cpSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, writ
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { validate, blankComments, LintError, SELF_TEST_CASES, checkEgress, EgressError, checkAnchor, AnchorError, profileCOfBody, readMustfileChecks, MustfileError, readProofReceipt, ProofReceiptError, checkContractiles, ContractilesError, contractilePaths, CONTRACTILE_VERBS, checkEdict, EdictError, verbOfFilename, checkVerbDescriptile, VerbDescriptileError, verbOfDescriptile, choraRepoUuid, rootChora, FIXTURE_TODAY, checkEcosystem, EcosystemError, ECOSYSTEM_RELATIONSHIPS, checkState, StateError, STATE_PHASES, MATURITY_LEVELS, checkRsrScorecard, RsrScorecardError, RSR_TIERS, RSR_VERDICTS, checkMeta, MetaError, META_PROJECT_TYPES, ADR_STATUSES, checkAgentic, AgenticError, J19_SETTINGS, checkNeurosym, NeurosymError, SCAN_DEPTHS, REPORT_FORMATS, checkRsrProfile, RsrProfileError, RSR_PROFILE_FIELDS } from "./deed_lint.js";
+import { validate, blankComments, LintError, SELF_TEST_CASES, checkEgress, EgressError, checkAnchor, AnchorError, profileCOfBody, readMustfileChecks, MustfileError, readProofReceipt, ProofReceiptError, checkContractiles, ContractilesError, contractilePaths, CONTRACTILE_VERBS, checkEdict, EdictError, verbOfFilename, checkVerbDescriptile, VerbDescriptileError, verbOfDescriptile, choraRepoUuid, rootChora, FIXTURE_TODAY, checkEcosystem, EcosystemError, ECOSYSTEM_RELATIONSHIPS, checkState, StateError, STATE_PHASES, MATURITY_LEVELS, checkRsrScorecard, RsrScorecardError, RSR_TIERS, RSR_VERDICTS, checkMeta, MetaError, META_PROJECT_TYPES, ADR_STATUSES, checkAgentic, AgenticError, J19_SETTINGS, checkNeurosym, NeurosymError, SCAN_DEPTHS, REPORT_FORMATS, checkRsrProfile, RsrProfileError, RSR_PROFILE_FIELDS, layoutPathFault } from "./deed_lint.js";
 import { generateContractileRegistry as generateRegistry } from "./deed_lint.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -380,17 +380,20 @@ describe("proof-receipt profile (PROOF-POLICY §8.5)", () => {
   const digestOf = (files) => createHash("sha256").update(files.map(([p, h]) => `${h}  ${p}\n`).join(""), "utf8").digest("hex");
   const manifest = (files) => `\n  (inputs-manifest${files.map(([p, h]) => `\n    (file :path "${p}" :sha256 "${h}")`).join("")})`;
   const D = digestOf(FILES), D2 = digestOf(FILES2), T = "c".repeat(64);
+  // §8.2: the digest-pinned image a checker ran in (owner ruling 2026-11-16).
+  const IMG = "debian:trixie-slim@sha256:" + "a".repeat(64);
   const rcpt = (o = {}) => `\n(receipt :run "${o.run ?? "https://ci/run/1"}" :commit "${o.commit ?? C}" :checker "${o.checker ?? "agda 2.6.4.3"}"`
     + ` :invocation "${o.inv ?? "agda --safe --without-K --cubical-compatible"}"`
     + (o.digest === null ? "" : ` :inputs-sha256 "${o.digest ?? D}"`)
     + ` :state ${o.rstate ?? "current"}${o.reason ? ` :reason "${o.reason}"` : ""}`
+    + (o.image === null ? "" : ` :image "${o.image ?? IMG}"`)
     + (o.manifest === null || (o.manifest === undefined && o.digest === null) ? ""
       : o.manifest !== undefined ? o.manifest : manifest(o.digest === D2 ? FILES2 : FILES))
     + (o.axioms === null ? "" : ` ${o.axioms ?? "(axioms)"}`) + ")";
   const agda = (o = {}) => `\n(leg :prover agda :route source :token ${o.tok ?? "proven"} :state ${o.state ?? "AGDA-VERIFIED"} ${o.receipts ?? rcpt(o)})`;
   const recheck = (p, o = {}) => o.route === "unavailable" || o.route === "waived" || o.route === undefined && o.counted === false
     ? `\n(leg :prover ${p} :route ${o.route ?? "unavailable"} :reason "none yet")`
-    : `\n(leg :prover ${p} :route ${o.route ?? "transported"} :token ${o.tok ?? "proven"} :state ${o.state ?? "RECONCILED"} ${rcpt({ checker: p, inv: p, commit: o.commit, digest: o.digest, axioms: o.axioms })})`;
+    : `\n(leg :prover ${p} :route ${o.route ?? "transported"} :token ${o.tok ?? "proven"} :state ${o.state ?? "RECONCILED"} ${rcpt({ checker: p, inv: p, commit: o.commit, digest: o.digest, axioms: o.axioms, image: o.image })})`;
   const claim = (pwg, legs, o = {}) => `(claim :id "${o.id ?? "T-1"}" :pwg ${pwg} :foundation-diverse ${o.fd ?? "#f"} ${legs})`;
   const doc = (claims, o = {}) => HDR + `(praxis-deed :schema-version "1.0.0" :canonical-name "r" :profile ${o.profile ?? "proof-receipt"}`
     + ` :repository "${o.repo ?? "hyperpolymath/x"}" :source-commit "${o.commit ?? C}" ${o.extra ?? ""} ${claims})`;
@@ -414,6 +417,31 @@ describe("proof-receipt profile (PROOF-POLICY §8.5)", () => {
     expect(read(doc(claim("PWG-2ii", agda() + " " + rocqOk + " " + recheck("lean", { commit: OTHER })))).claims[0].pwg).toBe("PWG-2ii");
     expect(read(doc(claim("PWG-1", agda() + " " + rocqOk + " " + leanOk))).claims[0].pwg).toBe("PWG-1");
     expect(read(doc(claim("ungraded", agda({ tok: "open", state: "AGDA-PENDING" }) + " " + none))).claims[0].pwg).toBe("ungraded");
+  });
+  test("PWG-1 needs every counted witness checked in a digest-pinned image (§8.2, ruling 2026-11-16)", () => {
+    const at = (o) => agda(o.agda ?? {}) + " " + recheck("rocq", o.rocq ?? {}) + " " + recheck("lean", o.lean ?? {});
+    // A fresh runner with version pins, but no image: the witness does not count toward PWG-1.
+    expect(read(doc(claim("PWG-2ii", at({ rocq: { image: null } })))).claims[0].pwg).toBe("PWG-2ii");
+    expect(read(doc(claim("PWG-2ii", at({ agda: { image: null } })))).claims[0].pwg).toBe("PWG-2ii");
+    expect(() => read(doc(claim("PWG-1", at({ lean: { image: null } }))))).toThrow(/records :pwg PWG-1, but .* support PWG-2ii/);
+    // The image does not raise a lower grade: it is a PWG-1 condition only.
+    expect(read(doc(claim("PWG-3", agda() + " " + none))).claims[0].pwg).toBe("PWG-3");
+    expect(read(doc(claim("PWG-3", agda({ image: null }) + " " + none))).claims[0].pwg).toBe("PWG-3");
+    // A tag is not a pin; the reference must carry a sha256 digest.
+    // Malformed names are refused too: an empty tag, an empty path component, a
+    // doubled separator, two tags, an upper-case path (distribution/reference).
+    const d = "a".repeat(64);
+    for (const bad of ["ubuntu:24.04", "ubuntu@sha256:abc", "ubuntu:24.04@sha256:" + "A".repeat(64), "@sha256:" + d,
+      "debian:@sha256:" + d, "debian/@sha256:" + d, "a//b@sha256:" + d, "a:b:c@sha256:" + d, "Ubuntu@sha256:" + d,
+      "a".repeat(256) + "@sha256:" + d, "[2001:db8::1:5000/coq@sha256:" + d]) {
+      expect(() => read(doc(claim("PWG-1", at({ rocq: { image: bad } }))))).toThrow(/:image must be an image reference pinned by digest/);
+    }
+    // Valid forms: a registry host with a port, a tag with upper case, no tag at all.
+    for (const good of ["ghcr.io/o/coq:8.18@sha256:" + "b".repeat(64), "ghcr.io/o/checker:RC1@sha256:" + d,
+      "localhost:5000/coq@sha256:" + d, "ubuntu@sha256:" + d, "docker.io/library/debian:trixie-slim@sha256:" + d,
+      "[2001:db8::1]:5000/checker@sha256:" + d, "a".repeat(255) + "@sha256:" + d]) {
+      expect(read(doc(claim("PWG-1", at({ rocq: { image: good } })))).claims[0].pwg).toBe("PWG-1");
+    }
   });
   test("a recorded grade the receipts do not support is refused (grades are derived, not asserted)", () => {
     expect(() => read(doc(claim("PWG-2i", agda() + " " + none)))).toThrow(/records :pwg PWG-2i, but .* support PWG-3/);
@@ -1348,8 +1376,9 @@ describe("ecosystem fixtures", () => {
     const t = readFileSync(join(FIX_ECO, "valid", "minimal", "ECOSYSTEM.deed"), "utf8");
     expect(checkEcosystem(t, "STATE.deed")).toBeNull();
   });
-  test("the closed relationship list has the 7 mapped terms, DESCRIPTILE-SPEC's 4 and the 5 ruled 2026-11-14", () => {
-    expect(ECOSYSTEM_RELATIONSHIPS.size).toBe(16);
+  test("the closed relationship list has the 7 mapped terms, DESCRIPTILE-SPEC's 4, the 5 ruled 2026-11-14 and extension-of", () => {
+    expect(ECOSYSTEM_RELATIONSHIPS.size).toBe(17);
+    expect(ECOSYSTEM_RELATIONSHIPS.has("extension-of")).toBe(true);
     for (const t of ["standard-source", "minted-from", "registry", "parent", "downstream-consumer"]) expect(ECOSYSTEM_RELATIONSHIPS.has(t)).toBe(true);
     for (const t of ["sibling-standard", "data-dependency", "dispatch-target", "scanner-source", "mcp-host"]) expect(ECOSYSTEM_RELATIONSHIPS.has(t)).toBe(true);
   });
@@ -1359,6 +1388,23 @@ describe("ecosystem fixtures", () => {
     expect(r.related.map((x) => x.relationship)).toEqual(["sibling-standard", "data-dependency", "dispatch-target", "scanner-source", "mcp-host"]);
     const q = join(FIX_ECO, "invalid", "relationship-near-miss", "ECOSYSTEM.deed");
     expect(() => checkEcosystem(readFileSync(q, "utf8"), q, { today: FIXTURE_TODAY })).toThrow(/:relationship must be one of/);
+  });
+  test("extension-of (ruled 2026-11-17) is accepted, and a near miss and an unknown term are still refused", () => {
+    const p = join(FIX_ECO, "valid", "extension-of", "ECOSYSTEM.deed");
+    const t = readFileSync(p, "utf8");
+    const r = checkEcosystem(t, p, { today: FIXTURE_TODAY });
+    expect(r.related.map((x) => x.relationship)).toEqual(["extension-of", "code-dependency"]);
+    for (const c of ["relationship-extension-near-miss", "relationship-unknown"]) {
+      const q = join(FIX_ECO, "invalid", c, "ECOSYSTEM.deed");
+      expect(() => checkEcosystem(readFileSync(q, "utf8"), q, { today: FIXTURE_TODAY })).toThrow(/:relationship must be one of/);
+    }
+    // The same deed with any other spelling of the term is refused, and the message lists the new term.
+    for (const bad of ["extends", "extension", "extension-for", "extensionof", "Extension-Of"]) {
+      expect(() => checkEcosystem(t.replace(":relationship extension-of", `:relationship ${bad}`), p, { today: FIXTURE_TODAY })).toThrow(/:relationship must be one of .*extension-of/);
+    }
+    // The command line passes the valid case and fails the invalid one.
+    expect(cli("--ecosystem", p).code).toBe(0);
+    expect(cli("--ecosystem", join(FIX_ECO, "invalid", "relationship-extension-near-miss", "ECOSYSTEM.deed")).code).not.toBe(0);
   });
   test("the summary lists project and related entries", () => {
     const p = join(FIX_ECO, "valid", "template-model", "ECOSYSTEM.deed");
@@ -1675,7 +1721,7 @@ describe("rsr-profile clause (A7 J39)", () => {
   test("--rsr-profile-keys prints the clause's one key set", () => {
     const r = cli("--rsr-profile-keys");
     expect(r.code).toBe(0);
-    expect(r.out.trim().split("\n")).toEqual([...RSR_PROFILE_FIELDS.map((k) => ":" + k), "(notes)"]);
+    expect(r.out.trim().split("\n")).toEqual([...RSR_PROFILE_FIELDS.map((k) => ":" + k), "(notes)", "(layout)"]);
   });
   test("the canon's own clause conforms", () => {
     for (const p of ["standards_chora.deed"]) {
@@ -1695,6 +1741,27 @@ describe("rsr-profile clause (A7 J39)", () => {
     const p = join(FIX, "valid");
     const f = readdirSync(p).find((n) => n.endsWith("_chora.deed") && !readFileSync(join(p, n), "utf8").includes("(rsr-profile"));
     expect(checkRsrProfile(readFileSync(join(p, f), "utf8"), join(p, f))).toBeNull();
+  });
+  test("(layout …) returns its bindings in order", () => {
+    const p = join(FIX_RP, "valid", "layout-binding_chora.deed");
+    expect(checkRsrProfile(readFileSync(p, "utf8"), p).layout).toEqual([
+      { gate: "abi.ipkg", at: ["src/interface/abi.ipkg"] },
+      { gate: "src/interface/abi/|src/interface/Abi/", at: ["src/abi/"] },
+    ]);
+  });
+  test("a profile without (layout …) has no bindings", () => {
+    const p = join(FIX_RP, "valid", "minimal_chora.deed");
+    expect(checkRsrProfile(readFileSync(p, "utf8"), p).layout).toEqual([]);
+  });
+  test("an :at path is concrete and inside the repo", () => {
+    for (const [path, ok] of [["src/interface/abi.ipkg", true], ["proofs/", true], ["/abs", false], ["a/../b", false],
+      ["./a", false], ["a//b", false], ["a/*.rs", false], ["a|b", false], ["a?", false], ["a[b]", false], ["", false], ["a\\b", false], ["a\nb", false]]) {
+      expect(layoutPathFault(path) === null).toBe(ok);
+    }
+  });
+  test("an unknown (module …) member refuses the clause (J39)", () => {
+    const p = join(FIX_RP, "invalid", "layout-unknown-member_chora.deed");
+    expect(() => checkRsrProfile(readFileSync(p, "utf8"), p)).toThrow(/has no field :why.*J39/);
   });
   test("errors are RsrProfileError", () => {
     const p = join(FIX_RP, "invalid", "profile-twice_chora.deed");

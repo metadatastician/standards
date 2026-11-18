@@ -267,5 +267,12 @@
       :secrets ("HYPATIA_SCAN_PAT")
       :endpoints ()
       :enforcement none
-      :reason "Reads the live Actions policy through the GitHub API with gh; reaches only GitHub."))
+      :reason "Reads the live Actions policy through the GitHub API with gh; reaches only GitHub.")
+    (job
+      :workflow ".github/workflows/sonarqube-reusable.yml"
+      :job "sonarqube"
+      :secrets ("SONAR_TOKEN")
+      :endpoints ("sonarcloud.io" "*.sonarcloud.io" "binaries.sonarsource.com" "keyserver.ubuntu.com")
+      :enforcement none
+      :reason "The preflight (scripts/sonar-preflight.sh) calls only sonarcloud.io. SonarSource/sonarqube-scan-action v8.5.0 downloads the scanner CLI from binaries.sonarsource.com and verifies it with a key from keyserver.ubuntu.com; the scanner then reads JRE metadata from api.sonarcloud.io, downloads the JRE from scanner.sonarcloud.io and analyses against the SonarCloud API. Hosts measured 2026-11-17; the engine and plugin downloads stay under sonarcloud.io."))
 )

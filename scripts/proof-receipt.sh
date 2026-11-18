@@ -18,16 +18,29 @@
 #   receipt_main "$@"
 #
 # Modes of receipt_main:
-#   --write              write the receipt from the tree and the ledgers
+#   --write [--commit SHA]
+#                        write the receipt from the tree and the ledgers
+#                        (--commit names the :source-commit when no leg has a
+#                        current run; it must be on the default branch)
 #   --check              regenerate it, refuse any difference, do the git
 #                        checks of §8.5.3, check that each current receipt
-#                        still describes the tree, and run the pinned reader
-#                        with a negative control
+#                        still describes the tree (its home inputs, and its
+#                        imports as the hook gives them at HEAD, with each
+#                        imported clone holding the pinned files), and run
+#                        the pinned reader with a negative control.  Exit 1
+#                        is a refusal; exit 2 means the git checks could not
+#                        run (no default branch, a tool missing)
 #   --digest PROVER      print the §8.5.1 inputs digest of one leg (agda, rocq,
 #                        lean, or a prover receipt_extra_legs names)
 #   --inputs PROVER      print the §8.5.1 input set of one leg, one path a line
 #   --run-row PROVER --run URL --commit SHA --checker TEXT --reported TEXT
+#                        --axioms none|NAME:c|b|debt[,…]
+#                        [--image NAME@sha256:<64 hex>]
 #                        print one ledger row for a run that just passed
+#                        (--axioms: what the run's own report listed, "none"
+#                        when it listed none; the row never assumes it.
+#                        --image: the digest-pinned image the checker ran
+#                        in; without it the run never counts toward PWG-1)
 #   --emit-run ROWS --out FILE
 #                        write a receipt for the run whose rows are in ROWS:
 #                        they become current, and the earlier current receipts
@@ -55,9 +68,14 @@
 #                           [| trusted base: the sha256 of what
 #                           receipt_trusted_base printed, on an Agda row whose
 #                           trusted base is not empty; the imports field may
-#                           then be empty]].  The gate refuses a current row
-#                           whose bindings differ from what the hooks derive
-#                           now: the run is recorded again (§8.4)
+#                           then be empty
+#                           [| image: NAME[:TAG]@sha256:<64 hex>, the
+#                           digest-pinned image the checker ran in, which
+#                           --run-row --image writes; fields 11 and 12 may
+#                           then be empty; PWG-1 needs it on all three legs]]]).
+#                           The gate refuses a current row whose bindings
+#                           differ from what the hooks derive now: the run is
+#                           recorded again (§8.4)
 #   receipt_echoes          the echo ledger: source | image | inputs-sha256 |
 #                           fetch ref
 #   receipt_header          the comment lines that open the receipt, after
@@ -222,24 +240,43 @@ _receipt_echo_ref() { local c="$1"; awk -F'|' -v c="$c" '$1==c{print $4}' "$_rec
 # ── Ledger rows ───────────────────────────────────────────────────────────────
 # Validate one row; print nothing.  A field may not hold " or \ (deed strings)
 # and may not be empty, except the reason of a current receipt and the axioms.
+# An image reference as the reader (deed_lint.js, readProofReceipt) accepts
+# it, so that a row --run-row writes is never refused later by --emit-run:
+# the distribution/reference grammar, with an optional registry host (a DNS
+# name or a bracketed IPv6 address, with an optional port), non-empty
+# lower-case path components, an optional tag of up to 128 characters, a
+# lower-case sha256 digest, and a NAME (host and path) of at most 255
+# characters.
+_receipt_image_ok() {
+  local comp='[a-z0-9]+(([._]|__|-+)[a-z0-9]+)*'
+  local domain='([a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)*|\[[a-fA-F0-9:]+\])'
+  local re="^((${domain}(:[0-9]+)?/)?${comp}(/${comp})*)(:[A-Za-z0-9_][A-Za-z0-9_.-]{0,127})?@sha256:[0-9a-f]{64}\$"
+  [[ "$1" =~ $re ]] && (( ${#BASH_REMATCH[1]} <= 255 ))
+}
 _receipt_check_row() {
-  local row="$1" prover run commit checker inv dig said state reason axioms imports tb x n
+  local row="$1" prover run commit checker inv dig said state reason axioms imports tb img x n
   local -a a
-  IFS='|' read -r prover run commit checker inv dig said state reason axioms imports tb <<< "$row"
+  IFS='|' read -r prover run commit checker inv dig said state reason axioms imports tb img <<< "$row"
   # Ten fields; eleven when the run read files of an imported repository,
   # whose last field binds those files to the run (OWNER/REPO@COMMIT=SHA256,
   # comma-separated); twelve on an Agda row with a trusted base, whose last
   # field is that list's sha256 (the imports field may then be empty).  So a
-  # receipt can never re-describe what a run imported or trusted.
+  # receipt can never re-describe what a run imported or trusted.  Thirteen
+  # when the run recorded the digest-pinned image its checker ran in, the last
+  # field (fields 11 and 12 may then be empty): only such a run can count
+  # toward PWG-1 (PROOF-POLICY §8.2, owner ruling 2026-11-16).
   n="$(tr -cd '|' <<< "$row" | wc -c)"
-  [[ "$n" == 9 || "$n" == 10 || "$n" == 11 ]] || receipt_die "a ledger row needs 10 fields, 11 with imports, or 12 with a trusted base: $row"
-  if [[ "$n" == 10 || ( "$n" == 11 && -n "$imports" ) ]]; then
+  [[ "$n" == 9 || "$n" == 10 || "$n" == 11 || "$n" == 12 ]] || receipt_die "a ledger row needs 10 fields, 11 with imports, 12 with a trusted base, or 13 with an image: $row"
+  if [[ "$n" == 10 || ( "$n" -ge 11 && -n "$imports" ) ]]; then
     [[ "$imports" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+@[0-9a-f]{40}=[0-9a-f]{64}(,[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+@[0-9a-f]{40}=[0-9a-f]{64})*$ ]] \
       || receipt_die "a row's imports must be OWNER/REPO@COMMIT=SHA256, comma-separated: $row"
   fi
-  if [[ "$n" == 11 ]]; then
+  if [[ "$n" == 11 || ( "$n" == 12 && -n "$tb" ) ]]; then
     [[ "$prover" == agda ]] || receipt_die "only an Agda row binds a trusted base: $row"
     [[ "$tb" =~ ^[0-9a-f]{64}$ ]] || receipt_die "a row's trusted-base binding must be a sha256: $row"
+  fi
+  if [[ "$n" == 12 ]]; then
+    _receipt_image_ok "$img" || receipt_die "a row's image must be NAME[:TAG]@sha256:<64 hex>, NAME as the reader accepts it: $row"
   fi
   [[ "$row" != *'"'* && "$row" != *'\'* ]] || receipt_die "a ledger row holds a quote or backslash: $row"
   [[ "$row" != *[[:cntrl:]]* ]] || receipt_die "a ledger row holds a control character, which a deed string cannot: $row"
@@ -415,6 +452,9 @@ _receipt_describes_source() {
     c="$img"
   done
 }
+# §8.2 (owner ruling 2026-11-16): a witness counts toward PWG-1 only when its
+# current run recorded the digest-pinned image its checker ran in (field 13).
+_receipt_isolated() { [[ -n "$(_receipt_current_field "$1" 13)" ]]; }
 _receipt_pwg_of() {
   local token="$1" coq_route="$2" coq_state="$3" lean_route="$4" lean_state="$5" n=0 p route state
   [[ "$token" == proven || "$token" == proven-with-postulates ]] || { printf 'ungraded'; return; }
@@ -426,7 +466,8 @@ _receipt_pwg_of() {
   case "$n" in
     0) printf 'PWG-3' ;;
     1) printf 'PWG-2i' ;;
-    2) if _receipt_describes_source agda && _receipt_describes_source rocq && _receipt_describes_source lean; then printf 'PWG-1'; else printf 'PWG-2ii'; fi ;;
+    2) if _receipt_describes_source agda && _receipt_describes_source rocq && _receipt_describes_source lean \
+            && _receipt_isolated agda && _receipt_isolated rocq && _receipt_isolated lean; then printf 'PWG-1'; else printf 'PWG-2ii'; fi ;;
     *) receipt_die "unexpected recheck count: $n" ;;
   esac
 }
@@ -492,11 +533,11 @@ _receipt_emit_imports() {
   done < "$_receipt_manifest_dir/$prover.imports"
 }
 _receipt_emit_receipts() {
-  local prover="$1" row p run commit checker inv dig said state reason axioms imports want
+  local prover="$1" row p run commit checker inv dig said state reason axioms imports tb img want
   # Current first, then the lineage in ledger order.
   for want in current other; do
     while IFS= read -r row; do
-      IFS='|' read -r p run commit checker inv dig said state reason axioms imports <<< "$row"
+      IFS='|' read -r p run commit checker inv dig said state reason axioms imports tb img <<< "$row"
       [[ "$p" == "$prover" ]] || continue
       if [[ $want == current ]]; then [[ $state == current ]] || continue; else [[ $state != current ]] || continue; fi
       _receipt_in_scope "$p" "$run" "$state" || continue
@@ -506,6 +547,7 @@ _receipt_emit_receipts() {
       printf '               :checker "%s"\n' "$checker"
       printf '               :invocation "%s"\n' "$inv"
       if [[ $state == current ]]; then
+        [[ -z "$img" ]] || printf '               :image "%s"\n' "$img"
         printf '               :inputs-sha256 "%s"\n' "$dig"
         printf '               :state current\n'
         _receipt_emit_manifest "$prover"
@@ -637,7 +679,8 @@ _receipt_check_leg_records() {
 # Prepare the ledger, the echoes, the manifests and the :source-commit.  The
 # current receipts must name one commit; the :source-commit is the end of the
 # echo chain from it (§8.5.2), or that commit if it has no echo.  With no
-# current receipt it is $_receipt_fallback_commit (nothing is graded then).
+# current receipt it is $_receipt_fallback_commit, which --write takes from
+# --commit and --check from the receipt (nothing is graded then).
 # Each echo link's witness digests are computed at its source and at its
 # image with the reference script, and must be equal (§8.5.3, check 3).
 _receipt_prepare() {
@@ -721,6 +764,13 @@ _receipt_prepare() {
     [[ "$a" == "$(_receipt_current_field agda 12)" ]] \
       || receipt_die "the agda run recorded trusted base '$(_receipt_current_field agda 12)', but receipt_trusted_base now gives '$a': a changed trusted base is earned again (§8.4), so record the run again"
   fi
+  # With no current receipt nothing is graded, but the :source-commit is still
+  # checked on the default branch (§8.5.3).  HEAD is not a safe default: on a
+  # pull request it is a commit that a squash merge leaves off the default
+  # branch, so the receipt would fail its git checks once merged.  The caller
+  # names the commit instead.
+  [[ -n "$commits" || -n "$_receipt_fallback_commit" ]] \
+    || receipt_die "no leg has a current run, so nothing names the :source-commit: pass --commit with a commit on $RECEIPT_DEFAULT_BRANCH"
   _receipt_source_commit="${commits:-$_receipt_fallback_commit}"
   _receipt_prepare_tail
 }
@@ -794,14 +844,26 @@ _receipt_prepare_tail() {
 # §8.5.3: the git checks, by the shared checker, so the home gate and every
 # consumer check in the same way.
 _receipt_check_git_facts() {
-  local file="$1" base clone
+  local file="$1" base clone rc=0
   local -a imports=()
   base="refs/remotes/origin/$RECEIPT_DEFAULT_BRANCH"
-  git rev-parse -q --verify "$base" >/dev/null || base="refs/heads/$RECEIPT_DEFAULT_BRANCH"
+  git rev-parse -q --verify "$base^{commit}" >/dev/null || base="refs/heads/$RECEIPT_DEFAULT_BRANCH"
+  # Ancestry is checked against the default branch only, never against
+  # whatever HEAD is: a clone that has neither ref cannot run the checks.
+  git rev-parse -q --verify "$base^{commit}" >/dev/null || {
+    printf 'ERROR: cannot run the git checks of §8.5.3: this clone has neither origin/%s nor %s; fetch the default branch\n' \
+      "$RECEIPT_DEFAULT_BRANCH" "$RECEIPT_DEFAULT_BRANCH" >&2
+    exit 2
+  }
   if [[ -f "$_receipt_manifest_dir/clones" ]]; then
     while IFS= read -r clone; do imports+=(--import "$clone"); done < <(sort -u "$_receipt_manifest_dir/clones")
   fi
-  bash "$(_receipt_checker)" --branch "$base" "${imports[@]}" "$file" . || receipt_die "the git checks of PROOF-POLICY §8.5.3 failed for $file"
+  bash "$(_receipt_checker)" --branch "$base" "${imports[@]}" "$file" . || rc=$?
+  # Exit 2 is the checker's "cannot run" (a tool missing, a shallow clone):
+  # the checks did not happen, which is not the same as a receipt that fails
+  # them, so the gate exits 2 as well and a caller can tell the two apart.
+  if (( rc == 2 )); then printf 'ERROR: the git checks of PROOF-POLICY §8.5.3 could not run for %s\n' "$file" >&2; exit 2; fi
+  (( rc == 0 )) || receipt_die "the git checks of PROOF-POLICY §8.5.3 failed for $file"
   printf 'PASS: git checks of §8.5.3 (shared checker, standards %s, --branch %s)\n' "${RECEIPT_STANDARDS_COMMIT:0:12}" "$base"
 }
 
@@ -809,12 +871,24 @@ _receipt_check_git_facts() {
 # digest of the inputs now.  Otherwise the grade cannot be carried forward
 # (§8.4, regression drops the grade): record a new run, or mark the row
 # superseded or regressed with its reason.
+#
+# The imported files count too (§8.5.1, Imported repositories).  The hook is
+# asked again at HEAD, so a repin moves the binding even when the pin is not
+# among the home inputs; and the files in each clone must be the files at the
+# pin, so a sibling checkout moved or edited since the run is not taken for
+# what the run read.
 _receipt_check_currency() {
-  local p want got
+  local p want got d run
   for p in "${_receipt_provers[@]}"; do
     _receipt_has_current "$p" || continue
+    run="$(_receipt_current_field "$p" 2)"
     want="$(_receipt_current_field "$p" 6)"; got="$(_receipt_digest "$p")"
-    [[ "$want" == "$got" ]] || receipt_die "the $p inputs changed since run $(_receipt_current_field "$p" 2) (recorded $want, now $got): record a new CI run, or mark that row superseded or regressed"
+    [[ "$want" == "$got" ]] || receipt_die "the $p inputs changed since run $run (recorded $want, now $got): record a new CI run, or mark that row superseded or regressed"
+    d="$(mktemp -d)"; _receipt_tmpfiles+=("$d")
+    _receipt_build_imports "$p" HEAD "$d"
+    want="$(_receipt_current_field "$p" 11)"; got="$(_receipt_imports_field "$d" "$p")"
+    [[ "$want" == "$got" ]] || receipt_die "the $p imports changed since run $run (recorded '$want', now '$got' at HEAD): record a new CI run, or mark that row superseded or regressed"
+    _receipt_check_import_worktree "$d" "$p"
   done
 }
 
@@ -878,7 +952,8 @@ _receipt_main() {
   _receipt_hook "$_receipt_header_file" receipt_header
   _receipt_load_provers
   local mode=--write target="$RECEIPT_OUT" row tmp
-  local r_prover= r_run= r_commit= r_checker= r_reported=
+  local r_prover= r_run= r_commit= r_checker= r_reported='' r_axioms='' r_axioms_given=''
+  local r_image=""
   _receipt_fallback_commit=
   while (( $# )); do
     case "$1" in
@@ -892,6 +967,8 @@ _receipt_main() {
       --run)      r_run="${2:-}"; shift ;;
       --checker)  r_checker="${2:-}"; shift ;;
       --reported) r_reported="${2:-}"; shift ;;
+      --axioms)   r_axioms="${2:-}"; r_axioms_given=1; shift ;;
+      --image)    r_image="${2:-}"; shift ;;
       *) printf 'unknown argument: %s\n' "$1" >&2; exit 2 ;;
     esac
     shift
@@ -903,7 +980,13 @@ _receipt_main() {
     --digest) _receipt_digest "$r_prover" ;;
     --inputs) _receipt_inputs "$r_prover" ;;
     --run-row)
-      # A run that passed its gate reported no axiom: every gate fails on one.
+      # The axioms are what the run reported, stated by the caller: a gate
+      # that refuses every axiom passes "none", and a leg whose kernel admits
+      # named axioms (§8.4, disposition c, b or debt) lists them.  Leaving it
+      # out is refused, so a row never asserts "no axioms" on a run's behalf.
+      [[ -n "$r_axioms_given" ]] || receipt_die "--run-row needs --axioms: none, or what the run reported as NAME:c|b|debt, comma-separated"
+      [[ -n "$r_axioms" ]] || receipt_die "--axioms needs a value: none, or NAME:c|b|debt, comma-separated"
+      [[ "$r_axioms" != none ]] || r_axioms=
       tmp="$(mktemp)"; _receipt_tmpfiles+=("$tmp")
       _receipt_hook "$tmp" receipt_invocation "$r_prover"
       [[ "$(grep -c . "$tmp")" == 1 && "$(wc -l < "$tmp")" == 1 ]] || receipt_die "receipt_invocation must print exactly one line for $r_prover"
@@ -919,12 +1002,12 @@ _receipt_main() {
         _receipt_hook "$imd/trusted-base" receipt_trusted_base
         tbf="$(_receipt_trusted_base_field "$imd/trusted-base")"
       fi
-      row="$r_prover|$r_run|$r_commit|$r_checker|$(cat "$tmp")|$(_receipt_digest "$r_prover")|$r_reported|current||"
-      if [[ -n "$tbf" ]]; then row+="|$imf|$tbf"; elif [[ -n "$imf" ]]; then row+="|$imf"; fi
+      row="$r_prover|$r_run|$r_commit|$r_checker|$(cat "$tmp")|$(_receipt_digest "$r_prover")|$r_reported|current||$r_axioms"
+      if [[ -n "$r_image" ]]; then row+="|$imf|$tbf|$r_image"
+      elif [[ -n "$tbf" ]]; then row+="|$imf|$tbf"; elif [[ -n "$imf" ]]; then row+="|$imf"; fi
       _receipt_check_row "$row"; printf '%s\n' "$row" ;;
     --write|--emit-run)
       _receipt_check_claim_ids; _receipt_check_leg_records
-      [[ -n "$_receipt_fallback_commit" ]] || _receipt_fallback_commit="$(git rev-parse HEAD)"
       if [[ "$mode" == --emit-run ]]; then
         [[ -f "$_receipt_extra" ]] || receipt_die "--emit-run needs a rows file"
         grep -q '[^[:space:]]' "$_receipt_extra" || receipt_die "--emit-run was given no rows: $_receipt_extra is empty"

@@ -259,7 +259,7 @@ jobs:
             || echo "No member is enrolled in .gitbot-fleet/enrolment.json." > "$RUNNER_TEMP/report-backs/NONE-ENROLLED.txt"
 
       # The artifact name is hypatia-scan-reusable.yml's `report-backs-artifact`
-      # default; the lane downloads it into .gitbot-fleet/report-backs/ before
+      # default; the lane downloads it into a temp directory outside the checkout before
       # rendering. Uploaded under always() so a failed adapter step still ships
       # whatever envelopes were written.
       - name: Upload the report-backs

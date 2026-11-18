@@ -123,7 +123,15 @@ export class LintError extends Error {
     this.line = line;
   }
 
-  /** Render as `line N: message`, like the Python __str__. */
+  /** Render as `line N: message`, like the Python   // A host is a DNS name or a bracketed IPv6 address, either with a port. A tag
+  // may hold upper case; the digest is lower-case hex. NAME (host and path) is
+  // at most 255 characters, as the grammar's NameTotalLengthMax says.
+  const IMG_COMPONENT = "[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*";
+  const IMG_DOMAIN = "(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?)*|\\[[a-fA-F0-9:]+\\])";
+  const IMG_HOST = `(?:${IMG_DOMAIN}(?::[0-9]+)?/)`;
+  const IMAGE_RE = new RegExp(`^(${IMG_HOST}?${IMG_COMPONENT}(?:/${IMG_COMPONENT})*)(?::[A-Za-z0-9_][A-Za-z0-9_.-]{0,127})?@sha256:[0-9a-f]{64}$`);
+  const IMAGE = { test: (s) => { const m = IMAGE_RE.exec(s); return m !== null && m[1].length <= 255; } };
+str__. */
   toString() {
     return `line ${this.line}: ${this.msg}`;
   }
@@ -883,6 +891,18 @@ export function readProofReceipt(text, filename = null) {
   const V = PROOF_RECEIPT_VOCABULARY;
   const HEX40 = /^[0-9a-f]{40}$/;
   const HEX64 = /^[0-9a-f]{64}$/;
+  // An OCI image reference pinned by its manifest digest, NAME[:TAG]@sha256:<64 hex>,
+  // with NAME and TAG as the distribution/reference grammar defines them: an
+  // optional registry host (with port), then path components of lower-case
+  // alphanumerics joined by one separator ("." "_" "__" or "-" runs), none empty.
+  // A host is a DNS name or a bracketed IPv6 address, either with a port. A tag
+  // may hold upper case; the digest is lower-case hex. NAME (host and path) is
+  // at most 255 characters, the grammar's NameTotalLengthMax.
+  const IMG_COMPONENT = "[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*";
+  const IMG_DOMAIN = "(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?)*|\\[[a-fA-F0-9:]+\\])";
+  const IMG_HOST = `(?:${IMG_DOMAIN}(?::[0-9]+)?/)`;
+  const IMAGE_RE = new RegExp(`^(${IMG_HOST}?${IMG_COMPONENT}(?:/${IMG_COMPONENT})*)(?::[A-Za-z0-9_][A-Za-z0-9_.-]{0,127})?@sha256:[0-9a-f]{64}$`);
+  const IMAGE = { test: (s) => { const m = IMAGE_RE.exec(s); return m !== null && m[1].length <= 255; } };
 
   // Collect a clause's fields, refusing unknown, duplicate and mistyped ones.
   const fieldsOf = (where, members, spec, allowedClauses) => {
@@ -1061,7 +1081,13 @@ export function readProofReceipt(text, filename = null) {
       "inputs-sha256": { types: ["string"] },
       state: { types: ["symbol"], required: true, oneOf: V.receiptState },
       reason: { types: ["string"] },
+      image: { types: ["string"] },
     }, ["axioms", "inputs-manifest", "import"]);
+    // §8.2: the image the checker ran in, pinned by digest. Only a receipt that
+    // names one can make its witness count toward PWG-1 (owner ruling 2026-11-16).
+    if (rf.has("image") && !IMAGE.test(rf.get("image"))) {
+      fail(`${rw}: :image must be an image reference pinned by digest (NAME@sha256:<64 hex>)`);
+    }
     if (!HEX40.test(rf.get("commit"))) fail(`${where}: a receipt :commit must be the full 40-character commit`);
     if (rf.get("state") !== "current" && !rf.has("reason")) fail(`${where}: a ${rf.get("state")} receipt needs :reason`);
     const isCurrent = rf.get("state") === "current";
@@ -1218,7 +1244,11 @@ export function readProofReceipt(text, filename = null) {
     if (agdaCounts) {
       pwg = ["PWG-3", "PWG-2i", "PWG-2ii"][recheck.length];
       const counted = [agda, ...recheck];
-      if (recheck.length === 2 && counted.every(describesSource)) pwg = "PWG-1";
+      // §8.2: PWG-1 needs every counted witness checked at the source commit by a
+      // pinned, headless, isolated checker: its current receipt names the image,
+      // pinned by digest, that the checker ran in (owner ruling 2026-11-16).
+      const isolated = (l) => current(l).image !== undefined;
+      if (recheck.length === 2 && counted.every(describesSource) && counted.every(isolated)) pwg = "PWG-1";
     }
     if (pwg !== cl.fields.get("pwg")) {
       fail(`${where} records :pwg ${cl.fields.get("pwg")}, but its legs and receipts support ${pwg} (PROOF-POLICY §8.2, §8.4)`);
@@ -2535,17 +2565,86 @@ export class RsrProfileError extends LintError {
   }
 }
 
-/** The clause's fields and their value kinds; (notes …) is its one sub-clause. */
+/** The clause's fields and their value kinds; (notes …) and (layout …) are its sub-clauses. */
 const RSR_PROFILE_SPEC = {
   version: "string", spec: "string", "declares-against": "string", role: "string", preset: "string",
   capabilities: "list", add: "list", remove: "list",
 };
 export const RSR_PROFILE_FIELDS = Object.freeze(Object.keys(RSR_PROFILE_SPEC));
-export const RSR_PROFILE_CLAUSES = Object.freeze(["notes"]);
+export const RSR_PROFILE_CLAUSES = Object.freeze(["notes", "layout"]);
+/** The members of a (layout (module …)) binding (owner ruling 2026-11-16). */
+export const RSR_PROFILE_LAYOUT_FIELDS = Object.freeze(["gate", "at"]);
+
+/**
+ * Why an (rsr-profile (layout (module :at …))) path is not a concrete,
+ * repo-relative path, or null when it is. A binding names where this tree
+ * keeps a module, never a pattern or a place outside the repo. A trailing
+ * "/" marks a directory. check-rsr-profile.sh applies the same rule on its
+ * awk path (layout_path_fault); scripts/tests/check-rsr-profile-test.sh runs
+ * the same refusals under both parser paths.
+ */
+export function layoutPathFault(p) {
+  if (p === "") return "is empty";
+  if (p.startsWith("/")) return "is absolute";
+  if (/[*?[\]|]/.test(p)) return "is a pattern, not a path (no *, ?, [, ] or |)";
+  if (/[\x00-\x1f\x7f\\]/.test(p)) return "holds a control character or a backslash";
+  const segs = p.replace(/\/$/, "").split("/");
+  if (segs.some((s) => s === "")) return "has an empty segment";
+  if (segs.some((s) => s === "." || s === "..")) return "has a . or .. segment";
+  return null;
+}
+
+/**
+ * Check the members of (rsr-profile (layout …)): one or more
+ * (module :gate "…" :at ("…" …)), each gate once. Returns [{gate, at}].
+ * Whether a gate names a bindable row of the gate table is
+ * check-rsr-profile.sh's to decide, as it is for capabilities.
+ */
+function checkRsrLayout(members, E) {
+  if (members.length === 0) throw E("(rsr-profile (layout …)) binds at least one (module …)");
+  const out = [];
+  const gates = new Set();
+  for (const m of members) {
+    if (m[0] !== "clause" || m[1] !== "module") {
+      const what = m[0] === "clause" ? `(${m[1]} …)` : `:${m[1]}`;
+      throw E(`(rsr-profile (layout …)) holds (module …) clauses only, not ${what} (J39: an unknown key refuses the clause)`);
+    }
+    const g = new Map();
+    for (const n of m[2]) {
+      if (n[0] !== "field") throw E(`(rsr-profile (layout (module …))) holds :gate and :at only, not (${n[1]} …)`);
+      if (n[3]) throw E(`'!' belongs only on a rule's :id in a contractile-deed, not on (module :${n[1]})`);
+      if (!RSR_PROFILE_LAYOUT_FIELDS.includes(n[1])) throw E(`(rsr-profile (layout (module …))) has no field :${n[1]} (J39: an unknown key refuses the clause)`);
+      if (g.has(n[1])) throw E(`(rsr-profile (layout (module …))) carries :${n[1]} once`);
+      const v = n[2];
+      if (n[1] === "gate") {
+        if (v[0] !== "string" || v[1] === "") throw E("(rsr-profile (layout (module :gate))) must be a non-empty string");
+        g.set("gate", v[1]);
+        continue;
+      }
+      if (v[0] !== "list" || v[1].length === 0 || !v[1].every((x) => x[0] === "string")) {
+        throw E("(rsr-profile (layout (module :at))) must be a non-empty list of strings");
+      }
+      const xs = v[1].map((x) => x[1]);
+      for (const p of xs) {
+        const why = layoutPathFault(p);
+        if (why !== null) throw E(`(rsr-profile (layout (module :at))) path ${JSON.stringify(p)} ${why}`);
+      }
+      const dup = xs.find((x, i) => xs.indexOf(x) !== i);
+      if (dup !== undefined) throw E(`(rsr-profile (layout (module :at))) names "${dup}" once`);
+      g.set("at", xs);
+    }
+    if (!g.has("gate")) throw E("(rsr-profile (layout (module …))) is missing :gate");
+    if (!g.has("at")) throw E("(rsr-profile (layout (module …))) is missing :at");
+    if (gates.has(g.get("gate"))) throw E(`(rsr-profile (layout …)) binds :gate "${g.get("gate")}" once`);
+    gates.add(g.get("gate"));
+    out.push({ gate: g.get("gate"), at: g.get("at") });
+  }
+  return out;
+}
 
 /**
  * Check the (rsr-profile …) clause of a repo deed. Returns null when the deed
- * carries none; otherwise {role, preset, capabilities, add, remove}, or throws
+ * carries none; otherwise {role, preset, capabilities, add, remove, layout}, or throws
  * RsrProfileError. An unknown field or clause refuses the clause (J39).
  */
 export function checkRsrProfile(text, filename = null) {
@@ -2562,9 +2661,15 @@ export function checkRsrProfile(text, filename = null) {
   if (top.length > 1) throw E(`the repo deed carries ${top.length} (rsr-profile …) clauses; it carries one`);
   const f = new Map();
   let notes = false;
+  let layout = null;
   for (const m of top[0][2]) {
     if (m[0] === "clause") {
       if (!RSR_PROFILE_CLAUSES.includes(m[1])) throw E(`(rsr-profile …) has no clause (${m[1]} …) (J39: an unknown key refuses the clause)`);
+      if (m[1] === "layout") {
+        if (layout !== null) throw E("(rsr-profile …) carries (layout …) once");
+        layout = checkRsrLayout(m[2], E);
+        continue;
+      }
       if (notes) throw E("(rsr-profile …) carries (notes …) once");
       notes = true;
       const said = new Set();
@@ -2597,7 +2702,7 @@ export function checkRsrProfile(text, filename = null) {
   if ((f.get("capabilities") ?? []).length === 0 && !f.has("preset")) {
     throw E("(rsr-profile …) declares a non-empty :capabilities, a :preset, or both");
   }
-  return { role: f.get("role") ?? null, preset: f.get("preset") ?? null, capabilities: f.get("capabilities") ?? [], add: f.get("add") ?? [], remove: f.get("remove") ?? [] };
+  return { role: f.get("role") ?? null, preset: f.get("preset") ?? null, capabilities: f.get("capabilities") ?? [], add: f.get("add") ?? [], remove: f.get("remove") ?? [], layout: layout ?? [] };
 }
 
 /** --rsr-profile FILE...: profile-check each repo deed; returns exit code. */
@@ -2606,7 +2711,7 @@ function rsrProfileFiles(files) {
   for (const f of files) {
     try {
       const r = checkRsrProfile(readFileSync(f, "utf8"), f);
-      console.log(`OK   ${f} (${r === null ? "no (rsr-profile …)" : `role ${r.role ?? "unset"}${r.preset ? `, preset ${r.preset}` : ""}, ${r.capabilities.length} capabilities`})`);
+      console.log(`OK   ${f} (${r === null ? "no (rsr-profile …)" : `role ${r.role ?? "unset"}${r.preset ? `, preset ${r.preset}` : ""}, ${r.capabilities.length} capabilities${r.layout.length ? `, ${r.layout.length} layout binding(s)` : ""}`})`);
     } catch (e) {
       if (!(e instanceof LintError) && e.code === undefined) throw e;
       bad += 1;
@@ -2632,15 +2737,17 @@ export class EcosystemError extends LintError {
 
 /**
  * The closed :relationship vocabulary (A7 7.2; clauses/ecosystem.abnf
- * v1.1.0): the seven terms owner-ruled 2026-09-19 in
+ * v1.2.0): the seven terms owner-ruled 2026-09-19 in
  * mappings/meta-ecosystem-to-repo-deed.adoc, the four DESCRIPTILE-SPEC
- * observed (parent among them), and the five owner-ruled 2026-11-14.
+ * observed (parent among them), the five owner-ruled 2026-11-14, and
+ * extension-of, owner-ruled 2026-11-17.
  */
 export const ECOSYSTEM_RELATIONSHIPS = new Set([
   "standard-source", "build-tooling", "validation-tooling", "signing-tooling",
   "verification-tooling", "minted-from", "registry",
   "downstream-consumer", "sibling-language", "code-dependency", "parent",
   "sibling-standard", "data-dependency", "dispatch-target", "scanner-source", "mcp-host",
+  "extension-of",
 ]);
 const ECOSYSTEM_STRINGS = ["project", "ecosystem", "position-type", "purpose", "pipeline-position", "chain", "pipeline-notes"];
 const ECOSYSTEM_FIELDS = [...DESCRIPTILE_HEADER, ...ECOSYSTEM_STRINGS, "not", "coordination"];

@@ -121,6 +121,12 @@ jobs:
       - name: Every setup-bun step names an exact bun-version (no API tag lookup)
         run: bash scripts/check-setup-bun-pinned.sh
 
+      # A `# <ref>` pin comment is read by Dependabot and by close-lock.sh, so
+      # it must name the release actions.lock reviewed for that SHA, not a
+      # branch or another major (standards#1440: six `# stable` on v1).
+      - name: Pin comments agree with actions.lock
+        run: bash scripts/check-pin-comments.sh
+
       # Every checkout of THIS repository from a shared workflow must name the
       # commit it came from. MEASURED 2026-10-31: three steps staged helpers
       # from the literal 317101e03b8f (2026-09-14) while main had moved 202
@@ -211,6 +217,20 @@ jobs:
         run: |
           set -euo pipefail
           bash scripts/check-a2ml-archived.sh --base "${BASE_SHA:-HEAD~1}" .
+
+      # The ledger above only says which A2ML files are known. This step says
+      # what blocks each one from deletion, and fails when: a file meets all
+      # three deletion conditions and is still here (it must go, in a commit
+      # of its own); a file fits no class; the committed counts
+      # (.machine_readable/a2ml-retire-counts.json) are not the ones the tree
+      # gives; or an A2ML path joined since the base. Fixtures and mutants:
+      # scripts/tests/a2ml-retire-check-test.sh. Needs bun (set up above).
+      - name: A2ML retire-check
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          bash scripts/a2ml-retire-check.sh --check --base "${BASE_SHA:-HEAD~1}"
 
       # Not part of the offline suite: this one needs real git history, so it
       # cannot live in scripts/tests/*.sh where a contributor runs it on a
