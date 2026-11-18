@@ -450,6 +450,148 @@ EOF
     "$WORK/findings-shipped-other.json" "$SHIPPED" "0,2"
 fi
 
+# ═══════════════════════════════════════════════════════════════════════
+# The advisory class never gates (owner ruling 2026-11-17, hypatia#1204)
+#
+# Hypatia marks a flag-only finding `advisory: true` (WF026, WF027, RE011)
+# and never counts it toward its own exit code. This gate used to reject it
+# all the same: in `blocking` mode at threshold `info`, 133 unbaselined
+# `research_extensions/RE011` findings failed "Baseline validation" on this
+# repository. The class now decides, not the severity: an advisory finding
+# at medium or below is reported in `findings_kept` and is never counted.
+# The class cannot waive a high or a critical, and only the JSON boolean
+# `true` is the class.
+# ═══════════════════════════════════════════════════════════════════════
+
+# assert_class_gate <label> <findings> <baseline> <threshold> <want-rc> [<stderr needle>]
+# Runs the gate in blocking mode; leaves stdout in gate.out, stderr in gate.err.
+assert_class_gate() {
+  local label="$1" findings="$2" baseline="$3" threshold="$4" want="$5" needle="${6:-}" status=0
+  BLOCKING_THRESHOLD="$threshold" bash "$APPLY" "$findings" "$baseline" blocking \
+    > "$WORK/gate.out" 2> "$WORK/gate.err" || status=$?
+  if [[ "$status" -ne "$want" ]]; then
+    echo "FAIL: $label  expected exit $want, got $status"
+    sed 's/^/      | /' "$WORK/gate.err" | cut -c1-240 | head -5
+    fail=$((fail + 1)); return 0
+  fi
+  if [[ -n "$needle" ]] && ! grep -qF -- "$needle" "$WORK/gate.err"; then
+    echo "FAIL: $label  exit $status as expected, but stderr lacks: $needle"
+    fail=$((fail + 1)); return 0
+  fi
+  echo "PASS: $label  (exit $status)"
+  pass=$((pass + 1))
+}
+
+RE011='"rule_module":"research_extensions","type":"RE011","line":3'
+printf '[{"severity":"medium","advisory":true,%s,"file":"scripts/a.sh"}]\n' "$RE011" > "$WORK/adv-medium.json"
+printf '[{"severity":"medium",%s,"file":"scripts/a.sh"}]\n' "$RE011" > "$WORK/plain-medium.json"
+printf '[{"severity":"medium","advisory":"true",%s,"file":"scripts/a.sh"}]\n' "$RE011" > "$WORK/adv-string.json"
+printf '[{"severity":"medium","advisory":false,%s,"file":"scripts/a.sh"}]\n' "$RE011" > "$WORK/adv-false.json"
+printf '[{"severity":"high","advisory":true,%s,"file":"scripts/a.sh"}]\n' "$RE011" > "$WORK/adv-high.json"
+printf '[{"severity":"critical","advisory":true,%s,"file":"scripts/a.sh"}]\n' "$RE011" > "$WORK/adv-critical.json"
+printf '[{"severity":"bogus","advisory":true,%s,"file":"scripts/a.sh"}]\n' "$RE011" > "$WORK/adv-unknown.json"
+printf '[{"severity":"warn","advisory":true,%s,"file":"scripts/a.sh"},{"severity":"low","advisory":true,%s,"file":"scripts/b.sh"},{"severity":"info","advisory":true,%s,"file":"scripts/c.sh"}]\n' \
+  "$RE011" "$RE011" "$RE011" > "$WORK/adv-lower.json"
+printf '[{"severity":"medium","advisory":true,%s,"file":"scripts/advisory-one.sh"},{"severity":"low","rule_module":"code_safety","type":"todo_marker","line":9,"file":"scripts/plain-one.sh"}]\n' \
+  "$RE011" > "$WORK/adv-mixed.json"
+
+assert_class_gate "an advisory medium finding does not fail the gate at info" \
+  "$WORK/adv-medium.json" "$WORK/empty.json" info 0
+got=$(jq -r "$COUNTS_JQ" "$WORK/gate.out")
+if [ "$got" = "0,1" ]; then
+  echo "PASS: the advisory finding is still reported in findings_kept"; pass=$((pass + 1))
+else
+  echo "FAIL: the advisory finding left findings_kept (suppressed,kept=$got)"; fail=$((fail + 1))
+fi
+assert_class_gate "CONTROL: the same finding without the class fails the gate" \
+  "$WORK/plain-medium.json" "$WORK/empty.json" info 1 "Gate failed: 1 unfiltered"
+assert_class_gate "the string \"true\" is not the class" \
+  "$WORK/adv-string.json" "$WORK/empty.json" info 1
+assert_class_gate "advisory: false is not the class" \
+  "$WORK/adv-false.json" "$WORK/empty.json" info 1
+assert_class_gate "the class cannot waive a high" \
+  "$WORK/adv-high.json" "$WORK/empty.json" info 1 "Gate failed: 1 unfiltered"
+assert_class_gate "the class cannot waive a critical" \
+  "$WORK/adv-critical.json" "$WORK/empty.json" critical 1
+assert_class_gate "the class cannot waive an unknown severity (ranked critical)" \
+  "$WORK/adv-unknown.json" "$WORK/empty.json" critical 1
+assert_class_gate "advisory warn, low and info do not fail the gate" \
+  "$WORK/adv-lower.json" "$WORK/empty.json" info 0
+assert_class_gate "one advisory and one plain finding: the plain one fails the gate" \
+  "$WORK/adv-mixed.json" "$WORK/empty.json" info 1 "Gate failed: 1 unfiltered"
+if grep -qF "scripts/plain-one.sh" "$WORK/gate.err" && ! grep -qF "scripts/advisory-one.sh" "$WORK/gate.err"; then
+  echo "PASS: only the plain finding is named in the annotations"; pass=$((pass + 1))
+else
+  echo "FAIL: the annotations do not name exactly the plain finding"; cat "$WORK/gate.err"; fail=$((fail + 1))
+fi
+if grep -qF "1 advisory" "$WORK/gate.err"; then
+  echo "PASS: the gate message counts the advisory finding apart"; pass=$((pass + 1))
+else
+  echo "FAIL: the gate message does not say how many findings were advisory"; fail=$((fail + 1))
+fi
+
+# The baseline still acknowledges an advisory finding like any other.
+printf '[{"severity":"medium",%s,"file":"scripts/a.sh"}]\n' '"rule_module":"research_extensions","type":"RE011"' > "$WORK/baseline-re011.json"
+assert_status "an advisory finding is acknowledged by a matching entry" \
+  "$WORK/adv-medium.json" "$WORK/baseline-re011.json" "1,0"
+
+# The step summary says how many findings were advisory.
+: > "$WORK/summary.md"
+GITHUB_STEP_SUMMARY="$WORK/summary.md" BLOCKING_THRESHOLD=info \
+  bash "$APPLY" "$WORK/adv-mixed.json" "$WORK/empty.json" advisory > /dev/null
+if grep -qE '^\| Advisory class \(reported, never gating\) \| 1 \|$' "$WORK/summary.md"; then
+  echo "PASS: the step summary counts the advisory class"; pass=$((pass + 1))
+else
+  echo "FAIL: the step summary has no advisory row"; cat "$WORK/summary.md"; fail=$((fail + 1))
+fi
+
+# MUTANT: the gate with the exemption removed must fail the first case above,
+# or these assertions do not depend on it.
+ADV_MUTANT="$WORK/apply-baseline-advisory-mutant.sh"
+sed 's/\.advisory == true and/false and/' "$APPLY" > "$ADV_MUTANT"
+if cmp -s "$ADV_MUTANT" "$APPLY" || ! bash -n "$ADV_MUTANT"; then
+  echo "FAIL: the advisory mutant is identical or invalid — it proves nothing"; fail=$((fail + 1))
+else
+  status=0
+  BLOCKING_THRESHOLD=info bash "$ADV_MUTANT" "$WORK/adv-medium.json" "$WORK/empty.json" blocking \
+    > /dev/null 2>&1 || status=$?
+  if [ "$status" -eq 1 ]; then
+    echo "PASS: MUTANT killed (without the exemption the advisory finding gates)"; pass=$((pass + 1))
+  else
+    echo "FAIL: MUTANT survived (exit $status)"; fail=$((fail + 1))
+  fi
+fi
+
+# ═══════════════════════════════════════════════════════════════════════
+# Findings larger than one argument string
+#
+# The findings and the baseline used to reach jq as `--argjson` values. One
+# argument is capped by the kernel (MAX_ARG_STRLEN, 128 KiB on Linux), so a
+# scan of about 350 KB (393 findings on this repository) ended with
+# "Argument list too long", exit 126: a red job that names no finding. Both
+# now reach jq as files.
+# ═══════════════════════════════════════════════════════════════════════
+jq -n '[range(800) | {severity: "medium", rule_module: "research_extensions", type: "RE011",
+        line: ., file: "scripts/f\(.).sh", reason: ("x" * 400)}]' > "$WORK/big-findings.json"
+jq '[.[] | {severity, rule_module, type, file, note: ("n" * 400)}]' "$WORK/big-findings.json" > "$WORK/big-baseline.json"
+for f in big-findings.json big-baseline.json; do
+  if [ "$(wc -c < "$WORK/$f")" -gt 300000 ]; then
+    echo "PASS: $f is larger than one argument string ($(wc -c < "$WORK/$f") bytes)"; pass=$((pass + 1))
+  else
+    echo "FAIL: $f is too small to prove anything"; fail=$((fail + 1))
+  fi
+done
+assert_class_gate "800 unbaselined findings fail the gate, not the shell" \
+  "$WORK/big-findings.json" "$WORK/empty.json" info 1 "Gate failed: 800 unfiltered"
+assert_class_gate "800 findings against 800 entries pass" \
+  "$WORK/big-findings.json" "$WORK/big-baseline.json" info 0
+got=$(jq -r "$COUNTS_JQ" "$WORK/gate.out")
+if [ "$got" = "800,0" ]; then
+  echo "PASS: every one of the 800 is acknowledged"; pass=$((pass + 1))
+else
+  echo "FAIL: expected 800,0 got $got"; fail=$((fail + 1))
+fi
+
 assert_invalid_option "invalid mode" bypass high
 assert_invalid_option "invalid threshold" blocking nonsense
 
