@@ -141,7 +141,7 @@ says so.
 | Where the plan kernel lives | HAR at source, consumed by Scaffoldia as a pinned module; spike in Scaffoldia meanwhile | —
 | Scaffoldia's own 118 `.a2ml` files | Scaffoldia retrofits itself; that is its first real retrofit case | —
 | Where campaigns live | In the repository of the tool that does the work, with one cross-repository board | 101 issues
-| git-logistics-office | *Reopened.* The ruling "no new repository; split the lifecycle across existing systems" rested on this plan's statement that the repository does not exist. That statement was wrong: `metadatastician/git-logistics-office` exists as an unfilled template (one commit, 2026-11-07), and `docs/estate-reconciliation/A4-office-farm.adoc` names an office as the holder of the ledger, the class table and the work orders. The question is back with the owner (2026-11-17, evening) | #636
+| git-logistics-office | The office holds decisions and data only (owner, 2026-11-17, evening): `metadatastician/git-logistics-office` carries the ledger, the class table, policy overlays and work orders as data; routes are computed by the hybrid automation router, checks by the plan kernel, and the farm executes. This replaces the earlier ruling "no new repository", which rested on this plan's wrong statement that the repository does not exist (it is an unfilled template, one commit of 2026-11-07). The issue stays open | #636
 | The 252 `boj-build.yml` copies | Delete all; re-add from the fixed generator when an endpoint is reachable | #331
 | Estate measurements | A recomputed number with a ratchet; the topic minimum goes into canon first | #949, #1049
 | Does the language ban cover toolchain declarations | Yes, by derivation from the languages a deed declares | #698, #706, #917
@@ -166,6 +166,7 @@ says so.
 | What marks the archive point for the 37 archived A2ML files (W14) | Both: each record carries the path, the blob id and a commit on `main`, and the retire-check verifies them; the owner also pushes a tag as the human-readable name | —
 | How far the fix for "a pipe into a quiet grep makes a gate pass wrongly" reaches | Estate-wide, as a flag-only Hypatia rule. It belongs in `hyperpolymath/hypatia`: `hypatia-rules/` in this repository holds retired A2ML definitions that no workflow reads (W17) | —
 | The next work order | W11: remove `1-formats/a2ml/` | —
+| How to test the office's route lattice before building anything | As a total function with a proof, in Idris2: "the dispatcher never emits a forbidden route", run over this plan's work orders and compared with what happened (W18) | —
 |===
 
 On the stub files the owner chose the genuine port over the recommended
@@ -549,6 +550,7 @@ they are renewed or E6 lands first.
 | W15 | One deed (owner, 2026-11-17): the content of `0-AI-MANIFEST.deed` becomes derivable from `standards_chora.deed`; a generator writes the file where a tool still needs it, and the committed copy is removed. First find every reader of the file; its route to `docs/wikis/0.2-AI-MANIFEST.deed` names a file that does not exist. Touches the identity file, so its own pull request with the full deed checks. | Opus
 | W16 | Gate fail-opens from a pipe into a quiet grep (found while doing W13; reproduced first: the exemption ratchet missed a wildcard in a 257 KB ignore file 8 times out of 8). *Done:* eight gates that could pass wrongly are fixed, each with a test that failed before the fix: the exemption ratchet's wildcard check, the pre-commit lock-closure trigger, the SPARK theatre gate, the provisioning template's `bun test` detection, the ReScript format probe (hook and CI step), the release pre-flight placeholder scan, `update-actions-lock.sh --verify-local`, and five lower-risk sites. The ledger fell from 203 lines to 182. | Opus
 | W17 | The same rule estate-wide (owner, 2026-11-17): a flag-only Hypatia rule (`:review`, never auto-fix) for a pipe into a quiet grep in shell sources and workflow `run:` blocks, added in `hyperpolymath/hypatia` beside `RE005`, with the standards gate (`scripts/check-pipe-grep-q.sh`) as its reference. Canary on `standards` first. Existing findings must be graded so that no repository turns red on the day it ships. | Opus, in a hypatia session
+| W18 | The route lattice as a checked model (owner, 2026-11-17): the schematic's eleven axes and five forbidden regions as Idris2 types; a dispatcher whose bundle can hold only permitted routes; the quarantine route proved always available; admission of at most one open order per (repo, class) (A4 I08). Run over the work orders above and the day's two incidents. Its home (the router, the office, or beside A4) is asked of the estate coordinator thread. | Top-tier model (proof work)
 |===
 
 == Departures met, for the owner
