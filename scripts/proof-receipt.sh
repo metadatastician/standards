@@ -73,7 +73,9 @@
 #                           grade
 #   receipt_runs            the run ledger: prover | run | commit (40 hex) |
 #                           checker | invocation | inputs sha256 | what the run
-#                           reported | state (current|superseded|regressed) |
+#                           reported | state (current|superseded|regressed; stale
+#                           and, among rows typed current, superseded are
+#                           derived, never typed: see Derived states) |
 #                           reason | axioms (name:c|b|debt, comma-separated)
 #                           [| imports: OWNER/REPO@COMMIT=SHA256, comma-separated,
 #                           which --run-row writes when the leg imports files
@@ -111,7 +113,7 @@
 #                           (§8.5.1, Imported repositories).  Default: none.
 #   receipt_ensure_import R C D   make commit C of R present in clone D.
 #                           Default: refuse when it is not there.
-#   receipt_run_scope       the claims a superseded or regressed run checked,
+#   receipt_run_scope       the claims a run that is not current checked,
 #                           when it did not check every claim with its leg,
 #                           one run a line: prover | run | claim ids
 #                           (space-separated).  That run's receipt is then
@@ -299,6 +301,7 @@ _receipt_check_row() {
   case "$state" in
     current) [[ -z "$reason" ]] || receipt_die "a current row carries no reason: $row" ;;
     superseded|regressed) [[ -n "$reason" ]] || receipt_die "a $state row needs a reason: $row" ;;
+    stale) receipt_die "stale is derived from the tree, never typed: give the row as current, and the generator says when it is stale: $row" ;;
     *) receipt_die "unknown receipt state in row: $row" ;;
   esac
   if [[ -n "$axioms" ]]; then
@@ -392,6 +395,116 @@ _receipt_has_any() {
     [[ "$p" == "$1" ]] && _receipt_in_scope "$p" "$run" "$state" && return 0
   done < "$_receipt_ledger_file"
   return 1
+}
+
+# ── Derived states (PROOF-POLICY §8.4) ────────────────────────────────────────
+# A ledger row is typed `current` when its run passed, and `regressed` or
+# `superseded` (with a reason) when someone knows more.  Of the rows typed
+# current, what git can tell is derived here and never typed:
+#
+#  superseded  A leg with several rows typed current keeps the newest as
+#              current; each earlier one is superseded by it.  A row typed
+#              regressed is ordered with them, so a later failure supersedes
+#              an earlier pass and the leg is left with no current receipt.  Newest is by
+#              ancestry of the rows' commits; rows at one commit keep ledger
+#              order, the later row being the newer.  Commits that git cannot
+#              order are refused.
+#  stale       The newest row no longer describes the tree: the leg's inputs
+#              digest, its imports or (Agda) its trusted base differ from the
+#              tree's.  The source may well still check; no run of the new
+#              inputs is recorded yet.  A stale receipt counts toward no
+#              grade, and becomes current again if the tree returns to what
+#              the run read.
+#
+# So a change to a leg's inputs needs no edit of the ledger: --write derives
+# the state, and the grade falls to what the remaining receipts support.
+# The rewritten rows replace the ledger in force; the typed rows are untouched.
+_receipt_stale_notes=()
+_receipt_derive_states() {
+  local p row line newest newest_commit newest_run c run d want got why out
+  local -a lines commits runs states
+  out="$(mktemp)"; _receipt_tmpfiles+=("$out")
+  cp -- "$_receipt_ledger_file" "$out"
+  for p in "${_receipt_provers[@]}"; do
+    # A run typed regressed is evidence too: a later failure outranks an
+    # earlier pass, so it is ordered with the rows typed current.
+    mapfile -t lines < <(awk -F'|' -v p="$p" '$1==p && ($8=="current" || $8=="regressed"){print NR}' "$_receipt_ledger_file")
+    (( ${#lines[@]} )) || continue
+    commits=(); runs=(); states=()
+    for line in "${lines[@]}"; do
+      states+=("$(awk -F'|' -v n="$line" 'NR==n{print $8}' "$_receipt_ledger_file")")
+      commits+=("$(awk -F'|' -v n="$line" 'NR==n{print $3}' "$_receipt_ledger_file")")
+      runs+=("$(awk -F'|' -v n="$line" 'NR==n{print $2}' "$_receipt_ledger_file")")
+    done
+    # The newest: no other row's commit descends from it, and of the rows at
+    # that commit it is the last.
+    newest=0
+    for (( c = 1; c < ${#lines[@]}; c++ )); do
+      if [[ "${commits[c]}" == "${commits[newest]}" ]]; then newest=$c; continue; fi
+      if ! git cat-file -e "${commits[c]}^{commit}" 2>/dev/null || ! git cat-file -e "${commits[newest]}^{commit}" 2>/dev/null; then
+        receipt_die "cannot order the current rows of the $p leg: commit ${commits[c]} or ${commits[newest]} is not here; fetch the default branch"
+      fi
+      if git merge-base --is-ancestor "${commits[newest]}" "${commits[c]}"; then newest=$c
+      elif git merge-base --is-ancestor "${commits[c]}" "${commits[newest]}"; then :
+      else receipt_die "cannot order the current rows of the $p leg: neither of ${commits[c]} and ${commits[newest]} descends from the other"
+      fi
+    done
+    newest_commit="${commits[newest]}"; newest_run="${runs[newest]}"
+    for (( c = 0; c < ${#lines[@]}; c++ )); do
+      (( c != newest )) || continue
+      [[ "${states[c]}" == current ]] || continue
+      if [[ "${states[newest]}" == regressed ]]; then
+        _receipt_restate "$out" "${lines[c]}" superseded "replaced by the later run $newest_run, which regressed"
+      else
+        _receipt_restate "$out" "${lines[c]}" superseded "replaced by the later run $newest_run"
+      fi
+    done
+    # A leg whose newest run regressed has no current receipt to test.
+    [[ "${states[newest]}" == current ]] || continue
+    # Does the newest still describe the tree?
+    line="${lines[newest]}"
+    want="$(awk -F'|' -v n="$line" 'NR==n{print $6}' "$_receipt_ledger_file")"; got="$(_receipt_digest "$p")"
+    why=
+    if [[ "$want" != "$got" ]]; then why='inputs'
+    else
+      d="$(mktemp -d)"; _receipt_tmpfiles+=("$d")
+      _receipt_build_imports "$p" HEAD "$d"
+      want="$(awk -F'|' -v n="$line" 'NR==n{print $11}' "$_receipt_ledger_file")"; got="$(_receipt_imports_field "$d" "$p")"
+      if [[ "$want" != "$got" ]]; then why='imports'
+      elif [[ "$p" == agda ]]; then
+        want="$(awk -F'|' -v n="$line" 'NR==n{print $12}' "$_receipt_ledger_file")"; got="$(_receipt_trusted_base_field "$_receipt_trusted_base_file")"
+        [[ "$want" == "$got" ]] || why='trusted base'
+      fi
+    fi
+    if [[ -n "$why" ]]; then
+      # A run handed to --emit-run was just recorded on this tree: one that
+      # does not describe it is refused, never written as stale.
+      if [[ -n "$_receipt_extra" ]] && awk -F'|' -v p="$p" -v r="$newest_run" '$1==p && $2==r{f=1} END{exit !f}' "$_receipt_extra"; then
+        receipt_die "the $p run given to --emit-run does not describe this tree: the leg's $why differ from what the run recorded (a changed trusted base is earned again, §8.4)"
+      fi
+      _receipt_restate "$out" "$line" stale "the $p leg's $why changed after commit ${newest_commit:0:12}, so this run no longer describes the tree; no run of the new $why is recorded yet"
+      _receipt_stale_notes+=("the $p receipt of run $newest_run is stale: the leg's $why changed after ${newest_commit:0:12}")
+      # With no current leg the receipt still names the commit its newest
+      # runs describe, which is on the default branch.
+      [[ -n "$_receipt_fallback_commit" ]] || _receipt_fallback_commit="$newest_commit"
+    fi
+  done
+  cp -- "$out" "$_receipt_ledger_file"
+}
+# Say which receipts were derived stale, on stderr: the receipt records it too.
+_receipt_note_stale() {
+  local n
+  for n in "${_receipt_stale_notes[@]}"; do printf 'NOTE: %s\n' "$n" >&2; done
+}
+# Rewrite line $2 of ledger file $1 as state $3 with reason $4, keeping the
+# row's other fields; the fields after the axioms are dropped, as for every
+# receipt that is not current.
+_receipt_restate() {
+  local f="$1" n="$2" state="$3" reason="$4" t
+  t="$(mktemp)"; _receipt_tmpfiles+=("$t")
+  awk -F'|' -v OFS='|' -v n="$n" -v s="$state" -v r="$reason" \
+    'NR==n{print $1,$2,$3,$4,$5,$6,$7,s,r,$10; next} {print}' "$f" > "$t"
+  cp -- "$t" "$f"
 }
 
 # ── Run scope (receipt_run_scope) ─────────────────────────────────────────────
@@ -716,13 +829,17 @@ _receipt_prepare() {
   _receipt_manifest_dir="$(mktemp -d)"
   _receipt_tmpfiles+=("$_receipt_ledger_file" "$_receipt_echo_file" "$_receipt_echo_digest_file" "$_receipt_manifest_dir")
   _receipt_ledger > "$_receipt_ledger_file"
-  _receipt_load_scope
   _receipt_trusted_base_file="$(mktemp)"; _receipt_tmpfiles+=("$_receipt_trusted_base_file")
   _receipt_hook "$_receipt_trusted_base_file" receipt_trusted_base
   grep . "$_receipt_echoes_file" > "$_receipt_echo_file" || true
   local row p commits src img wit ref a b c n repo commit dir path
   local -a paths
   while IFS= read -r row; do _receipt_check_row "$row"; done < "$_receipt_ledger_file"
+  # The states git can tell are derived from the rows as typed, before
+  # anything reads a row's state; the run scopes are read after, since a
+  # derived superseded run may carry one.
+  _receipt_derive_states
+  _receipt_load_scope
   while IFS= read -r row; do _receipt_check_echo "$row"; done < "$_receipt_echo_file"
   [[ "$(cut -d'|' -f1 "$_receipt_echo_file" | sort | uniq -d | wc -l)" == 0 ]] || receipt_die 'an echo source has two images'
   # §8.5.2: no echo chain may cycle, whether or not the current receipts use it.
@@ -897,8 +1014,10 @@ _receipt_check_git_facts() {
 
 # Each current receipt must still describe the tree: its inputs digest is the
 # digest of the inputs now.  Otherwise the grade cannot be carried forward
-# (§8.4, regression drops the grade): record a new run, or mark the row
-# superseded or regressed with its reason.
+# (§8.4, regression drops the grade).  A row that no longer describes the tree
+# was derived stale before this runs (Derived states), so the two digest
+# comparisons here are a second look at what is still current, and they stop
+# the gate if the derivation ever lets one through.
 #
 # The imported files count too (§8.5.1, Imported repositories).  The hook is
 # asked again at HEAD, so a repin moves the binding even when the pin is not
@@ -911,11 +1030,11 @@ _receipt_check_currency() {
     _receipt_has_current "$p" || continue
     run="$(_receipt_current_field "$p" 2)"
     want="$(_receipt_current_field "$p" 6)"; got="$(_receipt_digest "$p")"
-    [[ "$want" == "$got" ]] || receipt_die "the $p inputs changed since run $run (recorded $want, now $got): record a new CI run, or mark that row superseded or regressed"
+    [[ "$want" == "$got" ]] || receipt_die "the $p inputs changed since run $run (recorded $want, now $got), yet the row was not derived stale: the generator is at fault, so stop"
     d="$(mktemp -d)"; _receipt_tmpfiles+=("$d")
     _receipt_build_imports "$p" HEAD "$d"
     want="$(_receipt_current_field "$p" 11)"; got="$(_receipt_imports_field "$d" "$p")"
-    [[ "$want" == "$got" ]] || receipt_die "the $p imports changed since run $run (recorded '$want', now '$got' at HEAD): record a new CI run, or mark that row superseded or regressed"
+    [[ "$want" == "$got" ]] || receipt_die "the $p imports changed since run $run (recorded '$want', now '$got' at HEAD), yet the row was not derived stale: the generator is at fault, so stop"
     _receipt_check_import_worktree "$d" "$p"
   done
 }
@@ -1046,8 +1165,9 @@ _receipt_main() {
       fi
       [[ ! -d "$target" ]] || receipt_die "the receipt target $target is a directory"
       _receipt_prepare
-      # A receipt must describe the tree it is written from: a current row
-      # whose inputs moved is superseded or regressed first, never rewritten.
+      _receipt_note_stale
+      # What is still current must describe the tree it is written from (a
+      # row whose inputs moved was derived stale above).
       _receipt_check_currency
       mkdir -p "$(dirname "$target")"
       # Emit beside the target and move it into place only when the whole
@@ -1076,6 +1196,7 @@ _receipt_main() {
       [[ -f "$RECEIPT_OUT" ]] || receipt_die "$RECEIPT_OUT is missing"
       _receipt_fallback_commit="$(sed -n 's/^  :source-commit "\([0-9a-f]*\)"$/\1/p' "$RECEIPT_OUT")"
       _receipt_prepare
+      _receipt_note_stale
       _receipt_check_currency
       tmp="$(mktemp)"; _receipt_tmpfiles+=("$tmp")
       _receipt_emit > "$tmp"

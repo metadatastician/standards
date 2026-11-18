@@ -593,9 +593,14 @@ grade falls to the highest grade the current receipts support. Breaking
 includes a leg that fails, or one whose receipt cannot be reproduced at
 the new commit. Grades are never carried forward from an older commit.
 . *Lineage lives on the receipt.* A receipt that is kept but no longer
-current carries `state: superseded` (a newer receipt replaced it) or
-`state: regressed` (the source no longer checks), with the reason. These
-are receipt states. The §5 vocabulary stays closed, and no
+current carries its state and the reason. `state: stale`: the leg's inputs,
+imports or trusted base changed after the run, and no run of the new ones
+is recorded yet; the source may still check. `state: superseded`: a newer
+receipt replaced it. `state: regressed`: the source no longer checks. A
+generator derives `stale` and, between runs that passed, `superseded` from
+the ledger and the tree; neither is typed by hand. A stale receipt counts
+toward no grade, and is current again when the tree is what the run read.
+These are receipt states. The §5 vocabulary stays closed, and no
 `Superseded` or `Regressed` status token exists.
 . *Axioms travel with the grade.* Every counted witness lists its axioms:
 `#print axioms` for Lean, `Print Assumptions` for Rocq. For Agda the

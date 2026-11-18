@@ -862,7 +862,7 @@ export const PROOF_RECEIPT_VOCABULARY = {
   state: ["AGDA-PENDING", "AGDA-VERIFIED", "COQ-CHECKED", "LEAN-CHECKED", "BRIDGE-PENDING",
     "RECONCILED", "COUNTEREXAMPLE", "QUARANTINED"],
   route: ["source", "transported", "re-proved", "waived", "unavailable"],
-  receiptState: ["current", "superseded", "regressed"],
+  receiptState: ["current", "stale", "superseded", "regressed"],
   dttProvers: ["agda", "rocq", "lean"],
   disposition: ["b", "c", "debt"],
   echoWitness: ["inputs-sha256", "tree-sha256"],
