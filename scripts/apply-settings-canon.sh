@@ -29,9 +29,9 @@
 #   * rulesets and branch protection: they have their own canon and appliers
 #     (config/rulesets/, apply-protection-floor.sh, apply-branch-gates.sh,
 #     apply-tag-ruleset-canon.sh);
-#   * anything under Actions on a repository whose Actions are switched off:
-#     it is reported as HOLD for a person to decide, and neither switched on
-#     nor given an Actions policy.
+#   * anything under Actions (workflow token permissions and the Actions
+#     policy) on a repository whose Actions are switched off: it is reported
+#     as HOLD for a person to decide, and nothing under Actions is written.
 #
 # PRIVATE REPOSITORIES
 #   secret_scanning and push protection are unavailable on private repositories
@@ -244,6 +244,17 @@ for r in "${REPOS[@]}"; do
     row DRIFT "$r" automated_security_fixes true "$asf"; n_rows=$((n_rows + 1)); plan "$r" ASF true
   fi
 
+  # Everything below sits under Actions. A repository with Actions off is
+  # reported and left alone: the settings are moot there, and no write under
+  # Actions (workflow permissions or policy) can then switch them on.
+  perms="$(gh api "repos/$r/actions/permissions")" || die "could not read Actions permissions for $r"
+  enabled="$(jq -r 'if .enabled == null then true else .enabled end | tostring' <<<"$perms")"
+  if [ "$enabled" != "$AP_ENABLED" ]; then
+    row HOLD "$r" actions.enabled "$AP_ENABLED" "$enabled (left for a person: switching Actions on is a decision; nothing under Actions applied)"
+    n_rows=$((n_rows + 1)); n_hold=$((n_hold + 1))
+    continue
+  fi
+
   # Workflow token permissions.
   wf="$(gh api "repos/$r/actions/permissions/workflow")" || die "could not read workflow permissions for $r"
   wfdiff="$(jq -c --argjson c "$WF_CANON" '. as $l | $c
@@ -256,18 +267,9 @@ for r in "${REPOS[@]}"; do
   [ "$wfdiff" = "{}" ] || plan "$r" WF "$WF_CANON"
 
   # Actions policy. Union payload: canon patterns plus every live pattern.
-  perms="$(gh api "repos/$r/actions/permissions")" || die "could not read Actions permissions for $r"
   allowed="$(jq -r '.allowed_actions // "ABSENT"' <<<"$perms")"
   sha="$(jq -r '.sha_pinning_required // false | tostring' <<<"$perms")"
-  enabled="$(jq -r 'if .enabled == null then true else .enabled end | tostring' <<<"$perms")"
   need=0
-  if [ "$enabled" != "$AP_ENABLED" ]; then
-    # Nothing under Actions is written while they are off: the policy is moot
-    # there, and no helper call can then switch them on.
-    row HOLD "$r" actions.enabled "$AP_ENABLED" "$enabled (left for a person: switching Actions on is a decision; Actions policy not applied)"
-    n_rows=$((n_rows + 1)); n_hold=$((n_hold + 1))
-    continue
-  fi
   [ "$allowed" = "$AP_ALLOWED" ] || { row DRIFT "$r" actions.allowed_actions "$AP_ALLOWED" "$allowed"; need=1; }
   [ "$sha" = "$AP_SHA" ] || { row DRIFT "$r" actions.sha_pinning_required "$AP_SHA" "$sha"; need=1; }
   live_sel='{}'

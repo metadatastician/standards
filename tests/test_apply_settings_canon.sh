@@ -81,7 +81,8 @@ mk me/solo '.live.allow_auto_merge = true | .live.allow_merge_commit = true
   | .wf = {default_workflow_permissions: "write", can_approve_pull_request_reviews: true}
   | .prs = [{number: 7, autoMergeRequest: {mergeMethod: "SQUASH"}}]'
 mk me/off '.perms.enabled = false | .perms.allowed_actions = "all"
-  | .sel.patterns_allowed = ["local/only@*"]'
+  | .sel.patterns_allowed = ["local/only@*"]
+  | .wf = {default_workflow_permissions: "write", can_approve_pull_request_reviews: true}'
 mk org1/stuck '.live.allow_auto_merge = true | .live.delete_branch_on_merge = false
   | .reject_disarm = true | .prs = [{number: 9, autoMergeRequest: {mergeMethod: "SQUASH"}}]'
 
@@ -226,6 +227,7 @@ echo "10. Actions switched off"
 rows HOLD me/off | grep -q 'actions.enabled' && pass "disabled Actions reported as HOLD" || bad "no HOLD row for me/off"
 grep -qE '^api -X PUT repos/me/off/actions' "$STUB_LOG" && bad "Actions policy written on a repo with Actions off" || pass "no Actions write on a repo with Actions off"
 [ "$(live me/off '.perms.enabled')" = false ] && pass "Actions stay off" || bad "Actions were switched on"
+[ "$(live me/off '.wf.default_workflow_permissions')" = write ] && pass "workflow permissions untouched while Actions are off" || bad "workflow permissions written while Actions are off"
 # The helper on its own must not switch Actions on either: it once read a live
 # `enabled: false` as true and sent enabled=true with the policy.
 mk me/off2 '.perms.enabled = false | .perms.allowed_actions = "all"'
