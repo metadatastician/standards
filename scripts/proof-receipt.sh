@@ -1247,7 +1247,7 @@ _receipt_main() {
       # --out for a run CI has just recorded; the recording PR's --check runs
       # them there.)
       [[ "$mode" == --emit-run ]] || _receipt_check_git_facts "$tmp"
-      local ledger_new= deed_old=
+      local ledger_new='' deed_old=''
       if [[ "$mode" == --record ]]; then
         # The ledger with the new rows is written beside the ledger first, so
         # two renames are all that is left: the receipt and the ledger change
