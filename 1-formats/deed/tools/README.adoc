@@ -96,7 +96,8 @@ Validates a proof receipt (`:profile proof-receipt`, PROOF-POLICY §8.5.1)
 and emits one JSON record. It holds `repository`, `source_commit`,
 `trusted_base`, `echoes`, and `claims` with each claim's legs and receipts. Each claim's
 Proof Witness Grade and foundation-diversity tag are *derived* from its legs
-and receipts (§8.2, §8.3). A receipt whose recorded `:pwg` or
+and receipts (§8.2, §8.3). The tag needs a non-DTT leg that is
+kernel-checked, `RECONCILED` and current. A receipt whose recorded `:pwg` or
 `:foundation-diverse` differs from the derived value is refused, because a
 grade is derived, not asserted (§8.4). The vocabularies (§5 tokens, §2.2
 states, routes, receipt states) are closed, and anything outside them is an
