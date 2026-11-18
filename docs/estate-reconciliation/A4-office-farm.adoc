@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 = A4: Office and Farm (the boundary, the intake envelope, work orders, the move of the scripts)
 :version: 0.2.6-draft
-:status: DRAFT v0.2.6 (adds Annex A, informative: the text of the owner's deployment schematic of 2026-11-17 and the owner's rulings of 2026-11-18 on six of its open questions; sections 1 to 16 are unchanged; earlier: v0.2.5: an `evaluate` envelope from a pull-request run is bound to the synthetic merge commit it ran at; a non-verdict `publish` envelope names the state of its basis; the `gate-verdict` predicate carries the A3 v0.2.12 fields: `mode`, `basis` and `inlineInputs`; a `publish` envelope, signed by the A3 publisher from the default branch, is bound to its subject head through its `basis`, not through the certificate's source commit; earlier: v0.2.4, owner ruling Q3 of 2026-11-14: the generated index lives in chora-registry and the office reads it). Decisions F1 to F15 approved by the owner on 2026-11-10. Not yet ratified as a whole. Builds on A1 v0.4.1, A2 v0.2.4 and A3 v0.2.12. Consistency pass applied 2026-11-10. Proposed in standards#1474; bot-review fixes applied 2026-11-12.
+:status: DRAFT v0.2.6 (adds Annex A, informative: the text of the owner's deployment schematic of 2026-11-17 and the owner's nine rulings of 2026-11-18 on six of its open questions; sections 1 to 16 are unchanged; earlier: v0.2.5: an `evaluate` envelope from a pull-request run is bound to the synthetic merge commit it ran at; a non-verdict `publish` envelope names the state of its basis; the `gate-verdict` predicate carries the A3 v0.2.12 fields: `mode`, `basis` and `inlineInputs`; a `publish` envelope, signed by the A3 publisher from the default branch, is bound to its subject head through its `basis`, not through the certificate's source commit; earlier: v0.2.4, owner ruling Q3 of 2026-11-14: the generated index lives in chora-registry and the office reads it). Decisions F1 to F15 approved by the owner on 2026-11-10. Not yet ratified as a whole. Builds on A1 v0.4.1, A2 v0.2.4 and A3 v0.2.12. Consistency pass applied 2026-11-10. Proposed in standards#1474; bot-review fixes applied 2026-11-12.
 :toc:
 
 Specification A4 of the Estate Reconciliation Plan. The office decides and the farm executes (R2). A4 defines the line between them, the one envelope in which every finding and every verdict enters the office, the work order that leaves it, and the rules for moving the farm's label and merge scripts.
@@ -766,7 +766,7 @@ Each is for the owner. Questions 1 to 6 were answered on 2026-11-18 and are mark
 . *Axis values.* What are the values of each of the eleven axes? _Answered: R1, R2 and R5 in A.10._
 . *Estate-wide.* Which axis carries it, and does it mean every repo, or any change to more than one? _Answered: R3._
 . *Unsupported by current fleet.* Is this a forbidden region like the other four, which never change, or step 3 of the pruning ("prune by fleet availability"), which depends on the fleet at that moment? The schematic shows it as both. _Answered: R4._
-. *Time window.* The axis has no forbidden region. What may not happen outside a window? _Answered in part: R6 makes it a sixth region. Still open: what the window is (the validity of the order, a freeze calendar, or something else)._
+. *Time window.* The axis has no forbidden region. What may not happen outside a window? _Answered: R6 and R9._
 . *Dominance.* When does one route dominate another? _Answered: R7._
 . *Scoring.* What does "score survivors" weigh, and in what order of importance? _Answered: R8._
 . *Capacity.* What are the capacity limits, beyond one open order per `(repo, class)`?
@@ -780,7 +780,7 @@ Each is for the owner. Questions 1 to 6 were answered on 2026-11-18 and are mark
 
 === A.10 Rulings of 2026-11-18
 
-Eight rulings [O18], given by the owner through the question selector after the annex was first drafted. They answer open questions 1 to 6. Where a ruling goes beyond what the schematic shows, it says so.
+Nine rulings [O18], given by the owner through the question selector after the annex was first drafted. They answer open questions 1 to 6. Where a ruling goes beyond what the schematic shows, it says so.
 
 [cols="1,2,5"]
 |===
@@ -808,7 +808,7 @@ Eight rulings [O18], given by the owner through the question selector after the 
 
 | R6
 | Time window
-| A sixth forbidden region: outside the window × mutation. *Beyond the schematic,* which draws five. What the window is has not been ruled; see open question 4.
+| A sixth forbidden region: outside the window × mutation. *Beyond the schematic,* which draws five. R9 says what the window is.
 
 | R7
 | Dominance
@@ -817,6 +817,10 @@ Eight rulings [O18], given by the owner through the question selector after the 
 | R8
 | Scoring
 | A fixed order of criteria and no weights: first safety (recall-ready, then reviewed, then the narrower rollout), then cost (fewer legs).
+
+| R9
+| What the window is
+| A route is outside the window when its work order has expired (`:expires`, section 7.2), or when a freeze the owner has declared covers the repository. Both are data in the office. A model needs one predicate, "outside".
 |===
 
 The forbidden regions after these rulings, for reference:
@@ -826,10 +830,10 @@ The forbidden regions after these rulings, for reference:
 . non-idempotent × all-at-once [S];
 . no review × destructive (R2);
 . no capability in the fleet (R4);
-. outside the window × mutation (R6).
+. outside the window × mutation (R6, R9).
 
 === A.11 What follows from this annex
 
 . A model of the lattice as a total function with a proof (owner, 2026-11-17: Idris2, "the dispatcher never emits a forbidden route") can now be written against A.4 to A.7 and A.10. Under R5 it is written for any finite set of axis values and names the values it needs to exist, for example a class that does not mutate and a reviewed mode, since the quarantine route is built from them. Those become requirements on the office's tables.
 . A first model was written before these rulings, outside any repository. Its axis values, policy rules and scoring were its author's assumptions. It is evidence about the method and not about the design, and it stays outside the repositories (owner, 2026-11-18).
-. Open questions 7 to 14 stand, and so does the definition of the window (question 4). Nothing is built for the office from the schematic while question 10, acceptance, is open: the two events it cites travelled routes that all six regions permit.
+. Open questions 7 to 14 stand. Nothing is built for the office from the schematic while question 10, acceptance, is open: the two events it cites travelled routes that all six regions permit.
