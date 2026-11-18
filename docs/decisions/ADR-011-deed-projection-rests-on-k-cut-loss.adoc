@@ -5,7 +5,7 @@
 
 [cols="1,4"]
 |===
-| Status | *Proposed*, step 1 of `0-canon/constitution/CHANGE-PROCEDURE.adoc`. The owner ruled on 2026-11-18 that the caution is lifted: the estate/repo projection relation may rest on K-CUT-LOSS. Every design point below that the owner has not ruled on is put as a question (§11). Nothing here is adopted.
+| Status | *Proposed*, step 1 of `0-canon/constitution/CHANGE-PROCEDURE.adoc`. The owner ruled on 2026-11-18 that the caution is lifted (the estate/repo projection relation may rest on K-CUT-LOSS), and on the same day ruled the four design points in §11 by selector. Steps 2–6 (review, contest period, recorded decision, regeneration) remain; nothing is enforced yet.
 | Date | 2026-11-18
 | Supersedes | the caution "This spec must not depend on it" in `1-formats/deed/spec/DEED-GRAMMAR-SPEC.adoc` and `1-formats/deed/README.adoc` (typing chapter, Choreographic), removed by the owner ruling of 2026-11-18
 | Authority sought | semantics of the deed typing chapter: what the estate/repo projection means, what is graded, and which rule follows. No grammar authority is sought.
@@ -210,7 +210,7 @@ estate cut at `c`. By K-1 the estate's account of `p` up to `c` equals the
 account `p` reads from its own view. A source `p` is not party to
 contributes `𝟙`, so it cannot change `p`'s account.
 
-Two rules follow. Neither is adopted (question 4).
+Two rules follow. The owner ruled on 2026-11-18 to adopt both, as advisory (§11).
 
 R1. *Locality of account.* A party's graded account up to a consistent
 frontier is computed from its own deed and the pins it records, and from
@@ -347,7 +347,7 @@ before deriving anything. The owner's ruling to lift the caution rules
 out (a) as the end state, but leaves (b) and (c) open as sequencing.
 
 *Compatibility.* No existing deed, grammar or validator changes. R1 and R2,
-if adopted, start as advisory findings and never block (the `:review`
+as adopted (§11), are advisory findings and never block (the `:review`
 strategy).
 
 *Tensions.*
@@ -355,22 +355,30 @@ strategy).
 * The rule rests on a theorem that is ungraded. That is allowed by the
   owner's ruling, but a claim that the rule is "machine-checked" would need
   receipts (PROOF-POLICY §8).
-* `estate_chora.deed` "is the global type" is loose (§3). Ruling on
-  question 2 settles it.
+* `estate_chora.deed` "is the global type" is loose (§3). The ruling on
+  question 2 (`G` derived from deeds) settles it.
 * Under candidate A, `⊕ = min` reads optimistically at choices (§4).
 * chora-registry is authoritative for estate-wide placement. R1 fits that:
   the registry computes, and a repo's copy is checked against it.
 
 == 11. Questions to the owner
 
-Put through the question selector on 2026-11-18. The answers are recorded
-here when given.
+Put through the question selector on 2026-11-18 and ruled by the owner the
+same day:
 
-. Which resource algebra grades the deed projection (§4)?
-. Where does `G` live (§3, §9)?
-. Is R1/R2 stated over the asynchronous Y-2, the synchronous K-1, or both
-  (§7)?
-. Which rules are adopted, and how are they enforced (§5)?
+. *Resource algebra (§4): A, echo loss.* Upstream `Loss` (`⊗ = +`,
+  `⊕ = min`, `𝟙 = 0`), already discharged by K-6, so no new proof. The
+  caution that `⊕ = min` reads optimistically at choices stands.
+. *Where `G` lives (§3, §9): derived from deeds.* `G` is built from fields
+  deeds already carry (`:beholding-chora`, praxis rules, routing) and their
+  pins. No grammar change. The extractor's correctness is an Idris2
+  obligation, `ASSUMED` until the extractor exists (§8).
+. *Synchronous or asynchronous (§7): Y-2.* R1 and R2 are stated over
+  causal cuts with facts in flight. K-1 covers the settled special case
+  (Y-1).
+. *Rules (§5): R1 and R2, advisory.* Both are adopted as semantics. R2 is
+  reported later by a `deed_lint` mode as a `:review` finding that never
+  blocks.
 
 == 12. Beyond this repository
 
@@ -388,5 +396,5 @@ templates. None of these repositories is changed by this ADR:
   chosen.
 * `hyperpolymath/typed-wasm`: optionally re-pin the port from `edb784a7` to
   `a7c45138`. `KCut.agda` differs only in comments between the two.
-* hypatia and gitbot-fleet: an R2 finding, if adopted, is `:review`
+* hypatia and gitbot-fleet: an R2 finding is `:review`
   strategy.
