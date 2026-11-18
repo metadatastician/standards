@@ -460,6 +460,11 @@ describe("proof-receipt profile (PROOF-POLICY §8.5)", () => {
     expect(read(doc(claim("PWG-3", agda() + " " + none + " " + isa, { fd: "#t" }))).claims[0].foundation_diverse).toBe(true);
     expect(() => read(doc(claim("PWG-3", agda() + " " + none + " " + isa)))).toThrow(/foundation-diverse #f, but .* #t/);
     expect(() => read(doc(claim("PWG-3", agda() + " " + none, { fd: "#t" })))).toThrow(/foundation-diverse #t/);
+    // §8.3 needs the statement correspondence recorded: a leg the kernel
+    // accepted that is still BRIDGE-PENDING earns no tag.
+    const pending = isa.replace(":state RECONCILED", ":state BRIDGE-PENDING");
+    expect(read(doc(claim("PWG-3", agda() + " " + none + " " + pending))).claims[0].foundation_diverse).toBe(false);
+    expect(() => read(doc(claim("PWG-3", agda() + " " + none + " " + pending, { fd: "#t" })))).toThrow(/foundation-diverse #t, but .* #f/);
   });
   test("malformed receipts fail closed", () => {
     const ok = claim("PWG-3", agda() + " " + none);

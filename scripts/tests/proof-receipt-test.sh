@@ -59,9 +59,10 @@ RECEIPT_OUT=verification/receipts/t_praxis.deed
 RECEIPT_REPOSITORY="\${HOME_REPOSITORY:-o/home}"
 RECEIPT_DEFAULT_BRANCH="\${DEFAULT_BRANCH:-main}"
 RECEIPT_CANONICAL_NAME=t-proof-receipt
+[ -z "\${BEHOLDING:-}" ] || RECEIPT_BEHOLDING_CHORA="\$BEHOLDING"
 RECEIPT_SCRIPT=scripts/grade-receipt.sh
 SIB="$SIB"
-receipt_claims() { printf '%s\n' 'T-1|proven|theorem|re-proved|RECONCILED|re-proved|RECONCILED||' 'T-2|tested-only|demonstration|n/a|n/a|n/a|n/a||'; [ -z "\${SECOND:-}" ] || printf '%s\n' 'T-3|proven|theorem|re-proved|RECONCILED|re-proved|RECONCILED||'; }
+receipt_claims() { printf '%s\n' 'T-1|proven|theorem|re-proved|RECONCILED|re-proved|RECONCILED||' 'T-2|tested-only|demonstration|n/a|n/a|n/a|n/a||'; [ -z "\${SECOND:-}" ] || printf '%s\n' 'T-3|proven|theorem|re-proved|RECONCILED|re-proved|RECONCILED||'; [ -z "\${PENDING:-}" ] || printf 'T-4|%s\n' "\$PENDING"; }
 receipt_run_scope() { [ -z "\${SCOPE:-}" ] || printf '%s\n' "\$SCOPE"; }
 receipt_runs() { if [ -n "\${PARTIAL_FAIL:-}" ]; then cat runs.rows; return 3; fi; [ -z "\${FAIL_RUNS:-}" ] || return 4; cat "\${RUNS_FILE:-runs.rows}"; }
 receipt_echoes() { if [ -n "\${ECHO_ROW:-}" ]; then printf "%s\\n" "\$ECHO_ROW"; fi; }
@@ -449,6 +450,44 @@ RUNS_FILE="$WORK/scope.rows" SECOND=1 SCOPE='rocq|https://ci.example/run/1' expe
 RUNS_FILE="$WORK/scope.rows" SECOND=1 SCOPE="$SC1"$'\n'"$SC1" expect "two scopes of one run are refused" 1 "a run has two run scopes" --check
 RUNS_FILE="$WORK/scope.rows" SECOND=1 SCOPE='coq|https://ci.example/run/1|T-1' expect "a scope naming an unknown prover is refused" 1 "a run scope names an unknown prover" --check
 RUNS_FILE="$WORK/scope.rows" SECOND=1 expect "dropping the scope makes the receipt stale for --check" 1 "does not match the tree and the ledgers" --check
+
+# A claim with no Agda proof yet, and a recheck leg the kernel accepted whose
+# statement is not reconciled (§2.2: the token and the state are separate).
+# T-4 joins as a theorem claim; its rows are given by PENDING.
+printf '| T-4 | open\n' >>"$R/STATUS.adoc"
+gitq -C "$R" add -A; gitq -C "$R" commit -qm "a claim with no Agda proof"
+git -C "$R" fetch -q origin
+P1='open|theorem|unavailable||re-proved|LEAN-CHECKED|Rocq cannot import the statement|'
+RUNS_FILE="$WORK/scope.rows" SECOND=1 SCOPE="$SC1" PENDING="$P1" expect "a claim with no Agda proof and a LEAN-CHECKED leg writes, and the reader accepts it" 0 "WROTE" --write
+grep -q '^  (claim :id "T-4" :pwg ungraded ' "$R/verification/receipts/t_praxis.deed" && ok "the claim with no Agda proof is ungraded" || bad "T-4 is not ungraded"
+[ "$(leg_of T-4 agda)" = '    (leg :prover agda :route source :token open :state AGDA-PENDING)' ] && ok "its Agda leg is AGDA-PENDING and lists no run" || bad "T-4's Agda leg is not a bare AGDA-PENDING leg: $(leg_of T-4 agda | head -2)"
+leg_of T-4 lean | grep -q ':token proven :state LEAN-CHECKED' && ok "a LEAN-CHECKED leg is proven, not open" || bad "T-4's Lean leg is not proven and LEAN-CHECKED"
+leg_of T-4 lean | grep -q 'run/9"' && ok "and it carries the Lean leg's current receipt" || bad "T-4's Lean leg lost its receipt"
+[ "$(grep -c '^  (claim :id "T-[13]" :pwg PWG-1 ' "$R/verification/receipts/t_praxis.deed")" = 2 ] && ok "the other claims keep their grade" || bad "a pending claim moved another claim's grade"
+gitq -C "$R" add -A; gitq -C "$R" commit -qm "receipt with a pending claim"
+git -C "$R" fetch -q origin
+RUNS_FILE="$WORK/scope.rows" SECOND=1 SCOPE="$SC1" PENDING="$P1" expect "--check passes on it" 0 "PASS: negative control" --check
+P2='proven|theorem|re-proved|COQ-CHECKED|re-proved|LEAN-CHECKED||'
+RUNS_FILE="$WORK/scope.rows" SECOND=1 SCOPE="$SC1" PENDING="$P2" expect "a proven claim with two checked, unreconciled legs writes" 0 "WROTE" --write
+grep -q '^  (claim :id "T-4" :pwg PWG-3 ' "$R/verification/receipts/t_praxis.deed" && ok "unreconciled legs count toward no grade: PWG-3" || bad "T-4 is not PWG-3 with two unreconciled legs"
+leg_of T-4 rocq | grep -q ':token proven :state COQ-CHECKED' && ok "a COQ-CHECKED leg is proven" || bad "T-4's Rocq leg is not proven and COQ-CHECKED"
+leg_of T-4 agda | grep -q ':state AGDA-VERIFIED' && ok "a proven claim's Agda leg stays AGDA-VERIFIED" || bad "T-4's Agda leg is not AGDA-VERIFIED"
+P3='open|theorem|unavailable||re-proved|QUARANTINED|Rocq cannot import the statement|'
+RUNS_FILE="$WORK/scope.rows" SECOND=1 SCOPE="$SC1" PENDING="$P3" expect "a quarantined leg writes" 0 "WROTE" --write
+leg_of T-4 lean | grep -q ':token open :state QUARANTINED' && ok "a leg the kernel did not accept stays open" || bad "a QUARANTINED leg is not open"
+RUNS_FILE="$WORK/scope.rows" SECOND=1 SCOPE="$SC1" PENDING='open|theorem|unavailable||re-proved|COQ-CHECKED|r|' expect "COQ-CHECKED on a Lean leg is refused" 1 "COQ-CHECKED is the state of a Rocq leg" --write
+RUNS_FILE="$WORK/scope.rows" SECOND=1 SCOPE="$SC1" PENDING='open|theorem|re-proved|LEAN-CHECKED|unavailable|||r' expect "LEAN-CHECKED on a Rocq leg is refused" 1 "LEAN-CHECKED is the state of a Lean leg" --write
+gitq -C "$R" checkout -q -- verification/receipts/t_praxis.deed
+
+# :beholding-chora (RECEIPT_BEHOLDING_CHORA): written as given, after
+# :canonical-name, and refused when it is not a #u8 or #uuid literal.
+RUNS_FILE="$WORK/scope.rows" SECOND=1 SCOPE="$SC1" PENDING="$P1" BEHOLDING='#u8"chora:estate/github.com/o"' expect "a receipt with a :beholding-chora writes, and the reader accepts it" 0 "WROTE" --write
+grep -A1 '^  :canonical-name ' "$R/verification/receipts/t_praxis.deed" | grep -qxF '  :beholding-chora #u8"chora:estate/github.com/o"' && ok ":beholding-chora follows :canonical-name" || bad "no :beholding-chora after :canonical-name"
+RUNS_FILE="$WORK/scope.rows" SECOND=1 SCOPE="$SC1" PENDING="$P1" BEHOLDING='chora:estate' expect "a :beholding-chora that is no id literal is refused" 1 "RECEIPT_BEHOLDING_CHORA must be" --write
+RUNS_FILE="$WORK/scope.rows" SECOND=1 SCOPE="$SC1" PENDING="$P1" BEHOLDING='#u5"x"' expect "a #u5 :beholding-chora is refused" 1 "RECEIPT_BEHOLDING_CHORA must be" --write
+RUNS_FILE="$WORK/scope.rows" SECOND=1 SCOPE="$SC1" PENDING="$P1" expect "without it the committed receipt still checks" 1 "does not match the tree and the ledgers" --check
+gitq -C "$R" checkout -q -- verification/receipts/t_praxis.deed
+RUNS_FILE="$WORK/scope.rows" SECOND=1 SCOPE="$SC1" PENDING="$P1" expect "and the committed one, written without it, checks" 0 "PASS: negative control" --check
 
 echo "proof-receipt-test: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

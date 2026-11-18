@@ -55,10 +55,22 @@
 #   RECEIPT_DEFAULT_BRANCH  e.g. main
 #   RECEIPT_CANONICAL_NAME  the receipt's :canonical-name
 #   RECEIPT_SCRIPT          the home script's path, for messages
+#   RECEIPT_BEHOLDING_CHORA optional: the receipt's :beholding-chora, written
+#                           as given, a #u8"…" or #uuid"…" literal (the
+#                           estate chora's id, as the home chora deed has it)
 # Functions (each prints to stdout):
 #   receipt_claims          the claim list: id | §5 token of the Agda proof |
 #                           kind | Rocq route | Rocq §2.2 state | Lean route |
-#                           Lean §2.2 state | Rocq reason | Lean reason
+#                           Lean §2.2 state | Rocq reason | Lean reason.
+#                           A claim whose token is not proven or
+#                           proven-with-postulates has no Agda proof yet: its
+#                           Agda leg is AGDA-PENDING with no receipt and it
+#                           is ungraded.  A recheck leg the kernel accepted
+#                           but whose statement is not reconciled is
+#                           COQ-CHECKED (Rocq), LEAN-CHECKED (Lean) or
+#                           BRIDGE-PENDING: its token is proven and it
+#                           carries its receipts, but it counts toward no
+#                           grade
 #   receipt_runs            the run ledger: prover | run | commit (40 hex) |
 #                           checker | invocation | inputs sha256 | what the run
 #                           reported | state (current|superseded|regressed) |
@@ -471,12 +483,17 @@ _receipt_pwg_of() {
     *) receipt_die "unexpected recheck count: $n" ;;
   esac
 }
-# A leg's §5 token: a RECONCILED re-proof is kernel-checked, so it is proven,
-# or proven-with-postulates when its current run reported an axiom (§5: a
-# kernel proof resting on named necessary axioms); any other state is open.
+# A leg's §5 token.  The token and the §2.2 state are separate facts (§2.2: a
+# leg can be PROVEN and still BRIDGE-PENDING): a re-proof the kernel accepted
+# is proven whether or not its statement has been reconciled with the Agda
+# one, or proven-with-postulates when its current run reported an axiom (§5:
+# a kernel proof resting on named necessary axioms).  COQ-CHECKED and
+# LEAN-CHECKED say the kernel accepted it, as BRIDGE-PENDING and RECONCILED
+# do; any other state is open.  Only a RECONCILED leg counts toward a grade.
+_receipt_kernel_checked() { [[ "$1" == RECONCILED || "$1" == COQ-CHECKED || "$1" == LEAN-CHECKED || "$1" == BRIDGE-PENDING ]]; }
 _receipt_leg_token() {
   local state="$1" prover="$2"
-  if [[ "$state" != RECONCILED ]]; then printf 'open'
+  if ! _receipt_kernel_checked "$state"; then printf 'open'
   elif _receipt_has_current "$prover" && [[ -n "$(_receipt_current_field "$prover" 10)" ]]; then printf 'proven-with-postulates'
   else printf 'proven'; fi
 }
@@ -585,6 +602,9 @@ _receipt_emit_leg() {
       [[ -n "$reason" && "$reason" != *'"'* ]] || receipt_die "a $route $prover leg needs a reason without a quote"
       printf '    (leg :prover %s :route %s :reason "%s"%s\n' "$prover" "$route" "$reason" "$close" ;;
     transported|re-proved)
+      # COQ-CHECKED is a Rocq leg's state and LEAN-CHECKED a Lean leg's.
+      [[ "$state" != COQ-CHECKED || "$prover" == rocq ]] || receipt_die "COQ-CHECKED is the state of a Rocq leg, not of the $prover leg"
+      [[ "$state" != LEAN-CHECKED || "$prover" == lean ]] || receipt_die "LEAN-CHECKED is the state of a Lean leg, not of the $prover leg"
       printf '    (leg :prover %s :route %s :token %s :state %s' "$prover" "$route" "$(_receipt_leg_token "$state" "$prover")" "$state"
       if _receipt_has_any "$prover"; then printf '\n'; _receipt_emit_receipts_closed "$prover" "$close"; else printf '%s\n' "$close"; fi ;;
     *) receipt_die "unknown route for the $prover leg: $route" ;;
@@ -596,6 +616,7 @@ _receipt_emit() {
   printf '(praxis-deed\n'
   printf '  :schema-version "1.0.0"\n'
   printf '  :canonical-name "%s"\n' "$RECEIPT_CANONICAL_NAME"
+  [[ -z "${RECEIPT_BEHOLDING_CHORA:-}" ]] || printf '  :beholding-chora %s\n' "$RECEIPT_BEHOLDING_CHORA"
   printf '  :profile proof-receipt\n'
   printf '  :repository "%s"\n' "$RECEIPT_REPOSITORY"
   printf '  :source-commit "%s"\n' "$_receipt_source_commit"
@@ -620,8 +641,15 @@ _receipt_emit() {
     fi
     _receipt_claim="$id"
     printf '  (claim :id "%s" :pwg %s :foundation-diverse %s\n' "$id" "$(_receipt_pwg_of "$token" "$coq" "$coq_state" "$lean" "$lean_state")" "$(_receipt_diverse_of "$id")"
-    printf '    (leg :prover agda :route source :token %s :state AGDA-VERIFIED' "$token"
-    if _receipt_has_any agda; then printf '\n'; _receipt_emit_receipts_closed agda ')'; else printf ')\n'; fi
+    # A claim with no Agda proof yet (its token is not proven or
+    # proven-with-postulates) is AGDA-PENDING and carries no Agda receipt: the
+    # Agda runs checked the other claims, not this one.
+    if [[ "$token" == proven || "$token" == proven-with-postulates ]]; then
+      printf '    (leg :prover agda :route source :token %s :state AGDA-VERIFIED' "$token"
+      if _receipt_has_any agda; then printf '\n'; _receipt_emit_receipts_closed agda ')'; else printf ')\n'; fi
+    else
+      printf '    (leg :prover agda :route source :token %s :state AGDA-PENDING)\n' "$token"
+    fi
     _receipt_emit_leg rocq "$coq" "$coq_state" "$coq_reason" ')'
     # The claim's legs outside dependent type theory follow; the last leg
     # printed closes the claim.
@@ -941,6 +969,10 @@ _receipt_main() {
   for v in RECEIPT_STD RECEIPT_STANDARDS_COMMIT RECEIPT_OUT RECEIPT_REPOSITORY RECEIPT_DEFAULT_BRANCH RECEIPT_CANONICAL_NAME RECEIPT_SCRIPT; do
     [[ -n "${!v:-}" ]] || receipt_die "the home script must set $v"
   done
+  if [[ -n "${RECEIPT_BEHOLDING_CHORA:-}" ]]; then
+    [[ "$RECEIPT_BEHOLDING_CHORA" =~ ^#(u8|uuid)\"[^\"\\[:cntrl:]]+\"$ ]] \
+      || receipt_die 'RECEIPT_BEHOLDING_CHORA must be a #u8"…" or #uuid"…" literal'
+  fi
   for v in receipt_claims receipt_runs receipt_echoes receipt_header receipt_trusted_base receipt_invocation receipt_inputs receipt_status_ids receipt_recorded_legs; do
     declare -F "$v" >/dev/null || receipt_die "the home script must define $v"
   done
