@@ -581,6 +581,14 @@ gitq -C "$R" checkout -q -- legs/rocq/T.v
 awk -F'|' 'BEGIN{OFS="|"} {$8="superseded"; $9="typed"; print}' "$WORK/newrun2.rows" >"$WORK/newrun3.rows"
 LEDGER=runs.ledger SECOND=1 SCOPE="$SC1" PENDING="$P1" expect "--record takes only rows typed current" 1 "a row given to --record must be current" --record "$WORK/newrun3.rows"
 SECOND=1 SCOPE="$SC1" PENDING="$P1" expect "--record without a ledger file is refused" 1 "the home script must set RECEIPT_LEDGER" --record "$WORK/newrun2.rows"
+# The receipt and the ledger change together: if the ledger cannot be
+# replaced, the receipt is put back as it was.  A stub mv fails on the ledger.
+mkdir -p "$WORK/stubbin"
+printf '#!/usr/bin/env bash\nfor a; do last="$a"; done\ncase "$last" in *runs.ledger) echo "stub mv: refused" >&2; exit 1 ;; esac\nexec /usr/bin/mv "$@"\n' >"$WORK/stubbin/mv"; chmod +x "$WORK/stubbin/mv"
+cp "$R/verification/receipts/t_praxis.deed" "$WORK/before-failed-record.deed"; cp "$R/runs.ledger" "$WORK/before-failed-record.ledger"
+PATH="$WORK/stubbin:$PATH" LEDGER=runs.ledger SECOND=1 SCOPE="$SC1" PENDING="$P1" expect "a ledger that cannot be replaced stops --record" 1 "the receipt was put back as it was" --record "$WORK/newrun2.rows"
+cmp -s "$R/verification/receipts/t_praxis.deed" "$WORK/before-failed-record.deed" && cmp -s "$R/runs.ledger" "$WORK/before-failed-record.ledger" && ok "and the receipt and the ledger are both as they were" || bad "a failed ledger install left the receipt or the ledger changed"
+[ -z "$(find "$R" -name '.ledger.*' -o -name '.receipt-old.*' -o -name '.receipt.*' | head -1)" ] && ok "with no temporary file left behind" || bad "temporary files remain: $(find "$R" -name '.ledger.*' -o -name '.receipt-old.*' -o -name '.receipt.*' | tr '\n' ' ')"
 gitq -C "$R" checkout -q -- runs.ledger verification/receipts/t_praxis.deed
 
 echo "proof-receipt-test: $pass passed, $fail failed"

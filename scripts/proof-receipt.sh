@@ -1247,12 +1247,34 @@ _receipt_main() {
       # --out for a run CI has just recorded; the recording PR's --check runs
       # them there.)
       [[ "$mode" == --emit-run ]] || _receipt_check_git_facts "$tmp"
+      local ledger_new= deed_old=
+      if [[ "$mode" == --record ]]; then
+        # The ledger with the new rows is written beside the ledger first, so
+        # two renames are all that is left: the receipt and the ledger change
+        # together, and a failed second rename puts the receipt back.
+        ledger_new="$(mktemp "$(dirname "$RECEIPT_LEDGER")/.ledger.XXXXXX")" || receipt_die "cannot write beside $RECEIPT_LEDGER"
+        _receipt_tmpfiles+=("$ledger_new")
+        {
+          cat "$RECEIPT_LEDGER"
+          # The file ends in a newline before a row is appended to it.
+          [[ ! -s "$RECEIPT_LEDGER" || -z "$(tail -c1 "$RECEIPT_LEDGER")" ]] || printf '\n'
+          grep '[^[:space:]]' "$_receipt_new_rows"
+        } > "$ledger_new" || receipt_die "cannot write the new ledger beside $RECEIPT_LEDGER"
+        chmod --reference="$RECEIPT_LEDGER" "$ledger_new" 2>/dev/null || true
+        if [[ -f "$target" ]]; then
+          deed_old="$(mktemp "$(dirname "$target")/.receipt-old.XXXXXX")" || receipt_die "cannot write beside $target"
+          _receipt_tmpfiles+=("$deed_old")
+          cp -p -- "$target" "$deed_old" || receipt_die "cannot keep a copy of $target"
+        fi
+      fi
       mv -T "$tmp" "$target" || receipt_die "cannot install the receipt at $target"
+      if [[ "$mode" == --record ]] && ! mv -T "$ledger_new" "$RECEIPT_LEDGER"; then
+        # The receipt never describes rows the ledger lacks.
+        if [[ -n "$deed_old" ]]; then mv -T "$deed_old" "$target" || true; else rm -f -- "$target"; fi
+        receipt_die "cannot install the new ledger at $RECEIPT_LEDGER; the receipt was put back as it was"
+      fi
       printf 'WROTE %s (source-commit %s)\n' "$target" "$_receipt_source_commit"
       if [[ "$mode" == --record ]]; then
-        # The file ends in a newline before a row is appended to it.
-        [[ ! -s "$RECEIPT_LEDGER" || -z "$(tail -c1 "$RECEIPT_LEDGER")" ]] || printf '\n' >> "$RECEIPT_LEDGER"
-        grep '[^[:space:]]' "$_receipt_new_rows" >> "$RECEIPT_LEDGER" || receipt_die "cannot append to $RECEIPT_LEDGER"
         printf 'RECORDED %s row(s) in %s\n' "$(grep -c '[^[:space:]]' "$_receipt_new_rows")" "$RECEIPT_LEDGER"
       fi
       if [[ "$mode" == --emit-run ]]; then
