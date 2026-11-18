@@ -97,10 +97,17 @@ on:
         required: false
         default: bca1ea289a4f8a86bac6212731e6f8ec15c67ad4
       hypatia-advisory:
-        description: Include below-threshold advisory findings in JSON only; SARIF and gates are unchanged.
+        description: >-
+          Include below-threshold advisory findings (`advisory: true` at low
+          or info: WF026, WF027, latent RE011) in the findings JSON, so the
+          verdict grid lists them under "JSON-only below-threshold
+          advisories". JSON only: the SARIF projection and both gates read
+          medium and above and are unchanged. Default true (owner decision
+          2026-11-17), because a flag-only finding that no grid shows is not
+          flagged. Set false to keep them out of the JSON.
         type: boolean
         required: false
-        default: false
+        default: true
     secrets:
       HYPATIA_SCAN_PAT:
         description: >-
