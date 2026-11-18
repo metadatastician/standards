@@ -96,6 +96,7 @@ receipt_imports() {
 }
 receipt_status_ids() { grep -oE '^\\| T-[0-9]+ ' STATUS.adoc | tr -d '| ' || true; }
 receipt_recorded_legs() { grep -oE '^\\| T-[0-9]+ \\| RECONCILED \\| RECONCILED\$' legs/README.adoc | cut -d" " -f2 || true; }
+[ -z "\${LEDGER:-}" ] || { RECEIPT_LEDGER="\$LEDGER"; unset -f receipt_runs; }
 . "\$RECEIPT_STD/scripts/proof-receipt.sh"
 receipt_main "\$@"
 EOF
@@ -537,6 +538,50 @@ leg_of T-1 rocq | grep -q ':state current' && bad "the Rocq leg kept a current r
 leg_of T-1 rocq | grep -A6 'run/9"' | grep -q ':reason "replaced by the later run https://ci.example/run/10, which regressed"' && ok "and the earlier pass is superseded by the failure" || bad "run 9 is not superseded by the regression"
 grep -q '^  (claim :id "T-1" :pwg PWG-1 ' "$R/verification/receipts/t_praxis.deed" && bad "T-1 kept PWG-1 without a current Rocq receipt" || ok "the grade falls with it"
 gitq -C "$R" checkout -q -- verification/receipts/t_praxis.deed
+
+# The run ledger as a data file (RECEIPT_LEDGER): the same rows give the same
+# receipt, the file is append-only against the default branch, and --record
+# is the one call that adds a run.
+cp "$WORK/scope.rows" "$R/runs.ledger"
+gitq -C "$R" add -A; gitq -C "$R" commit -qm "the run ledger as a data file"
+git -C "$R" fetch -q origin
+LEDGER=runs.ledger SECOND=1 SCOPE="$SC1" PENDING="$P1" expect "a ledger file gives the receipt the hook gave" 0 "PASS: negative control" --check
+LEDGER=runs.ledger RUNS_FILE=x SECOND=1 SCOPE="$SC1" PENDING="$P1" expect "a ledger file and no receipt_runs is accepted" 0 "PASS: negative control" --check
+sed -i 's/^\[ -z "\${LEDGER:-}" \] || { RECEIPT_LEDGER="\$LEDGER"; unset -f receipt_runs; }$/[ -z "${LEDGER:-}" ] || RECEIPT_LEDGER="$LEDGER"/' "$R/scripts/grade-receipt.sh"
+LEDGER=runs.ledger SECOND=1 SCOPE="$SC1" PENDING="$P1" expect "a ledger file beside receipt_runs is refused" 1 "the run ledger has one source" --check
+gitq -C "$R" checkout -q -- scripts/grade-receipt.sh
+{ printf '# SPDX-License-Identifier: CC0-1.0\n\n'; cat "$WORK/scope.rows"; } >"$R/runs.ledger"
+LEDGER=runs.ledger SECOND=1 SCOPE="$SC1" PENDING="$P1" expect "comment and empty lines are not rows" 0 "PASS: negative control" --check
+sed '1s/|rocq 1|/|rocq 2|/; 1s/|agda 1|/|agda 2|/; 1s/|lean 1|/|lean 2|/' "$WORK/scope.rows" >"$R/runs.ledger"
+cmp -s "$WORK/scope.rows" "$R/runs.ledger" && bad "the fixture did not edit a ledger row" || ok "the fixture edits the first ledger row"
+LEDGER=runs.ledger SECOND=1 SCOPE="$SC1" PENDING="$P1" expect "an edited row is refused: the ledger is append-only" 1 "is append-only: row 1 of main was changed, moved or removed" --check
+sed '1d' "$WORK/scope.rows" >"$R/runs.ledger"
+LEDGER=runs.ledger SECOND=1 SCOPE="$SC1" PENDING="$P1" expect "a removed row is refused" 1 "is append-only: row 1 of main was changed, moved or removed" --check
+sed '1!G;h;$!d' "$WORK/scope.rows" >"$R/runs.ledger"
+LEDGER=runs.ledger SECOND=1 SCOPE="$SC1" PENDING="$P1" expect "reordered rows are refused" 1 "is append-only" --check
+gitq -C "$R" checkout -q -- runs.ledger
+# --record: a new run of the Rocq leg at the head of main.
+HEADC=$(git -C "$R" rev-parse HEAD)
+(cd "$R" && LEDGER=runs.ledger SECOND=1 SCOPE="$SC1" PENDING="$P1" bash scripts/grade-receipt.sh --run-row rocq --run "https://ci.example/run/11" --commit "$HEADC" --checker "rocq 1" --reported ok --axioms none --image "$RUN_IMG") >"$WORK/newrun.rows" 2>"$WORK/newrun.err" || bad "--run-row with a ledger file: $(cat "$WORK/newrun.err")"
+before=$(grep -c . "$R/runs.ledger")
+LEDGER=runs.ledger SECOND=1 SCOPE="$SC1" PENDING="$P1" expect "--record writes the receipt and appends the run" 0 "RECORDED 1 row(s) in runs.ledger" --record "$WORK/newrun.rows"
+[ "$(grep -c . "$R/runs.ledger")" = $((before + 1)) ] && ok "the ledger file gained exactly one row" || bad "the ledger file has $(grep -c . "$R/runs.ledger") rows, want $((before + 1))"
+[ "$(tail -n1 "$R/runs.ledger")" = "$(cat "$WORK/newrun.rows")" ] && ok "and it is the recorded row, at the end" || bad "the last ledger row is not the recorded one"
+leg_of T-1 rocq | grep -A6 'run/9"' | grep -q ':reason "replaced by the later run https://ci.example/run/11"' && ok "the run it replaces is derived superseded" || bad "run 9 is not superseded by run 11"
+LEDGER=runs.ledger SECOND=1 SCOPE="$SC1" PENDING="$P1" expect "the recorded receipt checks" 0 "PASS: negative control" --check
+LEDGER=runs.ledger SECOND=1 SCOPE="$SC1" PENDING="$P1" expect "recording the same run twice is refused" 1 "already holds this run of the rocq leg" --record "$WORK/newrun.rows"
+[ "$(grep -c . "$R/runs.ledger")" = $((before + 1)) ] && ok "and a refused --record appends nothing" || bad "a refused --record changed the ledger"
+# A run that does not describe the tree is refused, and nothing is written.
+sed 's|run/11|run/12|' "$WORK/newrun.rows" >"$WORK/newrun2.rows"
+printf '(* moved *)\n' >>"$R/legs/rocq/T.v"
+cp "$R/verification/receipts/t_praxis.deed" "$WORK/before-record.deed"
+LEDGER=runs.ledger SECOND=1 SCOPE="$SC1" PENDING="$P1" expect "--record refuses a run that does not describe the tree" 1 "the rocq run being recorded does not describe this tree" --record "$WORK/newrun2.rows"
+[ "$(grep -c . "$R/runs.ledger")" = $((before + 1)) ] && cmp -s "$R/verification/receipts/t_praxis.deed" "$WORK/before-record.deed" && ok "and neither the ledger nor the receipt changed" || bad "a refused --record wrote something"
+gitq -C "$R" checkout -q -- legs/rocq/T.v
+awk -F'|' 'BEGIN{OFS="|"} {$8="superseded"; $9="typed"; print}' "$WORK/newrun2.rows" >"$WORK/newrun3.rows"
+LEDGER=runs.ledger SECOND=1 SCOPE="$SC1" PENDING="$P1" expect "--record takes only rows typed current" 1 "a row given to --record must be current" --record "$WORK/newrun3.rows"
+SECOND=1 SCOPE="$SC1" PENDING="$P1" expect "--record without a ledger file is refused" 1 "the home script must set RECEIPT_LEDGER" --record "$WORK/newrun2.rows"
+gitq -C "$R" checkout -q -- runs.ledger verification/receipts/t_praxis.deed
 
 echo "proof-receipt-test: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]
