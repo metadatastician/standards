@@ -140,8 +140,11 @@ It only reports unless given `--apply`, and it reads back every write.
 * *Auto-merge*: when the canon has `allow_auto_merge: false`, auto-merge already
   armed on open pull requests is disarmed *before* the setting is switched off.
   Whether switching the setting off cancels armed requests is not established.
+  If a disarm cannot be verified, that repository's setting is left as it is
+  and reported as `FAIL`.
 * *Left for a person* (reported as `HOLD`): a repository with Actions switched
-  off. `set-allowed-actions.sh` keeps that state as it finds it.
+  off. Nothing under Actions is written there, so the run can neither switch
+  them on nor change their policy.
 * Rulesets and branch protection are out of scope: they have their own canon
   under `config/rulesets/` and their own appliers.
 

@@ -21,16 +21,17 @@
 #   When the canon says allow_auto_merge=false, open PRs with auto-merge armed
 #   are disarmed FIRST, before the setting is switched off. Whether switching
 #   the setting off cancels requests already armed is not established, so
-#   nothing is left to chance.
+#   nothing is left to chance: if a disarm cannot be verified, that
+#   repository's allow_auto_merge is left as it is and reported as FAIL.
 #
 # WHAT IT DOES NOT TOUCH
 #   * per_repo_deltas_allowed keys (description, topics, has_wiki, ...);
 #   * rulesets and branch protection: they have their own canon and appliers
 #     (config/rulesets/, apply-protection-floor.sh, apply-branch-gates.sh,
 #     apply-tag-ruleset-canon.sh);
-#   * actions_permissions.enabled: set-allowed-actions.sh keeps a repository's
-#     Actions on/off state as it finds it, so a repo with Actions off is
-#     reported as HOLD for a person to decide, not switched on.
+#   * anything under Actions on a repository whose Actions are switched off:
+#     it is reported as HOLD for a person to decide, and neither switched on
+#     nor given an Actions policy.
 #
 # PRIVATE REPOSITORIES
 #   secret_scanning and push protection are unavailable on private repositories
@@ -193,9 +194,12 @@ for r in "${REPOS[@]}"; do
 
   # Auto-merge requests already armed: disarmed before the setting goes off.
   if [ "$AUTO_MERGE_OFF" = true ]; then
-    prs="$(gh pr list -R "$r" --state open --limit 1000 --json number,autoMergeRequest)" \
+    # Paginated REST listing, so the census is complete whatever the number of
+    # open pull requests (a fixed --limit would silently cap it).
+    armed="$(gh api --paginate "repos/$r/pulls?state=open&per_page=100" \
+      --jq '.[] | select(.auto_merge != null) | .number')" \
       || die "could not list pull requests for $r"
-    for n in $(jq -r '.[] | select(.autoMergeRequest != null) | .number' <<<"$prs"); do
+    for n in $armed; do
       row ARMED "$r" "pr#$n" "auto-merge off" "armed"; n_rows=$((n_rows + 1))
       plan "$r" DISARM "$n"
     done
@@ -208,7 +212,7 @@ for r in "${REPOS[@]}"; do
     [ -n "$k" ] || continue
     row DRIFT "$r" "$k" "$exp" "$act"; n_rows=$((n_rows + 1))
   done < <(jq -r --argjson l "$live" 'to_entries[]
-             | [.key, (.value|tostring), ($l[.key] // "ABSENT" | tostring)] | @tsv' <<<"$diff")
+             | [.key, (.value|tostring), ($l[.key] | if . == null then "ABSENT" else tostring end)] | @tsv' <<<"$diff")
   [ "$diff" = "{}" ] || plan "$r" PATCH "$diff"
 
   # security_and_analysis, in canon order; private repos get the override.
@@ -248,18 +252,21 @@ for r in "${REPOS[@]}"; do
     [ -n "$k" ] || continue
     row DRIFT "$r" "actions_workflow.$k" "$exp" "$act"; n_rows=$((n_rows + 1))
   done < <(jq -r --argjson l "$wf" 'to_entries[]
-             | [.key, (.value|tostring), ($l[.key] // "ABSENT" | tostring)] | @tsv' <<<"$wfdiff")
+             | [.key, (.value|tostring), ($l[.key] | if . == null then "ABSENT" else tostring end)] | @tsv' <<<"$wfdiff")
   [ "$wfdiff" = "{}" ] || plan "$r" WF "$WF_CANON"
 
   # Actions policy. Union payload: canon patterns plus every live pattern.
   perms="$(gh api "repos/$r/actions/permissions")" || die "could not read Actions permissions for $r"
   allowed="$(jq -r '.allowed_actions // "ABSENT"' <<<"$perms")"
   sha="$(jq -r '.sha_pinning_required // false | tostring' <<<"$perms")"
-  enabled="$(jq -r '.enabled // true | tostring' <<<"$perms")"
+  enabled="$(jq -r 'if .enabled == null then true else .enabled end | tostring' <<<"$perms")"
   need=0
   if [ "$enabled" != "$AP_ENABLED" ]; then
-    row HOLD "$r" actions.enabled "$AP_ENABLED" "$enabled (left for a person: switching Actions on is a decision)"
+    # Nothing under Actions is written while they are off: the policy is moot
+    # there, and no helper call can then switch them on.
+    row HOLD "$r" actions.enabled "$AP_ENABLED" "$enabled (left for a person: switching Actions on is a decision; Actions policy not applied)"
     n_rows=$((n_rows + 1)); n_hold=$((n_hold + 1))
+    continue
   fi
   [ "$allowed" = "$AP_ALLOWED" ] || { row DRIFT "$r" actions.allowed_actions "$AP_ALLOWED" "$allowed"; need=1; }
   [ "$sha" = "$AP_SHA" ] || { row DRIFT "$r" actions.sha_pinning_required "$AP_SHA" "$sha"; need=1; }
@@ -275,19 +282,14 @@ for r in "${REPOS[@]}"; do
     fi
     for k in github_owned_allowed verified_allowed; do
       exp="$(jq -r --arg k "$k" '.[$k] | tostring' <<<"$ALLOW_FIELDS")"
-      act="$(jq -r --arg k "$k" '.[$k] // "ABSENT" | tostring' <<<"$live_sel")"
+      act="$(jq -r --arg k "$k" '.[$k] | if . == null then "ABSENT" else tostring end' <<<"$live_sel")"
       [ "$act" = "$exp" ] || { row DRIFT "$r" "actions.$k" "$exp" "$act"; need=1; }
     done
   fi
   if [ "$need" -eq 1 ]; then
     n_rows=$((n_rows + 1))
-    payload="$WORK/actions-$n_repos.json"
-    jq -n --argjson c "$ALLOW_FIELDS" --argjson l "$live_sel" '
-      {github_owned_allowed: $c.github_owned_allowed,
-       verified_allowed: $c.verified_allowed,
-       patterns_allowed: (reduce (($c.patterns_allowed // []) + ($l.patterns_allowed // []))[] as $p
-                            ([]; if index($p) then . else . + [$p] end))}' > "$payload"
-    plan "$r" ACTIONS "$payload"
+    # The payload is built at apply time from a fresh read (see ACTIONS below).
+    plan "$r" ACTIONS "-"
   fi
 done
 
@@ -302,18 +304,28 @@ fi
 failed=0
 ok()   { row FIXED "$1" "$2"; }
 fail() { row FAIL "$1" "$2" "" "$3"; failed=1; }
+# Repositories where an armed pull request could not be verified as disarmed.
+declare -A UNDISARMED=()
 
 apply_step() {
   local r="$1" step="$2" arg="$3" k v got live rc
   case "$step" in
     DISARM)
       gh pr merge "$arg" -R "$r" --disable-auto >/dev/null 2>"$WORK/err" \
-        || { fail "$r" "pr#$arg" "disarm rejected: $(tr '\n' ' ' < "$WORK/err")"; return; }
+        || { UNDISARMED[$r]=1; fail "$r" "pr#$arg" "disarm rejected: $(tr '\n' ' ' < "$WORK/err")"; return; }
       got="$(gh pr view "$arg" -R "$r" --json autoMergeRequest --jq '.autoMergeRequest == null')" \
-        || { fail "$r" "pr#$arg" "could not read back"; return; }
-      [ "$got" = true ] && ok "$r" "pr#$arg auto-merge disarmed" || fail "$r" "pr#$arg" "still armed after disarm"
+        || { UNDISARMED[$r]=1; fail "$r" "pr#$arg" "could not read back"; return; }
+      if [ "$got" = true ]; then ok "$r" "pr#$arg auto-merge disarmed"
+      else UNDISARMED[$r]=1; fail "$r" "pr#$arg" "still armed after disarm"; fi
       ;;
     PATCH)
+      # The setting is switched off only after every armed pull request in the
+      # repository is verified as disarmed. The other keys still go through.
+      if [ -n "${UNDISARMED[$r]:-}" ] && [ "$(jq 'has("allow_auto_merge")' <<<"$arg")" = true ]; then
+        fail "$r" allow_auto_merge "not written: an armed pull request could not be disarmed"
+        arg="$(jq -c 'del(.allow_auto_merge)' <<<"$arg")"
+        [ "$arg" = "{}" ] && return
+      fi
       gh api -X PATCH "repos/$r" --input - <<<"$arg" >/dev/null 2>"$WORK/err" \
         || { fail "$r" "repo settings" "PATCH rejected: $(tr '\n' ' ' < "$WORK/err")"; return; }
       live="$(gh api "repos/$r")" || { fail "$r" "repo settings" "could not read back"; return; }
@@ -321,7 +333,7 @@ apply_step() {
         [ -n "$k" ] || continue
         [ "$v" = "$got" ] && ok "$r" "$k=$v" || fail "$r" "$k" "read back $got, not $v"
       done < <(jq -r --argjson l "$live" 'to_entries[]
-                 | [.key, (.value|tostring), ($l[.key] // "ABSENT" | tostring)] | @tsv' <<<"$arg")
+                 | [.key, (.value|tostring), ($l[.key] | if . == null then "ABSENT" else tostring end)] | @tsv' <<<"$arg")
       ;;
     SA)
       k="${arg%%=*}"; v="${arg#*=}"
@@ -354,12 +366,27 @@ apply_step() {
         [ -n "$k" ] || continue
         [ "$v" = "$got" ] && ok "$r" "actions_workflow.$k=$v" || fail "$r" "actions_workflow.$k" "read back $got, not $v"
       done < <(jq -r --argjson l "$live" 'to_entries[]
-                 | [.key, (.value|tostring), ($l[.key] // "ABSENT" | tostring)] | @tsv' <<<"$arg")
+                 | [.key, (.value|tostring), ($l[.key] | if . == null then "ABSENT" else tostring end)] | @tsv' <<<"$arg")
       ;;
     ACTIONS)
       # set-allowed-actions.sh reads back itself and refuses success on an
       # empty or short allow-list. ACTIONS_NO_ESCALATE keeps a per-repository
       # payload from being written to a whole organisation.
+      # The union is built from a read made immediately before the write, so
+      # a pattern added to the repository since pass 1 is not dropped.
+      live="$(gh api "repos/$r/actions/permissions")" \
+        || { fail "$r" actions "could not re-read Actions permissions"; return; }
+      got='{}'
+      if [ "$(jq -r '.allowed_actions // "ABSENT"' <<<"$live")" = selected ]; then
+        got="$(gh api "repos/$r/actions/permissions/selected-actions")" \
+          || { fail "$r" actions "could not re-read the allow-list"; return; }
+      fi
+      arg="$WORK/actions-payload.json"
+      jq -n --argjson c "$ALLOW_FIELDS" --argjson l "$got" '
+        {github_owned_allowed: $c.github_owned_allowed,
+         verified_allowed: $c.verified_allowed,
+         patterns_allowed: (reduce (($c.patterns_allowed // []) + ($l.patterns_allowed // []))[] as $p
+                              ([]; if index($p) then . else . + [$p] end))}' > "$arg"
       ACTIONS_NO_ESCALATE=1 bash "$SET_ACTIONS" "$r" "$arg" >"$WORK/act" 2>&1
       rc=$?
       case "$rc" in

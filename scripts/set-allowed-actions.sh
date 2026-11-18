@@ -89,7 +89,7 @@ apply_policy() {
   case "$prefix" in
     repos/*)
       enabled_key=enabled
-      enabled_value="$(jq -r '.enabled // true' <<<"$current")"
+      enabled_value="$(jq -r 'if .enabled == null then true else .enabled end' <<<"$current")"
       ENABLED_FIELDS=(-F "enabled=$enabled_value")
       ;;
     *)

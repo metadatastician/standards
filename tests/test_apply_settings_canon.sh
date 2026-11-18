@@ -15,7 +15,15 @@
 #      and the run carries on with the next repository;
 #   6. an org-governed Actions policy is GOVERNED, never escalated to the org;
 #   7. a second --apply on a compliant repo writes nothing (idempotent);
-#   8. a read that fails stops the run with exit 2 before any write.
+#   8. a read that fails stops the run with exit 2 before any write, even when
+#      an earlier repository in the same run has drift waiting to be written;
+#   9. a successful write of `false` reads back as FIXED and the run exits 0
+#      (jq's `//` treats false as absent, which once turned every such write
+#      into a FAIL);
+#  10. a repository with Actions switched off gets HOLD and no Actions write,
+#      and stays off;
+#  11. an armed pull request that cannot be disarmed blocks that repository's
+#      allow_auto_merge switch, while its other settings still go through.
 #
 # No network: `gh` is a stateful stub on PATH. Each repository is one JSON
 # file; writes change it, so read-backs see what was written. The fixtures are
@@ -45,7 +53,8 @@ mk() { # mk owner/name jq-filter-applied-to-a-compliant-repo
     {live: ($f + {full_name: $r, private: false, fork: false, archived: false, security_and_analysis: $sa}),
      va: true, asf: true, wf: $wf,
      perms: {enabled: true, allowed_actions: "selected", sha_pinning_required: true},
-     sel: $sel, prs: [], governed: false, reject_patch: false, ignore_patch: false}' \
+     sel: $sel, prs: [], governed: false, reject_patch: false, ignore_patch: false,
+     reject_disarm: false}' \
   | jq "$2" > "$state/${1/\//__}.json"
 }
 first_pattern=$(jq -r '.patterns_allowed[0]' "$allow")
@@ -66,6 +75,15 @@ mk org1/007 '.live.allow_auto_merge = (.live.allow_auto_merge | not)'
 mk org1/gov '.perms.allowed_actions = "all" | .governed = true'
 mk org1/broken '.live.delete_branch_on_merge = false | .reject_patch = true'
 mk org1/sticky '.live.delete_branch_on_merge = false | .ignore_patch = true'
+# Every drifted key here has a canon value of false or "read", so a wrong
+# read-back of `false` cannot hide behind another repository's failure.
+mk me/solo '.live.allow_auto_merge = true | .live.allow_merge_commit = true
+  | .wf = {default_workflow_permissions: "write", can_approve_pull_request_reviews: true}
+  | .prs = [{number: 7, autoMergeRequest: {mergeMethod: "SQUASH"}}]'
+mk me/off '.perms.enabled = false | .perms.allowed_actions = "all"
+  | .sel.patterns_allowed = ["local/only@*"]'
+mk org1/stuck '.live.allow_auto_merge = true | .live.delete_branch_on_merge = false
+  | .reject_disarm = true | .prs = [{number: 9, autoMergeRequest: {mergeMethod: "SQUASH"}}]'
 
 cat > "$tmp/bin/gh" <<'STUB'
 #!/usr/bin/env bash
@@ -81,7 +99,9 @@ if [ "$1" = pr ]; then
     --json|--state|--limit) shift 2 ;; --disable-auto) shift ;; *) n=$1; shift ;; esac; done
   case $sub in
     list) jq -c '.prs' "$(f "$repo")" | out ;;
-    merge) upd "$repo" "(.prs[] | select(.number == $n) | .autoMergeRequest) = null" ;;
+    merge)
+      [ "$(jq -r .reject_disarm "$(f "$repo")")" = true ] && { echo "gh: disarm refused (HTTP 403)" >&2; exit 1; }
+      upd "$repo" "(.prs[] | select(.number == $n) | .autoMergeRequest) = null" ;;
     view) jq -c ".prs[] | select(.number == $n) | {autoMergeRequest}" "$(f "$repo")" | out ;;
   esac
   exit 0
@@ -111,6 +131,8 @@ case "$method $path" in
     [ -f "$file" ] || { echo "gh: Not Found (HTTP 404)" >&2; exit 1; }
     case "$method $sub" in
       "GET ") jq -c '.live' "$file" | out ;;
+      "GET pulls?state=open&per_page=100")
+        jq -c '[.prs[] | {number, auto_merge: .autoMergeRequest}]' "$file" | out ;;
       "PATCH ")
         [ "$(jq -r .reject_patch "$file")" = true ] && { echo "gh: Must have admin rights (HTTP 403)" >&2; exit 1; }
         [ "$(jq -r .ignore_patch "$file")" = true ] && { echo '{}'; exit 0; }
@@ -155,6 +177,17 @@ echo "4. skips"
 if grep -qE 'repos/(me/forked|me/old|org1/007)' "$STUB_LOG"; then bad "a fork, archived repo or 007 was read"
 else pass "fork, archived and 007 never read"; fi
 
+echo "9. a write of false reads back as FIXED"
+: > "$STUB_LOG"; run --apply --repo me/solo
+[ "$rc" -eq 0 ] && pass "exit 0 on a clean single-repository apply" || bad "exit $rc, expected 0: $(rows FAIL me/solo | tr '\t' ' ')"
+[ -z "$(rows FAIL me/solo)" ] && pass "no FAIL row" || bad "FAIL rows: $(rows FAIL me/solo | tr '\t' ' ')"
+if [ "$canon_am" = false ]; then
+  rows FIXED me/solo | grep -q $'\tallow_auto_merge=false' && pass "allow_auto_merge=false is FIXED" || bad "no FIXED row for allow_auto_merge=false"
+  [ "$(live me/solo '.live.allow_auto_merge')" = false ] && pass "allow_auto_merge reads back false" || bad "allow_auto_merge not false"
+fi
+rows FIXED me/solo | grep -q $'\tallow_merge_commit=false' && pass "allow_merge_commit=false is FIXED" || bad "no FIXED row for allow_merge_commit=false"
+rows FIXED me/solo | grep -q 'actions_workflow.can_approve_pull_request_reviews=false' && pass "workflow false value is FIXED" || bad "no FIXED row for can_approve_pull_request_reviews=false"
+
 echo "2,3,5,6. --apply"
 : > "$STUB_LOG"; run --apply
 [ "$rc" -eq 1 ] && pass "exit 1 (rejected, unread-back and governed repos)" || bad "exit $rc, expected 1"
@@ -189,12 +222,34 @@ rows GOVERNED org1/gov | grep -q . && pass "org-governed Actions policy is GOVER
 grep -q 'escalation attempted' "$tmp/err" && bad "escalated to the organisation" || pass "never escalated to the organisation"
 grep -qE '^api -X (PATCH|PUT) repos/me/clean' "$STUB_LOG" && bad "compliant repo was written" || pass "compliant repo not written"
 
+echo "10. Actions switched off"
+rows HOLD me/off | grep -q 'actions.enabled' && pass "disabled Actions reported as HOLD" || bad "no HOLD row for me/off"
+grep -qE '^api -X PUT repos/me/off/actions' "$STUB_LOG" && bad "Actions policy written on a repo with Actions off" || pass "no Actions write on a repo with Actions off"
+[ "$(live me/off '.perms.enabled')" = false ] && pass "Actions stay off" || bad "Actions were switched on"
+# The helper on its own must not switch Actions on either: it once read a live
+# `enabled: false` as true and sent enabled=true with the policy.
+mk me/off2 '.perms.enabled = false | .perms.allowed_actions = "all"'
+set +e
+PATH="$tmp/bin:$PATH" ACTIONS_NO_ESCALATE=1 bash "$here/scripts/set-allowed-actions.sh" me/off2 "$allow" >/dev/null 2>&1
+set -e
+[ "$(live me/off2 '.perms.enabled')" = false ] && pass "set-allowed-actions.sh keeps Actions off" || bad "set-allowed-actions.sh switched Actions on"
+
+echo "11. a failed disarm blocks the auto-merge switch"
+if [ "$canon_am" = false ]; then
+  rows FAIL org1/stuck | grep -q 'pr#9' && pass "failed disarm is FAIL" || bad "no FAIL row for the disarm"
+  rows FAIL org1/stuck | grep -q $'\tallow_auto_merge\t' && pass "allow_auto_merge reported as not written" || bad "no FAIL row for allow_auto_merge"
+  [ "$(live org1/stuck '.live.allow_auto_merge')" = true ] && pass "setting left on while a PR is still armed" || bad "setting switched off with a PR still armed"
+  [ "$(live org1/stuck '.live.delete_branch_on_merge')" = true ] && pass "the repository's other settings still applied" || bad "other settings were not applied"
+fi
+
 echo "7. idempotent"
 : > "$STUB_LOG"; run --apply --repo me/drifty --repo me/clean
 [ "$rc" -eq 0 ] && [ "$(writes)" -eq 0 ] && pass "second apply writes nothing" || bad "second apply rc=$rc writes=$(writes)"
 
 echo "8. fail closed"
-: > "$STUB_LOG"; run --apply --repo me/clean --repo me/missing
+mk me/late '.live.delete_branch_on_merge = false'
+: > "$STUB_LOG"; run --apply --repo me/late --repo me/missing
 [ "$rc" -eq 2 ] && [ "$(writes)" -eq 0 ] && pass "unreadable repo stops the run before any write" || bad "rc=$rc writes=$(writes)"
+[ "$(live me/late '.live.delete_branch_on_merge')" = false ] && pass "the drifted repo read first was not written" || bad "me/late was written before all reads finished"
 
 exit "$fail"
