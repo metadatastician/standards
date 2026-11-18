@@ -133,7 +133,12 @@ case "$method $path" in
     case "$method $sub" in
       "GET ") jq -c '.live' "$file" | out ;;
       "GET pulls?state=open&per_page=100")
-        jq -c '[.prs[] | {number, auto_merge: .autoMergeRequest}]' "$file" | out ;;
+        jq -c '[.prs[] | {number, auto_merge: .autoMergeRequest}]' "$file" | out
+        # A later page that fails: the first page has been printed already and
+        # `gh api --paginate` then exits non-zero.
+        if [ "$(jq -r '.pulls_fail // false' "$file")" = true ]; then
+          echo "gh: Server Error (HTTP 502)" >&2; exit 1
+        fi ;;
       "PATCH ")
         [ "$(jq -r .reject_patch "$file")" = true ] && { echo "gh: Must have admin rights (HTTP 403)" >&2; exit 1; }
         [ "$(jq -r .ignore_patch "$file")" = true ] && { echo '{}'; exit 0; }
@@ -170,6 +175,12 @@ echo "1. report only"
 : > "$STUB_LOG"; run
 [ "$rc" -eq 0 ] && pass "exit 0" || bad "exit $rc ($(cat "$tmp/err"))"
 [ "$(writes)" -eq 0 ] && pass "no write in report mode" || bad "report mode wrote: $(grep -E '^api -X|^pr merge' "$STUB_LOG")"
+if [ "$canon_am" = false ]; then
+  # Paging itself is gh's job and a stub cannot prove it. What the script
+  # controls is that it asks for every page.
+  grep -qE '^api --paginate repos/me/drifty/pulls\?state=open&per_page=100 ' "$STUB_LOG" \
+    && pass "the open-PR census asks gh for every page (--paginate)" || bad "the open-PR census is not paginated"
+fi
 rows DRIFT me/drifty | grep -q $'\tallow_auto_merge\t'"$canon_am" && pass "allow_auto_merge drift reported" || bad "allow_auto_merge drift missing"
 rows DRIFT me/drifty | grep -q 'actions.patterns_allowed' && pass "missing canon pattern reported" || bad "missing pattern not reported"
 [ -z "$(rows DRIFT me/clean)$(rows ARMED me/clean)" ] && pass "compliant repo has no rows" || bad "clean repo reported: $(rows DRIFT me/clean)"
@@ -253,5 +264,14 @@ mk me/late '.live.delete_branch_on_merge = false'
 : > "$STUB_LOG"; run --apply --repo me/late --repo me/missing
 [ "$rc" -eq 2 ] && [ "$(writes)" -eq 0 ] && pass "unreadable repo stops the run before any write" || bad "rc=$rc writes=$(writes)"
 [ "$(live me/late '.live.delete_branch_on_merge')" = false ] && pass "the drifted repo read first was not written" || bad "me/late was written before all reads finished"
+if [ "$canon_am" = false ]; then
+  # A pull-request listing that fails after its first page: the partial output
+  # must not be taken for a complete census.
+  mk me/halfpulls '.live.allow_auto_merge = true | .pulls_fail = true
+    | .prs = [{number: 3, autoMergeRequest: {mergeMethod: "SQUASH"}}]'
+  : > "$STUB_LOG"; run --apply --repo me/late --repo me/halfpulls
+  [ "$rc" -eq 2 ] && [ "$(writes)" -eq 0 ] && pass "a PR listing that fails partway stops the run before any write" || bad "rc=$rc writes=$(writes)"
+  [ "$(live me/halfpulls '.live.allow_auto_merge')" = true ] && pass "auto-merge left on after a partial census" || bad "auto-merge switched off after a partial census"
+fi
 
 exit "$fail"
