@@ -23,7 +23,9 @@
 #  10. a repository with Actions switched off gets HOLD and no Actions write,
 #      and stays off;
 #  11. an armed pull request that cannot be disarmed blocks that repository's
-#      allow_auto_merge switch, while its other settings still go through.
+#      allow_auto_merge switch, while its other settings still go through;
+#  12. an Actions pattern added to a repository between the planning read and
+#      the write is kept: the union is built from a read made at apply time.
 #
 # No network: `gh` is a stateful stub on PATH. Each repository is one JSON
 # file; writes change it, so read-backs see what was written. The fixtures are
@@ -158,7 +160,13 @@ case "$method $path" in
         [ "$(jq -r .governed "$file")" = true ] && {
           echo "gh: Actions policy is set at the organization or enterprise level (HTTP 409)" >&2; exit 1; }
         upd "$r" ".perms = (.perms * $body)" ;;
-      "GET actions/permissions/selected-actions") jq -c '.sel' "$file" | out ;;
+      "GET actions/permissions/selected-actions")
+        jq -c '.sel' "$file" | out
+        # Someone else adds a pattern just after this read (once).
+        late=$(jq -r '.late_pattern // empty' "$file")
+        if [ -n "$late" ]; then
+          upd "$r" "(.sel.patterns_allowed += [\"$late\"]) | .late_pattern = null"
+        fi ;;
       "PUT actions/permissions/selected-actions") upd "$r" ".sel = $body" ;;
       *) echo "stub: unhandled $method $path" >&2; exit 97 ;;
     esac ;;
@@ -273,5 +281,13 @@ if [ "$canon_am" = false ]; then
   [ "$rc" -eq 2 ] && [ "$(writes)" -eq 0 ] && pass "a PR listing that fails partway stops the run before any write" || bad "rc=$rc writes=$(writes)"
   [ "$(live me/halfpulls '.live.allow_auto_merge')" = true ] && pass "auto-merge left on after a partial census" || bad "auto-merge switched off after a partial census"
 fi
+
+echo "12. a pattern added between planning and apply is kept"
+mk me/racy '.sel.patterns_allowed = (.sel.patterns_allowed[1:]) | .late_pattern = "late/added@*"'
+: > "$STUB_LOG"; run --apply --repo me/racy
+[ "$rc" -eq 0 ] && pass "exit 0" || bad "exit $rc: $(rows FAIL me/racy | tr '\t' ' ')"
+pats=$(live me/racy '.sel.patterns_allowed')
+jq -e 'index("late/added@*")' <<<"$pats" >/dev/null && pass "the pattern added after the planning read survives the write" || bad "the late pattern was overwritten by a stale payload"
+jq -e --arg p "$first_pattern" 'index($p)' <<<"$pats" >/dev/null && pass "the missing canon pattern was still added" || bad "canon pattern not added"
 
 exit "$fail"
