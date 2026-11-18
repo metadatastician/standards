@@ -15,9 +15,17 @@
 #     - kept unchanged with `baseline_status: "new"`
 #   Plus a top-level summary written to $GITHUB_STEP_SUMMARY if set.
 #
+# The advisory class (owner ruling 2026-11-17, hypatia#1204): a finding the
+# scanner marks `"advisory": true` (WF026, WF027, RE011: flag-only rules) is
+# reported in `findings_kept` like any other unacknowledged finding, and is
+# never counted by the gate, at any threshold. Hypatia does not count it
+# toward its own exit code either. Two limits keep the class from hiding a
+# defect: only the JSON boolean `true` is the class, and it waives nothing
+# at `high`, `critical` or an unknown severity.
+#
 # Exit codes:
 #   0 = all unfiltered findings have severity below blocking threshold
-#       (or advisory mode)
+#       or are of the advisory class (or advisory mode)
 #   1 = one or more unfiltered findings >= high in blocking mode
 #   2 = invalid input (missing files, malformed JSON, or a baseline that
 #       violates the schema — see below)
@@ -77,6 +85,17 @@ echo "$BASELINE_JSON" | jq -e 'type == "array"' >/dev/null || {
   echo "error: baseline JSON is not an array" >&2
   exit 2
 }
+# Exactly one JSON document each. Both are read below with `--slurpfile`,
+# which accepts any number of documents: taking the first would silently
+# drop a finding (or an entry) in a second one. That is a fail-open, so it is
+# invalid input, as it was when both were passed as single `--argjson` values.
+for doc in findings baseline; do
+  if [[ "$doc" == findings ]]; then text=$FINDINGS_JSON; else text=$BASELINE_JSON; fi
+  if [[ "$(jq -s 'length' <<<"$text" 2>/dev/null)" != 1 ]]; then
+    echo "error: $doc JSON must be exactly one document" >&2
+    exit 2
+  fi
+done
 
 # Structural validation against the baseline schema (see header).
 SCHEMA_ERRORS="$(jq -r '
@@ -192,9 +211,18 @@ EXPIRED_COUNT=$((EXPIRED_COUNT - ACTIVE_COUNT))
 
 # Match each finding against the active baseline. Returns the matched
 # baseline entry (or null) for each finding.
+#
+# Both documents reach jq as FILES (`--slurpfile`), never as `--argjson`
+# values: one argument string is capped by the kernel (MAX_ARG_STRLEN,
+# 128 KiB on Linux), and a scan of about 350 KB ended here with "Argument
+# list too long", exit 126: a red job that named no finding.
+ACTIVE_FILE="$(mktemp)"
+trap 'rm -f "$ACTIVE_FILE"' EXIT
+printf '%s\n' "$ACTIVE_BASELINE" > "$ACTIVE_FILE"
 ANNOTATED="$(jq -n \
-  --argjson findings "$FINDINGS_JSON" \
-  --argjson baseline "$ACTIVE_BASELINE" '
+  --slurpfile findings_doc "$FINDINGS_FILE" \
+  --slurpfile baseline_doc "$ACTIVE_FILE" '
+  $findings_doc[0] as $findings | $baseline_doc[0] as $baseline |
   # Tokenise the two supported wildcards; every other character is literal.
   # No sentinel substitution: a real filename may contain DOUBLESTAR.
   def glob_regex:
@@ -299,14 +327,27 @@ rank() {
   esac
 }
 
+# The advisory class: see the header. A kept finding of the class is
+# reported and never counted. The one jq definition is shared by the count
+# below and by the annotations at the end, so they cannot disagree.
+# shellcheck disable=SC2016  # a jq program: `$s` is jq's variable, not the shell's
+ADVISORY_DEF='def advisory_class:
+  .advisory == true and
+  ((.severity // "") as $s
+   | ["medium", "warn", "low", "info", "informational", "advisory"] | index($s) != null);'
+ADVISORY_COUNT="$(jq "$ADVISORY_DEF"' [.[] | select(advisory_class)] | length' <<<"$KEPT")"
+
 THRESHOLD_RANK="$(rank "$BLOCKING_THRESHOLD")"
 MAX_KEPT_RANK=0
 BLOCKING_COUNT=0  # kept findings at or above the threshold (the gate message names these, not all kept)
+# Read from a process substitution, one line per gated finding: no findings
+# is no lines, and an empty severity is one empty line, which `rank` treats
+# as unknown (critical). A here-string could not tell the two apart.
 while IFS= read -r sev; do
   r="$(rank "$sev")"
   if (( r > MAX_KEPT_RANK )); then MAX_KEPT_RANK=$r; fi
   if (( r >= THRESHOLD_RANK )); then BLOCKING_COUNT=$((BLOCKING_COUNT + 1)); fi
-done < <(jq -r '.[].severity' <<<"$KEPT")
+done < <(jq -r "$ADVISORY_DEF"' .[] | select(advisory_class | not) | .severity' <<<"$KEPT")
 
 KEPT_COUNT="$(jq 'length' <<<"$KEPT")"
 SUPPRESSED_COUNT="$(jq 'length' <<<"$SUPPRESSED")"
@@ -322,6 +363,7 @@ if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
     echo "| Total findings | $TOTAL_COUNT |"
     echo "| Acknowledged by baseline | $SUPPRESSED_COUNT |"
     echo "| Remaining (kept for gate) | $KEPT_COUNT |"
+    echo "| Advisory class (reported, never gating) | $ADVISORY_COUNT |"
     echo "| Expired baseline entries | $EXPIRED_COUNT |"
     echo
     echo "Mode: \`$MODE\` · Blocking threshold: \`$BLOCKING_THRESHOLD\`"
@@ -333,10 +375,11 @@ if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
 fi
 
 # Always emit the annotated findings so downstream steps can use them.
-jq -n --argjson kept "$KEPT" --argjson suppressed "$SUPPRESSED" '{
-  findings_kept: $kept,
-  findings_suppressed: $suppressed
-}'
+# Derived from $ANNOTATED on stdin, not passed as arguments (see above).
+jq '{
+  findings_kept: [.[] | select(.baseline_status != "acknowledged")],
+  findings_suppressed: [.[] | select(.baseline_status == "acknowledged")]
+}' <<<"$ANNOTATED"
 
 # Gate decision.
 if [[ "$MODE" == "advisory" ]]; then
@@ -344,7 +387,9 @@ if [[ "$MODE" == "advisory" ]]; then
 fi
 
 if (( MAX_KEPT_RANK >= THRESHOLD_RANK )); then
-  echo "::error::Gate failed: $BLOCKING_COUNT unfiltered finding(s) at or above '$BLOCKING_THRESHOLD' ($KEPT_COUNT kept in total)." >&2
+  kept_note="$KEPT_COUNT kept in total"
+  if (( ADVISORY_COUNT > 0 )); then kept_note+=", $ADVISORY_COUNT advisory and never gating"; fi
+  echo "::error::Gate failed: $BLOCKING_COUNT unfiltered finding(s) at or above '$BLOCKING_THRESHOLD' ($kept_note)." >&2
   # ⚠ NAME THE FINDINGS. The summary line above says how many; it does not say
   # which, and the job log is not always readable (progress-log retention, a
   # fork PR, an API that returns EOF). The annotation API is, and it is the only
@@ -352,11 +397,12 @@ if (( MAX_KEPT_RANK >= THRESHOLD_RANK )); then
   # finding that caused the failure is emitted as its own annotation. Without
   # this, diagnosing a red baseline gate means reproducing the scanner locally,
   # which is exactly the work the gate exists to avoid.
-  printf '%s' "$ANNOTATED" | jq -r --arg th "$BLOCKING_THRESHOLD" '
+  printf '%s' "$ANNOTATED" | jq -r --arg th "$BLOCKING_THRESHOLD" "$ADVISORY_DEF"'
     def rank: {critical: 5, high: 4, medium: 3, warn: 3, low: 2, info: 1, informational: 1}[.] // 0;
     ($th | rank) as $min
     | .[]
     | select((.baseline_status // "new") == "new")
+    | select(advisory_class | not)
     | select((.severity | rank) >= $min)
     | "::error file=\(.file // "hypatia"),line=\(.line // 1),title=\(.rule_module)/\(.type)::unfiltered \(.severity) finding \(.rule_module)/\(.type) in \(.file // "(no file)") -- add it to .hypatia-baseline.json with a note, or fix it"
   ' >&2 || true
