@@ -111,6 +111,7 @@ out=$(cd "$R" && bash scripts/grade-receipt.sh --inputs agda)
 # recorded the digest-pinned image its checker ran in.  The same run recorded
 # without --image derives PWG-2ii, and a malformed image is refused.
 IMG="ubuntu:24.04@sha256:$(printf 'a%.0s' $(seq 64))"
+RUN_IMG="$IMG"   # kept: IMG is reused below for an echo image
 for p in agda rocq lean; do
   (cd "$R" && bash scripts/grade-receipt.sh --run-row "$p" --run "https://ci.example/run/1" --commit "$C" --checker "$p 1" --reported "ok" --axioms none) >>"$WORK/noimgrows" \
     || bad "--run-row $p without --image"
@@ -410,7 +411,7 @@ git -C "$R" fetch -q origin
 N=$(git -C "$R" rev-parse HEAD)
 sed 's/|current||/|superseded|replaced by run 9|/' "$WORK/rows" >"$WORK/scope.rows"
 for p in agda rocq lean; do
-  (cd "$R" && SECOND=1 bash scripts/grade-receipt.sh --run-row "$p" --run "https://ci.example/run/9" --commit "$N" --checker "$p 1" --reported ok) >>"$WORK/scope.rows" \
+  (cd "$R" && SECOND=1 bash scripts/grade-receipt.sh --run-row "$p" --run "https://ci.example/run/9" --commit "$N" --checker "$p 1" --reported ok --axioms none --image "$RUN_IMG") >>"$WORK/scope.rows" \
     || bad "--run-row $p at N"
 done
 # The lines of one leg of one claim in the receipt.
