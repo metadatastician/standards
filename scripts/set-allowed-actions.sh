@@ -28,6 +28,9 @@
 #       payload fails, so a partial run is a no-op rather than an outage.
 #
 # Usage: set-allowed-actions.sh <owner/repo> [allowed-actions.json] [enterprise]
+#   ACTIONS_NO_ESCALATE=1  stop at the repository level: when the policy is
+#   governed higher up, exit 3 instead of writing the payload to the
+#   organisation or enterprise (used by scripts/apply-settings-canon.sh).
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -170,6 +173,14 @@ echo "==> repository level: $REPO"
 apply_policy repository "repos/$REPO"; rc=$?
 [ "$rc" -eq 0 ] && exit 0
 [ "$rc" -ne 42 ] && exit 1
+
+# A caller applying a per-repository payload (scripts/apply-settings-canon.sh
+# unions the canon with that repository's live list) must not have it written
+# to the whole organisation. Exit 3 = governed higher up, not escalated.
+if [ "${ACTIONS_NO_ESCALATE:-0}" = 1 ]; then
+  echo "   repository policy is governed higher up; not escalating (ACTIONS_NO_ESCALATE=1)"
+  exit 3
+fi
 
 echo "==> organization level: $OWNER"
 apply_policy organization "orgs/$OWNER"; rc=$?
