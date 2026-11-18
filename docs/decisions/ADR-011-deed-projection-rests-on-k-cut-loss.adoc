@@ -1,0 +1,392 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+// Copyright (c) 2026 Jonathan D.A. Jewell
+= ADR-011: The estate/repo projection of deeds rests on K-CUT-LOSS
+:toc: preamble
+
+[cols="1,4"]
+|===
+| Status | *Proposed*, step 1 of `0-canon/constitution/CHANGE-PROCEDURE.adoc`. The owner ruled on 2026-11-18 that the caution is lifted: the estate/repo projection relation may rest on K-CUT-LOSS. Every design point below that the owner has not ruled on is put as a question (§11). Nothing here is adopted.
+| Date | 2026-11-18
+| Supersedes | the caution "This spec must not depend on it" in `1-formats/deed/spec/DEED-GRAMMAR-SPEC.adoc` and `1-formats/deed/README.adoc` (typing chapter, Choreographic), removed by the owner ruling of 2026-11-18
+| Authority sought | semantics of the deed typing chapter: what the estate/repo projection means, what is graded, and which rule follows. No grammar authority is sought.
+|===
+
+== 1. The request
+
+The deed spec reads the estate and its repos as a choreography.
+`estate_chora.deed` is the global side, each `<repo>_chora.deed` an endpoint
+projection, and the one-declaration-site rule is the projection discipline.
+Until 2026-11-18 the spec said its keystone, K-CUT, was an open conjecture,
+and that no rule could depend on it. The owner ruled to update the fact and
+lift the caution. A rule may now be *derived* from commuting projection.
+This ADR says what such a derivation means for deeds and what it would cost.
+
+== 2. What is proved, and where
+
+All of this is stated by upstream, in `PROOF-STATUS.adoc` of
+`hyperpolymath/choreographic-types` at commit
+`a7c45138ee9ad59d278d26140ae22a96009593f3` (2026-11-16):
+
+[cols="1,4,2",options="header"]
+|===
+| Row | Statement | Upstream status
+
+| K-1
+| *K-CUT-LOSS.* For every party `p`, global type `G` and cut `c` with
+  `Consistent p c`, `grade↾ p (G ↾ c) ≡ lgrade (proj p G ↾ₗ cutproj p c)`,
+  parametric in the resource algebra.
+| PROVEN, `Choreographic.KCut.kcut-loss`
+
+| K-2
+| Projection commutes with cutting, with no side condition and no algebra
+  law: `proj p (G ↾ c) ≡ proj p G ↾ₗ cutproj p c`.
+| PROVEN, `KCut.proj-cut`
+
+| K-4
+| K-1 uses exactly two laws: `𝟙 ⊗ x ≡ x` and `x ⊕ x ≡ x`.
+| TESTED, `scripts/minimal-laws.sh`
+
+| K-5
+| `Consistent p c` alone makes the cut prefix projectable. What lies
+  beyond the frontier does not matter.
+| PROVEN, `KCut.cut-projectable`
+
+| K-6
+| K-1 holds at the three instances `Loss`, `MaxPlus` and `HWM`.
+| PROVEN, `Instances.kcut-loss-*`
+
+| K-7
+| Both side conditions are needed. Without either, the equality fails
+  (restricted grade 1, local grade 2).
+| TESTED, two refusal fixtures
+
+| Y-2
+| *Asynchronous K-CUT-LOSS.* For every causal cut `κ` consistent for `p`,
+  with messages and selections in flight, `grade↾ₐ p G κ ≡ lgrade (aview p G κ)`.
+  Same two laws.
+| PROVEN, `Async.akcut-loss`
+|===
+
+*Fragment.* Finite global types with messages and binary choice, plain
+merge, synchronous; Y-2 adds asynchrony over the same fragment. Not covered:
+recursion, full merge, delegation, queues as data, data-dependent warrants.
+
+*Gate.* `scripts/check.sh` and `scripts/minimal-laws.sh`, run by
+`.github/workflows/proofs.yml` with
+`--safe --without-K --cubical-compatible --no-libraries --ignore-interfaces --double-check -W error`
+on Agda 2.6.4.3 (Debian `agda-bin=2.6.4.3-1+b2`). The sibling libraries are
+pinned by full commit: resource-algebra `b2c9f1f6bc7ed7cc83c7573014cdf88d49d2a881`,
+epistemic-types `6ce8c74e8a91e5021cb0c1fb4fc805bdff837178`, echo-types
+`ebde9ac4e1a9f115b441c642c82aced1316c5983`.
+
+*Grade.* Upstream records every theorem as `ungraded`. No per-theorem PWG-3
+receipt exists, and there is no Rocq or Lean leg. Grades are derived from
+receipts (PROOF-POLICY §8), so this ADR asserts none.
+
+*Port.* `hyperpolymath/typed-wasm` `src/abi/TypedWasm/ABI/KCut.idr` (at
+`b83409a5826827d144dc305be18742e83497f85c`) is an Idris2 port and re-proof of
+K-1, K-2, K-3, K-5, K-6 and K-7. It was taken from upstream
+`edb784a7d26c276c2abfa8399b773d346dbb101e`. Its header marks the
+correspondence to the Agda as `ASSUMED`, and it does not re-check K-4.
+Between `edb784a7` and `a7c45138`, `Party`, `Global`, `Local` and
+`Projection` are unchanged, `KCut.agda` gains only ledger comments, and
+`Instances.agda` gains additions. A port is not a recheck leg under
+PROOF-POLICY §2, so it does not change the grade.
+
+=== 2.1 What was re-run for this ADR, and what was not
+
+On 2026-11-18, at upstream `a7c45138`, with the sibling libraries checked out
+at the three pins above and the flags above:
+
+* `src/Choreographic/All.agda`, `KCut.agda` and `Async.agda` checked;
+* `KCut.agda` and `Async.agda` checked against the two-law
+  `tests/minimal-laws/ResourceAlgebra/Core.agda` (K-4);
+* `tests/reject/InconsistentCut.agda` and
+  `tests/reject/UnprojectableChoice.agda` were refused at their `invalid`
+  declarations with `1 != 2 of type Nat` (K-7).
+
+This ran on *Agda 2.6.3* (Ubuntu `agda-bin 2.6.3-1build1`), not the pinned
+2.6.4.3, so it is an off-pin re-run, not a receipt. Not run: the pinned
+2.6.4.3 binary (blocked by this session's sandbox), the echo-additive root
+(it needs `agda-stdlib` 2.1; the available package is 1.7.3), the other
+refusal fixtures, and the typed-wasm Idris2 port (no Idris2 here).
+
+== 3. The reading for deeds
+
+The model has parties, a global type built from messages and binary
+choices, a cut and a projection. Each is read as follows.
+
+*Parties.* At a given frontier: the estate chora `E`, the registry
+(chora-registry) `R`, each repo chora, each praxis deed's tool (the
+cadastre, for example) and each operational tool. The set is finite at a
+frontier (§7 says what that costs).
+
+*Message* `s → r : g`. Party `r` takes a fact that `s` publishes, with grade
+`g`. The flows the spec already draws in "The chora is not a layer" are
+messages: `E → repo` (vocabulary, through `:beholding-chora`),
+`repo → cadastre` (the cadastre reads every repo chora),
+`cadastre → emission`, and `emission → operational tool`.
+
+*Choice* `s → r chooses`. A decision taken by `s` and announced to `r`. In
+the estate this is an owner ruling between alternatives, a registry switch
+of classification scheme, or a praxis rule taking one branch. A party that
+receives the announcement is a participant in the choice. Any other party
+is outside it.
+
+*Global type `G`.* The protocol of these reads and decisions over a bounded
+window. This is a precision on the spec's sentence "`estate_chora.deed` is
+the global type". `estate_chora.deed` declares the vocabulary in which the
+messages of `G` are typed, and `G` is the flow. Today no file holds `G`.
+Where it should live is question 2 (§11).
+
+*Cut, or frontier.* How far the estate has run along each branch of `G`.
+Concretely it is a set of pins, a deed at a commit for each party, as of
+which the estate is read. `cutproj p c` is `p`'s own frontier: the pins that
+`p`'s deed itself records.
+
+*Projection.* `proj p G` is `p`'s local type: what `p` receives and
+publishes, in order. A repo chora's local type is "receive the vocabulary
+from `E`, publish facts to its readers". The grade restricted to `p`,
+`grade↾ p`, counts only the messages `p` takes part in. A message `p` is
+outside of contributes `𝟙` (upstream `at (outside _ _) _ = 𝟙`).
+
+== 4. The resource algebra
+
+K-1 holds for *any* algebra with `𝟙 ⊗ x ≡ x` and `x ⊕ x ≡ x` (K-4). `⊗`
+sequences two steps on one timeline, and `⊕` combines the two branches of a
+choice. Which algebra the estate uses decides what a deed's grade *means*.
+That choice is the owner's (question 1). The candidates:
+
+[cols="1,2,2,2",options="header"]
+|===
+| Candidate | What is graded | Why the two laws hold | Proof cost
+
+| A. *Echo loss* (upstream `Loss`)
+| Facts lost across a read: fields a reader cannot resolve, or that a
+  mapping spec drops on purpose ("anything a mapping spec does not list
+  does not translate"). `Grade = ℕ ∪ {∞}`, `⊗ = +` (loss accumulates, `∞`
+  absorbs), `𝟙 = 0`, `⊕ = min`.
+| `0 + x = x`; `min x x = x`.
+| None. K-6 already discharges it at the resource-algebra pin. It matches
+  the chapter's own Echo verdict ("each edge graded by an echo
+  loss-grade"). One caution: `⊕ = min` reports the *less* lossy branch of a
+  choice, which is optimistic for an audit.
+
+| B. *Worst-case lag* (upstream `MaxPlus`)
+| How far behind a party reads, counted in commits or pins along a chain
+  of reads. `⊗ = +`, `𝟙 = 0`, `⊕ = max`.
+| `0 + x = x`; `max x x = x`.
+| None. K-6 discharges it. `⊕ = max` is pessimistic, which suits an audit.
+
+| C. *Evidence strength, weakest link* (new)
+| The status of what a fact rests on: `PROVEN ⊐ TESTED ⊐ ASSUMED ⊐ OPEN`.
+  `⊗ = ⊕ = ⊓` (meet), `𝟙 = PROVEN`. This is the estate's existing rule
+  that "a row is only as strong as the weakest step it depends on"
+  (`docs/README-EXPLAINME-STANDARD.adoc`).
+| `PROVEN ⊓ x = x`; `x ⊓ x = x`.
+| A new instance in resource-algebra (Agda). Both laws are one line each,
+  but the obligation is new and `OPEN` until checked.
+
+| D. *Structural first, no grade*
+| Nothing yet. Use K-2 and K-5, which need no algebra law, for the
+  projection property, and choose a grade later.
+| Not applicable.
+| None. A product of any two of A–C is also lawful, componentwise, if a
+  vector grade is wanted later (a new instance, `OPEN`).
+|===
+
+Recommendation, for the owner to rule: *A* is the most elegant, because it
+needs no new proof and is the grade the chapter already names. *D* is the
+most dependable, because it commits to the least. *C* gives the most useful
+reading for an audit, at the price of a new obligation.
+
+== 5. What becomes a stated property, and what rule follows
+
+*The prose invariant, stated.* The spec says "an operational tool does not
+read a source it is not a party to". With the reading of §3, this is: for
+every party `p` and every frontier `c` consistent for `p`, `p`'s view up to
+`c` is `proj p G ↾ₗ cutproj p c`. By K-2 that is the projection of the
+estate cut at `c`. By K-1 the estate's account of `p` up to `c` equals the
+account `p` reads from its own view. A source `p` is not party to
+contributes `𝟙`, so it cannot change `p`'s account.
+
+Two rules follow. Neither is adopted (question 4).
+
+R1. *Locality of account.* A party's graded account up to a consistent
+frontier is computed from its own deed and the pins it records, and from
+nothing else. Consequence: chora-registry and the cadastre may compute each
+repo's account one repo at a time, incrementally, and an edit to a deed a
+repo does not read cannot change that repo's account. R1 is K-1 instantiated.
+It adds no new mathematics.
+
+R2. *No unannounced dependence.* If an estate decision changes what party
+`p`'s deed must say, then `p` must take part in that decision: its deed
+records the pin or the ruling that selected the branch. Otherwise the two
+branches, cut at the frontier, must look the same to `p`. R2 is the side
+condition `Consistent p c` (§6), turned into a rule a deed can be checked
+against.
+
+K-5 adds one more consequence: a deed is judged against the estate as of
+its own pins. A later ruling, beyond the frontier, does not make an earlier
+deed wrong. It only makes the deed's frontier old, which is the lag that
+candidate B measures.
+
+== 6. The side condition in deed terms
+
+`Consistent p c` (upstream `Projection.agda`) holds when, at every choice
+`p` is outside of, the two branches, truncated at `c`, project identically
+for `p` (plain merge). Messages carry no condition.
+
+In deed terms: when the owner, the registry or a tool decides something
+and `p` is not told, `p`'s view up to the frontier must not depend on which
+way the decision went.
+
+*What fails without it.* K-7 shows that the equality breaks: the estate's
+account of `p` and `p`'s own account differ (upstream's fixtures give 1
+against 2). In the estate this is *silent drift*. For example, a template
+change in rsr-template-repo or scaffoldia alters what a repo is expected to
+contain, under a decision the repo never received. The registry's account
+of that repo and the repo's own account then disagree, and neither is
+wrong by its own lights. R2 makes that failure visible: the repo either
+records the selection it received, or it must be indifferent to it.
+
+Plain merge is stricter than full merge, so R2 is conservative. It may
+refuse a dependence that full merge would accept (§7).
+
+== 7. Synchronous or asynchronous, and what is outside both
+
+Deeds are read *asynchronously*. Publishing a commit and a reader pinning
+it are separate events, and between them the fact is in flight. Y-1
+(upstream) shows that synchronous cuts are exactly the asynchronous cuts
+with nothing in flight. So K-1 covers only settled snapshots, where every
+reader has caught up. The estate is never settled, because `main` moves, so
+this ADR recommends stating R1 and R2 over Y-2 (question 3).
+
+The transport side of K-CUT is *not* relied on. It is proved upstream for
+this fragment and points to a later rule. By Y-5, Y-6 and Y-8, the estate
+does not know that a repo has adopted a ruling until the repo's deed cites
+it back ("acknowledgement by pin"). That is noted as a future proposal, not
+made here.
+
+Outside both K-1 and Y-2:
+
+* *Recursion.* Repeated reads, such as the cadastre's periodic run, and
+  mutual reads (A reads B, B reads A) are recursive protocols. Only a
+  finite window, unrolled, is covered. A claim about all time is not.
+* *Delegation.* A repo transfer, a rename (the id is unchanged under U1,
+  but the party's role passes), a fork that takes over a role, and a tool
+  handing work to another (gitbot-fleet dispatch) are all outside.
+* *Party creation.* `G` has a fixed set of parties. A repo born after the
+  frontier is a new `G`.
+* *Full merge, queues as data, data-dependent warrants.* Outside, as
+  upstream states.
+
+== 8. Proof obligations (PROOF-POLICY)
+
+[cols="3,1,1,3",options="header"]
+|===
+| Obligation | Kind | Prover | Status
+
+| K-1, K-2, K-5, Y-2
+| theory
+| Agda
+| PROVEN upstream and ungraded. Cited by pin `a7c45138…`, not re-proved,
+  in the way the estate cites echo-types.
+
+| K-4 (two laws suffice)
+| theory
+| Agda
+| TESTED upstream.
+
+| The laws of the chosen instance
+| theory
+| Agda
+| A or B: discharged upstream (K-6) at resource-algebra `b2c9f1f6…`.
+  C, or a product: `OPEN`, and the new instance belongs in resource-algebra.
+
+| R1 and R2 as instances of K-1 and K-5 for the deed parties
+| theory
+| Agda
+| `OPEN`. A short application module, like upstream's
+  `applications/` target, that builds a `Global` over the deed parties.
+
+| Rocq and Lean recheck legs
+| theory
+| Rocq, Lean
+| Absent upstream. Until both exist and are `RECONCILED`, the §2 recheck
+  obligation is open, and no grade above ungraded is available without
+  receipts.
+
+| That the `G` extracted from the estate's deeds and pins is the flow the
+  estate actually runs
+| engineering (it names the deed wire format)
+| Idris2
+| `ASSUMED`, because no extractor exists yet. When one exists, its
+  contract is an Idris2 obligation.
+
+| The typed-wasm Idris2 port
+| engineering port
+| Idris2
+| Correspondence `ASSUMED` upstream, and not a recheck leg.
+|===
+
+== 9. What changes in `deed.abnf` and `deed_lint`
+
+Nothing, at first. R1 and R2 are semantics. If `G` is derived from fields
+that deeds already carry (`:beholding-chora`, praxis rules, routing) and
+from pins, no production changes, and a later `deed_lint` mode could
+report R2 as an advisory finding. If `G` is to be *declared* (question 2),
+that is a new clause and a grammar change, and it needs a separate ADR.
+
+== 10. Alternatives, compatibility, tensions
+
+*Alternatives.* (a) Keep the vocabulary and derive no rule, which was the
+spec's position before 2026-11-18. (b) Derive rules from the synchronous
+K-1 only, on settled snapshots. (c) Wait for PWG-2ii (both recheck legs)
+before deriving anything. The owner's ruling to lift the caution rules
+out (a) as the end state, but leaves (b) and (c) open as sequencing.
+
+*Compatibility.* No existing deed, grammar or validator changes. R1 and R2,
+if adopted, start as advisory findings and never block (the `:review`
+strategy).
+
+*Tensions.*
+
+* The rule rests on a theorem that is ungraded. That is allowed by the
+  owner's ruling, but a claim that the rule is "machine-checked" would need
+  receipts (PROOF-POLICY §8).
+* `estate_chora.deed` "is the global type" is loose (§3). Ruling on
+  question 2 settles it.
+* Under candidate A, `⊕ = min` reads optimistically at choices (§4).
+* chora-registry is authoritative for estate-wide placement. R1 fits that:
+  the registry computes, and a repo's copy is checked against it.
+
+== 11. Questions to the owner
+
+Put through the question selector on 2026-11-18. The answers are recorded
+here when given.
+
+. Which resource algebra grades the deed projection (§4)?
+. Where does `G` live (§3, §9)?
+. Is R1/R2 stated over the asynchronous Y-2, the synchronous K-1, or both
+  (§7)?
+. Which rules are adopted, and how are they enforced (§5)?
+
+== 12. Beyond this repository
+
+If ruled, the rule reaches every estate repo through its chora deed and the
+templates. None of these repositories is changed by this ADR:
+
+* `hyperpolymath/rsr-template-repo`: the worked-model deed would record the
+  pins it received (R2).
+* `hyperpolymath/scaffoldia`: generated deeds carry those pins from birth.
+* chora-registry (formerly `gv-clade-index`): computes accounts per repo
+  (R1).
+* `hyperpolymath/choreographic-types`: per-theorem PWG-3 receipts, the
+  Rocq and Lean legs, and an optional deed application module (§8).
+* `hyperpolymath/resource-algebra`: a new instance, if C or a product is
+  chosen.
+* `hyperpolymath/typed-wasm`: optionally re-pin the port from `edb784a7` to
+  `a7c45138`. `KCut.agda` differs only in comments between the two.
+* hypatia and gitbot-fleet: an R2 finding, if adopted, is `:review`
+  strategy.
