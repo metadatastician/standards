@@ -826,7 +826,9 @@ of §8.4: a run whose inputs, imports or trusted base have since changed is
 `superseded`. `--record` is the one call that adds a run: it checks the rows,
 writes and checks the receipt they give, and only then appends them. What a
 recorder writes with it is a proposal: the gate (`--check`) and a review
-accept it, and a stored row never stands for the fact it records. `scripts/tests/proof-receipt-test.sh` tests it, including
+accept it, and a stored row never stands for the fact it records.
+
+`scripts/tests/proof-receipt-test.sh` tests the generator, including
 an `(import …)` of a pinned sibling. Using it is a convenience, not a rule:
 the reader decides what a receipt is.
 
