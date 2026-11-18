@@ -85,6 +85,17 @@ echo "$BASELINE_JSON" | jq -e 'type == "array"' >/dev/null || {
   echo "error: baseline JSON is not an array" >&2
   exit 2
 }
+# Exactly one JSON document each. Both are read below with `--slurpfile`,
+# which accepts any number of documents: taking the first would silently
+# drop a finding (or an entry) in a second one. That is a fail-open, so it is
+# invalid input, as it was when both were passed as single `--argjson` values.
+for doc in findings baseline; do
+  if [[ "$doc" == findings ]]; then text=$FINDINGS_JSON; else text=$BASELINE_JSON; fi
+  if [[ "$(jq -s 'length' <<<"$text" 2>/dev/null)" != 1 ]]; then
+    echo "error: $doc JSON must be exactly one document" >&2
+    exit 2
+  fi
+done
 
 # Structural validation against the baseline schema (see header).
 SCHEMA_ERRORS="$(jq -r '
@@ -324,18 +335,19 @@ ADVISORY_DEF='def advisory_class:
   .advisory == true and
   ((.severity // "") as $s
    | ["medium", "warn", "low", "info", "informational", "advisory"] | index($s) != null);'
-GATED_SEVERITIES="$(jq -r "$ADVISORY_DEF"' .[] | select(advisory_class | not) | .severity' <<<"$KEPT")"
 ADVISORY_COUNT="$(jq "$ADVISORY_DEF"' [.[] | select(advisory_class)] | length' <<<"$KEPT")"
 
 THRESHOLD_RANK="$(rank "$BLOCKING_THRESHOLD")"
 MAX_KEPT_RANK=0
 BLOCKING_COUNT=0  # kept findings at or above the threshold (the gate message names these, not all kept)
+# Read from a process substitution, one line per gated finding: no findings
+# is no lines, and an empty severity is one empty line, which `rank` treats
+# as unknown (critical). A here-string could not tell the two apart.
 while IFS= read -r sev; do
-  [[ -n "$sev" ]] || continue
   r="$(rank "$sev")"
   if (( r > MAX_KEPT_RANK )); then MAX_KEPT_RANK=$r; fi
   if (( r >= THRESHOLD_RANK )); then BLOCKING_COUNT=$((BLOCKING_COUNT + 1)); fi
-done <<<"$GATED_SEVERITIES"
+done < <(jq -r "$ADVISORY_DEF"' .[] | select(advisory_class | not) | .severity' <<<"$KEPT")
 
 KEPT_COUNT="$(jq 'length' <<<"$KEPT")"
 SUPPRESSED_COUNT="$(jq 'length' <<<"$SUPPRESSED")"

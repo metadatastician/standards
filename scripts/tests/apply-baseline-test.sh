@@ -592,6 +592,25 @@ else
   echo "FAIL: expected 800,0 got $got"; fail=$((fail + 1))
 fi
 
+# ── Review of #1668: two ways the change above could fail open ──────────
+# An empty severity is an unknown severity (rank critical), not "no finding".
+printf '[{"severity":"","rule_module":"code_safety","type":"x","file":"a.sh"}]\n' > "$WORK/sev-empty.json"
+printf '[{"severity":"","advisory":true,"rule_module":"code_safety","type":"x","file":"a.sh"}]\n' > "$WORK/sev-empty-adv.json"
+assert_class_gate "an empty severity gates as unknown, even at critical" \
+  "$WORK/sev-empty.json" "$WORK/empty.json" critical 1 "Gate failed: 1 unfiltered"
+assert_class_gate "the class does not waive an empty severity" \
+  "$WORK/sev-empty-adv.json" "$WORK/empty.json" critical 1
+assert_class_gate "no findings at all pass" \
+  "$WORK/empty.json" "$WORK/empty.json" info 0
+# One findings document, one baseline document. `--slurpfile` reads every
+# document in a file; taking the first would drop a finding in the second.
+printf '[]\n[{"severity":"critical","rule_module":"code_safety","type":"x","file":"a.sh"}]\n' > "$WORK/two-docs.json"
+assert_class_gate "a second findings document is invalid input, not ignored" \
+  "$WORK/two-docs.json" "$WORK/empty.json" info 2
+printf '[]\n[]\n' > "$WORK/two-baselines.json"
+assert_class_gate "a second baseline document is invalid input" \
+  "$WORK/plain-medium.json" "$WORK/two-baselines.json" info 2
+
 assert_invalid_option "invalid mode" bypass high
 assert_invalid_option "invalid threshold" blocking nonsense
 
