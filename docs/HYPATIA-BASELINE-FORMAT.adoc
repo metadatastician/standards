@@ -133,6 +133,19 @@ A finding is acknowledged by a baseline entry iff:
 
 First-match wins (entries are scanned in document order).
 
+== Findings that need no entry: the advisory class
+
+Hypatia marks a flag-only finding `"advisory": true` (WF026, WF027, RE011)
+and does not count it toward its own exit code. `scripts/apply-baseline.sh`
+reads the same class (owner ruling 2026-11-17, hyperpolymath/hypatia#1204):
+an advisory finding stays in `findings_kept` and in the run summary, and the
+gate never counts it, at any threshold. It needs no baseline entry, and an
+entry that matches it still acknowledges it.
+
+Two limits keep the class from hiding a defect. Only the JSON boolean `true`
+is the class. And the class waives nothing at `high`, `critical` or a
+severity the gate does not know: such a finding gates like any other.
+
 == What goes in the baseline (and what doesn't)
 
 **Good** entries:
