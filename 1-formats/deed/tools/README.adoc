@@ -539,6 +539,31 @@ way.
     bun deed_lint.js --rsr-profile-keys
     bun deed_lint.js --rsr-profile-fixtures fixtures/rsr-profile/
 
+== `deed_lint.js --chora-language` — `(language …)` and `:thesis` in a chora (DRAFT)
+
+Checks the `(language …)` clause and the `(identity :thesis …)` field of a
+`<repo>_chora.deed` against `spec/abnf/clauses/language.abnf` (the `[thesis]`
+and `[language]` rows of `mappings/clade-to-repo-deed.adoc`; owner rulings of
+2026-11-15 and 2026-11-19). The chora holds what a repo is and what it does in
+the world: for a language repo, its thesis, paradigm, compile targets and
+headline feature.
+
+* `(language …)` sits once at the top level and holds at least one of
+  `:paradigm` and `:compile-targets` (non-empty lists of symbols, each once)
+  and `:headline-feature` (a symbol), each at most once;
+* `:thesis` sits once in `(identity …)` and is a non-empty string;
+* any other field, or any clause inside `(language …)`, refuses the clause. A
+  reader never skips an unknown key (P-2a);
+* both belong to a `<repo>_chora.deed` only.
+
+The project's design heritage is not identity: it is `META.deed`'s
+`:inspiration`, a non-empty list of non-empty strings, each once
+(`clauses/meta.abnf`).
+
+    bun deed_lint.js --chora-language REPO_chora.deed
+    bun deed_lint.js --chora-language-keys
+    bun deed_lint.js --chora-language-fixtures fixtures/chora-language/
+
 The fixtures are flat files, `fixtures/rsr-profile/{valid,invalid}/<case>_chora.deed`.
 
 == `deed_lint.js --contractile-registry` — the `contractile` rule registry (A7 J13)
