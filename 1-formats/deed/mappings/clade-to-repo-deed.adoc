@@ -99,12 +99,12 @@ bare filename would resolve against nothing (grammar rationale).
 | `[identity] primary-owner` | `(identity … :owner "…")` | verbatim STRING
 | `[identity] prefixed-name` | `(identity … :prefixed-name "…")` | verbatim STRING
 | `[thesis] one-sentence` | `(identity … :thesis "…")` | verbatim STRING, non-empty: what the repo lives for (owner rulings 2026-11-15 and 2026-11-19; `clauses/language.abnf`, `deed_lint.js --chora-language`)
-3+| *Placements.* The `[clade]` rows below name the source fields, but a placement is never decided from them (A1 section 11; A7 W10, YP07; owner's standing rule of 2026-11-15 that a placement is taken from the registry, never from a legacy file or a guess). In order: (1) a source whose `[clade] primary` is `UNASSIGNED` fails the translation (P-5), whatever the registry holds; (2) where chora-registry holds no `clade-12` placement for the repo, no `(clade …)` clause is emitted; (3) otherwise the category placements, `:primary`, `:primary-name` and `:secondary`, are the registry's, written whether or not the source carries the field (the absent-field rule in the status note above does not apply to them), and a legacy value that differs is reported, never written. `:assigned` and `:rationale` are placement metadata the registry seed does not hold (`registry-seed-to-deed.adoc` section 2); their rows below say when the source's value is kept.
-| `[clade] primary` | `(clade … :primary rm)` | enum → SYMBOL, from chora-registry (12-category closed taxonomy: fv nl rm gv db ap ix dx pt ax gm sc); the legacy value is only compared
-| `[clade] primary-name` | `(clade … :primary-name "…")` | STRING, the registry's name for the `:primary` category, always written with `:primary` (the deliberate redundancy pair is kept — CLADE-006 survives)
-| `[clade] secondary` | `(clade … :secondary (gv))` | list of SYMBOLs, from chora-registry; the legacy list is only compared
-| `[clade] assigned` | `(clade … :assigned "2026-…")` | STRING, verbatim from the source, kept only when the registry's `:primary` equals the legacy one (it dates that placement, not another); else omitted
-| `[clade] rationale` | `(clade … :rationale "…")` | verbatim STRING, kept only when the registry's `:primary` equals the legacy one (it explains that placement, not another); else omitted
+3+| *Placements.* The `(clade …)` clause takes the placement shape of CHORA-SPEC section 11.2 (owner ruling CA1, 2026-11-19): one `(placement :scheme … :category … :primary #t)` or `(placement :scheme … :category … :rank n)` per placement, and nothing else. A placement is never decided from the `[clade]` rows below, which name the source fields only to say what becomes of them (A1 section 11; A7 W10, YP07; owner's standing rule of 2026-11-15 that a placement is taken from the registry, never from a legacy file or a guess). In order: (1) a source whose `[clade] primary` is `UNASSIGNED` fails the translation (P-5), whatever the registry holds; (2) where chora-registry holds no placement for the repo, no `(clade …)` clause is emitted; (3) otherwise each placement the registry holds for the repo is copied as one `(placement …)`, for every scheme it holds one in, with its `:primary #t` or `:rank` as the registry gives it (one primary per scheme, ranks 1 to n with no gap). The absent-field rule in the status note above does not apply to placements. A legacy value that differs from the registry's is reported, never written. The withdrawn flat form `(clade :primary … :secondary (…) …)` is never emitted.
+| `[clade] primary` | `(clade (placement :scheme clade-12 :category rm :primary #t))` | from chora-registry: the `clade-12` placement with `:primary #t` (12-category closed taxonomy: fv nl rm gv db ap ix dx pt ax gm sc). The legacy value is only compared
+| `[clade] secondary` | `(clade … (placement :scheme clade-12 :category gv :rank 1))` | from chora-registry: its ranked `clade-12` placements, in rank order. The legacy list is only compared
+| `[clade] primary-name` | — | not translated: withdrawn (CA1), because the registry's scheme names each category
+| `[clade] assigned` | — | not translated: withdrawn (CA1), because the registry holds the placement and the chora holds a copy
+| `[clade] rationale` | — | not translated: withdrawn (CA1), for the same reason
 | `[clade] primary` / `secondary` values that are not clade-12 codes (such as `language`, `compiler`, `type-system`) | nothing, now | They are not placements and never become one (rule 4 of CHORA-SPEC 11.1). They describe how the repo orders its own content, so they are reported as candidate content for `CLADE.deed`, and nothing is written until the A7 M3 `clade` module lands (owner ruling 2026-11-19). That module decides whether they enter it; CHORA-SPEC 11.1 rule 5 ("nothing from them goes into `CLADE.deed`") is to be reconciled with this ruling there
 | `[forges] github/gitlab/bitbucket` | `(forges … :github "o/r" …)` | verbatim STRINGs; empty stays `""`. Where chora-registry holds the repo, `:github` is the registry's `<owner>/<name>`, written whether or not the source carries it, and a legacy value that differs is reported, never written (proposed 2026-11-19, generalising the owner's correction of affinescript's stale monorepo path on 2026-11-15; the registry tracks where the repo lives)
 | `[lineage] type` | `(lineage … :type standalone)` | enum → SYMBOL — **the full post-#122 taxonomy carried verbatim**: `standalone monorepo monorepo-child inflated deflated hub satellite`. A value outside the taxonomy (such as `submodule`) is replaced by the registry's `(lineage :type … :parent …)` pair, and the legacy pair is reported, never written; with no registry lineage it fails the translation. A value inside the taxonomy that differs from the registry's fails the translation and is reported, so neither side is chosen silently: the registry could not record `hub` or `satellite` before 2026-11-19 (proposed 2026-11-19, generalising the owner's correction of affinescript's lineage on 2026-11-15)
@@ -171,8 +171,10 @@ Fields not listed do not exist in the deed era for this family.
   `repo-deed` as a stem.
 * **P-5 (registry gates survive):** CLADE-003/004/005/006 semantics are
   re-expressed over the deed surface before retire-the-checker day — an
-  `UNASSIGNED` clade, a missing `(status …)` in `STATE.deed`, an absent `:repo-uuid`, and a
-  `:primary`/`:primary-name` disagreement must each still fail.
+  `UNASSIGNED` clade, a missing `(status …)` in `STATE.deed`, an absent
+  `:repo-uuid`, and a `(clade …)` with no primary or two primaries in one
+  scheme must each still fail. CLADE-006, the `:primary`/`:primary-name`
+  pair check, has no deed form: `:primary-name` is withdrawn (CA1).
 
 == 6. Worked translation (real instance: `rsr-template-repo`)
 
@@ -207,11 +209,8 @@ Emitted `rsr-template-repo_chora.deed`:
             :owner          "hyperpolymath"
             :prefixed-name  "rm-rsr-template-repo")
 
-  (clade    :primary       rm
-            :primary-name  "Repo Management & Tooling"
-            :secondary     (gv)
-            :assigned      "2026-03-16"
-            :rationale     "…")
+  (clade    (placement :scheme clade-12 :category rm :primary #t)
+            (placement :scheme clade-12 :category gv :rank 1))
 
   (forges   :github    "hyperpolymath/rsr-template-repo"
             :gitlab    ""
