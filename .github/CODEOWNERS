@@ -7,6 +7,7 @@
 * @hyperpolymath
 
 # Security-sensitive files require explicit ownership
+STANDING-RULES.adoc @hyperpolymath
 3-practice/SECURITY.md @hyperpolymath
 .github/workflows/ @hyperpolymath
 .machine_readable/ @hyperpolymath
