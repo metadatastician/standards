@@ -118,7 +118,7 @@ Exit criteria (MUST):
 * every required status-check context equals the job id of a workflow that
   actually reports on this repo (an unreported context deadlocks the branch);
 * visibility is a deliberate owner decision, fail-closed private by default;
-* the repo is registered in `gv-clade-index`.
+* the repo is registered in `chora-registry`.
 
 === Harness
 
