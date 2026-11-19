@@ -128,7 +128,7 @@ claim_class = "command-ran"
 target = "true"
 expect = "exit==0"
 verifier = "command-transcript"'
-( cd "$ROOT" && DYADT_ALLOW_UNVERIFIABLE=1 bash "$V" "$TMP/noid.a2ml" 2>/dev/null | grep -q 'no-id' ) && ok "missing id not silently dropped" || bad "missing id was dropped"
+( vout=$(cd "$ROOT" && DYADT_ALLOW_UNVERIFIABLE=1 bash "$V" "$TMP/noid.a2ml" 2>/dev/null) && grep -q 'no-id' <<<"$vout" ) && ok "missing id not silently dropped" || bad "missing id was dropped"
 # empty pattern -> unverifiable (not an always-match confirm)
 mk ep.a2ml '[claims]
 [[claim]]

@@ -36,8 +36,8 @@ lacks() { ! grep -qF -e "$2" "$1"; }
 # Ignore comments and join shell continuations; global flags may precede
 # the subcommand, so checking only `panic-attack attack` can pass blind.
 has_subcommand() {
-  sed '/^[[:space:]]*#/d; :join; /\\$/ { N; s/\\\n[[:space:]]*/ /; b join; }' "$1" \
-    | grep -qE -e "panic-attack[[:space:]]+(--[^[:space:]]+[[:space:]]+)*$2([[:space:]]|$)"
+  local joined; joined=$(sed '/^[[:space:]]*#/d; :join; /\\$/ { N; s/\\\n[[:space:]]*/ /; b join; }' "$1")
+  grep -qE -e "panic-attack[[:space:]]+(--[^[:space:]]+[[:space:]]+)*$2([[:space:]]|$)" <<<"$joined"
 }
 no_subcommand() { ! has_subcommand "$@"; }
 planted="$(mktemp)"; trap 'rm -f "$planted"' EXIT
@@ -73,7 +73,7 @@ t "pons rev default is 40-hex" hasre "$reusable" 'default: "[0-9a-f]{40}"'
 t "panic rev is validated as 40-hex" has "$reusable" 'panic-rev must be a 40-hex commit'
 t "pons rev is validated as 40-hex" has "$reusable" 'pons-rev must be a 40-hex commit'
 t "caller holds no write grant beyond security-events" \
-  bash -c '! grep -E ": write" "$1" | grep -qv "security-events: write"' _ "$caller"
+  bash -c 'w=$(grep -E ": write" "$1"); [ -z "$w" ] || ! grep -qv "security-events: write" <<<"$w"' _ "$caller"
 t "caller is not a PR gate" lacks "$caller" 'pull_request:'
 t "checkouts do not persist credentials" has "$reusable" 'persist-credentials: false'
 

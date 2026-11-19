@@ -34,7 +34,7 @@ run_case() {
     bad "$name (rc=$rc, wanted $want_rc)"; printf '%s\n' "$out" | sed 's/^/       | /'
     return
   fi
-  if [ -n "$want_sub" ] && ! printf '%s' "$out" | grep -qF -- "$want_sub"; then
+  if [ -n "$want_sub" ] && ! grep -qF -- "$want_sub" <<<"$out"; then
     bad "$name (rc ok but missing \"$want_sub\")"; printf '%s\n' "$out" | sed 's/^/       | /'
     return
   fi
@@ -202,7 +202,7 @@ jobs:
     runs-on: ubuntu-latest
 YAML
 out="$(bash "$CHK" "$wfdir" 2>&1)"; rc=$?
-if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -qF "2 workflow file(s) clean"; then
+if [ "$rc" -eq 0 ] && grep -qF "2 workflow file(s) clean" <<<"$out"; then
   ok "a directory target scans every .yml in it"
 else
   bad "directory scan (rc=$rc)"; printf '%s\n' "$out" | sed 's/^/       | /'
@@ -213,13 +213,13 @@ name: c
 name: c
 YAML
 out="$(bash "$CHK" "$wfdir" 2>&1)"; rc=$?
-if [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -qF "1 of 3 workflow file(s) contain duplicate keys"; then
+if [ "$rc" -eq 1 ] && grep -qF "1 of 3 workflow file(s) contain duplicate keys" <<<"$out"; then
   ok "one dirty file among clean ones fails the whole scan"
 else
   bad "mixed directory scan (rc=$rc)"; printf '%s\n' "$out" | sed 's/^/       | /'
 fi
 
-if printf '%s' "$out" | grep -qF "::error file="; then
+if grep -qF "::error file=" <<<"$out"; then
   ok "it emits a GitHub workflow-command annotation"
 else
   bad "no ::error annotation emitted"

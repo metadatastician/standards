@@ -82,9 +82,9 @@ cat > "$WORK/fake_praxis.deed" <<'DEED'
   :standard-version "0.9.9")
 DEED
 out="$("$GATE" --root "$WORK" --standard "$WORK/fake_praxis.deed" 2>&1)" || true
-if printf '%s' "$out" | command grep -q 'expected=v0.9.9'; then
+if command grep -q 'expected=v0.9.9' <<<"$out"; then
   ok "--standard read :standard-version (0.9.9)"
-elif printf '%s' "$out" | command grep -q 'expected=v1.0.0'; then
+elif command grep -q 'expected=v1.0.0' <<<"$out"; then
   no "--standard read :schema-version (1.0.0) -- WRONG FIELD"
 else
   no "--standard produced no recognisable expected version: $out"
@@ -108,10 +108,10 @@ printf '# Compliant with launcher-standard.a2ml v0.1.0\n'             > "$WORK/t
 out="$("$GATE" --root "$WORK/tree" --expect-version 0.4.0 2>&1)" || true
 
 expect_hit() {
-  if printf '%s' "$out" | command grep -q "$1"; then ok "detects: $2"; else no "MUTANT SURVIVED: $2"; fi
+  if command grep -q "$1" <<<"$out"; then ok "detects: $2"; else no "MUTANT SURVIVED: $2"; fi
 }
 expect_miss() {
-  if printf '%s' "$out" | command grep -q "$1"; then no "FALSE POSITIVE: $2"; else ok "clean: $2"; fi
+  if command grep -q "$1" <<<"$out"; then no "FALSE POSITIVE: $2"; else ok "clean: $2"; fi
 }
 
 expect_hit 'retired-filename  retired-only.toml'       'retired filename with no version'

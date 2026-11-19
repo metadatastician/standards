@@ -25,6 +25,11 @@ TOOL="$SCRIPT_DIR/../a2ml-retire-check.sh"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 pass=0; fail=0
+# Nothing below may write to the repository under test. Work from the scratch
+# directory, and compare the repository's state at the end.
+cd "$WORK" || exit 1
+repo_state() { { git -C "$REPO_ROOT" rev-parse HEAD; git -C "$REPO_ROOT" status --porcelain; } 2>&1 | sha256sum; }
+REPO_STATE_BEFORE=$(repo_state)
 
 for t in bun jq git; do
   command -v "$t" >/dev/null 2>&1 || { echo "FAIL: $t is required by this suite" >&2; exit 1; }
@@ -136,8 +141,8 @@ c_check_fails_on_deletable() {
   local d out; d=$(deletable_tree check-del)
   run --root "$d" --write-counts >/dev/null || return 1
   out=$(run --root "$d" --check 2>&1); [ $? -eq 1 ] || return 1
-  printf '%s' "$out" | grep -qF 'git rm -- .machine_readable/CLADE.a2ml' \
-    && printf '%s' "$out" | grep -qF '.machine_readable/a2ml-legacy-allow.txt:2: .machine_readable/CLADE.a2ml'
+  grep -qF 'git rm -- .machine_readable/CLADE.a2ml' <<<"$out" \
+    && grep -qF '.machine_readable/a2ml-legacy-allow.txt:2: .machine_readable/CLADE.a2ml' <<<"$out"
 }
 c_fact_missing() {
   local d r; d=$(deletable_tree factmiss); chora "$d" "someone-else"
@@ -242,6 +247,28 @@ c_state_decision() {
   printf '%s' "$r1" | jq -e '.blockers == ["facts-unchecked:STATE"]' >/dev/null \
     && printf '%s' "$r2" | jq -e '.class == "deletable-now" and .facts.checked == 2 and .facts.missing == 0' >/dev/null
 }
+# Scorecards under the family decision (R5 option B): the per-criterion facts
+# are dropped on purpose, but the summary's target must exist, and its content
+# is not compared here. So such a file is never deletable-now.
+scorecard_record() { mkdir -p "$(dirname "$1")"; printf '[scorecard]\nspec_id = "%s"\nscore = 71\n' "$2" > "$1"; }
+c_scorecard_needs_its_target() {
+  local d r1 r2 r3 out; d="$WORK/score"; mkdir -p "$d"; chora "$d"
+  scorecard_record "$d/.machine_readable/scorecards/rsr.scorecard.a2ml" rsr
+  scorecard_record "$d/.machine_readable/scorecards/crg.scorecard.a2ml" crg
+  printf '%s\n' '{"date":"2026-10-09","family":"SCORECARD","id":"t-r5","kind":"decision","recorded":"test","summary":"s"}' > "$WORK/score.jsonl"
+  r1=$(RULINGS="$WORK/score.jsonl" row "$d" .machine_readable/scorecards/rsr.scorecard.a2ml)
+  r2=$(RULINGS="$WORK/score.jsonl" row "$d" .machine_readable/scorecards/crg.scorecard.a2ml)
+  printf '%s' "$r1" | has_blocker "no-target-deed:.machine_readable/scorecards/rsr-scorecard_praxis.deed" || return 1
+  printf '%s' "$r1" | class_is decision-drops || return 1
+  printf '%s' "$r2" | jq -e '.class == "decision-drops" and (.blockers | map(startswith("no-target-deed:")) | any)' >/dev/null || return 1
+  out=$(RULINGS="$WORK/score.jsonl" run --root "$d" --check 2>&1) || true
+  ! grep -qF 'git rm' <<<"$out" || return 1
+  # with the praxis deed present the file is still not deletable: nothing compares the summary
+  cp "$REPO_ROOT/1-formats/deed/tools/fixtures/rsr-scorecard/valid/minimal_praxis.deed" \
+     "$d/.machine_readable/scorecards/rsr-scorecard_praxis.deed" || return 1
+  r3=$(RULINGS="$WORK/score.jsonl" row "$d" .machine_readable/scorecards/rsr.scorecard.a2ml)
+  printf '%s' "$r3" | jq -e '.class != "deletable-now" and (.blockers | index("facts-unchecked:SCORECARD") != null)' >/dev/null
+}
 c_unclassified_fails_check() {
   local d out; d=$(deletable_tree twochora); cp "$d/fixture_chora.deed" "$d/other_chora.deed"
   out=$(run --root "$d" --json 2>/dev/null | jq -r 'select(.path == ".machine_readable/CLADE.a2ml") | .class')
@@ -250,7 +277,7 @@ c_unclassified_fails_check() {
 }
 c_bun_absent_fails_closed() {
   local d out; d=$(deletable_tree nobun)
-  out=$(BUN=/nonexistent/bun run --root "$d" --json 2>&1); [ $? -eq 2 ] && printf '%s' "$out" | grep -qF 'bun is required'
+  out=$(BUN=/nonexistent/bun run --root "$d" --json 2>&1); [ $? -eq 2 ] && grep -qF 'bun is required' <<<"$out"
 }
 c_bad_rulings_refused() {
   local d; d=$(deletable_tree badrul)
@@ -264,7 +291,7 @@ c_json_is_canonical() {
 c_summary_denominators() {
   local d out; d=$(deletable_tree summ); plain_record "$d/data/registry.a2ml"
   out=$(run --root "$d" --summary) || return 1
-  printf '%s' "$out" | grep -qF 'deletable-now 1 of 2' && printf '%s' "$out" | grep -qF 'no-mapping-spec 1 of 2'
+  grep -qF 'deletable-now 1 of 2' <<<"$out" && grep -qF 'no-mapping-spec 1 of 2' <<<"$out"
 }
 c_git_tracked_only() {
   local d r; d=$(deletable_tree gitmode); git -C "$d" init -q; plain_record "$d/untracked.a2ml"
@@ -290,32 +317,41 @@ c_counts_written_and_current() {
 }
 c_counts_missing_fails() {
   local d out; d=$(read_tree nocounts)
-  out=$(run --root "$d" --check 2>&1); [ $? -eq 1 ] && printf '%s' "$out" | grep -qF 'no counts file' \
-    && printf '%s' "$out" | grep -qF -- '--write-counts'
+  out=$(run --root "$d" --check 2>&1); [ $? -eq 1 ] && grep -qF 'no counts file' <<<"$out" \
+    && grep -qF -- '--write-counts' <<<"$out"
 }
 c_counts_stale_fails() {
   local d out; d=$(read_tree stale)
   run --root "$d" --write-counts >/dev/null || return 1
   plain_record "$d/data/registry.a2ml"                    # the tree changed; the counts did not
   out=$(run --root "$d" --check 2>&1); [ $? -eq 1 ] || return 1
-  printf '%s' "$out" | grep -qF 'counts are stale' && printf '%s' "$out" | grep -qF -- "--root $d" \
-    && printf '%s' "$out" | grep -qF -- '--write-counts'
+  grep -qF 'counts are stale' <<<"$out" && grep -qF -- "--root $d" <<<"$out" \
+    && grep -qF -- '--write-counts' <<<"$out"
 }
 # A git tree at two commits: <name> with the read file and current counts.
+# The path is the helper's only output. git prints "nothing to commit" on
+# stdout, and a path polluted by it would send the next `git -C` and `mkdir`
+# into the caller's directory: so every step is silenced and must succeed.
 git_tree() {
-  local d; d=$(read_tree "$1"); git -C "$d" init -q
-  git -C "$d" -c user.email=t@t -c user.name=t add -A >/dev/null
-  run --root "$d" --write-counts >/dev/null; git -C "$d" add -A
-  git -C "$d" -c user.email=t@t -c user.name=t commit -q -m base; printf '%s' "$d"
+  local d; d=$(read_tree "$1") || return 1
+  [ -n "$d" ] && [ -d "$d" ] && [ ! -e "$d/.git" ] || return 1
+  { git -C "$d" init -q && git -C "$d" -c user.email=t@t -c user.name=t add -A \
+      && run --root "$d" --write-counts && git -C "$d" add -A \
+      && git -C "$d" -c user.email=t@t -c user.name=t commit -q -m base; } >/dev/null 2>&1 || return 1
+  printf '%s' "$d"
 }
-commit_all() { run --root "$1" --write-counts >/dev/null; git -C "$1" add -A; git -C "$1" -c user.email=t@t -c user.name=t commit -q -m next >/dev/null; }
+commit_all() { # commit_all DIR: DIR must be a fixture's own repository
+  [ -d "$1/.git" ] || return 1
+  { run --root "$1" --write-counts && git -C "$1" add -A \
+      && git -C "$1" -c user.email=t@t -c user.name=t commit -q -m next; } >/dev/null 2>&1
+}
 c_base_same_tree_passes() {
   local d; d=$(git_tree base0); run --root "$d" --base HEAD --check >/dev/null 2>&1
 }
 c_base_joined_path_fails() {
   local d out; d=$(git_tree base1); plain_record "$d/data/new.a2ml"; git -C "$d" add -A; commit_all "$d"
-  out=$(run --root "$d" --base HEAD~1 --check 2>&1); [ $? -eq 1 ] && printf '%s' "$out" | grep -qF 'joined since HEAD~1' \
-    && printf '%s' "$out" | grep -qF '  data/new.a2ml'
+  out=$(run --root "$d" --base HEAD~1 --check 2>&1); [ $? -eq 1 ] && grep -qF 'joined since HEAD~1' <<<"$out" \
+    && grep -qF '  data/new.a2ml' <<<"$out"
 }
 c_base_deletion_and_rename_pass() {
   local d; d=$(git_tree base2); plain_record "$d/data/a.a2ml"; git -C "$d" add -A; commit_all "$d"
@@ -384,6 +420,7 @@ check "a 'dropped' row with a precondition blocks on it"                        
 check "spec-gap and kyx-family rows: blocker named, class needs-kyx-supported"     c_spec_gap_and_kyx_family
 check "external-reader and ruling-needed rows block"                               c_external_reader_and_ruling_needed
 check "STATE: unchecked without its decision row; with it, 2 facts compared"       c_state_decision
+check "SCORECARD: a decided scorecard needs its target and is never deletable-now" c_scorecard_needs_its_target
 check "a malformed rulings file is refused (exit 2)"                               c_bad_rulings_refused
 echo "=== modes and setup ==="
 check "bun absent: exit 2 with a message, never a skip"                            c_bun_absent_fails_closed
@@ -405,14 +442,27 @@ check "a named --rulings file that does not exist is refused (exit 2)"          
 check "a record line blocks until the record names the exact path"                c_record_line
 
 # ── mutants ────────────────────────────────────────────────────────────────
+# A mutant is a copy of the tool in $WORK. The tool finds deed_lint.js and the
+# mapping specs beside itself, so a copy needs both named explicitly, or every
+# case fails for want of them and each "kill" proves nothing. Before a kill
+# counts, the same case must pass against an UNMODIFIED copy at that location.
 mutant() { # mutant <sed-expr> <label> <case-fn>
-  local expr=$1 label=$2 fn=$3 m saved
+  local expr=$1 label=$2 fn=$3 m saved rc w=$WORK
   [ -f "$TOOL" ] || { bad "mutant (): the tool is missing"; return; }
-  m="$WORK/mutant-$(basename "$TOOL")"; sed "$expr" "$TOOL" > "$m"
-  if ! bash -n "$m" || cmp -s "$m" "$TOOL"; then bad "mutant ($label) is invalid or identical — it proves nothing"; return; fi
-  saved=$TOOL; TOOL=$m
-  if "$fn"; then bad "mutant survived ($label)"; else ok "mutant killed ($label)"; fi
-  TOOL=$saved
+  saved=$TOOL; m="$w/mutant-$(basename "$TOOL")"
+  export DEED_LINT="$REPO_ROOT/1-formats/deed/tools/deed_lint.js" MAPPINGS="$REPO_ROOT/1-formats/deed/mappings"
+  # The cases build fixtures under $WORK by fixed names, so each run gets its own.
+  cp "$saved" "$m"; TOOL=$m; WORK=$(mktemp -d "$w/control.XXXXXX")
+  if "$fn"; then rc=0; else rc=1; fi
+  if [ "$rc" -ne 0 ]; then
+    bad "mutant control ($label): the case fails against an unmodified copy, so a kill would prove nothing"
+  else
+    sed "$expr" "$saved" > "$m"; WORK=$(mktemp -d "$w/mutated.XXXXXX")
+    if ! bash -n "$m" || cmp -s "$m" "$saved"; then bad "mutant ($label) is invalid or identical — it proves nothing"
+    elif "$fn"; then bad "mutant survived ($label)"
+    else ok "mutant killed ($label)"; fi
+  fi
+  TOOL=$saved; WORK=$w; unset DEED_LINT MAPPINGS
 }
 echo "=== mutants ==="
 mutant 's/^\( *\)blockers+=("reader:\$r")/\1:/' "readers are ignored" c_reader
@@ -422,6 +472,7 @@ mutant 's/^\( *\)blockers+=("lint-fail:\$t")/\1:/' "lint failures are ignored" c
 mutant 's/if \[ "\${#joined\[@\]}" -gt 0 \]; then/if false; then/' "--base lets a joined path through" c_base_joined_path_fails
 mutant 's/^    elif ! jq -e -n --slurpfile a/    elif false && ! jq -e -n --slurpfile a/' "stale counts pass" c_counts_stale_fails
 mutant 's/named_in "\$p" "\$ROOT\/\$rec" ||/true ||/' "a missing record line is ignored" c_record_line
+mutant 's/^      summary_only=1$/      summary_only=1; blockers=()/' "a decided scorecard is waved through with no target" c_scorecard_needs_its_target
 
 # ── this repository ────────────────────────────────────────────────────────
 echo "=== this repository ==="
@@ -454,5 +505,8 @@ else
 fi
 
 echo
+if [ "$(repo_state)" = "$REPO_STATE_BEFORE" ]; then ok "the suite left the repository as it found it (HEAD and status)"
+else bad "the suite changed the repository under test (HEAD or status differ from the start)"; fi
+
 echo "a2ml-retire-check: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

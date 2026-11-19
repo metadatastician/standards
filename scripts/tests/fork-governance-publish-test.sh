@@ -52,7 +52,7 @@ printf '%s\n# Fork governance\n\nlanes\n' "$MARKER" > "$TMP/good.md"
 if assemble "$TMP/good.md"; then
   out="$TMP/out/published.md"
   [[ "$(sed -n 1p "$out")" == "$MARKER" ]] && ok "line 1 is the marker" || bad "line 1 is the marker" "$(sed -n 1p "$out")"
-  sed -n 2p "$out" | grep -qF "Rendered by the fork pull request run $RUN_URL" \
+  grep -qF "Rendered by the fork pull request run $RUN_URL" <<<"$(sed -n 2p "$out")" \
     && ok "line 2 is the publisher notice" || bad "line 2 is the publisher notice" "$(sed -n 2p "$out")"
   [[ "$(sed -n 3p "$out")" == "# Fork governance" ]] && ok "fork text follows the notice" || bad "fork text follows the notice"
   [[ "$(tail -n 1 "$out")" == "<!-- fork-governance-publish-run: 42.1 -->" ]] && ok "stamp is the last line" || bad "stamp is the last line" "$(tail -n 1 "$out")"

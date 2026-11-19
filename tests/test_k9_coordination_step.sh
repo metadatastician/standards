@@ -41,7 +41,7 @@ run() { # run FAKE -> writes $WORK/coord-results.jsonl
 }
 
 run pass;  [ "$(jq -r .verdict "$WORK/coord-results.jsonl")" = pass ] && ok "PASS output with exit 0 records a pass" || bad "pass: $(cat "$WORK/coord-results.jsonl") $(cat "$WORK/out")"
-run fail;  { [ "$(jq -r .verdict "$WORK/coord-results.jsonl")" = fail ] && jq -r .message "$WORK/coord-results.jsonl" | grep -q 'expected section'; } && ok "a FAIL line with exit 1 records a fail with its message" || bad "fail: $(cat "$WORK/coord-results.jsonl") $(cat "$WORK/out")"
+run fail;  { [ "$(jq -r .verdict "$WORK/coord-results.jsonl")" = fail ] && grep -q 'expected section' <<<"$(jq -r .message "$WORK/coord-results.jsonl")"; } && ok "a FAIL line with exit 1 records a fail with its message" || bad "fail: $(cat "$WORK/coord-results.jsonl") $(cat "$WORK/out")"
 run crash; { [ ! -s "$WORK/coord-results.jsonl" ] && grep -q 'no verdict on coordination.k9' "$WORK/out"; } && ok "a Bun crash (exit 1, no FAIL line) records nothing and warns" || bad "crash: $(cat "$WORK/coord-results.jsonl") $(cat "$WORK/out")"
 run cannot; [ ! -s "$WORK/coord-results.jsonl" ] && ok "exit 2 (cannot run) records nothing" || bad "cannot: $(cat "$WORK/coord-results.jsonl")"
 

@@ -95,10 +95,14 @@ cmd_enumerate() {
   comm -13 "$base_entries" "$head_entries" > "$RUNNER_TEMP/ledger-growth"
   [ -s "$RUNNER_TEMP/ledger-growth" ] || exit 0
   declared=no
-  if git log --format=%B "$merge_base..$HEAD_SHA" | grep -iE '^Ratchet-exception' | grep -qF "$LEDGER"; then
+  # The declarations are gathered by a grep that reads to the end, then
+  # matched: a pipe into grep -q let the writers die of SIGPIPE on a long
+  # message (status 141) and a declared growth read as undeclared. A failing
+  # writer still reads as "not declared", the strict outcome.
+  if grep -qF "$LEDGER" <<<"$(git log --format=%B "$merge_base..$HEAD_SHA" | grep -iE '^Ratchet-exception')"; then
     declared=yes
   elif [ -f "${GITHUB_EVENT_PATH:-}" ] \
-       && jq -r '.pull_request.body // ""' "$GITHUB_EVENT_PATH" | grep -iE '^Ratchet-exception' | grep -qF "$LEDGER"; then
+       && grep -qF "$LEDGER" <<<"$(jq -r '.pull_request.body // ""' "$GITHUB_EVENT_PATH" | grep -iE '^Ratchet-exception')"; then
     declared=yes
   fi
   n=$(wc -l < "$RUNNER_TEMP/ledger-growth")

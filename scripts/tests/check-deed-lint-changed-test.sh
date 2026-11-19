@@ -23,7 +23,7 @@ assert() { # label want-status needle cmd...
     echo "FAIL: $label — expected exit $want, got $status"; echo "      $(printf '%s' "$out" | tail -3 | tr '\n' '|')"
     fail=$((fail + 1)); return
   fi
-  if [ "$needle" != "-" ] && ! printf '%s' "$out" | grep -qF -- "$needle"; then
+  if [ "$needle" != "-" ] && ! grep -qF -- "$needle" <<<"$out"; then
     echo "FAIL: $label — output lacked '$needle'"; echo "      $(printf '%s' "$out" | tr '\n' '|')"
     fail=$((fail + 1)); return
   fi

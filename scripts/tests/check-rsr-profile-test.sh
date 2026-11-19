@@ -62,10 +62,10 @@ assert() { # label want-status needle cmd...
   out="$("$@" 2>&1)"; status=$?
   if [ "$status" != "$want" ]; then
     echo "FAIL: $label — expected exit $want, got $status"
-    echo "      $(printf '%s' "$out" | grep -E '^  |FAIL' | head -3 | tr '\n' '|')"
+    echo "      $(grep -E '^  |FAIL' <<<"$out" | head -3 | tr '\n' '|')"
     fail=$((fail + 1)); return
   fi
-  if [ "$needle" != "-" ] && ! printf '%s' "$out" | grep -qF -- "$needle"; then
+  if [ "$needle" != "-" ] && ! grep -qF -- "$needle" <<<"$out"; then
     echo "FAIL: $label — exit ok, output lacked '$needle'"
     echo "      $(printf '%s' "$out" | tr '\n' '|')"
     fail=$((fail + 1)); return

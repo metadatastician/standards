@@ -74,22 +74,22 @@ njobs=$(job_ids | wc -l); ncall=$(sed -n '/^jobs:/,$p' "$F" | grep -c '^    uses
 # 3. actions-lock-verify job
 B=$(job_block actions-lock-verify)
 [ -n "$B" ] && ok "actions-lock-verify job exists" || bad "actions-lock-verify job missing"
-printf '%s' "$B" | grep -q 'check-actions-lock-gate.sh' && ok "actions-lock-verify runs the tested gate script" || bad "actions-lock-verify does not run check-actions-lock-gate.sh"
-printf '%s' "$B" | grep -Eq 'ref: ([0-9a-f]{40}|\$\{\{ job\.workflow_sha \}\})$' && ok "actions-lock-verify pins standards at an immutable commit" || bad "actions-lock-verify standards checkout not pinned to an immutable commit"
-printf '%s' "$B" | grep -q 'ref: main' && bad "actions-lock-verify floats a standards checkout at main" || ok "actions-lock-verify has no floating ref: main"
-printf '%s' "$B" | grep -q 'ACTIONS_LOCK_VERIFIER=' && ok "gate is pointed at the fetched verifier" || bad "ACTIONS_LOCK_VERIFIER not set for the gate"
+grep -q 'check-actions-lock-gate.sh' <<<"$B" && ok "actions-lock-verify runs the tested gate script" || bad "actions-lock-verify does not run check-actions-lock-gate.sh"
+grep -Eq 'ref: ([0-9a-f]{40}|\$\{\{ job\.workflow_sha \}\})$' <<<"$B" && ok "actions-lock-verify pins standards at an immutable commit" || bad "actions-lock-verify standards checkout not pinned to an immutable commit"
+grep -q 'ref: main' <<<"$B" && bad "actions-lock-verify floats a standards checkout at main" || ok "actions-lock-verify has no floating ref: main"
+grep -q 'ACTIONS_LOCK_VERIFIER=' <<<"$B" && ok "gate is pointed at the fetched verifier" || bad "ACTIONS_LOCK_VERIFIER not set for the gate"
 
 # 4. workflow-lint no longer carries the lock step
 W=$(job_block workflow-lint)
-printf '%s' "$W" | grep -v '^ *#' | grep -q -- '--verify-local' && bad "workflow-lint still runs the lock verifier (should be its own context)" || ok "lock verification moved out of workflow-lint"
-printf '%s' "$W" | grep -q 'LOCK_SCRIPT' && bad "workflow-lint still copies the lock verifier" || ok "workflow-lint no longer fetches update-actions-lock.sh"
+grep -q -- '--verify-local' <<<"$(grep -v '^ *#' <<<"$W")" && bad "workflow-lint still runs the lock verifier (should be its own context)" || ok "lock verification moved out of workflow-lint"
+grep -q 'LOCK_SCRIPT' <<<"$W" && bad "workflow-lint still copies the lock verifier" || ok "workflow-lint no longer fetches update-actions-lock.sh"
 
 # 5. continue-on-error allow-list
 ALLOWED="language-policy quality workflow-lint"
 viol=0
 for id in $(job_ids); do
   case " $ALLOWED " in *" $id "*) continue;; esac
-  if job_block "$id" | grep -q 'continue-on-error: true'; then echo "  continue-on-error in gate job: $id"; viol=1; fi
+  if grep -q 'continue-on-error: true' <<<"$(job_block "$id")"; then echo "  continue-on-error in gate job: $id"; viol=1; fi
 done
 [ "$viol" -eq 0 ] && ok "continue-on-error confined to {$ALLOWED}" || bad "continue-on-error leaked into a gate job"
 
@@ -102,10 +102,10 @@ done
 # reusable at an immutable commit, advisory by default, skipped in standards.
 for id in deed-conformance k9-conformance; do
   B=$(job_block "$id")
-  printf '%s' "$B" | grep -Eq "^    uses: metadatastician/standards/\.github/workflows/$id\.yml@[0-9a-f]{40}\$" && ok "$id calls the standards reusable at a 40-hex commit" || bad "$id is not pinned to a 40-hex standards commit"
-  printf '%s' "$B" | grep -q 'repository_id != 1116521501' && ok "$id is skipped in standards itself" || bad "$id would run in standards itself (fork-governance already does)"
-  printf '%s' "$B" | grep -q "advisory: \${{ inputs.conformance-mode != 'enforce' }}" && ok "$id is advisory unless conformance-mode is enforce" || bad "$id advisory input is not driven by conformance-mode"
-  printf '%s' "$B" | grep -q 'conformance-mode != .off.' && ok "$id honours conformance-mode: off" || bad "$id ignores conformance-mode: off"
+  grep -Eq "^    uses: metadatastician/standards/\.github/workflows/$id\.yml@[0-9a-f]{40}\$" <<<"$B" && ok "$id calls the standards reusable at a 40-hex commit" || bad "$id is not pinned to a 40-hex standards commit"
+  grep -q 'repository_id != 1116521501' <<<"$B" && ok "$id is skipped in standards itself" || bad "$id would run in standards itself (fork-governance already does)"
+  grep -q "advisory: \${{ inputs.conformance-mode != 'enforce' }}" <<<"$B" && ok "$id is advisory unless conformance-mode is enforce" || bad "$id advisory input is not driven by conformance-mode"
+  grep -q 'conformance-mode != .off.' <<<"$B" && ok "$id honours conformance-mode: off" || bad "$id ignores conformance-mode: off"
   perms=$(printf '%s' "$B" | sed -n '/^    permissions:/,/^    [a-z]/p' | grep -v '^    [a-z]' | tr -d ' \n')
   [ "$perms" = "contents:read" ] && ok "$id asks for contents: read only (callers grant no more)" || bad "$id permissions are '$perms'"
 done
