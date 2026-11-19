@@ -107,11 +107,11 @@ Y
 bash "$RELOCK" --to "$NEW" --standards "$S" "$D" >/dev/null || fail "relock refused"
 L="$D/actions.lock"
 rec=$(awk -v k="    'hyperpolymath/standards@$NEW':" '$0==k{p=1;print;next} p&&/^    [^ ]/{p=0} p' "$L")
-printf '%s\n' "$rec" | grep -q "'acme/inner@5555555555555555555555555555555555555555'" \
+grep -q "'acme/inner@5555555555555555555555555555555555555555'" <<<"$rec" \
   || fail "the TARGET record's nested uses: lacks the action a NESTED standards reusable (by SHA) uses"
-printf '%s\n' "$rec" | grep -q "'acme/localdep@8888888888888888888888888888888888888888'" \
+grep -q "'acme/localdep@8888888888888888888888888888888888888888'" <<<"$rec" \
   || fail "the TARGET record's nested uses: lacks the action a LOCAL ./ reusable uses"
-printf '%s\n' "$rec" | grep -q "'actions/checkout@1111111111111111111111111111111111111111'" \
+grep -q "'actions/checkout@1111111111111111111111111111111111111111'" <<<"$rec" \
   || fail "the called reusable's own action is gone from the record"
 grep -q "^    'acme/inner@5555555555555555555555555555555555555555':\$" "$L" || fail "no record copied for the nested action"
 grep -q "^    'acme/localdep@8888888888888888888888888888888888888888':\$" "$L" || fail "no record copied for the local-reusable action"
@@ -159,16 +159,16 @@ OWNER_BODY=$(body "evil/standards/$K@$INNER")
 if scenario other-owner <<<"$OWNER_BODY" 2>/dev/null; then fail "a foreign-owner nested standards call was accepted"; fi
 grep -q "evil/standards@" "$T/last.log" || fail "the foreign-owner refusal does not name the call"
 scenario tag-form <<<"$(body "hyperpolymath/standards/$K@main")" || fail "relock refused (tag-form)"
-! printf '%s\n' "$rec" | grep -q "acme/inner@" || fail "a @main nested call was walked"
+! grep -q "acme/inner@" <<<"$rec" || fail "a @main nested call was walked"
 scenario missing-sha <<<"$(body "hyperpolymath/standards/$K@$GONE")" || fail "relock refused (missing-sha)"
-! printf '%s\n' "$rec" | grep -q "acme/inner@" || fail "an absent-commit nested call was walked"
+! grep -q "acme/inner@" <<<"$rec" || fail "an absent-commit nested call was walked"
 
 # a cycle between two local reusables terminates and still records both
 printf 'on: { workflow_call: {} }\njobs:\n  m:\n    uses: ./.github/workflows/l-reusable.yml\n' > "$S/.github/workflows/m-reusable.yml"
 printf 'on: { workflow_call: {} }\njobs:\n  l:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: acme/localdep@8888888888888888888888888888888888888888 # v8\n  back:\n    uses: ./.github/workflows/m-reusable.yml\n' > "$S/.github/workflows/l-reusable.yml"
 CYCLE_BODY=$(body "./.github/workflows/l-reusable.yml")
 scenario cycle <<<"$CYCLE_BODY" || fail "relock hung or refused on a local reusable cycle"
-printf '%s\n' "$rec" | grep -q "acme/localdep@" || fail "the cycle case lost the action"
+grep -q "acme/localdep@" <<<"$rec" || fail "the cycle case lost the action"
 
 # mutant: the cycle control must fail once the visited check is removed
 grep -v '^  case " \$nvisited " in' "$RELOCK" > "$T/mut-visited.sh"

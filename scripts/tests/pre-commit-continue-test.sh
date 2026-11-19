@@ -92,6 +92,39 @@ if [ "$RC" -eq 1 ] && grep -qF "Go files not allowed" <<<"$OUT" && ran "$d" vali
   ok "a language-policy refusal is counted and the later validators run"
 else ko "a staged .go file: wanted exit 1, the refusal and later validators, got exit $RC"; fi
 
+# The actions.lock closure check must run when the lock is staged, however
+# many other files the commit stages. The hook used to decide that with
+# `git diff --cached --name-only … | grep -qxF "$LOCK_REL"` under pipefail:
+# the lock sorts early, grep -q exits at it, git still writing a name list
+# above the 64 KiB pipe buffer dies of SIGPIPE, the pipeline reports 141 and
+# the check was skipped. A stub close-lock.sh that always fails stands in for
+# a lock that fails closure; five runs, each must fail the hook.
+d=$(fixture biglock)
+mkdir -p "$d/scripts" "$d/.github/workflows" "$d/zz"
+printf '#!/usr/bin/env bash\necho close-lock >> "%s"\nexit 1\n' "$d.log" > "$d/scripts/close-lock.sh"
+printf 'lock\n' > "$d/.github/workflows/actions.lock"
+for i in $(seq 1 1000); do
+  : > "$d/zz/a-staged-file-whose-name-is-long-enough-to-fill-the-pipe-buffer-quickly-number-$i.txt"
+done
+git -C "$d" add -A
+for run in 1 2 3 4 5; do
+  : > "$d.log"; run_hook "$d"
+  if [ "$RC" -eq 1 ] && ran "$d" close-lock && grep -qF "staged actions.lock failed the closure check" <<<"$OUT"; then
+    ok "a staged actions.lock in a commit of 1000 files is checked for closure (run $run)"
+  else OUT="exit $RC; log: $(tr '\n' ' ' < "$d.log")"; ko "staged actions.lock among 1000 files skipped the closure check (run $run)"; fi
+done
+# Controls: with the lock unstaged the closure check does not run (the hook
+# passes); with a closure check that passes, the hook passes.
+git -C "$d" rm -q --cached .github/workflows/actions.lock
+: > "$d.log"; run_hook "$d"
+if [ "$RC" -eq 0 ] && ! ran "$d" close-lock; then ok "an unstaged actions.lock is not checked (control)"
+else ko "unstaged actions.lock: wanted exit 0 and no closure check, got exit $RC"; fi
+git -C "$d" add .github/workflows/actions.lock
+printf '#!/usr/bin/env bash\necho close-lock >> "%s"\nexit 0\n' "$d.log" > "$d/scripts/close-lock.sh"
+: > "$d.log"; run_hook "$d"
+if [ "$RC" -eq 0 ] && ran "$d" close-lock; then ok "a staged actions.lock that closes passes (control)"
+else ko "staged actions.lock that closes: wanted exit 0 after the check, got exit $RC"; fi
+
 # Mutants: the suite, run against a modified copy of the hook, must fail.
 if [ -z "${PRE_COMMIT_MUTANT:-}" ]; then
   mutant() { # <label> <sed-expr>

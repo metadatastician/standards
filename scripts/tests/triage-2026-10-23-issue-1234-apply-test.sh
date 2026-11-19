@@ -107,9 +107,9 @@ SHIM
 chmod +x "$WORK/gh"
 
 dry_out="$(PATH="$WORK:$PATH" bash "$SUT" --dry-run)"
-printf '%s\n' "$dry_out" | grep -q 'D332 .github/settings.yml targets: 95'
-printf '%s\n' "$dry_out" | grep -q '#306 kept open'
-printf '%s\n' "$dry_out" | grep -q '#1234 kept open'
+grep -q 'D332 .github/settings.yml targets: 95' <<<"$dry_out"
+grep -q '#306 kept open' <<<"$dry_out"
+grep -q '#1234 kept open' <<<"$dry_out"
 echo "PASS: --dry-run performs zero gh write calls, enumerates 95 D332 repos, and gates issue closure on convergence"
 
 # 6. Exercise the actual close-out section with all earlier work converged.

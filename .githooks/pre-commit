@@ -135,8 +135,13 @@ run_validator "Bot directives" "validate-bot-directives.sh" "staged"
 # needs a top-level record of its own. Runs where the repository carries
 # scripts/close-lock.sh, like the canonical-names guard below.
 LOCK_REL=".github/workflows/actions.lock"
-if [[ -f "$REPO_ROOT/scripts/close-lock.sh" ]] \
-   && git diff --cached --name-only --diff-filter=ACM 2>/dev/null | grep -qxF "$LOCK_REL"; then
+# The lock is named as a pathspec, not grepped out of the staged list: a pipe
+# into grep -q lost the race to SIGPIPE on a large commit and skipped the check.
+# Under set -e a failing git diff ends the hook instead of reading as "not staged".
+STAGED_LOCK_NAME=""
+[[ -f "$REPO_ROOT/scripts/close-lock.sh" ]] \
+  && STAGED_LOCK_NAME="$(git -C "$REPO_ROOT" diff --cached --name-only --diff-filter=ACM -- "$LOCK_REL")"
+if [[ "$STAGED_LOCK_NAME" == "$LOCK_REL" ]]; then
   echo -e "${BLUE}[pre-commit]${NC} Checking actions.lock closure..."
   STAGED_LOCK="$(mktemp)"
   if ! git show ":$LOCK_REL" > "$STAGED_LOCK" 2>/dev/null \

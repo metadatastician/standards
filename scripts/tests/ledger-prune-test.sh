@@ -43,6 +43,7 @@ S_LIB="$REAL/scripts/lib/ledger-prune.sh"
 S_K9="$REAL/.githooks/validate-k9.sh"
 S_HOOK="$REAL/.githooks/validate-ledger-prune.sh"
 S_MARK="$REAL/scripts/check-marker-issue-refs.sh"
+S_PGQ="$REAL/scripts/check-pipe-grep-q.sh"
 S_DEP="$REAL/scripts/departures.sh"
 S_IE="$REAL/scripts/issue-evidence.sh"
 export K9_VALIDATOR="$REAL/1-formats/k9/tools/k9-validate.sh"
@@ -80,6 +81,7 @@ tools() {
   cp "$S_K9" "$1/.githooks/validate-k9.sh"
   cp "$S_HOOK" "$1/.githooks/validate-ledger-prune.sh"
   cp "$S_MARK" "$1/scripts/check-marker-issue-refs.sh"
+  cp "$S_PGQ" "$1/scripts/check-pipe-grep-q.sh"
   cp "$S_DEP" "$1/scripts/departures.sh"
   cp "$S_IE" "$1/scripts/issue-evidence.sh"
 }
@@ -586,6 +588,21 @@ c_hook_marker_cited() {
     && bash "$d/scripts/check-marker-issue-refs.sh" --root "$d" --cached >/dev/null
 }
 
+PGQ_L=.machine_readable/pipe-grep-q-allow.txt
+c_hook_pgq_fixed() {
+  local d g="gr""ep"; d=$(repo h16)
+  printf '#!/bin/sh\nw | %s -q a\n' "$g" > "$d/a.sh"
+  printf '#!/bin/sh\nw | %s -q b\n' "$g" > "$d/b.sh"
+  printf '# ledger\na.sh:1\nb.sh:1\n' > "$d/$PGQ_L"
+  commit_all "$d"
+  printf '#!/bin/sh\nout=$(w); %s -q a <<<"$out"\n' "$g" > "$d/a.sh"; git -C "$d" add a.sh
+  run_hook "$d" || return 1
+  has "prune: delete $PGQ_L:2: a.sh:1" \
+    && ! grep -qx 'a.sh:1' <<< "$(staged_ledger "$d" "$PGQ_L")" \
+    && grep -qx 'b.sh:1' <<< "$(staged_ledger "$d" "$PGQ_L")" \
+    && bash "$d/scripts/check-pipe-grep-q.sh" --root "$d" >/dev/null
+}
+
 # drow ID CHECKS_JSON — one canonical departures row.
 drow() {
   jq -c -S -n --arg id "$1" --argjson checks "$2" \
@@ -633,6 +650,7 @@ c_hook_departures_glob() {
 echo
 echo "== the hook on marker-allow.txt and departures.jsonl =="
 check "hook: citing an issue on a ledgered marker prunes its line"                c_hook_marker_cited
+check "hook: fixing a pipe into a quiet grep prunes its ledger line"            c_hook_pgq_fixed
 check "hook: departures — fixing a defect removes its row from the commit"        c_hook_departures_commit
 check "hook: departures — a glob row is judged though no path is spelled"         c_hook_departures_glob
 c_hook_departures_history() {
@@ -692,6 +710,8 @@ mutant S_HOOK 's/ ${parent:+-p "$parent"}//' \
   "the index commit has no parent" c_hook_departures_history
 mutant S_HOOK '/^  .machine_readable\/marker-allow.txt$/d' \
   "the hook forgets the marker ledger" c_hook_marker_cited
+mutant S_HOOK '/^  .machine_readable\/pipe-grep-q-allow.txt$/d' \
+  "the hook forgets the pipe-grep-q ledger" c_hook_pgq_fixed
 
 echo
 echo "ledger-prune: $pass passed, $fail failed"

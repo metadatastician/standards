@@ -24,6 +24,18 @@
 Owner ruling *D269* (2026-10-01, recorded on standards#787) supersedes the
 2026-05-29 "dependabot must not open major-version bumps unattended" policy.
 
+[IMPORTANT]
+====
+*Owner ruling 2026-11-18: auto-merge is off estate-wide.* The settings canon
+now has `allow_auto_merge: false` (`config/settings/repo.json`, under
+`owner_rulings`), applied by `scripts/apply-settings-canon.sh`. Until this
+policy is revised, *no update PR is armed*: the arming rule in §1 is suspended,
+and every update lands by a person merging it. Per-repository
+`dependabot-automerge.yml` workflows fail when they try to arm a pull request.
+Everything else here (the gate, changelog lines, rollback, per-repo opt-out)
+still describes the intended pipeline.
+====
+
 == Implementation status
 
 This document specifies the pipeline before all of it exists. Until a row says

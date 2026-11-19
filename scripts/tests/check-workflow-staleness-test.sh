@@ -100,7 +100,7 @@ run_case_out() {
   local want=0
   case "$regex" in '!'*) want=1; regex="${regex#!}" ;; esac
   local got=0
-  printf '%s' "$out" | grep -qE "$regex" || got=1
+  grep -qE "$regex" <<<"$out" || got=1
   if [ "$rc" -eq "$expected" ] && [ "$got" -eq "$want" ]; then
     echo "PASS: $desc"
     PASS=$((PASS + 1))
@@ -413,7 +413,7 @@ for owner in "someone/standards" "metadatastician/standards"; do
   set -e
   if [ "$owner" = "someone/standards" ]; then
     # Consumer: the retired enforcer is a hard error.
-    if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -q 'scorecard-enforcer.yml is retired'; then
+    if [ "$rc" -ne 0 ] && grep -q 'scorecard-enforcer.yml is retired' <<<"$out"; then
       echo "PASS: a lookalike owner is still a consumer (retired enforcer is a hard error)"
       PASS=$((PASS + 1))
     else
@@ -421,7 +421,7 @@ for owner in "someone/standards" "metadatastician/standards"; do
     fi
   else
     # Canon: the same file is the canonical history, not a consumer mistake.
-    if [ "$rc" -eq 0 ] && ! printf '%s' "$out" | grep -q 'scorecard-enforcer.yml is retired'; then
+    if [ "$rc" -eq 0 ] && ! grep -q 'scorecard-enforcer.yml is retired' <<<"$out"; then
       echo "PASS: the canon itself is exempt from the consumer-only retired-enforcer rule"
       PASS=$((PASS + 1))
     else

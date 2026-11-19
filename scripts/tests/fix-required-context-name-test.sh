@@ -99,7 +99,7 @@ check() { local label="$1" want="$2" got="$3"
   else fail=$((fail+1)); echo "FAIL $label — want exit $want, got $got"; fi; }
 
 check_says() { local label="$1" want="$2" out="$3"
-  if printf '%s' "$out" | grep -qF "$want"; then pass=$((pass+1)); echo "PASS $label"
+  if grep -qF "$want" <<<"$out"; then pass=$((pass+1)); echo "PASS $label"
   else fail=$((fail+1)); echo "FAIL $label — output lacks: $want"; printf '%s\n' "$out" | tail -3; fi; }
 
 install_gh

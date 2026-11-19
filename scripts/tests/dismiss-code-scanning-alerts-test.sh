@@ -65,11 +65,11 @@ recorded_lines_grounded() {
       return 1
     }
     text="$(sed -n "${line}p" "$ROOT/$path")"
-    if printf '%s\n' "$text" | grep -Eq '^[[:space:]]*#'; then
+    if grep -Eq '^[[:space:]]*#' <<<"$text"; then
       printf '%s:%s is a comment, not a permission: %s\n' "$path" "$line" "$text" >&2
       return 1
     fi
-    printf '%s\n' "$text" | grep -Eq '"?[A-Za-z-]+"?[[:space:]]*:[[:space:]]*"?write"?([[:space:],}]|$)' || {
+    grep -Eq '"?[A-Za-z-]+"?[[:space:]]*:[[:space:]]*"?write"?([[:space:],}]|$)' <<<"$text" || {
       printf '%s:%s is not a write permission: %s\n' "$path" "$line" "$text" >&2
       return 1
     }
@@ -156,7 +156,7 @@ check "a valid extra entry exits 0 (control for the case above)" -- \
 rm -f "$tmp_bad"
 
 echo "== dry run by default =="
-plan_only_shown() { ALERTS_JSON="$FEED_TMP" bash "$SCRIPT" --repo test/repo 2>&1 | grep -q 'Plan only'; }
+plan_only_shown() { grep -q 'Plan only' <<<"$(ALERTS_JSON="$FEED_TMP" bash "$SCRIPT" --repo test/repo 2>&1)"; }
 check "without --apply the script never calls the API" -- plan_only_shown
 
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"

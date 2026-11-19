@@ -45,9 +45,15 @@ meta-field      = ( %s":version"           token-sep string )
                 / ( %s":adaptive-focus"    token-sep string )
                 / ( %s":perfective-third"  token-sep boolean )
                 / ( %s":perfective-source" token-sep string )
+                / ( %s":inspiration"       token-sep str-list1 )
                 ; The chora (meta …) members, carried over unchanged (J30;
                 ; mapping section 3), and :design-rationale (A7 7.2). The
                 ; four tool members are (development-practices …)'s (J32).
+                ; :inspiration (owner ruling 2026-11-19, clade-to-repo-deed.adoc
+                ; section 3) names what the project draws on, verbatim: its
+                ; design heritage, a fact of the project undertaken, not of
+                ; the repo's identity. SEMANTIC: its items are not empty and
+                ; appear once.
                 ; :license is the SPDX id the source holds, verbatim: this
                 ; profile checks its shape only and never edits it.
                 ; :languages describes what the repo is written in; it is not

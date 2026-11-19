@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 = Mapping spec — the chora-registry seed (`repos.a2ml`) → `praxis-deed`
 Campaign: standards#837 · Frame: link:README.adoc[mappings/README] ·
-Status: DRAFT, keyed to the conversion in hyperpolymath/gv-clade-index#114
+Status: DRAFT, keyed to the conversion in hyperpolymath/chora-registry#114
 (head `5eedb08`). The deed form is A1's (CHORA-SPEC); this spec is A7's.
 
 == 0. Authority and the D313 exception
@@ -25,7 +25,7 @@ Owner rulings of 2026-11-14:
 
 == 1. Source surface
 
-* `hyperpolymath/gv-clade-index` `verisim/seed/repos.a2ml`: a `[meta]` table
+* `hyperpolymath/chora-registry` `verisim/seed/repos.a2ml`: a `[meta]` table
   and one `[repo.<name>]` table per registered repo (327 at conversion).
 * Its readers at conversion: `sync/parse-repos.sh`, `sync/export-json.sh`
   (which writes `worker/data/*.json`) and `scripts/check-registry.sh`.

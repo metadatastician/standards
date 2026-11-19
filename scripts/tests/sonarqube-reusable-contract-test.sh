@@ -33,15 +33,17 @@ has()   { grep -qF -e "$2" "$1"; }
 hasre() { grep -qE -e "$2" "$1"; }
 # Non-comment lines only, so a comment cannot satisfy or violate a rule.
 code()  { sed '/^[[:space:]]*#/d' "$wf"; }
-code_has()   { code | grep -qF -e "$1"; }
-code_lacks() { ! code | grep -qF -e "$1"; }
+code_has()   { grep -qF -e "$1" <<<"$(code)"; }
+code_lacks() { ! grep -qF -e "$1" <<<"$(code)"; }
 yqv()   { yq -r "$1" "$wf"; }
 # The list under this workflow's `workflows:` key: from its 4-space key line
 # up to the next 4-space key line (items are indented 8, so `[^ ]` matters).
 in_lock_entry() {
-  awk '/^    \x27\.github\/workflows\/sonarqube-reusable\.yml\x27:/ { f = 1; next }
+  local sect
+  sect=$(awk '/^    \x27\.github\/workflows\/sonarqube-reusable\.yml\x27:/ { f = 1; next }
        /^    [^ ]/ { f = 0 }
-       f' "$lock" | grep -qiF -e "'$1'"
+       f' "$lock")
+  grep -qiF -e "'$1'" <<<"$sect"
 }
 
 t "workflow exists"                     test -f "$wf"
@@ -78,7 +80,7 @@ uses="$(code | sed -nE 's/^[[:space:]]*-?[[:space:]]*uses:[[:space:]]*([^[:space
 t "has uses: lines"                     test -n "$uses"
 while IFS= read -r ref; do
   [ -n "$ref" ] || continue
-  t "pinned: $ref"                      bash -c "printf '%s' '$ref' | grep -Eq '@[0-9a-f]{40}\$'"
+  t "pinned: $ref"                      bash -c "grep -Eq '@[0-9a-f]{40}\$' <<<'$ref'"
   lc="$(printf '%s' "$ref" | tr '[:upper:]' '[:lower:]')"
   t "in lock under this workflow: $lc"  in_lock_entry "$lc"
   t "lock record exists: $lc"           grep -qiF "    '$lc':" "$lock"

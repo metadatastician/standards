@@ -37,7 +37,7 @@ assert() {
     echo "      output: $(printf '%s' "$out" | head -3 | tr '\n' '|')"
     fail=$((fail + 1)); return
   fi
-  if [ "$needle" != "-" ] && ! printf '%s' "$out" | grep -qF "$needle"; then
+  if [ "$needle" != "-" ] && ! grep -qF "$needle" <<<"$out"; then
     echo "FAIL: $label — exit $status correct, but output lacked '$needle'"
     echo "      output: $(printf '%s' "$out" | head -3 | tr '\n' '|')"
     fail=$((fail + 1)); return

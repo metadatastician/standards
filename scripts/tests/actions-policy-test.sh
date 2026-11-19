@@ -87,7 +87,7 @@ assert_rollback() {
   # whenever the default posture IS all — a guard asking a different question
   # than its consumer. Assert the ORDER.
   if grep -q -- 'allowed_actions=selected' "$PUT_LOG" \
-     && tail -1 "$PUT_LOG" | grep -q -- 'allowed_actions=all'; then
+     && grep -q -- 'allowed_actions=all' <<<"$(tail -1 "$PUT_LOG")"; then
     echo "PASS: a failed payload install ROLLS BACK the posture flip"
     pass=$((pass + 1))
   else
@@ -132,7 +132,7 @@ expect "setter refuses success when the allow-list reads back empty" 1 selected-
 # in which it is stricter than either end state.
 expect "setter installs the payload first when no flip is needed" 0 setter-selected \
   "$SET" owner/repo "$CANON"
-head -1 "$PUT_LOG" | grep -q -- '/selected-actions' \
+grep -q -- '/selected-actions' <<<"$(head -1 "$PUT_LOG")" \
   && { echo "PASS: payload PUT precedes the permissions PUT"; pass=$((pass + 1)); } \
   || { echo "FAIL: payload PUT did not come first"; cat "$PUT_LOG"; fail=$((fail + 1)); }
 

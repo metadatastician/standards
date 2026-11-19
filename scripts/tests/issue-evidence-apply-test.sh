@@ -170,11 +170,11 @@ state_of() { # N -> the states element for N, or "absent"
 actions() { cat "$FIX/ACTIONS.log" 2>/dev/null || true; }
 called() { grep -qF -- "$1" "$FIX/CALLS.log"; }
 # did_action "close N": that action was performed. no_action: it was not.
-did_action() { actions | grep -q "^$1\\( \\|\$\\)"; }
+did_action() { grep -q "^$1\\( \\|\$\\)" <<<"$(actions)"; }
 no_action() { ! did_action "$1"; }
 not_called() { ! called "$1"; }
-err_has() { printf '%s\n' "$ERR" | grep -qF -- "$1"; }
-out_has() { printf '%s\n' "$OUT" | grep -qF -- "$1"; }
+err_has() { grep -qF -- "$1" <<<"$ERR"; }
+out_has() { grep -qF -- "$1" <<<"$OUT"; }
 not_out_has() { ! out_has "$1"; }
 
 # --- states: the decide input ------------------------------------------------
