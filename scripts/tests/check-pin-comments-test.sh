@@ -13,7 +13,7 @@ checker="$root/scripts/check-pin-comments.sh"
 
 # The checker needs mikefarah yq v4. Without it nothing here can run, and that
 # is exit 2 ("could not run"), not a failure of the checker and not a pass.
-"${YQ_BIN:-yq}" --version 2>/dev/null | grep -q 'mikefarah' || {
+grep -q 'mikefarah' <<<"$("${YQ_BIN:-yq}" --version 2>/dev/null)" || {
   echo "check-pin-comments-test: could not run, mikefarah yq v4 is required (YQ_BIN=${YQ_BIN:-yq})" >&2
   exit 2
 }
@@ -49,7 +49,7 @@ expect() {
     echo "FAIL: $label — expected exit $want, got $rc"; printf '%s\n' "$out" | sed 's/^/      | /'
     fail=$((fail + 1)); return
   fi
-  if [ "$needle" != "-" ] && ! printf '%s' "$out" | grep -qF -- "$needle"; then
+  if [ "$needle" != "-" ] && ! grep -qF -- "$needle" <<<"$out"; then
     echo "FAIL: $label — exit $rc correct, but output lacked '$needle'"; printf '%s\n' "$out" | sed 's/^/      | /'
     fail=$((fail + 1)); return
   fi

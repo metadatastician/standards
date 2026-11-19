@@ -70,8 +70,8 @@ pass "$rows classified issues ($tier_counts), unique numbers, every row annotate
 
 # 3. --report must not need the network at all: run it with an empty PATH for gh.
 REPORT_OUT="$(PATH="/usr/bin:/bin" bash "$SUT" --report)" || fail "--report failed without gh on PATH"
-printf '%s' "$REPORT_OUT" | grep -q 'total' || fail "--report printed no total"
-printf '%s' "$REPORT_OUT" | grep -qE 'C +close now' || fail "--report did not summarise tier C"
+grep -q 'total' <<<"$REPORT_OUT" || fail "--report printed no total"
+grep -qE 'C +close now' <<<"$REPORT_OUT" || fail "--report did not summarise tier C"
 pass "--report works with no gh on PATH"
 
 # 4. Everything below uses a shim gh.

@@ -133,7 +133,7 @@ pub const SERVICE_TOKEN: &str = "PLANTED_CANARY_VALUE_NOT_REAL_5";
 EOF
 expect ws 1 "secret in crates/*/src -> BLOCKS after cutoff (no root ./src)" RUST_TODAY=2026-09-01
 expect ws 0 "secret in crates/*/src -> advisory before cutoff" RUST_TODAY=2026-07-21
-if ( cd "$WORK/ws" && RUST_TODAY=2026-07-21 bash "$SCAN" 2>&1 | grep -q 'NOT YET ENFORCED' ); then
+if scan_out=$(cd "$WORK/ws" && RUST_TODAY=2026-07-21 bash "$SCAN" 2>&1) && grep -q 'NOT YET ENFORCED' <<<"$scan_out"; then
   echo "  PASS  advisory run reports the finding and never claims a clean pass"
   pass=$((pass+1))
 else

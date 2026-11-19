@@ -192,7 +192,9 @@ filter_matches() {
 path_exists_with_real_files() {
     local path="$1"
     [[ -e "$TARGET/$path" ]] || return 1
-    find "$TARGET/$path" -type f ! -name '.gitkeep' | grep -q .
+    # -print -quit, not a pipe into grep -q: under pipefail a large directory
+    # made find die of SIGPIPE (status 141) and read as "no real files".
+    [[ -n "$(find "$TARGET/$path" -type f ! -name '.gitkeep' -print -quit)" ]]
 }
 
 justfile_path() {
@@ -256,9 +258,15 @@ check_fake_evidence() {
         printf 'PASS: no obvious fake test or benchmark evidence found\n'
     fi
 
-    if find "$TARGET" \( -path '*/fuzz/placeholder.txt' -o -path '*/benches/.gitkeep' \) 2>/dev/null | grep -q .; then
+    # Captured once, then tested and listed: piping find into grep -q (and into
+    # head) let find die of SIGPIPE on a long listing, status 141 under
+    # pipefail, and the placeholders read as absent. A find error with no
+    # output still reads as none found, as before.
+    local placeholders
+    placeholders="$(find "$TARGET" \( -path '*/fuzz/placeholder.txt' -o -path '*/benches/.gitkeep' \) 2>/dev/null)" || true
+    if [[ -n "$placeholders" ]]; then
         record_blocker "placeholder fuzz or benchmark artifacts present"
-        find "$TARGET" \( -path '*/fuzz/placeholder.txt' -o -path '*/benches/.gitkeep' \) | head -n 20
+        head -n 20 <<<"$placeholders"
     else
         printf 'PASS: no placeholder fuzz/bench artifact files found\n'
     fi

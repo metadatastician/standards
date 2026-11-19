@@ -24,7 +24,7 @@ check() { # name expected_rc actual_rc [haystack needle]
     fail=$((fail + 1))
     return
   fi
-  if [ "$#" -ge 5 ] && ! printf '%s' "$4" | grep -Fq -- "$5"; then
+  if [ "$#" -ge 5 ] && ! grep -Fq -- "$5" <<<"$4"; then
     echo "FAIL: $name — rc was right but the message never mentioned '$5'" >&2
     echo "----- output -----" >&2; printf '%s\n' "$4" >&2; echo "------------------" >&2
     fail=$((fail + 1))
@@ -36,7 +36,7 @@ check() { # name expected_rc actual_rc [haystack needle]
 
 refute() { # name haystack needle
   local name="$1"
-  if printf '%s' "$2" | grep -Fq -- "$3"; then
+  if grep -Fq -- "$3" <<<"$2"; then
     echo "FAIL: $name — output mentioned '$3' and must not" >&2
     fail=$((fail + 1))
     return
