@@ -67,7 +67,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEED_LINT="${DEED_LINT:-$SCRIPT_DIR/../1-formats/deed/tools/deed_lint.js}"
-MAPPINGS="$SCRIPT_DIR/../1-formats/deed/mappings"
+MAPPINGS="${MAPPINGS:-$SCRIPT_DIR/../1-formats/deed/mappings}"
 BUN="${BUN:-bun}"
 SELF_TOOL="scripts/a2ml-retire-check.sh"
 SELF_TEST="scripts/tests/a2ml-retire-check-test.sh"
@@ -423,7 +423,7 @@ named_in() {
 has() { local x; for x in "${blockers[@]}"; do case $x in "$1"*) return 0 ;; esac; done; return 1; }
 : > "$T/out.tsv"
 while IFS=$'\x1f' read -r p fam spec base uncl; do
-  family=$fam; blockers=(); targets=(); facts=null; note=""; ftruth=null; ltruth=null
+  family=$fam; blockers=(); targets=(); facts=null; note=""; ftruth=null; ltruth=null; summary_only=""
   chora=""; [ -z "$uncl" ] && chora=$(base_chora "$base")
   if [ "$chora" = MULTI ]; then uncl="several <name>_chora.deed files in '${base:-.}'"; chora=""; fi
   D="${base:+$base/}.machine_readable/descriptiles"
@@ -476,7 +476,20 @@ while IFS=$'\x1f' read -r p fam spec base uncl; do
       SCORECARD) [ -n "${DECIDED[$p]:-}" ] && compare=none ;;
     esac
     if [ "$compare" = none ]; then
-      facts='{"checked":0,"dropped":0,"legacy_chora":0,"missing":0,"present":0,"unlisted":0}'; missing_groups=()
+      # The decision drops the per-criterion facts on purpose: nothing is
+      # translated. The summary still has a target (an (assessment) clause, or
+      # the RSR praxis deed), and nothing here compares its content. So an
+      # absent target blocks, a present one leaves the file unchecked, and a
+      # file on this path is never deletable-now unless a ruling drops it.
+      facts='{"checked":0,"dropped":0,"legacy_chora":0,"missing":0,"present":0,"unlisted":0}'
+      if [ "${#missing_groups[@]}" -gt 0 ]; then
+        ftruth=false
+        for g in "${missing_groups[@]}"; do blockers+=("no-target-deed:$g"); done
+      else
+        note=${note:-"the target exists, but the summary it holds is not compared with this record here"}
+        blockers+=("facts-unchecked:$family")
+      fi
+      summary_only=1
     elif [ -n "$compare" ]; then
       fj=$(facts_json "$ROOT/$p")
       cast=""; sast=""
@@ -493,7 +506,9 @@ while IFS=$'\x1f' read -r p fam spec base uncl; do
       fi
     fi
 
-    if [ "$facts" != null ]; then
+    if [ -n "$summary_only" ]; then
+      :  # settled above
+    elif [ "$facts" != null ]; then
       fm=$(jq -r '.missing' <<< "$facts")
       if [ "$fm" -gt 0 ]; then ftruth=false; blockers+=("facts-missing:$fm"); else ftruth=true; missing_groups=(); fi
       if [ "$fm" -gt 0 ]; then

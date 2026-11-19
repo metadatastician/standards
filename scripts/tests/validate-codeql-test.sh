@@ -110,7 +110,7 @@ ck "Rust listed in CodeQL matrix still FAILS" 1 "$T/rustbad"
 mk pywarn "['actions']" py
 ck "missing-language warning is non-fatal" 0 "$T/pywarn"
 out7="$(INPUT_PATH="$T/pywarn" bash "$HOOK" 2>&1)"
-if printf '%s' "$out7" | grep -q "WARNING: Python files"; then
+if grep -q "WARNING: Python files" <<<"$out7"; then
   printf '  ok    warning text is actually emitted\n'; pass=$((pass+1))
 else
   printf '  FAIL  warning text missing; output=%s\n' "${out7:-<none>}"; fail=$((fail+1))

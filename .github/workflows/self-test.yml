@@ -14,9 +14,9 @@
 # reporting a vacuous pass.
 #
 # SHARDS: the suite is split so no single job nears its limit. The mutation
-# test tests/test_apply_workflow_pins_remote.sh runs its mutants one after
-# another and takes longer than the rest of the suite together; it runs alone in
-# `tests-heavy`. `tests` keeps the required context name `Repo self-tests` and
+# test tests/test_apply_workflow_pins_remote.sh is still the longest single
+# test (its mutants run concurrently, but its serial sections remain); it runs
+# alone in `tests-heavy`. `tests` keeps the required context name `Repo self-tests` and
 # fails unless both shards pass, so a shard cannot be skipped or forgotten.
 # What belongs in which shard is HEAVY_TESTS in scripts/run-shell-test-suite.sh.
 
@@ -242,11 +242,10 @@ jobs:
   tests-heavy:
     name: Repo self-tests (heavy)
     runs-on: ubuntu-latest
-    # STOPGAP, NOT THE FIX. The mutation test inside this shard runs its
-    # mutants serially and is still the long pole; this limit only stops it
-    # being killed. The real fix is to run its mutants in parallel (see the
-    # tracking issue linked from the PR that introduced this shard).
-    timeout-minutes: 40
+    # The mutation test inside this shard now runs its mutants concurrently
+    # (MUT_JOBS, default one per core): about 6 minutes on 4 cores, down from
+    # about 11 serially. 20 minutes is an ordinary bound, not a stopgap.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

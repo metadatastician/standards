@@ -33,19 +33,19 @@ bash -n "$APPLIER" && pass "applier parses" || fail "applier does not parse"
 
 # A suite committed 100644 passes every local run (`bash script` ignores the
 # mode) and dies in CI at exit 126 before a single control runs.
-if git -C "${SCRIPT_DIR}/.." ls-files -s -- tests/test_apply_workflow_pins_remote.sh 2>/dev/null | grep -q '^100755'; then
+if grep -q '^100755' <<<"$(git -C "${SCRIPT_DIR}/.." ls-files -s -- tests/test_apply_workflow_pins_remote.sh 2>/dev/null)"; then
   pass "this test is committed executable (100755)"
 elif ! git -C "${SCRIPT_DIR}/.." rev-parse --git-dir >/dev/null 2>&1; then
   pass "not a git checkout; mode check skipped"
 else
   # Not yet staged is acceptable while authoring; a wrong mode is not.
-  if git -C "${SCRIPT_DIR}/.." ls-files -- tests/test_apply_workflow_pins_remote.sh 2>/dev/null | grep -q .; then
+  if grep -q . <<<"$(git -C "${SCRIPT_DIR}/.." ls-files -- tests/test_apply_workflow_pins_remote.sh 2>/dev/null)"; then
     fail "test is tracked but NOT 100755 — it will exit 126 in CI"
   else
     pass "test not yet tracked; mode will be checked once added"
   fi
 fi
-if git -C "${SCRIPT_DIR}/.." ls-files -s -- scripts/apply-workflow-pins-remote.sh 2>/dev/null | grep -q '^100644'; then
+if grep -q '^100644' <<<"$(git -C "${SCRIPT_DIR}/.." ls-files -s -- scripts/apply-workflow-pins-remote.sh 2>/dev/null)"; then
   fail "applier is tracked 100644 — it must be executable"
 else
   pass "applier mode acceptable"
@@ -73,9 +73,43 @@ for want in "fresh.yml" "behind.yml" "illegal.yml" "tracking.yml" "none.yml" "sh
 done
 
 # --- 2. mutants --------------------------------------------------------------
+# Mutants are independent: each works on its own copy of the applier and its own
+# scratch files, so they run concurrently (this suite was one serial run of ~120
+# mutants and timed CI out, #1610). A background job cannot set this shell's rc or
+# print in order, so each job writes its output and verdict to files and mut_flush
+# replays them in call order. A job that dies before writing a verdict counts as a
+# failure: silence is never a pass. MUT_JOBS=1 gives the old serial behaviour.
+MUT_JOBS="${MUT_JOBS:-$(nproc 2>/dev/null || echo 2)}"
+case "$MUT_JOBS" in ''|*[!0-9]*|0) MUT_JOBS=2 ;; esac
+MUT_SEQ=0; MUT_SHOWN=0
+# mut_dispatch <function> <args...> — run the function as one background job.
+mut_dispatch() {
+  MUT_SEQ=$((MUT_SEQ+1))
+  local n=$MUT_SEQ
+  while [ "$(jobs -rp | wc -l)" -ge "$MUT_JOBS" ]; do wait -n 2>/dev/null || true; done
+  ( rc=0; "$@"; echo "$rc" > "$TMP/job.$n.rc" ) >"$TMP/job.$n.out" 2>"$TMP/job.$n.err" &
+}
+# mut_flush — wait for every job, then replay each one's output in call order.
+mut_flush() {
+  wait
+  local n
+  while [ "$MUT_SHOWN" -lt "$MUT_SEQ" ]; do
+    MUT_SHOWN=$((MUT_SHOWN+1)); n=$MUT_SHOWN
+    cat "$TMP/job.$n.out"; cat "$TMP/job.$n.err" >&2
+    if [ ! -f "$TMP/job.$n.rc" ]; then
+      echo "  FAIL mutant job $n died without a verdict" >&2; rc=1
+    elif [ "$(cat "$TMP/job.$n.rc")" != 0 ]; then
+      rc=1
+    fi
+  done
+}
+
 # kill <name> <sed-expr> <expected-substring-in-red-output>
 kill_mutant() {
-  MUT_RAN=$((MUT_RAN+1))
+  MUT_RAN=$((MUT_RAN+1))   # counted here, in the parent: a job's own counter would be lost
+  mut_dispatch kill_mutant_job "$@"
+}
+kill_mutant_job() {
   # NOTE: `local a="$1" m="${a}"` does NOT work — bash expands every word of the
   # `local` builtin's argument list BEFORE assigning any of them, so `${a}` is
   # unset there. Assign on separate lines. (Cost one red herring to find.)
@@ -157,8 +191,9 @@ kill_mutant illegal_dot_slash \
   's@\(\\\.\\\./\|@(\\.\\.?/|@' \
   "FAIL dot-local.yml"
 # (b) the managed-file exemption never applies: gh actions-lock's own `$/` is reported.
+# gr''ep is split on purpose: this is the text of a mutant of the applier, not a pipe in this test.
 kill_mutant managed_exempt_off \
-  's@^  head -n 5 "\$1" 2>/dev/null \| grep -qE "\$ACTIONS_LOCK_MANAGED_RE"@  false@' \
+  's@^  head -n 5 "\$1" 2>/dev/null \| gr''ep -qE "\$ACTIONS_LOCK_MANAGED_RE"@  false@' \
   "FAIL dollar-managed.yml"
 # (c) the exemption swallows `../` too: a parent-relative ref in a managed file would
 # pass the census while GitHub still refuses it at parse time.
@@ -350,6 +385,7 @@ kill_mutant envpin_flow_question_boundary 's@\[\[:space:\]\{,:\[\?\]@[[:space:]{
 # A rate-limited repo used to come back as "no workflows": fetch_workflows
 # returned 0 on every failure, so the census dropped the repo while `walked N`
 # still counted it (2026-10-02). Only a 404 may read as "nothing here".
+mut_flush   # section 2's mutants have all run; show their results before section 3
 echo "== 3. fetch failures are reported, not swallowed =="
 STUB="$TMP/stub"; mkdir -p "$STUB"
 cat > "$STUB/gh" <<'EOF'
@@ -837,8 +873,8 @@ case_main_content_fix() {
   paths=$(jq -r '.variables.input.fileChanges.additions[]?.path' "$d/commit.json" 2>/dev/null)
   if [ "$(cat "$d/rc")" = 0 ] \
      && grep -qF "$(printf 'hyperpolymath/pub-a\tproven-lock-gate.yml\tBEHIND-CONTENT')" "$d/out" \
-     && printf '%s\n' "$paths" | grep -qxF '.github/workflows/ci.yml' \
-     && ! printf '%s\n' "$paths" | grep -qF 'proven-lock-gate.yml'; then
+     && grep -qxF '.github/workflows/ci.yml' <<<"$paths" \
+     && ! grep -qF 'proven-lock-gate.yml' <<<"$paths"; then
     pass "main: --fix re-pins ci.yml but never commits the stale stamped copy"
   else
     fail "main: --fix acted on a content row (rc=$(cat "$d/rc"))"
@@ -885,9 +921,9 @@ case_main_content_refresh() {
      && grep -qF "$(printf 'hyperpolymath/pub-a\t-\tPR-OPENED\t')" "$d/out" \
      && [ "$paths" = ".github/workflows/proven-lock-gate.yml" ] \
      && [ "$(printf '%s\n' "$body" | head -n 1)" = "$(head -n 1 "$d/proven_template.yml")" ] \
-     && printf '%s\n' "$body" | grep -qxF "      - uses: actions/checkout@${CO_OLD} # v5" \
-     && printf '%s\n' "$body" | grep -qxF "  PROVEN_SHA: \"${P}\"" \
-     && printf '%s\n' "$body" | grep -qxF '      - run: echo new' \
+     && grep -qxF "      - uses: actions/checkout@${CO_OLD} # v5" <<<"$body" \
+     && grep -qxF "  PROVEN_SHA: \"${P}\"" <<<"$body" \
+     && grep -qxF '      - run: echo new' <<<"$body" \
      && grep -qF 'refs/heads/chore/refresh-proven-cicd-content' "$d/calls.log" \
      && grep -qF 'chore(ci): refresh proven-cicd content to dddddddddddd' "$d/calls.log" \
      && [ "$(grep -c "contents/templates/proven-lock-gate.yml?ref=${P}" "$d/calls.log")" = 1 ] \
@@ -936,7 +972,7 @@ case_main_content_refresh_envpin() {
     fi
     # The report never prints a value that is not a commit: only a 40-hex value is shown.
     if [ "$want" != 0 ] && [ "$old" = main ] && [ "$new" = release ]; then
-      if grep -F 'ENV-PIN-REFRESH-MOVED' "$d/out" | grep -qE 'main|release'; then
+      if grep -qE 'main|release' <<<"$(grep -F 'ENV-PIN-REFRESH-MOVED' "$d/out")"; then
         fail "main: ENV-PIN-REFRESH-MOVED printed a branch name (non-commit values must not be shown)"
       else
         pass "main: ENV-PIN-REFRESH-MOVED does not print a non-commit value"
@@ -1202,8 +1238,8 @@ case_main_envpin_fix_untouched() {
   paths=$(jq -r '.variables.input.fileChanges.additions[]?.path' "$d/commit.json" 2>/dev/null)
   if [ "$(cat "$d/rc")" = 0 ] \
      && grep -q 'ENV-PIN-BEHIND' "$d/out" \
-     && printf '%s\n' "$paths" | grep -qxF '.github/workflows/ci.yml' \
-     && ! printf '%s\n' "$paths" | grep -qF 'env-pin.yml'; then
+     && grep -qxF '.github/workflows/ci.yml' <<<"$paths" \
+     && ! grep -qF 'env-pin.yml' <<<"$paths"; then
     pass "main: --fix never moves an env-var pin (the commit carries ci.yml only; env-pin.yml stays ENV-PIN-BEHIND)"
   else
     fail "main: --fix touched or mishandled an env-var pin (rc=$(cat "$d/rc"), paths: $(echo $paths))"
@@ -1576,8 +1612,8 @@ sqcaller=$(jq -r '.variables.input.fileChanges.additions[] | select(.path == ".g
 sqlock=$(jq -r '.variables.input.fileChanges.additions[] | select(.path == ".github/workflows/actions.lock") | .contents' "$d/commit.json" 2>/dev/null | base64 -d 2>/dev/null)
 if [ "$rc_fixsq" = 0 ] \
    && grep -qF "$(printf 'hyperpolymath/pub-a\tcicd-squabbler.yml\tSQUABBLER-ADDED')" "$d/out" \
-   && printf '%s\n' "$sqcaller" | grep -qxF "    uses: metadatastician/standards/.github/workflows/cicd-squabbler-reusable.yml@$SQT" \
-   && printf '%s\n' "$sqlock" | grep -qxF "    '.github/workflows/cicd-squabbler.yml':" \
+   && grep -qxF "    uses: metadatastician/standards/.github/workflows/cicd-squabbler-reusable.yml@$SQT" <<<"$sqcaller" \
+   && grep -qxF "    '.github/workflows/cicd-squabbler.yml':" <<<"$sqlock" \
    && grep -q '^pr create ' "$d/calls.log" \
    && grep -qF "$(printf 'hyperpolymath/pub-a\t-\tPR-OPENED')" "$d/out"; then
   pass "main: --fix --ensure-squabbler commits the caller pinned at the target, writes its lock entry and opens the PR"
@@ -1638,18 +1674,24 @@ declare -A LM_CTL
 # lm_red <output> — did a case report a failure? A line that STARTS with FAIL, not the bare
 # substring: a passing label can contain it (one CONTENT-CENSUS-FAILED row), which made
 # a green case look red and a no-op mutant look killed.
-lm_red() { printf '%s\n' "$1" | grep -Eq '^[[:space:]]*FAIL[[:space:]]'; }
+lm_red() { grep -Eq '^[[:space:]]*FAIL[[:space:]]' <<<"$1"; }
 list_mutant() {
   MUT_RAN=$((MUT_RAN+1))
   local name="$1" expr="$2" fn="$3"
-  local m="$MUT/mutant_${name}.sh" out
+  # The control runs here, in the parent, once per case function: the LM_CTL cache
+  # would not survive a background job. Only the mutant itself runs concurrently.
   if [ -z "${LM_CTL[$fn]:-}" ]; then
     local ctl="$MUT/control_${fn}.sh" outc
     cp "$APPLIER" "$ctl"
     outc=$("$fn" "$ctl" 2>&1)
     if lm_red "$outc"; then LM_CTL[$fn]=red; else LM_CTL[$fn]=green; fi
   fi
-  if [ "${LM_CTL[$fn]}" = red ]; then
+  mut_dispatch list_mutant_job "$name" "$expr" "$fn" "${LM_CTL[$fn]}"
+}
+list_mutant_job() {
+  local name="$1" expr="$2" fn="$3" ctlstate="$4"
+  local m="$MUT/mutant_${name}.sh" out
+  if [ "$ctlstate" = red ]; then
     fail "mutant '$name': the UNMUTATED copy is already red under $fn in the mutant environment, so a kill would prove nothing"; return
   fi
   cp "$APPLIER" "$m"
@@ -1722,7 +1764,7 @@ list_mutant envpin_behind_as_fresh 's@if \(low == tgt\) row = sprintf\("ENV-PIN-
 # (No mutant for the comment-line guard: the key regex already rejects a line that starts
 # with #, so removing the guard changes nothing observable. The commented fixture lines
 # stay as a regression check, not a mutation target.)
-list_mutant envpin_before_none_skip_lost 's@^      done < <\(env_pin_rows "\$wf" "\$TARGET_SHA"\)$@      done < <(classify_file "$wf" "$TARGET_SHA" | grep -qx NONE || env_pin_rows "$wf" "$TARGET_SHA")@' case_main_envpin
+list_mutant envpin_before_none_skip_lost 's@^      done < <\(env_pin_rows "\$wf" "\$TARGET_SHA"\)$@      done < <(classify_file "$wf" "$TARGET_SHA" | gr''ep -qx NONE || env_pin_rows "$wf" "$TARGET_SHA")@' case_main_envpin
 # Health block: each row kind must be written, a 0-job row needs the jobs endpoint's
 # agreement, an unreadable answer must be said, the cap must hold, and --no-health
 # must read nothing.
@@ -1740,6 +1782,7 @@ kill_mutant health_tie_break_lost 's@sort_by\(\[\.created_at, \.id\]\)@sort_by(.
 kill_mutant health_pathless_dropped 's@then "\(unknown workflow\)" else \. end@then "" else . end@' "FAIL health-pathless"
 }
 
+mut_flush   # the last batch of mutants, replayed in call order before the verdict
 echo
 # A mutant call placed before its function exists fails silently (no `set -e`) and would leave the
 # suite green: every call line must have started.

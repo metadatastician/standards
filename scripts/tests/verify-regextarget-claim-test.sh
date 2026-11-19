@@ -51,7 +51,7 @@ check() { # check <name> <wanted-rc> <wanted-substring> <env-prefix...> -- runs 
   local name="$1" want_rc="$2" want_txt="$3"; shift 3
   local out rc
   out="$("$@" 2>&1)"; rc=$?
-  if [ "$rc" = "$want_rc" ] && printf '%s' "$out" | grep -qF "$want_txt"; then
+  if [ "$rc" = "$want_rc" ] && grep -qF "$want_txt" <<<"$out"; then
     printf '  ok    %s\n' "$name"; pass=$((pass + 1))
   else
     printf '  FAIL  %s\n' "$name"

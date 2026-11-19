@@ -6,7 +6,7 @@
     "allow_merge_commit": false,
     "allow_rebase_merge": false,
     "delete_branch_on_merge": true,
-    "allow_auto_merge": true,
+    "allow_auto_merge": false,
     "allow_update_branch": true,
     "web_commit_signoff_required": true,
     "squash_merge_commit_title": "PR_TITLE",
@@ -36,6 +36,9 @@
   "vulnerability_alerts": { "endpoint": "PUT /repos/{o}/{r}/vulnerability-alerts", "enabled": true },
   "automated_security_fixes": { "endpoint": "PUT /repos/{o}/{r}/automated-security-fixes", "enabled": true },
   "per_repo_deltas_allowed": ["description", "homepage", "topics", "has_wiki", "has_projects", "has_discussions", "has_pages", "visibility"],
+  "owner_rulings": {
+    "2026-11-18": "Auto-merge off estate-wide: allow_auto_merge=false. scripts/apply-settings-canon.sh disarms auto-merge already armed on open PRs before switching the setting off. Supersedes the arming rule in docs/DEPENDABOT-POLICY.adoc section 1 until that policy is revised."
+  },
   "open_owner_decisions": {
     "O8": "allow_merge_commit / allow_rebase_merge are false here (squash-only). If the owner keeps merge commits, flip allow_merge_commit to true and add \"merge\" to allowed_merge_methods in rulesets/base.json."
   }

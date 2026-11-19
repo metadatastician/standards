@@ -46,7 +46,7 @@ contains()      { case "$2" in *"$1"*) return 0 ;; *) return 1 ;; esac; }
 not_contains()  { case "$2" in *"$1"*) return 1 ;; *) return 0 ;; esac; }
 fresh_only()    { contains FRESH "$1" && not_contains BEHIND "$1"; }
 file_has()      { grep -q "$2" "$1"; }
-staged_has()    { git -C "$1" diff --cached --name-only | grep -q "$2"; }
+staged_has()    { grep -q "$2" <<<"$(git -C "$1" diff --cached --name-only)"; }
 
 mk_consumer() { # dir [owner] — owner defaults to the canonical one
   local owner="${2:-metadatastician}"

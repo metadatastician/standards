@@ -53,6 +53,10 @@ if [ "${2:-}" = "--verify-local" ]; then
       printf '%s\n' '{"valid":false,"findings":[{"workflow":".github/workflows/runonly.yml","category":"not-pinned","dependency":"actions/checkout@v7.0.1"}]}'
       exit 1
       ;;
+    not-pinned-big)
+      printf '%s\n' '{"valid":false,"findings":[{"workflow":".github/workflows/big.yml","category":"not-pinned","dependency":null}]}'
+      exit 1
+      ;;
     local-action)
       printf '%s\n' '{"valid":false,"findings":[{"workflow":".github/workflows/localaction.yml","category":"local-action","dependency":null}]}'
       exit 1
@@ -206,6 +210,24 @@ if FAKE_VERIFY_FINDING=not-pinned-with-dependency GH_BIN="$WORK/bin/fake-gh" \
   exit 1
 fi
 echo "PASS: a not-pinned dependency remains blocking"
+
+# A workflow with remote actions is not "nothing to pin", however many it has.
+# The check read `! printf … | grep -v <local> | grep -q .` under pipefail:
+# grep -q exited at the first remote ref, grep -v still writing a list above
+# the pipe buffer died of SIGPIPE, the pipeline reported 141, `!` made it 0 and
+# the not-pinned finding was accepted. 3000 remote uses (~200 KB); five runs.
+{ printf '# SPDX-License-Identifier: MPL-2.0\non: push\npermissions: {}\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n'
+  for i in $(seq 1 3000); do printf '      - uses: some-org/remote-action-number-%d@3d3c42e5aac5ba805825da76410c181273ba90b1\n' "$i"; done
+} > .github/workflows/big.yml
+for run in 1 2 3 4 5; do
+  if FAKE_VERIFY_FINDING=not-pinned-big GH_BIN="$WORK/bin/fake-gh" \
+     bash "$UPDATE" --verify-local .github/workflows >/dev/null 2>&1; then
+    echo "FAIL: a workflow with ~200 KB of remote uses and no lock entry was accepted (run $run)" >&2
+    exit 1
+  fi
+done
+echo "PASS: a workflow with ~200 KB of remote uses and no lock entry remains blocking (5 of 5 runs)"
+rm -f .github/workflows/big.yml
 rm -f .github/workflows/runonly.yml .github/workflows/localcall.yml
 sed -i "/^    '.github\/workflows\/runonly.yml':/d; /^    '.github\/workflows\/localcall.yml':/d" .github/workflows/actions.lock
 
@@ -286,8 +308,8 @@ cp "$WORK/reusable.block" .github/workflows/reusable.yml
 
 advisory_output="$(FAKE_VERIFY_FINDING=valid-advisory GH_BIN="$WORK/bin/fake-gh" \
   bash "$UPDATE" --verify-local .github/workflows)"
-printf '%s\n' "$advisory_output" | grep -q '"category":"sha-as-ref"'
-printf '%s\n' "$advisory_output" | grep -q 'valid with advisory finding'
+grep -q '"category":"sha-as-ref"' <<<"$advisory_output"
+grep -q 'valid with advisory finding' <<<"$advisory_output"
 echo "PASS: authoritative valid result accepts but preserves advisory findings"
 
 if FAKE_VERIFY_FINDING=invalid-empty GH_BIN="$WORK/bin/fake-gh" \
@@ -303,8 +325,8 @@ echo "PASS: invalid result with no explainable findings fails closed"
 # red on 7 advisories and skipped the secret-baseline controls behind it.
 mixed_output="$(FAKE_VERIFY_FINDING=invalid-advisory-and-reusable GH_BIN="$WORK/bin/fake-gh" \
   bash "$UPDATE" --verify-local .github/workflows)"
-printf '%s\n' "$mixed_output" | grep -q 'Accepted reusable-workflow lock coverage'
-printf '%s\n' "$mixed_output" | grep -q 'advisory finding(s) recorded, not blocking'
+grep -q 'Accepted reusable-workflow lock coverage' <<<"$mixed_output"
+grep -q 'advisory finding(s) recorded, not blocking' <<<"$mixed_output"
 echo "PASS: advisory finding alongside an accepted reusable false positive does not block"
 
 # The exemption must key on CATEGORY, not severity: v0.1.6 marks `stale`

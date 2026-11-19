@@ -128,8 +128,13 @@ declared_for() {
   local ledger="$1" msgs
   msgs="$(git log --format=%B "${BASE_REF}..HEAD" 2>/dev/null || true)"
   
-  # Check commit messages
-  if printf '%s' "$msgs" | grep -iE '^Ratchet-exception' | grep -qF "$ledger"; then
+  # Check commit messages. The declarations are captured, then matched: a
+  # three-stage pipe into grep -q lost the race to SIGPIPE on a long message
+  # (status 141) and a declared growth read as undeclared. grep exits 1 when
+  # no line declares anything, which is a normal outcome here.
+  local decl
+  decl="$(grep -iE '^Ratchet-exception' <<<"$msgs")" || [ $? -eq 1 ]
+  if grep -qF "$ledger" <<<"$decl"; then
     return 0
   fi
   
@@ -137,7 +142,8 @@ declared_for() {
   if [ -n "${GITHUB_EVENT_PATH:-}" ] && [ -f "${GITHUB_EVENT_PATH}" ]; then
     local pr_body
     pr_body="$(jq -r '.pull_request.body // ""' "${GITHUB_EVENT_PATH}" 2>/dev/null || true)"
-    if printf '%s' "$pr_body" | grep -iE '^Ratchet-exception' | grep -qF "$ledger"; then
+    decl="$(grep -iE '^Ratchet-exception' <<<"$pr_body")" || [ $? -eq 1 ]
+    if grep -qF "$ledger" <<<"$decl"; then
       return 0
     fi
   fi
@@ -341,9 +347,15 @@ fi
 # steady — the failure this whole check exists to prevent. Architectural
 # exemptions belong in .hypatia-baseline.json with a note explaining them.
 if [ -f .hypatia-ignore ]; then
-  if grep -vE '^\s*(#|$)' .hypatia-ignore | grep -q '\*\*'; then
+  # ⚠ One awk, no pipe. `grep -vE … | grep -q '\*\*'` under pipefail missed a
+  # wildcard on an early line of a ledger above the pipe buffer (the filter
+  # died of SIGPIPE, status 141 read as "no match") and the gate passed. awk
+  # exits 0 whether or not a line matches, so under `set -e` an awk that cannot
+  # read the file stops the script instead of reading as "no wildcard".
+  wild="$(awk '!/^[[:space:]]*(#|$)/ && /\*\*/' .hypatia-ignore)"
+  if [ -n "$wild" ]; then
     note "WILDCARD       .hypatia-ignore contains a '**' pattern"
-    grep -vE '^\s*(#|$)' .hypatia-ignore | grep '\*\*' | sed 's/^/                 /'
+    printf '%s\n' "$wild" | sed 's/^/                 /'
     note "               A migration ledger must list paths individually so it can"
     note "               only shrink. Put architectural exemptions in"
     note "               .hypatia-baseline.json with a note instead."

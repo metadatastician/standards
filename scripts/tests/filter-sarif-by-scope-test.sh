@@ -52,8 +52,8 @@ mk_sarif() { # mk_sarif FILE  (uri tab ...)
 uris_of() { jq -r '[.runs[].results[].locations[]?.physicalLocation.artifactLocation.uri] | join(",")' "$1"; }
 
 # uris_has PATTERN FILE / uris_has_line PATTERN FILE: a listed URI matches (substring of the joined list / whole URI, one per line).
-uris_has()      { uris_of "$2" | grep -q  -- "$1"; }
-uris_has_line() { jq -r '.runs[].results[].locations[]?.physicalLocation.artifactLocation.uri' "$2" | grep -Fxq -- "$1"; }
+uris_has()      { grep -q -- "$1" <<<"$(uris_of "$2")"; }
+uris_has_line() { grep -Fxq -- "$1" <<<"$(jq -r '.runs[].results[].locations[]?.physicalLocation.artifactLocation.uri' "$2")"; }
 # result_count FILE / location_counts FILE: values the old checks compared.
 result_count()    { jq '[.runs[].results[]] | length' "$1"; }
 location_counts() { jq -r '[.runs[].results[] | (.locations|length)] | @csv' "$1" | tr -d '"'; }

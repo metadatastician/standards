@@ -78,15 +78,15 @@ jobs:
 
           # --- Repo-wide: is GNATprove ever actually run? -------------------
           prover_evidence=0
-          if grep -rIlE 'gnatprove' .github/workflows 2>/dev/null | grep -q .; then
+          if grep -rqIE 'gnatprove' .github/workflows 2>/dev/null; then
             prover_evidence=1
           fi
           for bf in Justfile justfile Mustfile Dustfile; do
             [ -f "$bf" ] && grep -qI 'gnatprove' "$bf" && prover_evidence=1
           done
-          if find . \( -name 'gnatprove.out' -o -name '*.spark' \
+          if [ -n "$(find . \( -name 'gnatprove.out' -o -name '*.spark' \
                       -o -path '*/gnatprove/*.json' \) \
-                -not -path '*/.git/*' 2>/dev/null | grep -q .; then
+                -not -path '*/.git/*' -print -quit 2>/dev/null)" ]; then
             prover_evidence=1
           fi
           echo "prover_evidence=$prover_evidence  enforce_t2=$ENFORCE_T2"
@@ -100,7 +100,12 @@ jobs:
             [ -z "$f" ] && continue
 
             # Active SPARK_Mode-On aspect, ignoring commented-out lines.
-            grep -vE '^[[:space:]]*--' "$f" | grep -qE "$sparkon_re" || continue
+            # Captured, then matched: a pipe into grep -q skipped a unit whose
+            # match came before a pipe buffer of code (SIGPIPE, status 141).
+            # grep -v exits 1 when it selects no line, which is a normal
+            # outcome; any other failure ends the step (bash -e).
+            body="$(grep -vE '^[[:space:]]*--' "$f")" || [ $? -eq 1 ]
+            grep -qE "$sparkon_re" <<<"$body" || continue
 
             # Header banner = the leading run of comment / blank lines up to
             # (but excluding) the first non-comment, non-blank code token.
@@ -109,7 +114,7 @@ jobs:
               { exit }' "$f")"
 
             has_header_claim=0
-            printf '%s\n' "$header" | grep -qiE "$claim_re" && has_header_claim=1
+            grep -qiE "$claim_re" <<<"$header" && has_header_claim=1
             has_contract=0
             grep -qE "$contract_re" "$f" && has_contract=1
 

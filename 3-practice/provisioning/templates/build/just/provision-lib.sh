@@ -311,8 +311,10 @@ lang_cmd() { # $1 lang, $2 verb  -> prints a shell command, or nothing (= N/A)
     bun:deps)  [ -f bun.lock ] || [ -f bun.lockb ] && echo "bun install --frozen-lockfile" || echo "bun install" ;;
     bun:build) grep -qs '"build"[[:space:]]*:' package.json && echo "bun run build" ;;
     # `bun test` exits 0 when it finds no test files, so it runs only when some exist.
+    # The listing is captured, not piped: grep -q in a pipe let git die of SIGPIPE
+    # on a large repository (status 141) and the test step was reported N/A.
     bun:test)  if grep -qs '"test"[[:space:]]*:' package.json; then echo "bun run test"
-               elif git ls-files 2>/dev/null | grep -qE '(\.|_)(test|spec)\.(js|mjs|cjs|jsx)$'; then echo "bun test"; fi ;;
+               elif grep -qE '(\.|_)(test|spec)\.(js|mjs|cjs|jsx)$' <<<"$(git ls-files 2>/dev/null)"; then echo "bun test"; fi ;;
     bun:bench) grep -qs '"bench"[[:space:]]*:' package.json && echo "bun run bench" ;;
     bun:lint)  grep -qs '"lint"[[:space:]]*:' package.json && echo "bun run lint" ;;
     bun:fmt)   grep -qs '"fmt"[[:space:]]*:' package.json && echo "bun run fmt" ;;

@@ -713,7 +713,7 @@ Priority | |—|————-|———-|——–|———-| | JV1 | Security 
 |`+hesiod-dns-map+` |ABI + DNS correctness |I2
 |`+heterogenous-mobile-computing+` |ABI |I2
 |`+grim-repo+` |ABI |I2
-|`+gv-clade-index+` |ABI + clade correctness |I2
+|`+chora-registry+` |ABI + clade correctness |I2
 |`+git-reticulator+` |ABI + git operation safety |I2
 |`+git-scripts+` |ABI |I2
 |`+fireflag+` |ABI + feature flag safety |I2
