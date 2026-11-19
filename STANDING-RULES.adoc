@@ -99,3 +99,15 @@ toc::[]
 ** Second line, plain-comment form: `MPL-2.0 (code) and CC-BY-SA-4.0 (prose)`. The exact comment syntax of the second line is not yet fixed by any template or checker; the owner's words are the only source.
 ** CONFLICT, open: `3-practice/LICENCE-POLICY.adoc` Rule 1 still says one id per file (code MPL-2.0, prose CC-BY-SA-4.0), and `spdx-policy-guard.yml` fails contradictory multi-SPDX files. Neither has been updated, and `rsr-template-repo` carries no dual line today. Until they are, do not rewrite existing headers. This rule applies to new files only, and never as a sweep (see the licence policy in CLAUDE.md).
 * Source: owner answer by selector in session_0136P7ZmGBYEMMDzFR4kaYUT's child thread (this session, 2026-11-19).
+
+== SR-011 Commit signing
+
+* Date: 2026-11-19 (owner ruling by selector: SR-011 wins over the older CLAUDE.md signing text).
+* Rule: sign every commit with the owner's signing identity and commit under its email, never `noreply@anthropic.com`.
+* Detail:
+** The Default and bofj environments already hold `CLAUDE_SIGNING_KEY` (base64 ed25519 private key), `CLAUDE_SIGNING_NAME` and `CLAUDE_SIGNING_EMAIL`. Never ask the owner to set them. They appear only when a container starts; if missing, tell the owner by selector and recommend a fresh session.
+** Recipe, when all three are non-empty (rsr-template-repo and bofj-kitt carry `.claude/hooks/session-start.sh`): write the decoded key to `~/.ssh/id_ed25519_signing` (mode 600) and its public key beside it; write `~/.ssh/allowed_signers` as `EMAIL namespaces="git" PUBKEY`; set global git `user.name`, `user.email`, `user.signingkey`, `gpg.format=ssh`, `gpg.ssh.program=ssh-keygen`, `gpg.ssh.allowedSignersFile`, `commit.gpgsign=true`. Never print the key.
+** Check: `git log -1 --format='%G? %ce'` shows `G` and the signing email. Check presence with `[ -n "$CLAUDE_SIGNING_KEY" ] && echo set`.
+** "Unverified / unknown_key" comes from the committer email, not a missing GitHub key (hub correction, 2026-11-19). Do not ask the owner to register the key.
+** standards `.claude/CLAUDE.md` signing section was rewritten to match (same PR).
+* Source: commit-signing thread session_0136P7ZmnzSRYkvz2hRsrWgM; owner selector answer in this thread, 2026-11-19.

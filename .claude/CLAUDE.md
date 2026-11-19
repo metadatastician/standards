@@ -519,38 +519,23 @@ Distinct from TS/RS policy: JavaScript is *allowed* where AffineScript cannot re
 
 ---
 
-## Commit Signing in Agent Environments — "Unverified" is not an action item
+## Commit Signing in Agent Environments (owner ruling 2026-11-19, STANDING-RULES SR-011)
 
-**Do not chase "Unverified" / "no signature" on agent commits, and do not put
-signing keys into containers or repos to fix it.** In the managed Claude-Code
-execution environment, commit signing is **platform-mediated and already wired
-once, globally** — there is no per-repo or per-container key chore, and no
-estate-wide key rollout to do.
+`STANDING-RULES.adoc` SR-011 governs and this section matches it. This replaces
+the earlier text that called signing platform-mediated and told agents not to
+use keys.
 
-How it actually works (ground-truthed 2026-06-26):
-
-- The container's global git config already sets, for *every* repo:
-  `commit.gpgsign = true`, `gpg.format = ssh`,
-  `gpg.ssh.program = /tmp/code-sign` (→ Anthropic's `environment-manager`
-  binary), and `user.signingkey = …/commit_signing_key.pub`.
-- On every commit, git invokes that platform shim
-  (`/tmp/code-sign -Y sign -n git -f <key> <buffer>`). The shim — **not**
-  OpenSSH — is the signer. `ssh-keygen` is not even installed.
-- When a session's managed signing identity is inactive, the shim is a no-op:
-  the commit succeeds but carries no signature (`git log --format='%G?'` → `N`),
-  and the `commit_signing_key.pub` is an empty placeholder.
-
-Consequences for agents:
-
-- **It is non-blocking.** Unverified commits push and merge normally. The
-  `stop-hook-git-check.sh` "Unverified" warning is *advisory*; `--amend
-  --reset-author` only churns SHAs and cannot add a signature (no key/identity
-  to sign with). Do not loop on it.
-- **The only real lever is platform-side**: enabling managed commit-signing for
-  the environment/account (Anthropic support / Claude-Code settings), which makes
-  the shim emit real signatures automatically and estate-wide. Alternatively,
-  merging via the GitHub UI re-signs the merge commit with GitHub's web-flow key,
-  so `main` shows Verified regardless.
-- Doctrine "always sign" remains the aspiration; the *mechanism* is this managed
-  shim, configured once by the platform — never a manual per-repo/per-container
-  key edit by an agent.
+- The Default and bofj environments already hold `CLAUDE_SIGNING_KEY` (base64
+  ed25519 private key, one line), `CLAUDE_SIGNING_NAME` and
+  `CLAUDE_SIGNING_EMAIL`. Never ask the owner to set them. They appear only
+  when a container starts: if they are missing, tell the owner by selector and
+  recommend a fresh session.
+- Before your first commit, set global git `user.name` and `user.email` from
+  `CLAUDE_SIGNING_NAME` and `CLAUDE_SIGNING_EMAIL`, and sign with the
+  `CLAUDE_SIGNING_KEY` ssh key (`gpg.format=ssh`, `gpg.ssh.program=ssh-keygen`,
+  an `allowed_signers` file, `commit.gpgsign=true`). Never print the key.
+- Check: `git log -1 --format='%G? %ce'` must show `G` and the HoTT-stuff
+  noreply address, never `noreply@anthropic.com`. A commit signed with the
+  right key but committed under the wrong email shows "unverified".
+- Commits already made under the wrong email stay unverified; only new or
+  re-made commits (with the owner's go) fix it.
