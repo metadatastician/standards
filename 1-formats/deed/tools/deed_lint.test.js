@@ -451,6 +451,10 @@ describe("proof-receipt profile (PROOF-POLICY §8.5)", () => {
   test("what does not count: no §2.1 flags, no current receipt, BRIDGE-PENDING, argued", () => {
     expect(() => read(doc(claim("PWG-3", agda({ inv: "agda --safe --without-K" }) + " " + none)))).toThrow(/support ungraded/);
     expect(() => read(doc(claim("PWG-3", agda({ rstate: "superseded", reason: "old" }) + " " + none)))).toThrow(/support ungraded/);
+    // §8.4: a stale receipt (inputs changed, no new run yet) counts toward no grade, and needs its reason.
+    expect(() => read(doc(claim("PWG-3", agda({ rstate: "stale", reason: "the inputs changed" }) + " " + none)))).toThrow(/support ungraded/);
+    expect(read(doc(claim("ungraded", agda({ rstate: "stale", reason: "the inputs changed" }) + " " + none))).claims[0].pwg).toBe("ungraded");
+    expect(() => read(doc(claim("ungraded", agda({ rstate: "stale" }) + " " + none)))).toThrow(/stale receipt needs :reason/);
     expect(() => read(doc(claim("PWG-2i", agda() + " " + recheck("rocq", { state: "BRIDGE-PENDING" }) + " " + recheck("lean", { counted: false }))))).toThrow(/support PWG-3/);
     expect(() => read(doc(claim("PWG-2i", agda() + " " + recheck("rocq", { tok: "argued" }) + " " + recheck("lean", { counted: false }))))).toThrow(/support PWG-3/);
     expect(read(doc(claim("PWG-3", agda({ inv: "agda --safe --without-K --cubical --erasure" }) + " " + none))).claims[0].pwg).toBe("PWG-3");
@@ -460,6 +464,11 @@ describe("proof-receipt profile (PROOF-POLICY §8.5)", () => {
     expect(read(doc(claim("PWG-3", agda() + " " + none + " " + isa, { fd: "#t" }))).claims[0].foundation_diverse).toBe(true);
     expect(() => read(doc(claim("PWG-3", agda() + " " + none + " " + isa)))).toThrow(/foundation-diverse #f, but .* #t/);
     expect(() => read(doc(claim("PWG-3", agda() + " " + none, { fd: "#t" })))).toThrow(/foundation-diverse #t/);
+    // §8.3 needs the statement correspondence recorded: a leg the kernel
+    // accepted that is still BRIDGE-PENDING earns no tag.
+    const pending = isa.replace(":state RECONCILED", ":state BRIDGE-PENDING");
+    expect(read(doc(claim("PWG-3", agda() + " " + none + " " + pending))).claims[0].foundation_diverse).toBe(false);
+    expect(() => read(doc(claim("PWG-3", agda() + " " + none + " " + pending, { fd: "#t" })))).toThrow(/foundation-diverse #t, but .* #f/);
   });
   test("malformed receipts fail closed", () => {
     const ok = claim("PWG-3", agda() + " " + none);

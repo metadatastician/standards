@@ -862,7 +862,7 @@ export const PROOF_RECEIPT_VOCABULARY = {
   state: ["AGDA-PENDING", "AGDA-VERIFIED", "COQ-CHECKED", "LEAN-CHECKED", "BRIDGE-PENDING",
     "RECONCILED", "COUNTEREXAMPLE", "QUARANTINED"],
   route: ["source", "transported", "re-proved", "waived", "unavailable"],
-  receiptState: ["current", "superseded", "regressed"],
+  receiptState: ["current", "stale", "superseded", "regressed"],
   dttProvers: ["agda", "rocq", "lean"],
   disposition: ["b", "c", "debt"],
   echoWitness: ["inputs-sha256", "tree-sha256"],
@@ -1253,8 +1253,10 @@ export function readProofReceipt(text, filename = null) {
     if (pwg !== cl.fields.get("pwg")) {
       fail(`${where} records :pwg ${cl.fields.get("pwg")}, but its legs and receipts support ${pwg} (PROOF-POLICY §8.2, §8.4)`);
     }
-    // §8.3: a kernel-checked witness outside the DTT family, with a current receipt.
-    const diverse = legs.some((l) => !V.dttProvers.includes(l.prover) && kernelOk(l) && current(l));
+    // §8.3: a kernel-checked witness outside the DTT family whose statement
+    // correspondence is recorded (RECONCILED, §2.2), with a current receipt. A
+    // leg the kernel accepted but that is still BRIDGE-PENDING earns no tag.
+    const diverse = legs.some((l) => !V.dttProvers.includes(l.prover) && kernelOk(l) && l.state === "RECONCILED" && current(l));
     if (diverse !== (cl.fields.get("foundation-diverse") === "#t")) {
       fail(`${where} records :foundation-diverse ${cl.fields.get("foundation-diverse")}, but its legs support ${diverse ? "#t" : "#f"} (§8.3)`);
     }
