@@ -2236,7 +2236,7 @@ action = "park: thin template, stop Dependabot"
 confirmed = false
 evidence = { reality = "small", activity = "occasional", own_src_lines = 3014, own_test_lines = 206, template_code_lines = 36, doc_config_lines = 9555, languages = ["rs", "sh", "html"], workflows = 5, upkeep_share = 0.6, last_source_change = "2026-09-27", tags = 0, licence = "MPL-2.0", status_words = ["prototype", "stable"] }
 
-[repos.gv-clade-index]
+[repos.chora-registry]
 owner = "hyperpolymath"
 identity = "canonical"
 official_home = "self"

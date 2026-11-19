@@ -34,10 +34,10 @@ section3() {
 expect() {
   local out verdict
   out="$(section3 "$2")"
-  if printf '%s' "$out" | grep -q 'FAIL'; then verdict=FAIL
-  elif printf '%s' "$out" | grep -q 'PASS'; then verdict=PASS
+  if grep -q 'FAIL' <<<"$out"; then verdict=FAIL
+  elif grep -q 'PASS' <<<"$out"; then verdict=PASS
   else verdict=NONE; fi
-  if [ "$verdict" = "$3" ] && { [ -z "${4:-}" ] || printf '%s' "$out" | grep -qF -- "$4"; }; then
+  if [ "$verdict" = "$3" ] && { [ -z "${4:-}" ] || grep -qF -- "$4" <<<"$out"; }; then
     PASSED=$((PASSED + 1)); echo "ok   $1"
   else
     FAILED=$((FAILED + 1)); echo "FAIL $1 (wanted $3${4:+ + '$4'}, got $verdict)"; printf '%s\n' "$out" | sed 's/^/     /'

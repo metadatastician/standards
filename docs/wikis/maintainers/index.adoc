@@ -121,6 +121,11 @@ so this prune does not remove it.
 |the file has no bare code marker left (line deleted), or fewer than the count
 (count lowered)
 
+|`.machine_readable/pipe-grep-q-allow.txt`
+|`scripts/check-pipe-grep-q.sh --prune`
+|the file has no pipe into a quiet grep left (line deleted), or fewer than the
+count (count lowered)
+
 |`.machine_readable/departures.jsonl` (JSON Lines; the output shows each row's
 `id`)
 |`scripts/departures.sh prune [--ref REV]`
@@ -132,6 +137,48 @@ so this prune does not remove it.
 no prune mode. Their lines go stale because of state outside this tree (a
 lockfile on another repository's default branch, a pipeline run in another
 repository, the live rulesets), and an offline prune could only guess.
+
+[[pipe-grep-q]]
+*No pipe into a quiet grep.* Under `set -o pipefail`, `writer | grep -q PATTERN`
+is unsound. `grep -q` exits at its first match; if the writer is still writing
+(more than one write, or more than a pipe buffer) it is killed by SIGPIPE, the
+pipeline reports 141, and a match reads as no match. In a test that is an
+intermittent failure on a loaded machine. In a gate written
+`if writer | grep -q BAD; then fail` it is a fail-open. Capture, then match,
+with no pipe: `out=$(writer); grep -q PATTERN <<<"$out"`. A writer that is a
+single command can sit inside the here-string: `grep -q PATTERN <<<"$(writer)"`.
+That form ignores the writer's exit status, so in a gate use the two-step
+form: under `set -e` a failing writer then stops the script, where the
+here-string form would read it as "no match".
+Two cautions when converting a line. A here-string always carries one line, so
+an empty capture is one empty line, which `grep -v` and an empty pattern match,
+where an empty pipe had no line at all. And `$(...)` drops the trailing
+newlines, so keep a temporary file where the exact bytes matter. The gate is
+`scripts/check-pipe-grep-q.sh`, its test is
+`scripts/tests/check-pipe-grep-q-test.sh`, and its header says what it does
+and does not read. Its shrink-only ledger,
+`.machine_readable/pipe-grep-q-allow.txt` (`path:count`), lists the lines that
+remain, all outside the tests but one; it fails on a new line, on a count
+above the ledger and on a stale line, and `scripts/check-pipe-grep-q.sh --prune`
+lowers or deletes the entries a fix made stale (the pre-commit hook does the
+same).
+
+*Gates fixed on 2026-11-17.* Each of these passed, or skipped a check, when
+the writer's output was larger than a pipe buffer and the match came early;
+each fix has a test with such a fixture. `scripts/check-exemption-ratchet.sh`:
+a `**` on an early line of a large `.hypatia-ignore` was not seen.
+`.githooks/pre-commit`: a commit that staged `actions.lock` among many files
+skipped the lock-closure check. `.github/workflows/spark-theatre-gate.yml`: a
+SPARK_Mode-On unit with a long body after the aspect was skipped.
+`3-practice/provisioning/templates/build/just/provision-lib.sh`: in a
+repository that tracks many files, `lang-run test` reported N/A instead of
+running `bun test`. `scripts/update-actions-lock.sh --verify-local`: a
+`not-pinned` finding was accepted for a workflow with many remote `uses:`.
+`3-practice/release-pre-flight/v1-audit.sh`: a long list of placeholder
+fuzz or bench files printed PASS. `.githooks/validate-lint-format.sh` and the
+ReScript step of `.github/workflows/ci-pipeline.yml`: a `format --help`
+written in several writes skipped the format gate (shown with a stub; the
+real help text is short). The ledger now holds 70 lines, 182 pipes in all.
 
 *The pre-commit hook.* `.githooks/validate-ledger-prune.sh`, run by
 `.githooks/pre-commit` on every commit before the K9 gate, applies the prune
@@ -191,8 +238,13 @@ runs `deed_lint.js` from this repository); without bun it stops with exit 2.
 from the path (and, for a root `0-AI-MANIFEST.a2ml`, the `[ai-allocation]`
 shape `ai-manifest-decision.adoc` names). Facts are compared field by field
 only for CLADE (`clade-to-repo-deed.adoc` §3) and, when the rulings file
-carries their decision rows, for STATE (phase and maturity) and the scorecard
-corpus (nothing is translated). For any other family whose target deeds
+carries its decision row, for STATE (phase and maturity). A scorecard under
+its decision row has no fact to compare (nothing is translated), but its
+summary still has a target: the `(assessment)` clause of the chora deed, or
+`rsr-scorecard_praxis.deed` for the RSR scorecard. An absent target is
+`no-target-deed`; a present one is `facts-unchecked:SCORECARD`, because the
+tool does not compare the summary with the record. Either way such a file is
+never `deletable-now` unless a ruling drops it. For any other family whose target deeds
 exist, the tool reports `facts-unchecked:<family>` and never classes the file
 deletable; the kyX front end for that family is what makes it checkable. A
 record that is not TOML-shaped is also `facts-unchecked`. A reader is a

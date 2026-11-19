@@ -398,7 +398,9 @@ for pass in 1 2 3 4 5 6; do
           kf="$(printf '%s\n' "$k" | fold)"
           while IFS= read -r rk; do
             uf="$SC/u/$(keyfile "$rk")"
-            if [ -f "$uf" ] && fold < "$uf" | grep -qxF "$kf"; then
+            # Folded, captured, then matched: `fold < "$uf" | grep -qxF` let fold die
+            # of SIGPIPE on a long uses list (status 141) and the callee was passed over.
+            if [ -f "$uf" ] && grep -qxF "$kf" <<<"$(fold < "$uf")"; then
               if try_record "the lock of $rk" "$SC/cl/$(keyfile "$rk")"; then break; fi
             fi
           done < <(cut -f1 "$SC/calls" | LC_ALL=C sort -u)

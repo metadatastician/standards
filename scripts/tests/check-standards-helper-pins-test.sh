@@ -17,7 +17,7 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 GUARD="$ROOT/scripts/check-standards-helper-pins.sh"
 command -v yq >/dev/null 2>&1 || { echo 'SKIP(2): yq not installed' >&2; exit 2; }
-yq --version 2>/dev/null | grep -q mikefarah || { echo 'SKIP(2): mikefarah yq v4 required' >&2; exit 2; }
+grep -q mikefarah <<<"$(yq --version 2>/dev/null)" || { echo 'SKIP(2): mikefarah yq v4 required' >&2; exit 2; }
 command -v jq >/dev/null 2>&1 || { echo 'SKIP(2): jq not installed' >&2; exit 2; }
 command -v git >/dev/null 2>&1 || { echo 'SKIP(2): git not installed' >&2; exit 2; }
 
@@ -135,7 +135,7 @@ got=0
 mkpin "$pinned" scripts/gate.sh
 got=0
 out="$( cd "$repo" && bash "$GUARD" .github/workflows --compare "$head" 2>&1 )" || got=$?
-if [ "$got" -eq 1 ] && printf '%s' "$out" | grep -q 'stale: scripts/gate.sh'; then
+if [ "$got" -eq 1 ] && grep -q 'stale: scripts/gate.sh' <<<"$out"; then
   ok 'a literal pin that is stale over its staged path is rejected'
 else
   printf '%s\n' "$out" | sed 's/^/    /'
@@ -170,7 +170,7 @@ out="$( cd "$ROOT" && bash "$GUARD" .github/workflows 2>&1 )" || got=$?
 if [ "$got" -eq 0 ]; then
   ok "this repository's own workflows pass the guard"
 else
-  printf '%s\n' "$out" | grep -E '::error' | sed 's/^/    /'
+  grep -E '::error' <<<"$out" | sed 's/^/    /'
   bad "this repository's own workflows fail the guard (exit $got)"
 fi
 

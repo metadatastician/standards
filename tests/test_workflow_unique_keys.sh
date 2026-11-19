@@ -18,7 +18,7 @@
 # 2 NOT RUN (mikefarah yq missing, or no workflows found).
 set -euo pipefail
 root=$(cd "$(dirname "$0")/.." && pwd)
-command -v yq >/dev/null && yq --version 2>/dev/null | grep -q mikefarah ||
+command -v yq >/dev/null && grep -q mikefarah <<<"$(yq --version 2>/dev/null)" ||
   { echo "test_workflow_unique_keys: mikefarah yq missing; NOT RUN" >&2; exit 2; }
 
 # dups FILE: one line per mapping that repeats a key: "<path>: <key> ...".

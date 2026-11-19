@@ -31,15 +31,15 @@ helper_checkout="$(grep -F -A 18 -- '- name: Checkout the pinned Standards polic
 # happened for six weeks to 317101e03b8f, and check-standards-helper-pins.sh is
 # what judges currency. This contract test judges that the step cannot float.
 # shellcheck disable=SC2016
-printf '%s\n' "$helper_checkout" | grep -Eq '^[[:space:]]*ref:[[:space:]]*(\$\{\{ job\.workflow_sha \}\}|[0-9a-f]{40})[[:space:]]*$' ||
+grep -Eq '^[[:space:]]*ref:[[:space:]]*(\$\{\{ job\.workflow_sha \}\}|[0-9a-f]{40})[[:space:]]*$' <<<"$helper_checkout" ||
   fail "governance helpers are not fetched from an immutable commit or job.workflow_sha"
-if printf '%s\n' "$helper_checkout" | grep -Eq '^[[:space:]]*ref:[[:space:]]*(main|master|HEAD)[[:space:]]*$'; then
+if grep -Eq '^[[:space:]]*ref:[[:space:]]*(main|master|HEAD)[[:space:]]*$' <<<"$helper_checkout"; then
   fail "governance helper execution still follows a moving ref"
 fi
 # github.workflow_sha / github.sha name the CALLER's commit inside a called
 # reusable, so they can never serve as this repository's helper source.
 # shellcheck disable=SC2016
-if printf '%s\n' "$helper_checkout" | grep -Eq 'ref:.*\$\{\{ github\.(workflow_sha|sha)'; then
+if grep -Eq 'ref:.*\$\{\{ github\.(workflow_sha|sha)' <<<"$helper_checkout"; then
   fail "governance helper source is the caller's commit, not this repository's"
 fi
 
@@ -64,9 +64,9 @@ lock_gate_block="$(awk '
 # Immutable either way: a literal 40-hex commit, or job.workflow_sha (the
 # reusable's own commit, i.e. exactly the caller's pin). Never a branch, and
 # never github.workflow_sha / github.sha, which name the CALLER's commit.
-printf '%s\n' "$lock_gate_block" | grep -Eq '^[[:space:]]*ref:[[:space:]]*([0-9a-f]{40}|\$\{\{ job\.workflow_sha \}\})[[:space:]]*$' ||
+grep -Eq '^[[:space:]]*ref:[[:space:]]*([0-9a-f]{40}|\$\{\{ job\.workflow_sha \}\})[[:space:]]*$' <<<"$lock_gate_block" ||
   fail "the lock gate is not staged from an immutable 40-hex commit or job.workflow_sha"
-if printf '%s\n' "$lock_gate_block" | grep -Eq '^[[:space:]]*ref:[[:space:]]*main[[:space:]]*$'; then
+if grep -Eq '^[[:space:]]*ref:[[:space:]]*main[[:space:]]*$' <<<"$lock_gate_block"; then
   fail "the lock gate follows moving main"
 fi
 # Shape is not currency: a well-formed SHA can still point at stale tooling, and
@@ -186,13 +186,13 @@ assert_sites="$(awk '
 [ -n "$assert_sites" ] || fail "no job stages a standards helper from job.workflow_sha — the derivation found nothing, so this assertion would be vacuous; if the file really changed shape, change this test deliberately"
 for job in $assert_sites; do
   block="$(awk -v id="$job" '$0=="  "id":" {p=1; next} p && /^  [a-zA-Z0-9_-]+:$/ {exit} p {print}' "$GOVERNANCE")"
-  printf '%s\n' "$block" | grep -Fq "Assert this reusable's own commit resolved" ||
+  grep -Fq "Assert this reusable's own commit resolved" <<<"$block" ||
     fail "job '$job' stages helpers from job.workflow_sha without asserting it resolved (GHES resolves it empty, and ref: '' follows the default branch)"
-  printf '%s\n' "$block" | grep -Fq "SELF_WORKFLOW_SHA" ||
+  grep -Fq "SELF_WORKFLOW_SHA" <<<"$block" ||
     fail "job '$job' assertion does not read job.workflow_sha"
   # The assertion must come BEFORE the checkout it protects.
-  a="$(printf '%s\n' "$block" | grep -n "Assert this reusable's own commit resolved" | head -1 | cut -d: -f1)"
-  c="$(printf '%s\n' "$block" | grep -n 'ref: \${{ job.workflow_sha }}\|ref: \${{ inputs\..*|| job.workflow_sha }}' | head -1 | cut -d: -f1)"
+  a="$(grep -n "Assert this reusable's own commit resolved" <<<"$block" | head -1 | cut -d: -f1)"
+  c="$(grep -n 'ref: \${{ job.workflow_sha }}\|ref: \${{ inputs\..*|| job.workflow_sha }}' <<<"$block" | head -1 | cut -d: -f1)"
   [ -n "$c" ] && [ "$a" -lt "$c" ] ||
     fail "job '$job' asserts the commit AFTER the helper checkout it is supposed to protect"
 done

@@ -895,7 +895,7 @@ The limits travel with the claim:
 *Owner ruling, 2026-11-18:* the caution is lifted. The estate/repo
 projection relation may rest on K-CUT-LOSS, within the fragment and
 limits above. A rule derived from it is proposed in
-link:../../docs/decisions/ADR-011-deed-projection-rests-on-k-cut-loss.adoc[ADR-011]. It is a proposal until the owner rules on it.
+link:../../docs/decisions/ADR-011-deed-projection-rests-on-k-cut-loss.adoc[ADR-011]. The owner ruled its design points the same day: echo loss as the grade, `G` derived from deeds, the asynchronous form (Y-2), and both rules adopted as advisory. It is not enforced.
 
 *Ruling proposed:* adopt choreography/endpoint-projection as the
 description of the estate/repo relation in the document forms.

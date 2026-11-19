@@ -60,7 +60,7 @@ run() {
 # First numeric field on the summary line whose label is $1.
 count_of() {
   local label=$1
-  printf '%s\n' "$OUT" | grep -E "^  $label" |
+  grep -E "^  $label" <<<"$OUT" |
     awk '{for(i=1;i<=NF;i++) if($i ~ /^[0-9]+$/){print $i; exit}}'
   return 0
 }
@@ -85,14 +85,14 @@ count_is() {
 says() {
   local pat=$1
   local msg=$2
-  if printf '%s\n' "$OUT" | grep -q "$pat"; then ok "$msg"; else bad "$msg"; fi
+  if grep -q "$pat" <<<"$OUT"; then ok "$msg"; else bad "$msg"; fi
   return 0
 }
 
 lacks() {
   local pat=$1
   local msg=$2
-  if printf '%s\n' "$OUT" | grep -q "$pat"; then bad "$msg"; else ok "$msg"; fi
+  if grep -q "$pat" <<<"$OUT"; then bad "$msg"; else ok "$msg"; fi
   return 0
 }
 

@@ -14,6 +14,7 @@
 #   a2ml-legacy-allow.txt    scripts/check-a2ml-archived.sh --prune
 #   k9-contract-debt.txt     .githooks/validate-k9.sh --prune (staged K9 files)
 #   marker-allow.txt         scripts/check-marker-issue-refs.sh --prune
+#   pipe-grep-q-allow.txt    scripts/check-pipe-grep-q.sh --prune
 #   departures.jsonl         scripts/departures.sh prune --ref <the index as a commit>
 # lock-allow.txt, pipeline-allow.txt and required-contexts-allow.txt have no
 # prune: what makes their lines stale lives on GitHub, not in the tree.
@@ -48,6 +49,7 @@ LEDGERS=(
   .machine_readable/a2ml-legacy-allow.txt
   .machine_readable/k9-contract-debt.txt
   .machine_readable/marker-allow.txt
+  .machine_readable/pipe-grep-q-allow.txt
   .machine_readable/departures.jsonl
 )
 
@@ -124,6 +126,9 @@ for ledger in "${relevant[@]}"; do
     *marker-allow.txt)
       [ -f scripts/check-marker-issue-refs.sh ] || { echo "[ledger-prune] $ledger: no checker here, skipped"; continue; }
       cmd=(bash "$REPO_ROOT/scripts/check-marker-issue-refs.sh" --root "$T" --prune) ;;
+    *pipe-grep-q-allow.txt)
+      [ -f scripts/check-pipe-grep-q.sh ] || { echo "[ledger-prune] $ledger: no checker here, skipped"; continue; }
+      cmd=(bash "$REPO_ROOT/scripts/check-pipe-grep-q.sh" --root "$T" --prune) ;;
     *departures.jsonl)
       [ -f scripts/departures.sh ] || { echo "[ledger-prune] $ledger: no checker here, skipped"; continue; }
       cmd=(bash "$REPO_ROOT/scripts/departures.sh" prune --ref "$(index_commit)" "$ledger") ;;
