@@ -73,9 +73,43 @@ for want in "fresh.yml" "behind.yml" "illegal.yml" "tracking.yml" "none.yml" "sh
 done
 
 # --- 2. mutants --------------------------------------------------------------
+# Mutants are independent: each works on its own copy of the applier and its own
+# scratch files, so they run concurrently (this suite was one serial run of ~120
+# mutants and timed CI out, #1610). A background job cannot set this shell's rc or
+# print in order, so each job writes its output and verdict to files and mut_flush
+# replays them in call order. A job that dies before writing a verdict counts as a
+# failure: silence is never a pass. MUT_JOBS=1 gives the old serial behaviour.
+MUT_JOBS="${MUT_JOBS:-$(nproc 2>/dev/null || echo 2)}"
+case "$MUT_JOBS" in ''|*[!0-9]*|0) MUT_JOBS=2 ;; esac
+MUT_SEQ=0; MUT_SHOWN=0
+# mut_dispatch <function> <args...> — run the function as one background job.
+mut_dispatch() {
+  MUT_SEQ=$((MUT_SEQ+1))
+  local n=$MUT_SEQ
+  while [ "$(jobs -rp | wc -l)" -ge "$MUT_JOBS" ]; do wait -n 2>/dev/null || true; done
+  ( rc=0; "$@"; echo "$rc" > "$TMP/job.$n.rc" ) >"$TMP/job.$n.out" 2>"$TMP/job.$n.err" &
+}
+# mut_flush — wait for every job, then replay each one's output in call order.
+mut_flush() {
+  wait
+  local n
+  while [ "$MUT_SHOWN" -lt "$MUT_SEQ" ]; do
+    MUT_SHOWN=$((MUT_SHOWN+1)); n=$MUT_SHOWN
+    cat "$TMP/job.$n.out"; cat "$TMP/job.$n.err" >&2
+    if [ ! -f "$TMP/job.$n.rc" ]; then
+      echo "  FAIL mutant job $n died without a verdict" >&2; rc=1
+    elif [ "$(cat "$TMP/job.$n.rc")" != 0 ]; then
+      rc=1
+    fi
+  done
+}
+
 # kill <name> <sed-expr> <expected-substring-in-red-output>
 kill_mutant() {
-  MUT_RAN=$((MUT_RAN+1))
+  MUT_RAN=$((MUT_RAN+1))   # counted here, in the parent: a job's own counter would be lost
+  mut_dispatch kill_mutant_job "$@"
+}
+kill_mutant_job() {
   # NOTE: `local a="$1" m="${a}"` does NOT work — bash expands every word of the
   # `local` builtin's argument list BEFORE assigning any of them, so `${a}` is
   # unset there. Assign on separate lines. (Cost one red herring to find.)
@@ -351,6 +385,7 @@ kill_mutant envpin_flow_question_boundary 's@\[\[:space:\]\{,:\[\?\]@[[:space:]{
 # A rate-limited repo used to come back as "no workflows": fetch_workflows
 # returned 0 on every failure, so the census dropped the repo while `walked N`
 # still counted it (2026-10-02). Only a 404 may read as "nothing here".
+mut_flush   # section 2's mutants have all run; show their results before section 3
 echo "== 3. fetch failures are reported, not swallowed =="
 STUB="$TMP/stub"; mkdir -p "$STUB"
 cat > "$STUB/gh" <<'EOF'
@@ -1643,14 +1678,20 @@ lm_red() { grep -Eq '^[[:space:]]*FAIL[[:space:]]' <<<"$1"; }
 list_mutant() {
   MUT_RAN=$((MUT_RAN+1))
   local name="$1" expr="$2" fn="$3"
-  local m="$MUT/mutant_${name}.sh" out
+  # The control runs here, in the parent, once per case function: the LM_CTL cache
+  # would not survive a background job. Only the mutant itself runs concurrently.
   if [ -z "${LM_CTL[$fn]:-}" ]; then
     local ctl="$MUT/control_${fn}.sh" outc
     cp "$APPLIER" "$ctl"
     outc=$("$fn" "$ctl" 2>&1)
     if lm_red "$outc"; then LM_CTL[$fn]=red; else LM_CTL[$fn]=green; fi
   fi
-  if [ "${LM_CTL[$fn]}" = red ]; then
+  mut_dispatch list_mutant_job "$name" "$expr" "$fn" "${LM_CTL[$fn]}"
+}
+list_mutant_job() {
+  local name="$1" expr="$2" fn="$3" ctlstate="$4"
+  local m="$MUT/mutant_${name}.sh" out
+  if [ "$ctlstate" = red ]; then
     fail "mutant '$name': the UNMUTATED copy is already red under $fn in the mutant environment, so a kill would prove nothing"; return
   fi
   cp "$APPLIER" "$m"
@@ -1741,6 +1782,7 @@ kill_mutant health_tie_break_lost 's@sort_by\(\[\.created_at, \.id\]\)@sort_by(.
 kill_mutant health_pathless_dropped 's@then "\(unknown workflow\)" else \. end@then "" else . end@' "FAIL health-pathless"
 }
 
+mut_flush   # the last batch of mutants, replayed in call order before the verdict
 echo
 # A mutant call placed before its function exists fails silently (no `set -e`) and would leave the
 # suite green: every call line must have started.
