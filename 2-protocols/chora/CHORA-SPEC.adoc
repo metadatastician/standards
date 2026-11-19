@@ -426,7 +426,7 @@ Owner ruling CA1, 2026-11-19: the chora's `(clade …)` clause takes the registr
 ----
 
 . *Members.* `(clade …)` holds one or more `(placement …)` clauses and nothing else. A `(placement …)` has `:scheme` (SYMBOL), `:category` (SYMBOL), and either `:primary #t` or `:rank` (a positive INTEGER). These are the seed's members (8.4, RS2).
-. *A copy of the registry.* Each placement copies one placement the registry holds for the repo, and the set copies them all for each scheme it names. The registry wins on a difference (section 11, A7 YP07). A chora names only schemes the registry declares, and only their categories.
+. *A copy of the registry.* Each placement copies one placement the registry holds for the repo, and for each scheme it names the set copies all of them. A chora may leave out a scheme the registry holds; it may not leave out a placement within a scheme it names. The registry wins on a difference (section 11, A7 YP07). A chora names only schemes the registry declares, and only their categories.
 . *One primary per scheme.* Within one scheme, exactly one placement has `:primary #t`, and the others have ranks 1 to n with no gap. A scheme of membership `single` has the primary only.
 . *Withdrawn members.* The earlier flat form `(clade :primary … :primary-name … :secondary (…) :assigned … :rationale …)` is withdrawn. `:primary` and `:secondary` become placements. `:primary-name` is withdrawn, because the registry's scheme names each category. `:assigned` and `:rationale` are withdrawn, because the registry holds the placement and the chora holds a copy.
 . *Migration.* A chora in the flat form is read with a warning for one release and refused after that, as J15 does for `(status)`. Each repo moves to the new form in its own PR, taking its placements from chora-registry, never from its flat form. That is not a sweep.
@@ -579,7 +579,7 @@ Each test is a check that a validator can run. `deed_lint.js` already implements
 | T46 | `:registry-version` increases when the output changes outside `(generation ...)` and `:registry-version`, and stays when it does not. | 2 runs
 | T47 | No identity field is derived from a clade. A `(clade ...)` placement in a chora that disagrees with chora-registry is reported, and the registry's placement is used (A7 W10). | `clade-as-identity-bad`, `clade-registry-mismatch`
 | T48 | Hand edit: the index differs from a fresh generation. This reports an error in CI. | `hand-edited-bad`
-| T57 | A chora `(clade …)` in the placement shape whose placements equal the registry's for the repo passes (CA1). | `clade-placements-ok`
+| T57 | A chora `(clade …)` in the placement shape whose placements equal the registry's for the repo in each scheme it names passes, also when it leaves out a scheme the registry holds (CA1). | `clade-placements-ok`
 | T58 | A placement naming a scheme or category the registry does not declare, two primaries in one scheme, or ranks that skip, is refused (CA1). | `clade-placement-unknown-bad`, `clade-two-primaries-bad`, `clade-rank-gap-bad`
 | T59 | A placement that differs from the registry's is reported, and the registry's is used (CA1, A7 YP07). | `clade-registry-stale`
 | T60 | A chora in the withdrawn flat form `(clade :primary …)` gets a warning for one release, then an error (CA1). | `clade-flat-form-warn`, `clade-flat-form-bad`
