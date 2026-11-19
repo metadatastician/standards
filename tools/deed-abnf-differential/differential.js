@@ -26,7 +26,7 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import apg from "apg-js";
-import { checkAgentic, checkEcosystem, checkNeurosym, checkRsrProfile, checkMeta, checkRsrScorecard, checkState, checkVerbDescriptile, choraRepoUuid, edictRuleIdsAt, FIXTURE_TODAY, LintError, rootChora, validate, verbOfDescriptile } from "../../1-formats/deed/tools/deed_lint.js";
+import { checkAgentic, checkEcosystem, checkNeurosym, checkRsrProfile, checkChoraLanguage, checkMeta, checkRsrScorecard, checkState, checkVerbDescriptile, choraRepoUuid, edictRuleIdsAt, FIXTURE_TODAY, LintError, rootChora, validate, verbOfDescriptile } from "../../1-formats/deed/tools/deed_lint.js";
 
 const { apgApi, apgLib } = apg;
 const ROOT = resolve(import.meta.dir, "../..");
@@ -78,6 +78,7 @@ function compileGrammar() {
       readFileSync(join(ABNF, "clauses/agentic.abnf"), "utf8") + "\n" +
       readFileSync(join(ABNF, "clauses/neurosym.abnf"), "utf8") + "\n" +
       readFileSync(join(ABNF, "clauses/rsr-profile.abnf"), "utf8") + "\n" +
+      readFileSync(join(ABNF, "clauses/language.abnf"), "utf8") + "\n" +
       readFileSync(join(ABNF, "clauses/rsr-scorecard.abnf"), "utf8")).replace(/[^\x00-\x7f]/g, "?") +
     "\nSP = %x20\nDQUOTE = %x22\nALPHA = %x41-5A / %x61-7A\nDIGIT = %x30-39\n" +
     "VCHAR = %x21-7E\nCR = %x0D\nLF = %x0A\nCRLF = CR LF\n";
@@ -222,7 +223,7 @@ const fail = (kind, detail) => failures.push({ kind, detail });
 
 // 1. Fixtures: every valid fixture passes both; every valid egress or anchor
 //    fixture's clause parses as its clause rule.
-for (const [dir, clause] of [["valid", null], ["heads/valid", null], ["bang/valid", null], ["egress/valid", "egress"], ["anchor/valid", "anchor"], ["contractiles/valid", "contractiles"], ["rsr-scorecard/valid", "rsr-scorecard"], ["rsr-profile/valid", "rsr-profile"]]) {
+for (const [dir, clause] of [["valid", null], ["heads/valid", null], ["bang/valid", null], ["egress/valid", "egress"], ["anchor/valid", "anchor"], ["contractiles/valid", "contractiles"], ["rsr-scorecard/valid", "rsr-scorecard"], ["rsr-profile/valid", "rsr-profile"], ["chora-language/valid", "language"]]) {
   for (const name of readdirSync(join(FIXTURES, dir)).sort()) {
     const text = readFileSync(join(FIXTURES, dir, name), "utf8");
     if (!grammarAccepts(grammar, "deed", text)) fail("fixture rejected by deed.abnf", `${dir}/${name}`);
@@ -335,6 +336,43 @@ for (const name of CONTRACTILES_GRAMMAR_REJECTS) {
     } else if (RSR_PROFILE_SEMANTIC_ONLY.includes(name)) {
       if (e === null || !grammarAccepts(grammar, "rsr-profile-clause", e)) fail("rsr-profile.abnf refuses a fixture listed as semantic only", name);
     } else fail("rsr-profile invalid fixture is in neither list", name);
+  }
+}
+// (language …) and (identity :thesis) in a chora (clauses/language.abnf; the
+// CLADE mapping's [thesis] and [language] rows). Invalid fixtures whose defect
+// language.abnf itself expresses: an unknown field, a clause inside, a value
+// of the wrong kind, no member. The others break a SEMANTIC side condition
+// (once-only, an empty or repeated list), or concern :thesis, which sits in
+// (identity …) and is checked only by deed_lint.js --chora-language. Every
+// invalid fixture is in one list or another.
+{
+  const LANGUAGE_GRAMMAR_REJECTS = [
+    "empty-clause_chora.deed", "headline-string_chora.deed", "nested-clause_chora.deed", "paradigm-strings_chora.deed", "unknown-key_chora.deed",
+  ];
+  const LANGUAGE_SEMANTIC_ONLY = ["key-twice_chora.deed", "language-twice_chora.deed", "paradigm-empty_chora.deed", "targets-duplicate_chora.deed"];
+  const THESIS_ONLY = ["thesis-empty_chora.deed", "thesis-symbol_chora.deed", "thesis-twice_chora.deed"];
+  const languageOk = (text, name) => {
+    try {
+      return checkChoraLanguage(text, name) !== null;
+    } catch (e) {
+      if (!(e instanceof LintError)) throw e;
+      return false;
+    }
+  };
+  for (const name of readdirSync(join(FIXTURES, "chora-language/valid")).sort()) {
+    if (!languageOk(readFileSync(join(FIXTURES, "chora-language/valid", name), "utf8"), name)) fail("chora-language valid fixture rejected by deed_lint.js --chora-language", name);
+  }
+  for (const name of readdirSync(join(FIXTURES, "chora-language/invalid")).sort()) {
+    const text = readFileSync(join(FIXTURES, "chora-language/invalid", name), "utf8");
+    if (!grammarAccepts(grammar, "deed", text)) fail("chora-language invalid fixture is not a valid deed", name);
+    if (!gateVerdict(text).ok) fail("chora-language invalid fixture is refused by deed_lint.js itself", name);
+    if (languageOk(text, name)) fail("deed_lint.js --chora-language accepts an invalid fixture", name);
+    const e = clauseText(text, "language");
+    if (LANGUAGE_GRAMMAR_REJECTS.includes(name)) {
+      if (e === null || grammarAccepts(grammar, "language-clause", e)) fail("language.abnf accepts a fixture it must refuse", name);
+    } else if (LANGUAGE_SEMANTIC_ONLY.includes(name)) {
+      if (e === null || !grammarAccepts(grammar, "language-clause", e)) fail("language.abnf refuses a fixture listed as semantic only", name);
+    } else if (!THESIS_ONLY.includes(name)) fail("chora-language invalid fixture is in no list", name);
   }
 }
 // And the converse: every invalid fixture NOT listed breaks only a semantic
@@ -569,7 +607,7 @@ for (const { c, text } of edictCases("valid")) {
 {
   const META_FIELDS = new Set(["version", "last-updated", "type", "languages", "license", "author", "design-rationale",
     "scoping-first", "execution-order", "axis-1", "axis-2", "axis-3", "corrective-first", "adaptive-second",
-    "adaptive-focus", "perfective-third", "perfective-source", "build-tool", "container-runtime", "ci-platform", "package-manager"]);
+    "adaptive-focus", "perfective-third", "perfective-source", "build-tool", "container-runtime", "ci-platform", "package-manager", "inspiration"]);
   const CLAUSE_RULES = { "development-practices": "meta-practices", scoping: "meta-scoping", "axis-3": "meta-axis-3", adr: "meta-adr", ssg: "ssg-clause" };
   const fieldsOf = (t) => topLevelFields(t, META_FIELDS);
   const clausesOf = (t) => Object.entries(CLAUSE_RULES).flatMap(([n, rule]) => allClauses(t, n).map((c) => [rule, c]));
@@ -594,10 +632,10 @@ for (const { c, text } of edictCases("valid")) {
     for (const f of fieldsOf(k.text)) if (!grammarAccepts(grammar, "meta-field", f)) fail("meta.abnf refuses a valid field", `${k.c}: ${f.slice(0, 60)}`);
     for (const [r, c] of clausesOf(k.text)) if (!grammarAccepts(grammar, r, c)) fail(`meta.abnf refuses a valid clause as ${r}`, `${k.c}: ${c.slice(0, 60)}`);
   }
-  const grammarRejects = ["adr-date-not-date", "adr-inline-decision", "adr-status-unknown", "languages-strings", "last-updated-not-date",
+  const grammarRejects = ["adr-date-not-date", "adr-inline-decision", "adr-status-unknown", "inspiration-empty", "inspiration-symbols", "languages-strings", "last-updated-not-date",
     "license-string", "practices-empty", "practices-tool-string", "practices-unknown", "scoping-empty", "scoping-first-string", "scoping-unknown", "ssg-trigger-string",
     "ssg-unknown", "tool-at-top", "type-string", "type-unknown"];
-  const semanticOnly = ["adr-date-impossible", "adr-duplicate-id", "adr-missing-ref", "adr-ref-absolute", "adr-ref-dotdot", "adr-twice-status",
+  const semanticOnly = ["adr-date-impossible", "adr-duplicate-id", "adr-missing-ref", "adr-ref-absolute", "adr-ref-dotdot", "adr-twice-status", "inspiration-duplicate", "inspiration-empty-string",
     "beholding-chora", "clause-constructor", "empty-author", "meta-clause", "meta-in-chora-strict", "missing-affirmed", "of-chora-mismatch",
     "practices-twice", "rule-in-descriptile", "ssg-twice", "unknown-clause", "unknown-field", "version-twice"];
   for (const k of cases("invalid")) {

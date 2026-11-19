@@ -60,6 +60,10 @@ Usage: deed_lint.js FILE...     exit 0 iff all files conform
                                               known keys only, :version, and :capabilities or :preset
        deed_lint.js --rsr-profile-keys        print the clause's keys, one per line: the set every reader fails closed on
        deed_lint.js --rsr-profile-fixtures DIR DIR/valid pass the profile, DIR/invalid fail it (both required)
+       deed_lint.js --chora-language FILE...  the (language …) clause and (identity :thesis) of a <repo>_chora.deed
+                                              (DRAFT, clauses/language.abnf): known keys only, each once
+       deed_lint.js --chora-language-keys     print the (language …) keys, one per line
+       deed_lint.js --chora-language-fixtures DIR DIR/valid pass the profile, DIR/invalid fail it (both required)
        deed_lint.js --state FILE... [--root DIR] [--strict]
                                               STATE.deed (DRAFT, A7 7.2, J3, J15); --root checks :of-chora against the
                                               chora deed (YD08) and warns on a chora (status …) or (maturity …), which
@@ -2723,6 +2727,91 @@ function rsrProfileFiles(files) {
   return bad ? 1 : 0;
 }
 
+
+// ---------------------------------------------------------------------------
+// The chora's (language …) clause and (identity :thesis …) (clauses/language.abnf;
+// mappings/clade-to-repo-deed.adoc section 3; owner rulings of 2026-11-15 and
+// 2026-11-19): what a language repo is and what it does in the world. Known
+// keys only, each once; an unknown key refuses the clause (P-2a).
+
+export class ChoraLanguageError extends LintError {
+  constructor(msg) {
+    super(msg, null);
+    this.name = "ChoraLanguageError";
+  }
+
+  toString() {
+    return this.msg;
+  }
+}
+
+/** The (language …) keys and their kinds: a non-empty list of unique symbols, or one symbol. */
+export const CHORA_LANGUAGE_SPEC = { paradigm: "symbols", "compile-targets": "symbols", "headline-feature": "symbol" };
+
+/**
+ * Check the (language …) clause and the (identity :thesis …) field of a
+ * <repo>_chora.deed. Returns {language, thesis} (each null when absent), or
+ * null when the deed carries neither.
+ */
+export function checkChoraLanguage(text, filename = null) {
+  const [head, items] = validate(text, filename);
+  const E = (m) => new ChoraLanguageError(m);
+  const langs = items.filter((it) => it[0] === "clause" && it[1] === "language");
+  const ids = items.filter((it) => it[0] === "clause" && it[1] === "identity");
+  const theses = ids.flatMap((c) => c[2].filter((m) => m[0] === "field" && m[1] === "thesis"));
+  if (langs.length === 0 && theses.length === 0) return null;
+  if (head !== "repo-deed" || (filename !== null && !basename(filename).endsWith("_chora.deed"))) {
+    throw E(`(language …) and :thesis belong to a <repo>_chora.deed, not ${filename !== null ? basename(filename) : `a ${head}`}`);
+  }
+  if (langs.length > 1) throw E(`the repo deed carries ${langs.length} (language …) clauses; it carries one`);
+  if (theses.length > 1) throw E("(identity …) carries :thesis once");
+  let thesis = null;
+  if (theses.length === 1) {
+    const [, , v, bang] = theses[0];
+    if (bang) throw E("'!' belongs only on a rule's :id in a contractile-deed, not on (identity :thesis)");
+    if (v[0] !== "string" || v[1] === "") throw E("(identity :thesis) must be a non-empty string");
+    thesis = v[1];
+  }
+  let language = null;
+  if (langs.length === 1) {
+    language = {};
+    if (langs[0][2].length === 0) throw E("(language) is empty: it takes at least one member, or is left out");
+    for (const m of langs[0][2]) {
+      if (m[0] !== "field") throw E(`(language …) has no clause (${m[1]} …): its members are fields`);
+      if (m[3]) throw E(`'!' belongs only on a rule's :id in a contractile-deed, not on (language :${m[1]})`);
+      if (!Object.hasOwn(CHORA_LANGUAGE_SPEC, m[1])) throw E(`(language …) has no field :${m[1]} (an unknown key refuses the clause, P-2a)`);
+      if (Object.hasOwn(language, m[1])) throw E(`(language …) carries :${m[1]} once`);
+      const v = m[2];
+      if (CHORA_LANGUAGE_SPEC[m[1]] === "symbol") {
+        if (v[0] !== "symbol") throw E(`(language :${m[1]}) must be a symbol`);
+        language[m[1]] = v[1];
+      } else {
+        if (v[0] !== "list" || v[1].length === 0 || !v[1].every((x) => x[0] === "symbol")) throw E(`(language :${m[1]}) must be a non-empty list of symbols`);
+        const xs = v[1].map((x) => x[1]);
+        const dup = xs.find((x, i) => xs.indexOf(x) !== i);
+        if (dup !== undefined) throw E(`(language :${m[1]}) names ${dup} once`);
+        language[m[1]] = xs;
+      }
+    }
+  }
+  return { language, thesis };
+}
+
+/** --chora-language FILE...: check each repo deed; returns exit code. */
+function choraLanguageFiles(files) {
+  let bad = 0;
+  for (const f of files) {
+    try {
+      const r = checkChoraLanguage(readFileSync(f, "utf8"), f);
+      console.log(`OK   ${f} (${r === null ? "no (language …) or :thesis" : `${r.language ? "(language …)" : "no (language …)"}, ${r.thesis !== null ? ":thesis" : "no :thesis"}`})`);
+    } catch (e) {
+      if (!(e instanceof LintError) && e.code === undefined) throw e;
+      bad += 1;
+      console.log(`FAIL ${f}: ${e instanceof LintError ? e.toString() : e.message}`);
+    }
+  }
+  return bad ? 1 : 0;
+}
 // ---------------------------------------------------------------------------
 // ECOSYSTEM.deed (A7 7.2, YD07; clauses/ecosystem.abnf).
 
@@ -3139,7 +3228,7 @@ export const ADR_STATUSES = new Set(["proposed", "accepted", "deprecated", "supe
 
 const META_STRINGS = ["version", "author", "design-rationale", "execution-order", "axis-1", "axis-2", "axis-3", "adaptive-focus", "perfective-source"];
 const META_BOOLEANS = ["scoping-first", "corrective-first", "adaptive-second", "perfective-third"];
-const META_FIELDS = [...DESCRIPTILE_HEADER, ...META_STRINGS, ...META_BOOLEANS, "last-updated", "type", "languages", "license"];
+const META_FIELDS = [...DESCRIPTILE_HEADER, ...META_STRINGS, ...META_BOOLEANS, "last-updated", "type", "languages", "license", "inspiration"];
 const PRACTICE_STRINGS = ["code-style", "security", "testing", "versioning", "documentation", "branching"];
 const PRACTICE_SYMBOLS = ["build-tool", "container-runtime", "ci-platform", "package-manager"];
 const META_SUBCLAUSES = {
@@ -3197,6 +3286,15 @@ export function checkMeta(text, filename, opts = {}) {
     if (v[0] !== "list" || !v[1].every((x) => x[0] === "symbol")) throw E(":languages must be a list of symbols");
   }
   if (fields.has("license") && fields.get("license")[0] !== "symbol") throw E(":license must be the SPDX id as a symbol");
+  // :inspiration names what the project draws on (owner ruling 2026-11-19; the
+  // CLADE mapping's [language] inspiration row): a non-empty list of unique, non-empty strings.
+  if (fields.has("inspiration")) {
+    const v = fields.get("inspiration");
+    if (v[0] !== "list" || v[1].length === 0 || !v[1].every((x) => x[0] === "string" && x[1] !== "")) throw E(":inspiration must be a non-empty list of non-empty strings");
+    const xs = v[1].map((x) => x[1]);
+    const dup = xs.find((x, i) => xs.indexOf(x) !== i);
+    if (dup !== undefined) throw E(`:inspiration names "${dup}" once`);
+  }
 
   for (const [name, f] of sub) {
     for (const [k, v] of f) {
@@ -3954,6 +4052,30 @@ function main(argv) {
     return rc;
   }
   if (argv.includes("--contractile-registry")) return registryMain(argv.filter((a) => a !== "--contractile-registry"));
+  if (argv.includes("--chora-language-keys")) {
+    for (const k of Object.keys(CHORA_LANGUAGE_SPEC)) console.log(":" + k);
+    return 0;
+  }
+  if (argv.includes("--chora-language-fixtures")) {
+    const d = argv[argv.indexOf("--chora-language-fixtures") + 1];
+    if (d === undefined) {
+      console.log("--chora-language-fixtures requires a DIR argument");
+      return 2;
+    }
+    const rc = profileFixtures(d, (t, f) => {
+      if (checkChoraLanguage(t, f) === null) throw new ChoraLanguageError("no (language …) clause or :thesis");
+    });
+    console.log("CHORA LANGUAGE FIXTURES " + (rc === 0 ? "OK" : rc === 2 ? "NOT CHECKED" : "FAILED"));
+    return rc;
+  }
+  if (argv.includes("--chora-language")) {
+    const files = argv.filter((a) => !a.startsWith("-"));
+    if (files.length === 0) {
+      console.log(DOC);
+      return 2;
+    }
+    return choraLanguageFiles(files);
+  }
   if (argv.includes("--rsr-profile-keys")) {
     for (const k of RSR_PROFILE_FIELDS) console.log(":" + k);
     for (const c of RSR_PROFILE_CLAUSES) console.log("(" + c + ")");
