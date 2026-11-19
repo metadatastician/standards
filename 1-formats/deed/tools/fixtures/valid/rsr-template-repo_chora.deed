@@ -10,11 +10,16 @@
             :owner          "hyperpolymath"
             :prefixed-name  "rm-rsr-template-repo")
 
-  (clade    :primary       rm
-            :primary-name  "Repo Management & Tooling"
-            :secondary     ()
-            :assigned      "2026-03-16"
-            :rationale     "Repo Management & Tooling (`rm`): the core value proposition is scaffolding repositories — CI/CD, AI manifests, ABI/FFI seams, governance — that other projects are instantiated from. `gv` was previously claimed as a secondary and is dropped: the template SHIPS governance files, but shipping them is not being a governance project. That authority lives in `standards` and `metadatastician-governance`. The inherited [\"gv\"] propagated into every repo created from this template, where it was even less meant.")
+  ;; Repo Management & Tooling (rm): the core value proposition is scaffolding
+  ;; repositories (CI/CD, AI manifests, ABI/FFI seams, governance) that other
+  ;; projects are instantiated from. gv was previously claimed as a secondary and
+  ;; is dropped: the template SHIPS governance files, but shipping them is not
+  ;; being a governance project. That authority lives in standards and
+  ;; metadatastician-governance. The inherited ["gv"] propagated into every repo
+  ;; created from this template, where it was even less meant. (Kept as a comment
+  ;; when CA1 withdrew :rationale, owner ruling 2026-11-19; the registry record
+  ;; drops its stale gv rank 1 in step.)
+  (clade    (placement :scheme clade-12 :category rm :primary #t))
 
   (forges   :github    "hyperpolymath/rsr-template-repo"
             :gitlab    "hyperpolymath/rsr-template-repo"

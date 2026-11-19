@@ -150,7 +150,7 @@ fi
 # two-step check above.
 GATE_SRC="$APPLIER"
 gate_block=$(awk '/^if \[ -n "\$\{GH_TOKEN:-\}" \]; then/{f=1} f{print} f&&/^fi$/{exit}' "$APPLIER")
-if printf '%s' "$gate_block" | grep -qE '^[[:space:]]*exit 3[[:space:]]*$'; then
+if grep -qE '^[[:space:]]*exit 3[[:space:]]*$' <<<"$gate_block"; then
   ok "the credential gate itself exits non-zero when neither credential exists"
 else
   bad "the credential gate does not exit inside its own else branch — an absent secret resolves to an empty string in silence and the sweep writes nothing while reporting success"
@@ -185,20 +185,20 @@ plan_arm=$(awk "/Upgrade to GitHub Pro. \"\\\$api_err\"/,/^  fi\$/" "$APPLIER")
 if [ -z "$plan_arm" ]; then
   plan_arm=$(awk '/if grep -q .Upgrade to GitHub Pro./{f=1} f{print} f&&/^  fi$/{exit}' "$APPLIER")
 fi
-if printf '%s' "$plan_arm" | grep -q 'PLAN-EXCLUDED'; then
+if grep -q 'PLAN-EXCLUDED' <<<"$plan_arm"; then
   ok "a free-plan 403 gets its own terminal state, distinct from FAILED"
 else
   bad "a free-plan 403 is not distinguished from a real fault — 5 permanently-unfixable repos would look like 5 transient retryables forever"
 fi
 # Inverse limb: the PLAN-EXCLUDED arm must NOT set rc. If it does, the weekly run
 # can never go green no matter how many repos converge.
-if printf '%s' "$plan_arm" | awk '/PLAN-EXCLUDED/,/^    else$/' | grep -q 'rc=2'; then
+if grep -q 'rc=2' <<<"$(awk '/PLAN-EXCLUDED/,/^    else$/' <<<"$plan_arm")"; then
   bad "the PLAN-EXCLUDED arm bumps rc — the scheduled run would be permanently red on repos that CANNOT be fixed"
 else
   ok "the PLAN-EXCLUDED arm leaves rc alone (a plan ceiling is not drift)"
 fi
 # And a genuine, non-plan list failure must STILL be a hard failure.
-if printf '%s' "$plan_arm" | awk '/^    else$/,/^    fi$/' | grep -q 'rc=2'; then
+if grep -q 'rc=2' <<<"$(awk '/^    else$/,/^    fi$/' <<<"$plan_arm")"; then
   ok "a non-plan list failure still bumps rc (real faults stay loud)"
 else
   bad "a real list failure no longer bumps rc — the plan carve-out swallowed genuine faults too"
@@ -211,20 +211,20 @@ fi
 # to `gh auth login`, destroying a working credential to cure a condition that clears
 # itself. So the gate must classify THREE ways and must NOT use `gh auth status` as
 # the authority. Anchored on the distinct arm and its distinct exit code.
-if grep -q 'rate limit exceeded' "$GATE_SRC" && printf '%s' "$gate_block" | grep -qE '^[[:space:]]*exit 5[[:space:]]*$'; then
+if grep -q 'rate limit exceeded' "$GATE_SRC" && grep -qE '^[[:space:]]*exit 5[[:space:]]*$' <<<"$gate_block"; then
   ok "the gate distinguishes an EXHAUSTED rate limit from an ABSENT credential (own exit code)"
 else
   bad "the gate cannot tell a rate-limited account from an uncredentialled one — it would print a FALSE 'no credential' FATAL and tell the operator to re-auth, throwing away a working token"
 fi
 # Inverse limb: `gh auth status` must not be the thing the gate branches on.
-if printf '%s' "$gate_block" | grep -qE '(if|elif)[^#]*gh auth status'; then
+if grep -qE '(if|elif)[^#]*gh auth status' <<<"$gate_block"; then
   bad "the gate branches on 'gh auth status', which MISREPORTS a rate-limited account as holding an invalid token"
 else
   ok "the gate does not branch on 'gh auth status' (it answers a different question than the consumer asks)"
 fi
 # And the rate-limit arm must tell the operator NOT to re-authenticate, because the
 # obvious remedy is the destructive one.
-if printf '%s' "$gate_block" | grep -qi "DO NOT run 'gh auth login'"; then
+if grep -qi "DO NOT run 'gh auth login'" <<<"$gate_block"; then
   ok "the rate-limit arm warns against the destructive remedy"
 else
   bad "the rate-limit arm does not warn against 'gh auth login' — the operator's obvious next move destroys a valid credential"

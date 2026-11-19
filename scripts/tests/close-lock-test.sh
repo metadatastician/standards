@@ -224,8 +224,8 @@ jobs:
 EOF
 d=$(mklock t10 "o/r@$A" </dev/null); mkwf t10 "o/r/.github/workflows/w2.yml@$A"
 out=$(run "$d"); st=$?
-[ "$st" = 0 ] && record "$d/actions.lock" "o/r@$A" | grep -qxF "            - 'o/r2@$B'" \
-  && record "$d/actions.lock" "o/r2@$B" | grep -qxF "            - 'o/c@$C'" \
+[ "$st" = 0 ] && grep -qxF "            - 'o/r2@$B'" <<<"$(record "$d/actions.lock" "o/r@$A")" \
+  && grep -qxF "            - 'o/c@$C'" <<<"$(record "$d/actions.lock" "o/r2@$B")" \
   && grep -qxF "    'o/c@$C':" "$d/actions.lock" \
   && ok "nested reusable gets its own uses: list, and its refs are closed" || bad "nested reusable gets its own uses: list — st=$st $out"
 
@@ -287,7 +287,7 @@ out=$(runp "$d" "$p"); st=$?
   && ok "prior record with a forward-moved tag → leaf record ref 'v1', reported" || bad "prior record → ref 'v1' — st=$st $out"
 d=$(mklock mv2 "o/untagged@$A" </dev/null); p=$(prior_rec "O/Untagged@$A" v1 "$A" 7 | mkprior mv2)
 out=$(runp "$d" "$p"); st=$?
-[ "$st" = 0 ] && record "$d/actions.lock" "o/untagged@$A" | grep -qxF "        ref: 'v1'" \
+[ "$st" = 0 ] && grep -qxF "        ref: 'v1'" <<<"$(record "$d/actions.lock" "o/untagged@$A")" \
   && ok "prior record key matches owner/repo case-insensitively" || bad "prior record case fold — st=$st $out"
 
 echo "=== moved tag: planted positives — a prior record that does not qualify writes nothing ==="
@@ -330,7 +330,7 @@ prior_rec "o/untagged@$A" v1 "$B" 7 | mkprior qb >/dev/null; plant o/q .github/w
 prior_rec "o/untagged@$A" v1 "$A" 7 | plant o/q .github/workflows/actions.lock "$D"
 d=$(mklock cl1 "o/q@$A" </dev/null); mkwf cl1 "o/q/.github/workflows/w.yml@$A"
 out=$(run "$d"); st=$?
-[ "$st" = 0 ] && record "$d/actions.lock" "o/untagged@$A" | grep -qxF "        ref: 'v1'" \
+[ "$st" = 0 ] && grep -qxF "        ref: 'v1'" <<<"$(record "$d/actions.lock" "o/untagged@$A")" \
   && grep -qF "~ o/untagged@$A ref 'v1' from the lock of o/q@$A" <<<"$out" \
   && ok "called repository's lock record with a forward-moved tag → leaf record ref 'v1', reported" || bad "callee lock source — st=$st $out"
 
@@ -358,6 +358,22 @@ d=$(mklock clr4 "o/q@$A" </dev/null); mkwf clr4 "o/q/.github/workflows/w.yml@$A"
 p=$(prior_rec "o/untagged@$A" gone "$A" 7 | mkprior clr4); out=$(runp "$d" "$p"); st=$?
 [ "$st" = 0 ] && grep -qF "from the lock of o/q@$A" <<<"$out" \
   && ok "a refused prior record falls through to the called repository's lock" || bad "prior → callee lock fallthrough — st=$st $out"
+# The callee's uses are read with a quiet grep. That grep used to sit after a
+# pipe (`fold < "$uf" | grep -qxF "$kf"`) under pipefail: with the key on the
+# first line of a list above the pipe buffer, grep -q exited, fold died of
+# SIGPIPE, the pipeline reported 141 and the callee's lock was passed over.
+# 5000 uses of the key (~250 KB folded); five runs.
+E=5555555555555555555555555555555555555555
+{ printf 'jobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n'
+  for i in $(seq 1 5000); do printf '      - uses: o/untagged@%s # stable\n' "$A"; done; } | plant o/q .github/workflows/w.yml "$E"
+plant o/q .github/workflows/actions.lock "$E" < "$WORK/qa.prior"
+for run in 1 2 3 4 5; do
+  d=$(mklock "clbig$run" "o/q@$E" </dev/null); mkwf "clbig$run" "o/q/.github/workflows/w.yml@$E"
+  out=$(run "$d"); st=$?
+  [ "$st" = 0 ] && grep -qF "~ o/untagged@$A ref 'v1' from the lock of o/q@$E" <<<"$out" \
+    && ok "a callee whose uses list exceeds a pipe buffer still supplies ref: (run $run)" \
+    || bad "a callee with a large uses list was passed over (run $run) — st=$st $(tail -3 <<<"$out")"
+done
 
 echo "=== moved tag: a call-site '# <tag>' comment supplies ref: ==="
 plant o/r .github/workflows/cm.yml "$A" <<EOF
@@ -369,19 +385,19 @@ jobs:
 EOF
 d=$(mklock mc1 "o/r@$A" </dev/null); mkwf mc1 "o/r/.github/workflows/cm.yml@$A"
 out=$(run "$d"); st=$?
-[ "$st" = 0 ] && record "$d/actions.lock" "o/r@$A" | grep -qxF "            - 'o/untagged@$A'" \
-  && record "$d/actions.lock" "o/untagged@$A" | grep -qxF "        ref: 'v1'" \
+[ "$st" = 0 ] && grep -qxF "            - 'o/untagged@$A'" <<<"$(record "$d/actions.lock" "o/r@$A")" \
+  && grep -qxF "        ref: 'v1'" <<<"$(record "$d/actions.lock" "o/untagged@$A")" \
   && grep -qF "~ o/untagged@$A ref 'v1' from a call-site comment" <<<"$out" \
   && ok "comment in a called workflow → leaf record ref 'v1'" || bad "called-workflow comment — st=$st $out"
 d=$(mklock mc2 "o/untagged@$A" </dev/null)
 printf '{\n  jobs: {\n    a: {\n      steps: [\n        {\n          uses: "o/untagged@%s", # v1\n        },\n      ],\n    },\n  },\n}\n' "$A" > "$d/ci.yml"
 out=$(run "$d"); st=$?
-[ "$st" = 0 ] && record "$d/actions.lock" "o/untagged@$A" | grep -qxF "        ref: 'v1'" \
+[ "$st" = 0 ] && grep -qxF "        ref: 'v1'" <<<"$(record "$d/actions.lock" "o/untagged@$A")" \
   && ok "KYAML comment in this repository's workflow → leaf record ref 'v1'" || bad "local KYAML comment — st=$st $out"
 d=$(mklock mc3 "o/untagged@$A" </dev/null); p=$(prior_rec "o/untagged@$A" gone "$A" 7 | mkprior mc3)
 printf 'jobs:\n  a:\n    steps:\n      - uses: o/untagged@%s # v1\n' "$A" > "$d/ci.yml"
 out=$(runp "$d" "$p"); st=$?
-[ "$st" = 0 ] && record "$d/actions.lock" "o/untagged@$A" | grep -qxF "        ref: 'v1'" && grep -qF 'from a call-site comment' <<<"$out" \
+[ "$st" = 0 ] && grep -qxF "        ref: 'v1'" <<<"$(record "$d/actions.lock" "o/untagged@$A")" && grep -qF 'from a call-site comment' <<<"$out" \
   && ok "a refused prior record falls through to the call-site comment" || bad "prior → comment fallthrough — st=$st $out"
 
 echo "=== moved tag: planted positives — a call-site comment that does not qualify writes nothing ==="
@@ -455,15 +471,15 @@ printf 'version: v0.0.3\nworkflows: {}\ndependencies: {}\n' > "$d/actions.lock"
 printf '{ jobs: { call: { uses: "o/flow/.github/workflows/outer.yml@%s", }, }, }\n' "$A" > "$d/ci.yml"
 (cd "$d/../.." && bash "$SCRIPT_DIR/../complete-job-refs.sh") >/dev/null 2>&1; completed=$?
 out=$(run "$d"); st=$?
-[[ "$completed" == 0 && "$st" == 0 ]] && record "$d/actions.lock" "o/flow@$A" | grep -qxF "            - 'o/flow-child@$B'" \
-  && record "$d/actions.lock" "o/flow-child@$B" | grep -qxF "            - 'o/c@$C'" \
+[[ "$completed" == 0 && "$st" == 0 ]] && grep -qxF "            - 'o/flow-child@$B'" <<<"$(record "$d/actions.lock" "o/flow@$A")" \
+  && grep -qxF "            - 'o/c@$C'" <<<"$(record "$d/actions.lock" "o/flow-child@$B")" \
   && ok "flow completion and close-lock retain nested reusable records" || bad "flow completion lost nested reusable records — st=$st $out"
-record "$d/actions.lock" "o/flow@$A" | grep -qxF "            - 'o/b@$B'" \
+grep -qxF "            - 'o/b@$B'" <<<"$(record "$d/actions.lock" "o/flow@$A")" \
   && ! grep -qF 'not-a-dependency' "$d/actions.lock" \
   && ok "flow step references count while environment/input examples do not" || bad "flow step/environment discrimination"
 bash "$SCRIPT_DIR/../check-lock-sync.sh" "$d" >/dev/null 2>&1; st=$?
 [[ "$st" == 0 ]] && ok "completed flow repair satisfies the strict sync gate" || bad "completed flow repair does not satisfy the strict sync gate"
-record "$d/actions.lock" "o/flow-child@$B" | grep -qxF "        ref: 'v1.0.0'" \
+grep -qxF "        ref: 'v1.0.0'" <<<"$(record "$d/actions.lock" "o/flow-child@$B")" \
   && ok "transitive reusable without a local caller records a symbolic tag" || bad "transitive reusable incorrectly received a raw-SHA exemption"
 
 plant o/badflow .github/workflows/bad.yml "$A" <<'EOF'

@@ -107,7 +107,7 @@ check() { local l="$1" w="$2" g="$3"
   if [ "$g" = "$w" ]; then pass=$((pass+1)); echo "PASS $l"
   else fail=$((fail+1)); echo "FAIL $l — want $w got $g"; fi; }
 check_says() { local l="$1" w="$2"
-  if printf '%s' "$out" | grep -qF "$w"; then pass=$((pass+1)); echo "PASS $l"
+  if grep -qF "$w" <<<"$out"; then pass=$((pass+1)); echo "PASS $l"
   else fail=$((fail+1)); echo "FAIL $l — output lacks: $w"; printf '%s\n' "$out" | tail -4; fi; }
 
 # 1. report-only: identifies the three bypasses, writes nothing
@@ -157,7 +157,7 @@ REFUSE=0
 setup; VERIFY_FAIL=1; run --apply
 check "read-back failure exits 1" 1 "$rc"
 check_says "read-back failure says UNVERIFIED" "UNVERIFIED"
-if printf '%s' "$out" | grep -q "verified: 0 bypass"; then
+if grep -q "verified: 0 bypass" <<<"$out"; then
   fail=$((fail+1)); echo "FAIL read-back failure still claimed verification"
 else pass=$((pass+1)); echo "PASS read-back failure did not claim verification"; fi
 VERIFY_FAIL=0

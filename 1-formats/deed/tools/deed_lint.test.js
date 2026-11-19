@@ -6,7 +6,7 @@ import { cpSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, writ
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { validate, blankComments, LintError, SELF_TEST_CASES, checkEgress, EgressError, checkAnchor, AnchorError, profileCOfBody, readMustfileChecks, MustfileError, readProofReceipt, ProofReceiptError, checkContractiles, ContractilesError, contractilePaths, CONTRACTILE_VERBS, checkEdict, EdictError, verbOfFilename, checkVerbDescriptile, VerbDescriptileError, verbOfDescriptile, choraRepoUuid, rootChora, FIXTURE_TODAY, checkEcosystem, EcosystemError, ECOSYSTEM_RELATIONSHIPS, checkState, StateError, STATE_PHASES, MATURITY_LEVELS, checkRsrScorecard, RsrScorecardError, RSR_TIERS, RSR_VERDICTS, checkMeta, MetaError, META_PROJECT_TYPES, ADR_STATUSES, checkAgentic, AgenticError, J19_SETTINGS, checkNeurosym, NeurosymError, SCAN_DEPTHS, REPORT_FORMATS, checkRsrProfile, RsrProfileError, RSR_PROFILE_FIELDS, layoutPathFault } from "./deed_lint.js";
+import { validate, blankComments, LintError, SELF_TEST_CASES, checkEgress, EgressError, checkAnchor, AnchorError, profileCOfBody, readMustfileChecks, MustfileError, readProofReceipt, ProofReceiptError, checkContractiles, ContractilesError, contractilePaths, CONTRACTILE_VERBS, checkEdict, EdictError, verbOfFilename, checkVerbDescriptile, VerbDescriptileError, verbOfDescriptile, choraRepoUuid, rootChora, FIXTURE_TODAY, checkEcosystem, EcosystemError, ECOSYSTEM_RELATIONSHIPS, checkState, StateError, STATE_PHASES, MATURITY_LEVELS, checkRsrScorecard, RsrScorecardError, RSR_TIERS, RSR_VERDICTS, checkMeta, MetaError, META_PROJECT_TYPES, ADR_STATUSES, checkAgentic, AgenticError, J19_SETTINGS, checkNeurosym, NeurosymError, SCAN_DEPTHS, REPORT_FORMATS, checkRsrProfile, RsrProfileError, checkChoraLanguage, ChoraLanguageError, CHORA_LANGUAGE_SPEC, RSR_PROFILE_FIELDS, layoutPathFault } from "./deed_lint.js";
 import { generateContractileRegistry as generateRegistry } from "./deed_lint.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -1775,5 +1775,35 @@ describe("rsr-profile clause (A7 J39)", () => {
   test("errors are RsrProfileError", () => {
     const p = join(FIX_RP, "invalid", "profile-twice_chora.deed");
     expect(() => checkRsrProfile(readFileSync(p, "utf8"), p)).toThrow(RsrProfileError);
+  });
+});
+
+// (language …) and (identity :thesis) in a chora (clauses/language.abnf; the
+// CLADE mapping's [thesis] and [language] rows, owner rulings 2026-11-15 and 2026-11-19).
+const FIX_CL = join(FIX, "chora-language");
+describe("chora (language …) and :thesis", () => {
+  test("--chora-language-fixtures passes on the corpus", () => {
+    const r = cli("--chora-language-fixtures", FIX_CL);
+    expect(r.code).toBe(0);
+    expect(r.out).toContain("CHORA LANGUAGE FIXTURES OK");
+  });
+  test("--chora-language-keys prints the clause's one key set", () => {
+    const r = cli("--chora-language-keys");
+    expect(r.code).toBe(0);
+    expect(r.out.trim().split("\n")).toEqual([":paradigm", ":compile-targets", ":headline-feature"]);
+    expect(Object.keys(CHORA_LANGUAGE_SPEC)).toEqual(["paradigm", "compile-targets", "headline-feature"]);
+  });
+  test("the full fixture reads whole", () => {
+    const p = join(FIX_CL, "valid", "full_chora.deed");
+    expect(checkChoraLanguage(readFileSync(p, "utf8"), p)).toEqual({
+      language: { paradigm: ["functional", "affine", "typed"], "compile-targets": ["typed-wasm", "wasm-gc"], "headline-feature": "affine-types" },
+      thesis: "A language for affine things.",
+    });
+  });
+  test("a deed with neither reads as null, and the clause outside a chora deed is refused", () => {
+    const t = HDR + '(repo-deed :schema-version "1.0.0" :canonical-name "x" :repo-uuid #uuid"00000000-0000-8000-8000-000000000801" :beholding-chora #uuid"00000000-0000-8000-8000-0000000000e5" (identity :primary-forge github :owner "o"))\n';
+    expect(checkChoraLanguage(t, "x_chora.deed")).toBeNull();
+    const m = HDR + '(repo-deed :schema-version "1.0.0" :canonical-name "x" (language :headline-feature a))\n';
+    expect(() => checkChoraLanguage(m, "0-AI-MANIFEST.deed")).toThrow(ChoraLanguageError);
   });
 });

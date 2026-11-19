@@ -94,7 +94,7 @@ row() { printf '%s\n' "$1" | awk -F'\t' -v r="o/$2" '$1==r{print $2}'; }
 set +e; out=$(PATH="$tmp/bin:$PATH" bash "$script" "${args[@]}" 2>/dev/null); rc=$?; set -e
 [ -z "$(ls "$tmp/puts")" ] && pass "report mode writes nothing" || bad "report mode wrote: $(ls "$tmp/puts")"
 [ "$(row "$out" phantom-only)" = WOULD-RETIRE ] && pass "phantom-only reported WOULD-RETIRE" || bad "phantom-only: $(row "$out" phantom-only)"
-printf '%s' "$out" | grep -q 'also in this repo: code_coverage' && pass "retired code_coverage is surfaced as a second blocker" || bad "code_coverage not surfaced"
+grep -q 'also in this repo: code_coverage' <<<"$out" && pass "retired code_coverage is surfaced as a second blocker" || bad "code_coverage not surfaced"
 [ "$(row "$out" clean)" = CLEAN ] && pass "a real context alone is CLEAN" || bad "clean: $(row "$out" clean)"
 [ "$(row "$out" org)" = ORG-INHERITED ] && pass "org ruleset is ORG-INHERITED" || bad "org: $(row "$out" org)"
 [ "$(row "$out" nosource)" = REFUSED ] && pass "absent source_type is REFUSED" || bad "nosource: $(row "$out" nosource)"
@@ -125,7 +125,7 @@ reset() { rm -rf "$tmp/puts" "$tmp"/calls.*; mkdir -p "$tmp/puts"; }
 
 # A phantom in one ruleset and a retired rule in ANOTHER: the retired rule is still reported.
 reset; set +e; out=$(PATH="$tmp/bin:$PATH" bash "$script" --repo o/split 2>/dev/null); set -e
-printf '%s' "$out" | grep -q 'also in this repo: code_coverage' \
+grep -q 'also in this repo: code_coverage' <<<"$out" \
   && pass "a retired rule in a separate ruleset is reported" || bad "split: retired rule not reported: $out"
 
 # The phantom is on page 2 of the ruleset listing.

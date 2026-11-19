@@ -183,6 +183,38 @@ git commit -q --amend -m "grow the migration ledger
 Ratchet-exception: .hypatia-ignore — correct ledger named"
 expect 0 "exception naming THIS ledger licenses it"
 
+# A declaration is found however many declaration lines the messages carry.
+# declared_for read `printf … | grep -iE '^Ratchet-exception' | grep -qF LEDGER`
+# under pipefail: with the matching line first and more than a pipe buffer of
+# declarations, grep -q exited, the filter died of SIGPIPE, the pipeline
+# reported 141 and a declared growth read as undeclared (a false block).
+git checkout -q "$BASE" -- .hypatia-baseline.json .hypatia-ignore
+printf 'cicd_rules/banned_language_file:src/A.res\ncicd_rules/banned_language_file:src/C.res\n' > .hypatia-ignore
+{ printf 'grow the migration ledger\n\n'
+  for i in $(seq 1 3000); do printf 'Ratchet-exception: .hypatia-ignore — declared reason number %d\n' "$i"; done
+} > "$WORK/long-msg"
+git commit -aq -F "$WORK/long-msg"
+for run in 1 2 3 4 5; do
+  expect 0 "a declaration among ~180 KB of declaration lines licenses growth (run $run)"
+done
+
+
+# ⚠ A wildcard on an early line of a LARGE migration ledger must still fail.
+# The check used to read `grep -vE … .hypatia-ignore | grep -q '\*\*'` under
+# `set -o pipefail`: grep -q exits at its first match, the filter still writing
+# the rest of a file above the 64 KiB pipe buffer dies of SIGPIPE, the pipeline
+# reports 141, and the wildcard read as absent, so the gate passed. Same entry
+# count at both refs, so only the wildcard rule can fail it; five runs, because
+# the old form lost the race on almost every run, not every one.
+git checkout -q "$BASE" -- .hypatia-baseline.json
+seq 1 6000 | sed 's|^|cicd_rules/banned_language_file:src/legacy/module-number-|; s|$|.res|' > .hypatia-ignore
+git add -A; git commit -qm "large ledger, no wildcard"
+BASE="$(git rev-parse HEAD)"
+sed -i '1s|.*|cicd_rules/banned_language_file:docs/**|' .hypatia-ignore
+git commit -aqm "large ledger, wildcard on line 1"
+for run in 1 2 3 4 5; do
+  expect 1 "wildcard on line 1 of a ledger above the pipe buffer fails (run $run)"
+done
 echo
 echo "  ${pass} passed, ${fail} failed"
 [ "$fail" = "0" ]

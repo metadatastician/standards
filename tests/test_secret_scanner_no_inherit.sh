@@ -134,8 +134,7 @@ for ex_file in "$REUSABLE" "$WF_DIR/mirror-reusable.yml"; do
   [ -r "$ex_file" ] || { fail "example-bearing reusable unreadable: $ex_file"; continue; }
   example="$(awk '/Caller example/{f=1} f && /^[^#]/{exit} f{print}' "$ex_file")"
   [ -n "$example" ] || { fail "no caller example found in $ex_file — extraction is broken"; continue; }
-  if printf '%s
-' "$example" | grep -q 'secrets:[[:space:]]*inherit'; then
+  if grep -q 'secrets:[[:space:]]*inherit' <<<"$example"; then
     fail "caller example in $(basename "$ex_file") still teaches \`secrets: inherit\` — examples are what generators copy"
   fi
 done
@@ -338,7 +337,7 @@ for dir in "${scan_dirs[@]}"; do
     rel="${f#"$REPO_ROOT"/}"
     # A directive is a non-comment line `secrets: inherit` (a trailing
     # suppression comment such as `# NOSONAR` does not change that).
-    if grep -vE '^[[:space:]]*#' "$f" | grep -qE '^[[:space:]]*secrets:[[:space:]]*inherit([[:space:]]|$)'; then
+    if grep -qE '^[[:space:]]*secrets:[[:space:]]*inherit([[:space:]]|$)' <<<"$(grep -vE '^[[:space:]]*#' "$f")"; then
       if supported_path "$rel"; then
         seen_supported+=("$rel")
       else
@@ -404,8 +403,7 @@ lock_section="$(awk "/^    '\\.github\\/workflows\\/secret-scanner-reusable\\.ym
 [ -n "$lock_section" ] || fail "actions.lock has no section for secret-scanner-reusable.yml — regenerate with \`gh actions-lock\`"
 while IFS= read -r pin; do
   [ -n "$pin" ] || continue
-  printf '%s
-' "$lock_section" | grep -qF "'$pin'" \
+  grep -qF "'$pin'" <<<"$lock_section" \
     || fail "scanner reusable uses $pin but its actions.lock section does not key it — callers pinned to this commit will fail lock validation at startup"
 done <<< "$checkout_pin"
 

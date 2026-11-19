@@ -979,7 +979,7 @@ rewrite_illegal() {
 # after this run's rewrite, BEHIND and MOVED are gone; in audit mode they are
 # still there but the same fix run would clear them, so they do not defer.
 squabbler_state() {
-  local dir="$1" t="$2" repair="$3" f cls blockers=""
+  local dir="$1" t="$2" repair="$3" f cls blockers="" body
   shopt -s nullglob
   for f in "$dir"/*.yml "$dir"/*.yaml; do
     # PRESENT only when a non-comment line runs the gate: a `uses:` of
@@ -989,8 +989,11 @@ squabbler_state() {
     # Inline comments are stripped first, and `squabble chains` or the local
     # action count only in command position (start of a run: value or after
     # ; && ||), so `echo "squabble chains"` is not a gate either.
-    if grep -vE '^[[:space:]]*#' "$f" | sed -E 's/[[:space:]]+#.*$//' \
-         | grep -qiE "^[[:space:]]*(-[[:space:]]+)?[\"']?uses[\"']?[[:space:]]*:[[:space:]]*[\"']?([^[:space:]]*cicd-squabbler|\./\.github/actions/squabble)|(^[[:space:]]*(-[[:space:]]+)?(run[[:space:]]*:[[:space:]]*)?|[;&|][[:space:]]*)(bash[[:space:]]+|sh[[:space:]]+)?(\./)?(squabble[[:space:]]+chains|\.github/actions/squabble/)"; then
+    # One sed drops comment lines and strips inline comments; its output is
+    # captured, then matched, because a pipe into grep -q let the writer die
+    # of SIGPIPE on a large file (status 141) and a present gate read MISSING.
+    body=$(sed -E -e '/^[[:space:]]*#/d' -e 's/[[:space:]]+#.*$//' "$f")
+    if grep -qiE "^[[:space:]]*(-[[:space:]]+)?[\"']?uses[\"']?[[:space:]]*:[[:space:]]*[\"']?([^[:space:]]*cicd-squabbler|\./\.github/actions/squabble)|(^[[:space:]]*(-[[:space:]]+)?(run[[:space:]]*:[[:space:]]*)?|[;&|][[:space:]]*)(bash[[:space:]]+|sh[[:space:]]+)?(\./)?(squabble[[:space:]]+chains|\.github/actions/squabble/)" <<<"$body"; then
       shopt -u nullglob; echo PRESENT; return 0
     fi
     for cls in $(classify_file "$f" "$t"); do
@@ -1240,6 +1243,17 @@ self_test() {
   [ "$(squabbler_state "$d/sq" "$t" 0)" = PRESENT ] || { echo "  FAIL a run with whitespace before the colon must count as PRESENT" >&2; ok_sq=0; }
   printf 'jobs:\n  s:\n    steps:\n      - run: echo "uses : org/cicd-squabbler@main"\n' > "$d/sq/squabble.yml"
   [ "$(squabbler_state "$d/sq" "$t" 0)" = MISSING ] || { echo "  FAIL an echoed uses : line inside a run: value must not count as PRESENT" >&2; ok_sq=0; }
+  # A gate on the first line of a workflow above the pipe buffer is still PRESENT.
+  # The test used to pipe the comment-stripped file into grep -q: grep -q exited
+  # at the match, the filter still writing died of SIGPIPE, the pipeline reported
+  # 141 under pipefail and a present gate read as MISSING. Five runs.
+  local sqrun
+  { printf 'jobs:\n  s:\n    uses: hyperpolymath/cicd-squabbler/.github/workflows/x.yml@abc\n'
+    for sqrun in $(seq 1 3000); do printf '  k%d: a value line long enough to fill the pipe buffer quickly\n' "$sqrun"; done
+  } > "$d/sq/squabble.yml"
+  for sqrun in 1 2 3 4 5; do
+    [ "$(squabbler_state "$d/sq" "$t" 0)" = PRESENT ] || { echo "  FAIL a cicd-squabbler uses: before ~200 KB of workflow must count as PRESENT (run $sqrun)" >&2; ok_sq=0; }
+  done
   rm "$d/sq/squabble.yml"
   write_squabbler_caller "$d/sqc.yml" "$t"
   sq=$(classify_file "$d/sqc.yml" "$t" | sort | tr '\n' ',')

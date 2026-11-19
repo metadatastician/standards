@@ -26,7 +26,7 @@ expect() {
   local label=$1 want=$2 needle=$3 out rc
   shift 3
   out="$(bash "$FMT" "$@" 2>&1)"; rc=$?
-  if [ "$rc" -ne "$want" ] || { [ "$needle" != "-" ] && ! printf '%s' "$out" | /usr/bin/grep -qF -- "$needle"; }; then
+  if [ "$rc" -ne "$want" ] || { [ "$needle" != "-" ] && ! /usr/bin/grep -qF -- "$needle" <<<"$out"; }; then
     echo "FAIL: $label — wanted exit $want and '$needle', got exit $rc"
     printf '%s\n' "$out" | sed 's/^/      | /'
     fail=$((fail + 1)); return

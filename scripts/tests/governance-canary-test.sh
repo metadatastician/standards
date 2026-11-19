@@ -52,7 +52,7 @@ REF="${1:-}"
 FIXTURE="$ROOT/scripts/tests/fixtures/governance-canary"
 
 command -v yq >/dev/null 2>&1 || { echo 'SKIP(2): yq not installed' >&2; exit 2; }
-yq --version 2>/dev/null | grep -q mikefarah || { echo 'SKIP(2): mikefarah yq v4 required' >&2; exit 2; }
+grep -q mikefarah <<<"$(yq --version 2>/dev/null)" || { echo 'SKIP(2): mikefarah yq v4 required' >&2; exit 2; }
 command -v jq >/dev/null 2>&1 || { echo 'SKIP(2): jq not installed' >&2; exit 2; }
 
 tmp="$(mktemp -d)"
@@ -208,7 +208,7 @@ if [ -n "$pin_key" ]; then
   ' "$tmp/lock.yml" > "$tmp/lock.poison.yml"
   got=0
   out="$(bash "$poison_guard" "$tmp/lock.poison.yml" --self-repo metadatastician/standards 2>&1)" || got=$?
-  if [ "$got" -eq 1 ] && printf '%s' "$out" | grep -qF "ref repeats the commit SHA"; then
+  if [ "$got" -eq 1 ] && grep -qF "ref repeats the commit SHA" <<<"$out"; then
     ok "negative control: a leaf whose ref repeats its own SHA is caught ($pin_key)"
   else
     printf '%s\n' "$out" | tail -5 | sed 's/^/    /'
@@ -237,7 +237,7 @@ awk '
 ' "$SRC/.github/workflows/actions.lock" > "$tmp/lock.dangling.yml"
 got=0
 out="$(bash "$poison_guard" "$tmp/lock.dangling.yml" --self-repo metadatastician/standards 2>&1)" || got=$?
-if [ "$got" -eq 1 ] && printf '%s' "$out" | grep -qiF "closure"; then
+if [ "$got" -eq 1 ] && grep -qiF "closure" <<<"$out"; then
   ok "negative control: a dangling closure edge is caught"
 else
   printf '%s\n' "$out" | tail -5 | sed 's/^/    /'

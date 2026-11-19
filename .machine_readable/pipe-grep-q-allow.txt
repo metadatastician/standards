@@ -1,0 +1,87 @@
+# SPDX-License-Identifier: MPL-2.0
+# SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+#
+# pipe-grep-q-allow.txt — SHRINK-ONLY ledger for scripts/check-pipe-grep-q.sh.
+#
+# Under `set -o pipefail`, a pipe into a quiet grep is unsound: grep exits at
+# its first match, the writer is killed by SIGPIPE, and the pipeline reports
+# 141, so a match reads as no match (a test fails at random; a gate written
+# `if writer | grep -q BAD` passes wrongly). The fix is to capture, then match:
+# out=$(writer); grep -q PATTERN <<<"$out".
+#
+# Each line names a file that still has the pattern and how many times:
+# `path:count`. The gate fails if a file not listed gains one, if a count
+# GROWS, or if an entry is STALE (the count fell or reached zero). Fixing a
+# line means lowering or deleting its entry in the same change (`--prune` does
+# that). Never add a line; never raise a count. Generated once, on 2026-11-17,
+# by `bash scripts/check-pipe-grep-q.sh --print`.
+.githooks/commit-msg:4
+.githooks/docstring-scan.sh:1
+.githooks/post-checkout:1
+.githooks/post-merge:1
+.githooks/validate-lint-format.sh:6
+.githooks/validate-spdx-workflows.sh:1
+.githooks/validate-spdx.sh:1
+.github/workflows/affinescript-verify.yml:1
+.github/workflows/changelog-reusable.yml:2
+.github/workflows/ci-pipeline.yml:1
+.github/workflows/code-coverage.yml:1
+.github/workflows/echidna-verify.yml:2
+.github/workflows/governance-reusable.yml:24
+.github/workflows/propagate-hooks.yml:1
+.github/workflows/readme-derive-reusable.yml:1
+.github/workflows/secret-scanner-reusable.yml:4
+.github/workflows/sonarqube-reusable.yml:1
+1-formats/k9/tools/k9-validate.sh:9
+2-protocols/overlay/scripts/check-conformance.sh:1
+3-practice/provisioning/templates/build/just/provision-lib.sh:5
+3-practice/provisioning/tests/doctor-summary.sh:2
+9-archive/rhodium-standard-repositories/rsr-audit.sh:2
+9-archive/rhodium-standard-repositories/satellites/palimpsest-license/.git-hooks/pre-commit:2
+9-archive/rhodium-standard-repositories/satellites/palimpsest-license/.git-hooks/pre-push:3
+9-archive/rhodium-standard-repositories/satellites/rsr-certifier/hooks/validate-sha-pins.sh:1
+9-archive/rhodium-standard-repositories/satellites/rsr-certifier/hooks/validate-spdx.sh:1
+9-archive/rhodium-standard-repositories/templates/setup.sh.template:4
+9-archive/rhodium-standard-repositories/ux-test-harness/run-ux-test.sh:4
+docs/UX-standards/e-grade-launcher-template.sh:1
+hooks/pre-commit:1
+hooks/validate-sha-pins.sh:1
+hooks/validate-spdx.sh:1
+scripts/apply-branch-gates.sh:1
+scripts/apply-protection-floor.sh:3
+scripts/apply-tag-ruleset-canon.sh:7
+scripts/apply-workflow-pins-remote.sh:3
+scripts/check-baseline-expiry.sh:2
+scripts/check-canon-lockstep.sh:2
+scripts/check-canonical-names.sh:2
+scripts/check-doctrine-coverage.sh:2
+scripts/check-language-guide.sh:1
+scripts/check-launcher-standard-currency.sh:2
+scripts/check-licence-consistency.sh:1
+scripts/check-lock-gate-pin-freshness.sh:2
+scripts/check-lock-pin-contract.sh:7
+scripts/check-lock-sync.sh:1
+scripts/check-lockfile-drift.sh:1
+scripts/check-package-policy.sh:2
+scripts/check-pin-comments.sh:1
+scripts/check-required-contexts.sh:1
+scripts/check-retired-names.sh:3
+scripts/check-reusable-closure.sh:3
+scripts/check-rsr-profile.sh:3
+scripts/check-standards-helper-pins.sh:3
+scripts/check-standards-map.sh:2
+scripts/check-trusted-base.sh:2
+scripts/check-uuid-v8.sh:2
+scripts/close-lock.sh:7
+scripts/complete-job-refs.sh:1
+scripts/conformance-k9.sh:2
+scripts/estate-trusted-base-survey.sh:1
+scripts/propagate-hypatia-caller-id.sh:2
+scripts/prune-stale.sh:1
+scripts/regen-dependabot-locks.sh:3
+scripts/relock-standards-pin.sh:5
+scripts/sonar-preflight.sh:2
+scripts/tests/spdx-header-block-test.sh:1
+scripts/triage-2026-09-29-apply.sh:2
+scripts/triage-2026-10-23-issue-1234-apply.sh:1
+setup.sh:4
