@@ -177,6 +177,7 @@ The root has no `:beholding-chora`. It is the top of the hierarchy. There is exa
 | `(status ...)` | clause | Moves to `STATE.deed`, with `(maturity ...)` (A7 J15, 2026-11-13). A `(status)` or `(maturity)` in the chora is read, with a warning, for one release, then refused in `strict` mode. Profile, canon version and deviations belong to A2.
 | `(profile)`, `(generation)`, `(deviations)` | clauses | Defined by A2 (sections 4 to 7 there). `(profile)` is required in `strict` mode. `(generation)` is required only for a generated repo. `(deviations)` is optional.
 | `(clade ...)` | clause | Optional. The repo's clade placements, as identity facts, checked against chora-registry (section 11, A7 W10). Never an id, never an edict.
+| `(language ...)`, `(identity … :thesis "…")` | clause, field | Optional, once each. For a language repo: its paradigm, compile targets and headline feature, and the one sentence it lives for: what it is and does in the world (section 11.1; owner rulings of 2026-11-15 and 2026-11-19). Grammar `clauses/language.abnf`, check `deed_lint.js --chora-language`. Its design heritage is `META.deed`'s `:inspiration`, not identity.
 |===
 
 The existing recommendation `(provenance ...)` and `(project ...)` of the draft stays recommended and is not required.
