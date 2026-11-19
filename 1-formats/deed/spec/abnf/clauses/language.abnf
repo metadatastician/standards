@@ -1,0 +1,46 @@
+; SPDX-FileCopyrightText: © 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+; SPDX-License-Identifier: MPL-2.0
+; SPDX-License-Identifier: CC-BY-SA-4.0
+;
+; DEED clause profile: (language …) and (identity :thesis …) in
+; <repo>_chora.deed, v1.0.0 (DRAFT)
+; Prose and rationale: 1-formats/deed/mappings/clade-to-repo-deed.adoc,
+; section 3 (the [thesis] and [language] rows), and the owner rulings of
+; 2026-11-15 and 2026-11-19 given in the kyX CLADE thread: the chora holds what
+; a repo is, what it lives for and what it does in the world (CHORA-SPEC
+; 11.1), so a language repo's thesis, paradigm, compile targets and headline
+; feature are chora content; the project's design heritage (:inspiration)
+; is META.deed's (clauses/meta.abnf), and the repo's internal content
+; ordering is CLADE.deed's, once A7 M3 lands.
+;
+; A CLAUSE PROFILE, not a new grammar. Every rule below is also a `clause`
+; or `field` of deed.abnf v2.0.0, so a chora deed carrying them still passes
+; deed_lint unchanged. Rules it borrows: string, symbol and token-sep are
+; deed.abnf's; symbol-list is common.abnf's. Requires RFC 7405 (%s"..."
+; case-sensitive literals).
+;
+; Where it applies: the top level of a <repo>_chora.deed (head repo-deed and
+; that file name), at most once; :thesis inside its (identity …) clause, at
+; most once. SEMANTIC (validator-enforced, deed_lint.js --chora-language):
+;   * each member at most once; the clause holds at least one;
+;   * :paradigm and :compile-targets are non-empty and name each symbol once;
+;   * :thesis is a non-empty string;
+;   * no other field and no clause inside (language …): a reader that meets
+;     an unknown key refuses the clause, never skips it (P-2a).
+; The (identity …) clause as a whole has no profile yet (CHORA-SPEC 5.4);
+; identity-thesis names only the member this profile adds to it.
+
+language-clause = "(" %s"language" 1*(token-sep language-member) [token-sep] ")"
+language-member = ( %s":paradigm"         token-sep symbol-list )
+                / ( %s":compile-targets"  token-sep symbol-list )
+                / ( %s":headline-feature" token-sep symbol )
+                ; :paradigm is the kind of language it is (functional,
+                ; affine, typed); :compile-targets what it compiles to;
+                ; :headline-feature the one trait it is known for in the
+                ; world. All three are symbols, read verbatim from the
+                ; source; a source value that is not symbol-legal fails the
+                ; translation rather than being respelled.
+
+identity-thesis = %s":thesis" token-sep string
+                ; One sentence: what the repo lives for. A member of the
+                ; chora's (identity …) clause.
