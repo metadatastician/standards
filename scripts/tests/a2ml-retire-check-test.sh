@@ -39,6 +39,9 @@ CHORA_UUID='00000000-0000-8000-8000-0000000000a1'
 # file holds no UUID literal the v8 gate would have to exempt.
 LEGACY_UUID="$(printf '%s-%s-%s-%s-%s' d9e987dc bb7b 51aa 839b 3d8bbfe774c3)"
 
+# The (clade …) clause takes the placement shape (CHORA-SPEC 11.2, CA1);
+# CLADE_CLAUSE swaps it, e.g. for the withdrawn flat form.
+PLACED='(clade (placement :scheme clade-12 :category rm :primary #t))'
 chora() { # chora DIR [owner]
   cat > "$1/fixture_chora.deed" <<EOF
 ;; SPDX-License-Identifier: MPL-2.0
@@ -48,7 +51,7 @@ chora() { # chora DIR [owner]
   :repo-uuid #uuid"$CHORA_UUID"
   :beholding-chora #uuid"00000000-0000-8000-8000-0000000000b2"
   (identity :owner "${2:-o}" :primary-forge github :prefixed-name "rm-fixture")
-  (clade :primary rm :secondary () :assigned "2026-03-16" :rationale "")
+  ${CLADE_CLAUSE:-$PLACED}
   (forges :github "o/fixture" :gitlab "" :bitbucket "")
   (lineage :type standalone :parent "" :born "2026-03-16"))
 EOF
@@ -130,7 +133,29 @@ c_deletable() {
   local d r; d=$(deletable_tree deletable)
   r=$(row "$d" .machine_readable/CLADE.a2ml)
   printf '%s' "$r" | class_is deletable-now \
-    && printf '%s' "$r" | jq -e '.blockers == [] and .facts.checked == 26 and .facts.missing == 0 and .facts.dropped == 1' >/dev/null
+    && printf '%s' "$r" | jq -e '.blockers == [] and .facts.checked == 26 and .facts.missing == 0 and .facts.dropped == 3' >/dev/null
+}
+# The withdrawn flat form is still read, field by field, for one release.
+c_clade_flat_form() {
+  local d r; d=$(deletable_tree flat)
+  CLADE_CLAUSE='(clade :primary rm :secondary () :assigned "2026-03-16" :rationale "")' chora "$d"
+  r=$(row "$d" .machine_readable/CLADE.a2ml)
+  printf '%s' "$r" | class_is deletable-now && printf '%s' "$r" | jq -e '.facts.missing == 0' >/dev/null
+}
+# A ranked placement is a secondary; another scheme's placements do not count.
+c_clade_ranked() {
+  local d r; d=$(deletable_tree ranked)
+  CLADE_CLAUSE='(clade (placement :scheme clade-12 :category rm :primary #t) (placement :scheme clade-12 :category sc :rank 1) (placement :scheme other :category xx :primary #t))' chora "$d"
+  sed -i 's/^secondary = \[\]$/secondary = ["sc"]/' "$d/.machine_readable/CLADE.a2ml"
+  r=$(row "$d" .machine_readable/CLADE.a2ml)
+  printf '%s' "$r" | class_is deletable-now && printf '%s' "$r" | jq -e '.facts.missing == 0' >/dev/null
+}
+# A primary placement that differs from the record is a missing fact.
+c_clade_wrong_primary() {
+  local d r; d=$(deletable_tree wrongprimary)
+  CLADE_CLAUSE='(clade (placement :scheme clade-12 :category sc :primary #t))' chora "$d"
+  r=$(row "$d" .machine_readable/CLADE.a2ml)
+  printf '%s' "$r" | has_blocker 'facts-missing:1'
 }
 c_check_fails_on_deletable() {
   local d out; d=$(deletable_tree check-del)
@@ -364,7 +389,10 @@ c_record_line() {
 check() { if "$2"; then ok "$1"; else bad "$1"; fi; }
 
 echo "=== the three deletion conditions ==="
-check "all three conditions hold: deletable-now, 26 facts checked, 1 dropped by spec" c_deletable
+check "all three conditions hold: deletable-now, 26 facts checked, 3 dropped by spec" c_deletable
+check "CA1: the withdrawn flat (clade …) form is still compared field by field"  c_clade_flat_form
+check "CA1: ranked placements are the secondaries; other schemes do not count"  c_clade_ranked
+check "CA1: a primary placement that differs from the record is facts-missing:1" c_clade_wrong_primary
 check "--check fails on a deletable file and prints the git rm and ledger line"    c_check_fails_on_deletable
 check "condition 1: one differing fact is facts-missing:1 and needs kyX"           c_fact_missing
 check "condition 1: an absent target deed is named, its facts counted missing"     c_target_absent
