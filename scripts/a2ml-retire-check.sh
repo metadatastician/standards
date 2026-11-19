@@ -347,13 +347,25 @@ JQ_COMMON='
       | (if ($h | type) == "object" then clauses($items; $h.c)[$h.i] else clauses($items; $h)[0] end) as $sub
       | if $sub == null then null else lookup($sub; $path[1:]) end end;
   def items($ast): if $ast == null then null else $ast.items end;
+  # CHORA-SPEC 11.2 (CA1): (clade (placement :scheme :category :primary #t | :rank n) …).
+  # A chora still in the withdrawn flat form (read with a warning for one
+  # release) is looked up by path, as before.
+  def placed($its; $r):
+    (clauses($its; "clade")[0]) as $cl
+    | if $cl == null then null
+      else [clauses($cl; "placement")[] | select(field(.; "scheme").v == "clade-12")
+            | {c: field(.; "category").v, p: ((field(.; "primary") // {v: false}).v),
+               r: ((field(.; "rank") // {v: null}).v)}] as $ps
+      | if ($ps | length) == 0 then lookup($its; $r.p)
+        elif $r.placement == "primary" then ($ps | map(select(.p)) | if length == 1 then {v: .[0].c} else null end)
+        else {v: ($ps | map(select(.p | not)) | sort_by(.r) | map(.c))} end end;
   def compare($facts; $chora; $state):
     [ $facts[] | . as $f | ($f.path | route) as $r
       | if $r.skip then empty
         elif $r.drop then {s: "dropped"}
         elif $r.unlisted then {s: "unlisted"}
         else (if $r.deed == "chora" then items($chora) else items($state) end) as $its
-          | (if $its == null then null else lookup($its; $r.p) end) as $got
+          | (if $its == null then null elif $r.placement then placed($its; $r) else lookup($its; $r.p) end) as $got
           | {s: (if $got != null and $got.v == $f.value then "present" else "missing" end),
              legacy: ($r.deed == "state" and ($chora != null) and ((lookup($chora.items; $r.p) // {v: null}).v == $f.value))}
         end ]
@@ -369,8 +381,10 @@ JQ_CLADE='
     elif . == "identity.primary-forge" then {deed: "chora", p: ["identity", "primary-forge"]}
     elif . == "identity.primary-owner" then {deed: "chora", p: ["identity", "owner"]}
     elif . == "identity.prefixed-name" then {deed: "chora", p: ["identity", "prefixed-name"]}
-    elif test("^clade\\.(primary|primary-name|secondary|assigned|rationale)$")
-      or test("^forges\\.(github|gitlab|bitbucket)$")
+    elif . == "clade.primary" then {deed: "chora", placement: "primary", p: split(".")}
+    elif . == "clade.secondary" then {deed: "chora", placement: "ranked", p: split(".")}
+    elif test("^clade\\.(primary-name|assigned|rationale)$") then {drop: true}
+    elif test("^forges\\.(github|gitlab|bitbucket)$")
       or test("^lineage\\.(type|parent|born|previous-names|instantiated-from)$") then {deed: "chora", p: split(".")}
     elif test("^status\\.history\\[[0-9]+\\]\\.(phase|since|note)$") then
       (capture("^status\\.history\\[(?<i>[0-9]+)\\]\\.(?<f>.*)$")
