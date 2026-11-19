@@ -37,8 +37,8 @@ verdict() {
   if "$@"; then ok "$label"; else ko "$label"; fi
 }
 # out_has TEXT / out_line LINE: $OUT contains TEXT / has exactly the line LINE.
-out_has() { printf "%s\n" "$OUT" | grep -qF -- "$1"; }
-out_line() { printf "%s\n" "$OUT" | grep -qx -- "$1"; }
+out_has() { grep -qF -- "$1" <<<"$OUT"; }
+out_line() { grep -qx -- "$1" <<<"$OUT"; }
 rc0_and() { [ "$RC" = 0 ] && "$@"; }
 
 # run CMD...: sets OUT (stdout), ERR (stderr) and RC.
@@ -62,7 +62,7 @@ expect_err() {
   local label="$1" needle="$2"
   shift 2
   run "$@"
-  if [ "$RC" = 2 ] && printf '%s' "$ERR" | grep -qF -- "$needle"; then ok "$label"
+  if [ "$RC" = 2 ] && grep -qF -- "$needle" <<<"$ERR"; then ok "$label"
   else ko "$label — expected exit 2 with '$needle', got $RC; stderr: $(printf '%s' "$ERR" | head -3 | tr '\n' '|')"; fi
 }
 
@@ -466,10 +466,10 @@ EOF
 ledger "$(row 7 '[{"kind":"path-present","path":"docs/a.adoc"}]' landed \
   "$(jq -c -n --arg p "$PAYLOAD" '{claim: ($p + " @owner ; rm -rf /"), evidence: ["@someone #12"]}')")"
 run bash "$IE" render-comment --issue 7 --action close "$L"
-if [ "$RC" = 0 ] && printf '%s' "$OUT" | grep -qF -- "$PAYLOAD" && sentinel_absent; then
+if [ "$RC" = 0 ] && grep -qF -- "$PAYLOAD" <<<"$OUT" && sentinel_absent; then
   ok "claim text is rendered as a literal"
 else ko "claim rendering — rc=$RC"; fi
-if ! printf '%s' "$OUT" | grep -q '@owner\|@someone'; then ok "@mentions in claim and evidence notify nobody"; else ko "an @mention survives rendering"; fi
+if ! grep -q '@owner\|@someone' <<<"$OUT"; then ok "@mentions in claim and evidence notify nobody"; else ko "an @mention survives rendering"; fi
 
 echo "=== decide: the full truth table ==="
 # Evaluate records for issues 11..19, and every issue state.
@@ -744,7 +744,7 @@ for n in $(seq 100 119); do
 done >"$WORK/big-ledger.jsonl"
 rm -f "$MARK_OUT"
 run bash "$IE" evaluate --scripts-only "$WORK/big-ledger.jsonl"
-if [ "$RC" = 2 ] && [ -z "$OUT" ] && [ ! -e "$MARK_OUT" ] && printf '%s' "$ERR" | grep -qF "over 65536"; then
+if [ "$RC" = 2 ] && [ -z "$OUT" ] && [ ! -e "$MARK_OUT" ] && grep -qF "over 65536" <<<"$ERR"; then
   ok "--scripts-only refuses (exit 2, nothing emitted, no script run) above the 65,536-byte cap"
 else ko "--scripts-only cap — rc=$RC stdout bytes=${#OUT}"; fi
 

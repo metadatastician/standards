@@ -15,7 +15,7 @@ bad() { echo "  ❌ $1"; fail=$((fail + 1)); }
 
 echo "== real guides pass =="
 guide_out="$(bash "$CHK" 2>&1)"; guide_rc=$?
-if [ "$guide_rc" -eq 0 ] && printf '%s\n' "$guide_out" | grep -q 'affinescript-testing-guide.adoc'; then
+if [ "$guide_rc" -eq 0 ] && grep -q 'affinescript-testing-guide.adoc' <<<"$guide_out"; then
   ok "estate guides are discovered and pass structural lint"
 else
   bad "estate guides were missed or failed lint"

@@ -46,7 +46,7 @@ expect() {
     printf '%s\n' "$out" | sed 's/^/      | /'
     fail=$((fail + 1)); return
   fi
-  if [ "$needle" != "-" ] && ! printf '%s' "$out" | /usr/bin/grep -qF -- "$needle"; then
+  if [ "$needle" != "-" ] && ! /usr/bin/grep -qF -- "$needle" <<<"$out"; then
     echo "FAIL: $label — exit $rc correct, but output lacked '$needle'"
     printf '%s\n' "$out" | sed 's/^/      | /'
     fail=$((fail + 1)); return

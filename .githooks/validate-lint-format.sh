@@ -251,7 +251,10 @@ if [ -n "$RES" ] && tracks 'rescript.json' '*/rescript.json' 'bsconfig.json' '*/
     fail "ReScript is BANNED for new code: $(echo "$RES_ADDED" | grep -c .) NEWLY ADDED .res/.resi file(s). Migrate to AffineScript (.affine). Modified grandfathered files are still linted below."
   fi
   if require_tool bunx ReScript "https://bun.sh"; then
-    if bunx rescript format --help 2>&1 | grep -q -- '-check'; then
+    # Captured, then matched: a pipe into grep -q let a CLI still writing its help
+    # die of SIGPIPE (status 141), and the format gate was skipped.
+    rs_help="$(bunx rescript format --help 2>&1)" || true
+    if grep -q -- '-check' <<<"$rs_help"; then
       bunx rescript format -all -check || fail "ReScript: sources are not formatted"
     else
       warn "ReScript: the installed CLI has no 'format -check'; the format gate did NOT run. This is a skip, not a pass."

@@ -15,8 +15,8 @@ SCRIPT=scripts/check-gate-tiers.sh
 PASS=0; FAIL=0
 ok()   { PASS=$((PASS+1)); printf '  ✅ %s\n' "$1"; }
 bad()  { FAIL=$((FAIL+1)); printf '  ❌ %s\n' "$1"; }
-have() { if printf '%s\n' "$OUT" | grep -q "$1"; then ok "$2"; else bad "$2"; fi; }
-lack() { if printf '%s\n' "$OUT" | grep -q "$1"; then bad "$2"; else ok "$2"; fi; }
+have() { if grep -q "$1" <<<"$OUT"; then ok "$2"; else bad "$2"; fi; }
+lack() { if grep -q "$1" <<<"$OUT"; then bad "$2"; else ok "$2"; fi; }
 
 STUB=$(mktemp -d)
 trap 'rm -rf "$STUB"' EXIT

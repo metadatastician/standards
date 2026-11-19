@@ -10,7 +10,7 @@
 # Run: bash scripts/tests/prune-stale-test.sh
 # TARGET=<path> runs the suite against another copy (used for mutant checks).
 set -uo pipefail
-command -v jq >/dev/null && command -v yq >/dev/null && yq --version | grep -Eq 'github.com/mikefarah/yq/.*version v4\.' || {
+command -v jq >/dev/null && command -v yq >/dev/null && grep -Eq 'github.com/mikefarah/yq/.*version v4\.' <<<"$(yq --version)" || {
   echo 'prune-stale-test: requires jq and Mike Farah yq v4' >&2
   exit 1
 }

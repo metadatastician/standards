@@ -67,7 +67,7 @@ expect 1 $? "failing critical invariant blocks"
 echo "== affinescript-verify workflow shape =="
 WF="$ROOT/.github/workflows/affinescript-verify.yml"
 # job-level continue-on-error removed (the job can now fail)
-if awk '/^  verify:/,/^    steps:/' "$WF" | grep -q 'continue-on-error: true'; then
+if grep -q 'continue-on-error: true' <<<"$(awk '/^  verify:/,/^    steps:/' "$WF")"; then
   bad "job-level continue-on-error still present"
 else
   ok "job-level continue-on-error removed"

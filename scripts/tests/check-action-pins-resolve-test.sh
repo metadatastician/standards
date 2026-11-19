@@ -101,7 +101,7 @@ expect() {
   if [ "$rc" -ne "$want_rc" ]; then
     bad "$name (rc=$rc, wanted $want_rc)"; printf '%s\n' "$out" | sed 's/^/       | /'; return
   fi
-  if [ -n "$want_sub" ] && ! printf '%s' "$out" | grep -qF -- "$want_sub"; then
+  if [ -n "$want_sub" ] && ! grep -qF -- "$want_sub" <<<"$out"; then
     bad "$name (rc ok but missing \"$want_sub\")"; printf '%s\n' "$out" | sed 's/^/       | /'; return
   fi
   ok "$name"

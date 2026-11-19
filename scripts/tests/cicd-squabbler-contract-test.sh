@@ -63,7 +63,7 @@ t "no ad-hoc binary download" lacks "$reusable" 'releases/download'
 # Propose-only, forever, from CI. Comment lines are stripped first: the
 # workflows explain the rule using the very flag they forbid, and the
 # explanation must not read as the offence.
-noflag() { ! grep -v '^[[:space:]]*#' "$1" | grep -qF -e "$2"; }
+noflag() { local body; body=$(grep -v '^[[:space:]]*#' "$1"); ! grep -qF -e "$2" <<<"$body"; }
 # Firing fixture first: the matcher must SEE a planted --apply, or the
 # assertions below could pass blind (they once did — grep parsed the
 # pattern as a flag). Silence fixture: a comment mentioning it is fine.
@@ -118,7 +118,7 @@ t "reusable references no GITHUB_TOKEN secret" lacks "$reusable" 'secrets.GITHUB
 t "reusable declares the optional Administration-read secret" has "$reusable" \
   'ADMINISTRATION_READ_TOKEN:'
 t "fight credential is not required" bash -c \
-  'grep -A3 "ADMINISTRATION_READ_TOKEN:" "$1" | grep -q "required: false"' _ "$reusable"
+  'b=$(grep -A3 "ADMINISTRATION_READ_TOKEN:" "$1"); grep -q "required: false" <<<"$b"' _ "$reusable"
 t "caller maps only the estate Administration-read PAT" has "$caller" \
   'ADMINISTRATION_READ_TOKEN: ${{ secrets.HYPATIA_SCAN_PAT }}'
 t "caller declares no secret beyond the Administration-read PAT" bash -c \
@@ -151,7 +151,7 @@ t "lock lists the caller as pin-free" has "$lock" "'.github/workflows/cicd-squab
 t "lock records the squabbler pin" hasre "$lock" \
   "'hyperpolymath/cicd-squabbler@[0-9a-f]{40}'"
 t "lock lists harden-runner for the squabbler reusable" bash -c \
-  'grep -A4 "cicd-squabbler-reusable.yml" "$1" | grep -q "step-security/harden-runner@"' _ "$lock"
+  'b=$(grep -A4 "cicd-squabbler-reusable.yml" "$1"); grep -q "step-security/harden-runner@" <<<"$b"' _ "$lock"
 
 # The pin in the workflow and the pin in the lock are the same commit, or
 # one of them is stale and the run dies at startup.
@@ -165,7 +165,7 @@ t "workflow pin equals lock pin" test "$wf_pin" = "$lock_pin"
 lock_ref="$(grep -A1 -F "'hyperpolymath/cicd-squabbler@$wf_pin':" "$lock" \
   | sed -n "s/.*ref: '\([^']*\)'.*/\1/p" | head -1)"
 t "lock recorded ref is not the pin SHA" \
-  bash -c '[ -n "$1" ] && [ "$1" != "$2" ] && ! printf "%s" "$1" | grep -qE "^[0-9a-f]{40}$"' \
+  bash -c '[ -n "$1" ] && [ "$1" != "$2" ] && ! grep -qE "^[0-9a-f]{40}$" <<<"$1"' \
   _ "$lock_ref" "$wf_pin"
 
 printf '\ncicd-squabbler contract tests: %s passed, %s failed\n' "$pass" "$fail"

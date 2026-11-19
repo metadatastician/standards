@@ -23,7 +23,7 @@ assert() { # label want-status needle cmd...
   if [ "$status" != "$want" ]; then
     echo "FAIL: $label — expected exit $want, got $status"; fail=$((fail + 1)); return
   fi
-  if [ "$needle" != "-" ] && ! printf '%s' "$out" | grep -qF -- "$needle"; then
+  if [ "$needle" != "-" ] && ! grep -qF -- "$needle" <<<"$out"; then
     echo "FAIL: $label — output lacked '$needle'"; echo "      $(printf '%s' "$out" | tr '\n' '|')"
     fail=$((fail + 1)); return
   fi
@@ -31,7 +31,7 @@ assert() { # label want-status needle cmd...
 }
 refute() { # label needle cmd...
   local label="$1" needle="$2"; shift 2
-  if "$@" 2>&1 | grep -qF -- "$needle"; then echo "FAIL: $label — output has '$needle'"; fail=$((fail + 1))
+  if grep -qF -- "$needle" <<<"$("$@" 2>&1)"; then echo "FAIL: $label — output has '$needle'"; fail=$((fail + 1))
   else echo "PASS: $label"; pass=$((pass + 1)); fi
 }
 

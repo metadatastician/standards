@@ -868,7 +868,7 @@ run_case_env "CLI/environment override beats the budget file" \
 catalogue="$(bash "$SCRIPT" --list-markers 2>&1)"
 for need in agda-terminating-pragma agda-unsound-flag lean-implemented-by \
             lean-native-decide coq-parameter-or-conjecture idris-hole dafny-axiom; do
-  if printf '%s' "$catalogue" | grep -q "$need"; then
+  if grep -q "$need" <<<"$catalogue"; then
     echo "ok   catalogue lists $need"
     PASS=$((PASS+1))
   else

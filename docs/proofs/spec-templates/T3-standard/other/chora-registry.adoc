@@ -1,6 +1,6 @@
-== Proof Spec: gv-clade-index
+== Proof Spec: chora-registry
 
-*Repo Path*: `+/var/mnt/eclipse/repos/gv-clade-index+` *Tier*: T3 —
+*Repo Path*: `+/var/mnt/eclipse/repos/chora-registry+` *Tier*: T3 —
 Standard *Archetype*: link:../archetypes/cli-tool.md[cli-tool]
 
 === Theorems
@@ -19,7 +19,7 @@ bespoke theorems.
 
 [source,bash]
 ----
-cd /var/mnt/eclipse/repos/gv-clade-index
+cd /var/mnt/eclipse/repos/chora-registry
 just proof-check-all
 just proof-scan-dangerous
 ----
@@ -30,4 +30,4 @@ just proof-scan-dangerous
 * [ ] ABI-1..ABI-5 complete
 * [ ] Repo-specific items (if any) complete
 * [ ] `+PROOF-STATUS.md+` updated
-* [ ] Commit: `+proof: complete gv-clade-index proofs+`
+* [ ] Commit: `+proof: complete chora-registry proofs+`

@@ -37,7 +37,7 @@ Identifiers. Every decision, law and test id in this specification is local to i
 . [M] `standards/1-formats/deed/vocabulary/updates.adoc` says the same: vocabulary terms are declared on a page until `estate_chora.deed` lands, then move into its `(vocabulary ...)` clause.
 . [M] 48 files in `standards` (fixtures, `standards_chora.deed`, `0-AI-MANIFEST.deed` and others) carried the literal `#u5"estate/chora"` as their `:beholding-chora`. That is one literal name shared by all repos, so it does not tell estates apart. Under Q2 (section 7.1) it is an error, and standards replaced it on 2026-11-14.
 . [M] `standards` has no forge chora. Outside the archive, forge appears only as mirroring policy (`0-canon/rsr/RSR-SPEC-v2.adoc` line 216: GitHub canonical, GitLab mirror-only; `KNOWN-TENSIONS.adoc` line 17).
-. [M] The only structured forge record is `gv-clade-index/verisim/schema/forge-identity.vcl` and `seed/forges.a2ml` (GitHub primary; GitLab, Bitbucket, Codeberg mirrors). Both are VeriSimDB and A2ML files, not deeds.
+. [M] The only structured forge record is `chora-registry/verisim/schema/forge-identity.vcl` and `seed/forges.a2ml` (GitHub primary; GitLab, Bitbucket, Codeberg mirrors). Both are VeriSimDB and A2ML files, not deeds.
 . [M] `deed.abnf` v1.2.1 has 4 heads: `estate-deed`, `repo-deed`, `estate-atlas-deed`, `praxis-deed`. It has no forge head. (v1.4.0 has 7 document heads: those 4, plus `contractile-deed`, `descriptile-deed` and `anchor-deed` from A7 J14; the forge head is still not in it. A7 J24 drops `anchor-deed` in v2.0.0.)
 . [M] The deed spec identity table gives `estate-deed` no required reference and gives `estate-atlas-deed` a required `:beholding-chora`. The fixture `ATLAS.deed` has no `:canonical-name` and no `:beholding-chora`. The fixture contradicts the table.
 . [M] `hyperpolymath/hyperpolymath/README.adoc` (lines 51 to 64) does not list the 4 estates in section 3.1 [O]. The profile page is therefore stale.
@@ -174,6 +174,7 @@ The root has no `:beholding-chora`. It is the top of the hierarchy. There is exa
 | `(identity :primary-forge <symbol> :owner "<s>" :name "<s>")` | clause | Required, once. It reuses the clause that `rsr-template-repo_chora.deed` carries today [M].
 | `(co-estates (co-estate :estate <uuid> :role <symbol>))` | clause | Optional, once. Each `:estate` is an `:estate-uuid` and is not the beholding estate. `:role` is a symbol; A1 fixes none.
 | `(forges ...)`, `(lineage ...)` | clauses | Optional. They keep the shape in the template [M]. A1 adds nothing to them.
+| `(language ...)`, `(identity … :thesis "…")` | clause, field | Optional, once each. For a language repo: its paradigm, compile targets and headline feature, and the one sentence it lives for: what it is and does in the world (section 11.1; owner rulings of 2026-11-15 and 2026-11-19). Grammar `clauses/language.abnf`, check `deed_lint.js --chora-language`. Its design heritage is `META.deed`'s `:inspiration`, not identity.
 | `(status ...)` | clause | Moves to `STATE.deed`, with `(maturity ...)` (A7 J15, 2026-11-13). A `(status)` or `(maturity)` in the chora is read, with a warning, for one release, then refused in `strict` mode. Profile, canon version and deviations belong to A2.
 | `(profile)`, `(generation)`, `(deviations)` | clauses | Defined by A2 (sections 4 to 7 there). `(profile)` is required in `strict` mode. `(generation)` is required only for a generated repo. `(deviations)` is optional.
 | `(clade ...)` | clause | Optional. The repo's clade placements, as identity facts, checked against chora-registry (section 11, A7 W10). Never an id, never an edict. Its shape is one `(placement …)` per placement, as in the registry seed (section 11.2, CA1).
@@ -239,7 +240,7 @@ The ABNF requires only `:schema-version` on every form. All other requirements i
 
 === 8.1 What it is
 
-`ATLAS.deed` (head `estate-atlas-deed`) is the output of an index generator [O]. It is a deterministic function of: the federation root, the estate chora of each estate in the root's `(estates)` clause, every platform chora, and every repo chora found under each estate's `(hosting)` namespaces. Nobody edits it. It lives in chora-registry, today `hyperpolymath/gv-clade-index` until the rename lands, and the office reads it from there (Q3 [O], 2026-11-14, replacing the plan's default of `git-logistics-office`).
+`ATLAS.deed` (head `estate-atlas-deed`) is the output of an index generator [O]. It is a deterministic function of: the federation root, the estate chora of each estate in the root's `(estates)` clause, every platform chora, and every repo chora found under each estate's `(hosting)` namespaces. Nobody edits it. It lives in chora-registry (`hyperpolymath/chora-registry`), and the office reads it from there (Q3 [O], 2026-11-14, replacing the plan's default of `git-logistics-office`).
 
 How the generator finds repo choras is not part of A1. It can enumerate repos in a namespace on the platform. The enumerated repo list of each namespace is an input of the function: the generator records the sha256 of the sorted list as `:enumeration-sha256` in `(generation ...)`, and "the same inputs" includes that list. Two runs that observed different repo sets therefore have different inputs, and a replay uses the recorded list. `cadastra` supplies observed fields. That belongs to Stage B step 1 [R].
 
@@ -295,7 +296,7 @@ The registry seed is the hand-edited register of repo identities from which chor
 * *RS3, the id and its domain.* Each `(repo …)` stores `:uuid #uuid"<v8>"`, the profile C UUIDv8 of its birth path, and `:minted-in`, the domain that minted it. The domain is `gv-clade-index` for a repo born before V9 or registered late under L1, and `chora-registry` for one born after V9. The birth path is `(former :generation 1 :path …)` when the repo has moved, else `:owner`/`:name`. The registry's gate re-derives every stored id from that path and domain, and fails on a mismatch. No UUIDv5 is stored. The registry still derives the v5 `uuid` it serves under `/v1` (V8). The seed is not served, so the birth path in it does not breach U4.
 * *RS4, what does not translate.* `completion` is state, which belongs in a repo's `STATE.deed` (A7 J15), not in the register. `julia` is shown by the `.jl` name. Neither is in the seed.
 
-The seed keeps the registry's other rules: a registered repo is never removed, `(former …)` records each earlier location by generation, and `(retired …)` records each path whose ids were served and withdrawn (gv-clade-index ADR 0008). A move or rename adds a `(former …)` and changes `:owner` or `:name`, never `:uuid` (U1).
+The seed keeps the registry's other rules: a registered repo is never removed, `(former …)` records each earlier location by generation, and `(retired …)` records each path whose ids were served and withdrawn (chora-registry ADR 0008). A move or rename adds a `(former …)` and changes `:owner` or `:name`, never `:uuid` (U1).
 
 == 9. Identity values
 
@@ -336,7 +337,7 @@ The estate ids, each the profile C UUIDv8 of `chora:estate/github.com/<owner>` [
 * An id minted after V9 is the profile C UUIDv8 of `chora-registry:github.com/<birth owner>/<name>`.
 * An id minted before V9 stays as it is: the profile C UUIDv8 of `gv-clade-index:github.com/<birth owner>/<name>`. For `standards` that is `b32d6be4-73ba-873e-9d61-e57f43c75cd1`, unchanged.
 * The registry records, for each id, the domain that minted it, so a re-check derives the id with that domain. Since gv-clade-index#114 this is the `:minted-in` member of the repo's record in the registry seed (section 8.4, RS3).
-* Before any id is minted under the new domain, `chora-registry` is registered in `docs/decisions/ADR-008-profile-c-domains.json` (standards#1515), with its minting repos (the registry, under its current GitHub name `hyperpolymath/gv-clade-index` until the rename lands, and `hyperpolymath/rsr-template-repo`). `gv-clade-index` stays registered for good as the domain of the ids of repos born before V9, including those registered late under L1: no id for a repo born after V9 is minted in it, and existing ids are re-checked under it. It is not retired. That is a separate change, not part of A1.
+* Before any id is minted under the new domain, `chora-registry` is registered in `docs/decisions/ADR-008-profile-c-domains.json` (standards#1515), with its minting repos (the registry, `hyperpolymath/chora-registry`, and `hyperpolymath/rsr-template-repo`). `gv-clade-index` stays registered for good as the domain of the ids of repos born before V9, including those registered late under L1: no id for a repo born after V9 is minted in it, and existing ids are re-checked under it. It is not retired. That is a separate change, not part of A1.
 * Nothing is reminted, and no deed changes because of V9.
 
 *L1 [O].* Owner ruling, 2026-11-14, by selector in the SysArch thread and relayed to the A1 thread: a repo that existed before V9 but was never registered is registered late, with its birth path, and its id is the profile C UUIDv8 of `gv-clade-index:github.com/<birth owner>/<name>`. That is a late registration of a birth that came before V9, not a new mint, so V9's `chora-registry` domain does not apply. About 65 repos are affected. The #u5 fixer thread opens one registry PR for them.
@@ -347,7 +348,7 @@ The estate ids, each the profile C UUIDv8 of `chora:estate/github.com/<owner>` [
 
 *U1a [O].* Owner ruling, 2026-11-14, given by selector in the hub thread and relayed to the A1 thread: V9 stands as recorded, and U1 has exactly one exception. The id of the Julia package `CoprocessorRuntime.jl` is re-minted as a UUIDv8, whatever it carries now. The scope is that one id. The exception sets no precedent: every other id, repo or not, stays under U1, and a later re-mint needs its own owner ruling. The value is minted by the thread that owns the CoprocessorRuntime work, not by A1, and A1 does not record it.
 
-U2, U3 and U4 were relayed to the drafting session first, and the owner then confirmed them there on 2026-11-12. ADR 0007 of `gv-clade-index` is rejected by U1 and U2. It has since been superseded there by ADR 0008 (K-a). A1 records this and edits no repo.
+U2, U3 and U4 were relayed to the drafting session first, and the owner then confirmed them there on 2026-11-12. ADR 0007 of `chora-registry` is rejected by U1 and U2. It has since been superseded there by ADR 0008 (K-a). A1 records this and edits no repo.
 
 The following existing estate state conflicts with U1 to U4:
 
@@ -602,4 +603,4 @@ Each test is a check that a validator can run. `deed_lint.js` already implements
 
 == 15. Out of scope
 
-The trope format. A2 (profile, canon version, deviations, pack laws). A3 (the single gate). A4 (office and farm boundary). The generator's repo discovery. Any migration of existing repo choras. Any `.a2ml` file: A1 creates none, and `gv-clade-index` still carries A2ML files that are not part of this work [M].
+The trope format. A2 (profile, canon version, deviations, pack laws). A3 (the single gate). A4 (office and farm boundary). The generator's repo discovery. Any migration of existing repo choras. Any `.a2ml` file: A1 creates none, and `chora-registry` still carries A2ML files that are not part of this work [M].

@@ -117,6 +117,48 @@ As last measured across the estate, compliance against this canon sat at
 97–100% depending on the key, with the residue concentrated in the exclusion
 classes above rather than in genuine drift.
 
+== Applying the whole canon estate-wide
+
+`scripts/apply-settings-canon.sh` applies every section of {std-canon} to
+every repository the caller administers: the flat repository block (one PATCH
+carrying only the keys that differ), `security_and_analysis` one key at a time
+in the order above, vulnerability alerts, then automated security fixes, the
+workflow token permissions, and the Actions policy. It walks owners and skips
+repositories by the same rules as the next section's script. It reads each
+repository on its own, compares canon ⊆ live key by key, and fails closed: a
+listing or read that fails stops the run before anything is written.
+
+It only reports unless given `--apply`, and it reads back every write.
+
+* *Actions policy* is delegated to `scripts/set-allowed-actions.sh`, which owns
+  the ordering and rollback that stop an allow-list from being left empty. The
+  payload is the canon allow-list *unioned* with the repository's live list, so
+  a repository-specific pattern is never pruned. With `ACTIONS_NO_ESCALATE=1`
+  set by the applier, a policy governed at organisation or enterprise level is
+  reported as `GOVERNED` rather than having one repository's payload written to
+  the whole organisation.
+* *Auto-merge*: when the canon has `allow_auto_merge: false`, auto-merge already
+  armed on open pull requests is disarmed *before* the setting is switched off.
+  Whether switching the setting off cancels armed requests is not established.
+  If a disarm cannot be verified, that repository's setting is left as it is
+  and reported as `FAIL`.
+* *Left for a person* (reported as `HOLD`): a repository with Actions switched
+  off. Nothing under Actions is written there, so the run can neither switch
+  them on nor change their policy.
+* Rulesets and branch protection are out of scope: they have their own canon
+  under `config/rulesets/` and their own appliers.
+
+`tests/test_apply_settings_canon.sh` pins this behaviour against a stateful
+`gh` stub built from the live canon.
+
+=== Owner ruling 2026-11-18: auto-merge off
+
+`allow_auto_merge` is `false` in the canon. The ruling is recorded under
+`owner_rulings` in {std-canon}. It suspends the arming rule of
+link:DEPENDABOT-POLICY.adoc[DEPENDABOT-POLICY] §1 until that policy is revised.
+Per-repository `dependabot-automerge.yml` workflows can no longer arm a pull
+request once the setting is off, and fail when they try.
+
 == Applying `delete_branch_on_merge` estate-wide
 
 `scripts/apply-branch-autodelete.sh` turns on "Automatically delete head
