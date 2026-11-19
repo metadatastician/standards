@@ -23,7 +23,7 @@
     (drift-automation :paths ("hypatia-rules/" "docs/decisions/ADR-003-workflow-pin-staleness-window.adoc" "scripts/check-workflow-staleness.sh" "scripts/propagate-workflow-pins.sh"))
     (derived-architecture-map :paths ("TOPOLOGY.adoc"))
     (current-project-state :paths ("standards_chora.deed"))
-    (education-layer :paths ("docs/wikis/" "docs/wikis/0.2-AI-MANIFEST.deed")))
+    (education-layer :paths ("docs/wikis/")))
 
   (invariants
     (rule :priority 10 :text "No A2ML/DEED duplication — root must NOT contain STATE.deed, META.deed, etc.")

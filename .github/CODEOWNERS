@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: MPL-2.0 (code)
 # SPFX-License-Identifier: CC-SA-BY-4.0 (prose)
-# CODEOWNERS - Define code review assignments for GitHub
-# See: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+# CODEOWNERS for metadatastician/standards.
 #
 # Default: maintainer
 * @hyperpolymath

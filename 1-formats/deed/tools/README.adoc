@@ -15,7 +15,9 @@ it may be written; every `.deed` committed in this repo is linted in CI.
 
 The Python linter `deed_lint.py` (frozen at deed.abnf v1.0.0) and the
 Python translator `a2ml_to_deed.py` were deleted on 2026-11-13 (owner
-ruling; D313, Python banned). Conversion of A2ML is kyX's first front end,
+ruling; D313, Python banned). The leftover wrapper stub
+`migrate_a2ml_to_deed.sh`, which planned to call them, was deleted on
+2026-11-17 (owner ruling; standards#1339). Conversion of A2ML is kyX's first front end,
 and the mapping specs in `../mappings/` stay the authority for where each
 family's content goes.
 
@@ -94,7 +96,8 @@ Validates a proof receipt (`:profile proof-receipt`, PROOF-POLICY §8.5.1)
 and emits one JSON record. It holds `repository`, `source_commit`,
 `trusted_base`, `echoes`, and `claims` with each claim's legs and receipts. Each claim's
 Proof Witness Grade and foundation-diversity tag are *derived* from its legs
-and receipts (§8.2, §8.3). A receipt whose recorded `:pwg` or
+and receipts (§8.2, §8.3). The tag needs a non-DTT leg that is
+kernel-checked, `RECONCILED` and current. A receipt whose recorded `:pwg` or
 `:foundation-diverse` differs from the derived value is refused, because a
 grade is derived, not asserted (§8.4). The vocabularies (§5 tokens, §2.2
 states, routes, receipt states) are closed, and anything outside them is an
@@ -106,7 +109,9 @@ Every current receipt carries `:inputs-sha256` and `(inputs-manifest …)`
 (§8.5.1), and `(axioms …)` (§8.4). The reader rebuilds the manifest and
 refuses a digest that is not its SHA-256. A receipt may also hold `(import …)` clauses
 for pinned repositories it read, and a claim may hold negative `(control …)`
-records (§8.5.4), which are never graded. A leg whose current receipt lists an axiom that is not disposition
+records (§8.5.4), which are never graded. A receipt may name the digest-pinned image its checker ran in (`:image`,
+as `NAME[:TAG]@sha256:<64 hex>`); a witness counts toward `PWG-1` only through a
+current receipt that names one (§8.2, owner ruling 2026-11-16). A leg whose current receipt lists an axiom that is not disposition
 `c` does not count. Top-level `(echo …)` records (§8.5.2) let a receipt
 earned on a commit that a squash or rebase rewrote count toward `PWG-1` for
 its image. The reader checks their form and consistency only. The git checks
@@ -292,9 +297,11 @@ Checks `ECOSYSTEM.deed` (head `descriptile-deed`) against
   `validation-tooling`, `signing-tooling`, `verification-tooling`,
   `minted-from`, `registry` (owner-ruled 2026-09-19 in the mapping) and
   `downstream-consumer`, `sibling-language`, `code-dependency`, `parent`
-  (DESCRIPTILE-SPEC), and `sibling-standard`, `data-dependency`,
+  (DESCRIPTILE-SPEC), `sibling-standard`, `data-dependency`,
   `dispatch-target`, `scanner-source`, `mcp-host` (owner-ruled
-  2026-11-14, `ecosystem.abnf` v1.1.0; defined in the mapping). `:uuid` is a version 8 chora id (`#uuid` or `#u8`; `#u5` is refused, A7 S2), and `--strict` requires
+  2026-11-14, `ecosystem.abnf` v1.1.0), and `extension-of` (owner-ruled
+  2026-11-17, `ecosystem.abnf` v1.2.0): 17 terms, with definitions in the
+  mapping's §3.1. `:uuid` is a version 8 chora id (`#uuid` or `#u8`; `#u5` is refused, A7 S2), and `--strict` requires
   it (J12). A `(:name, :relationship)` pair appears once.
 
     bun deed_lint.js --ecosystem ECOSYSTEM.deed [--root REPO] [--strict]
@@ -469,8 +476,10 @@ rules it adds to the grammar:
 * the descriptile header, as for the other descriptiles (J20, J28, J4, YD06);
 * `(hypatia :scan-enabled :scan-depth :report-format)` is required, once, with
   all three members: `:scan-enabled` a boolean, `:scan-depth` one of `quick`,
-  `standard` and `deep` as a symbol, `:report-format` a non-empty string (the
-  mapping's ruled row; the source's `[hypatia-config]` is this clause);
+  `standard` and `deep` as a symbol, `:report-format` one of `"json"`,
+  `"text"`, `"github"` and `"sarif"` as a string, Hypatia's report formats
+  with `"json"` canonical (the mapping's ruled row; the source's
+  `[hypatia-config]` is this clause);
 * `:version`, `:last-updated` (a real date) and `:rulesets`, each at most once.
   `:rulesets` is a non-empty list of A5 rule domains as strings (A5 3.1, such
   as `"hypatia"`), each once: it selects from the A5 registry by domain only
@@ -498,16 +507,28 @@ Checks the `(rsr-profile …)` clause of a `<repo>_chora.deed` against
 
 * `:version` is required; `:spec`, `:declares-against`, `:role` and `:preset`
   are non-empty strings; `:capabilities`, `:add` and `:remove` are lists of
-  non-empty strings, each item once; at least one of `:capabilities` and
-  `:preset`;
+  non-empty strings, each item once; a non-empty `:capabilities`, a
+  `:preset`, or both (an empty `:capabilities` declares nothing, as
+  `check-rsr-profile.sh` reads it);
 * `(notes …)`, at most once, holds prose only (`:<name> "…"` fields such as
-  `:omitted-rationale`): a `:role` inside it is never the profile's role;
+  `:omitted-rationale`, each once): a `:role` inside it is never the profile's
+  role;
+* `(layout …)` (v1.1.0, owner ruling 2026-11-16), at most once, holds one or
+  more `(module :gate "…" :at ("…" …))`: `:gate` names a gate-table row by
+  one of its alternatives, each gate once; `:at` is a non-empty list of
+  concrete repo-relative paths, each once (no leading `/`, no `.`, `..` or
+  empty segment, no `*`, `?`, `[`, `]` or `|`, no control character or
+  backslash; a trailing `/` marks a directory). It says where this repo
+  keeps a gated module, so the check reads the layout from the deed instead
+  of the table's default locations;
 * any other field or clause refuses the clause. A reader never skips an
   unknown key (J39);
-* the clause sits once, at the top level of a repo deed.
+* the clause sits once, at the top level of a `<repo>_chora.deed` (never in
+  `0-AI-MANIFEST.deed`, though that is a repo-deed too).
 
-Whether a capability or preset is known is the gate table's business, checked
-by `scripts/check-rsr-profile.sh`. That script refuses a clause with an unknown
+Whether a capability or preset is known, and whether a `(layout …)` `:gate`
+names a bindable `[gates]` row of the same kind as its `:at` paths, is the
+gate table's business, checked by `scripts/check-rsr-profile.sh`. That script refuses a clause with an unknown
 key on both of its parser paths: through this profile on the AST path, and
 against its copy of the key set on the awk path, which checks keys only.
 `scripts/tests/check-rsr-profile-test.sh` holds that copy equal to

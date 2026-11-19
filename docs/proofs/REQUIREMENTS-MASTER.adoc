@@ -140,7 +140,7 @@ post-operation) |INV |I2 |P0 |`+verisim-octad/src/store.rs+`
 
 ==== hypatia — Neurosymbolic CI/CD Intelligence
 
-*Languages*: Elixir (8K+), Rust (3K+), Idris2 (1K), Zig, Logtalk
+*Languages*: Elixir (8K+), Rust (3K+), Idris2 (1K), Zig
 *Existing proofs*: Idris2 ABI + FFI return type proofs, pipeline state
 machine (ValidTransition GADT) *Status*: ~30% — safety triangle, neural
 networks, learning loop unproven

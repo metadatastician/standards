@@ -6,6 +6,7 @@
 # Scope:
 #   - lol/proofs/theories/**/*.agda
 #   - 2-protocols/avow/avow-lib/src/abi/*.idr
+#   - 1-formats/k9/spec/proofs/HuntGate.idr (this repo's own; idris2-standards)
 #   - 2-protocols/k9-coordination/tools/validate/proofs/*.idr (this repo's own; idris2-standards)
 #
 # Proof-corpus status (issue #748, updated 2026-09-17): the lol and AVOW
@@ -31,7 +32,9 @@ on:
     paths:
       - 'lol/proofs/**'
       - '2-protocols/avow/avow-lib/src/abi/*.idr'
+      - '1-formats/k9/spec/proofs/**'
       - '2-protocols/k9-coordination/tools/validate/proofs/**'
+      - '3-practice/fork-governance/proofs/**'
       - '.github/workflows/echidna-verify.yml'
   # NO path filter on pull_request, deliberately. It once existed because
   # `Idris2 - a2ml proofs` was recorded as a REQUIRED context; that is STALE —
@@ -68,7 +71,7 @@ jobs:
       proofs: ${{ steps.check.outputs.proofs }}
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
       - name: Did this change touch any proof source?
@@ -82,7 +85,7 @@ jobs:
           base="${{ github.event.pull_request.base.sha }}"
           head="${{ github.event.pull_request.head.sha }}"
           changed=$(git diff --name-only "$base" "$head" 2>/dev/null || true)
-          if printf '%s\n' "$changed" | grep -qE '^(lol/proofs/|2-protocols/avow/avow-lib/src/abi/.*\.idr$|2-protocols/k9-coordination/tools/validate/proofs/|\.github/workflows/echidna-verify\.yml$)'; then
+          if printf '%s\n' "$changed" | grep -qE '^(lol/proofs/|2-protocols/avow/avow-lib/src/abi/.*\.idr$|1-formats/k9/spec/proofs/|2-protocols/k9-coordination/tools/validate/proofs/|3-practice/fork-governance/proofs/|\.github/workflows/echidna-verify\.yml$)'; then
             echo "proofs=true" >> "$GITHUB_OUTPUT"
           else
             echo "proofs=false" >> "$GITHUB_OUTPUT"
@@ -171,7 +174,7 @@ jobs:
           submodules: recursive
 
       - name: Cache pack
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.pack
@@ -233,24 +236,6 @@ jobs:
             fi
           done
 
-      - name: Type-check the K9 Hunt-gate proof (K9-CONTRACT-SPEC §9.2)
-        run: |
-          export PATH="$HOME/.pack/bin:$HOME/.local/bin:$PATH"
-          # PROOF-POLICY §1: an interface property, proved in Idris2. Its bridge
-          # to the Nickel text is the exhaustive check that
-          # `k9-validate.sh --self-test` runs in k9-conformance.yml.
-          # `idris2 --check` can exit 0 on a missing import while printing
-          # `Error:`, so this step fails on either.
-          cd 1-formats/k9/spec/proofs
-          set +e
-          out="$(idris2 --check HuntGate.idr 2>&1)"; rc=$?
-          set -e
-          printf '%s\n' "$out" | tee "$GITHUB_WORKSPACE/idris2-k9.log"
-          if [ "$rc" -ne 0 ] || printf '%s\n' "$out" | grep -qE '^Error:'; then
-            echo "::error title=K9 Hunt-gate proof::HuntGate.idr does not typecheck"
-            exit 1
-          fi
-
       - name: Upload log
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -258,7 +243,6 @@ jobs:
           name: idris2-avow-log
           path: |
             idris2-avow.log
-            idris2-k9.log
           if-no-files-found: ignore
 
   idris2-standards:
@@ -278,8 +262,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
+      # The K9 Hunt gate (K9-CONTRACT-SPEC §9.2) is an interface property
+      # (PROOF-POLICY §1). Its bridge to the two Nickel copies is the
+      # exhaustive check `k9-validate.sh --self-test` runs in k9-conformance.yml.
       PROOFS: >-
+        1-formats/k9/spec/proofs:HuntGate.idr
         2-protocols/k9-coordination/tools/validate/proofs:GrammarExtension.idr
+        3-practice/fork-governance/proofs:ReportBack.idr
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -305,7 +294,7 @@ jobs:
           exit "$bad"
 
       - name: Cache pack
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.pack
@@ -354,6 +343,23 @@ jobs:
             fi
           done
 
+      # The renderer is tied to ReportBack.idr by an exhaustive differential
+      # test (scripts/tests/report-back-model-test.sh) over the committed case
+      # table. That table must be what the proved model prints, so it is
+      # regenerated here from the model and compared byte for byte.
+      - name: Case table matches the ReportBack model
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd 3-practice/fork-governance/proofs
+          idris2 ReportBack.idr --exec main > "$RUNNER_TEMP/report-back-cases.tsv"
+          if ! cmp -s "$RUNNER_TEMP/report-back-cases.tsv" report-back-cases.tsv; then
+            echo "::error file=3-practice/fork-governance/proofs/report-back-cases.tsv::differs from what ReportBack.idr prints; regenerate it with: idris2 ReportBack.idr --exec main > report-back-cases.tsv"
+            diff "$RUNNER_TEMP/report-back-cases.tsv" report-back-cases.tsv | head -20
+            exit 1
+          fi
+          echo "report-back-cases.tsv: $(wc -l < report-back-cases.tsv) cases, as the model prints them" | tee -a "$GITHUB_WORKSPACE/idris2-standards.log"
+
       - name: Upload log
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -378,6 +384,6 @@ jobs:
           echo "| Agda lol/proofs | ${{ needs.agda-lol.result }} |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Idris2 a2ml | _evicted — a2ml project officially retired 2026-09-17 |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Idris2 avow | ${{ needs.idris2-avow.result }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Idris2 this repository (coordination.k9 grammar) | ${{ needs.idris2-standards.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Idris2 this repository (K9 Hunt gate, coordination.k9 grammar) | ${{ needs.idris2-standards.result }} |" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "See artefacts for verification logs." >> "$GITHUB_STEP_SUMMARY"

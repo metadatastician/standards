@@ -108,7 +108,7 @@ hypatia/
 |`+verify/src/PipelineState.idr+` |175 |ValidTransition GADT for
 pipeline states
 
-|`+src/abi/RuleEngine.idr+` |~300 |Logtalk rule type definitions
+|`+src/abi/RuleEngine.idr+` |~300 |Rule-evaluation type definitions
 |===
 
 === Theorems to Prove

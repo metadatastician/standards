@@ -1,0 +1,35 @@
+# SPDX-License-Identifier: MPL-2.0
+# SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+#
+# marker-allow.txt — SHRINK-ONLY ledger for scripts/check-marker-issue-refs.sh.
+#
+# A code marker must cite an issue (owner decision 2026-11-17, standards#955).
+# Each line names a file that still carries bare markers (a marker word opening
+# a comment with no "(#N)" or "(owner/repo#N)" after it) and how many: `path:count`.
+#
+# The gate fails if a file not listed here gains a bare marker, if a count
+# GROWS, or if an entry is STALE (the count fell or reached zero). Paying the
+# debt down means citing an issue or removing the marker, and lowering or
+# deleting the line in the same change (`--prune` does that). Never add a
+# line; never raise a count. Generated once, on 2026-11-17, by
+#   bash scripts/check-marker-issue-refs.sh --print
+.machine_readable/contractiles/adjust/adjust.ncl:1
+.machine_readable/contractiles/bust/bust.ncl:2
+.machine_readable/contractiles/dust/dust.ncl:1
+.machine_readable/contractiles/intend/intend.ncl:1
+.machine_readable/contractiles/must/must.ncl:1
+.machine_readable/contractiles/trust/Trustfile.a2ml:1
+.machine_readable/contractiles/trust/trust.ncl:2
+2-protocols/axel/config/ci.k9.ncl:1
+9-archive/rhodium-standard-repositories/rhodium-pipeline/template/{{project-name}}/src/config.rs.liquid:2
+9-archive/rhodium-standard-repositories/rhodium-pipeline/template/{{project-name}}/src/pipeline.rs.liquid:3
+9-archive/rhodium-standard-repositories/rhodium-pipeline/template/{{project-name}}/src/validation.rs.liquid:2
+9-archive/rhodium-standard-repositories/satellites/cccp/satellites/sanctify-php/src/Sanctify/Analysis/Advanced.hs:1
+9-archive/rhodium-standard-repositories/satellites/cccp/satellites/sanctify-php/src/Sanctify/Config.hs:1
+9-archive/rhodium-standard-repositories/satellites/cccp/satellites/sanctify-php/src/Sanctify/Transform/TypeHints.hs:1
+9-archive/rhodium-standard-repositories/satellites/palimpsest-license/config/infra.ncl:3
+9-archive/rhodium-standard-repositories/satellites/rsr-certifier/engine/src/adapters/bitbucket.rs:2
+9-archive/rhodium-standard-repositories/satellites/rsr-certifier/engine/src/adapters/gitea.rs:1
+9-archive/rhodium-standard-repositories/satellites/rsr-certifier/engine/src/adapters/gitlab.rs:1
+9-archive/rhodium-standard-repositories/satellites/rsr-certifier/engine/src/server/routes.rs:5
+9-archive/rhodium-standard-repositories/satellites/rsr-certifier/lsp/src/main.rs:3

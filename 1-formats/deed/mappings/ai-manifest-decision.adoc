@@ -20,6 +20,13 @@ on the filename alone. Sub-family separation recorded here; cartridge
 manifests get their own spec when their registry moment comes (linked to
 the #732 rename batch, not this campaign).
 
+**The per-directory `0.N-AI-MANIFEST.a2ml` ply manifests are a third
+family.** Their `### [META]` and `### [AI_MANIFEST]` content is neither the
+allocation manifest of §1 nor a cartridge manifest. A census of three
+repositories on 2026-11-17 found 140 files of this name: 1 is the family of
+this spec and 127 are ply manifests, which
+link:ply-manifest-decision.adoc[ply-manifest-decision] governs.
+
 == 1. Source surface (family 7 proper)
 
 `<repo>/0-AI-MANIFEST.a2ml` at repo root — generated, ~900 estate copies

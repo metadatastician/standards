@@ -39,7 +39,20 @@
 # CI, where it is installed and pinned; a pre-commit hook that fails because a
 # laptop lacks a toolchain teaches people to pass --no-verify. Set
 # K9_VALIDATE_LAYER=all to check semantics locally too.
+#
+# --prune deletes each ledger line this hook reports as STALE (the file now
+# conforms), by the same per-file verdict loop, and then passes. Nothing else
+# changes; with any violation the ledger is left unchanged and the exit is 1.
+# Contract: docs/wikis/maintainers/index.adoc, "Shrink-only ledgers".
 set -euo pipefail
+
+PRUNE=0
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --prune) PRUNE=1; shift ;;
+    *) echo "[validate-k9] unknown argument: $1" >&2; exit 2 ;;
+  esac
+done
 
 REPO_ROOT="${INPUT_PATH:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
 cd "$REPO_ROOT"
@@ -162,6 +175,7 @@ case "$VALIDATOR_RC" in 0|1) ;; *)
 esac
 
 CHANGED="${K9_CHANGED_FILES:-$STAGED_FILES}"
+PLAN=""
 HARD=0
 ADVISORY=0
 CONFORMING=0
@@ -186,7 +200,12 @@ while IFS= read -r line; do
       if in_ledger "$file"; then
         # A conforming file must not keep its exemption: that is how a ledger
         # becomes a permanent licence for debt that no longer exists.
-        echo -e "${RED}[validate-k9] STALE ledger entry: $file now conforms — remove it from $LEDGER in this change${NC}" >&2
+        if [ "$PRUNE" -eq 1 ]; then
+          # Every non-comment line equal to the path, as in_ledger matches it.
+          PLAN+="$(F="$file" awk '$0 == ENVIRON["F"] && $0 !~ /^[[:space:]]*(#|$)/ { printf "%d\tdelete\t\t%s now conforms\n", NR, $0 }' "$LEDGER")"$'\n'
+        else
+          echo -e "${RED}[validate-k9] STALE ledger entry: $file now conforms — remove it from $LEDGER in this change${NC}" >&2
+        fi
         STALE=$((STALE + 1))
       fi
       continue ;;
@@ -215,6 +234,27 @@ rm -f "$REPORT"
 if [ "$VALIDATOR_RC" -ne 0 ] && [ "$HARD" -eq 0 ] && [ "$ADVISORY" -eq 0 ]; then
   echo "[validate-k9] ERROR: validator failed without attributed violations" >&2
   exit 2
+fi
+
+if [ "$PRUNE" -eq 1 ]; then
+  if [ "$HARD" -gt 0 ]; then
+    echo -e "${RED}[validate-k9] prune refused: $HARD violation(s) that pruning may not hide; $LEDGER is unchanged${NC}" >&2
+    exit 1
+  fi
+  if [ "$STALE" -eq 0 ]; then
+    echo "prune: $LEDGER: nothing stale"
+  else
+    # The writer lives beside the checkers, found from this hook's own place
+    # (REPO_ROOT may be a materialised index that holds no scripts/).
+    # shellcheck source=SCRIPTDIR/../scripts/lib/ledger-prune.sh
+    . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../scripts/lib/ledger-prune.sh"
+    PLANFILE="$(mktemp)"
+    printf '%s' "$PLAN" | grep -v '^$' > "$PLANFILE" || true
+    rc=0; ledger_prune_apply "$LEDGER" "$LEDGER" "$PLANFILE" || rc=$?
+    rm -f "$PLANFILE"
+    [ "$rc" -eq 0 ] || exit 2
+    STALE=0
+  fi
 fi
 
 if [ "$STALE" -gt 0 ] || [ "$HARD" -gt 0 ]; then

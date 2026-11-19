@@ -2,7 +2,7 @@
 ; SPDX-License-Identifier: MPL-2.0
 ; SPDX-License-Identifier: CC-BY-SA-4.0
 ;
-; DEED clause profile: (rsr-profile …) in <repo>_chora.deed, v1.0.0 (DRAFT)
+; DEED clause profile: (rsr-profile …) in <repo>_chora.deed, v1.1.0 (DRAFT)
 ; Prose and rationale: docs/estate-reconciliation/A7-contractiles-descriptiles-anchor.adoc
 ; section 10 (the check-rsr-profile.sh row) and ruling J39 of 2026-11-15 (one
 ; grammar owns the clause's keys; scripts/check-rsr-profile.sh and every other
@@ -14,17 +14,25 @@
 ; A CLAUSE PROFILE, not a new grammar. Every rule below is also a `clause` of
 ; deed.abnf v2.0.0, so a chora deed carrying it still passes deed_lint
 ; unchanged. Rules it borrows: string, keyword and token-sep are
-; deed.abnf's; str-list is common.abnf's. Requires RFC 7405 (%s"..."
+; deed.abnf's; str-list and str-list1 are common.abnf's. Requires RFC 7405 (%s"..."
 ; case-sensitive literals).
 ;
-; Where it applies: the top level of a <repo>_chora.deed (head repo-deed), at
+; Where it applies: the top level of a <repo>_chora.deed (head repo-deed, and
+; that file name: 0-AI-MANIFEST.deed is a repo-deed but never carries it), at
 ; most once (check-rsr-profile.sh refuses two). SEMANTIC (validator-enforced,
 ; deed_lint.js --rsr-profile):
-;   * :version is present; every field at most once; (notes …) at most once;
-;   * at least one of :capabilities and :preset;
+;   * :version is present; every field at most once, inside (notes …) too;
+;     (notes …) at most once;
+;   * a non-empty :capabilities, a :preset, or both (an empty :capabilities
+;     declares nothing, as check-rsr-profile.sh reads it);
 ;   * the strings are not empty; list items are not empty and appear once;
 ;   * no other field and no other clause: a reader that meets an unknown key
 ;     refuses the clause, never skips it (J39).
+;   * (layout …) at most once, holding one or more (module :gate … :at …),
+;     each with exactly one :gate and one non-empty :at; a :gate names one
+;     module once; an :at path is repo-relative (no leading "/", no "." or
+;     ".." segment, no "//") and concrete (no "*", "?", "[", "]" or "|"),
+;     with a trailing "/" for a directory, and appears once in its module.
 ; Whether a capability or preset is known is the gate table's business
 ; (0-canon/template-capability-gates.toml), checked by check-rsr-profile.sh.
 
@@ -37,6 +45,7 @@ rsr-profile-member = ( %s":version"          token-sep string )
                    / ( %s":capabilities"     token-sep str-list )
                    / ( %s":add"              token-sep str-list )
                    / ( %s":remove"           token-sep str-list )
+                   / rsr-profile-layout
                    / rsr-profile-notes
                    ; :spec names the criteria canon ("rsr-criteria-v2") and
                    ; :declares-against its version. :role is read by
@@ -49,3 +58,21 @@ rsr-profile-notes  = "(" %s"notes" *(token-sep keyword token-sep string) [token-
                    ; Prose only, such as :omitted-rationale. Nothing in it is
                    ; read as a profile field: a :role inside (notes …) never
                    ; makes a repo a spine.
+
+; (layout …), v1.1.0 (owner ruling 2026-11-16, rsr-template-repo#421): where
+; THIS repo keeps a capability-gated module, so that the repo's layout and its
+; check cannot drift apart. The gate table says WHAT a capability owes and
+; where it lives by default; a (module …) binds one gate-table row to the
+; paths this tree actually uses. :gate names the row by one of its
+; alternatives exactly as the table writes it ("abi.ipkg"); :at lists the
+; paths that replace the row's default locations. check-rsr-profile.sh
+; requires every :at path to exist when the row's capability is declared, to
+; be the same kind of artefact (same file name, or a matching name for a
+; glob row; a directory for a directory row), reports a present one as
+; VESTIGIAL when it is not declared, and fails a binding whose paths are gone.
+; Whether a :gate names a real, bindable row is the gate table's business,
+; checked there, as for capabilities.
+rsr-profile-layout = "(" %s"layout" 1*(token-sep layout-module) [token-sep] ")"
+layout-module      = "(" %s"module" 1*(token-sep layout-member) [token-sep] ")"
+layout-member      = ( %s":gate" token-sep string )
+                   / ( %s":at"   token-sep str-list1 )

@@ -6,4 +6,4 @@
   :affirmed "2026-11-14" :affirmed-by agent
   :version "0.1.0"
   :version "0.2.0"
-  (hypatia :scan-enabled #t :scan-depth standard :report-format "logtalk"))
+  (hypatia :scan-enabled #t :scan-depth standard :report-format "json"))

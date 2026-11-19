@@ -39,7 +39,7 @@ workflows:
         - 'oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6'
     '.github/workflows/cicd-squabbler-reusable.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'hyperpolymath/cicd-squabbler@d04055f4a26c4a0a5fa4f5149d40f0c42aeac274'
+        - 'hyperpolymath/cicd-squabbler@b62a5ce01efdbf5c86977f35e3507759fcb4c22d'
         - 'step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a'
     '.github/workflows/cicd-squabbler.yml': []
     '.github/workflows/code-coverage.yml':
@@ -94,7 +94,6 @@ workflows:
         - 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9'
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed'
-        - 'editorconfig-checker/action-editorconfig-checker@51f63319f592f97930c73d9c46184d20bd206393'
         - 'erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124'
         - 'metadatastician/standards@bfa851f5291edd82d01dfb33cb8d81b3002d2f89'
         - 'oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6'
@@ -158,10 +157,15 @@ workflows:
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346'
         - 'actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9'
+    '.github/workflows/proof-receipt-tools.yml':
+        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
+        - 'oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6'
     '.github/workflows/propagate-hooks.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a'
     '.github/workflows/provisioning-check-reusable.yml':
+        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
+    '.github/workflows/provisioning-portability.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
     '.github/workflows/readme-derive-reusable.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
@@ -197,6 +201,9 @@ workflows:
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9'
         - 'step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a'
+    '.github/workflows/sonarqube-reusable.yml':
+        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
+        - 'sonarsource/sonarqube-scan-action@59202af334b4ba7b5db01b701b8e79f8b3bef0f4'
     '.github/workflows/spark-theatre-gate.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
     '.github/workflows/tag-ruleset-canon.yml':
@@ -276,11 +283,6 @@ dependencies:
         commit: 'sha1-683b588c487a69d01f6c6ddf40f036ff682cc2c8'
         owner_id: 1940490
         repo_id: 260749683
-    'editorconfig-checker/action-editorconfig-checker@51f63319f592f97930c73d9c46184d20bd206393':
-        ref: 'v3.0.0'
-        commit: 'sha1-51f63319f592f97930c73d9c46184d20bd206393'
-        owner_id: 26415196
-        repo_id: 297874902
     'erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124':
         ref: 'v1.24.1'
         commit: 'sha1-54075bcc5e249e4758d363f27d099f55d843f124'
@@ -301,9 +303,9 @@ dependencies:
         commit: 'sha1-0f8e8c99d88aeb3fbfd523f1ef2c6f762d10d64d'
         owner_id: 75048950
         repo_id: 623796603
-    'hyperpolymath/cicd-squabbler@d04055f4a26c4a0a5fa4f5149d40f0c42aeac274':
+    'hyperpolymath/cicd-squabbler@b62a5ce01efdbf5c86977f35e3507759fcb4c22d':
         ref: 'main'
-        commit: 'sha1-d04055f4a26c4a0a5fa4f5149d40f0c42aeac274'
+        commit: 'sha1-b62a5ce01efdbf5c86977f35e3507759fcb4c22d'
         owner_id: 6759885
         repo_id: 1284026967
     'metadatastician/standards@70019048f862250c04346f27e6ca196ff7aa187a':
@@ -355,6 +357,11 @@ dependencies:
         commit: 'sha1-28959ce8df70de7be546dd1250a005dd32156697'
         owner_id: 18365890
         repo_id: 220359305
+    'sonarsource/sonarqube-scan-action@59202af334b4ba7b5db01b701b8e79f8b3bef0f4':
+        ref: 'v8.5.0'
+        commit: 'sha1-59202af334b4ba7b5db01b701b8e79f8b3bef0f4'
+        owner_id: 545988
+        repo_id: 366408409
     'step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a':
         ref: 'v2.22.4'
         commit: 'sha1-1d88384fd173af6ecb012dfd0264a306b711241a'
