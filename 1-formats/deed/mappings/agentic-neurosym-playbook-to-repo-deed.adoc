@@ -317,13 +317,14 @@ window. Each repo counts once however many of its files match, so a repo
 with both forms cannot hide a repo whose translation is missing. A repo with
 both forms is a defect, and the loop names it on standard error.
 * *Profile strings, target forms only (P-9).* Over every repo, the distinct
-  `:id` values of a `(profile …)` directly inside a chora `(playbook …)` are
-  exactly `a2ml/playbook`. The check reads the deed's validated parse, not
-  its text: a grep cannot tell which clause a `(profile …)` sits in, and a
-  transitioning chora such as `standards_chora.deed` still holds the legacy
-  `(agentic (profile …))` and `(neurosym (profile …))` that YF05 and YF06
-  permit for one release. No `AGENTIC.deed` or `NEUROSYM.deed` carries a
-  profile at all: `--agentic` and `--neurosym` refuse one (J34, J36).
+  `:id` values of a `(profile …)` directly inside a top-level `(playbook …)`
+  of a chora are exactly `a2ml/playbook`. A `(playbook …)` nested in another
+  clause is not the target form and is not read. The check reads the deed's
+  validated parse, not its text: a grep cannot tell which clause a
+  `(profile …)` sits in, and a transitioning chora such as
+  `standards_chora.deed` still holds the legacy `(agentic (profile …))` and
+  `(neurosym (profile …))` that YF05 and YF06 permit for one release. No
+  `AGENTIC.deed` or `NEUROSYM.deed` carries a profile at all: `--agentic` and `--neurosym` refuse one (J34, J36).
 +
 [source,bash]
 ----
@@ -331,7 +332,7 @@ for r in "$ESTATE"/*/; do
   for d in "$r"*_chora.deed; do
     [ -f "$d" ] || continue
     bun 1-formats/deed/tools/deed_lint.js --ast-json "$d" | jq -r '
-      .. | arrays | select(.[0] == "clause" and .[1] == "playbook")
+      .items[] | select(.[0] == "clause" and .[1] == "playbook")
       | .[2][] | select(.[0] == "clause" and .[1] == "profile")
       | .[2][] | select(.[0] == "field" and .[1] == "id") | .[2][1]'
   done
