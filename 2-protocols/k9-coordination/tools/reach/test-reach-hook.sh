@@ -25,6 +25,8 @@ git -C "$co" remote add origin https://github.com/hyperpolymath/rsr-template-rep
 git -C "$co" checkout -q -b claude/x
 mkdir -p "$co/docs"; echo a >"$co/docs/a.adoc"
 git -C "$co" add . && git -C "$co" -c user.name=t -c user.email=t@example.invalid commit -q -m docs
+# The stand-in for the remote at push time: main at the root commit, no claude/x yet.
+git clone -q --bare "$co" "$work/remote.git"; git -C "$work/remote.git" branch -q -D claude/x
 # A second checkout on feature/y, and a third with 42 files under docs/.
 cp -r "$co" "$work/feat"; git -C "$work/feat" checkout -q -b feature/y
 cp -r "$co" "$work/big"
@@ -43,7 +45,7 @@ run() {
   local name=$1 want=$2 now=$3 contract=$4 sid=$5 json=$6; shift 6
   local sha; sha=$(sha256sum <"$contract" | cut -d' ' -f1)
   local out rc; out=$(env -i PATH="$PATH" HOME="$work" K9_REACH_STATE_KEY="${KEY-test-state-key}" K9_REACH_ROLE="${ROLE:-deed-migrator}" \
-    K9_REACH_JSON_SHA="${SHA:-$sha}" K9_REACH_FILE="$contract" K9_REACH_STATE="$work/state" \
+    K9_REACH_JSON_SHA="${SHA:-$sha}" K9_REACH_FILE="$contract" K9_REACH_STATE="$work/state" K9_REACH_LS_REMOTE="${LSR:-$work/remote.git}" \
     K9_REACH_NOW="$now" "$@" bash "$hook" <<<"${json//SID/$sid}"); rc=$?
   local got=pass; [[ "$out" == *'"permissionDecision":"deny"'* ]] && got=deny
   [ "$rc" -eq 0 ] || got="exit $rc"
@@ -147,6 +149,17 @@ WHY="more than one repo" run "origin with a second, ungranted push URL" deny "$M
 WHY="insteadOf" run "push to a URL under url.insteadOf" deny "$MON" "$full" n7 "$(bash_in "$work/iof" 'git push https://github.com/hyperpolymath/rsr-template-repo claude/x')"
 WHY="src/x.rs is outside" run "src/ file added then deleted" deny "$MON" "$full" n8 "$(bash_in "$work/gone" 'git push origin claude/x')"
 WHYNOT="$long" run "long path cut in the deny reason" deny "$MON" "$full" n9 "$(bash_in "$work/long" 'git push origin claude/x')"
+run "ANSI-C escape \$'mer\\x67e' after a push" deny "$MON" "$full" n11 "$(bash_in "$co" "git push origin claude/x; gh pr \$'mer\\x67e' 1")"
+# A remote whose main moved on (a commit under src/) while its claude/x stayed at the root.
+git clone -q --bare "$work/src" "$work/behind.git"; git -C "$work/behind.git" branch -q -f main claude/x
+git -C "$work/behind.git" branch -q -f claude/x "$(git -C "$co" rev-list --max-parents=0 HEAD)"
+WHY="src/x.rs is outside" LSR="$work/behind.git" run "destination behind the remote HEAD" deny "$MON" "$full" n12 "$(bash_in "$work/src" 'git push origin HEAD:claude/x')"
+# A remote claude/x at a commit this checkout has never fetched.
+git clone -q --bare "$co" "$work/ahead.git"; git -C "$work/ahead.git" -c user.name=t -c user.email=t@example.invalid \
+  commit-tree -p claude/x -m other "$(git -C "$work/ahead.git" rev-parse 'claude/x^{tree}')" >"$work/ahead.sha"
+git -C "$work/ahead.git" branch -q -f claude/x "$(cat "$work/ahead.sha")"
+WHY="fetch first" LSR="$work/ahead.git" run "remote tip not fetched" deny "$MON" "$full" n13 "$(bash_in "$co" 'git push origin claude/x')"
+WHY="cannot read" LSR="$work/nowhere.git" run "remote cannot be read" deny "$MON" "$full" n14 "$(bash_in "$co" 'git push origin claude/x')"
 qv="$repo/2-protocols/k9-coordination/tools/validate/fixtures/reach/reach-quoted-version.json"
 ROLE=constructor run "role named constructor keeps its grant" pass "$SAT21" "$qv" n10 "$(attach hyperpolymath/k9-ecosystem read)" K9_CEIL_PROFILE=moderate
 

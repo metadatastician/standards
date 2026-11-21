@@ -28,7 +28,8 @@
 #
 # Counters live in a state file in the worker's container, so they are
 # tamper-evident, not tamper-proof; the hub keeps its own clock and counts.
-# Test only: K9_REACH_FILE (local contract) and K9_REACH_NOW (fixed clock).
+# Test only: K9_REACH_FILE (local contract), K9_REACH_NOW (fixed clock) and
+# K9_REACH_LS_REMOTE (a local repo that stands in for the remote at push time).
 set -u
 breach=deny_and_report
 deny() { local r="$1"
@@ -176,7 +177,7 @@ classify_seg() { local x=$1 ep
 }
 # Resolve a git push: the repo it writes to, each destination branch, and the
 # files it carries. Any form the hook cannot resolve is refused.
-parse_push() { local x=$1 tw n i=0 wd=$cwd remote="" rname="" url urls t r src dst src_c base up refs=()
+parse_push() { local x=$1 tw n i=0 wd=$cwd remote="" rname="" url urls t r src dst src_c ls old up refs=()
   read -ra tw <<<"$x"; n=${#tw[@]}
   while [ $i -lt $n ] && [ "${tw[$i]}" != git ] && [[ "${tw[$i]}" != */git ]]; do i=$((i + 1)); done
   i=$((i + 1))
@@ -237,12 +238,23 @@ parse_push() { local x=$1 tw n i=0 wd=$cwd remote="" rname="" url urls t r src d
     dst=${dst#refs/heads/}
     [[ -n "$dst" && "$dst" != refs/* ]] || deny "push to $(clip "$dst") is not a branch"
     src_c=$(git -C "$top" rev-parse --verify -q "$src^{commit}") || deny "cannot resolve $src"
-    base=$(git -C "$top" merge-base "$src_c" "${rname:-origin}/HEAD" 2>/dev/null ||
-           git -C "$top" rev-list --max-parents=0 "$src_c" | tail -1)
+    # The baseline is the destination's real tip on the remote, or the remote's
+    # HEAD for a new branch. A local tracking ref can be stale.
+    ls=$(git -C "$top" ls-remote "${K9_REACH_LS_REMOTE:-${urls%%$'\n'*}}" HEAD "refs/heads/$dst" 2>/dev/null) ||
+      deny "cannot read $target to check the push"
+    old=$(awk -v r="refs/heads/$dst" '$2 == r {print $1}' <<<"$ls")
+    [ -n "$old" ] || old=$(awk '$2 == "HEAD" {print $1}' <<<"$ls")
+    if [ -n "$old" ]; then
+      git -C "$top" cat-file -e "$old^{commit}" 2>/dev/null ||
+        deny "fetch first: the tip of $(clip "$dst") on $target is not in this checkout"
+    else old=$(git -C "$top" hash-object -t tree /dev/null)  # an empty remote
+    fi
     # The net change, and every file each pushed commit touched (a file added and
     # then deleted still counts). Merges are listed against each parent.
-    files+="$(git -C "$top" diff --name-only "$base" "$src_c")"$'\n'
-    files+="$(git -C "$top" log --format= --name-only -m "$base..$src_c")"$'\n'
+    files+="$(git -C "$top" diff --name-only "$old" "$src_c")"$'\n'
+    if [ "$(git -C "$top" cat-file -t "$old")" = commit ]; then
+      files+="$(git -C "$top" log --format= --name-only -m "$src_c" --not "$old")"$'\n'
+    else files+="$(git -C "$top" log --format= --name-only -m "$src_c")"$'\n'; fi
     dsts+="$dst"$'\n'
   done
 }
@@ -266,6 +278,8 @@ case "$tool" in
     fi ;;
   Bash)
     c=$(jq -r '.tool_input.command // empty' <<<"$in"); api_target=; seg_c=
+    # bash decodes escapes inside $'...' ($'mer\x67e' is merge); unquote cannot.
+    bsq="[\$]'[^']*[\\]"; [[ ! "$c" =~ $bsq ]] || deny "\$'...' with a backslash escape is not allowed under reach"
     # Check every simple command. At most one may be a GitHub action.
     while IFS= read -r seg; do
       s_action=; s_need=; s_api=; seg=$(unquote "$seg")

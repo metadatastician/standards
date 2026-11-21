@@ -57,7 +57,10 @@ Pilot settings (ruling Q12): `K9_CEIL_PROFILE=moderate`,
   updates, and its files come from the commits it pushes: the net change
   and every file each commit touched, so a file added and then deleted
   still counts. Shell quoting is removed before the check, so `'merge'` and
-  `m\erge` read as `merge`. A remote with several push URLs must point every
+  `m\erge` read as `merge`, and a call with a backslash escape inside
+  `$'...'` is denied. A push is checked against the destination's real tip,
+  read with `git ls-remote` (the remote's HEAD for a new branch); it is
+  denied if that tip is not in the checkout or the remote cannot be read. A remote with several push URLs must point every
   one at the same granted repo. A push to a URL is denied while any
   `url.*.insteadOf` rewrite is set. `GH_REPO` anywhere in a call with a
   GitHub action is denied; one set in a shell profile is not seen. Any
