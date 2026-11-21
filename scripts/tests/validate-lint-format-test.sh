@@ -191,6 +191,35 @@ printf '\n' >> "$WORK/repo/Cargo.toml"
 expect "virtual workspace manifest staged alone → not checked, named, not a failure" 0 \
   "virtual workspace manifest" "m2"
 
+# The package is selected by NAME, read from the manifest's own [package] table,
+# so the answer does not depend on how a given cargo scopes --manifest-path
+# (cargo 1.100 checks every workspace member for it; 1.97 did not). Awkward but
+# valid layouts must still resolve to the root package.
+new_repo
+mkdir -p "$WORK/repo/src" "$WORK/repo/member/src"
+printf '# a leading comment\n[ package ] # the root package\nname = '"'"'quoted_root'"'"' # single quotes, trailing comment\nversion = "0.1.0"\nedition = "2021"\n\n[package.metadata.docs]\nname = "decoy"\n\n[workspace]\nmembers = ["member"]\n' > "$WORK/repo/Cargo.toml"
+printf '%s' "$FORMATTED" > "$WORK/repo/src/lib.rs"
+printf '[package]\nname = "member"\nversion = "0.1.0"\nedition = "2021"\n' > "$WORK/repo/member/Cargo.toml"
+printf '%s' "$UNFORMATTED" > "$WORK/repo/member/src/lib.rs"
+commit_all
+printf '// touch\n' >> "$WORK/repo/src/lib.rs"
+expect "single-quoted name, trailing comments, [package.metadata] decoy → root only, member untouched" 0 \
+  "Rust: .: formatted" "member"
+
+# A virtual manifest must never reach cargo fmt, whatever the cargo version: a
+# cargo that formats every member would report the sibling's formatting.
+new_repo
+mkdir -p "$WORK/repo/m1/src" "$WORK/repo/m2/src"
+printf '[workspace]\nmembers = ["m1", "m2"]\nresolver = "2"\n\n[workspace.package]\nedition = "2021"\n' > "$WORK/repo/Cargo.toml"
+printf '[package]\nname = "m1"\nversion = "0.1.0"\nedition.workspace = true\n' > "$WORK/repo/m1/Cargo.toml"
+printf '[package]\nname = "m2"\nversion = "0.1.0"\nedition.workspace = true\n' > "$WORK/repo/m2/Cargo.toml"
+printf '%s' "$FORMATTED" > "$WORK/repo/m1/src/lib.rs"
+printf '%s' "$UNFORMATTED" > "$WORK/repo/m2/src/lib.rs"
+commit_all
+printf '\n' >> "$WORK/repo/Cargo.toml"
+expect "virtual manifest alone is never handed to cargo fmt (no Diff from a sibling)" 0 \
+  "virtual workspace manifest" "Diff in"
+
 echo
 echo "=== Rust arm: manifests come from the index, not the working tree (B4) ==="
 
