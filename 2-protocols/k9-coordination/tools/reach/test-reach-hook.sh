@@ -35,7 +35,8 @@ cp -r "$co" "$work/src"; mkdir -p "$work/src/src"; echo x >"$work/src/src/x.rs"
 git -C "$work/src" add . && git -C "$work/src" -c user.name=t -c user.email=t@example.invalid commit -q -m src
 
 # run NAME EXPECT(pass|deny) NOW CONTRACT SID JSON [ENV=VALUE...]
-# WHY=TEXT makes a deny case also check that the reason contains TEXT. A hook
+# WHY=TEXT makes a deny case also check that the reason contains TEXT, and
+# WHYNOT=TEXT that it does not. A hook
 # that exits nonzero fails the case, whatever it printed.
 # State persists per SID inside one test file run, so cases can build on each other.
 run() {
@@ -47,6 +48,7 @@ run() {
   local got=pass; [[ "$out" == *'"permissionDecision":"deny"'* ]] && got=deny
   [ "$rc" -eq 0 ] || got="exit $rc"
   [ "$got" = deny ] && [ -n "${WHY:-}" ] && [[ "$out" != *"$WHY"* ]] && got="deny for another reason"
+  [ "$got" = deny ] && [ -n "${WHYNOT:-}" ] && [[ "$out" == *"$WHYNOT"* ]] && got="deny with uncut text"
   if [ "$got" = "$want" ]; then pass=$((pass + 1)); echo "ok   $name"
   else fail=$((fail + 1)); echo "FAIL $name: wanted $want, got $got: ${out:-no output}"; fi
 }
@@ -121,6 +123,32 @@ run "push a tag" deny "$MON" "$full" m17 "$(bash_in "$co" 'git push origin refs/
 WHY="src/x.rs is outside" run "edit docs/../src/x.rs" deny "$MON" "$full" m18 "$(edit "$co/docs/../src/x.rs")"
 run "edit through a symlink into src/" deny "$MON" "$full" m19 "$(edit "$co/docs/link/x.rs")"
 run "push with a redirect" pass "$MON" "$full" m20 "$(bash_in "$co" 'git push origin claude/x 2>&1')"
+
+echo "# second review pass"
+# A file under src/ added in one commit and deleted in the next.
+cp -r "$co" "$work/gone"; rm -f "$work/gone/docs/link"; mkdir -p "$work/gone/src"; echo x >"$work/gone/src/x.rs"
+git -C "$work/gone" add -A && git -C "$work/gone" -c user.name=t -c user.email=t@example.invalid commit -q -m add
+git -C "$work/gone" rm -q src/x.rs && git -C "$work/gone" -c user.name=t -c user.email=t@example.invalid commit -q -m del
+# A second push URL on origin, and a URL rewrite.
+cp -r "$co" "$work/two"
+git -C "$work/two" config --add remote.origin.pushurl https://github.com/hyperpolymath/rsr-template-repo.git
+git -C "$work/two" config --add remote.origin.pushurl https://github.com/evil/x.git
+cp -r "$co" "$work/iof"; git -C "$work/iof" config url.https://github.com/evil/.insteadOf https://github.com/hyperpolymath/
+# A long file name under src/, for the clipped deny reason.
+long=$(printf 'a%.0s' $(seq 1 150))
+cp -r "$co" "$work/long"; rm -f "$work/long/docs/link"; mkdir -p "$work/long/src"; echo x >"$work/long/src/$long.rs"
+git -C "$work/long" add -A && git -C "$work/long" -c user.name=t -c user.email=t@example.invalid commit -q -m long
+run "export GH_REPO, then a gh action" deny "$MON" "$full" n1 "$(bash_in "$co" 'export GH_REPO=evil/x; gh pr comment 1 --body hi')"
+WHY="more than one GitHub action" run "push then a quoted 'merge'" deny "$MON" "$full" n2 "$(bash_in "$co" "git push origin claude/x; gh pr 'merge' 1")"
+run "quoted \$'merge' alone" deny "$MON" "$full" n3 "$(bash_in "$co" "gh pr \$'merge' 1")"
+run "backslash m\\erge" deny "$MON" "$full" n4 "$(bash_in "$co" 'gh pr m\erge 1')"
+run "quoted 'push' to HEAD:main" deny "$MON" "$full" n5 "$(bash_in "$co" "git 'push' origin HEAD:main")"
+WHY="more than one repo" run "origin with a second, ungranted push URL" deny "$MON" "$full" n6 "$(bash_in "$work/two" 'git push origin claude/x')"
+WHY="insteadOf" run "push to a URL under url.insteadOf" deny "$MON" "$full" n7 "$(bash_in "$work/iof" 'git push https://github.com/hyperpolymath/rsr-template-repo claude/x')"
+WHY="src/x.rs is outside" run "src/ file added then deleted" deny "$MON" "$full" n8 "$(bash_in "$work/gone" 'git push origin claude/x')"
+WHYNOT="$long" run "long path cut in the deny reason" deny "$MON" "$full" n9 "$(bash_in "$work/long" 'git push origin claude/x')"
+qv="$repo/2-protocols/k9-coordination/tools/validate/fixtures/reach/reach-quoted-version.json"
+ROLE=constructor run "role named constructor keeps its grant" pass "$SAT21" "$qv" n10 "$(attach hyperpolymath/k9-ecosystem read)" K9_CEIL_PROFILE=moderate
 
 echo "# temporal window and validity"
 run "attach on a Saturday" deny "$(at 2026-11-28T10:00:00Z)" "$full" w1 "$(attach hyperpolymath/rsr-template-repo)"

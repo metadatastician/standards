@@ -42,6 +42,11 @@ deny() { local r="$1"
          [ -n "${log:-}" ] && printf '%s deny %s %s\n' "$(date -u +%FT%TZ)" "${tool:-?}" "$1" >>"$log"; exit 0; }
 rank() { case "$1" in deny|actions) echo 0;; deny_and_report|all) echo 1;; deny_and_interrupt) echo 2;; *) echo -1;; esac; }
 firmer() { [ "$(rank "${2:-}")" -gt "$(rank "$1")" ] && echo "$2" || echo "$1"; }
+# Repo-sourced text (a pushed path or branch name) goes into a deny reason only
+# with control characters removed and cut to 80 characters.
+clip() { printf '%s' "$1" | tr -d '[:cntrl:]' | cut -c1-80; }
+# Drop shell quoting so 'merge', "merge", $'merge' and m\erge read as merge.
+unquote() { local x=${1//\$\'/\'}; x=${x//\$\"/\"}; printf '%s' "${x//[\"\'\\]/}"; }
 min() { local a=${1:-} b=${2:-}; [ -z "$a" ] && { echo "$b"; return; }; [ -z "$b" ] && { echo "$a"; return; }; [ "$a" -le "$b" ] && echo "$a" || echo "$b"; }
 in=$(cat) || deny "no hook input"
 jq -e . >/dev/null 2>&1 <<<"$in" || deny "bad hook input"
@@ -168,11 +173,10 @@ classify_seg() { local x=$1 ep
   elif [[ "$x" =~ (^|[[:space:]\"\'/])(curl|wget|http|xh)([[:space:]]|$) ]]; then
     deny "direct HTTP calls are not allowed; use git or gh"
   fi
-  if [[ -n "$s_action" && "$x" =~ (^|[[:space:]])GH_REPO= ]]; then deny "GH_REPO is not allowed with a GitHub action; use --repo"; fi
 }
 # Resolve a git push: the repo it writes to, each destination branch, and the
 # files it carries. Any form the hook cannot resolve is refused.
-parse_push() { local x=${1//[\"\']/} tw n i=0 wd=$cwd remote="" rname="" url t r src dst src_c base up refs=()
+parse_push() { local x=$1 tw n i=0 wd=$cwd remote="" rname="" url urls t r src dst src_c base up refs=()
   read -ra tw <<<"$x"; n=${#tw[@]}
   while [ $i -lt $n ] && [ "${tw[$i]}" != git ] && [[ "${tw[$i]}" != */git ]]; do i=$((i + 1)); done
   i=$((i + 1))
@@ -201,9 +205,21 @@ parse_push() { local x=${1//[\"\']/} tw n i=0 wd=$cwd remote="" rname="" url t r
     remote=$(git -C "$top" config "branch.$br.pushRemote" || git -C "$top" config remote.pushDefault ||
              git -C "$top" config "branch.$br.remote" || echo origin)
   fi
-  if [[ "$remote" == *[:/]* ]]; then url=$remote
-  else rname=$remote; url=$(git -C "$top" remote get-url --push "$remote" 2>/dev/null) || deny "unknown remote $remote"; fi
-  target=$(repo_of_url "$url") || deny "push to a remote that is not on github.com"
+  if [[ "$remote" == *[:/]* ]]; then urls=$remote
+    # git rewrites a URL through url.*.insteadOf at push time; the hook would check the wrong repo.
+    [ -z "$(git -C "$top" config --get-regexp '^url\..*\.(push)?insteadof$')" ] ||
+      deny "url.*.insteadOf is set; push to a named remote instead"
+  else rname=$remote
+    # A remote can carry several push URLs, and git pushes to all of them.
+    urls=$(git -C "$top" remote get-url --push --all "$remote" 2>/dev/null) || deny "unknown remote $remote"
+  fi
+  target=
+  while IFS= read -r url; do [ -n "$url" ] || continue
+    t=$(repo_of_url "$url") || deny "push to a remote that is not on github.com"
+    [ -z "$target" ] || [ "$t" = "$target" ] || deny "remote $rname pushes to more than one repo"
+    target=$t
+  done <<<"$urls"
+  [ -n "$target" ] || deny "cannot tell which repo the push goes to"
   [ -z "$rname" ] || [ -z "$(git -C "$top" config --get-all "remote.$rname.push")" ] ||
     deny "remote.$rname.push is set; it can redirect a push, so it is not allowed under reach"
   if [ ${#refs[@]} -eq 0 ]; then
@@ -219,11 +235,14 @@ parse_push() { local x=${1//[\"\']/} tw n i=0 wd=$cwd remote="" rname="" url t r
       else git -C "$top" show-ref --verify -q "refs/heads/$src" || deny "push $src: name a local branch"; fi
     fi
     dst=${dst#refs/heads/}
-    [[ -n "$dst" && "$dst" != refs/* ]] || deny "push to $dst is not a branch"
+    [[ -n "$dst" && "$dst" != refs/* ]] || deny "push to $(clip "$dst") is not a branch"
     src_c=$(git -C "$top" rev-parse --verify -q "$src^{commit}") || deny "cannot resolve $src"
     base=$(git -C "$top" merge-base "$src_c" "${rname:-origin}/HEAD" 2>/dev/null ||
            git -C "$top" rev-list --max-parents=0 "$src_c" | tail -1)
+    # The net change, and every file each pushed commit touched (a file added and
+    # then deleted still counts). Merges are listed against each parent.
     files+="$(git -C "$top" diff --name-only "$base" "$src_c")"$'\n'
+    files+="$(git -C "$top" log --format= --name-only -m "$base..$src_c")"$'\n'
     dsts+="$dst"$'\n'
   done
 }
@@ -249,13 +268,15 @@ case "$tool" in
     c=$(jq -r '.tool_input.command // empty' <<<"$in"); api_target=; seg_c=
     # Check every simple command. At most one may be a GitHub action.
     while IFS= read -r seg; do
-      s_action=; s_need=; s_api=
+      s_action=; s_need=; s_api=; seg=$(unquote "$seg")
       classify_seg "$seg"
       if [ -n "$s_action" ]; then
         [ -z "$action" ] || deny "more than one GitHub action in one Bash call ($action, $s_action); run them one at a time"
         action=$s_action; need=$s_need; api_target=$s_api; seg_c=$seg
       fi
     done < <(segments "$c")
+    # GH_REPO anywhere in the call (an export in an earlier command too) could pick the repo.
+    [ -z "$action" ] || [[ "$c" != *GH_REPO* ]] || deny "GH_REPO is not allowed in a call with a GitHub action; use --repo"
     if [ -n "$api_target" ]; then
       target=$api_target
     elif [ "$action" = push_branch ]; then
@@ -299,13 +320,13 @@ if [ -n "$action" ]; then
     if [ -n "$files" ] && [ -n "$(g '.paths[0]')" ]; then
       while IFS= read -r p; do [ -z "$p" ] && continue; ok=0
         while IFS= read -r glob; do [[ "$p" == $glob ]] && { ok=1; break; }; done < <(g '.paths[]')
-        [ $ok = 1 ] || deny "depth: $p is outside the allowed paths on $target"
+        [ $ok = 1 ] || deny "depth: $(clip "$p") is outside the allowed paths on $target"
       done <<<"$files"
     fi
     if [ "$action" = push_branch ]; then
       bp=$(g .branch)
       if [ -n "$bp" ]; then
-        while IFS= read -r d; do [ -z "$d" ] || [[ "$d" == $bp ]] || deny "branch $d does not match $bp"; done <<<"$dsts"
+        while IFS= read -r d; do [ -z "$d" ] || [[ "$d" == $bp ]] || deny "branch $(clip "$d") does not match $bp"; done <<<"$dsts"
       fi
       files=$(grep . <<<"$files" | sort -u)
       mf=$(g .max_files_per_push); n=$(grep -c . <<<"$files")

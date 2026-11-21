@@ -54,9 +54,17 @@ Pilot settings (ruling Q12): `K9_CEIL_PROFILE=moderate`,
   comment) on a `repos/OWNER/REPO` path, or it is denied. A `gh pr` command
   is checked against the repo it selects (`--repo`, or gh's own remote pick).
   A push is checked against the remote it writes to and each branch it
-  updates, and its files come from the commits it pushes. Any `curl`,
-  `wget`, `http` or `xh` call is denied. Other Bash runs freely, so a worker
-  can build and test.
+  updates, and its files come from the commits it pushes: the net change
+  and every file each commit touched, so a file added and then deleted
+  still counts. Shell quoting is removed before the check, so `'merge'` and
+  `m\erge` read as `merge`. A remote with several push URLs must point every
+  one at the same granted repo. A push to a URL is denied while any
+  `url.*.insteadOf` rewrite is set. `GH_REPO` anywhere in a call with a
+  GitHub action is denied; one set in a shell profile is not seen. Any
+  `curl`, `wget`, `http` or `xh` call is denied. Other Bash runs freely, so
+  a worker can build and test.
+* Pushed paths and branch names in a deny reason have control characters
+  removed and are cut to 80 characters.
 * Edit paths are resolved (`..` and symlinks) before the path check.
 * One call at a time per session holds a lock on the state file, so two
   calls cannot both use the last unit of a limit.
