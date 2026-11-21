@@ -110,6 +110,9 @@ workflows:
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
     '.github/workflows/instant-sync.yml':
         - 'peter-evans/repository-dispatch@28959ce8df70de7be546dd1250a005dd32156697'
+    '.github/workflows/issue-evidence-reusable.yml':
+        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
+    '.github/workflows/issue-evidence.yml': []
     '.github/workflows/js-runtimes-reusable.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed'
