@@ -1,0 +1,62 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+= K9 worker reach
+:toc: preamble
+
+This folder holds what the K9 worker reach contract needs beside its
+source. The source is the `reach` section of this repository's
+`coordination.k9` (`2-protocols/k9-coordination/spec/COORDINATION-K9-SPEC.adoc`,
+grammar v1.3.0). Owner rulings by selector, 2026-11-20 (Q1 to Q12).
+
+The contract is not live. There is no `reach` section in `coordination.k9`
+yet, no `reach.json`, no signature and no key. Those come in a later change
+that only the owner makes.
+
+== Contents
+
+[horizontal]
+`reach-hook.sh`:: The PreToolUse hook a worker session runs. It denies any
+  tool call the contract does not allow, and never returns allow. Its header
+  lists the settings it reads.
+
+To come, each added by the owner:
+
+[horizontal]
+`reach.json`:: The compiled contract:
+  `bun 2-protocols/k9-coordination/tools/validate/validate.js --compile-reach coordination.k9`.
+  CI will check it matches the section.
+`reach.sig`:: A detached k9-sign Ed25519 signature over the section bytes,
+  made with a new owner key kept off every cloud environment (ruling Q2).
+`owner-reach.pub`:: That key's public half.
+
+== Who can change what
+
+* This folder, `coordination.k9` and the grammars are owner-only in
+  `.github/CODEOWNERS`. A change needs the owner's review and merge.
+* The hook's settings (ceiling profile, breach floor, window scope floor,
+  the pinned commit and contract hash) sit in the organisation's
+  server-managed settings, which only an Owner or Primary Owner can change.
+  The owner is the sole Owner and Primary Owner (ruling Q11).
+* Settings and the contract can only tighten each other. The hook uses the
+  stricter value.
+
+Pilot settings (ruling Q12): `K9_CEIL_PROFILE=moderate`,
+`K9_BREACH_MIN=deny_and_report`, `K9_WINDOW_SCOPE_MIN=actions`.
+
+== Limits of the hook
+
+* Counters (tool calls, pushes, the wall-clock start) live in a state file
+  inside the worker's container. A worker could edit it, so they are
+  tamper-evident, not tamper-proof. The hub keeps its own clock from spawn
+  time and counts pushes and pull requests on GitHub.
+* It reads `git push` and `gh pr` commands from Bash text. Bash rules are
+  not a security boundary, so the push-time path check and the hub's GitHub
+  check back it up.
+* It cannot interrupt a session. On `deny_and_interrupt` it tells the worker
+  to report, and the hub stops the session.
+* It has not yet run inside a real cloud session (the throwaway test, Q9).
+
+== Tests
+
+`bash 2-protocols/k9-coordination/tools/reach/test-reach-hook.sh` runs the
+hook against the compiled fixture contracts with a fixed clock. It needs
+bash, git and jq.
