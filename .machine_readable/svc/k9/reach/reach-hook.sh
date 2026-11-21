@@ -250,11 +250,12 @@ parse_push() { local x=$1 tw n i=0 wd=$cwd remote="" rname="" url urls t r src d
     else old=$(git -C "$top" hash-object -t tree /dev/null)  # an empty remote
     fi
     # The net change, and every file each pushed commit touched (a file added and
-    # then deleted still counts). Merges are listed against each parent.
-    files+="$(git -C "$top" diff --name-only "$old" "$src_c")"$'\n'
+    # then deleted still counts). Merges are listed against each parent. A rename
+    # lists its source too, so moving a file out of a restricted path is caught.
+    files+="$(git -C "$top" diff --no-renames --name-only "$old" "$src_c")"$'\n'
     if [ "$(git -C "$top" cat-file -t "$old")" = commit ]; then
-      files+="$(git -C "$top" log --format= --name-only -m "$src_c" --not "$old")"$'\n'
-    else files+="$(git -C "$top" log --format= --name-only -m "$src_c")"$'\n'; fi
+      files+="$(git -C "$top" log --no-renames --format= --name-only -m "$src_c" --not "$old")"$'\n'
+    else files+="$(git -C "$top" log --no-renames --format= --name-only -m "$src_c")"$'\n'; fi
     dsts+="$dst"$'\n'
   done
 }

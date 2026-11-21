@@ -160,6 +160,10 @@ git clone -q --bare "$co" "$work/ahead.git"; git -C "$work/ahead.git" -c user.na
 git -C "$work/ahead.git" branch -q -f claude/x "$(cat "$work/ahead.sha")"
 WHY="fetch first" LSR="$work/ahead.git" run "remote tip not fetched" deny "$MON" "$full" n13 "$(bash_in "$co" 'git push origin claude/x')"
 WHY="cannot read" LSR="$work/nowhere.git" run "remote cannot be read" deny "$MON" "$full" n14 "$(bash_in "$co" 'git push origin claude/x')"
+# A remote claude/x that already holds src/x.rs, and a commit that moves it to docs/.
+git clone -q --bare "$work/src" "$work/moved.git"; cp -r "$work/src" "$work/mv"
+git -C "$work/mv" mv src/x.rs docs/x.rs && git -C "$work/mv" -c user.name=t -c user.email=t@example.invalid commit -q -m move
+WHY="src/x.rs is outside" LSR="$work/moved.git" run "move from src/ to docs/" deny "$MON" "$full" n15 "$(bash_in "$work/mv" 'git push origin claude/x')"
 qv="$repo/2-protocols/k9-coordination/tools/validate/fixtures/reach/reach-quoted-version.json"
 ROLE=constructor run "role named constructor keeps its grant" pass "$SAT21" "$qv" n10 "$(attach hyperpolymath/k9-ecosystem read)" K9_CEIL_PROFILE=moderate
 
