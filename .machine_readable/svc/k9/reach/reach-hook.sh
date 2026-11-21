@@ -83,20 +83,24 @@ today=$(date -u -d "@$now" +%F); dow=$(date -u -d "@$now" +%a | tr A-Z a-z); hou
 vf=$(jq -r .valid_from "$cache"); ex=$(jq -r .expires "$cache")
 [[ "$today" < "$vf" ]] && deny "contract not valid until $vf"
 [[ "$today" > "$ex" ]] && deny "contract expired $ex"
-# Session state with local integrity check (worker-writable storage must be signed).
+# A worker may always report to the hub, even after its TTL runs out,
+# and even when the state check below fails.
+case "$tool" in mcp__claude-code-remote__send_message|SendMessage) exit 0;; esac
+# Session state with an HMAC integrity check. The key only shows that the
+# hook wrote the file. A worker that can read the key could still forge it.
 st="$state_dir/$sid.json"; st_sig="$st.sig"
 [ -n "${K9_REACH_STATE_KEY:-}" ] || deny "state integrity key missing (K9_REACH_STATE_KEY)"
+state_key=$K9_REACH_STATE_KEY; unset K9_REACH_STATE_KEY
+sign_state() { openssl dgst -sha256 -hmac "$state_key" -r "$st" 2>/dev/null | awk '{print $1}'; }
 if [ ! -s "$st" ]; then
   jq -cn --argjson t "$now" '{first:$t,last:$t,calls:0,attaches:0,pushes:0,prs:0,spawns:0,push_times:[],repos:[]}' >"$st" || deny "failed to initialize session state"
-  openssl dgst -sha256 -hmac "$K9_REACH_STATE_KEY" -r "$st" 2>/dev/null | awk '{print $1}' >"$st_sig" || deny "failed to sign session state"
+  sign_state >"$st_sig" || deny "failed to sign session state"
 fi
 [ -s "$st_sig" ] || deny "session state signature missing"
-calc_sig=$(openssl dgst -sha256 -hmac "$K9_REACH_STATE_KEY" -r "$st" 2>/dev/null | awk '{print $1}')
+calc_sig=$(sign_state)
 read -r file_sig <"$st_sig"
 [ -n "$calc_sig" ] && [ "$calc_sig" = "$file_sig" ] || deny "session state integrity check failed"
 S=$(cat "$st"); s() { jq -r "$1" <<<"$S"; }
-# A worker may always report to the hub, even after its TTL runs out.
-case "$tool" in mcp__claude-code-remote__send_message|SendMessage) exit 0;; esac
 # Temporal window. scope=actions: only actions; scope=all: every tool except reporting.
 window_check() {
   if [ -n "$(q .window.days)" ]; then jq -e --arg d "$dow" '.window.days|index($d)' >/dev/null <<<"$R" || deny "outside window: nothing on $dow"; fi
@@ -222,5 +226,6 @@ jq -c --argjson n "$now" --arg a "$action" --arg t "${target:-}" '
   | if $a=="open_draft_pr" then .prs+=1 else . end
   | if $a=="spawn" then .spawns+=1 else . end
   | if $t!="" and $a!="spawn" and (.repos|index($t)|not) then .repos+=[$t] else . end' <<<"$S" >"$st.tmp" && mv "$st.tmp" "$st"
+sign_state >"$st_sig.tmp" && mv "$st_sig.tmp" "$st_sig"
 [ -n "$action" ] && printf '%s ok %s %s %s\n' "$(date -u +%FT%TZ)" "$tool" "$action" "${target:-}" >>"$log"
 exit 0

@@ -39,7 +39,7 @@ git -C "$work/src" add . && git -C "$work/src" -c user.name=t -c user.email=t@ex
 run() {
   local name=$1 want=$2 now=$3 contract=$4 sid=$5 json=$6; shift 6
   local sha; sha=$(sha256sum <"$contract" | cut -d' ' -f1)
-  local out; out=$(env -i PATH="$PATH" HOME="$work" K9_REACH_ROLE="${ROLE:-deed-migrator}" \
+  local out; out=$(env -i PATH="$PATH" HOME="$work" K9_REACH_STATE_KEY="${KEY-test-state-key}" K9_REACH_ROLE="${ROLE:-deed-migrator}" \
     K9_REACH_JSON_SHA="${SHA:-$sha}" K9_REACH_FILE="$contract" K9_REACH_STATE="$work/state" \
     K9_REACH_NOW="$now" "$@" bash "$hook" <<<"${json//SID/$sid}")
   local got=pass; [[ "$out" == *'"permissionDecision":"deny"'* ]] && got=deny
@@ -137,6 +137,14 @@ echo "# contract and input"
 ROLE=nobody run "unknown role" deny "$MON" "$full" c1 "$READ"
 SHA=0000 run "tampered contract (hash mismatch)" deny "$MON" "$full" c2 "$READ"
 run "malformed input" deny "$MON" "$full" c3 "not json"
+
+# state integrity (HMAC over the session state file)
+KEY= run "state key missing" deny "$MON" "$full" k1 "$READ"
+run "first call signs the state" pass "$MON" "$full" k2 "$READ"
+run "second call after a signed write" pass "$MON" "$full" k2 "$READ"
+jq -c ".calls=0" "$work/state/k2.json" >"$work/state/k2.t" && mv "$work/state/k2.t" "$work/state/k2.json"
+run "edited state file" deny "$MON" "$full" k2 "$READ"
+run "hub message with an edited state file" pass "$MON" "$full" k2 "$MSG"
 
 echo "local hook tests: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]
