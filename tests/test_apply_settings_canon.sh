@@ -189,8 +189,8 @@ if [ "$canon_am" = false ]; then
   grep -qE '^api --paginate repos/me/drifty/pulls\?state=open&per_page=100 ' "$STUB_LOG" \
     && pass "the open-PR census asks gh for every page (--paginate)" || bad "the open-PR census is not paginated"
 fi
-rows DRIFT me/drifty | grep -q $'\tallow_auto_merge\t'"$canon_am" && pass "allow_auto_merge drift reported" || bad "allow_auto_merge drift missing"
-rows DRIFT me/drifty | grep -q 'actions.patterns_allowed' && pass "missing canon pattern reported" || bad "missing pattern not reported"
+got=$(rows DRIFT me/drifty); grep -q $'\tallow_auto_merge\t'"$canon_am" <<<"$got" && pass "allow_auto_merge drift reported" || bad "allow_auto_merge drift missing"
+got=$(rows DRIFT me/drifty); grep -q 'actions.patterns_allowed' <<<"$got" && pass "missing canon pattern reported" || bad "missing pattern not reported"
 [ -z "$(rows DRIFT me/clean)$(rows ARMED me/clean)" ] && pass "compliant repo has no rows" || bad "clean repo reported: $(rows DRIFT me/clean)"
 
 echo "4. skips"
@@ -202,11 +202,11 @@ echo "9. a write of false reads back as FIXED"
 [ "$rc" -eq 0 ] && pass "exit 0 on a clean single-repository apply" || bad "exit $rc, expected 0: $(rows FAIL me/solo | tr '\t' ' ')"
 [ -z "$(rows FAIL me/solo)" ] && pass "no FAIL row" || bad "FAIL rows: $(rows FAIL me/solo | tr '\t' ' ')"
 if [ "$canon_am" = false ]; then
-  rows FIXED me/solo | grep -q $'\tallow_auto_merge=false' && pass "allow_auto_merge=false is FIXED" || bad "no FIXED row for allow_auto_merge=false"
+  got=$(rows FIXED me/solo); grep -q $'\tallow_auto_merge=false' <<<"$got" && pass "allow_auto_merge=false is FIXED" || bad "no FIXED row for allow_auto_merge=false"
   [ "$(live me/solo '.live.allow_auto_merge')" = false ] && pass "allow_auto_merge reads back false" || bad "allow_auto_merge not false"
 fi
-rows FIXED me/solo | grep -q $'\tallow_merge_commit=false' && pass "allow_merge_commit=false is FIXED" || bad "no FIXED row for allow_merge_commit=false"
-rows FIXED me/solo | grep -q 'actions_workflow.can_approve_pull_request_reviews=false' && pass "workflow false value is FIXED" || bad "no FIXED row for can_approve_pull_request_reviews=false"
+got=$(rows FIXED me/solo); grep -q $'\tallow_merge_commit=false' <<<"$got" && pass "allow_merge_commit=false is FIXED" || bad "no FIXED row for allow_merge_commit=false"
+got=$(rows FIXED me/solo); grep -q 'actions_workflow.can_approve_pull_request_reviews=false' <<<"$got" && pass "workflow false value is FIXED" || bad "no FIXED row for can_approve_pull_request_reviews=false"
 
 echo "2,3,5,6. --apply"
 : > "$STUB_LOG"; run --apply
@@ -235,15 +235,15 @@ jq -e 'index("local/only@*")' <<<"$pats" >/dev/null && pass "repo-only Actions p
 jq -e --arg p "$first_pattern" 'index($p)' <<<"$pats" >/dev/null && pass "missing canon pattern added" || bad "canon pattern not added"
 grep -qE '^api -X PATCH repos/me/priv --input' "$STUB_LOG" && pass "private repo flat block patched" || bad "private repo not patched"
 [ "$(live me/priv '.live.security_and_analysis | has("secret_scanning")')" = false ] && pass "no secret-scanning write on the private repo" || bad "secret scanning written on private repo"
-rows N/A me/priv | grep -q 'secret_scanning' && pass "private repo reports N/A" || bad "no N/A row for private repo"
-rows FAIL org1/broken | grep -q 'rejected' && pass "rejected write is FAIL" || bad "rejected write not FAIL"
-rows FAIL org1/sticky | grep -q 'read back' && pass "write that does not read back is FAIL" || bad "sticky not FAIL"
-rows GOVERNED org1/gov | grep -q . && pass "org-governed Actions policy is GOVERNED" || bad "no GOVERNED row"
+got=$(rows N/A me/priv); grep -q 'secret_scanning' <<<"$got" && pass "private repo reports N/A" || bad "no N/A row for private repo"
+got=$(rows FAIL org1/broken); grep -q 'rejected' <<<"$got" && pass "rejected write is FAIL" || bad "rejected write not FAIL"
+got=$(rows FAIL org1/sticky); grep -q 'read back' <<<"$got" && pass "write that does not read back is FAIL" || bad "sticky not FAIL"
+got=$(rows GOVERNED org1/gov); grep -q . <<<"$got" && pass "org-governed Actions policy is GOVERNED" || bad "no GOVERNED row"
 grep -q 'escalation attempted' "$tmp/err" && bad "escalated to the organisation" || pass "never escalated to the organisation"
 grep -qE '^api -X (PATCH|PUT) repos/me/clean' "$STUB_LOG" && bad "compliant repo was written" || pass "compliant repo not written"
 
 echo "10. Actions switched off"
-rows HOLD me/off | grep -q 'actions.enabled' && pass "disabled Actions reported as HOLD" || bad "no HOLD row for me/off"
+got=$(rows HOLD me/off); grep -q 'actions.enabled' <<<"$got" && pass "disabled Actions reported as HOLD" || bad "no HOLD row for me/off"
 grep -qE '^api -X PUT repos/me/off/actions' "$STUB_LOG" && bad "Actions policy written on a repo with Actions off" || pass "no Actions write on a repo with Actions off"
 [ "$(live me/off '.perms.enabled')" = false ] && pass "Actions stay off" || bad "Actions were switched on"
 [ "$(live me/off '.wf.default_workflow_permissions')" = write ] && pass "workflow permissions untouched while Actions are off" || bad "workflow permissions written while Actions are off"
@@ -257,8 +257,8 @@ set -e
 
 echo "11. a failed disarm blocks the auto-merge switch"
 if [ "$canon_am" = false ]; then
-  rows FAIL org1/stuck | grep -q 'pr#9' && pass "failed disarm is FAIL" || bad "no FAIL row for the disarm"
-  rows FAIL org1/stuck | grep -q $'\tallow_auto_merge\t' && pass "allow_auto_merge reported as not written" || bad "no FAIL row for allow_auto_merge"
+  got=$(rows FAIL org1/stuck); grep -q 'pr#9' <<<"$got" && pass "failed disarm is FAIL" || bad "no FAIL row for the disarm"
+  got=$(rows FAIL org1/stuck); grep -q $'\tallow_auto_merge\t' <<<"$got" && pass "allow_auto_merge reported as not written" || bad "no FAIL row for allow_auto_merge"
   [ "$(live org1/stuck '.live.allow_auto_merge')" = true ] && pass "setting left on while a PR is still armed" || bad "setting switched off with a PR still armed"
   [ "$(live org1/stuck '.live.delete_branch_on_merge')" = true ] && pass "the repository's other settings still applied" || bad "other settings were not applied"
 fi
