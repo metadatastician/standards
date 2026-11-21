@@ -126,6 +126,12 @@ while IFS= read -r -d '' file; do
     owner="${repo%%/*}"
     if first_party "$owner"; then printf '%s\t%s\t%s\t-\tfirst-party\n' "$rel" "$action" "${old:0:12}"; continue; fi
     if held "$repo" || held "$action"; then printf '%s\t%s\t%s\t-\theld\n' "$rel" "$action" "${old:0:12}"; continue; fi
+    # Untrusted repo text reaches a sed expression below: accept only the strict
+    # action grammar (owner/repo[/path]) and a plain version token. Anything else
+    # is reported as unparsed and never interpolated.
+    if ! [[ "$action" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(/[A-Za-z0-9_./-]+)?$ && "$old" =~ ^[0-9a-f]{40}$ && "$comment" =~ ^[A-Za-z0-9._+-]+$ ]]; then
+      printf '%s\t%s\t%s\t-\tunparsed\n' "$rel" "${action:0:80}" "${old:0:12}"; continue
+    fi
     cur="$(version_of "$comment")" || { printf '%s\t%s\t%s\t-\tunparsed\n' "$rel" "$action" "${old:0:12}"; continue; }
     latest_tag "$repo"
     tag="${LATEST_TAG[$repo]}"

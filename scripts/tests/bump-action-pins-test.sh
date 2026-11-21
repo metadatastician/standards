@@ -56,6 +56,8 @@ jobs:
       - uses: ./.github/actions/x
       - uses: foo/unversioned@$A # stable
       - uses: foo/missing@$A # v1.0.0
+      - uses: foo/b&d|x@$A # v1.0.0
+      - uses: foo/bar@$A # v1.0.0\1
 YML
 cat > "$D/.github/actions/x/action.yml" <<YML
 runs:
@@ -83,8 +85,9 @@ expect "…the quoted form keeps its quotes" 1 "$(grep -c '"foo/bar@444444444444
 expect "…the composite action is bumped too" 1 "$(grep -c '4444444444444444444444444444444444444444 # v2.1.0' "$D/.github/actions/x/action.yml")"
 expect "…an annotated tag lands on the commit, not the tag object" 1 "$(grep -c 'foo/ann@6666666666666666666666666666666666666666 # v1.0.0' "$W")"
 expect "…a pin at the same SHA for a different action keeps its own SHA" 1 "$(grep -c "foo/shared@7777777777777777777777777777777777777777 # v2.0.0" "$W")"
-expect "…nothing else moved (held, first-party, no comment, non-version comment, no release)" 5 "$(grep -c "$A" "$W" | awk '{print $1}')"
+expect "…nothing else moved (held, first-party, no comment, non-version comment, no release, two malformed)" 7 "$(grep -c "$A" "$W" | awk '{print $1}')"
 expect "one release lookup per repository, not per line" 1 "$(grep -c 'repos/foo/bar/releases/latest' "$GH_LOG")"
+expect "an action or comment outside the strict grammar is unparsed, never interpolated" 4 "$(printf "%s\n" "$rows" | grep -c "unparsed")"
 expect "a second run changes nothing" "0" "$(bash "$TARGET" "$D" | grep -c '	bumped$')"
 bash "$TARGET" "$WORK/none" >/dev/null 2>&1; expect "a directory with no .github is an error" 2 "$?"
 
