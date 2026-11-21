@@ -271,6 +271,76 @@ expect "process_repo runs the default-branch repair only with REGEN_MAIN=1" "o/r
 fresh_main unwired
 expect "…and not without it" "" "$(TOOL_ACTION=bump process_repo o/r t 2>/dev/null)"
 
+# --- bump_main: the single writer lands workflow bump + lock in ONE commit ----
+# The bump tool is stubbed; its own suite is bump-action-pins-test.sh.
+cat > "$TOOLS/bump-action-pins.sh" <<'STUB'
+#!/usr/bin/env bash
+cd "$1" || exit 2
+case "${BUMP_ACTION:-none}" in
+  edit) sed -i 's/@1111111111111111111111111111111111111111/@5555555555555555555555555555555555555555/' .github/workflows/ci.yml
+        printf '.github/workflows/ci.yml\ta/b\t111111111111\t555555555555\tbumped\n' ;;
+  evil) echo x > README.md ;;
+  fail) exit 1 ;;
+  none) : ;;
+esac
+exit 0
+STUB
+bump_paths() { jq -r '.variables.in.fileChanges.additions | map(.path) | sort | join(",")' "$GH_CAPTURE"; }
+
+fresh_main bump
+out="$(BUMP_ACTION=edit TOOL_ACTION=bump bump_main o/r '[]' 2>/dev/null)"
+expect "a bump opens one PR" "o/r@main	pr-opened #42 ($oid)" "$out"
+expect "…the workflow edit and the lock travel in ONE commit" ".github/workflows/actions.lock,.github/workflows/ci.yml" "$(bump_paths)"
+expect "…the commit file for the workflow carries the bumped SHA" 1 "$(jq -r '.variables.in.fileChanges.additions[] | select(.path==".github/workflows/ci.yml") | .contents' "$GH_CAPTURE" | base64 -d | grep -c '@5555555555555555555555555555555555555555')"
+expect "…on the bump branch, guarded by the default head" "chore/bump-action-pins $MAIN_SHA" "$(jq -r '.variables.in.branch.branchName + " " + .variables.in.expectedHeadOid' "$GH_CAPTURE")"
+expect "…with the bump headline" "$BUMP_PINS_HEADLINE" "$(jq -r .variables.in.message.headline "$GH_CAPTURE")"
+expect "…and the PR goes from the bump branch to the default branch" 1 "$(grep -c 'POST-PR .*head=chore/bump-action-pins .*base=main' "$GH_LOG")"
+
+fresh_main bumpnone
+expect "nothing to bump opens nothing" "o/r@main	current" "$(BUMP_ACTION=none TOOL_ACTION=bump bump_main o/r '[]' 2>/dev/null)"
+expect "…and touches no ref" 0 "$(grep -c . "$GH_LOG")"
+
+fresh_main bumpunver
+expect "a bump whose lock does not verify is not proposed" "o/r@main	bump-unverified" "$(BUMP_ACTION=edit VERIFY_RC=1 TOOL_ACTION=bump bump_main o/r '[]' 2>/dev/null)"
+expect "…and no branch is created" 0 "$(grep -c . "$GH_LOG")"
+
+fresh_main bumpevil
+expect "a bump that changes a path outside .github is refused" "o/r@main	bump-unexpected-path" "$(BUMP_ACTION=evil TOOL_ACTION=bump bump_main o/r '[]' 2>/dev/null)"
+fresh_main bumpfail
+expect "a failing bump tool is reported" "o/r@main	bump-failed" "$(BUMP_ACTION=fail bump_main o/r '[]' 2>/dev/null)"
+fresh_main bumpdry
+expect "DRY_RUN reports the bump" "o/r@main	would-bump 1" "$(DRY_RUN=1 BUMP_ACTION=edit TOOL_ACTION=bump bump_main o/r '[]' 2>/dev/null)"
+expect "…and writes nothing" 0 "$(grep -c . "$GH_LOG")"
+fresh_main bumpmoved
+expect "a default branch that moved under the clone is refused" "o/r@main	moved" "$(MAIN_SHA=4444444444444444444444444444444444444444 BUMP_ACTION=edit bump_main o/r '[]' 2>/dev/null)"
+fresh_main bumpopen
+bopen='[{"number":9,"draft":false,"user":{"login":"estate-applier[bot]"},"head":{"ref":"chore/bump-action-pins","sha":"hhh","repo":{"full_name":"o/r"}},"base":{"repo":{"full_name":"o/r"}}}]'
+expect "an open bump PR is left alone" "o/r@main	bump-pr-open" "$(BUMP_ACTION=edit bump_main o/r "$bopen" 2>/dev/null)"
+expect "…and is swept, because a bot opened it on the bump branch" "9	chore/bump-action-pins	hhh" "$(printf '%s' "$bopen" | select_prs)"
+expect "…but never a human's PR on that branch name" "" "$(printf '%s' "$bopen" | sed 's/estate-applier\[bot\]/someone/' | select_prs)"
+
+fresh_main wiredbump
+out="$(BUMP_PINS=1 REGEN_MAIN=1 BUMP_ACTION=edit TOOL_ACTION=bump process_repo o/r t 2>/dev/null)"
+expect "process_repo bumps only with BUMP_PINS=1" "o/r@main	pr-opened #42 ($oid)" "$out"
+expect "…and then skips the lock-only repair (one PR, not two)" 1 "$(grep -c 'POST-PR' "$GH_LOG")"
+fresh_main unwiredbump
+expect "…and does not bump without it" "" "$(BUMP_ACTION=edit TOOL_ACTION=bump process_repo o/r t 2>/dev/null)"
+fresh_main repairstill
+out="$(BUMP_PINS=1 REGEN_MAIN=1 BUMP_ACTION=none TOOL_ACTION=bump process_repo o/r t 2>/dev/null)"
+expect "with nothing to bump, the lock-only repair still runs" "o/r@main	current
+o/r@main	pr-opened #42 ($oid)" "$out"
+
+# A repository with no lock gets the bump alone.
+nolock="$WORK/repo-nolock"; rm -rf "$nolock"; mkdir -p "$nolock/.github/workflows"; git -C "$nolock" init --quiet
+printf 'jobs:\n  a:\n    steps:\n      - uses: a/b@1111111111111111111111111111111111111111 # v1\n' > "$nolock/.github/workflows/ci.yml"
+git -C "$nolock" add -A; git -C "$nolock" -c user.name=t -c user.email=t@t commit --quiet -m init
+FIXTURE="$nolock"; MAIN_SHA="$(git -C "$nolock" rev-parse HEAD)"; export MAIN_SHA; : > "$GH_LOG"; rm -f "$GH_CAPTURE"
+out="$(CONTENTS=404 BUMP_PINS=1 BUMP_ACTION=edit process_repo o/r t 2>/dev/null)"
+expect "a repository with no lock gets the bump alone" "o/r@main	pr-opened #42 ($oid)" "$out"
+expect "…the commit holds only the workflow" ".github/workflows/ci.yml" "$(bump_paths)"
+: > "$GH_LOG"
+expect "…and without BUMP_PINS a lockless repository is still skipped" "" "$(CONTENTS=404 BUMP_ACTION=edit process_repo o/r t 2>/dev/null)"
+
 # --- missing credential ----------------------------------------------------
 out="$(REGEN_TOKENS='' main 2>&1)"; rc=$?
 expect "no token: exits 0" 0 "$rc"
