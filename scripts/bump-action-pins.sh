@@ -147,9 +147,12 @@ while IFS= read -r -d '' file; do
     new="${LATEST_SHA[$repo]}"
     if [ "$new" = "?" ]; then printf '%s\t%s\t%s\t-\tunresolved\n' "$rel" "$action" "${old:0:12}"; continue; fi
     # Rewrite SHA and the first token of the pin comment on this action's lines.
+    # The comment must be matched as a WHOLE token (whitespace or end of line
+    # after it, kept in the replacement): `v2` must never rewrite the prefix of a
+    # `v2.0.0` line that shares the action and SHA, which would become `v2.1.0.0.0`.
     esc_action="$(sed 's/[.[\*^$/]/\\&/g' <<< "$action")"
     esc_comment="$(sed 's/[.[\*^$/]/\\&/g' <<< "$comment")"
-    sed -E -i "s|(uses:[[:space:]]*[\"']?${esc_action})@${old}([\"']?[[:space:]]*#[[:space:]]*)${esc_comment}|\1@${new}\2${tag}|" "$file"
+    sed -E -i "s|(uses:[[:space:]]*[\"']?${esc_action})@${old}([\"']?[[:space:]]*#[[:space:]]*)${esc_comment}([[:space:]]\|\$)|\1@${new}\2${tag}\3|" "$file"
     printf '%s\t%s\t%s\t%s\tbumped\n' "$rel" "$action" "${old:0:12}" "${new:0:12}"
   done < <(grep -E 'uses:[[:space:]]*["'"'"']?[^[:space:]"'"'"'@]+@[0-9a-f]{40}["'"'"']?[[:space:]]*#' "$file" | sort -u)
 done < <(find "$dir/.github/workflows" "$dir/.github/actions" -type f \( -name '*.yml' -o -name '*.yaml' \) -print0 2>/dev/null | sort -z)

@@ -224,17 +224,24 @@ clone_branch() {
 # Open ONE PR from branch $5 of repo $1 (default branch $2 at $3) carrying the
 # files $8... of checkout $4, in one commit headed $6 with body $7. Prints the
 # outcome. Never moves a branch it did not create: an existing branch is reused
-# only when its head commit carries headline $6 and no PR is open from it
-# (the callers check the latter). Needs Pull requests: write, and Workflows:
-# write when a path is under .github/workflows/.
+# only when it carries nothing but the default head $3 (a stranded leftover of a
+# commit that was refused: no commit on it, nothing to lose) or its head commit
+# carries headline $6; and no PR is open from it (the callers check the latter).
+# When the commit is refused (typically the App lacks Workflows: write) the
+# branch this call created or reused is deleted again, but only while it still
+# points at $3, so the next run can retry. Needs Pull requests: write, and
+# Workflows: write when a path is under .github/workflows/.
 open_branch_pr() {
-  local repo="$1" base="$2" sha="$3" dir="$4" branch="$5" headline="$6" body="$7" msg oid pr
+  local repo="$1" base="$2" sha="$3" dir="$4" branch="$5" headline="$6" body="$7" msg oid pr head
   shift 7
   if ! "$GH_BIN" api -X POST "repos/$repo/git/refs" \
        -f ref="refs/heads/$branch" -f sha="$sha" --silent 2>/dev/null; then
     # The branch exists. Reuse it only if it is a leftover of ours.
+    head="$("$GH_BIN" api "repos/$repo/git/ref/heads/$branch" --jq .object.sha 2>/dev/null || true)"
     msg="$("$GH_BIN" api "repos/$repo/commits/$branch" --jq .commit.message 2>/dev/null || true)"
-    if [ "${msg%%$'\n'*}" = "$headline" ] \
+    if [ -n "$head" ] && [ "$head" = "$sha" ]; then
+      :
+    elif [ "${msg%%$'\n'*}" = "$headline" ] \
        && "$GH_BIN" api -X PATCH "repos/$repo/git/refs/heads/$branch" \
             -f sha="$sha" -F force=true --silent 2>/dev/null; then
       :
@@ -252,6 +259,12 @@ open_branch_pr() {
       echo "pr-refused ($oid)"
     fi
   else
+    # Do not strand the branch: remove it only while it is still the bare
+    # default head this call put it on, never one that has since moved.
+    head="$("$GH_BIN" api "repos/$repo/git/ref/heads/$branch" --jq .object.sha 2>/dev/null || true)"
+    if [ -n "$head" ] && [ "$head" = "$sha" ]; then
+      "$GH_BIN" api -X DELETE "repos/$repo/git/refs/heads/$branch" --silent 2>/dev/null || true
+    fi
     echo "commit-refused"
   fi
 }
@@ -304,7 +317,8 @@ BUMP_PINS_HEADLINE="chore(deps): bump third-party action pins and actions.lock t
 # outside .github/workflows or .github/actions. A repository with no lock gets
 # the bump alone. Prints "repo@branch<TAB>outcome".
 bump_main() {
-  local repo="$1" prs="$2" base sha work outcome rows n paths p body
+  local repo="$1" prs="$2" base sha work outcome rows n p body
+  local -a paths=()
   if printf '%s' "$prs" | jq -e --arg b "$BUMP_PR_BRANCH" \
        'any(.[]; .head.ref == $b and .head.repo.full_name == .base.repo.full_name)' >/dev/null; then
     printf '%s@main\tbump-pr-open\n' "$repo"; return 0
@@ -334,8 +348,10 @@ bump_main() {
     *) printf '%s@%s\tbump-%s\n' "$repo" "$base" "$outcome"; rm -rf "$work"; return 0 ;;
   esac
   # Everything now differing from the default head, bump and lock together.
-  paths="$(git -C "$work/r" diff --name-only "$sha")"
-  for p in $paths; do
+  # NUL-delimited into an array, so a path with a space stays one path and
+  # nothing is glob-expanded.
+  mapfile -d '' -t paths < <(git -C "$work/r" diff --name-only -z "$sha")
+  for p in "${paths[@]}"; do
     case "$p" in
       .github/workflows/*|.github/actions/*) ;;
       *) printf '%s@%s\tbump-unexpected-path\n' "$repo" "$base"; rm -rf "$work"; return 0 ;;
@@ -347,8 +363,7 @@ bump_main() {
   body="Third-party action pins moved to their latest release, and actions.lock rewritten in the same commit by the single-writer applier (scripts/bump-action-pins.sh and scripts/regen-dependabot-locks.sh, BUMP_PINS=1, in metadatastician/standards). Verified with update-actions-lock.sh --verify-local, check-lock-sync.sh and check-lock-pin-contract.sh where the repository has a lock.
 
 $(printf '%s\n' "$rows" | awk -F'\t' '$5=="bumped"{printf "- %s: %s -> %s (%s)\n", $2, $3, $4, $1}' | head -n 40)"
-  # shellcheck disable=SC2086
-  outcome="$(open_branch_pr "$repo" "$base" "$sha" "$work/r" "$BUMP_PR_BRANCH" "$BUMP_PINS_HEADLINE" "$body" $paths)"
+  outcome="$(open_branch_pr "$repo" "$base" "$sha" "$work/r" "$BUMP_PR_BRANCH" "$BUMP_PINS_HEADLINE" "$body" "${paths[@]}")"
   printf '%s@%s\t%s\n' "$repo" "$base" "$outcome"
   rm -rf "$work"
 }

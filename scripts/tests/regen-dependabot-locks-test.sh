@@ -75,6 +75,7 @@ if [ "$1 $2" = "api --paginate" ] && [[ "$3" == installation/repositories* ]]; t
 fi
 if [ "$1 $2" = "api graphql" ]; then
   cat > "$GH_CAPTURE"
+  [ -n "${GQL_FAIL:-}" ] && exit 1
   echo 2222222222222222222222222222222222222222
   exit 0
 fi
@@ -88,6 +89,9 @@ if [ "$1" = api ] && [[ "$2" == repos/o/r/commits/* ]]; then echo "$MAIN_SHA"; e
 if [ "$1 $2 $3" = "api -X POST" ] && [[ "$4" == repos/*/git/refs ]]; then
   echo "POST-REF $*" >> "$GH_LOG"; [ -n "${REF_EXISTS:-}" ] && exit 1; exit 0
 fi
+# The branch head a branch-ref read reports (BRANCH_SHA); unset means the branch is unknown.
+if [ "$1" = api ] && [[ "$2" == repos/*/git/ref/heads/* ]]; then [ -n "${BRANCH_SHA:-}" ] || exit 1; echo "$BRANCH_SHA"; exit 0; fi
+if [ "$1 $2 $3" = "api -X DELETE" ]; then echo "DELETE-REF $*" >> "$GH_LOG"; exit 0; fi
 if [ "$1 $2 $3" = "api -X PATCH" ]; then echo "PATCH-REF $*" >> "$GH_LOG"; exit 0; fi
 if [ "$1 $2 $3" = "api -X POST" ] && [[ "$4" == repos/*/pulls ]]; then
   echo "POST-PR $*" >> "$GH_LOG"; [ -n "${PR_FAIL:-}" ] && exit 1; echo 42; exit 0
@@ -280,6 +284,7 @@ case "${BUMP_ACTION:-none}" in
   edit) sed -i 's/@1111111111111111111111111111111111111111/@5555555555555555555555555555555555555555/' .github/workflows/ci.yml
         printf '.github/workflows/ci.yml\ta/b\t111111111111\t555555555555\tbumped\n' ;;
   evil) echo x > README.md ;;
+  space) printf 'x\n' > ".github/workflows/build checks.yml" ;;
   fail) exit 1 ;;
   none) : ;;
 esac
@@ -316,6 +321,31 @@ expect "a default branch that moved under the clone is refused" "o/r@main	moved"
 fresh_main bumpopen
 bopen='[{"number":9,"draft":false,"user":{"login":"estate-applier[bot]"},"head":{"ref":"chore/bump-action-pins","sha":"hhh","repo":{"full_name":"o/r"}},"base":{"repo":{"full_name":"o/r"}}}]'
 expect "an open bump PR is left alone" "o/r@main	bump-pr-open" "$(BUMP_ACTION=edit bump_main o/r "$bopen" 2>/dev/null)"
+
+# A refused commit (e.g. the App lacks Workflows: write) must not strand the
+# branch this run created: the next run has to be able to retry.
+fresh_main refused
+out="$(GQL_FAIL=1 BRANCH_SHA="$MAIN_SHA" BUMP_ACTION=edit TOOL_ACTION=bump bump_main o/r '[]' 2>/dev/null)"
+expect "a refused commit is reported" "o/r@main	commit-refused" "$out"
+expect "…the branch this run created, still at the default head, is deleted" 1 "$(grep -c 'DELETE-REF .*git/refs/heads/chore/bump-action-pins' "$GH_LOG")"
+
+fresh_main refusedmoved
+GQL_FAIL=1 BRANCH_SHA=9999999999999999999999999999999999999999 BUMP_ACTION=edit TOOL_ACTION=bump bump_main o/r '[]' >/dev/null 2>&1
+expect "…a branch that has moved since is never deleted" 0 "$(grep -c DELETE-REF "$GH_LOG")"
+
+fresh_main strandedretry
+out="$(REF_EXISTS=1 BRANCH_SHA="$MAIN_SHA" LEFTOVER_MSG='chore: unrelated default-branch commit' BUMP_ACTION=edit TOOL_ACTION=bump bump_main o/r '[]' 2>/dev/null)"
+expect "a stranded bump branch (still at the default head, no commit of ours) is retried" "o/r@main	pr-opened #42 ($oid)" "$out"
+
+fresh_main strangerbranch
+expect "…but a branch with someone else's commits on it is still never touched" "o/r@main	repair-branch-exists" "$(REF_EXISTS=1 BRANCH_SHA=9999999999999999999999999999999999999999 LEFTOVER_MSG='feat: someone else' BUMP_ACTION=edit TOOL_ACTION=bump bump_main o/r '[]' 2>/dev/null)"
+expect "…no delete, no commit" "0 no" "$(grep -c DELETE-REF "$GH_LOG") $([ -e "$GH_CAPTURE" ] && echo yes || echo no)"
+
+# A workflow whose filename has a space is one path, not two.
+fresh_main spaced
+out="$(BUMP_ACTION=space TOOL_ACTION=bump bump_main o/r '[]' 2>/dev/null)"
+expect "a workflow with a space in its name is accepted" "o/r@main	pr-opened #42 ($oid)" "$out"
+expect "…and travels whole in the commit" ".github/workflows/actions.lock,.github/workflows/build checks.yml" "$(bump_paths)"
 expect "…and is swept, because a bot opened it on the bump branch" "9	chore/bump-action-pins	hhh" "$(printf '%s' "$bopen" | select_prs)"
 expect "…but never a human's PR on that branch name" "" "$(printf '%s' "$bopen" | sed 's/estate-applier\[bot\]/someone/' | select_prs)"
 

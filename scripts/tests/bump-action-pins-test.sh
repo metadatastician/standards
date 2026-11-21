@@ -22,10 +22,12 @@ case "$2" in
   repos/foo/rc/releases/latest)    echo v5.0.0-rc1 ;;
   repos/foo/ann/releases/latest)   echo v1.0.0 ;;
   repos/foo/shared/releases/latest) echo v2.0.0 ;;
+  repos/foo/pre/releases/latest)    echo v2.1.0 ;;
   repos/foo/bar/git/ref/tags/v2.1.0)  echo "commit 4444444444444444444444444444444444444444" ;;
   repos/foo/ann/git/ref/tags/v1.0.0)  echo "tag aaaa" ;;
   repos/foo/ann/git/tags/aaaa)        echo "commit 6666666666666666666666666666666666666666" ;;
   repos/foo/shared/git/ref/tags/v2.0.0) echo "commit 7777777777777777777777777777777777777777" ;;
+  repos/foo/pre/git/ref/tags/v2.1.0)   echo "commit 8888888888888888888888888888888888888888" ;;
   *) exit 1 ;;
 esac
 STUB
@@ -49,6 +51,8 @@ jobs:
       - uses: foo/rc@2222222222222222222222222222222222222222 # v4.0.0
       - uses: foo/ann@$A # v0.9.0
       - uses: foo/shared@$A # v1.0.0
+      - uses: foo/pre@$A # v2
+      - uses: foo/pre@$A # v2.0.0
       - uses: held/thing/sub@$A # v1.0.0
       - uses: hyperpolymath/x/.github/workflows/y.yml@$A # v1
       - uses: foo/nocomment@$A
@@ -85,6 +89,8 @@ expect "…the quoted form keeps its quotes" 1 "$(grep -c '"foo/bar@444444444444
 expect "…the composite action is bumped too" 1 "$(grep -c '4444444444444444444444444444444444444444 # v2.1.0' "$D/.github/actions/x/action.yml")"
 expect "…an annotated tag lands on the commit, not the tag object" 1 "$(grep -c 'foo/ann@6666666666666666666666666666666666666666 # v1.0.0' "$W")"
 expect "…a pin at the same SHA for a different action keeps its own SHA" 1 "$(grep -c "foo/shared@7777777777777777777777777777777777777777 # v2.0.0" "$W")"
+expect "…a short comment token never rewrites the prefix of a longer one (v2 vs v2.0.0)" 2 "$(grep -c "foo/pre@8888888888888888888888888888888888888888 # v2.1.0$" "$W")"
+expect "…so no pin comment is mangled into v2.1.0.0.0" 0 "$(grep -c "v2.1.0\.0" "$W")"
 expect "…nothing else moved (held, first-party, no comment, non-version comment, no release, two malformed)" 7 "$(grep -c "$A" "$W" | awk '{print $1}')"
 expect "one release lookup per repository, not per line" 1 "$(grep -c 'repos/foo/bar/releases/latest' "$GH_LOG")"
 expect "an action or comment outside the strict grammar is unparsed, never interpolated" 4 "$(printf "%s\n" "$rows" | grep -c "unparsed")"
