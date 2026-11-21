@@ -305,6 +305,15 @@ case "$tool" in
         top=$(git -C "$cwd" rev-parse --show-toplevel 2>/dev/null) || deny "$action outside a git checkout"
         target=$(repo_of_url "$(git -C "$top" remote get-url "$(gh_remote "$top")" 2>/dev/null)")
       fi
+      # A PR URL picks its own repo in gh, whatever --repo or the checkout says.
+      # Other github.com links (in a comment body, say) do not pick a repo.
+      if [[ "$seg_c" =~ github\.com/([^/[:space:]]+)/([^/[:space:]]+)/pull/ ]]; then
+        t="${BASH_REMATCH[1]}/${BASH_REMATCH[2]}"
+        if [ "${t,,}" != "${target,,}" ]; then
+          [[ ! "$seg_c" =~ (^|[[:space:]])(--repo|-R)([[:space:]]+|=) ]] || deny "the PR URL and --repo name different repos"
+          target=$t
+        fi
+      fi
     fi ;;
 esac
 if [ -n "$action" ]; then
@@ -335,7 +344,8 @@ if [ -n "$action" ]; then
     if [ -n "$files" ] && [ -n "$(g '.paths[0]')" ]; then
       while IFS= read -r p; do [ -z "$p" ] && continue; ok=0
         while IFS= read -r glob; do [[ "$p" == $glob ]] && { ok=1; break; }; done < <(g '.paths[]')
-        [ $ok = 1 ] || deny "depth: $(clip "$p") is outside the allowed paths on $target"
+        # The file name is repo text, so it stays out of the reason; git shows which file.
+        [ $ok = 1 ] || deny "depth: a changed file is outside the allowed paths ($(g '.paths[]' | paste -sd' ')) on $target"
       done <<<"$files"
     fi
     if [ "$action" = push_branch ]; then

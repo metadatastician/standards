@@ -66,8 +66,10 @@ Pilot settings (ruling Q12): `K9_CEIL_PROFILE=moderate`,
   GitHub action is denied; one set in a shell profile is not seen. Any
   `curl`, `wget`, `http` or `xh` call is denied. Other Bash runs freely, so
   a worker can build and test.
-* Pushed paths and branch names in a deny reason have control characters
-  removed and are cut to 80 characters.
+* A pull request URL in a `gh pr` command sets the repo it is checked
+  against, and it is denied if `--repo` names another.
+* A deny reason never names a pushed file. Branch names in a deny reason
+  have control characters removed and are cut to 80 characters.
 * Edit paths are resolved (`..` and symlinks) before the path check.
 * One call at a time per session holds a lock on the state file, so two
   calls cannot both use the last unit of a limit.

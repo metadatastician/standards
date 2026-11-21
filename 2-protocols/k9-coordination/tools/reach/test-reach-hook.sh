@@ -120,9 +120,9 @@ run "git -c before push" deny "$MON" "$full" m12 "$(bash_in "$co" 'git -c remote
 run "push inside bash -c" deny "$MON" "$full" m13 "$(bash_in "$co" "bash -c \"git push origin HEAD:main\"")"
 run "push with no arguments" pass "$MON" "$full" m14 "$(bash_in "$co" 'git push')"
 run "push a docs-only branch from another checkout state" pass "$MON" "$full" m15 "$(bash_in "$work/src" 'git push origin claude/clean')"
-WHY="src/x.rs is outside" run "push HEAD (with src/) to claude/clean" deny "$MON" "$full" m16 "$(bash_in "$work/src" 'git push origin HEAD:claude/clean')"
+WHY="a changed file is outside" WHYNOT="x.rs" run "push HEAD (with src/) to claude/clean" deny "$MON" "$full" m16 "$(bash_in "$work/src" 'git push origin HEAD:claude/clean')"
 run "push a tag" deny "$MON" "$full" m17 "$(bash_in "$co" 'git push origin refs/tags/v1')"
-WHY="src/x.rs is outside" run "edit docs/../src/x.rs" deny "$MON" "$full" m18 "$(edit "$co/docs/../src/x.rs")"
+WHY="a changed file is outside" WHYNOT="x.rs" run "edit docs/../src/x.rs" deny "$MON" "$full" m18 "$(edit "$co/docs/../src/x.rs")"
 run "edit through a symlink into src/" deny "$MON" "$full" m19 "$(edit "$co/docs/link/x.rs")"
 run "push with a redirect" pass "$MON" "$full" m20 "$(bash_in "$co" 'git push origin claude/x 2>&1')"
 
@@ -147,13 +147,13 @@ run "backslash m\\erge" deny "$MON" "$full" n4 "$(bash_in "$co" 'gh pr m\erge 1'
 run "quoted 'push' to HEAD:main" deny "$MON" "$full" n5 "$(bash_in "$co" "git 'push' origin HEAD:main")"
 WHY="more than one repo" run "origin with a second, ungranted push URL" deny "$MON" "$full" n6 "$(bash_in "$work/two" 'git push origin claude/x')"
 WHY="insteadOf" run "push to a URL under url.insteadOf" deny "$MON" "$full" n7 "$(bash_in "$work/iof" 'git push https://github.com/hyperpolymath/rsr-template-repo claude/x')"
-WHY="src/x.rs is outside" run "src/ file added then deleted" deny "$MON" "$full" n8 "$(bash_in "$work/gone" 'git push origin claude/x')"
+WHY="a changed file is outside" WHYNOT="x.rs" run "src/ file added then deleted" deny "$MON" "$full" n8 "$(bash_in "$work/gone" 'git push origin claude/x')"
 WHYNOT="$long" run "long path cut in the deny reason" deny "$MON" "$full" n9 "$(bash_in "$work/long" 'git push origin claude/x')"
 run "ANSI-C escape \$'mer\\x67e' after a push" deny "$MON" "$full" n11 "$(bash_in "$co" "git push origin claude/x; gh pr \$'mer\\x67e' 1")"
 # A remote whose main moved on (a commit under src/) while its claude/x stayed at the root.
 git clone -q --bare "$work/src" "$work/behind.git"; git -C "$work/behind.git" branch -q -f main claude/x
 git -C "$work/behind.git" branch -q -f claude/x "$(git -C "$co" rev-list --max-parents=0 HEAD)"
-WHY="src/x.rs is outside" LSR="$work/behind.git" run "destination behind the remote HEAD" deny "$MON" "$full" n12 "$(bash_in "$work/src" 'git push origin HEAD:claude/x')"
+WHY="a changed file is outside" WHYNOT="x.rs" LSR="$work/behind.git" run "destination behind the remote HEAD" deny "$MON" "$full" n12 "$(bash_in "$work/src" 'git push origin HEAD:claude/x')"
 # A remote claude/x at a commit this checkout has never fetched.
 git clone -q --bare "$co" "$work/ahead.git"; git -C "$work/ahead.git" -c user.name=t -c user.email=t@example.invalid \
   commit-tree -p claude/x -m other "$(git -C "$work/ahead.git" rev-parse 'claude/x^{tree}')" >"$work/ahead.sha"
@@ -163,7 +163,11 @@ WHY="cannot read" LSR="$work/nowhere.git" run "remote cannot be read" deny "$MON
 # A remote claude/x that already holds src/x.rs, and a commit that moves it to docs/.
 git clone -q --bare "$work/src" "$work/moved.git"; cp -r "$work/src" "$work/mv"
 git -C "$work/mv" mv src/x.rs docs/x.rs && git -C "$work/mv" -c user.name=t -c user.email=t@example.invalid commit -q -m move
-WHY="src/x.rs is outside" LSR="$work/moved.git" run "move from src/ to docs/" deny "$MON" "$full" n15 "$(bash_in "$work/mv" 'git push origin claude/x')"
+WHY="a changed file is outside" WHYNOT="x.rs" LSR="$work/moved.git" run "move from src/ to docs/" deny "$MON" "$full" n15 "$(bash_in "$work/mv" 'git push origin claude/x')"
+WHY="evil/x not in role" run "gh pr comment on an evil/x PR URL" deny "$MON" "$full" n16 "$(bash_in "$co" 'gh pr comment https://github.com/evil/x/pull/1 --body hi')"
+WHY="different repos" run "PR URL and -R disagree" deny "$MON" "$full" n17 "$(bash_in "$co" "gh pr comment https://github.com/evil/x/pull/1 -R $G --body hi")"
+run "gh pr comment on a granted PR URL" pass "$MON" "$full" n18 "$(bash_in "$co" "gh pr comment https://github.com/$G/pull/1 --body hi")"
+run "gh pr comment whose body links another repo" pass "$MON" "$full" n19 "$(bash_in "$co" 'gh pr comment 1 --body https://github.com/evil/x')"
 qv="$repo/2-protocols/k9-coordination/tools/validate/fixtures/reach/reach-quoted-version.json"
 ROLE=constructor run "role named constructor keeps its grant" pass "$SAT21" "$qv" n10 "$(attach hyperpolymath/k9-ecosystem read)" K9_CEIL_PROFILE=moderate
 
