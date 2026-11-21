@@ -153,8 +153,8 @@ case "$tool" in
           *) deny "gh api write to $ep is not a reach action" ;;
         esac
       fi
-    elif [[ "$c" =~ (^|[;&|[:space:]\(\`])(curl|wget|http|xh)[[:space:]].*api\.github\.com ]]; then
-      deny "direct HTTP calls to api.github.com are not allowed; use git or gh"
+    elif [[ "$c" =~ (^|[;&|[:space:]\(\`])(curl|wget|http|xh)([[:space:]]|$) ]]; then
+      deny "direct HTTP calls are not allowed; use git or gh"
     fi
     if [ -n "$api_target" ]; then
       target=$api_target
