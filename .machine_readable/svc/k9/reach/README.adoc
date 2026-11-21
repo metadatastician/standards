@@ -48,9 +48,14 @@ Pilot settings (ruling Q12): `K9_CEIL_PROFILE=moderate`,
   inside the worker's container. A worker could edit it, so they are
   tamper-evident, not tamper-proof. The hub keeps its own clock from spawn
   time and counts pushes and pull requests on GitHub.
-* It reads `git push` and `gh pr` commands from Bash text. Bash rules are
-  not a security boundary, so the push-time path check and the hub's GitHub
-  check back it up.
+* It reads `git push`, `gh pr` and `gh api` commands from Bash text. A
+  `gh api` write must map to a granted action (merge, draft PR, comment) on a
+  `repos/OWNER/REPO` path, or it is denied. Direct `curl`, `wget`, `http` or
+  `xh` calls to api.github.com are denied. Other Bash runs freely, so a worker
+  can build and test.
+* Bash text rules are not a security boundary. An aliased or obfuscated
+  command can slip past them. The session's GitHub scope, the push-time path
+  check and the hub's GitHub check back them up.
 * It cannot interrupt a session. On `deny_and_interrupt` it tells the worker
   to report, and the hub stops the session.
 * It has not yet run inside a real cloud session (the throwaway test, Q9).

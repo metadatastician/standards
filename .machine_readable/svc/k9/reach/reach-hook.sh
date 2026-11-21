@@ -118,7 +118,7 @@ case "$tool" in
       target=$(git -C "$top" remote get-url origin 2>/dev/null | sed -E 's#^.*github.com[:/]##; s#\.git$##')
     fi ;;
   Bash)
-    c=$(jq -r '.tool_input.command // empty' <<<"$in")
+    c=$(jq -r '.tool_input.command // empty' <<<"$in"); api_target=
     if [[ "$c" =~ (^|[;&|[:space:]])git([[:space:]]+-[Cc][[:space:]]+[^[:space:]]+)*[[:space:]]+push ]]; then
       action=push_branch; need=write
       [[ "$c" =~ (--force|[[:space:]]-f([[:space:]]|$)|--delete|[[:space:]]:[^[:space:]]) ]] && deny "force push or branch delete is never granted"
@@ -126,8 +126,31 @@ case "$tool" in
       [[ "$c" =~ --draft ]] || deny "PRs must be opened as drafts"
     elif [[ "$c" =~ gh[[:space:]]+pr[[:space:]]+(comment|review) ]]; then action=comment; need=read
     elif [[ "$c" =~ gh[[:space:]]+pr[[:space:]]+close ]]; then action=close_pr; need=write
-    elif [[ "$c" =~ gh[[:space:]]+pr[[:space:]]+merge ]]; then action=merge; need=write; fi
-    if [ -n "$action" ]; then
+    elif [[ "$c" =~ gh[[:space:]]+pr[[:space:]]+merge ]]; then action=merge; need=write
+    elif [[ "$c" =~ (^|[;&|[:space:]])gh[[:space:]]+api([[:space:]]|$) ]]; then
+      # gh api: reads pass. A write (a write method, or fields without -X GET)
+      # must map to a reach action on a repos/OWNER/REPO path, or it is denied.
+      if [[ "$c" =~ (-X|--method)[[:space:]=]*[\"\']?(POST|PUT|PATCH|DELETE|post|put|patch|delete) ]] ||
+         { [[ "$c" =~ [[:space:]](-f|-F|--field|--raw-field|--input)([[:space:]=]) ]] &&
+           ! [[ "$c" =~ (-X|--method)[[:space:]=]*[\"\']?(GET|get) ]]; }; then
+        [[ "$c" =~ repos/([A-Za-z0-9._-]+/[A-Za-z0-9._-]+)/([^[:space:]\'\"?]*) ]] ||
+          deny "gh api write without a repos/OWNER/REPO path"
+        api_target=${BASH_REMATCH[1]}; ep=${BASH_REMATCH[2]%/}
+        case "$ep" in
+          pulls/*/merge) action=merge; need=write ;;
+          pulls) action=open_draft_pr; need=write
+            [[ "$c" =~ -[Ff][[:space:]]+[\"\']?draft=true ]] || deny "PRs must be opened as drafts (draft=true)" ;;
+          issues/*/comments|pulls/*/comments|pulls/*/comments/*/replies|pulls/*/reviews)
+            action=comment; need=read ;;
+          *) deny "gh api write to $ep is not a reach action" ;;
+        esac
+      fi
+    elif [[ "$c" =~ (^|[;&|[:space:]\(\`])(curl|wget|http|xh)[[:space:]].*api\.github\.com ]]; then
+      deny "direct HTTP calls to api.github.com are not allowed; use git or gh"
+    fi
+    if [ -n "$api_target" ]; then
+      target=$api_target
+    elif [ -n "$action" ]; then
       # `git -C DIR push` runs in DIR (relative to cwd); otherwise the call's cwd.
       wd=$cwd
       if [[ "$c" =~ git[[:space:]]+-[Cc][[:space:]]+([^[:space:]\;\&\|]+) ]]; then

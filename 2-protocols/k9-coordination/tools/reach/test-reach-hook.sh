@@ -78,6 +78,22 @@ run "edit in a new src/ folder" deny "$MON" "$full" e3 "$(edit "$co/src/new/x.rs
 run "scratch file outside any checkout" pass "$MON" "$full" e4 "$(edit "$work/scratch/n.txt")"
 run "spawn at depth 0" deny "$MON" "$full" s1 "$SPAWN"
 
+echo "# gh api and direct HTTP"
+G=hyperpolymath/rsr-template-repo
+run "gh api read" pass "$MON" "$full" g1 "$(bash_in /tmp "gh api repos/$G/pulls/1")"
+run "gh api read with -X GET and -f" pass "$MON" "$full" g2 "$(bash_in /tmp "gh api -X GET repos/$G/pulls -f state=open")"
+run "gh api merge" deny "$MON" "$full" g3 "$(bash_in /tmp "gh api -X PUT repos/$G/pulls/1/merge")"
+run "gh api draft PR" pass "$MON" "$full" g4 "$(bash_in /tmp "gh api repos/$G/pulls -f title=t -f head=claude/x -f base=main -F draft=true")"
+run "gh api PR without draft=true" deny "$MON" "$full" g5 "$(bash_in /tmp "gh api repos/$G/pulls -f title=t -f head=claude/x -f base=main")"
+run "gh api comment" pass "$MON" "$full" g6 "$(bash_in /tmp "gh api repos/$G/issues/1/comments -f body=hi")"
+run "gh api comment on an ungranted repo" deny "$MON" "$full" g7 "$(bash_in /tmp "gh api repos/evil/x/issues/1/comments -f body=hi")"
+run "gh api delete a branch ref" deny "$MON" "$full" g8 "$(bash_in /tmp "gh api -X DELETE repos/$G/git/refs/heads/claude/x")"
+run "gh api write with no repos path" deny "$MON" "$full" g9 "$(bash_in /tmp "gh api graphql -f query=x")"
+run "gh api --method=PATCH settings" deny "$MON" "$full" g10 "$(bash_in /tmp "gh api --method=PATCH repos/$G -f visibility=public")"
+run "curl to api.github.com" deny "$MON" "$full" g11 "$(bash_in /tmp "curl -X PUT https://api.github.com/repos/$G/pulls/1/merge")"
+run "wget in a pipe to api.github.com" deny "$MON" "$full" g12 "$(bash_in /tmp "true | wget -qO- https://api.github.com/repos/$G")"
+run "ordinary bash (build)" pass "$MON" "$full" g13 "$(bash_in "$co" 'ls -la && echo done')"
+
 echo "# temporal window and validity"
 run "attach on a Saturday" deny "$(at 2026-11-28T10:00:00Z)" "$full" w1 "$(attach hyperpolymath/rsr-template-repo)"
 run "read on a Saturday (scope actions)" pass "$(at 2026-11-28T10:00:00Z)" "$full" w2 "$READ"
