@@ -48,18 +48,23 @@ jq -e . >/dev/null 2>&1 <<<"$in" || deny "bad hook input"
 tool=$(jq -r '.tool_name // empty' <<<"$in"); sid=$(jq -r '.session_id // "unknown"' <<<"$in")
 cwd=$(jq -r '.cwd // "."' <<<"$in")
 [[ "$sid" =~ ^[A-Za-z0-9_-]+$ ]] || deny "bad session id"
+# A worker may always report to the hub: after the contract expires, after its
+# TTL runs out, and even when the state check below fails.
+case "$tool" in mcp__claude-code-remote__send_message|SendMessage) exit 0;; esac
 role=${K9_REACH_ROLE:-}; [ -n "$role" ] || deny "no K9_REACH_ROLE on this environment"
 want_sha=${K9_REACH_JSON_SHA:-}; [ -n "$want_sha" ] || deny "no pinned contract hash"
 state_dir=${K9_REACH_STATE:-$HOME/.k9-reach}; mkdir -p "$state_dir" || deny "no state dir"
 log="$state_dir/$sid.log"
 cache="$state_dir/reach-$want_sha.json"
-if [ -n "${K9_REACH_FILE:-}" ]; then cp "$K9_REACH_FILE" "$cache.tmp" || deny "cannot read contract"
+# One temp file per call, so calls that run at the same time do not share it.
+ctmp="$cache.$$.tmp"
+if [ -n "${K9_REACH_FILE:-}" ]; then cp "$K9_REACH_FILE" "$ctmp" || deny "cannot read contract"
 elif [ ! -s "$cache" ]; then
   [[ "${K9_REACH_PIN_SHA:-}" =~ ^[0-9a-f]{40}$ ]] || deny "bad pin"
-  curl -fsS --max-time 20 -o "$cache.tmp" "https://raw.githubusercontent.com/metadatastician/standards/$K9_REACH_PIN_SHA/.machine_readable/svc/k9/reach/reach.json" || deny "cannot fetch contract"
-else cp "$cache" "$cache.tmp"; fi
-[ "$(sha256sum <"$cache.tmp" | cut -d' ' -f1)" = "$want_sha" ] || { rm -f "$cache.tmp"; deny "contract hash mismatch"; }
-mv "$cache.tmp" "$cache"
+  curl -fsS --max-time 20 -o "$ctmp" "https://raw.githubusercontent.com/metadatastician/standards/$K9_REACH_PIN_SHA/.machine_readable/svc/k9/reach/reach.json" || deny "cannot fetch contract"
+else cp "$cache" "$ctmp"; fi
+[ "$(sha256sum <"$ctmp" | cut -d' ' -f1)" = "$want_sha" ] || { rm -f "$ctmp"; deny "contract hash mismatch"; }
+mv "$ctmp" "$cache"
 R=$(jq -c --arg r "$role" '.roles[$r] // empty' "$cache"); [ -n "$R" ] || deny "role $role not in contract"
 q() { jq -r "$1 // empty" <<<"$R"; }
 # Ceiling profile presets (admin). Explicit K9_CEIL_* values override the preset.
@@ -83,12 +88,14 @@ today=$(date -u -d "@$now" +%F); dow=$(date -u -d "@$now" +%a | tr A-Z a-z); hou
 vf=$(jq -r .valid_from "$cache"); ex=$(jq -r .expires "$cache")
 [[ "$today" < "$vf" ]] && deny "contract not valid until $vf"
 [[ "$today" > "$ex" ]] && deny "contract expired $ex"
-# A worker may always report to the hub, even after its TTL runs out,
-# and even when the state check below fails.
-case "$tool" in mcp__claude-code-remote__send_message|SendMessage) exit 0;; esac
 # Session state with an HMAC integrity check. The key only shows that the
 # hook wrote the file. A worker that can read the key could still forge it.
 st="$state_dir/$sid.json"; st_sig="$st.sig"
+# One call at a time per session: hold the lock from the read of the state
+# to the write of its signature, so two calls cannot both use the last unit.
+command -v flock >/dev/null || deny "flock is needed for the session state lock"
+exec 9>"$st.lock" || deny "cannot open the session state lock"
+flock -w 10 9 || deny "session state is busy"
 [ -n "${K9_REACH_STATE_KEY:-}" ] || deny "state integrity key missing (K9_REACH_STATE_KEY)"
 state_key=$K9_REACH_STATE_KEY; unset K9_REACH_STATE_KEY
 sign_state() { openssl dgst -sha256 -hmac "$state_key" -r "$st" 2>/dev/null | awk '{print $1}'; }
@@ -116,63 +123,151 @@ calls_max=$(min "$(q .ttl.max_tool_calls)" "${K9_CEIL_TOOL_CALLS:-}")
 [ -n "$idle" ] && [ $(( (now - $(s .last)) / 60 )) -ge "$idle" ] && deny "TTL: idle over $idle min; ask the hub to renew"
 [ -n "$calls_max" ] && [ "$(s .calls)" -ge "$calls_max" ] && deny "TTL: $calls_max tool calls used up"
 # Classify the call into an action (empty = read or local work).
-action=""; target=""; files=""
+action=""; target=""; files=""; dsts=""
+# OWNER/REPO from a github.com remote URL; fails for any other host.
+repo_of_url() { local u=$1
+  [[ "$u" =~ ^(https://([^@/]+@)?github\.com/|git@github\.com:|ssh://git@github\.com/)(.+)$ ]] || return 1
+  u=${BASH_REMATCH[3]%/}; echo "${u%.git}"; }
+# The remote gh uses in a checkout: the one marked gh-resolved=base, else
+# upstream, github, origin, in that order (as gh itself picks).
+gh_remote() { local r n
+  r=$(git -C "$1" config --get-regexp '^remote\..*\.gh-resolved$' 2>/dev/null | sed -nE 's/^remote\.(.*)\.gh-resolved base$/\1/p' | head -1)
+  [ -n "$r" ] || for n in upstream github origin; do git -C "$1" remote get-url "$n" >/dev/null 2>&1 && { r=$n; break; }; done
+  echo "${r:-origin}"; }
+# Split a command line into simple commands. Quotes are not parsed, so a
+# separator inside a quoted string also splits. That can only add pieces, and
+# a piece that looks like a second action is refused, so it fails closed.
+segments() { sed -E 's/(\|\||&&|[;|&()`{}]|\$\()/\n/g' <<<"$1"; }
+# Classify one simple command: sets s_action, s_need and s_api.
+classify_seg() { local x=$1 ep
+  if [[ "$x" =~ (^|[[:space:]\"\'/])git([[:space:]]+-[^[:space:]]+([[:space:]]+[^-[:space:]][^[:space:]]*)?)*[[:space:]]+push([[:space:]]|$) ]]; then
+    s_action=push_branch; s_need=write
+  elif [[ "$x" =~ gh[[:space:]]+pr[[:space:]]+create ]]; then s_action=open_draft_pr; s_need=write
+    [[ "$x" =~ --draft ]] || deny "PRs must be opened as drafts"
+  elif [[ "$x" =~ gh[[:space:]]+pr[[:space:]]+(comment|review) ]]; then s_action=comment; s_need=read
+  elif [[ "$x" =~ gh[[:space:]]+pr[[:space:]]+close ]]; then s_action=close_pr; s_need=write
+  elif [[ "$x" =~ gh[[:space:]]+pr[[:space:]]+merge ]]; then s_action=merge; s_need=write
+  elif [[ "$x" =~ (^|[[:space:]\"\'/])gh[[:space:]]+api([[:space:]]|$) ]]; then
+    # gh api: reads pass. A write (a write method, or fields without -X GET)
+    # must map to a reach action on a repos/OWNER/REPO path, or it is denied.
+    if [[ "$x" =~ (-X|--method)[[:space:]=]*[\"\']?(POST|PUT|PATCH|DELETE|post|put|patch|delete) ]] ||
+       { [[ "$x" =~ [[:space:]](-f|-F|--field|--raw-field|--input)([[:space:]=]) ]] &&
+         ! [[ "$x" =~ (-X|--method)[[:space:]=]*[\"\']?(GET|get) ]]; }; then
+      [[ "$x" =~ repos/([A-Za-z0-9._-]+/[A-Za-z0-9._-]+)/([^[:space:]\'\"?]*) ]] ||
+        deny "gh api write without a repos/OWNER/REPO path"
+      s_api=${BASH_REMATCH[1]}; ep=${BASH_REMATCH[2]%/}
+      case "$ep" in
+        pulls/*/merge) s_action=merge; s_need=write ;;
+        pulls) s_action=open_draft_pr; s_need=write
+          [[ "$x" =~ -[Ff][[:space:]]+[\"\']?draft=true ]] || deny "PRs must be opened as drafts (draft=true)" ;;
+        issues/*/comments|pulls/*/comments|pulls/*/comments/*/replies|pulls/*/reviews)
+          s_action=comment; s_need=read ;;
+        *) deny "gh api write to $ep is not a reach action" ;;
+      esac
+    fi
+  elif [[ "$x" =~ (^|[[:space:]\"\'/])(curl|wget|http|xh)([[:space:]]|$) ]]; then
+    deny "direct HTTP calls are not allowed; use git or gh"
+  fi
+  if [[ -n "$s_action" && "$x" =~ (^|[[:space:]])GH_REPO= ]]; then deny "GH_REPO is not allowed with a GitHub action; use --repo"; fi
+}
+# Resolve a git push: the repo it writes to, each destination branch, and the
+# files it carries. Any form the hook cannot resolve is refused.
+parse_push() { local x=${1//[\"\']/} tw n i=0 wd=$cwd remote="" rname="" url t r src dst src_c base up refs=()
+  read -ra tw <<<"$x"; n=${#tw[@]}
+  while [ $i -lt $n ] && [ "${tw[$i]}" != git ] && [[ "${tw[$i]}" != */git ]]; do i=$((i + 1)); done
+  i=$((i + 1))
+  while [ $i -lt $n ] && [ "${tw[$i]}" != push ]; do
+    case "${tw[$i]}" in
+      -C) i=$((i + 1)); t=${tw[$i]:-}; [[ "$t" == /* ]] && wd=$t || wd="$wd/$t" ;;
+      *) deny "git option ${tw[$i]} before push is not allowed under reach" ;;
+    esac; i=$((i + 1))
+  done
+  [ $i -lt $n ] || deny "cannot read the git push command"
+  for ((i = i + 1; i < n; i++)); do t=${tw[$i]}
+    [[ "$t" =~ ^[0-9]*[\<\>] ]] && break   # a redirect ends the arguments
+    case "$t" in
+      +*|:*|-f|--force|--force-*|-d|--delete|--prune|--mirror) deny "force push or branch delete is never granted" ;;
+      -u|--set-upstream|-q|--quiet|-v|--verbose|--progress|--no-verify|--atomic|--porcelain|-n|--dry-run) ;;
+      -o|--push-option) i=$((i + 1)) ;;
+      --push-option=*) ;;
+      -*) deny "git push option $t is not allowed under reach" ;;
+      *) if [ -z "$remote" ]; then remote=$t; else refs+=("$t"); fi ;;
+    esac
+  done
+  top=$(git -C "$wd" rev-parse --show-toplevel 2>/dev/null) || deny "push_branch outside a git checkout"
+  br=$(git -C "$top" symbolic-ref -q --short HEAD)
+  if [ -z "$remote" ]; then
+    [ -n "$br" ] || deny "a push from a detached HEAD must name the remote and the branch"
+    remote=$(git -C "$top" config "branch.$br.pushRemote" || git -C "$top" config remote.pushDefault ||
+             git -C "$top" config "branch.$br.remote" || echo origin)
+  fi
+  if [[ "$remote" == *[:/]* ]]; then url=$remote
+  else rname=$remote; url=$(git -C "$top" remote get-url --push "$remote" 2>/dev/null) || deny "unknown remote $remote"; fi
+  target=$(repo_of_url "$url") || deny "push to a remote that is not on github.com"
+  [ -z "$rname" ] || [ -z "$(git -C "$top" config --get-all "remote.$rname.push")" ] ||
+    deny "remote.$rname.push is set; it can redirect a push, so it is not allowed under reach"
+  if [ ${#refs[@]} -eq 0 ]; then
+    [ "$(git -C "$top" config push.default || echo simple)" != matching ] || deny "push.default=matching is not allowed under reach"
+    [ -n "$br" ] || deny "a push from a detached HEAD must name the branch"
+    up=$(git -C "$top" rev-parse --abbrev-ref --symbolic-full-name '@{push}' 2>/dev/null)
+    if [ -n "$up" ] && [ -n "$rname" ]; then refs=("$br:${up#"$rname"/}"); else refs=("$br:$br"); fi
+  fi
+  for r in "${refs[@]}"; do
+    src=${r%%:*}; dst=${r#*:}
+    if [[ "$r" != *:* ]]; then
+      if [ "$src" = HEAD ]; then [ -n "$br" ] || deny "a push from a detached HEAD must name the branch"; dst=$br
+      else git -C "$top" show-ref --verify -q "refs/heads/$src" || deny "push $src: name a local branch"; fi
+    fi
+    dst=${dst#refs/heads/}
+    [[ -n "$dst" && "$dst" != refs/* ]] || deny "push to $dst is not a branch"
+    src_c=$(git -C "$top" rev-parse --verify -q "$src^{commit}") || deny "cannot resolve $src"
+    base=$(git -C "$top" merge-base "$src_c" "${rname:-origin}/HEAD" 2>/dev/null ||
+           git -C "$top" rev-list --max-parents=0 "$src_c" | tail -1)
+    files+="$(git -C "$top" diff --name-only "$base" "$src_c")"$'\n'
+    dsts+="$dst"$'\n'
+  done
+}
 case "$tool" in
   mcp__claude-code-remote__add_repo)
     action=attach; target="$(jq -r '.tool_input.owner + "/" + .tool_input.repo' <<<"$in")"
     [ "$(jq -r '.tool_input.access // "read"' <<<"$in")" = push ] && need=write || need=read ;;
   mcp__claude-code-remote__create_session) action=spawn ;;
   Edit|Write|NotebookEdit|MultiEdit)
-    f=$(jq -r '.tool_input.file_path // .tool_input.notebook_path // empty' <<<"$in"); d=$(dirname "$f")
-    while [ ! -d "$d" ] && [ "$d" != / ] && [ "$d" != . ]; do d=$(dirname "$d"); done  # new folders
+    f=$(jq -r '.tool_input.file_path // .tool_input.notebook_path // empty' <<<"$in")
+    [ -n "$f" ] || deny "edit without a file path"
+    [[ "$f" == /* ]] || f="$cwd/$f"
+    # Resolve .. and symlinks in the parts that exist, so docs/../src counts as src.
+    f=$(realpath -m -- "$f") || deny "cannot resolve $f"
+    d=$(dirname "$f")
+    while [ ! -d "$d" ] && [ "$d" != / ]; do d=$(dirname "$d"); done  # new folders
     if top=$(git -C "$d" rev-parse --show-toplevel 2>/dev/null); then
-      action=edit; need=write; files="${f#$top/}"
-      target=$(git -C "$top" remote get-url origin 2>/dev/null | sed -E 's#^.*github.com[:/]##; s#\.git$##')
+      [[ "$f" == "$top"/* ]] || deny "edit target $f is outside its checkout"
+      action=edit; need=write; files="${f#"$top"/}"
+      target=$(repo_of_url "$(git -C "$top" remote get-url origin 2>/dev/null)")
     fi ;;
   Bash)
-    c=$(jq -r '.tool_input.command // empty' <<<"$in"); api_target=
-    if [[ "$c" =~ (^|[;&|[:space:]])git([[:space:]]+-[Cc][[:space:]]+[^[:space:]]+)*[[:space:]]+push ]]; then
-      action=push_branch; need=write
-      [[ "$c" =~ (--force|[[:space:]]-f([[:space:]]|$)|--delete|[[:space:]]:[^[:space:]]) ]] && deny "force push or branch delete is never granted"
-    elif [[ "$c" =~ gh[[:space:]]+pr[[:space:]]+create ]]; then action=open_draft_pr; need=write
-      [[ "$c" =~ --draft ]] || deny "PRs must be opened as drafts"
-    elif [[ "$c" =~ gh[[:space:]]+pr[[:space:]]+(comment|review) ]]; then action=comment; need=read
-    elif [[ "$c" =~ gh[[:space:]]+pr[[:space:]]+close ]]; then action=close_pr; need=write
-    elif [[ "$c" =~ gh[[:space:]]+pr[[:space:]]+merge ]]; then action=merge; need=write
-    elif [[ "$c" =~ (^|[;&|[:space:]])gh[[:space:]]+api([[:space:]]|$) ]]; then
-      # gh api: reads pass. A write (a write method, or fields without -X GET)
-      # must map to a reach action on a repos/OWNER/REPO path, or it is denied.
-      if [[ "$c" =~ (-X|--method)[[:space:]=]*[\"\']?(POST|PUT|PATCH|DELETE|post|put|patch|delete) ]] ||
-         { [[ "$c" =~ [[:space:]](-f|-F|--field|--raw-field|--input)([[:space:]=]) ]] &&
-           ! [[ "$c" =~ (-X|--method)[[:space:]=]*[\"\']?(GET|get) ]]; }; then
-        [[ "$c" =~ repos/([A-Za-z0-9._-]+/[A-Za-z0-9._-]+)/([^[:space:]\'\"?]*) ]] ||
-          deny "gh api write without a repos/OWNER/REPO path"
-        api_target=${BASH_REMATCH[1]}; ep=${BASH_REMATCH[2]%/}
-        case "$ep" in
-          pulls/*/merge) action=merge; need=write ;;
-          pulls) action=open_draft_pr; need=write
-            [[ "$c" =~ -[Ff][[:space:]]+[\"\']?draft=true ]] || deny "PRs must be opened as drafts (draft=true)" ;;
-          issues/*/comments|pulls/*/comments|pulls/*/comments/*/replies|pulls/*/reviews)
-            action=comment; need=read ;;
-          *) deny "gh api write to $ep is not a reach action" ;;
-        esac
+    c=$(jq -r '.tool_input.command // empty' <<<"$in"); api_target=; seg_c=
+    # Check every simple command. At most one may be a GitHub action.
+    while IFS= read -r seg; do
+      s_action=; s_need=; s_api=
+      classify_seg "$seg"
+      if [ -n "$s_action" ]; then
+        [ -z "$action" ] || deny "more than one GitHub action in one Bash call ($action, $s_action); run them one at a time"
+        action=$s_action; need=$s_need; api_target=$s_api; seg_c=$seg
       fi
-    elif [[ "$c" =~ (^|[;&|[:space:]\(\`])(curl|wget|http|xh)([[:space:]]|$) ]]; then
-      deny "direct HTTP calls are not allowed; use git or gh"
-    fi
+    done < <(segments "$c")
     if [ -n "$api_target" ]; then
       target=$api_target
+    elif [ "$action" = push_branch ]; then
+      parse_push "$seg_c"
     elif [ -n "$action" ]; then
-      # `git -C DIR push` runs in DIR (relative to cwd); otherwise the call's cwd.
-      wd=$cwd
-      if [[ "$c" =~ git[[:space:]]+-[Cc][[:space:]]+([^[:space:]\;\&\|]+) ]]; then
-        wd=${BASH_REMATCH[1]}; [[ "$wd" == /* ]] || wd="$cwd/$wd"
-      fi
-      top=$(git -C "$wd" rev-parse --show-toplevel 2>/dev/null) || deny "$action outside a git checkout"
-      target=$(git -C "$top" remote get-url origin 2>/dev/null | sed -E 's#^.*github.com[:/]##; s#\.git$##')
-      if [ "$action" = push_branch ]; then
-        br=$(git -C "$top" rev-parse --abbrev-ref HEAD); base=$(git -C "$top" merge-base HEAD origin/HEAD 2>/dev/null || git -C "$top" rev-list --max-parents=0 HEAD | tail -1)
-        files=$(git -C "$top" diff --name-only "$base" HEAD)
+      # gh pr: --repo/-R names the repo; otherwise gh's own pick in the cwd checkout.
+      if [[ "$seg_c" =~ (^|[[:space:]])(--repo|-R)([[:space:]]+|=)[\"\']?([^[:space:]\"\']+) ]]; then
+        t=${BASH_REMATCH[4]}
+        target=$(repo_of_url "$t" || repo_of_url "https://$t" || echo "$t")
+      else
+        top=$(git -C "$cwd" rev-parse --show-toplevel 2>/dev/null) || deny "$action outside a git checkout"
+        target=$(repo_of_url "$(git -C "$top" remote get-url "$(gh_remote "$top")" 2>/dev/null)")
       fi
     fi ;;
 esac
@@ -208,7 +303,11 @@ if [ -n "$action" ]; then
       done <<<"$files"
     fi
     if [ "$action" = push_branch ]; then
-      bp=$(g .branch); [ -z "$bp" ] || [[ "$br" == $bp ]] || deny "branch $br does not match $bp"
+      bp=$(g .branch)
+      if [ -n "$bp" ]; then
+        while IFS= read -r d; do [ -z "$d" ] || [[ "$d" == $bp ]] || deny "branch $d does not match $bp"; done <<<"$dsts"
+      fi
+      files=$(grep . <<<"$files" | sort -u)
       mf=$(g .max_files_per_push); n=$(grep -c . <<<"$files")
       [ -n "$mf" ] && [ "$n" -gt "$mf" ] && deny "depth: $n files in push, max $mf"
       mp=$(q .ttl.max_pushes); [ -n "$mp" ] && [ "$(s .pushes)" -ge "$mp" ] && deny "TTL: $mp pushes used up"
@@ -225,7 +324,9 @@ jq -c --argjson n "$now" --arg a "$action" --arg t "${target:-}" '
   | if $a=="push_branch" then .pushes+=1 | .push_times+=[$n] else . end
   | if $a=="open_draft_pr" then .prs+=1 else . end
   | if $a=="spawn" then .spawns+=1 else . end
-  | if $t!="" and $a!="spawn" and (.repos|index($t)|not) then .repos+=[$t] else . end' <<<"$S" >"$st.tmp" && mv "$st.tmp" "$st"
-sign_state >"$st_sig.tmp" && mv "$st_sig.tmp" "$st_sig"
+  | if $t!="" and $a!="spawn" and (.repos|index($t)|not) then .repos+=[$t] else . end' <<<"$S" >"$st.$$.tmp" &&
+  mv "$st.$$.tmp" "$st" || deny "failed to write session state"
+new_sig=$(sign_state) && [ -n "$new_sig" ] && printf '%s\n' "$new_sig" >"$st_sig.$$.tmp" &&
+  mv "$st_sig.$$.tmp" "$st_sig" || deny "failed to sign session state"
 [ -n "$action" ] && printf '%s ok %s %s %s\n' "$(date -u +%FT%TZ)" "$tool" "$action" "${target:-}" >>"$log"
 exit 0

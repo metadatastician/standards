@@ -138,7 +138,9 @@ function reachLines(text) {
   const start = lines.indexOf("reach:");
   if (start < 0) return null;
   const out = [];
-  for (let i = start + 1; i < lines.length && lines[i].startsWith(" "); i++) out.push(lines[i]);
+  for (let i = start + 1; i < lines.length && lines[i].startsWith(" "); i++) {
+    if (lines[i].trim() !== "") out.push(lines[i]); // space-only gap lines are dropped
+  }
   return out;
 }
 
@@ -202,7 +204,7 @@ export function reachObject(text) {
       } else out[k] = v;
     }
     if (rest.never) out.never = rest.never;
-    if (roles[name] !== undefined) roles[name] = null; // duplicate, caught by rule 23
+    if (Object.hasOwn(roles, name)) roles[name] = null; // duplicate, caught by rule 23
     else roles[name] = out;
   }
   return { ...r, roles };
@@ -216,6 +218,7 @@ export function compileReach(text) {
 }
 
 const isDate = (s) => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s)
+  && Number.isFinite(Date.parse(`${s}T00:00:00Z`))
   && new Date(`${s}T00:00:00Z`).toISOString().startsWith(s);
 const dayCount = (a, b) => (Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86400000;
 
@@ -225,7 +228,8 @@ const dayCount = (a, b) => (Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:0
 export function reachError(text) {
   const lines = reachLines(text);
   if (lines === null) return null;
-  const ver = /^ {2}schema_version: (.*)$/m.exec(text)?.[1];
+  const rawVer = /^ {2}schema_version: (.*)$/m.exec(text)?.[1];
+  const ver = rawVer === undefined ? undefined : String(scalar(rawVer));
   if (ver !== "1.3.0") return `a file with a reach section declares schema_version 1.3.0, not ${ver} (rule 22)`;
   const [r] = parseMap(lines, 0, 2, {});
   const { valid_from: vf, expires: ex } = r;

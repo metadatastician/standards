@@ -263,7 +263,7 @@ reach-role     = indent2 "- " %s"role:" SP symbol line-end
                  [indent3 %s"limits:" line-end reach-limits]
                  [indent3 %s"never:" line-end 1*(indent4 "- " reach-action line-end)]
 
-reach-grant    = indent4 "- " %s"repo:" SP repo-path line-end
+reach-grant    = indent4 "- " %s"repo:" SP reach-repo line-end
                  indent5 %s"access:" SP reach-access line-end
                  indent5 %s"actions:" line-end 1*(indent6 "- " reach-action line-end)
                  [indent5 %s"branch:" SP glob-pattern line-end]
@@ -330,6 +330,8 @@ escape         = "\" (DQUOTE / "\" / %s"n" / %s"t")
 symbol         = ALPHA *(ALPHA / DIGIT / "-" / "_" / ".")
 spdx-id        = 1*(ALPHA / DIGIT / "-" / ".")
 repo-path      = 1*(ALPHA / DIGIT / "-" / "_" / "/")
+reach-repo     = reach-seg "/" reach-seg               ; exactly owner/name (rule 16)
+reach-seg      = 1*(ALPHA / DIGIT / "-" / "_")
 deed-filename  = deed-char deed-tail           ; 1*deed-char %s".deed", written
 deed-tail      = deed-char deed-tail / %s".deed"  ; so a greedy parser can end
 deed-char      = ALPHA / DIGIT / "-" / "_" / "."  ; (2026-11-09 changelog note)

@@ -418,7 +418,7 @@ bind the hub and the hook, not the validator.
     `change_environment`, `change_permissions` and `sign_commit` appear
     only under `never`, never in a grant.
 16. A grant's `repo` is an exact `owner/name`, with no wildcard (the grammar's
-    `repo-path`).
+    `reach-repo`: one slash, two non-empty parts).
 17. `valid_from` and `expires` are calendar dates, and `expires` is 1 to 31
     days after `valid_from`.
 18. The hub and the hook honour a `reach` section only in
