@@ -83,9 +83,17 @@ today=$(date -u -d "@$now" +%F); dow=$(date -u -d "@$now" +%a | tr A-Z a-z); hou
 vf=$(jq -r .valid_from "$cache"); ex=$(jq -r .expires "$cache")
 [[ "$today" < "$vf" ]] && deny "contract not valid until $vf"
 [[ "$today" > "$ex" ]] && deny "contract expired $ex"
-# Session state (tamper-evident only: the worker can write here; the hub cross-checks).
-st="$state_dir/$sid.json"
-[ -s "$st" ] || jq -cn --argjson t "$now" '{first:$t,last:$t,calls:0,attaches:0,pushes:0,prs:0,spawns:0,push_times:[],repos:[]}' >"$st"
+# Session state with local integrity check (worker-writable storage must be signed).
+st="$state_dir/$sid.json"; st_sig="$st.sig"
+[ -n "${K9_REACH_STATE_KEY:-}" ] || deny "state integrity key missing (K9_REACH_STATE_KEY)"
+if [ ! -s "$st" ]; then
+  jq -cn --argjson t "$now" '{first:$t,last:$t,calls:0,attaches:0,pushes:0,prs:0,spawns:0,push_times:[],repos:[]}' >"$st" || deny "failed to initialize session state"
+  openssl dgst -sha256 -hmac "$K9_REACH_STATE_KEY" -r "$st" 2>/dev/null | awk '{print $1}' >"$st_sig" || deny "failed to sign session state"
+fi
+[ -s "$st_sig" ] || deny "session state signature missing"
+calc_sig=$(openssl dgst -sha256 -hmac "$K9_REACH_STATE_KEY" -r "$st" 2>/dev/null | awk '{print $1}')
+read -r file_sig <"$st_sig"
+[ -n "$calc_sig" ] && [ "$calc_sig" = "$file_sig" ] || deny "session state integrity check failed"
 S=$(cat "$st"); s() { jq -r "$1" <<<"$S"; }
 # A worker may always report to the hub, even after its TTL runs out.
 case "$tool" in mcp__claude-code-remote__send_message|SendMessage) exit 0;; esac
