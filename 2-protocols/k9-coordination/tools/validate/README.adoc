@@ -4,8 +4,8 @@
 :toc: preamble
 
 `validate.js` checks `coordination.k9` files against the normative grammar,
-`../../spec/abnf/coordination-k9-grammar_v1.2.abnf`, and against the schema
-rule the grammar cannot express. It closes standards#1221: until it existed,
+`../../spec/abnf/coordination-k9-grammar_v1.3.abnf`, and against the schema
+rules the grammar cannot express. It closes standards#1221: until it existed,
 nothing checked a `coordination.k9` file, and a generic YAML parser does not
 conform.
 
@@ -17,6 +17,7 @@ cd 2-protocols/k9-coordination/tools/validate
 bun install --frozen-lockfile
 bun validate.js path/to/coordination.k9 ...   # PASS/FAIL per file
 bun validate.js --self-test                   # the checks below
+bun validate.js --compile-reach FILE         # reach section as reach.json
 ----
 
 Exit status: 0 when every file conforms, 1 on a finding, 2 when it cannot
@@ -26,7 +27,7 @@ run.
 
 A file passes when:
 
-* it parses as `k9-file` under the v1.2 grammar, through
+* it parses as `k9-file` under the v1.3 grammar, through
   https://github.com/ldthomas/apg-js[apg-js] 4.4.0 (pinned in `bun.lock`,
   `deno.lock` and `pnpm-lock.yaml`). That covers rules 1–10 and 12 of the
   spec's "Validation Rules";
@@ -34,7 +35,10 @@ A file passes when:
   (rule 11);
 * no line is longer than 998 octets, not counting its CR and LF (rule 14,
   the constraint stated in the grammar's header; owner ruling I4,
-  2026-11-12). This is checked first, on the raw bytes.
+  2026-11-12). This is checked first, on the raw bytes;
+* when it has a `reach` section, that section meets rules 15, 17 and
+  20 to 23 (1.3.0). Rule 16 is the grammar's; rules 18 and 19 bind the hub
+  and the hook.
 
 Rule 13 is a default and has nothing to check. Resolving `project.deed_ref`
 to an existing deed is the generator's duty (README "Usage"), not
@@ -46,7 +50,9 @@ validation, and is not done here.
 
 . accepts the repository's own `coordination.k9`, every
   `../../examples/*.k9` and every `fixtures/valid/*.k9`, each with LF and
-  with CRLF line ends, and reports which of them are also v1.1 files;
+  with CRLF line ends, and reports which of them are also v1.1 and v1.2
+  files, and that each `fixtures/valid/reach-*.k9` compiles to the bytes of
+  its `fixtures/reach/*.json`;
 . rejects every `fixtures/invalid/*.k9`, for the reason its `# expect:`
   line names;
 . rejects seven mutants of the root file: a `---` separator, a tab, a
@@ -59,6 +65,10 @@ validation, and is not done here.
   unchanged in v1.2, and v1.2's `body` only gains optional elements;
 . checks that the `body` lists the proof transcribes are the committed
   grammars' `body` rules, so the proof and the grammars cannot drift apart.
+. re-checks the same side condition from v1.2 to v1.3: v1.3 only adds the
+  optional `reach` element to `body`. This is the JS check only; the Idris
+  transcription below covers v1.1 to v1.2, and extending it to v1.3 is
+  open work.
 
 == The proof
 
@@ -89,3 +99,14 @@ is *tested* by the self-test, not proved. The two editorial rewrites of
 2026-11-09 exist because it did not: before them, no date-time and no
 `deed_ref` validated. `3-practice/PROOF-NEEDS.adoc`, the repository's proof-status file, records the status of
 every claim.
+
+== Compiling a reach section
+
+`bun validate.js --compile-reach FILE` validates FILE and prints its
+`reach` section as `reach.json`: two-space JSON in section order with one
+final line feed, roles keyed by name, each role's `limits` lifted onto the
+role, `hours_utc` as `[start, end]` and each `blackout` range as
+`[from, to]`. Those bytes are canonical: the admin pins their sha256 in the
+server-managed settings, and `.machine_readable/svc/k9/reach/reach-hook.sh`
+refuses any other contract. `../reach/test-reach-hook.sh` runs the hook
+against the compiled fixtures.
