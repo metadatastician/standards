@@ -1,0 +1,34 @@
+# SPDX-License-Identifier: MPL-2.0
+# THROWAWAY DIAGNOSTIC. Never merge. Prints the runner's cargo/rustfmt facts to
+# root-cause validate-lint-format-test (workspace-root B3 cases).
+name: zz-diag-cargo-fmt
+on:
+  pull_request:
+    paths: ['.github/workflows/zz-diag-cargo-fmt.yml']
+permissions:
+  contents: read
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Tool facts
+        run: |
+          set +e
+          cargo --version; rustfmt --version; rustc --version
+          which -a cargo cargo-fmt rustfmt
+          rustup show 2>&1 | head -30
+          echo "--- env"; env | grep -iE 'cargo|rust' | sort
+          echo "--- config files"; ls -la "$HOME"/rust-toolchain* "$HOME"/rustfmt.toml "$HOME"/.rustfmt.toml "$HOME"/.cargo/config* /tmp/rustfmt.toml /tmp/.rustfmt.toml /rustfmt.toml /rust-toolchain* 2>&1
+      - name: Reproduce the B3 fixtures
+        run: |
+          set +e
+          W="$(mktemp -d)"; cd "$W" && git init -q
+          mkdir -p src member/src
+          printf '[package]\nname = "rootpkg"\nversion = "0.1.0"\nedition = "2021"\n\n[workspace]\nmembers = ["member"]\n' > Cargo.toml
+          printf 'pub fn one() -> u32 {\n    1\n}\n' > src/lib.rs
+          printf '[package]\nname = "member"\nversion = "0.1.0"\nedition = "2021"\n' > member/Cargo.toml
+          printf 'pub fn one()->u32{1}\n' > member/src/lib.rs
+          echo "--- fixture dir config files"; ls -la "$W" "$W"/member; find "$W" -name 'rustfmt.toml' -o -name '.rustfmt.toml' -o -name 'rust-toolchain*'
+          echo "--- --manifest-path"; cargo fmt --check --manifest-path Cargo.toml; echo "exit $?"
+          echo "--- -p rootpkg"; cargo fmt --check -p rootpkg --manifest-path Cargo.toml; echo "exit $?"
+          echo "--- -p rootpkg, no manifest-path"; cargo fmt --check -p rootpkg; echo "exit $?"
