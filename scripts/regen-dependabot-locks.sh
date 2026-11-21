@@ -63,9 +63,22 @@
 # (its head commit carries the repair headline) and no PR is open from it. An
 # open repair PR is swept like a Dependabot PR. See repair_main.
 #
+# SINGLE-WRITER PIN BUMP (BUMP_PINS=1; owner ruling 2026-11-21)
+# -------------------------------------------------------------
+# Dependabot's github-actions ecosystem is off. bump_main clones the default
+# branch, runs scripts/bump-action-pins.sh (third-party pins to the latest
+# release; holds in config/settings/actions-bump-holds.txt), commits the bump
+# LOCALLY, regenerates actions.lock on top of it with the same chain and
+# refusals as above, and pushes the workflow edits and the lock in ONE commit
+# (createCommitOnBranch) on $BUMP_PR_BRANCH, then opens one PR. The two files
+# therefore cannot disagree. A repository with no lock gets the bump alone. It
+# refuses any changed path outside .github/workflows and .github/actions. When
+# the bump opened a PR, the lock-only repair is skipped for that repository. The
+# App must hold Workflows: write for the push to be accepted.
+#
 # Usage: regen-dependabot-locks.sh [owner/repo]     (default: every repo the
 #        installations can see).  DRY_RUN=1 regenerates but never commits.
-# Env:   REGEN_TOKENS, DRY_RUN, REGEN_MAIN, GH_BIN (test stub), REGEN_TOOLS (dir
+# Env:   REGEN_TOKENS, DRY_RUN, REGEN_MAIN, BUMP_PINS, GH_BIN (test stub), REGEN_TOOLS (dir
 #        holding the repair scripts; default: this script's directory).
 set -uo pipefail
 
@@ -139,29 +152,44 @@ BUMP_BODY="Dependabot updated workflow refs without the lockfile. Regenerated wi
 REPAIR_HEADLINE="fix(ci): regenerate the stale actions.lock"
 REPAIR_BODY="The default branch's actions.lock no longer matches its workflows' uses: refs, so the lock gate is red and GitHub refuses to start the workflows whose refs drifted. Regenerated with the estate repair order (scripts/regen-dependabot-locks.sh in metadatastician/standards, REGEN_MAIN=1) and verified with update-actions-lock.sh --verify-local and check-lock-sync.sh. Only actions.lock changes."
 
-# Commit the checkout's actions.lock onto branch $2 of repo $1, only if the
-# branch head is still $3, with headline $5 and body $6 (default: the
-# Dependabot-bump message). Prints the new commit oid.
-commit_lock() {
-  local repo="$1" branch="$2" expected="$3" dir="$4" payload
-  local headline="${5:-$BUMP_HEADLINE}" body="${6:-$BUMP_BODY}"
+# Commit the files $7... (paths relative to checkout $4) onto branch $2 of repo
+# $1, only if the branch head is still $3, with headline $5 and body $6, in ONE
+# commit. Prints the new commit oid. The single-writer bump uses this to land
+# workflow edits and actions.lock together, so the two can never disagree.
+commit_files() {
+  local repo="$1" branch="$2" expected="$3" dir="$4" headline="$5" body="$6" payload adds p
+  shift 6
+  adds="$(for p in "$@"; do
+            jq -n --arg path "$p" --arg contents "$(base64 -w0 < "$dir/$p")" '{path: $path, contents: $contents}'
+          done | jq -s .)"
   payload="$(jq -n \
     --arg repo "$repo" --arg branch "$branch" --arg oid "$expected" \
-    --arg path "$LOCK_PATH" --arg contents "$(base64 -w0 < "$dir/$LOCK_PATH")" \
+    --argjson adds "$adds" \
     --arg headline "$headline" --arg body "$body" \
     '{query: "mutation($in: CreateCommitOnBranchInput!) { createCommitOnBranch(input: $in) { commit { oid } } }",
       variables: {in: {
         branch: {repositoryNameWithOwner: $repo, branchName: $branch},
         expectedHeadOid: $oid,
         message: {headline: $headline, body: $body},
-        fileChanges: {additions: [{path: $path, contents: $contents}]}}}}')"
+        fileChanges: {additions: $adds}}}}')"
   printf '%s' "$payload" | "$GH_BIN" api graphql --input - --jq '.data.createCommitOnBranch.commit.oid'
+}
+
+# Commit the checkout's actions.lock onto branch $2 of repo $1, only if the
+# branch head is still $3, with headline $5 and body $6 (default: the
+# Dependabot-bump message). Prints the new commit oid.
+commit_lock() {
+  local repo="$1" branch="$2" expected="$3" dir="$4"
+  commit_files "$repo" "$branch" "$expected" "$dir" "${5:-$BUMP_HEADLINE}" "${6:-$BUMP_BODY}" "$LOCK_PATH"
 }
 
 # The branch scripts/apply-workflow-pins-remote.sh opens its PRs from.
 APPLIER_BRANCH="${APPLIER_BRANCH:-chore/re-point-standards-workflow-pins}"
 # The branch this script opens default-branch repair PRs from (REGEN_MAIN=1).
 REPAIR_BRANCH="${REPAIR_BRANCH:-chore/regenerate-actions-lock}"
+# The branch the single-writer pin bump opens its PR from (BUMP_PINS=1); also set
+# where bump_main is defined, so select_prs can match it.
+BUMP_PR_BRANCH="${BUMP_PR_BRANCH:-chore/bump-action-pins}"
 
 # Read a pulls-list JSON array on stdin; print "number<TAB>head_ref<TAB>head_sha"
 # for each open, non-draft PR from a same-repo branch that changes workflow refs
@@ -173,10 +201,10 @@ REPAIR_BRANCH="${REPAIR_BRANCH:-chore/regenerate-actions-lock}"
 # default-branch repair PRs are matched the same way, so a repair PR that
 # drifts again before it merges is regenerated rather than left stale.
 select_prs() {
-  jq -r --arg applier "$APPLIER_BRANCH" --arg repair "$REPAIR_BRANCH" '.[]
+  jq -r --arg applier "$APPLIER_BRANCH" --arg repair "$REPAIR_BRANCH" --arg bump "$BUMP_PR_BRANCH" '.[]
     | select(((.user.login == "dependabot[bot]")
               or ((.user.login | endswith("[bot]"))
-                  and (.head.ref == $applier or .head.ref == $repair)))
+                  and (.head.ref == $applier or .head.ref == $repair or .head.ref == $bump)))
              and (.draft | not)
              and .head.repo.full_name == .base.repo.full_name)
     | [.number, .head.ref, .head.sha] | @tsv'
@@ -191,6 +219,54 @@ clone_branch() {
     GIT_CONFIG_VALUE_0="Authorization: Basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)" \
     git clone --quiet --depth 1 --branch "$ref" \
     "https://github.com/$repo.git" "$dest" 2>/dev/null
+}
+
+# Open ONE PR from branch $5 of repo $1 (default branch $2 at $3) carrying the
+# files $8... of checkout $4, in one commit headed $6 with body $7. Prints the
+# outcome. Never moves a branch it did not create: an existing branch is reused
+# only when it carries nothing but the default head $3 (a stranded leftover of a
+# commit that was refused: no commit on it, nothing to lose) or its head commit
+# carries headline $6; and no PR is open from it (the callers check the latter).
+# When the commit is refused (typically the App lacks Workflows: write) the
+# branch this call created or reused is deleted again, but only while it still
+# points at $3, so the next run can retry. Needs Pull requests: write, and
+# Workflows: write when a path is under .github/workflows/.
+open_branch_pr() {
+  local repo="$1" base="$2" sha="$3" dir="$4" branch="$5" headline="$6" body="$7" msg oid pr head
+  shift 7
+  if ! "$GH_BIN" api -X POST "repos/$repo/git/refs" \
+       -f ref="refs/heads/$branch" -f sha="$sha" --silent 2>/dev/null; then
+    # The branch exists. Reuse it only if it is a leftover of ours.
+    head="$("$GH_BIN" api "repos/$repo/git/ref/heads/$branch" --jq .object.sha 2>/dev/null || true)"
+    msg="$("$GH_BIN" api "repos/$repo/commits/$branch" --jq .commit.message 2>/dev/null || true)"
+    if [ -n "$head" ] && [ "$head" = "$sha" ]; then
+      :
+    elif [ "${msg%%$'\n'*}" = "$headline" ] \
+       && "$GH_BIN" api -X PATCH "repos/$repo/git/refs/heads/$branch" \
+            -f sha="$sha" -F force=true --silent 2>/dev/null; then
+      :
+    else
+      echo "repair-branch-exists"; return 0
+    fi
+  fi
+  if oid="$(commit_files "$repo" "$branch" "$sha" "$dir" "$headline" "$body" "$@")" \
+     && printf '%s' "$oid" | grep -Eq '^[0-9a-f]{40}$'; then
+    if pr="$("$GH_BIN" api -X POST "repos/$repo/pulls" -f title="$headline" \
+              -f head="$branch" -f base="$base" -f body="$body" --jq .number)" \
+       && [ -n "$pr" ]; then
+      echo "pr-opened #$pr ($oid)"
+    else
+      echo "pr-refused ($oid)"
+    fi
+  else
+    # Do not strand the branch: remove it only while it is still the bare
+    # default head this call put it on, never one that has since moved.
+    head="$("$GH_BIN" api "repos/$repo/git/ref/heads/$branch" --jq .object.sha 2>/dev/null || true)"
+    if [ -n "$head" ] && [ "$head" = "$sha" ]; then
+      "$GH_BIN" api -X DELETE "repos/$repo/git/refs/heads/$branch" --silent 2>/dev/null || true
+    fi
+    echo "commit-refused"
+  fi
 }
 
 # Repair a stale actions.lock on the default branch of repo $1, whose open PRs
@@ -221,34 +297,73 @@ repair_main() {
   fi
   outcome="$(regen_lock "$work/r")"
   if [ "$outcome" = changed ] && [ "${DRY_RUN:-0}" != 1 ]; then
-    outcome=""
-    if ! "$GH_BIN" api -X POST "repos/$repo/git/refs" \
-         -f ref="refs/heads/$REPAIR_BRANCH" -f sha="$sha" --silent 2>/dev/null; then
-      # The branch exists. Reuse it only if it is a leftover of ours.
-      msg="$("$GH_BIN" api "repos/$repo/commits/$REPAIR_BRANCH" --jq .commit.message 2>/dev/null || true)"
-      if [ "${msg%%$'\n'*}" = "$REPAIR_HEADLINE" ] \
-         && "$GH_BIN" api -X PATCH "repos/$repo/git/refs/heads/$REPAIR_BRANCH" \
-              -f sha="$sha" -F force=true --silent 2>/dev/null; then
-        :
-      else
-        outcome="repair-branch-exists"
-      fi
-    fi
-    if [ -z "$outcome" ]; then
-      if oid="$(commit_lock "$repo" "$REPAIR_BRANCH" "$sha" "$work/r" "$REPAIR_HEADLINE" "$REPAIR_BODY")" \
-         && printf '%s' "$oid" | grep -Eq '^[0-9a-f]{40}$'; then
-        if pr="$("$GH_BIN" api -X POST "repos/$repo/pulls" -f title="$REPAIR_HEADLINE" \
-                  -f head="$REPAIR_BRANCH" -f base="$base" -f body="$REPAIR_BODY" --jq .number)" \
-           && [ -n "$pr" ]; then
-          outcome="pr-opened #$pr ($oid)"
-        else
-          outcome="pr-refused ($oid)"
-        fi
-      else
-        outcome="commit-refused"
-      fi
-    fi
+    outcome="$(open_branch_pr "$repo" "$base" "$sha" "$work/r" "$REPAIR_BRANCH" "$REPAIR_HEADLINE" "$REPAIR_BODY" "$LOCK_PATH")"
   fi
+  printf '%s@%s\t%s\n' "$repo" "$base" "$outcome"
+  rm -rf "$work"
+}
+
+# The branch and messages for the single-writer pin bump (BUMP_PINS=1).
+BUMP_PR_BRANCH="${BUMP_PR_BRANCH:-chore/bump-action-pins}"
+BUMP_PINS_HEADLINE="chore(deps): bump third-party action pins and actions.lock together"
+
+# Bump third-party action pins on the default branch of repo $1 (open PRs: JSON
+# array $2) and rewrite actions.lock in the SAME commit. This is the single
+# writer: Dependabot's github-actions ecosystem is off, so nothing else moves
+# a `uses:` SHA, and the lock is regenerated on top of the bump before anything
+# is pushed. The bump is committed locally first so regen_lock's "restore every
+# file except the lock" step keeps the bumped workflows. Refusals: any verdict
+# regen_lock gives other than changed/current/no-lock, and any changed path
+# outside .github/workflows or .github/actions. A repository with no lock gets
+# the bump alone. Prints "repo@branch<TAB>outcome".
+bump_main() {
+  local repo="$1" prs="$2" base sha work outcome rows n p body
+  local -a paths=()
+  if printf '%s' "$prs" | jq -e --arg b "$BUMP_PR_BRANCH" \
+       'any(.[]; .head.ref == $b and .head.repo.full_name == .base.repo.full_name)' >/dev/null; then
+    printf '%s@main\tbump-pr-open\n' "$repo"; return 0
+  fi
+  if ! base="$("$GH_BIN" api "repos/$repo" --jq .default_branch)" || [ -z "$base" ] \
+     || ! sha="$("$GH_BIN" api "repos/$repo/commits/$base" --jq .sha)"; then
+    printf '%s@main\tapi-error\n' "$repo"; return 0
+  fi
+  work="$(mktemp -d)"
+  if ! clone_branch "$work/r" "$repo" "$base"; then
+    printf '%s@%s\tclone-failed\n' "$repo" "$base"; rm -rf "$work"; return 0
+  fi
+  if [ "$(git -C "$work/r" rev-parse HEAD)" != "$sha" ]; then
+    printf '%s@%s\tmoved\n' "$repo" "$base"; rm -rf "$work"; return 0
+  fi
+  rows="$(bash "$REGEN_TOOLS/bump-action-pins.sh" "$work/r" 2>/dev/null)" || {
+    printf '%s@%s\tbump-failed\n' "$repo" "$base"; rm -rf "$work"; return 0; }
+  n="$(printf '%s\n' "$rows" | grep -c '	bumped$')"
+  if [ -z "$(git -C "$work/r" status --porcelain)" ]; then
+    printf '%s@%s\tcurrent\n' "$repo" "$base"; rm -rf "$work"; return 0
+  fi
+  git -C "$work/r" add -A && git -C "$work/r" -c user.name=pin-applier -c user.email=pin-applier@localhost \
+    commit --quiet -m "bump" || { printf '%s@%s\tbump-failed\n' "$repo" "$base"; rm -rf "$work"; return 0; }
+  outcome="$(regen_lock "$work/r")"
+  case "$outcome" in
+    changed|current|no-lock) ;;
+    *) printf '%s@%s\tbump-%s\n' "$repo" "$base" "$outcome"; rm -rf "$work"; return 0 ;;
+  esac
+  # Everything now differing from the default head, bump and lock together.
+  # NUL-delimited into an array, so a path with a space stays one path and
+  # nothing is glob-expanded.
+  mapfile -d '' -t paths < <(git -C "$work/r" diff --name-only -z "$sha")
+  for p in "${paths[@]}"; do
+    case "$p" in
+      .github/workflows/*|.github/actions/*) ;;
+      *) printf '%s@%s\tbump-unexpected-path\n' "$repo" "$base"; rm -rf "$work"; return 0 ;;
+    esac
+  done
+  if [ "${DRY_RUN:-0}" = 1 ]; then
+    printf '%s@%s\twould-bump %s\n' "$repo" "$base" "$n"; rm -rf "$work"; return 0
+  fi
+  body="Third-party action pins moved to their latest release, and actions.lock rewritten in the same commit by the single-writer applier (scripts/bump-action-pins.sh and scripts/regen-dependabot-locks.sh, BUMP_PINS=1, in metadatastician/standards). Verified with update-actions-lock.sh --verify-local, check-lock-sync.sh and check-lock-pin-contract.sh where the repository has a lock.
+
+$(printf '%s\n' "$rows" | awk -F'\t' '$5=="bumped"{printf "- %s: %s -> %s (%s)\n", $2, $3, $4, $1}' | head -n 40)"
+  outcome="$(open_branch_pr "$repo" "$base" "$sha" "$work/r" "$BUMP_PR_BRANCH" "$BUMP_PINS_HEADLINE" "$body" "${paths[@]}")"
   printf '%s@%s\t%s\n' "$repo" "$base" "$outcome"
   rm -rf "$work"
 }
@@ -257,12 +372,23 @@ repair_main() {
 # "repo#N<TAB>outcome" line per PR examined. With REGEN_MAIN=1, then repair
 # the default branch's own lock (see repair_main).
 process_repo() {
-  local repo="$1" token="$2" num ref sha work outcome oid err files prs
+  local repo="$1" token="$2" num ref sha work outcome oid err files prs bumped
   export GH_TOKEN="$token"
   # Only a 404 means "no lock here". A rate limit or 5xx must stay visible, or
   # the repository is silently counted as examined.
   if ! err="$("$GH_BIN" api "repos/$repo/contents/$LOCK_PATH" --silent 2>&1)"; then
-    case "$err" in *"HTTP 404"*) return 0 ;; esac
+    case "$err" in
+      *"HTTP 404"*)
+        # No lock here. With BUMP_PINS=1 the repository still gets its
+        # third-party pins bumped (the bump alone; there is no lock to write).
+        if [ "${BUMP_PINS:-0}" = 1 ]; then
+          if ! prs="$("$GH_BIN" api --paginate "repos/$repo/pulls?state=open&per_page=100")"; then
+            printf '%s\tapi-error\n' "$repo"; return 0
+          fi
+          bump_main "$repo" "$(printf '%s' "$prs" | jq -s 'add // []')"
+        fi
+        return 0 ;;
+    esac
     printf '%s\tapi-error\n' "$repo"; return 0
   fi
   if ! prs="$("$GH_BIN" api --paginate "repos/$repo/pulls?state=open&per_page=100")"; then
@@ -293,8 +419,18 @@ process_repo() {
     printf '%s#%s\t%s\n' "$repo" "$num" "$outcome"
     rm -rf "$work"
   done < <(printf '%s' "$prs" | select_prs)
+  # The bump regenerates the lock itself, so when it opened a PR the lock-only
+  # repair is skipped: two PRs rewriting the same lock would conflict.
+  bumped=""
+  if [ "${BUMP_PINS:-0}" = 1 ]; then
+    bumped="$(bump_main "$repo" "$prs")"
+    printf '%s\n' "$bumped"
+  fi
   if [ "${REGEN_MAIN:-0}" = 1 ]; then
-    repair_main "$repo" "$prs"
+    case "$bumped" in
+      *"pr-opened"*) ;;
+      *) repair_main "$repo" "$prs" ;;
+    esac
   fi
 }
 
