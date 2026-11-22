@@ -142,8 +142,9 @@ kyX's first front end (D313).
 === Monorepo Architecture
 
 NOTE: This section is history. The A2ML formats specified under
-`1-formats/a2ml/` are retired. Their specs stay in the tree for reference; do
-not write new files against them.
+`1-formats/a2ml/` are retired and the tree was removed (W11, 2026-11-21).
+`9-archive/A2ML-REMOVED.adoc` records what each file held and git history
+keeps them; do not write new files against these formats.
 
 As of 2026-02-08, all A2ML specification satellites have been absorbed into this monorepo as subdirectories.
 The previous hub-satellite architecture (with separate GitHub repos) has been consolidated here for easier maintenance and atomic cross-spec changes.
@@ -154,34 +155,6 @@ RSR boilerplate (LICENSE, CODE_OF_CONDUCT, CONTRIBUTING, SECURITY, MAINTAINERS) 
 [cols="1,2,1", options="header"]
 |===
 |Subdirectory |Former Repository |Content
-
-|`1-formats/a2ml/meta/`
-|link:1-formats/a2ml/meta/[meta-a2ml]
-|META.a2ml, STATE.a2ml, ECOSYSTEM.a2ml specs, IANA registration
-
-|`1-formats/a2ml/playbook/`
-|link:1-formats/a2ml/playbook/[playbook-a2ml]
-|PLAYBOOK.a2ml spec
-
-|`1-formats/a2ml/agentic/`
-|link:1-formats/a2ml/agentic/[agentic-a2ml]
-|AGENTIC.a2ml spec, contractiles, Nickel configs
-
-|`1-formats/a2ml/neurosym/`
-|link:1-formats/a2ml/neurosym/[neurosym-a2ml]
-|NEUROSYM.a2ml spec, Nickel configs
-
-|`1-formats/a2ml/anchor/`
-|link:1-formats/a2ml/anchor/[anchor-a2ml]
-|ANCHOR.a2ml spec, contractiles
-
-|`1-formats/a2ml/state/`
-|link:1-formats/a2ml/state/[state-a2ml]
-|STATE.a2ml spec, library, IANA registration
-
-|`1-formats/a2ml/ecosystem/`
-|link:1-formats/a2ml/ecosystem/[ecosystem-a2ml]
-|ECOSYSTEM.a2ml spec, IANA considerations
 
 |`standards-update/`
 |https://github.com/metadatastician/standards-update[standards-update]
@@ -424,39 +397,6 @@ standards/
 |   +-- AGENTIC.a2ml.template
 |   +-- NEUROSYM.a2ml.template
 |   +-- PLAYBOOK.a2ml.template
-+-- 1-formats/a2ml/meta/                 # Retired META.a2ml specification (history only)
-|   +-- README.adoc
-|   +-- spec/
-|   +-- examples/
-+-- 1-formats/a2ml/playbook/             # Retired PLAYBOOK.a2ml specification (history only)
-|   +-- README.adoc
-|   +-- spec/
-|   +-- examples/
-+-- 1-formats/a2ml/agentic/              # Retired AGENTIC.a2ml specification (history only)
-|   +-- README.adoc
-|   +-- spec/
-|   +-- examples/
-|   +-- 1-formats/contractiles/
-|   +-- ncl/
-+-- 1-formats/a2ml/neurosym/             # Retired NEUROSYM.a2ml specification (history only)
-|   +-- README.adoc
-|   +-- spec/
-|   +-- examples/
-|   +-- ncl/
-+-- 1-formats/a2ml/anchor/               # Retired ANCHOR.a2ml specification (history only)
-|   +-- README.adoc
-|   +-- spec/
-|   +-- examples/
-|   +-- 1-formats/contractiles/
-+-- 1-formats/a2ml/state/                # Retired STATE.a2ml specification (history only)
-|   +-- README.adoc
-|   +-- spec/
-|   +-- examples/
-|   +-- lib/
-+-- 1-formats/a2ml/ecosystem/            # Retired ECOSYSTEM.a2ml specification (history only)
-|   +-- README.adoc
-|   +-- spec/
-|   +-- docs/
 +-- standards-update/          # Standards update tooling
 |   +-- README.adoc
 +-- 1-formats/SATELLITES.a2ml            # Retired satellite registry (history only)
@@ -495,15 +435,7 @@ standards/
 * link:docs/UX-standards/[docs/UX-standards] -- UX standards and E-Grade launcher specification
 * link:standards-update/[standards-update] -- Standards update tooling
 
-**Retired A2ML specifications (history only; see <<Machine-Readable Metadata>> for the live forms):**
-
-* link:1-formats/a2ml/meta/[meta-a2ml] -- META.a2ml, STATE.a2ml, ECOSYSTEM.a2ml (primary tier)
-* link:1-formats/a2ml/playbook/[playbook-a2ml] -- PLAYBOOK.a2ml (execution tier)
-* link:1-formats/a2ml/agentic/[agentic-a2ml] -- AGENTIC.a2ml (execution tier)
-* link:1-formats/a2ml/neurosym/[neurosym-a2ml] -- NEUROSYM.a2ml (execution tier)
-* link:1-formats/a2ml/anchor/[anchor-a2ml] -- ANCHOR.a2ml (intervention tier)
-* link:1-formats/a2ml/state/[state-a2ml] -- STATE.a2ml (primary tier)
-* link:1-formats/a2ml/ecosystem/[ecosystem-a2ml] -- ECOSYSTEM.a2ml (primary tier)
+**Retired A2ML specifications:** the tree `1-formats/a2ml/` was removed on 2026-11-21 (W11). See link:9-archive/A2ML-REMOVED.adoc[9-archive/A2ML-REMOVED.adoc] for what each file held and <<Machine-Readable Metadata>> for the live forms.
 
 **RSR/Rhodium:**
 
