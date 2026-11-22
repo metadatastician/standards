@@ -1,3 +1,10 @@
+  # Who "we" are. An App installation token cannot call GET /user (403), so the
+  # workflow passes the App slug as APPLIER_SLUG; a PAT falls back to /user.
+  if [ -n "${APPLIER_SLUG:-}" ]; then
+    actor="${APPLIER_SLUG}[bot]"
+  else
+    actor="$("$GH_BIN" api user --jq .login 2>/dev/null || true)"
+  fi
 #!/usr/bin/env bash
 # SPDX-License-Identifier: MPL-2.0
 #
@@ -234,7 +241,14 @@ clone_branch() {
 open_branch_pr() {
   local repo="$1" base="$2" sha="$3" dir="$4" branch="$5" headline="$6" body="$7" msg oid pr head actor author_login
   shift 7
-  actor="$("$GH_BIN" api user --jq .login 2>/dev/null || true)"
+  # Who "we" are. An App installation token cannot call GET /user (403), so the
+  # workflow passes the App slug as APPLIER_SLUG; a PAT falls back to /user.
+  # Unknown means no reuse and no cleanup, never a guess.
+  if [ -n "${APPLIER_SLUG:-}" ]; then
+    actor="${APPLIER_SLUG}[bot]"
+  else
+    actor="$("$GH_BIN" api user --jq .login 2>/dev/null || true)"
+  fi
   if ! "$GH_BIN" api -X POST "repos/$repo/git/refs" \
        -f ref="refs/heads/$branch" -f sha="$sha" --silent 2>/dev/null; then
     # The branch exists. Reuse it only if it is a leftover of ours.
