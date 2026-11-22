@@ -86,8 +86,7 @@ its reason, in `.machine_readable/a2ml-legacy-allow.txt`. In short:
   `rsr-criteria-v2.a2ml`, the Hypatia rules and the DYADT vectors;
 * families whose mapping spec is refused or still open: META, ECOSYSTEM,
   STATE, ANCHOR, CLADE, `rsr-profile.a2ml` and the 0-AI-MANIFEST files;
-* the A2ML format family under `1-formats/a2ml/`, whose grammar describes the
-  files above, so it retires with the last of them;
+* the A2ML format family under `1-formats/a2ml/`, removed on 2026-11-21 (W11);
 * the scorecard corpus, whose archive surface the owner fixed at
   `.machine_readable/archive/scorecards-v1/` (ruling R5 on #837);
 * canon and data with no deed home yet, such as the readiness grades and the
