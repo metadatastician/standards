@@ -1,0 +1,22 @@
+{
+  "contract_id": "K9R-min",
+  "serial": 1,
+  "valid_from": "2026-11-21",
+  "expires": "2026-11-22",
+  "default": "deny",
+  "approved_by": "owner",
+  "selector_ref": "fixture",
+  "roles": {
+    "constructor": {
+      "grants": [
+        {
+          "repo": "hyperpolymath/k9-ecosystem",
+          "access": "read",
+          "actions": [
+            "attach"
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -1,20 +1,21 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 = K9 Coordination File Specification
 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
-:revdate: 2026-10-13
-:revnumber: 1.2.0
+:revdate: 2026-11-21
+:revnumber: 1.3.0
 :description: Schema specification for coordination.k9 files
 :toc:
 
 == Status
 
-Stable — Version 1.2.0. Owner ruling D311 (2026-10-06) made the 1.1 line
+Stable — Version 1.3.0. Owner ruling D311 (2026-10-06) made the 1.1 line
 canonical; rulings D317 and D318 made the 1.1.1 grammar patch; an owner
-ruling of 2026-10-13 added the two optional sections of 1.2.0 below.
+ruling of 2026-10-13 added the two optional sections of 1.2.0, and owner
+rulings of 2026-11-20 added the optional `reach` section of 1.3.0 below.
 
 The normative grammar is
-link:abnf/coordination-k9-grammar_v1.2.abnf[`coordination-k9-grammar_v1.2.abnf`].
-The v1.1 file is kept, marked superseded, so that existing links resolve.
+link:abnf/coordination-k9-grammar_v1.3.abnf[`coordination-k9-grammar_v1.3.abnf`].
+The v1.1 and v1.2 files are kept, so that existing links resolve.
 Where this prose, its examples or a generator disagree with the ABNF about
 syntax, the ABNF wins.
 
@@ -29,6 +30,13 @@ exact. The version stays 1.2.0: no file in this repository came near the
 limit, and the media type is not yet filed. A 1.1.1 file with a longer line
 is not a 1.2.0 file, so the inclusion below holds for the grammars, not for
 every conforming 1.1.1 file.
+
+NOTE: *Changes in 1.3.0.* One optional section, additive and last: `reach`
+(the worker reach contract, below). Every file the 1.2.0 grammar accepts,
+the 1.3.0 grammar accepts. A file with a `reach` section declares
+`schema_version: 1.3.0` (rule 22); other files may keep 1.2.0. Schema rules
+15 to 23 are new. Owner rulings by selector, 2026-11-20 (Q1 to Q12 of the
+K9 worker reach design).
 
 NOTE: *Changes in 1.2.0.* Two optional sections, additive, so every file the
 1.1.1 grammar accepts, the 1.2.0 grammar accepts (subject, since 2026-11-12,
@@ -278,10 +286,108 @@ coordination:
     - "Integration tests for Groove handlers"
 ----
 
+==== `reach` (1.3.0)
+
+The worker reach contract: which repositories and actions each agent role
+may use, and the limits on that use. It is honoured only in
+`metadatastician/standards/coordination.k9` (rule 18). It is the last
+section.
+
+The hub of hubs reads it before it starts or answers a worker. A
+PreToolUse hook, `.machine_readable/svc/k9/reach/reach-hook.sh`, set in the
+organisation's server-managed settings, enforces it inside each worker
+session. Anything the contract does not grant is denied (`default: deny`),
+and the hub asks the owner by selector; silence is no.
+
+[source,yaml]
+----
+reach:
+  contract_id: K9R-estate
+  serial: 1
+  valid_from: 2026-11-21
+  expires: 2026-12-21
+  default: deny
+  approved_by: owner
+  selector_ref: "hub thread, 2026-11-21, contract serial 1"
+  roles:
+    - role: deed-migrator
+      grants:
+        - repo: hyperpolymath/rsr-template-repo
+          access: write
+          actions:
+            - attach
+            - push_branch
+            - open_draft_pr
+          branch: claude/*
+          paths:
+            - docs/*
+          max_files_per_push: 40
+      limits:
+        window:
+          days:
+            - mon
+            - tue
+            - wed
+            - thu
+            - fri
+          hours_utc: 7-21
+          scope: actions
+        extent:
+          max_repos: 3
+          spawn_depth: 0
+        ttl:
+          wall_minutes: 240
+          max_tool_calls: 800
+        on_breach: deny_and_report
+      never:
+        - merge
+        - force_push
+----
+
+Fields, in the order the grammar fixes:
+
+* `contract_id`, `serial`, optional `supersedes`: the contract and its
+  version. Each change raises `serial`.
+* `valid_from`, `expires`: calendar dates, at most 31 days apart (rule 17).
+  Outside them every tool is refused.
+* `default: deny`, `approved_by`, `selector_ref`: the only default, who
+  approved it, and where the owner's selector answer is recorded.
+* `roles`: one entry per role. A cloud environment names its role in
+  `K9_REACH_ROLE`.
+* `grants`: per repository, `access` (`read` or `write`), the `actions`
+  (`attach`, `push_branch`, `open_draft_pr`, `comment`, `close_pr`), and for
+  writes an optional `branch` pattern, `paths` globs and
+  `max_files_per_push`.
+* `limits` (all optional):
+** `window`: `days`, `hours_utc` (start inclusive, end exclusive),
+   `blackout` date ranges, and `scope`: `actions` blocks only actions that
+   leave the container, `all` blocks every tool except messaging the hub.
+** `extent`: breadth (`max_orgs`, `max_repos`, `spawn_breadth`) and depth
+   (`spawn_depth`).
+** `ttl`: `wall_minutes` from the first tool call, `idle_minutes`,
+   `max_tool_calls`, and per-action counts `max_attaches`, `max_pushes`,
+   `max_prs`. Whichever runs out first ends the session's reach.
+** `rate`: `pushes_per_hour`, a sliding hour.
+** `on_breach`: `deny`, `deny_and_report` (the default) or
+   `deny_and_interrupt` (the hub stops the session).
+* `never`: actions refused at any time.
+
+Admin ceilings and floors sit in the server-managed settings, which only an
+organisation Owner or Primary Owner can change. A ceiling caps a role value,
+and a floor makes `on_breach` and `scope` at least that firm. The hook uses
+the stricter of the two, so a switch can tighten a role, never loosen it.
+`reach-hook.sh` documents the settings.
+
+The hook reads a compiled form, `reach.json`, which
+`bun tools/validate/validate.js --compile-reach FILE` produces from the
+section. The admin pins the sha256 of those bytes, so the hook accepts only
+the contract the owner merged and signed.
+
 == Validation Rules
 
-The ABNF is normative; these rules summarise it (1–10) and add the schema
-rules a grammar cannot express (11–14).
+The ABNF is normative; these rules summarise it (1–10 and 16) and add the
+schema rules a grammar cannot express (11–15 and 17–23). Rules 18 and 19
+bind the hub and the hook, not the validator.
 
 1. File MUST start with `K9!` on line 1, with no leading whitespace or BOM.
 2. One or more `# SPDX-` header lines MUST immediately follow the magic line.
@@ -308,6 +414,25 @@ rules a grammar cannot express (11–14).
     `8bit` encoding label exact (RFC 2045 Section 2.8). The grammar states
     it in its header as a constraint on the whole file; ABNF cannot express
     it compactly. Owner ruling I4, 2026-11-12.
+15. In `reach`, `merge`, `force_push`, `delete_branch`,
+    `change_environment`, `change_permissions` and `sign_commit` appear
+    only under `never`, never in a grant.
+16. A grant's `repo` is an exact `owner/name`, with no wildcard (the grammar's
+    `reach-repo`: one slash, two non-empty parts).
+17. `valid_from` and `expires` are calendar dates, and `expires` is 1 to 31
+    days after `valid_from`.
+18. The hub and the hook honour a `reach` section only in
+    `metadatastician/standards`, at the commit the admin pins.
+19. An action with no wall-clock or tool-call limit, from the role or the
+    admin ceilings, is refused (fail closed).
+20. `hours_utc` start is below its end, and the end is at most 24.
+21. Each `blackout` range runs forwards and lies within `valid_from` to
+    `expires`.
+22. A file with a `reach` section declares `schema_version: 1.3.0`.
+23. No role, granted repository, action, day or never action is listed
+    twice in its list; `push_branch`, `open_draft_pr` and `close_pr`, and
+    `paths` or `max_files_per_push`, need `access: write`; and a limits
+    block that is present has at least one field.
 
 == Generator Behaviour
 
