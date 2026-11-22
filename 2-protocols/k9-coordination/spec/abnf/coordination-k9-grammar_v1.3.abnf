@@ -1,0 +1,378 @@
+; SPDX-FileCopyrightText: © 2026 Jonathan D.A. Jewell (hyperpolymath)
+; SPDX-License: MPL-2.0
+; SPDX-License-Identifier: MPL-2.0
+;
+; K9 Coordination File Grammar, v1.3.0
+; Normative for parsing coordination.k9 files
+; Prose specification: ../COORDINATION-K9-SPEC.adoc
+;
+; K9 is YAML-like but NOT standard YAML. It is a domain-specific
+; coordination language with strict schema validation.
+;
+; Requires RFC 7405 (%s"..." case-sensitive string literals).
+;
+; CHANGELOG (v1.2.0 -> v1.3.0), owner rulings by selector, 2026-11-20
+; (K9 worker reach, Q4 and Q6 to Q12):
+;   - One optional section, additive and last: reach (after
+;     coordination). Every string the v1.2.0 grammar derives, the
+;     v1.3.0 grammar derives; no v1.2.0 rule changes except body,
+;     which gains the one optional element.
+;   - reach is the worker reach contract: which repos and actions each
+;     agent role may use, and the role's limits (temporal window,
+;     breadth and depth, time to live, rate, breach mode). The hub and
+;     the reach hook honour it only in metadatastician/standards
+;     (spec rule 18).
+;   - indent5 (10 spaces) and indent6 (12 spaces) for the nesting
+;     inside reach.
+;   - Schema rules the grammar cannot express are spec rules 15 to 23,
+;     enforced by tools/validate.
+;
+; LINE-LENGTH CONSTRAINT (normative; owner ruling I4, 2026-11-12):
+;   No line of a k9-file is longer than 998 octets, not counting the
+;   line-end (CR and LF) that closes it. A file with a longer line does
+;   not conform even if it matches k9-file below. ABNF has no compact
+;   way to bound a line, so the constraint is stated here and enforced
+;   by the validator (spec "Validation Rules", rule 14). It is the
+;   RFC 5322 Section 2.1.1 bound and makes the registered "8bit"
+;   encoding label exact. The rules below are unchanged by it.
+;
+; CHANGELOG (v1.1.1 -> v1.2.0), owner ruling 2026-10-13:
+;   - Two optional sections, additive: every string the v1.1.1 grammar
+;     derives, the v1.2.0 grammar derives. Since 2026-11-12 the
+;     998-octet line constraint above also applies, so a v1.1.1 file
+;     with a longer line is not a conforming v1.2.0 file.
+;     build_commands (after project): the commands an agent may run,
+;     each with its purpose. innervation (after architecture): the
+;     signals the repo emits (afferent), responds to (efferent) and the
+;     local guards it enforces (reflex).
+;   - indent4 (8 spaces) for the consumer lists inside innervation.
+;   - Comments are ASCII, as RFC 5234 requires, apart from the SPDX
+;     copyright line (the earlier files also carried
+;     non-ASCII arrows and comparison signs).
+;   - Editorial, 2026-11-09 (the language is unchanged):
+;     * deed-filename is right-recursive. As 1*(... / ".") %s".deed",
+;       a greedy repetition also consumed ".deed", so no deed_ref ever
+;       validated under apg-js. The new form denotes the same strings:
+;       one or more name characters, then ".deed" (proved in
+;       tools/validate/proofs/GrammarExtension.idr).
+;     * `date` lists iso8601-datetime first. RFC 5234 alternation is
+;       unordered, but ordered-choice parsers such as apg-js take the
+;       first alternative that matches, and the calendar-date prefix of
+;       a date-time matched first, so no date-time was ever accepted
+;       (spec rule 10).
+;
+; CHANGELOG (v1.1.0 -> v1.1.1), owner rulings D317 + D318:
+;   - lang-list items are indented one level under "languages:" (indent2),
+;     the same nesting every other list follows (was: indent, a defect)
+;   - Full-line "#" comments are permitted between sections (rule gap);
+;     still not within a section; "---" separators remain invalid
+;
+; CHANGELOG (v1.0.0 -> v1.1.0):
+;   - Added %s prefix for case-sensitive literals (RFC 7405)
+;   - Unified line endings to line-end (CRLF or LF) throughout
+;   - Added blank-line support between sections
+;   - Added bare-version to value rule (unquoted 1.0.0 etc.)
+;   - Expanded iso8601-datetime to full RFC 3339 (frac-sec, tz offsets)
+;   - Added escape sequences to strings (\" \\ \n \t)
+;   - Added indent2 / indent3 aliases for nested indentation
+;   - Expanded glob-pattern with ?, [], {}
+;   - Required >=1 entry in ecosystem / coordination sections
+;   - Fixed optional sections: explicit order, no duplicates
+
+k9-file       = magic-line line-end header *gap body
+
+; --- Magic Number (REQUIRED first line) ----------------------------
+magic-line    = %s"K9!"
+
+; --- SPDX Header (REQUIRED) ----------------------------------------
+header        = 1*spdx-line
+spdx-line     = "#" SP %s"SPDX-" 1*text-char line-end
+
+; --- Gaps between sections (not permitted within a section) --------
+; A gap is a blank line or a full-line comment starting in column 0.
+gap           = blank-line / comment-line
+blank-line    = *SP line-end
+comment-line  = "#" *text-char line-end
+
+; --- Body Structure ------------------------------------------------
+; Required sections MUST appear in this order.
+; Optional sections MUST appear in the order shown; each at most once.
+body          = metadata-section    *gap
+                project-section     *gap
+                [build-commands-section *gap]
+                invariants-section  *gap
+                [protected-section     *gap]
+                [architecture-section  *gap]
+                [innervation-section   *gap]
+                [do-not-create-section *gap]
+                [terminology-section   *gap]
+                [ecosystem-section     *gap]
+                [coordination-section  *gap]
+                [reach-section         *gap]
+
+; --- Required Sections ---------------------------------------------
+
+metadata-section = %s"metadata:" line-end
+                   1*metadata-field
+
+metadata-field = indent %s"schema:"         SP value line-end
+               / indent %s"schema_version:" SP value line-end
+               / indent %s"generated_by:"   SP value line-end
+               / indent %s"last_updated:"   SP date  line-end
+
+project-section = %s"project:" line-end
+                  1*project-field
+
+project-field  = indent %s"name:"         SP string        line-end
+               / indent %s"description:"  SP string        line-end
+               / indent %s"license:"      SP spdx-id       line-end
+               / indent %s"repo:"         SP repo-path     line-end
+               / indent %s"deed_ref:"     SP deed-filename line-end
+               / indent %s"languages:"    line-end lang-list
+               / indent %s"build_system:" SP symbol        line-end
+               / indent %s"runtime:"      SP symbol        line-end
+
+lang-list      = 1*(indent2 "- " symbol line-end)
+
+invariants-section = %s"invariants:" line-end
+                     *invariant-entry                     ; May be empty
+
+invariant-entry = indent  "- " %s"id:"       SP symbol   line-end
+                  indent2      %s"rule:"     SP string   line-end
+                  indent2      %s"reason:"   SP string   line-end
+                  [indent2     %s"severity:" SP severity line-end]
+
+severity       = %s"critical" / %s"high" / %s"moderate"
+
+; --- Optional Sections ---------------------------------------------
+
+build-commands-section = %s"build_commands:" line-end
+                         1*build-command-entry
+
+build-command-entry = indent  "- " %s"command:" SP string line-end
+                      indent2      %s"purpose:" SP string line-end
+
+protected-section = %s"protected:" line-end
+                    1*protected-entry
+
+protected-entry = indent  "- " %s"path:"   SP file-path line-end
+                  indent2      %s"reason:" SP string    line-end
+
+architecture-section = %s"architecture:" line-end
+                       1*arch-entry
+
+arch-entry     = indent  "- " %s"id:"                  SP symbol line-end
+                 indent2      %s"decision:"            SP string line-end
+                 indent2      %s"reason:"              SP string line-end
+                 [indent2     %s"alternatives_rejected:" line-end alt-list]
+
+alt-list       = 1*(indent3 "- " string line-end)
+
+innervation-section = %s"innervation:" line-end
+                      1*innervation-entry          ; >=1 required
+
+innervation-entry = indent %s"afferent:" line-end afferent-list
+                  / indent %s"efferent:" line-end efferent-list
+                  / indent %s"reflex:"   line-end reflex-list
+
+; Afferent: a signal this repo emits, and who consumes it.
+afferent-list  = 1*(indent2 "- " %s"signal:"      SP string line-end
+                    indent3      %s"description:" SP string line-end
+                    indent3      %s"triggers_on:" SP string line-end
+                    indent3      %s"consumers:"   line-end consumer-list)
+
+consumer-list  = 1*(indent4 "- " symbol line-end)
+
+; Efferent: a signal this repo responds to, and whether it fixes itself.
+efferent-list  = 1*(indent2 "- " %s"signal:"   SP string  line-end
+                    indent3      %s"action:"   SP string  line-end
+                    indent3      %s"auto_fix:" SP boolean line-end)
+
+; Reflex: a local guard that needs no central processing.
+reflex-list    = 1*(indent2 "- " %s"trigger:" SP string line-end
+                    indent3      %s"guard:"   SP string line-end
+                    indent3      %s"action:"  SP string line-end)
+
+boolean        = %s"true" / %s"false"
+
+do-not-create-section = %s"do_not_create:" line-end
+                        1*dnc-entry
+
+dnc-entry      = indent  "- " %s"pattern:"     SP glob-pattern line-end
+                 indent2      %s"reason:"      SP string       line-end
+               / indent  "- " %s"description:" SP string       line-end
+                 indent2      %s"reason:"      SP string       line-end
+
+terminology-section = %s"terminology:" line-end
+                      1*term-entry
+
+term-entry     = indent  "- " %s"correct:"   SP symbol line-end
+                 indent2      %s"incorrect:" line-end incorrect-list
+                 [indent2     %s"context:"   SP string line-end]
+
+incorrect-list = 1*(indent3 "- " symbol line-end)
+
+ecosystem-section = %s"ecosystem:" line-end
+                    1*ecosystem-entry               ; >=1 required
+
+ecosystem-entry = indent %s"depends_on:"  line-end dep-list
+                / indent %s"consumed_by:" line-end dep-list
+                / indent %s"related:"     line-end dep-list
+
+dep-list       = 1*(indent2 "- " %s"name:" SP symbol line-end
+                    indent3      %s"role:" SP string line-end)
+
+coordination-section = %s"coordination:" line-end
+                       1*coordination-entry          ; >=1 required
+
+coordination-entry = indent %s"active:"    line-end active-list
+                   / indent %s"completed:" line-end completed-list
+                   / indent %s"available:" line-end available-list
+
+active-list    = 1*(indent2 "- " %s"agent:"   SP symbol line-end
+                    indent3      %s"area:"    SP string line-end
+                    indent3      %s"started:" SP date   line-end
+                    indent3      %s"status:"  SP status line-end
+                    [indent3     %s"blocker:" SP string line-end])
+
+completed-list = 1*(indent2 "- " %s"agent:"     SP symbol line-end
+                    indent3      %s"area:"      SP string line-end
+                    indent3      %s"completed:" SP date   line-end)
+
+available-list = 1*(indent2 "- " string line-end)
+
+status         = %s"in-progress" / %s"blocked" / %s"paused"
+
+; --- Reach (v1.3.0) ------------------------------------------------
+; The worker reach contract. Fields appear in the order shown.
+
+reach-section  = %s"reach:" line-end
+                 indent  %s"contract_id:"  SP symbol    line-end
+                 indent  %s"serial:"       SP 1*DIGIT   line-end
+                 [indent %s"supersedes:"   SP string    line-end]
+                 indent  %s"valid_from:"   SP date      line-end
+                 indent  %s"expires:"      SP date      line-end
+                 indent  %s"default:"      SP %s"deny"  line-end
+                 indent  %s"approved_by:"  SP symbol    line-end
+                 indent  %s"selector_ref:" SP string    line-end
+                 indent  %s"roles:" line-end
+                 1*reach-role
+
+reach-role     = indent2 "- " %s"role:" SP symbol line-end
+                 indent3 %s"grants:" line-end 1*reach-grant
+                 [indent3 %s"limits:" line-end reach-limits]
+                 [indent3 %s"never:" line-end 1*(indent4 "- " reach-action line-end)]
+
+reach-grant    = indent4 "- " %s"repo:" SP reach-repo line-end
+                 indent5 %s"access:" SP reach-access line-end
+                 indent5 %s"actions:" line-end 1*(indent6 "- " reach-action line-end)
+                 [indent5 %s"branch:" SP glob-pattern line-end]
+                 [indent5 %s"paths:" line-end 1*(indent6 "- " glob-pattern line-end)]
+                 [indent5 %s"max_files_per_push:" SP 1*DIGIT line-end]
+
+reach-access   = %s"read" / %s"write"
+
+; close_pr and the grantable actions come before the never-only ones;
+; spec rule 15 keeps the never-only actions out of grants.
+reach-action   = %s"attach" / %s"push_branch" / %s"open_draft_pr"
+               / %s"comment" / %s"close_pr" / %s"merge" / %s"force_push"
+               / %s"delete_branch" / %s"change_environment"
+               / %s"change_permissions" / %s"sign_commit"
+
+; Each block is optional; spec rule 23 requires at least one field in
+; a block that is present.
+reach-limits   = [indent4 %s"window:" line-end
+                    [indent5 %s"days:" line-end 1*(indent6 "- " weekday line-end)]
+                    [indent5 %s"hours_utc:" SP 1*2DIGIT "-" 1*2DIGIT line-end]
+                    [indent5 %s"blackout:" line-end 1*(indent6 "- " day-range line-end)]
+                    [indent5 %s"scope:" SP window-scope line-end]]
+                 [indent4 %s"extent:" line-end
+                    [indent5 %s"max_orgs:" SP 1*DIGIT line-end]
+                    [indent5 %s"max_repos:" SP 1*DIGIT line-end]
+                    [indent5 %s"spawn_depth:" SP 1*DIGIT line-end]
+                    [indent5 %s"spawn_breadth:" SP 1*DIGIT line-end]]
+                 [indent4 %s"ttl:" line-end
+                    [indent5 %s"wall_minutes:" SP 1*DIGIT line-end]
+                    [indent5 %s"idle_minutes:" SP 1*DIGIT line-end]
+                    [indent5 %s"max_tool_calls:" SP 1*DIGIT line-end]
+                    [indent5 %s"max_attaches:" SP 1*DIGIT line-end]
+                    [indent5 %s"max_pushes:" SP 1*DIGIT line-end]
+                    [indent5 %s"max_prs:" SP 1*DIGIT line-end]]
+                 [indent4 %s"rate:" line-end
+                    indent5 %s"pushes_per_hour:" SP 1*DIGIT line-end]
+                 [indent4 %s"on_breach:" SP breach-mode line-end]
+
+weekday        = %s"mon" / %s"tue" / %s"wed" / %s"thu" / %s"fri"
+               / %s"sat" / %s"sun"
+window-scope   = %s"actions" / %s"all"
+breach-mode    = %s"deny_and_report" / %s"deny_and_interrupt" / %s"deny"
+calendar-date  = 4DIGIT "-" 2DIGIT "-" 2DIGIT
+day-range      = calendar-date ".." calendar-date
+
+; --- Primitives ----------------------------------------------------
+
+indent         = "  "                    ; Exactly 2 spaces (not tabs)
+indent2        = indent indent           ; Exactly 4 spaces
+indent3        = indent indent indent    ; Exactly 6 spaces
+indent4        = indent3 indent          ; Exactly 8 spaces
+indent5        = indent4 indent          ; Exactly 10 spaces (v1.3.0)
+indent6        = indent5 indent          ; Exactly 12 spaces (v1.3.0)
+
+value          = string / symbol / bare-version
+bare-version   = 1*DIGIT *("." 1*DIGIT)  ; e.g., 1.0.0, 2.3, 42
+
+string         = DQUOTE *string-char DQUOTE
+string-char    = %x20-21 / %x23-5B / %x5D-7E
+               / UTF8-2 / UTF8-3 / UTF8-4
+               / escape
+escape         = "\" (DQUOTE / "\" / %s"n" / %s"t")
+
+symbol         = ALPHA *(ALPHA / DIGIT / "-" / "_" / ".")
+spdx-id        = 1*(ALPHA / DIGIT / "-" / ".")
+repo-path      = 1*(ALPHA / DIGIT / "-" / "_" / "/")
+reach-repo     = reach-seg "/" reach-seg               ; exactly owner/name (rule 16)
+reach-seg      = 1*(ALPHA / DIGIT / "-" / "_")
+deed-filename  = deed-char deed-tail           ; 1*deed-char %s".deed", written
+deed-tail      = deed-char deed-tail / %s".deed"  ; so a greedy parser can end
+deed-char      = ALPHA / DIGIT / "-" / "_" / "."  ; (2026-11-09 changelog note)
+file-path      = 1*(ALPHA / DIGIT / "-" / "_" / "/" / ".")
+glob-pattern   = 1*(ALPHA / DIGIT / "-" / "_" / "/" / "."
+               / "*" / "?" / "[" / "]" / "{" / "}")
+
+date           = iso8601-datetime                ; full RFC 3339 datetime, first:
+               / 4DIGIT "-" 2DIGIT "-" 2DIGIT   ; or ISO 8601 calendar date
+                                                 ; (see the 2026-11-09 changelog note)
+
+iso8601-datetime = 4DIGIT "-" 2DIGIT "-" 2DIGIT "T"
+                   2DIGIT ":" 2DIGIT ":" 2DIGIT
+                   ["." 1*DIGIT]
+                   ("Z" / ("+" / "-") 2DIGIT ":" 2DIGIT)
+
+; --- UTF-8 Support (RFC 3629) -------------------------------------
+
+UTF8-2         = %xC2-DF UTF8-tail
+UTF8-3         = %xE0 %xA0-BF UTF8-tail
+               / %xE1-EC 2UTF8-tail
+               / %xED %x80-9F UTF8-tail
+               / %xEE-EF 2UTF8-tail
+UTF8-4         = %xF0 %x90-BF 2UTF8-tail
+               / %xF1-F3 3UTF8-tail
+               / %xF4 %x80-8F 2UTF8-tail
+UTF8-tail      = %x80-BF
+
+text-char      = VCHAR / SP / UTF8-2 / UTF8-3 / UTF8-4
+
+line-end       = CRLF / LF
+
+; --- Notes ---------------------------------------------------------
+;  1. Indentation is EXACTLY 2 spaces per level. Tabs are INVALID.
+;  2. The magic number "K9!" MUST be the first line (no leading ws).
+;  3. SPDX header MUST appear before the first section.
+;  4. metadata, project, and invariants sections are REQUIRED.
+;  5. Optional sections appear in fixed order; each at most once.
+;  6. deed_ref links to a .deed file for typed identity.
+;  7. Line endings may be CRLF or LF (mixing is permitted).
+;  8. Blank lines and full-line "#" comments are permitted between
+;     sections, not within them.
+;  9. Strings support escape sequences: \" \\ \n \t
+; 10. Bare version numbers (e.g., 1.0.0) are valid unquoted values.

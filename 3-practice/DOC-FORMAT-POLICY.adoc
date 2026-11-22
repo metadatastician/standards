@@ -1,0 +1,49 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+= Documentation Format Policy: AsciiDoc by default, declared Markdown exemptions
+:toc:
+:toc-placement: preamble
+
+AsciiDoc is the estate's documentation format. README is `.adoc` (ADR-004,
+`docs/decisions/ADR-004-readme-single-source-derive.adoc`), and the
+GitHub-special-cased community files keep their `.md` names. The check is
+`.github/workflows/doc-format.yml`.
+
+== 1. Rule D-1: declared Markdown exemptions
+
+*Status: IN FORCE. Owner ruling by selector, 2026-11-21. Enforced by:
+`tests/test_markdown_exempt_paths.sh`, which checks the ledger itself; no
+converter or stray-`.md` check is wired to read it yet.*
+
+Some repositories are upstream copies whose tests need real Markdown files
+(for example Jekyll content with front matter). Those files are not drift.
+They are declared in one ledger: `config/settings/markdown-exempt-paths.json`.
+
+Each entry is an object with these members, all required:
+
+[cols="1,5",options="header"]
+|===
+| Member | Meaning
+
+| `repo` | `owner/name` of the repository the exemption covers.
+| `paths` | Relative globs, each ending in `.md`. No `..`, no leading `/`, no bare `**`.
+| `class` | Why the files are exempt. Today only `upstream-copy`.
+| `reason` | One or two sentences of evidence.
+| `ruling` | The owner ruling that grants it (selector and date).
+|===
+
+The ledger is I-JSON serialised by JCS (`JSON-POLICY.adoc` J-1).
+
+== 2. Rule D-2: every tool reads the ledger
+
+Every Markdown-to-AsciiDoc converter and every stray-`.md` check MUST read this
+ledger and skip the listed globs for the repository it is running in. A tool
+MUST NOT hard-code a repository name or glob. An exemption covers only the
+listed globs: root docs, `README` and `docs/*.md` of an exempt repository stay
+`.adoc`.
+
+A new exemption is added only on an owner ruling, as a new entry; the ruling is
+recorded in the entry. A path outside the listed globs is not exempt.
+
+== 3. Current entries
+
+* `hyperpolymath/explore`: `topics/**/index.md`, `collections/**/index.md`.

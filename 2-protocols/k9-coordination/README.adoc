@@ -4,7 +4,7 @@
 
 = K9 Coordination Protocol
 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
-:version: 1.2.0
+:version: 1.3.0
 :status: STABLE
 :revdate: 2026-10-06
 :toc:
@@ -15,7 +15,7 @@ Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 The K9 Coordination File Specification is *STABLE* at version {version}.
 
 The normative parsing grammar is
-link:spec/abnf/coordination-k9-grammar_v1.2.abnf[K9 Coordination ABNF v1.2.0]. If this README or the prose
+link:spec/abnf/coordination-k9-grammar_v1.3.abnf[K9 Coordination ABNF v1.3.0]. If this README or the prose
 specification disagrees with the ABNF about syntax, the ABNF wins.
 
 The implementation roadmap is currently at *Phase 1*. The grammar already
@@ -35,7 +35,7 @@ K9 is a *Kennel-level* format: pure data with no execution, functions, or
 evaluation.
 
 K9 is YAML-like, but it is *not YAML*. Implementations MUST use a K9-aware
-parser conforming to link:spec/abnf/coordination-k9-grammar_v1.2.abnf[coordination-k9-grammar_v1.2.abnf], not a generic YAML
+parser conforming to link:spec/abnf/coordination-k9-grammar_v1.3.abnf[coordination-k9-grammar_v1.3.abnf], not a generic YAML
 parser.
 
 == The Problem
@@ -416,7 +416,7 @@ If `deed_ref` is present:
 == See Also
 
 * link:spec/COORDINATION-K9-SPEC.adoc[K9 Coordination File Specification]
-* link:spec/abnf/coordination-k9-grammar_v1.2.abnf[K9 Coordination ABNF Grammar v1.2.0]
+* link:spec/abnf/coordination-k9-grammar_v1.3.abnf[K9 Coordination ABNF Grammar v1.3.0]
 * link:examples/[Example K9 files]
 * link:generator/[Generator tool]
 * link:https://www.rfc-editor.org/rfc/rfc7405[RFC 7405 — Case-Sensitive ABNF Strings]

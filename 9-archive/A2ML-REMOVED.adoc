@@ -424,3 +424,1165 @@ on `main` that holds every file in this table.
 | `c43fc02e3a571649d7f2fd993250eb581ea6b086`
 | Directory manifest for the wiki track (`docs/wikis/`): an id, a scaffold status, the three audience tracks with their home pages and quickstarts, and a to-do list. The same structure is in `docs/wikis/README.adoc`, which it mirrored. Removed under the owner's ruling of 2026-11-17 that directory manifests are derived and not stored.
 |===
+
+== Removed on 2026-11-21: the format tree `1-formats/a2ml/` (W11)
+
+The owner ruled on 2026-11-17 (question selector; recorded in
+`docs/triage/2026-11-17/README.adoc`, work order W11) that the retired format tree
+`1-formats/a2ml/` is removed whole once its inbound links are redirected. Its
+seven sub-projects (agentic, anchor, ecosystem, meta, neurosym, playbook, state)
+were the specifications, examples, library code and per-profile metadata of the
+A2ML formats; their grammar and IANA material described files that are retired.
+Nothing in it is translated: the live forms are the deeds, `*.k9.ncl` contracts
+and `coordination.k9` (see `.claude/CLAUDE.md`, "Machine-Readable Artefacts").
+
+The contents are not copied here; git history keeps them.
+`19c6bac2efae3ef9d052ec04f71919ae73d92d43` is a commit on `main` that holds every file in this table:
+
+[source,bash]
+----
+git cat-file -p <blob id>
+git show 19c6bac2efae3ef9d052ec04f71919ae73d92d43:<path>
+----
+
+The "What it was" column is derived from the path and the file's own header, not
+from a line-by-line reading. Size is in bytes; sha256 is of the file as tracked.
+
+[cols="4,1,3,3,4",options="header"]
+|===
+| Path | Size | sha256 | Git blob id | What it was
+
+| `1-formats/a2ml/agentic/.ai-context.json`
+| 255
+| `ca2fb4103fae1784f2f3575eaca6bb7f707e4715340674327c6db781d559668f`
+| `b2278ab158f44f009c34f1d1a68f63c13a9647a2`
+| Repository boilerplate or tooling file of the agentic sub-project.
+
+| `1-formats/a2ml/agentic/.editorconfig`
+| 748
+| `999f54d9d189e170bb07024160efabe29d5674f091cb568e0c63b04e4316e1ce`
+| `fc6650ceaddb9e87fb623cf04ac22d584ec3624b`
+| Repository boilerplate or tooling file of the agentic sub-project.
+
+| `1-formats/a2ml/agentic/.gitattributes`
+| 971
+| `0f7b8712f7c12f3dcc89a0b50f0fa588855f6acbaa617ce3b18beb4f9c10840d`
+| `e860a85c161807812d87143d3f522c5512fad289`
+| Repository boilerplate or tooling file of the agentic sub-project.
+
+| `1-formats/a2ml/agentic/.gitignore`
+| 676
+| `c52af7b1c398d05b7690d288b76257f52db8059f2a1c1efeab1d334bdf89bcd7`
+| `45f10b185cc2e4b46cdad23137659dcca1397d3d`
+| Repository boilerplate or tooling file of the agentic sub-project.
+
+| `1-formats/a2ml/agentic/.gitlab-ci.yml`
+| 2900
+| `b8aeccd913fd31cb0ba1c6d595a6d9a2ff5d355bade3e25690377382853db34b`
+| `7309fa9002100002155634c3ff4c7001c1930ead`
+| Repository boilerplate or tooling file of the agentic sub-project.
+
+| `1-formats/a2ml/agentic/.machine_readable/descriptiles/AGENTIC.a2ml`
+| 1179
+| `dd30f6c36b2f67f3510f871dbb8c415e862cfa27f4ebc30f97fcc9691b98a837`
+| `274d854953189561856d5b0fd1f6fd2ea63aa5f4`
+| AGENTIC descriptile copy for the agentic sub-project.
+
+| `1-formats/a2ml/agentic/.machine_readable/descriptiles/ECOSYSTEM.a2ml`
+| 466
+| `9f4c4f26b1fbcfc354d27763d0e2ca3cb3632b66676595329ee205f56261eece`
+| `ac7049ce6c3df17123254d7f07f6e05401082ccb`
+| ECOSYSTEM descriptile copy for the agentic sub-project.
+
+| `1-formats/a2ml/agentic/.machine_readable/descriptiles/META.a2ml`
+| 632
+| `4ab6a43d4a5065004a189ff34a9c05e0b1e4bb6dec23ca552bff06a570f0de4e`
+| `ce016642a828ffb9f68d4300a106b6a2bc328af7`
+| META descriptile copy for the agentic sub-project.
+
+| `1-formats/a2ml/agentic/.machine_readable/descriptiles/NEUROSYM.a2ml`
+| 601
+| `8f3780036a5cdf8c4cc727ac79946218d7944071c4154371411f5c2c5b7f289b`
+| `184174709d125b77ade1f3f9faf146429421e72b`
+| NEUROSYM descriptile copy for the agentic sub-project.
+
+| `1-formats/a2ml/agentic/.machine_readable/descriptiles/PLAYBOOK.a2ml`
+| 839
+| `80a0d33bf1bd3e03293cacae386666270433e75caf325d0e4851631fcd911a36`
+| `5003fd08bba17856441a339796093d62501ea4fe`
+| PLAYBOOK descriptile copy for the agentic sub-project.
+
+| `1-formats/a2ml/agentic/.machine_readable/descriptiles/STATE.a2ml`
+| 1016
+| `114ed83cea8f80dbb31c192595ef554a1cc52b9ca3bc4b5d86100091dd2d4834`
+| `da445b99745517e8c22e6a22a248722604d3bc75`
+| STATE descriptile copy for the agentic sub-project.
+
+| `1-formats/a2ml/agentic/.nojekyll`
+| 0
+| `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`
+| `e69de29bb2d1d6434b8b29ae775ad8c2e48c5391`
+| Repository boilerplate or tooling file of the agentic sub-project.
+
+| `1-formats/a2ml/agentic/README.adoc`
+| 4449
+| `b3077124211e8e305b5f1720709a6737137e700bb3165b950bf047baf14d0811`
+| `699e119498a15134e63fa07e02080d687c055e83`
+| Top-level prose page of the agentic sub-project.
+
+| `1-formats/a2ml/agentic/ROADMAP.adoc`
+| 395
+| `db9610cea27c1fc904c28c78e1b218dd460546f3129edd430f82b8c72ba21c1a`
+| `e2aec25b368d539526aa3a7eb0b1775d8ef71d6a`
+| Top-level prose page of the agentic sub-project.
+
+| `1-formats/a2ml/agentic/architecture.adoc`
+| 737
+| `623dd3dbfce5876e8fd7e5cf533b96e8de906846f9d6a2c82b34af85db8a2d9f`
+| `755df2e13fb9cd212cb81f5d07c37f8263fc29a9`
+| Top-level prose page of the agentic sub-project.
+
+| `1-formats/a2ml/agentic/contractiles/README.adoc`
+| 862
+| `dece77e2d0e523d78794e630cf7f2a028d400db65d96f0513799a3bb11eadfbe`
+| `4d7f0c058749c091a80b1d3a2021862d502a9bda`
+| Supporting code or contract file of the agentic sub-project (contractiles).
+
+| `1-formats/a2ml/agentic/contractiles/dust/Dustfile`
+| 885
+| `498487f3a2ccd1a4cf23404ddb0811c8407bf9684acc71ebb7d2722a46a73acc`
+| `314903cca452af05c876ce71a1bbabb7d19ff628`
+| Supporting code or contract file of the agentic sub-project (contractiles).
+
+| `1-formats/a2ml/agentic/contractiles/must/Mustfile`
+| 1044
+| `8c74e76c7651ef61dfe552e3b6303a9f24697c57abf03df09cb3d621996dd2d5`
+| `dc7b3be51a4bb662ca6986d1f85f1f7e618164f4`
+| Supporting code or contract file of the agentic sub-project (contractiles).
+
+| `1-formats/a2ml/agentic/docs/ADR-002-methodology-layer.adoc`
+| 13332
+| `629448920616025961ed3cd0f7ef61ddf1cb4c3a36eb341ec5595d2902e0aef8`
+| `d6f5e2b053cac88f47412bd33cb725f5dfb09306`
+| Documentation page of the agentic sub-project.
+
+| `1-formats/a2ml/agentic/docs/CITATIONS.adoc`
+| 851
+| `264dab3528b178e70b09079fa7186d9164a269cdffddc74eb65b7ee8f8f0790c`
+| `37fdb0f08f7b393b8a852f5e47138b1a7f8f2b88`
+| Documentation page of the agentic sub-project.
+
+| `1-formats/a2ml/agentic/docs/ROADMAP.adoc`
+| 2591
+| `f58d4bc109c917bfc393adff7cf76410372524ba3513ba7ca9eb17286144fc0e`
+| `a9537c0fe38a55916d517871a5e02246a40e6352`
+| Documentation page of the agentic sub-project.
+
+| `1-formats/a2ml/agentic/examples/comprehensive.a2ml`
+| 4017
+| `f77aa7dd270df7997b886ebecc678caeaf48f56c6a32076a4aab94bffc4bbd97`
+| `2cd0cd9dc2b054ae78f1a713f2843ada2b2d6331`
+| Comprehensive example file for the agentic format.
+
+| `1-formats/a2ml/agentic/examples/minimal.a2ml`
+| 576
+| `86a659be951499e22b40b06e55b6d1558e775e4f267b94a8bd5462bbf988f388`
+| `569decbc70760e49bf15170d9a6c321dd1e6fcc1`
+| Minimal example file for the agentic format.
+
+| `1-formats/a2ml/agentic/examples/web-project-deno.json`
+| 622
+| `743a0aef9357d4b5a2ba89ee2c8d935ef777967689220205bacbdc9eeacc094f`
+| `5ddd3bd7fbc282ebd9294e058c06db01fa91b0af`
+| Example for the agentic format.
+
+| `1-formats/a2ml/agentic/ffi/zig/build.zig`
+| 2672
+| `9879e7c78e9b26453a6f7b0442255ad1d133e269fe9f5182f22f83860ac1a9a7`
+| `4a2e049a425512c48813ce0ea48df81981616c0c`
+| Supporting code or contract file of the agentic sub-project (ffi).
+
+| `1-formats/a2ml/agentic/ffi/zig/src/main.zig`
+| 7305
+| `c155fdd3d48ceec05bb1bd0bd5bdd89af0f4c2aad4d76cdaa4b717e8075e0e19`
+| `6b233bc79a6211870c7b38e446c9c7a458e2c33b`
+| Supporting code or contract file of the agentic sub-project (ffi).
+
+| `1-formats/a2ml/agentic/ffi/zig/test/integration_test.zig`
+| 5638
+| `4f8d988ff6a7c29ce3cd382716193f398411d39d70f6ae4a9d30eca2a7186b19`
+| `0341994997434db07a0f7a4fa38ead9c2aad1afe`
+| Supporting code or contract file of the agentic sub-project (ffi).
+
+| `1-formats/a2ml/agentic/ncl/lib/os_detect.ncl`
+| 1034
+| `db2352a868209c8d9d516287479826a502a27bf893134ea1fbd802b1c8de480e`
+| `2bdb2979b052ea7bce13325b92977835236e278a`
+| Supporting code or contract file of the agentic sub-project (ncl).
+
+| `1-formats/a2ml/agentic/ncl/lib/schema.ncl`
+| 454
+| `1984154566e2a2079f1d0feedbf98f95dd61690be842f0bfb35d1bd1686d6e49`
+| `506e239546fc84212cf60968b31256bab60386bd`
+| Supporting code or contract file of the agentic sub-project (ncl).
+
+| `1-formats/a2ml/agentic/scripts/all-shells.sh`
+| 1229
+| `b8c34495ad73270c75d7ec8bd89647ca0508cd44b5ad14e368d03c2631ab6066`
+| `9593f8cfad67bb7558b703a9f7c8d41e55c5e515`
+| Supporting code or contract file of the agentic sub-project (scripts).
+
+| `1-formats/a2ml/agentic/scripts/bootstrap.sh`
+| 5569
+| `4ea29b50a835f18139010a3109e584913776f9c08d5382fa6a0b378da5144ef3`
+| `0ddd7ccfe1486c24740e5629e186c07305a24224`
+| Supporting code or contract file of the agentic sub-project (scripts).
+
+| `1-formats/a2ml/agentic/spec/AGENTIC-FORMAT-SPEC.adoc`
+| 9942
+| `943a3a59f28c8299eae82cdb77b8bfbeb801b72f0118b26c9d7e3ecd66f5ac29`
+| `9103e30900690bf31431e9c127a9306f8b14aaaf`
+| Specification or grammar document of the agentic format.
+
+| `1-formats/a2ml/agentic/spec/VERSION-POLICY.adoc`
+| 5375
+| `57f27accaaa26cad0b5e3024787e0630cc3c8431c59d9dfd7dee8b9b5dc44c30`
+| `f44525c30f0987eda7fac13723a321ea320cb8bb`
+| Specification or grammar document of the agentic format.
+
+| `1-formats/a2ml/agentic/spec/agentic.abnf`
+| 8322
+| `d41d0b4dfc116f9c13bf9ffff3b08fe240ef5aa9ad32a89b225f1b79b7d92487`
+| `37c00f2c6d72d9d2a42ca28d17429588ff3ac8ea`
+| Specification or grammar document of the agentic format.
+
+| `1-formats/a2ml/agentic/spec/agentic.schema.json`
+| 12099
+| `011a3305828d5aa9c163344c3752169830c69eaa5a2c542659f909f7248d1294`
+| `1655f3035c94783600e211ba443f6ae9bffe8235`
+| Specification or grammar document of the agentic format.
+
+| `1-formats/a2ml/anchor/.editorconfig`
+| 748
+| `999f54d9d189e170bb07024160efabe29d5674f091cb568e0c63b04e4316e1ce`
+| `fc6650ceaddb9e87fb623cf04ac22d584ec3624b`
+| Repository boilerplate or tooling file of the anchor sub-project.
+
+| `1-formats/a2ml/anchor/.gitattributes`
+| 971
+| `0f7b8712f7c12f3dcc89a0b50f0fa588855f6acbaa617ce3b18beb4f9c10840d`
+| `e860a85c161807812d87143d3f522c5512fad289`
+| Repository boilerplate or tooling file of the anchor sub-project.
+
+| `1-formats/a2ml/anchor/.gitignore`
+| 676
+| `c52af7b1c398d05b7690d288b76257f52db8059f2a1c1efeab1d334bdf89bcd7`
+| `45f10b185cc2e4b46cdad23137659dcca1397d3d`
+| Repository boilerplate or tooling file of the anchor sub-project.
+
+| `1-formats/a2ml/anchor/.gitlab-ci.yml`
+| 2900
+| `b8aeccd913fd31cb0ba1c6d595a6d9a2ff5d355bade3e25690377382853db34b`
+| `7309fa9002100002155634c3ff4c7001c1930ead`
+| Repository boilerplate or tooling file of the anchor sub-project.
+
+| `1-formats/a2ml/anchor/.machine_readable/descriptiles/AGENTIC.a2ml`
+| 1179
+| `dd30f6c36b2f67f3510f871dbb8c415e862cfa27f4ebc30f97fcc9691b98a837`
+| `274d854953189561856d5b0fd1f6fd2ea63aa5f4`
+| AGENTIC descriptile copy for the anchor sub-project.
+
+| `1-formats/a2ml/anchor/.machine_readable/descriptiles/ECOSYSTEM.a2ml`
+| 463
+| `4c0ea967dfd7bd5ef615f84f29b02b202d01cb30390ea9556051b83e91c635b4`
+| `4484fd644c4cb9350f458e231803e0a4d74c99d9`
+| ECOSYSTEM descriptile copy for the anchor sub-project.
+
+| `1-formats/a2ml/anchor/.machine_readable/descriptiles/META.a2ml`
+| 631
+| `71e27681e201d3d4b3dfd7fed678a2ba1e6e4aac50c0a02588d0f7f5a1f8ec68`
+| `0c375aeba37274f0d45d7913f5bfdf0ed4735cdf`
+| META descriptile copy for the anchor sub-project.
+
+| `1-formats/a2ml/anchor/.machine_readable/descriptiles/NEUROSYM.a2ml`
+| 601
+| `8f3780036a5cdf8c4cc727ac79946218d7944071c4154371411f5c2c5b7f289b`
+| `184174709d125b77ade1f3f9faf146429421e72b`
+| NEUROSYM descriptile copy for the anchor sub-project.
+
+| `1-formats/a2ml/anchor/.machine_readable/descriptiles/PLAYBOOK.a2ml`
+| 839
+| `80a0d33bf1bd3e03293cacae386666270433e75caf325d0e4851631fcd911a36`
+| `5003fd08bba17856441a339796093d62501ea4fe`
+| PLAYBOOK descriptile copy for the anchor sub-project.
+
+| `1-formats/a2ml/anchor/.machine_readable/descriptiles/STATE.a2ml`
+| 1020
+| `6eca29106fee712308e60163a512da97ed888675ddf29c4b46653bb75b1ce361`
+| `8f27225af04fab06f69212a34fcc294921f4093f`
+| STATE descriptile copy for the anchor sub-project.
+
+| `1-formats/a2ml/anchor/.nojekyll`
+| 0
+| `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`
+| `e69de29bb2d1d6434b8b29ae775ad8c2e48c5391`
+| Repository boilerplate or tooling file of the anchor sub-project.
+
+| `1-formats/a2ml/anchor/README.adoc`
+| 7995
+| `82427bccf2a10f432374f80460659cba310914bb81b38a69a6dd483c2ae6edf2`
+| `a845538903b0f5ed08dd211fa31e0e559ccc0f0f`
+| Top-level prose page of the anchor sub-project.
+
+| `1-formats/a2ml/anchor/ROADMAP.adoc`
+| 393
+| `f052f6f7c30f7a8848de71e97acb867276a6837aa6dd8cd88ce79a5b1fc4de12`
+| `0a761e58802df6b18ceb90d790388ec7bfaa99ea`
+| Top-level prose page of the anchor sub-project.
+
+| `1-formats/a2ml/anchor/abnf/anchor.abnf`
+| 5571
+| `ae34f5ab0e45a7a91fdb3488308909d0308379826222cc3d8fee234d8cd37789`
+| `532a7a35dcc92c77e6e66e09ca956fe17609eebb`
+| Specification or grammar document of the anchor format.
+
+| `1-formats/a2ml/anchor/contractiles/README.adoc`
+| 862
+| `dece77e2d0e523d78794e630cf7f2a028d400db65d96f0513799a3bb11eadfbe`
+| `4d7f0c058749c091a80b1d3a2021862d502a9bda`
+| Supporting code or contract file of the anchor sub-project (contractiles).
+
+| `1-formats/a2ml/anchor/contractiles/dust/Dustfile`
+| 885
+| `498487f3a2ccd1a4cf23404ddb0811c8407bf9684acc71ebb7d2722a46a73acc`
+| `314903cca452af05c876ce71a1bbabb7d19ff628`
+| Supporting code or contract file of the anchor sub-project (contractiles).
+
+| `1-formats/a2ml/anchor/contractiles/must/Mustfile`
+| 1044
+| `8c74e76c7651ef61dfe552e3b6303a9f24697c57abf03df09cb3d621996dd2d5`
+| `dc7b3be51a4bb662ca6986d1f85f1f7e618164f4`
+| Supporting code or contract file of the anchor sub-project (contractiles).
+
+| `1-formats/a2ml/anchor/docs/CITATIONS.adoc`
+| 851
+| `264dab3528b178e70b09079fa7186d9164a269cdffddc74eb65b7ee8f8f0790c`
+| `37fdb0f08f7b393b8a852f5e47138b1a7f8f2b88`
+| Documentation page of the anchor sub-project.
+
+| `1-formats/a2ml/anchor/examples/comprehensive.scm`
+| 9260
+| `d3adb717b64ba04164073ba0fcc88cc3cd38e4189b24992b56326330a093d1d9`
+| `05c60f75483f90f8a670b2042fd6f03853d7a5fb`
+| Example for the anchor format.
+
+| `1-formats/a2ml/anchor/examples/minimal.scm`
+| 723
+| `6813f730001d1331cffeadf17a2267caece7bb94735360bba43d9f8cb7360afb`
+| `74116068381673b5923db1a9ba4084074c87ab59`
+| Example for the anchor format.
+
+| `1-formats/a2ml/anchor/examples/web-project-deno.json`
+| 622
+| `743a0aef9357d4b5a2ba89ee2c8d935ef777967689220205bacbdc9eeacc094f`
+| `5ddd3bd7fbc282ebd9294e058c06db01fa91b0af`
+| Example for the anchor format.
+
+| `1-formats/a2ml/anchor/ffi/zig/build.zig`
+| 2672
+| `9879e7c78e9b26453a6f7b0442255ad1d133e269fe9f5182f22f83860ac1a9a7`
+| `4a2e049a425512c48813ce0ea48df81981616c0c`
+| Supporting code or contract file of the anchor sub-project (ffi).
+
+| `1-formats/a2ml/anchor/ffi/zig/src/main.zig`
+| 7305
+| `c155fdd3d48ceec05bb1bd0bd5bdd89af0f4c2aad4d76cdaa4b717e8075e0e19`
+| `6b233bc79a6211870c7b38e446c9c7a458e2c33b`
+| Supporting code or contract file of the anchor sub-project (ffi).
+
+| `1-formats/a2ml/anchor/ffi/zig/test/integration_test.zig`
+| 5638
+| `4f8d988ff6a7c29ce3cd382716193f398411d39d70f6ae4a9d30eca2a7186b19`
+| `0341994997434db07a0f7a4fa38ead9c2aad1afe`
+| Supporting code or contract file of the anchor sub-project (ffi).
+
+| `1-formats/a2ml/anchor/spec/ANCHOR-FORMAT-SPEC.adoc`
+| 15598
+| `7fb054d06edada6ae6227a654832f499cb661ff2650b29c720b262f66c027bcd`
+| `75531c07c90a751e42bcc20cba3c8fccf9090d9f`
+| Specification or grammar document of the anchor format.
+
+| `1-formats/a2ml/ecosystem/.editorconfig`
+| 748
+| `999f54d9d189e170bb07024160efabe29d5674f091cb568e0c63b04e4316e1ce`
+| `fc6650ceaddb9e87fb623cf04ac22d584ec3624b`
+| Repository boilerplate or tooling file of the ecosystem sub-project.
+
+| `1-formats/a2ml/ecosystem/.gitattributes`
+| 971
+| `0f7b8712f7c12f3dcc89a0b50f0fa588855f6acbaa617ce3b18beb4f9c10840d`
+| `e860a85c161807812d87143d3f522c5512fad289`
+| Repository boilerplate or tooling file of the ecosystem sub-project.
+
+| `1-formats/a2ml/ecosystem/.gitignore`
+| 676
+| `c52af7b1c398d05b7690d288b76257f52db8059f2a1c1efeab1d334bdf89bcd7`
+| `45f10b185cc2e4b46cdad23137659dcca1397d3d`
+| Repository boilerplate or tooling file of the ecosystem sub-project.
+
+| `1-formats/a2ml/ecosystem/.machine_readable/descriptiles/AGENTIC.a2ml`
+| 1179
+| `dd30f6c36b2f67f3510f871dbb8c415e862cfa27f4ebc30f97fcc9691b98a837`
+| `274d854953189561856d5b0fd1f6fd2ea63aa5f4`
+| AGENTIC descriptile copy for the ecosystem sub-project.
+
+| `1-formats/a2ml/ecosystem/.machine_readable/descriptiles/ECOSYSTEM.a2ml`
+| 396
+| `c0d07716317d7eba513a89bc654c7a74073adfeffa885c0c8ded7dc8663bf562`
+| `d20cb9d4ec7c76c984c9bb60378448f4bc874ff6`
+| ECOSYSTEM descriptile copy for the ecosystem sub-project.
+
+| `1-formats/a2ml/ecosystem/.machine_readable/descriptiles/META.a2ml`
+| 634
+| `8914a4594130be061e5d909acaeea86dca34e02b0f238800c0308254db6bab3c`
+| `eb48994b69497c00d57d53ab62066138932d25a9`
+| META descriptile copy for the ecosystem sub-project.
+
+| `1-formats/a2ml/ecosystem/.machine_readable/descriptiles/NEUROSYM.a2ml`
+| 601
+| `8f3780036a5cdf8c4cc727ac79946218d7944071c4154371411f5c2c5b7f289b`
+| `184174709d125b77ade1f3f9faf146429421e72b`
+| NEUROSYM descriptile copy for the ecosystem sub-project.
+
+| `1-formats/a2ml/ecosystem/.machine_readable/descriptiles/PLAYBOOK.a2ml`
+| 839
+| `80a0d33bf1bd3e03293cacae386666270433e75caf325d0e4851631fcd911a36`
+| `5003fd08bba17856441a339796093d62501ea4fe`
+| PLAYBOOK descriptile copy for the ecosystem sub-project.
+
+| `1-formats/a2ml/ecosystem/.machine_readable/descriptiles/STATE.a2ml`
+| 871
+| `076d1b9aeb8733b35fcef3be4a08cd6d4558fb3816a36be9064caab8923319ea`
+| `fd3157d569828e3558e82d87d79bdb1d416f32af`
+| STATE descriptile copy for the ecosystem sub-project.
+
+| `1-formats/a2ml/ecosystem/README.adoc`
+| 11419
+| `35dcb089c7c290ecc879a55560e5faf803b61a3bd533233aebc87eaa707eb7ab`
+| `1a916474e932d76761381368051ebda16eeeb369`
+| Top-level prose page of the ecosystem sub-project.
+
+| `1-formats/a2ml/ecosystem/STANDARDS-ROADMAP.adoc`
+| 12709
+| `308e9551b40d2f5a900e09e1e7adc50eccd38432e662b386abe07154ba50a1f9`
+| `84ee37e918d91327361b5e226a107e89df8ad2cc`
+| Top-level prose page of the ecosystem sub-project.
+
+| `1-formats/a2ml/ecosystem/contractiles/README.adoc`
+| 862
+| `dece77e2d0e523d78794e630cf7f2a028d400db65d96f0513799a3bb11eadfbe`
+| `4d7f0c058749c091a80b1d3a2021862d502a9bda`
+| Supporting code or contract file of the ecosystem sub-project (contractiles).
+
+| `1-formats/a2ml/ecosystem/contractiles/dust/Dustfile`
+| 885
+| `498487f3a2ccd1a4cf23404ddb0811c8407bf9684acc71ebb7d2722a46a73acc`
+| `314903cca452af05c876ce71a1bbabb7d19ff628`
+| Supporting code or contract file of the ecosystem sub-project (contractiles).
+
+| `1-formats/a2ml/ecosystem/contractiles/must/Mustfile`
+| 1044
+| `8c74e76c7651ef61dfe552e3b6303a9f24697c57abf03df09cb3d621996dd2d5`
+| `dc7b3be51a4bb662ca6986d1f85f1f7e618164f4`
+| Supporting code or contract file of the ecosystem sub-project (contractiles).
+
+| `1-formats/a2ml/ecosystem/docs/CITATIONS.adoc`
+| 851
+| `264dab3528b178e70b09079fa7186d9164a269cdffddc74eb65b7ee8f8f0790c`
+| `37fdb0f08f7b393b8a852f5e47138b1a7f8f2b88`
+| Documentation page of the ecosystem sub-project.
+
+| `1-formats/a2ml/ecosystem/examples/web-project-deno.json`
+| 622
+| `743a0aef9357d4b5a2ba89ee2c8d935ef777967689220205bacbdc9eeacc094f`
+| `5ddd3bd7fbc282ebd9294e058c06db01fa91b0af`
+| Example for the ecosystem format.
+
+| `1-formats/a2ml/ecosystem/spec/IANA-CONSIDERATIONS.adoc`
+| 6224
+| `6047523efcae323f37ea3cc74ad4673fe4e15c3b50b2408ce38744a2f35773f2`
+| `2be4679c4b1a9d1b5f6362279cd36a4bc44def99`
+| Specification or grammar document of the ecosystem format.
+
+| `1-formats/a2ml/ecosystem/spec/draft/draft-jewell-ecosystem-scm-00.txt`
+| 19220
+| `b10de857c7d1b2bfff56036ef1cc205226504a0775192018acf2ada68e803d47`
+| `c479d688d2e9b78f029309b77cb0529972b6e2ad`
+| Specification or grammar document of the ecosystem format.
+
+| `1-formats/a2ml/ecosystem/spec/ecosystem.abnf`
+| 8490
+| `efbbfe66a50c634233426248571721fb797149b1b13ad6068033bb52131ca580`
+| `1064477b24e7d9d719aea121c068ef20d506a451`
+| Specification or grammar document of the ecosystem format.
+
+| `1-formats/a2ml/ecosystem/spec/ecosystem.schema.json`
+| 5459
+| `03869f17ea909957c049145210af627f93a54c9eced24bd8b94d9bfb42dc2a6c`
+| `501d1cc2e29441e9d752bfb8f3b6a85b0f87af1a`
+| Specification or grammar document of the ecosystem format.
+
+| `1-formats/a2ml/ecosystem/spec/family/SCM-FAMILY.adoc`
+| 10697
+| `85f133b8bc154f760f487829a986eb0085fa5aedb113529beb7a8da5b8d9a77d`
+| `285487278d3c47e64124c660d2126f96630bae00`
+| Specification or grammar document of the ecosystem format.
+
+| `1-formats/a2ml/ecosystem/spec/family/scm-core.abnf`
+| 8182
+| `6e4aab987e1ecbb040d5e48605c2984885fcc7cc2a747680829c3c79fa1f614a`
+| `711ddc5babe48901492cdf9db2ef292f11e2b140`
+| Specification or grammar document of the ecosystem format.
+
+| `1-formats/a2ml/ecosystem/spec/family/scm-family.schema.json`
+| 9419
+| `5f8c6a6661990c27a1ad1c4845f1e9b6c00b6544cefc9b698b38809e9f3d00a2`
+| `bfc59433dd70aced379539ab9ca81ecb51f86d7d`
+| Specification or grammar document of the ecosystem format.
+
+| `1-formats/a2ml/meta/.claude/CLAUDE.md`
+| 3779
+| `cbd079c568ddea1a3af81f5d418cd69b9ce7fe3a1dac5edebc27763dade5e1f7`
+| `f94ec1a13ef911cd258a1fc8969b049dbe79119a`
+| Repository boilerplate or tooling file of the meta sub-project.
+
+| `1-formats/a2ml/meta/.editorconfig`
+| 748
+| `999f54d9d189e170bb07024160efabe29d5674f091cb568e0c63b04e4316e1ce`
+| `fc6650ceaddb9e87fb623cf04ac22d584ec3624b`
+| Repository boilerplate or tooling file of the meta sub-project.
+
+| `1-formats/a2ml/meta/.gitattributes`
+| 971
+| `0f7b8712f7c12f3dcc89a0b50f0fa588855f6acbaa617ce3b18beb4f9c10840d`
+| `e860a85c161807812d87143d3f522c5512fad289`
+| Repository boilerplate or tooling file of the meta sub-project.
+
+| `1-formats/a2ml/meta/.github/FUNDING.yml`
+| 321
+| `2ff19adf6ac5c6655e3371228e7a4227ca6e3503b315bc0d630342a418ccb849`
+| `688a442caf171690f3d6867efbebad750da3a386`
+| Packaged GitHub workflow or issue template of the meta sub-project.
+
+| `1-formats/a2ml/meta/.github/ISSUE_TEMPLATE/bug_report.md`
+| 869
+| `3d6cc93a424c1d4c6488b566b7c571fdedc50bd3775860eb0244414b7026d471`
+| `987aab6bc1274293219d18df82d16e778a804539`
+| Packaged GitHub workflow or issue template of the meta sub-project.
+
+| `1-formats/a2ml/meta/.github/ISSUE_TEMPLATE/documentation.md`
+| 1693
+| `aa61aebd454b0c20e4003e5effa4ef5235ed840e54037920481ce46450471feb`
+| `4fcb9f9fafac6ba7bb9d9d47337558925b9c4d26`
+| Packaged GitHub workflow or issue template of the meta sub-project.
+
+| `1-formats/a2ml/meta/.github/ISSUE_TEMPLATE/feature_request.md`
+| 631
+| `0a9572710bdc24dbc2b4188d5531dafefd3a39e0628a913fb7c457196d772b33`
+| `3e8fa7e7ec54e962d9a002ebae4df943ed3522c6`
+| Packaged GitHub workflow or issue template of the meta sub-project.
+
+| `1-formats/a2ml/meta/.github/ISSUE_TEMPLATE/question.md`
+| 1390
+| `ee58dd9f056176c8120959ae29f254d67c44ff65a12ce540fb77c909f122c004`
+| `fd0e2a5ccd57a7b98c8e86c471c95dc3b4158812`
+| Packaged GitHub workflow or issue template of the meta sub-project.
+
+| `1-formats/a2ml/meta/.github/dependabot.yml`
+| 245
+| `6f809890dce1d9ed3219dcd90d9ad54721d41a5d1df6c23445b4614837a03227`
+| `fa4475f9119a70581b31ef9d26908e8ec1948631`
+| Packaged GitHub workflow or issue template of the meta sub-project.
+
+| `1-formats/a2ml/meta/.github/workflows/casket-pages.yml`
+| 3167
+| `e465fc95969cd6f1bf9d2ffa65616624908f959ee7e774b62e9c32482b17cacb`
+| `bfe5df08e061ed1db89e03ccc503b8314d2ea8e3`
+| Packaged GitHub workflow or issue template of the meta sub-project.
+
+| `1-formats/a2ml/meta/.github/workflows/codeql.yml`
+| 583
+| `766b0190085cb15de757d8c2e58cd3e6d8bf7f8a8e2d26acc4676d7d37bf5770`
+| `f32317e567d66b2dfd7dc90ccc6239f4633a3ef4`
+| Packaged GitHub workflow or issue template of the meta sub-project.
+
+| `1-formats/a2ml/meta/.github/workflows/governance.yml`
+| 914
+| `ba9e17f6e951523f1e2b6cce31f4d4cafd3256d772707e14dc0072cdc054f962`
+| `c146872338e125d477263525b8911bd746604510`
+| Packaged GitHub workflow or issue template of the meta sub-project.
+
+| `1-formats/a2ml/meta/.github/workflows/hypatia-scan.yml`
+| 871
+| `da191a6a656c1df4f0b2b57460732a919bb6aff2b4cf03caca93eb40f8bca0d3`
+| `7796025109c768de4d1ce469a1f0cb6920b30edd`
+| Packaged GitHub workflow or issue template of the meta sub-project.
+
+| `1-formats/a2ml/meta/.github/workflows/mirror.yml`
+| 895
+| `0583310e47cbef6d6d772d117780ad41aa4a839e122a3426db97131fa2c611f1`
+| `d8f01e9acca2e08298a65c66fe99a689c9422816`
+| Packaged GitHub workflow or issue template of the meta sub-project.
+
+| `1-formats/a2ml/meta/.github/workflows/scorecard-enforcer.yml`
+| 801
+| `32e4dec6325933e5bd5f50087b9ba42a3d78d85faff27ed6651d4e8dd7398d9a`
+| `52f4bc717cb616a13f2d1119ade012efbc56fa76`
+| Packaged GitHub workflow or issue template of the meta sub-project.
+
+| `1-formats/a2ml/meta/.github/workflows/scorecard.yml`
+| 717
+| `e9b06fe5828261ddbf07525ae8d030c8965dc87344b823644026d5ba1dffa344`
+| `bc796768ba8169372f38cefbf4a1feec37d622b2`
+| Packaged GitHub workflow or issue template of the meta sub-project.
+
+| `1-formats/a2ml/meta/.github/workflows/secret-scanner.yml`
+| 480
+| `dde893ea3593a77b7dfd01430b1fc4a5d508aa6ee66a03113c6d382d02f0ba5b`
+| `b1ec835b669e3a8860dda7d90c982b7727e9ec19`
+| Packaged GitHub workflow or issue template of the meta sub-project.
+
+| `1-formats/a2ml/meta/.gitignore`
+| 676
+| `c52af7b1c398d05b7690d288b76257f52db8059f2a1c1efeab1d334bdf89bcd7`
+| `45f10b185cc2e4b46cdad23137659dcca1397d3d`
+| Repository boilerplate or tooling file of the meta sub-project.
+
+| `1-formats/a2ml/meta/.machine_readable/descriptiles/AGENTIC.a2ml`
+| 1179
+| `dd30f6c36b2f67f3510f871dbb8c415e862cfa27f4ebc30f97fcc9691b98a837`
+| `274d854953189561856d5b0fd1f6fd2ea63aa5f4`
+| AGENTIC descriptile copy for the meta sub-project.
+
+| `1-formats/a2ml/meta/.machine_readable/descriptiles/ECOSYSTEM.a2ml`
+| 420
+| `843a9214ea6029e3d0c0cb90358e1cf4b4f24e6ecf5fcfdd596e3ae9d2b27b59`
+| `03a54d52e97c2a56949dba4673218cbe452c078f`
+| ECOSYSTEM descriptile copy for the meta sub-project.
+
+| `1-formats/a2ml/meta/.machine_readable/descriptiles/META.a2ml`
+| 629
+| `5e7cd3095ffb63328a4dad2a7d7fadb6f911826dd42e6b001fd88587994dce28`
+| `f8e0ab0ae4b074db653fd73c9247cee6687c33fc`
+| META descriptile copy for the meta sub-project.
+
+| `1-formats/a2ml/meta/.machine_readable/descriptiles/NEUROSYM.a2ml`
+| 601
+| `8f3780036a5cdf8c4cc727ac79946218d7944071c4154371411f5c2c5b7f289b`
+| `184174709d125b77ade1f3f9faf146429421e72b`
+| NEUROSYM descriptile copy for the meta sub-project.
+
+| `1-formats/a2ml/meta/.machine_readable/descriptiles/PLAYBOOK.a2ml`
+| 839
+| `80a0d33bf1bd3e03293cacae386666270433e75caf325d0e4851631fcd911a36`
+| `5003fd08bba17856441a339796093d62501ea4fe`
+| PLAYBOOK descriptile copy for the meta sub-project.
+
+| `1-formats/a2ml/meta/.machine_readable/descriptiles/STATE.a2ml`
+| 879
+| `750abf33df92d961fb3734144fa27007b63e2b6431b9fbf352ff76714a42a8f1`
+| `c82d7e6e061f886f89480da6e36c72ac9a7f57d3`
+| STATE descriptile copy for the meta sub-project.
+
+| `1-formats/a2ml/meta/README.adoc`
+| 9016
+| `8dca6dabff2030fb8f4ec72ea49cac84fc7120e007f72012d127e6553dab4505`
+| `ed9e335b5bdcd5a1e83008025c8d564a8e3ffc7a`
+| Top-level prose page of the meta sub-project.
+
+| `1-formats/a2ml/meta/examples/comprehensive.a2ml`
+| 6946
+| `f716307a334d62c013810054e33c21be8a71b5d549079f27966be8f32627a371`
+| `934ef15622faeb5c64ce33a0f71fa7f76710338a`
+| Comprehensive example file for the meta format.
+
+| `1-formats/a2ml/meta/examples/minimal.a2ml`
+| 1009
+| `3a1f10ae1ea27605390e63dff290d5bacdcbcfbc69efb3b00b2e222d834ff2b6`
+| `48f03f488be7c8e08b8e015b5798420166b8e286`
+| Minimal example file for the meta format.
+
+| `1-formats/a2ml/meta/spec/IANA-MEDIA-TYPE.adoc`
+| 6575
+| `b2da46522ba8f65131f4636061480ab6396728a1f628f1c887fff97e09106bb0`
+| `7de43d2a058439491a546d81457dd542421d4361`
+| Specification or grammar document of the meta format.
+
+| `1-formats/a2ml/meta/spec/META-FORMAT-SPEC.adoc`
+| 19761
+| `dd79327226f1e14a15f1ca83601252f14993bd8f670ca83599c9caca248e7f93`
+| `545ae331c9ad05f67d53114d74f10b20a0ea35a7`
+| Specification or grammar document of the meta format.
+
+| `1-formats/a2ml/meta/spec/README.adoc`
+| 6482
+| `3035813cc4b17a4540109e017dd8369abd678d2f0e6d5b64e76ff2191fe0f415`
+| `c6cc76c471622ed094b90dd6f6b3dec39f4a2bf8`
+| Specification or grammar document of the meta format.
+
+| `1-formats/a2ml/meta/spec/SCM-FORMAT-FAMILY.adoc`
+| 15734
+| `17f62bbc7ce54363d3a3fcc6ff3cc811d755e64471de63b89e31a0a5d56456c9`
+| `d326fc85dd749289b3a54a7b8f0b9a5f6f7e185a`
+| Specification or grammar document of the meta format.
+
+| `1-formats/a2ml/meta/spec/STANDARDS-TRACK.adoc`
+| 12036
+| `ffb9dd1efdbe6e05847f911554209d0aa94f6aa7af95a542a8689bf91d756eb2`
+| `c4c77840369a9aceaab6ebab9635bc2a26925fea`
+| Specification or grammar document of the meta format.
+
+| `1-formats/a2ml/meta/spec/UNIFIED-STANDARDS-STRATEGY.adoc`
+| 9715
+| `915d41851b6acf7193df168b8ced58e050a0d46ca108fa2f857b09dea2189c92`
+| `05a4ef4c28da2992d0954d74ea4a87cb69c0e2ea`
+| Specification or grammar document of the meta format.
+
+| `1-formats/a2ml/meta/spec/VERSION-POLICY.adoc`
+| 6090
+| `b109b3e0fbb857c3f6463c837088aec7af2a1f16609ab4a8936a4b54a637455b`
+| `9b1443a1bb548fde9a7195b28f2721620ba0986a`
+| Specification or grammar document of the meta format.
+
+| `1-formats/a2ml/meta/spec/abnf/meta.abnf`
+| 10663
+| `94617b0c93175864b94a026dfb88961e3621ad46435034b8f48b1d484afce1db`
+| `aa579b21dadb6873c714ddf574114397be783cdd`
+| Specification or grammar document of the meta format.
+
+| `1-formats/a2ml/meta/spec/schema/meta.schema.json`
+| 12044
+| `add03d223eb1733c797c504740676369f0ef0667a3fde9c23af37545e8a760ab`
+| `fb35ec8f698d3d18773d04062160cdb098aa58ad`
+| Specification or grammar document of the meta format.
+
+| `1-formats/a2ml/meta/spec/shared/s-expression.abnf`
+| 13981
+| `b718f872451a516080285d1707e37b3ded1429fd3e4f9ffc82ba9d74dc5fa2a0`
+| `a38653616cc0a367569e451001f69c7f4ff9e80d`
+| Specification or grammar document of the meta format.
+
+| `1-formats/a2ml/meta/spec/shared/scm-common.schema.json`
+| 8025
+| `1a4f67f7ed2002cba8cb983e8981723d46eb6402676b1ee6dcc7df3ca8c1ef3f`
+| `6fd9cd293421dedb07cbb1bbb13efbc5829981af`
+| Specification or grammar document of the meta format.
+
+| `1-formats/a2ml/neurosym/.ai-context.json`
+| 255
+| `ca2fb4103fae1784f2f3575eaca6bb7f707e4715340674327c6db781d559668f`
+| `b2278ab158f44f009c34f1d1a68f63c13a9647a2`
+| Repository boilerplate or tooling file of the neurosym sub-project.
+
+| `1-formats/a2ml/neurosym/.editorconfig`
+| 748
+| `999f54d9d189e170bb07024160efabe29d5674f091cb568e0c63b04e4316e1ce`
+| `fc6650ceaddb9e87fb623cf04ac22d584ec3624b`
+| Repository boilerplate or tooling file of the neurosym sub-project.
+
+| `1-formats/a2ml/neurosym/.gitattributes`
+| 971
+| `0f7b8712f7c12f3dcc89a0b50f0fa588855f6acbaa617ce3b18beb4f9c10840d`
+| `e860a85c161807812d87143d3f522c5512fad289`
+| Repository boilerplate or tooling file of the neurosym sub-project.
+
+| `1-formats/a2ml/neurosym/.gitignore`
+| 676
+| `c52af7b1c398d05b7690d288b76257f52db8059f2a1c1efeab1d334bdf89bcd7`
+| `45f10b185cc2e4b46cdad23137659dcca1397d3d`
+| Repository boilerplate or tooling file of the neurosym sub-project.
+
+| `1-formats/a2ml/neurosym/.gitlab-ci.yml`
+| 2900
+| `b8aeccd913fd31cb0ba1c6d595a6d9a2ff5d355bade3e25690377382853db34b`
+| `7309fa9002100002155634c3ff4c7001c1930ead`
+| Repository boilerplate or tooling file of the neurosym sub-project.
+
+| `1-formats/a2ml/neurosym/.machine_readable/descriptiles/AGENTIC.a2ml`
+| 1179
+| `dd30f6c36b2f67f3510f871dbb8c415e862cfa27f4ebc30f97fcc9691b98a837`
+| `274d854953189561856d5b0fd1f6fd2ea63aa5f4`
+| AGENTIC descriptile copy for the neurosym sub-project.
+
+| `1-formats/a2ml/neurosym/.machine_readable/descriptiles/ECOSYSTEM.a2ml`
+| 463
+| `ec74968cdf98f7098f50e2c588162179f5eee2bd6222226df412553e3d15fb74`
+| `91303156e9a62e03f0e177fb628682d2d5a2ae6b`
+| ECOSYSTEM descriptile copy for the neurosym sub-project.
+
+| `1-formats/a2ml/neurosym/.machine_readable/descriptiles/META.a2ml`
+| 633
+| `9bbc4c487b933c78cc0b629f6390ff918e1600733220dd10601f0c75ea7c9bd8`
+| `cc351418ddf6b2d5a21b81ad7c270e5e407a9f77`
+| META descriptile copy for the neurosym sub-project.
+
+| `1-formats/a2ml/neurosym/.machine_readable/descriptiles/NEUROSYM.a2ml`
+| 601
+| `8f3780036a5cdf8c4cc727ac79946218d7944071c4154371411f5c2c5b7f289b`
+| `184174709d125b77ade1f3f9faf146429421e72b`
+| NEUROSYM descriptile copy for the neurosym sub-project.
+
+| `1-formats/a2ml/neurosym/.machine_readable/descriptiles/PLAYBOOK.a2ml`
+| 839
+| `80a0d33bf1bd3e03293cacae386666270433e75caf325d0e4851631fcd911a36`
+| `5003fd08bba17856441a339796093d62501ea4fe`
+| PLAYBOOK descriptile copy for the neurosym sub-project.
+
+| `1-formats/a2ml/neurosym/.machine_readable/descriptiles/STATE.a2ml`
+| 1031
+| `b44f726b4046fa4b8d4ecf2e32f49ce774163bec1b6acd88638224117d2efe24`
+| `dd860b7521d34c0ac422bfb700a1a7d996073ff5`
+| STATE descriptile copy for the neurosym sub-project.
+
+| `1-formats/a2ml/neurosym/.nojekyll`
+| 0
+| `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`
+| `e69de29bb2d1d6434b8b29ae775ad8c2e48c5391`
+| Repository boilerplate or tooling file of the neurosym sub-project.
+
+| `1-formats/a2ml/neurosym/README.adoc`
+| 4435
+| `1bb83eebe80dcf93fd2117d225cf0a2cb2a09442a0c71523abb942cc16294023`
+| `3c4d64c4c09a32dead55424863ae4553273dceca`
+| Top-level prose page of the neurosym sub-project.
+
+| `1-formats/a2ml/neurosym/architecture.adoc`
+| 737
+| `623dd3dbfce5876e8fd7e5cf533b96e8de906846f9d6a2c82b34af85db8a2d9f`
+| `755df2e13fb9cd212cb81f5d07c37f8263fc29a9`
+| Top-level prose page of the neurosym sub-project.
+
+| `1-formats/a2ml/neurosym/docs/CITATIONS.adoc`
+| 851
+| `264dab3528b178e70b09079fa7186d9164a269cdffddc74eb65b7ee8f8f0790c`
+| `37fdb0f08f7b393b8a852f5e47138b1a7f8f2b88`
+| Documentation page of the neurosym sub-project.
+
+| `1-formats/a2ml/neurosym/docs/ROADMAP.adoc`
+| 2587
+| `bab127e3b51eccd751317ad2a63ac4a3d48ff7c874dc4d5640dc5e02b372e11a`
+| `87dc384fb91d4cc1838597f6c8517b4f63ea70f9`
+| Documentation page of the neurosym sub-project.
+
+| `1-formats/a2ml/neurosym/examples/comprehensive.a2ml`
+| 4365
+| `3d0bbbc74198a973fbab1f0d9731c4c45aef42bd60ac5d408e2bd6efecd7741b`
+| `d945d72495ab3ba1ff6294e5f1c1ccca153c1a2d`
+| Comprehensive example file for the neurosym format.
+
+| `1-formats/a2ml/neurosym/examples/minimal.a2ml`
+| 529
+| `73301d889607deb76c842672c48201a4ea58db9dab05d89009a5c473dabcd2b1`
+| `bedc0c4b0ba27ab72a69a602a4977eab0e0bc1d6`
+| Minimal example file for the neurosym format.
+
+| `1-formats/a2ml/neurosym/ncl/lib/os_detect.ncl`
+| 1034
+| `db2352a868209c8d9d516287479826a502a27bf893134ea1fbd802b1c8de480e`
+| `2bdb2979b052ea7bce13325b92977835236e278a`
+| Supporting code or contract file of the neurosym sub-project (ncl).
+
+| `1-formats/a2ml/neurosym/ncl/lib/schema.ncl`
+| 454
+| `1984154566e2a2079f1d0feedbf98f95dd61690be842f0bfb35d1bd1686d6e49`
+| `506e239546fc84212cf60968b31256bab60386bd`
+| Supporting code or contract file of the neurosym sub-project (ncl).
+
+| `1-formats/a2ml/neurosym/scripts/all-shells.sh`
+| 1229
+| `b8c34495ad73270c75d7ec8bd89647ca0508cd44b5ad14e368d03c2631ab6066`
+| `9593f8cfad67bb7558b703a9f7c8d41e55c5e515`
+| Supporting code or contract file of the neurosym sub-project (scripts).
+
+| `1-formats/a2ml/neurosym/scripts/bootstrap.sh`
+| 5569
+| `4ea29b50a835f18139010a3109e584913776f9c08d5382fa6a0b378da5144ef3`
+| `0ddd7ccfe1486c24740e5629e186c07305a24224`
+| Supporting code or contract file of the neurosym sub-project (scripts).
+
+| `1-formats/a2ml/neurosym/spec/NEUROSYM-FORMAT-SPEC.adoc`
+| 10301
+| `6f8c3be41523cf7260b0005937f2c91082b5bfae3506dcf20e3f5cc3ee633109`
+| `2edf3e1588788c56d372336b8d0bc10e1b5b7c4d`
+| Specification or grammar document of the neurosym format.
+
+| `1-formats/a2ml/playbook/.editorconfig`
+| 748
+| `999f54d9d189e170bb07024160efabe29d5674f091cb568e0c63b04e4316e1ce`
+| `fc6650ceaddb9e87fb623cf04ac22d584ec3624b`
+| Repository boilerplate or tooling file of the playbook sub-project.
+
+| `1-formats/a2ml/playbook/.gitattributes`
+| 971
+| `0f7b8712f7c12f3dcc89a0b50f0fa588855f6acbaa617ce3b18beb4f9c10840d`
+| `e860a85c161807812d87143d3f522c5512fad289`
+| Repository boilerplate or tooling file of the playbook sub-project.
+
+| `1-formats/a2ml/playbook/.gitignore`
+| 676
+| `c52af7b1c398d05b7690d288b76257f52db8059f2a1c1efeab1d334bdf89bcd7`
+| `45f10b185cc2e4b46cdad23137659dcca1397d3d`
+| Repository boilerplate or tooling file of the playbook sub-project.
+
+| `1-formats/a2ml/playbook/.machine_readable/descriptiles/AGENTIC.a2ml`
+| 1179
+| `dd30f6c36b2f67f3510f871dbb8c415e862cfa27f4ebc30f97fcc9691b98a837`
+| `274d854953189561856d5b0fd1f6fd2ea63aa5f4`
+| AGENTIC descriptile copy for the playbook sub-project.
+
+| `1-formats/a2ml/playbook/.machine_readable/descriptiles/ECOSYSTEM.a2ml`
+| 468
+| `c93fa94783bc3b26cd63f3ea37fc76f42871f3b3e2526c138a138b52b8a1d70b`
+| `fb84ee47d2db4a8989f34c5eb4d2dd2254858aa3`
+| ECOSYSTEM descriptile copy for the playbook sub-project.
+
+| `1-formats/a2ml/playbook/.machine_readable/descriptiles/META.a2ml`
+| 633
+| `cd5a9c8e819efc8fad046878dd7bc8882a6b21955288ce161b955eae1ebaa757`
+| `d0d598ba5f442fab98a44f148f522082bc47d98e`
+| META descriptile copy for the playbook sub-project.
+
+| `1-formats/a2ml/playbook/.machine_readable/descriptiles/NEUROSYM.a2ml`
+| 601
+| `8f3780036a5cdf8c4cc727ac79946218d7944071c4154371411f5c2c5b7f289b`
+| `184174709d125b77ade1f3f9faf146429421e72b`
+| NEUROSYM descriptile copy for the playbook sub-project.
+
+| `1-formats/a2ml/playbook/.machine_readable/descriptiles/PLAYBOOK.a2ml`
+| 839
+| `80a0d33bf1bd3e03293cacae386666270433e75caf325d0e4851631fcd911a36`
+| `5003fd08bba17856441a339796093d62501ea4fe`
+| PLAYBOOK descriptile copy for the playbook sub-project.
+
+| `1-formats/a2ml/playbook/.machine_readable/descriptiles/STATE.a2ml`
+| 1013
+| `4bc5a2b78e186d7e056605d13a9b311eb89fb86a9d6825be03c793adbf5652e1`
+| `f69441ccea163f8e5e6f4b5693d2157ad19bb00f`
+| STATE descriptile copy for the playbook sub-project.
+
+| `1-formats/a2ml/playbook/.nojekyll`
+| 0
+| `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`
+| `e69de29bb2d1d6434b8b29ae775ad8c2e48c5391`
+| Repository boilerplate or tooling file of the playbook sub-project.
+
+| `1-formats/a2ml/playbook/README.adoc`
+| 6649
+| `a242f5e14699a7b775051d042cc6f6dae7afba78c3cfeb6b49eb24f0d5dd7e23`
+| `7f8b9f918310b4ac6a17c1b0fd945748f74c7f52`
+| Top-level prose page of the playbook sub-project.
+
+| `1-formats/a2ml/playbook/examples/comprehensive.a2ml`
+| 4759
+| `db015784eda965e1baf2e11757d1e976d2e634dcf22a98f79851381f503a1f87`
+| `f42510a53a2cfad7a0bfbce63c43431306706230`
+| Comprehensive example file for the playbook format.
+
+| `1-formats/a2ml/playbook/examples/minimal.a2ml`
+| 501
+| `bac019c4e63a8d780e3c7a9a7a490ba47e064cb6a73383de3e160f2d6e78bbed`
+| `26b061398dc88cfe4a496b162ba1af0fa3c662f6`
+| Minimal example file for the playbook format.
+
+| `1-formats/a2ml/playbook/spec/PLAYBOOK-FORMAT-SPEC.adoc`
+| 8094
+| `b78390b7be784e73fa915d77b14296dd5eb7c292667c39fe6611f83d03968468`
+| `721b4148f0a79b7e6d2c3c7ff5bc6bdc07c5cbb5`
+| Specification or grammar document of the playbook format.
+
+| `1-formats/a2ml/playbook/spec/playbook-spec`
+| 4323
+| `3011c71b67a093c289218a360ff355077c14a5a97d872f77ba58e9635394b23f`
+| `e55796482084582478543c2726b12c97cbc0d01a`
+| Specification or grammar document of the playbook format.
+
+| `1-formats/a2ml/state/.editorconfig`
+| 740
+| `7642b5d05260b50b687fb1c47389158866405e04b3b54efeaa7a829b634c06a1`
+| `1b1028958ef5170478808f443d8098623cf7c504`
+| Repository boilerplate or tooling file of the state sub-project.
+
+| `1-formats/a2ml/state/.gitattributes`
+| 672
+| `02cbd3a7d6c802caaa610102e9194cbeee9db0930d8a49eda381842090b3e347`
+| `855d41cdbeb8039931e039a9c5f2787c3854f5f4`
+| Repository boilerplate or tooling file of the state sub-project.
+
+| `1-formats/a2ml/state/.gitignore`
+| 582
+| `a74502996e8b10e91b249d074baf325daf67b4dfb6ac5f3955c50017b21ebe02`
+| `7eeb35c32d6e0f6cf8338e7fcd8af33c836af56e`
+| Repository boilerplate or tooling file of the state sub-project.
+
+| `1-formats/a2ml/state/.gitlab-ci.yml`
+| 2419
+| `eec1f394f35fc1da04559ae29e81002fc8302f4927a87a3bade9419afc7c3306`
+| `22d8b1d21b9d9c661ba14368364fe145c57dba06`
+| Repository boilerplate or tooling file of the state sub-project.
+
+| `1-formats/a2ml/state/.machine_readable/descriptiles/AGENTIC.a2ml`
+| 1179
+| `dd30f6c36b2f67f3510f871dbb8c415e862cfa27f4ebc30f97fcc9691b98a837`
+| `274d854953189561856d5b0fd1f6fd2ea63aa5f4`
+| AGENTIC descriptile copy for the state sub-project.
+
+| `1-formats/a2ml/state/.machine_readable/descriptiles/ECOSYSTEM.a2ml`
+| 388
+| `7e8bdbdbb48b060f964f2e3703799fcab840bba61c1dbcb89382e6ebe69304f0`
+| `b801c478be477f4525e4c0e212196e12e1c0b181`
+| ECOSYSTEM descriptile copy for the state sub-project.
+
+| `1-formats/a2ml/state/.machine_readable/descriptiles/META.a2ml`
+| 630
+| `188d85cc60de1053914aaa6f433a4598d0c5689de29edd1d1657cd50a4c23af9`
+| `18c361d8415c84ba6ae3c765e5f7e1242ee074ae`
+| META descriptile copy for the state sub-project.
+
+| `1-formats/a2ml/state/.machine_readable/descriptiles/NEUROSYM.a2ml`
+| 601
+| `8f3780036a5cdf8c4cc727ac79946218d7944071c4154371411f5c2c5b7f289b`
+| `184174709d125b77ade1f3f9faf146429421e72b`
+| NEUROSYM descriptile copy for the state sub-project.
+
+| `1-formats/a2ml/state/.machine_readable/descriptiles/PLAYBOOK.a2ml`
+| 839
+| `80a0d33bf1bd3e03293cacae386666270433e75caf325d0e4851631fcd911a36`
+| `5003fd08bba17856441a339796093d62501ea4fe`
+| PLAYBOOK descriptile copy for the state sub-project.
+
+| `1-formats/a2ml/state/.machine_readable/descriptiles/STATE.a2ml`
+| 859
+| `745d4bcba69bdc1ee20f8ae712beddd772d460f076c9f3e798c1b21f94c1c1fc`
+| `f0ac3a3aec0d4d23d074ba950364676fbd79fb7c`
+| STATE descriptile copy for the state sub-project.
+
+| `1-formats/a2ml/state/.nojekyll`
+| 0
+| `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`
+| `e69de29bb2d1d6434b8b29ae775ad8c2e48c5391`
+| Repository boilerplate or tooling file of the state sub-project.
+
+| `1-formats/a2ml/state/README.adoc`
+| 6141
+| `c02f3e5c338dda0ef45ed0f89fb1ed1181b05a7d02a08e6718131281bacf3e78`
+| `b1bc2d3b85c1c65449bb1f1d42f78d11cd356bdd`
+| Top-level prose page of the state sub-project.
+
+| `1-formats/a2ml/state/channels.scm`
+| 1102
+| `0ce26dae0ea093f2d94237d218d506ed73931deac07f3b0a32d2f5d71f5dbdb0`
+| `036276f583ce7646e9048d728374c575bfde8c4a`
+| Repository boilerplate or tooling file of the state sub-project.
+
+| `1-formats/a2ml/state/docs/CITATIONS.adoc`
+| 1325
+| `9e6664b1a2be2b3f4d57499c8dbe769ea51634e0923d5111f29ec163bf178284`
+| `3277cef1835fea79b5c341b880812b76c1747827`
+| Documentation page of the state sub-project.
+
+| `1-formats/a2ml/state/docs/COOKBOOK.adoc`
+| 14043
+| `7ec2979519f49354f16ec1cee65a79d14c714c61ed0123636f4161a398afa445`
+| `de1cadd7aab9d0890c07882da81249a736fe8682`
+| Documentation page of the state sub-project.
+
+| `1-formats/a2ml/state/docs/USAGE.adoc`
+| 6575
+| `43ac4e041422d3286c1ccbea2b7af5f174071620be3e3b566d609600048784a6`
+| `37f9c27f489c35a35aaab64cd3a078289d503f75`
+| Documentation page of the state sub-project.
+
+| `1-formats/a2ml/state/examples/example-state.scm`
+| 10296
+| `6a2fa15aba006a9252dad81ff8be0de28d703462789d263b16acadb70b889037`
+| `5852e35e8f7699bff53e62539af0a432ee489a1a`
+| Example for the state format.
+
+| `1-formats/a2ml/state/lib/state-core.scm`
+| 7152
+| `a95e82f67e892f56fc2a39aaac98b8b7185b9ac0f319524d75f2afef528be720`
+| `9575383da873dfd90149d9f960253dda14f0d354`
+| Supporting code or contract file of the state sub-project (lib).
+
+| `1-formats/a2ml/state/lib/state-graph.scm`
+| 14953
+| `ce679bd30b4333a712444882a661c26fa5fd31b3b25f709bc38550056fed06af`
+| `5bdd98d3982a8050677141d7560ebfe1fed603f5`
+| Supporting code or contract file of the state sub-project (lib).
+
+| `1-formats/a2ml/state/lib/state-history.scm`
+| 11996
+| `5d6fbe8a10ea09a40e2c983d096d5aad394ab01825b240907fb9175262be4e16`
+| `285d00aeb9c1f5a7e8d5cdb641d842ffa73c5b67`
+| Supporting code or contract file of the state sub-project (lib).
+
+| `1-formats/a2ml/state/lib/state-kanren.scm`
+| 12105
+| `e0ba61d10402cbbd84f752d93ab779fd077c8abe40be7a86010679b939bb70f2`
+| `55c43a14ec9b01be413cd8c124032a6eeb0d9bd2`
+| Supporting code or contract file of the state sub-project (lib).
+
+| `1-formats/a2ml/state/lib/state.scm`
+| 5226
+| `2c0870a62cb6dad6f184843b25e4f34c5bdd89d33b4b6409952a8e6624351fb3`
+| `b1e495155c835ab68ed86e66ea372265e60abff1`
+| Supporting code or contract file of the state sub-project (lib).
+
+| `1-formats/a2ml/state/manifest.scm`
+| 1085
+| `c3c460fe07f1cc002fcd8868c208e1d10cddf3435c1f824bdd459fd0324557e6`
+| `8e31aa3e37daf68385a7fb9531906be7e8163358`
+| Repository boilerplate or tooling file of the state sub-project.
+
+| `1-formats/a2ml/state/spec/IANA-MEDIA-TYPE.adoc`
+| 7574
+| `5d2949074a97229ea4d5db1352a46d08f172547f330e6a9dd8e5d02f2d350836`
+| `763ec39a3bbdb21d21a88668d317cd452296e573`
+| Specification or grammar document of the state format.
+
+| `1-formats/a2ml/state/spec/README.adoc`
+| 2783
+| `918ef6421d2169749152d89393826432c8061908be78bd59d7ef04027711e246`
+| `a459e70ac1cba282dc82ad92aa95dca75bdb7779`
+| Specification or grammar document of the state format.
+
+| `1-formats/a2ml/state/spec/STANDARDS-TRACK.adoc`
+| 13493
+| `9629d41d4d30f25107bb4acbfd2488922fb9065c5b01d4d440c35b1c15f7983b`
+| `eb60e475ac9ed3b4e78f12d15f396edde3cc491a`
+| Specification or grammar document of the state format.
+
+| `1-formats/a2ml/state/spec/STATE-FORMAT-SPEC.adoc`
+| 24618
+| `39f1ea79c308d158747616ed4d5ad17f22c55e2feabea7f7f9558ef7cc9db5a3`
+| `c87015b45013c00f2ffb8732816646323eb453c8`
+| Specification or grammar document of the state format.
+
+| `1-formats/a2ml/state/spec/VERSION-POLICY.adoc`
+| 6533
+| `abe8ad079582ab20ce8fca03eabf8154feb0244ecaa1bc77f2b2c82d126038dd`
+| `ab90089879d2d0e26eb2c311e30506843175b81d`
+| Specification or grammar document of the state format.
+
+| `1-formats/a2ml/state/spec/abnf/state.abnf`
+| 13320
+| `656f87e1ddcafbcb04fa17c229edb23b2ba6613d039039468091257768cf75c7`
+| `9c2f8aa2735ab2d1dbff0e5c183397eb7a3551de`
+| Specification or grammar document of the state format.
+
+| `1-formats/a2ml/state/spec/schema/state.schema.json`
+| 10761
+| `2a440829b94a2b96361b02b6ca61231a0c9cb9570f5bd064abb761392a81a0fa`
+| `0be2da44eabcb2b706ab58b7210a3f1954965d2a`
+| Specification or grammar document of the state format.
+|===

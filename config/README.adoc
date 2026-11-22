@@ -357,7 +357,7 @@ ruling 2026-10-08), and neither is OikosBot:
 
 * `vars.APP_ID` + `secrets.APP_PRIVATE_KEY` — the pin applier (contents,
   workflows and pull-requests write). Read by `apply-workflow-pins.yml` and
-  `dependabot-lock-regen.yml`.
+  `action-pins-applier.yml`.
 * `vars.RULESET_APP_ID` + `secrets.RULESET_APP_PRIVATE_KEY` — the ruleset
   applier (`administration: write`). Read by `tag-ruleset-canon.yml`.
 

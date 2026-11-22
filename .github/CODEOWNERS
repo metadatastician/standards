@@ -33,3 +33,9 @@ ROADMAP* @hyperpolymath
 Justfile @hyperpolymath
 Makefile @hyperpolymath
 *.sh @hyperpolymath
+
+# K9 worker reach contract (owner ruling Q1, 2026-11-20): owner only.
+# Kept last so no earlier pattern overrides it.
+/coordination.k9 @hyperpolymath
+/.machine_readable/svc/k9/reach/ @hyperpolymath
+/2-protocols/k9-coordination/spec/abnf/ @hyperpolymath

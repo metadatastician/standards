@@ -61,7 +61,7 @@ jobs:
       # installed on BOTH owners (hyperpolymath and metadatastician).
       #
       # It is ALSO not the pin applier's App (vars.APP_ID, used by
-      # apply-workflow-pins and dependabot-lock-regen). That App
+      # apply-workflow-pins and action-pins-applier). That App
       # holds contents/workflows/pull-requests write; giving it administration:write
       # would let the thing that re-points pins also rewrite the rulesets that gate
       # it. Owner ruling 2026-10-08: two Apps, two slots.

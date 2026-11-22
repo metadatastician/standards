@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: MPL-2.0
+# Third-party actions the single-writer applier must NOT bump
+# (scripts/bump-action-pins.sh). One shell glob per line, matched against
+# owner/repo (a subpath action such as github/codeql-action/init matches by its
+# repository). Carried over from the Dependabot ignore list it replaces.
+#
+# HOLD: github/codeql-action at v4.38.0 (SHA-pinned). v4.38.1 fails GitHub
+# workflow-startup validation estate-wide (nexia-list#100, #101, #104). Revisit
+# deliberately, not on a schedule.
+github/codeql-action*

@@ -1,0 +1,137 @@
+# This workflow is managed by gh actions-lock.
+# SPDX-License-Identifier: MPL-2.0
+#
+# Action pins applier: the SINGLE WRITER of third-party `uses:` SHAs and of
+# actions.lock (owner ruling "single writer", 2026-11-21). It replaces
+# dependabot-lock-regen.yml, which only repaired the lock after Dependabot had
+# already bumped a workflow, never had an App credential, and was disabled by
+# hand on 8 Oct. Dependabot's github-actions ecosystem is now off
+# (.github/dependabot.yml), so nothing else moves a pin.
+#
+# WEEKLY BUMP (BUMP_PINS=1): for every installed repository, move third-party
+# action pins to their latest release and rewrite actions.lock IN THE SAME
+# COMMIT, so the two cannot disagree. One PR per repository from
+# chore/bump-action-pins. Holds live in config/settings/actions-bump-holds.txt.
+# First-party refs (hyperpolymath, metadatastician, catachresis-colloquium)
+# are not touched here: apply-workflow-pins re-points those.
+# Logic, guards and the reasoning: scripts/bump-action-pins.sh and
+# scripts/regen-dependabot-locks.sh.
+#
+# EVERY 30 MIN (no bump): the PR sweep still regenerates the lock on open PRs
+# from Dependabot (until the estate's per-repo dependabot.yml files stop opening
+# github-actions PRs), the pin applier and this workflow's own branches.
+# DAILY 04:41: also opens one lock-only PR where a stale lock already landed.
+#
+# CREDENTIAL: the estate's dedicated applier App — vars.APP_ID and
+# secrets.APP_PRIVATE_KEY, the same slot apply-workflow-pins.yml reads (owner
+# ruling STD-R-3: NOT OikosBot, which is a ruleset bypass actor). It needs
+# Contents R/W, Pull requests R/W and WORKFLOWS R/W (a push that edits a file
+# under .github/workflows is refused without the Workflows permission), and must
+# be installed on hyperpolymath, metadatastician and catachresis-colloquium. One
+# token per owner, as in apply-workflow-pins. Until it exists the run warns and
+# exits 0.
+name: Action pins applier
+
+on:
+  schedule:
+    - cron: '23,53 * * * *'
+    - cron: '41 4 * * *'
+    - cron: '17 5 * * 1'
+  workflow_dispatch:
+    inputs:
+      repo:
+        description: 'Only this owner/repo (empty = every installed repo)'
+        required: false
+        default: ''
+      dry-run:
+        description: 'Run everything, report what would change, commit nothing'
+        type: boolean
+        default: false
+      bump:
+        description: 'Also bump third-party action pins and the lock together (opens a PR)'
+        type: boolean
+        default: false
+      main-repair:
+        description: 'Also repair a stale actions.lock on each default branch (opens a PR)'
+        type: boolean
+        default: false
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Harden runner (egress audit)
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # An installation token is scoped to ONE owner, so mint one per owner.
+      - name: Mint an App installation token for hyperpolymath
+        id: tok-user
+        if: vars.APP_ID != ''
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        continue-on-error: true
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: hyperpolymath
+      - name: Mint an App installation token for metadatastician
+        id: tok-org
+        if: vars.APP_ID != ''
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        continue-on-error: true
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: metadatastician
+      - name: Mint an App installation token for catachresis-colloquium
+        id: tok-cc
+        if: vars.APP_ID != ''
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        continue-on-error: true
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: catachresis-colloquium
+
+      - name: Install the lock tooling (same pin as the governance gate)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          sudo apt-get install -y -qq gawk >/dev/null
+          gh extension install github/gh-actions-lock --pin v0.2.0
+
+      - name: Bump pins, regenerate locks, repair
+        env:
+          REGEN_TOKENS: >-
+            hyperpolymath=${{ steps.tok-user.outputs.token }}
+            metadatastician=${{ steps.tok-org.outputs.token }}
+            catachresis-colloquium=${{ steps.tok-cc.outputs.token }}
+          # One App behind all three tokens; its slug names the bot that authors
+          # the applier's commits, so a leftover branch of ours can be told apart.
+          APPLIER_SLUG: ${{ steps.tok-org.outputs.app-slug || steps.tok-user.outputs.app-slug || steps.tok-cc.outputs.app-slug }}
+          DRY_RUN: ${{ inputs.dry-run && '1' || '0' }}
+          REGEN_MAIN: ${{ (github.event.schedule == '41 4 * * *' || github.event.schedule == '17 5 * * 1' || inputs.main-repair) && '1' || '0' }}
+          BUMP_PINS: ${{ (github.event.schedule == '17 5 * * 1' || inputs.bump) && '1' || '0' }}
+          ONLY_REPO: ${{ inputs.repo }}
+        run: |
+          # A token is an empty string when the App is absent or not installed
+          # on that owner; the script names each owner it did NOT examine.
+          bash scripts/regen-dependabot-locks.sh ${ONLY_REPO:+"$ONLY_REPO"} | tee "$RUNNER_TEMP/applier.txt"
+          {
+            echo '### Action pins applier'
+            echo '```'
+            cat "$RUNNER_TEMP/applier.txt"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
