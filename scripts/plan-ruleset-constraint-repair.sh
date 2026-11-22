@@ -18,18 +18,30 @@ if ! { [ "$#" -eq 1 ] || { [ "$#" -eq 3 ] && [ "$2" = '--remove-uninstalled-app'
 fi
 app_id=null
 if [ "$#" -eq 3 ]; then
-  # Only a positive decimal integer can name an existing integration.
-  if ! [[ "$3" =~ ^\+?([0-9]+)$ ]] || [ $((10#${BASH_REMATCH[1]})) -le 0 ]; then
+  invalid_app_id() {
     echo "Expected the exact ID of an existing integration bypass rejected by GitHub" >&2
     exit 1
+  }
+  # Only a positive decimal integer can name an existing integration.
+  LC_ALL=C
+  [[ "$3" =~ ^\+?([0-9]+)$ ]] || invalid_app_id
+  app_id=${BASH_REMATCH[1]}
+  app_id=${app_id#"${app_id%%[!0]*}"}
+  app_id=${app_id:-0}
+  # Stay within the safe integer range of jq builds that use doubles.
+  max_app_id=9007199254740991
+  if (( ${#app_id} > ${#max_app_id} )) ||
+     { (( ${#app_id} == ${#max_app_id} )) && [[ "$app_id" > "$max_app_id" ]]; }; then
+    invalid_app_id
   fi
-  app_id=$((10#${BASH_REMATCH[1]}))
+  (( app_id > 0 )) || invalid_app_id
 fi
 
 # shellcheck disable=SC2016 # jq program, not shell
-jq --argjson app "$app_id" '
+jq --slurp --argjson app "$app_id" '
   def refuse(msg): error(msg);
-  ["update", "required_deployments", "code_quality", "code_coverage"] as $retired
+  if length == 1 then .[0] else refuse("Expected exactly one JSON value") end
+  | ["update", "required_deployments", "code_quality", "code_coverage"] as $retired
   | ["name", "target", "enforcement", "conditions", "bypass_actors", "rules"] as $writable
   | if (type == "object") and .target == "branch" and .enforcement == "active"
        and ((.conditions | type) == "object") and ((.conditions.ref_name | type) == "object")
@@ -51,4 +63,4 @@ jq --argjson app "$app_id" '
       then .bypass_actors = [$actors[] | select(stale | not)]
       else refuse("Expected the exact ID of an existing integration bypass rejected by GitHub") end
     end
-' "$1"
+' -- "$1" || exit 1

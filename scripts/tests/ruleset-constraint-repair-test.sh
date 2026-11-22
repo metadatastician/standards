@@ -9,6 +9,13 @@ tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 fail() { echo "FAIL: $*" >&2; exit 1; }
 same() { [ "$(jq -cS . <<<"$1")" = "$(jq -cS . <<<"$2")" ]; }
+reject() {
+  local reason="$1" status=0
+  shift
+  "$plan" "$@" > "$tmp/refused.json" 2>/dev/null || status=$?
+  [ "$status" -eq 1 ] || fail "$reason: expected exit 1, got $status"
+  [ ! -s "$tmp/refused.json" ] || fail "$reason: emitted plan output"
+}
 
 retained='[
   {"type":"required_signatures"},
@@ -44,24 +51,30 @@ same "$("$plan" "$tmp/with-actors.json" | jq .bypass_actors)" "$actors" \
   || fail 'Changed actors without explicit selection'
 same "$("$plan" "$tmp/with-actors.json" --remove-uninstalled-app 288115 | jq .bypass_actors)" \
   "$(jq '.[1:]' <<<"$actors")" || fail 'Removed an unrelated bypass'
-for bad in 999 0 -288115 abc; do
-  if "$plan" "$tmp/with-actors.json" --remove-uninstalled-app "$bad" >/dev/null 2>&1; then
-    fail "Accepted an unknown app: $bad"
-  fi
+same "$("$plan" "$tmp/with-actors.json" --remove-uninstalled-app +000288115 | jq .bypass_actors)" \
+  "$(jq '.[1:]' <<<"$actors")" || fail 'Did not normalize the decimal app ID'
+# The oversized value is 2^64 + 288115 and used to wrap to the existing ID.
+for bad in 999 0 -288115 abc 18446744073709839731; do
+  reject "Invalid app ID: $bad" "$tmp/with-actors.json" --remove-uninstalled-app "$bad"
 done
-if "$plan" "$tmp/with-actors.json" --remove-uninstalled-app >/dev/null 2>&1; then
-  fail 'Accepted a missing app id'
-fi
+reject 'Missing app ID' "$tmp/with-actors.json" --remove-uninstalled-app
+
+: > "$tmp/bad.json"
+reject 'Empty input' "$tmp/bad.json"
+cat "$tmp/fixture.json" "$tmp/fixture.json" > "$tmp/bad.json"
+reject 'Multiple JSON documents' "$tmp/bad.json"
+{ cat "$tmp/fixture.json"; printf '{\n'; } > "$tmp/bad.json"
+reject 'Malformed trailing JSON' "$tmp/bad.json"
 
 for bad_target in '"tag"' null; do
   jq --argjson t "$bad_target" '.target = $t' "$tmp/fixture.json" > "$tmp/bad.json"
-  if "$plan" "$tmp/bad.json" >/dev/null 2>&1; then fail 'Accepted unsupported scope'; fi
+  reject 'Unsupported scope' "$tmp/bad.json"
 done
 jq '.rules |= map(select(.type != "pull_request"))' "$tmp/fixture.json" > "$tmp/bad.json"
-if "$plan" "$tmp/bad.json" >/dev/null 2>&1; then fail 'Accepted a ruleset without pull-request protection'; fi
+reject 'Missing pull-request protection' "$tmp/bad.json"
 jq '.rules += [{"type": 7}]' "$tmp/fixture.json" > "$tmp/bad.json"
-if "$plan" "$tmp/bad.json" >/dev/null 2>&1; then fail 'Accepted malformed rule data'; fi
+reject 'Malformed rule data' "$tmp/bad.json"
 jq '.conditions.ref_name.exclude = ["refs/heads/x"]' "$tmp/fixture.json" > "$tmp/bad.json"
-if "$plan" "$tmp/bad.json" >/dev/null 2>&1; then fail 'Accepted a ruleset with exclusions'; fi
+reject 'Ruleset with exclusions' "$tmp/bad.json"
 
 echo 'PASS: only four retired constraints removed; CI, signatures, reviews, scans, scope, and bypass preserved'
