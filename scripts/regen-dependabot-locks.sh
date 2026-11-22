@@ -232,16 +232,19 @@ clone_branch() {
 # points at $3, so the next run can retry. Needs Pull requests: write, and
 # Workflows: write when a path is under .github/workflows/.
 open_branch_pr() {
-  local repo="$1" base="$2" sha="$3" dir="$4" branch="$5" headline="$6" body="$7" msg oid pr head
+  local repo="$1" base="$2" sha="$3" dir="$4" branch="$5" headline="$6" body="$7" msg oid pr head actor author_login
   shift 7
+  actor="$("$GH_BIN" api user --jq .login 2>/dev/null || true)"
   if ! "$GH_BIN" api -X POST "repos/$repo/git/refs" \
        -f ref="refs/heads/$branch" -f sha="$sha" --silent 2>/dev/null; then
     # The branch exists. Reuse it only if it is a leftover of ours.
     head="$("$GH_BIN" api "repos/$repo/git/ref/heads/$branch" --jq .object.sha 2>/dev/null || true)"
     msg="$("$GH_BIN" api "repos/$repo/commits/$branch" --jq .commit.message 2>/dev/null || true)"
+    author_login="$("$GH_BIN" api "repos/$repo/commits/$branch" --jq '.author.login // empty' 2>/dev/null || true)"
     if [ -n "$head" ] && [ "$head" = "$sha" ]; then
       :
-    elif [ "${msg%%$'\n'*}" = "$headline" ] \
+    elif [ -n "$actor" ] && [ "$author_login" = "$actor" ] \
+       && [ "${msg%%$'\n'*}" = "$headline" ] \
        && "$GH_BIN" api -X PATCH "repos/$repo/git/refs/heads/$branch" \
             -f sha="$sha" -F force=true --silent 2>/dev/null; then
       :
@@ -262,7 +265,8 @@ open_branch_pr() {
     # Do not strand the branch: remove it only while it is still the bare
     # default head this call put it on, never one that has since moved.
     head="$("$GH_BIN" api "repos/$repo/git/ref/heads/$branch" --jq .object.sha 2>/dev/null || true)"
-    if [ -n "$head" ] && [ "$head" = "$sha" ]; then
+    author_login="$("$GH_BIN" api "repos/$repo/commits/$branch" --jq '.author.login // empty' 2>/dev/null || true)"
+    if [ -n "$head" ] && [ "$head" = "$sha" ] && [ -n "$actor" ] && [ "$author_login" = "$actor" ]; then
       "$GH_BIN" api -X DELETE "repos/$repo/git/refs/heads/$branch" --silent 2>/dev/null || true
     fi
     echo "commit-refused"
