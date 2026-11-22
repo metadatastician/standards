@@ -27,13 +27,7 @@ https://github.com/metadatastician/standards/tree/6d19ce0ebae047027dcfd594c7810b
 | Spec | Home | If you want…
 | K9 Self-Validating Components | link:1-formats/k9/[`+1-formats/k9/+`] | the K9 specification, security analysis and adoption guidance (implementations live in hyperpolymath/k9-ecosystem)
 | Contractiles (Must/Trust/Dust/Intend) | link:1-formats/contractiles/[`+1-formats/contractiles/+`] | policy-enforcement primitives the K9 layer is built from
-| META.a2ml spec | link:1-formats/a2ml/meta/[`+1-formats/a2ml/meta/+`] | architecture decisions / governance metadata format
-| STATE.a2ml spec | link:1-formats/a2ml/state/[`+1-formats/a2ml/state/+`] | project-state metadata format (drives this registry's topology)
-| ECOSYSTEM.a2ml spec | link:1-formats/a2ml/ecosystem/[`+1-formats/a2ml/ecosystem/+`] | ecosystem-positioning metadata format
-| AGENTIC.a2ml spec | link:1-formats/a2ml/agentic/[`+1-formats/a2ml/agentic/+`] | AI-agent operational gating / entropy budgets
-| NEUROSYM.a2ml spec | link:1-formats/a2ml/neurosym/[`+1-formats/a2ml/neurosym/+`] | symbolic semantics / proof obligations
-| PLAYBOOK.a2ml spec | link:1-formats/a2ml/playbook/[`+1-formats/a2ml/playbook/+`] | executable operational runbooks
-| ANCHOR.a2ml spec | link:1-formats/a2ml/anchor/[`+1-formats/a2ml/anchor/+`] | project-recalibration intervention format
+| Retired A2ML family specs (META, STATE, ECOSYSTEM, AGENTIC, NEUROSYM, PLAYBOOK, ANCHOR) | link:9-archive/A2ML-REMOVED.adoc[`+9-archive/A2ML-REMOVED.adoc+`] | what the removed `1-formats/a2ml/` tree held; the live forms are the deeds (`1-formats/deed/`)
 | FFP — Form-Fill Provenance | link:1-formats/sub-specs/form-fill-provenance/[`+1-formats/sub-specs/form-fill-provenance/+`] | whether a PDF form was machine-filled or printed blank for hand completion, and what a print path must record
 | A2ML — Attested Markup Language | https://github.com/hyperpolymath/a2ml/blob/main/README.adoc[`+hyperpolymath/a2ml+`] `+@ v1.0.0+` ⇗ | the typed/verified machine-readable document format; evicted from standards 2026-08-28 per #490
 |===

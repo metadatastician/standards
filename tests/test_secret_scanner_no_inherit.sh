@@ -75,7 +75,7 @@ BASELINE="$REPO_ROOT/.hypatia-baseline.json"
 DEAD_PIN="a3308ea8d0cc513727c8ad149b1132317a886c98"
 
 # No supported-inherit exemptions remain: the two packaged hypatia callers
-# (1-formats/a2ml/meta, 2-protocols/0-ai-gatekeeper) were re-pinned to the
+# (2-protocols/0-ai-gatekeeper, and the former 1-formats/a2ml/meta) were re-pinned to the
 # commit that declares HYPATIA_SCAN_PAT and narrowed to named secrets
 # (standards#1108 §6b). Keep this list EMPTY; a file that needs inherit is a
 # signal the callee contract regressed, never a supported state.
@@ -302,7 +302,6 @@ check_pinned() {
   done <<< "$triples"
 }
 for packaged_dir in \
-  "$REPO_ROOT/1-formats/a2ml/meta/.github/workflows" \
   "$REPO_ROOT/2-protocols/0-ai-gatekeeper/.github/workflows" \
   "$REPO_ROOT/2-protocols/axel/.github/workflows"; do
   [ -d "$packaged_dir" ] || { fail "expected packaged caller dir missing: $packaged_dir"; continue; }
@@ -323,7 +322,6 @@ supported_path() {
 
 scan_dirs=(
   "$WF_DIR"
-  "$REPO_ROOT/1-formats/a2ml/meta/.github/workflows"
   "$REPO_ROOT/2-protocols/0-ai-gatekeeper/.github/workflows"
   "$REPO_ROOT/2-protocols/axel/.github/workflows"
 )
