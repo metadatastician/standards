@@ -106,6 +106,8 @@ armed.
 
 === 2. Dependabot proposes; nothing is ignored by default
 
+NOTE: *Superseded for the `github-actions` ecosystem (owner ruling "single writer", 2026-11-21).* Dependabot no longer proposes action bumps: `.github/dependabot.yml` sets `open-pull-requests-limit: 0` for it, and `.github/workflows/action-pins-applier.yml` bumps third-party pins and rewrites `actions.lock` in one commit. Holds that were Dependabot `ignore` entries live in `config/settings/actions-bump-holds.txt`. The rest of this section still describes the other ecosystems.
+
 Dependabot remains the proposer (no Renovate). The estate shape:
 
 [source,yaml]

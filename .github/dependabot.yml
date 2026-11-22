@@ -1,30 +1,21 @@
 # SPDX-License-Identifier: MPL-2.0
 # Estate dependabot policy: see docs/DEPENDABOT-POLICY.adoc (standards#297).
+#
+# github-actions version updates are OFF (owner ruling "single writer",
+# 2026-11-21). Dependabot bumped `uses:` SHAs without touching
+# .github/workflows/actions.lock, so the two drifted. The applier
+# (.github/workflows/action-pins-applier.yml) now bumps third-party action pins
+# and rewrites actions.lock in the SAME commit. `open-pull-requests-limit: 0`
+# keeps this file valid and stops every version-update PR, while Dependabot
+# security updates are a separate repository setting and are unaffected.
+#
+# The hold that used to live here (github/codeql-action stays at v4.38.0;
+# v4.38.1 fails workflow-startup validation, nexia-list#100/#101/#104) moved to
+# config/settings/actions-bump-holds.txt, which the applier reads.
 version: 2
 updates:
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
-    groups:
-      actions:
-        patterns: ["*"]
-    open-pull-requests-limit: 2
-    ignore:
-      # HOLD: github/codeql-action at v4.38.0 (SHA-pinned). v4.38.1 fails
-      # GitHub workflow-startup validation estate-wide (nexia-list#100;
-      # SHA-form re-bump attempt bypassed versions-scoped ignores — see
-      # nexia-list#101/#104). Hold until upstream clears 4.38.1 or a newer
-      # release verifies green; revisit deliberately, not weekly.
-      #
-      # The trailing * is load-bearing. Workflows reference the SUBPATH
-      # actions (github/codeql-action/init, /analyze, /upload-sarif) and
-      # Dependabot treats each subpath as its own dependency name -- so a
-      # bare "github/codeql-action" entry matches NONE of them. That is how
-      # #977 re-bumped 4.38.0 -> 4.38.1 on 2026-09-22 straight through this
-      # hold, startup-killing codeql.yml and scorecard.yml (jobs=0).
-      - dependency-name: "github/codeql-action*"
-    # github-actions major bumps are usually safe — the SHA pin is the real
-    # version. Standards repo is the canonical-template host so we want the
-    # PRs fast (daily) and grouped. If a specific action proves unstable on
-    # majors, add a per-name ignore here.
+    open-pull-requests-limit: 0
