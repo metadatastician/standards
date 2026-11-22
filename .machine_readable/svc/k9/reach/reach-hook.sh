@@ -54,9 +54,8 @@ jq -e . >/dev/null 2>&1 <<<"$in" || deny "bad hook input"
 tool=$(jq -r '.tool_name // empty' <<<"$in"); sid=$(jq -r '.session_id // "unknown"' <<<"$in")
 cwd=$(jq -r '.cwd // "."' <<<"$in")
 [[ "$sid" =~ ^[A-Za-z0-9_-]+$ ]] || deny "bad session id"
-# A worker may always report to the hub: after the contract expires, after its
-# TTL runs out, and even when the state check below fails.
-case "$tool" in mcp__claude-code-remote__send_message|SendMessage) exit 0;; esac
+# Do not exempt send_message from policy checks; it must follow the same
+# reach/TTL/window constraints as every other tool invocation.
 role=${K9_REACH_ROLE:-}; [ -n "$role" ] || deny "no K9_REACH_ROLE on this environment"
 want_sha=${K9_REACH_JSON_SHA:-}; [ -n "$want_sha" ] || deny "no pinned contract hash"
 state_dir=${K9_REACH_STATE:-$HOME/.k9-reach}; mkdir -p "$state_dir" || deny "no state dir"
