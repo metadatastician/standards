@@ -48,11 +48,6 @@ the highest tier of the Rhodium Framework. This example showcases:
 
 [source,bash]
 ----
-# Setup Python environment
-python -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-
 # Build Rust components
 cargo build --release
 

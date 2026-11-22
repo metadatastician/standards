@@ -79,7 +79,7 @@ name regex** — `reasonably-good-token-vault` and `befunge93-vault-cracker` mat
 and genuinely need the floor. A missing class file is a hard refusal, because an absent
 exclusion list is indistinguishable from an empty one.
 
-`scripts/plan-ruleset-constraint-repair.rb` is the sanctioned planner: it emits a reviewable PUT
+`scripts/plan-ruleset-constraint-repair.sh` (Bash and jq) is the sanctioned planner: it emits a reviewable PUT
 body for exactly those retired constraints, optionally dropping one integration's bypass once
 GitHub has rejected that app as no longer installed. It never calls GitHub.
 
