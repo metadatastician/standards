@@ -59,6 +59,16 @@ held() {
   return 1
 }
 
+valid_action_ref() {
+  # owner/repo with optional /subpath segments, safe charset only
+  [[ "$1" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$ ]]
+}
+
+valid_pin_comment() {
+  # version-like token used in pin comments (no spaces), safe charset only
+  [[ "$1" =~ ^[vV]?[0-9]+([.][0-9]+){0,3}([._-][A-Za-z0-9]+)*$ ]]
+}
+
 # first_party <owner>: true for an estate owner.
 first_party() {
   local o
@@ -124,6 +134,10 @@ while IFS= read -r -d '' file; do
     read -r action old comment <<< "$spec"
     repo="$(cut -d/ -f1,2 <<< "$action")"
     owner="${repo%%/*}"
+    if ! valid_action_ref "$action" || ! valid_pin_comment "$comment"; then
+      printf '%s\t%s\t%s\t-\tunparsed\n' "$rel" "$action" "${old:0:12}"
+      continue
+    fi
     if first_party "$owner"; then printf '%s\t%s\t%s\t-\tfirst-party\n' "$rel" "$action" "${old:0:12}"; continue; fi
     if held "$repo" || held "$action"; then printf '%s\t%s\t%s\t-\theld\n' "$rel" "$action" "${old:0:12}"; continue; fi
     # Untrusted repo text reaches a sed expression below: accept only the strict
