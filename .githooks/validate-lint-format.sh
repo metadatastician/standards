@@ -98,15 +98,20 @@ RS="$(staged_matching '\.rs$|(^|/)Cargo\.toml$')"
 # manifest in the working tree is not, so the lookup reads `git ls-files
 # --cached`, never a working-tree `-f` test.
 #
-# ONE PACKAGE PER MANIFEST. cargo fmt is given the manifest explicitly
-# (`--manifest-path`), which formats the package that manifest defines and
+# ONE PACKAGE PER MANIFEST. cargo fmt is given the manifest AND the package
+# name (`-p <name> --manifest-path Cargo.toml`), which formats that package and
 # nothing else. Run bare from a workspace root that is also a package, it
 # checks EVERY workspace member, so an unformatted member the commit never
-# touched blocked it (measured with cargo 1.97 / rustfmt 1.9). A member's own
+# touched blocked it. `--manifest-path` alone is NOT enough on every cargo: it
+# scoped to one package up to cargo 1.97 / rustfmt 1.9, and from cargo 1.100 /
+# rustfmt 1.11 (the ubuntu-latest runner image) it checks every member again,
+# so the package is named explicitly. A member's own
 # staged file resolves to the member's manifest, which is nearer.
 #
 # A VIRTUAL WORKSPACE MANIFEST (no [package]) defines no package, so there is
-# nothing of its own to format: cargo fmt answers "Failed to find targets".
+# nothing of its own to format. It is recognised from the manifest itself and
+# never handed to cargo fmt: cargo 1.97 answered "Failed to find targets", but
+# cargo 1.100 formats every member and would report a sibling's formatting.
 # A staged file whose nearest indexed manifest is virtual (the manifest itself,
 # or a .rs inside no member) is named in the ledger as unchecked, and clippy
 # is not run for it either.
@@ -126,6 +131,31 @@ nearest_crate() {
   done
 }
 
+# manifest_package_name <Cargo.toml> — prints the name from the manifest's own
+# [package] table, or nothing when it has none (a virtual workspace manifest).
+# Read textually so no JSON tool is needed. Handles a spaced header, single or
+# double quoted names, trailing comments, and a name key that appears only in a
+# later table such as [package.metadata.*] (the first table's name wins and
+# parsing stops at the next header). cargo validates the manifest first.
+manifest_package_name() {
+  awk -v sq="'" -v dq='"' '
+    function val(s,   q, i) {
+      sub(/^[^=]*=[[:space:]]*/, "", s)
+      q = substr(s, 1, 1)
+      if (q != dq && q != sq) return ""
+      s = substr(s, 2); i = index(s, q)
+      return (i > 0) ? substr(s, 1, i - 1) : ""
+    }
+    /^[[:space:]]*\[/ {
+      h = $0; sub(/^[[:space:]]*\[[[:space:]]*/, "", h); sub(/[[:space:]]*\].*$/, "", h)
+      if (in_pkg) exit
+      in_pkg = (h == "package"); seen_header = 1; next
+    }
+    in_pkg && /^[[:space:]]*name[[:space:]]*=/ { print val($0); exit }
+    !seen_header && /^[[:space:]]*package[[:space:]]*\.[[:space:]]*name[[:space:]]*=/ { print val($0); exit }
+  ' "$1"
+}
+
 if [ -n "$RS" ]; then
   CRATES=""; RS_ORPHANS=""
   while IFS= read -r f; do
@@ -143,13 +173,26 @@ if [ -n "$RS" ]; then
         # rustfmt reports a formatting difference as "Diff in <file>"; any other
         # non-zero exit is cargo failing to run (bad manifest, missing
         # component), which is a tooling/scope error and is named as one.
-        if fmt_out="$(cd "$c" && cargo fmt --check --manifest-path Cargo.toml 2>&1)"; then
+        # cargo itself must be able to load the manifest first (a broken one is a
+        # tooling error, not "virtual"); --no-deps needs no Cargo.lock and writes
+        # nothing.
+        if ! meta_out="$(cd "$c" && cargo metadata --no-deps --format-version 1 --manifest-path Cargo.toml 2>&1 >/dev/null)"; then
+          printf '%s\n' "$meta_out" >&2
+          fail "Rust: $c: cargo could not run 'cargo fmt --check' here (tooling/scope error, not a formatting verdict)"
+          continue
+        fi
+        pkg="$(manifest_package_name "$c/Cargo.toml")"
+        if [ -z "$pkg" ]; then
+          LEDGER+=("rust ($c): NOT checked, nearest Cargo.toml is a virtual workspace manifest (no package of its own)")
+          continue
+        fi
+        if fmt_out="$(cd "$c" && cargo fmt --check -p "$pkg" --manifest-path Cargo.toml 2>&1)"; then
           note "Rust: $c: formatted"
         elif printf '%s' "$fmt_out" | grep -q '^Diff in '; then
           printf '%s\n' "$fmt_out" >&2
           fail "Rust: $c: sources are not formatted (cargo fmt --check)"
         elif printf '%s' "$fmt_out" | grep -q '^Failed to find targets'; then
-          LEDGER+=("rust ($c): NOT checked, nearest Cargo.toml is a virtual workspace manifest (no package of its own)")
+          LEDGER+=("rust ($c): NOT checked, package $pkg has no formattable targets")
           continue
         else
           printf '%s\n' "$fmt_out" >&2

@@ -33,7 +33,7 @@
 [map]
 repo        = "metadatastician/standards"
 version     = "1.0.0"
-entry_count = 140
+entry_count = 141
 generated   = false   # hand-curated; the district index.adoc files ARE generated
 checked_by  = "scripts/check-standards-map.sh"
 
@@ -1697,6 +1697,19 @@ canon_slot  = ""
 canonical_doc = ""
 gate        = ""
 note        = "GitHub security policy: supported versions (tip of main only) + private vulnerability reporting. Added 2026-09-22 (round 2 maps it)."
+
+[[entry]]
+from        = "STANDING-RULES.adoc"
+target      = "STANDING-RULES.adoc"
+district    = "root"
+kind        = "policy"
+files       = 1
+lifecycle   = "versioned"
+canonical   = false
+canon_slot  = ""
+canonical_doc = ""
+gate        = ""
+note        = "Estate standing rules for agents (SR-*), behind a fail-closed verification gate. Added by #1677; mapped 2026-11-21."
 
 [[entry]]
 from        = "CODE_OF_CONDUCT.md"
