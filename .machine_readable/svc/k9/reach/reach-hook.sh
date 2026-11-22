@@ -172,6 +172,8 @@ classify_seg() { local x=$1 ep
     fi
   elif [[ "$x" =~ (^|[[:space:]\"\'/])(curl|wget|http|xh)([[:space:]]|$) ]]; then
     deny "direct HTTP calls are not allowed; use git or gh"
+  else
+    deny "unapproved command; only approved git/gh reach actions are allowed"
   fi
 }
 # Resolve a git push: the repo it writes to, each destination branch, and the
