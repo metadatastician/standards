@@ -34,29 +34,41 @@ ok()  { echo "PASS: $1"; pass=$((pass + 1)); }
 bad() { echo "FAIL: $1"; fail=$((fail + 1)); }
 check() { if [ "$2" = "$3" ]; then ok "$1 ($3)"; else bad "$1 expected=$2 got=$3"; fi; }
 
-command -v ruby >/dev/null || { echo "ruby is required to read the workflow" >&2; exit 2; }
+command -v yq >/dev/null || { echo "yq is required to read the workflow" >&2; exit 2; }
 command -v jq >/dev/null || { echo "jq is required" >&2; exit 2; }
 
 # ── 1. The workflow wiring ─────────────────────────────────────────────────
 # Extract the isolate step's script, and assert that the download writes to
 # its output and the renderer reads only that output.
-# shellcheck disable=SC2016  # the Ruby program is meant to be literal
-if ruby -ryaml -e '
-  steps = YAML.load_file(ARGV[0]).fetch("jobs").fetch("scan").fetch("steps")
-  iso = steps.find { |s| s["id"] == "report-backs" } or abort("missing step id report-backs")
-  abort("isolate step must run always()") unless iso.fetch("if").to_s.include?("always()")
-  abort("isolate step must not depend on the artifact input") if iso.fetch("if").to_s.include?("report-backs-artifact")
-  dl = steps.find { |s| s["name"] == "Download the fleet report-backs" } or abort("missing download step")
-  abort("download must write to the isolated directory") unless dl.fetch("with").fetch("path") == "${{ steps.report-backs.outputs.dir }}"
-  abort("download must follow the isolate step") unless steps.index(dl) > steps.index(iso)
-  render = steps.find { |s| s["id"] == "grid" } or abort("missing render step")
-  abort("render must follow the download") unless steps.index(render) > steps.index(dl)
-  abort("render must take REPORT_BACKS_DIR from the isolate step") unless render.fetch("env").fetch("REPORT_BACKS_DIR") == "${{ steps.report-backs.outputs.dir }}"
-  run = render.fetch("run")
-  abort("render must pass --report-backs \"${REPORT_BACKS_DIR:-}\"") unless run.include?(%q{--report-backs "${REPORT_BACKS_DIR:-}"})
-  abort("render must not read a checkout path for report-backs") if run =~ /--report-backs\s+\.?\/?\.gitbot-fleet/
-  File.write(ARGV[1], iso.fetch("run"))
-' "$workflow" "$tmp/isolate.sh"; then
+# check_wiring WORKFLOW OUT: prints the first broken rule and fails, or
+# writes the isolate step's script to OUT.
+check_wiring() {
+  local wf="$1" out="$2" iso dl render cond run
+  # shellcheck disable=SC2016  # yq expressions are meant to be literal
+  idx() { yq -r ".jobs.scan.steps | to_entries | map(select(.value | $1)) | .[0].key // \"\"" "$wf"; }
+  field() { yq -r ".jobs.scan.steps[$1]$2 // \"\"" "$wf"; }
+  # shellcheck disable=SC2016
+  local dir_expr='${{ steps.report-backs.outputs.dir }}'
+  iso=$(idx '.id == "report-backs"'); [ -n "$iso" ] || { echo "missing step id report-backs" >&2; return 1; }
+  cond=$(field "$iso" .if)
+  [[ "$cond" == *'always()'* ]] || { echo "isolate step must run always()" >&2; return 1; }
+  [[ "$cond" != *report-backs-artifact* ]] || { echo "isolate step must not depend on the artifact input" >&2; return 1; }
+  dl=$(idx '.name == "Download the fleet report-backs"'); [ -n "$dl" ] || { echo "missing download step" >&2; return 1; }
+  [ "$(field "$dl" .with.path)" = "$dir_expr" ] || { echo "download must write to the isolated directory" >&2; return 1; }
+  [ "$dl" -gt "$iso" ] || { echo "download must follow the isolate step" >&2; return 1; }
+  render=$(idx '.id == "grid"'); [ -n "$render" ] || { echo "missing render step" >&2; return 1; }
+  [ "$render" -gt "$dl" ] || { echo "render must follow the download" >&2; return 1; }
+  [ "$(field "$render" .env.REPORT_BACKS_DIR)" = "$dir_expr" ] \
+    || { echo "render must take REPORT_BACKS_DIR from the isolate step" >&2; return 1; }
+  run=$(field "$render" .run)
+  # shellcheck disable=SC2016
+  [[ "$run" == *'--report-backs "${REPORT_BACKS_DIR:-}"'* ]] \
+    || { echo 'render must pass --report-backs "${REPORT_BACKS_DIR:-}"' >&2; return 1; }
+  ! grep -Eq -- '--report-backs[[:space:]]+\.?/?\.gitbot-fleet' <<<"$run" \
+    || { echo "render must not read a checkout path for report-backs" >&2; return 1; }
+  field "$iso" .run > "$out"
+}
+if check_wiring "$workflow" "$tmp/isolate.sh"; then
   ok "workflow: isolate, download and render are wired to one temp directory"
 else
   bad "workflow wiring (see the message above)"
