@@ -39,7 +39,7 @@ deny() { local r="$1"
     r="$1. on_breach=$breach: report this to the hub now with send_message"
     [ "$breach" = deny_and_interrupt ] && r="$r; the hub will stop this session"
   fi
-  jq -cn --arg r "K9 reach: $r" '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"deny",permissionDecisionReason:$r}}'
+  jq -cn '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"deny",permissionDecisionReason:"K9 reach: denied by policy"}}'
          [ -n "${log:-}" ] && printf '%s deny %s %s\n' "$(date -u +%FT%TZ)" "${tool:-?}" "$1" >>"$log"; exit 0; }
 rank() { case "$1" in deny|actions) echo 0;; deny_and_report|all) echo 1;; deny_and_interrupt) echo 2;; *) echo -1;; esac; }
 firmer() { [ "$(rank "${2:-}")" -gt "$(rank "$1")" ] && echo "$2" || echo "$1"; }
