@@ -118,6 +118,9 @@ jobs:
             hyperpolymath=${{ steps.tok-user.outputs.token }}
             metadatastician=${{ steps.tok-org.outputs.token }}
             catachresis-colloquium=${{ steps.tok-cc.outputs.token }}
+          # One App behind all three tokens; its slug names the bot that authors
+          # the applier's commits, so a leftover branch of ours can be told apart.
+          APPLIER_SLUG: ${{ steps.tok-org.outputs.app-slug || steps.tok-user.outputs.app-slug || steps.tok-cc.outputs.app-slug }}
           DRY_RUN: ${{ inputs.dry-run && '1' || '0' }}
           REGEN_MAIN: ${{ (github.event.schedule == '41 4 * * *' || github.event.schedule == '17 5 * * 1' || inputs.main-repair) && '1' || '0' }}
           BUMP_PINS: ${{ (github.event.schedule == '17 5 * * 1' || inputs.bump) && '1' || '0' }}

@@ -79,13 +79,18 @@ if [ "$1 $2" = "api graphql" ]; then
   echo 2222222222222222222222222222222222222222
   exit 0
 fi
+# An installation token cannot read /user; a PAT can (USER_LOGIN).
+if [ "$1 $2" = "api user" ]; then [ -n "${USER_LOGIN:-}" ] || exit 1; echo "$USER_LOGIN"; exit 0; fi
 # Default-branch repair (REGEN_MAIN=1): repo metadata, heads, refs and PRs.
 if [ "$1" = api ] && [ "$2" = repos/o/r ] && [ "$3" = --jq ]; then echo "${DEFAULT_BRANCH:-main}"; exit 0; fi
 if [ "$1" = api ] && [ "$2" = repos/o/r/commits/chore/regenerate-actions-lock ]; then
   [ -n "${LEFTOVER_MSG:-}" ] || exit 1
-  printf '%s\n' "$LEFTOVER_MSG"; exit 0
+  # --jq selects the field: the commit author login or the message.
+  case "${4:-}" in *author*) printf '%s\n' "${LEFTOVER_AUTHOR-estate-applier[bot]}" ;; *) printf '%s\n' "$LEFTOVER_MSG" ;; esac; exit 0
 fi
-if [ "$1" = api ] && [[ "$2" == repos/o/r/commits/* ]]; then echo "$MAIN_SHA"; exit 0; fi
+if [ "$1" = api ] && [[ "$2" == repos/o/r/commits/* ]]; then
+  case "${4:-}" in *author*) printf '%s\n' "${BRANCH_AUTHOR-estate-applier[bot]}" ;; *) echo "$MAIN_SHA" ;; esac; exit 0
+fi
 if [ "$1 $2 $3" = "api -X POST" ] && [[ "$4" == repos/*/git/refs ]]; then
   echo "POST-REF $*" >> "$GH_LOG"; [ -n "${REF_EXISTS:-}" ] && exit 1; exit 0
 fi
@@ -99,7 +104,7 @@ fi
 exit 1
 EOF
 chmod +x "$WORK/gh"
-export GH_BIN="$WORK/gh" REGEN_TOOLS="$TOOLS" GH_CAPTURE="$WORK/payload.json"
+export GH_BIN="$WORK/gh" REGEN_TOOLS="$TOOLS" GH_CAPTURE="$WORK/payload.json" APPLIER_SLUG=estate-applier
 
 # shellcheck source=../regen-dependabot-locks.sh
 source "$TARGET"
@@ -266,6 +271,16 @@ fresh_main leftover
 out="$(REF_EXISTS=1 LEFTOVER_MSG="$REPAIR_HEADLINE"$'\n\n'"body" TOOL_ACTION=bump repair_main o/r '[]' 2>/dev/null)"
 expect "a leftover repair branch of ours is reused" "o/r@main	pr-opened #42 ($oid)" "$out"
 expect "…by force-moving it to the default head" 1 "$(grep -c "PATCH-REF .*git/refs/heads/chore/regenerate-actions-lock .*sha=$MAIN_SHA .*force=true" "$GH_LOG")"
+
+# Identity gates reuse: our headline from someone else is never force-moved, and
+# when we cannot tell who we are (no slug, no /user) nothing is reused.
+fresh_main leftover-foreign
+expect "a branch with our headline by another author is not reused" "o/r@main	repair-branch-exists" "$(REF_EXISTS=1 LEFTOVER_AUTHOR=someone LEFTOVER_MSG="$REPAIR_HEADLINE" TOOL_ACTION=bump repair_main o/r '[]' 2>/dev/null)"
+expect "…no PATCH" 0 "$(grep -c PATCH-REF "$GH_LOG")"
+fresh_main leftover-noid
+expect "an unknown identity reuses nothing" "o/r@main	repair-branch-exists" "$(APPLIER_SLUG= REF_EXISTS=1 LEFTOVER_MSG="$REPAIR_HEADLINE" TOOL_ACTION=bump repair_main o/r '[]' 2>/dev/null)"
+fresh_main leftover-pat
+expect "a PAT identity (/user) is honoured when no slug is given" "o/r@main	pr-opened #42 ($oid)" "$(APPLIER_SLUG= USER_LOGIN=estate-applier[bot] REF_EXISTS=1 LEFTOVER_MSG="$REPAIR_HEADLINE" TOOL_ACTION=bump repair_main o/r '[]' 2>/dev/null)"
 
 fresh_main prfail
 expect "a refused PR creation is reported with the commit" "o/r@main	pr-refused ($oid)" "$(PR_FAIL=1 TOOL_ACTION=bump repair_main o/r '[]' 2>/dev/null)"
