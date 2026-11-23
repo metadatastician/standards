@@ -175,10 +175,17 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: webfactory/ssh-agent@e83874834305fe9a4a2997156cb26c5de65a8555 # v0.10.0
+      # No third-party action or disk-resident private key.
+      - name: Start SSH agent (gitlab_key)
         if: ${{ env.GITLAB_KEY != '' }}
-        with:
-          ssh-private-key: ${{ secrets.GITLAB_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          eval "$(ssh-agent -s)" >/dev/null
+          printf '%s\n' "$GITLAB_KEY" | ssh-add - >/dev/null
+          {
+            printf 'SSH_AUTH_SOCK=%s\n' "$SSH_AUTH_SOCK"
+            printf 'SSH_AGENT_PID=%s\n' "$SSH_AGENT_PID"
+          } >> "$GITHUB_ENV"
       - name: Verify gitlab SSH host
         if: ${{ env.GITLAB_KEY != '' }}
         env:
@@ -236,10 +243,17 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: webfactory/ssh-agent@e83874834305fe9a4a2997156cb26c5de65a8555 # v0.10.0
+      # No third-party action or disk-resident private key.
+      - name: Start SSH agent (bitbucket_key)
         if: ${{ env.BITBUCKET_KEY != '' }}
-        with:
-          ssh-private-key: ${{ secrets.BITBUCKET_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          eval "$(ssh-agent -s)" >/dev/null
+          printf '%s\n' "$BITBUCKET_KEY" | ssh-add - >/dev/null
+          {
+            printf 'SSH_AUTH_SOCK=%s\n' "$SSH_AUTH_SOCK"
+            printf 'SSH_AGENT_PID=%s\n' "$SSH_AGENT_PID"
+          } >> "$GITHUB_ENV"
       - name: Verify bitbucket SSH host
         if: ${{ env.BITBUCKET_KEY != '' }}
         env:
@@ -291,10 +305,17 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: webfactory/ssh-agent@e83874834305fe9a4a2997156cb26c5de65a8555 # v0.10.0
+      # No third-party action or disk-resident private key.
+      - name: Start SSH agent (codeberg_key)
         if: ${{ env.CODEBERG_KEY != '' }}
-        with:
-          ssh-private-key: ${{ secrets.CODEBERG_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          eval "$(ssh-agent -s)" >/dev/null
+          printf '%s\n' "$CODEBERG_KEY" | ssh-add - >/dev/null
+          {
+            printf 'SSH_AUTH_SOCK=%s\n' "$SSH_AUTH_SOCK"
+            printf 'SSH_AGENT_PID=%s\n' "$SSH_AGENT_PID"
+          } >> "$GITHUB_ENV"
       - name: Verify codeberg SSH host
         if: ${{ env.CODEBERG_KEY != '' }}
         env:
@@ -346,10 +367,17 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: webfactory/ssh-agent@e83874834305fe9a4a2997156cb26c5de65a8555 # v0.10.0
+      # No third-party action or disk-resident private key.
+      - name: Start SSH agent (sourcehut_key)
         if: ${{ env.SOURCEHUT_KEY != '' }}
-        with:
-          ssh-private-key: ${{ secrets.SOURCEHUT_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          eval "$(ssh-agent -s)" >/dev/null
+          printf '%s\n' "$SOURCEHUT_KEY" | ssh-add - >/dev/null
+          {
+            printf 'SSH_AUTH_SOCK=%s\n' "$SSH_AUTH_SOCK"
+            printf 'SSH_AGENT_PID=%s\n' "$SSH_AGENT_PID"
+          } >> "$GITHUB_ENV"
       - name: Verify sourcehut SSH host
         if: ${{ env.SOURCEHUT_KEY != '' }}
         env:
@@ -401,10 +429,17 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: webfactory/ssh-agent@e83874834305fe9a4a2997156cb26c5de65a8555 # v0.10.0
+      # No third-party action or disk-resident private key.
+      - name: Start SSH agent (disroot_key)
         if: ${{ env.DISROOT_KEY != '' }}
-        with:
-          ssh-private-key: ${{ secrets.DISROOT_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          eval "$(ssh-agent -s)" >/dev/null
+          printf '%s\n' "$DISROOT_KEY" | ssh-add - >/dev/null
+          {
+            printf 'SSH_AUTH_SOCK=%s\n' "$SSH_AUTH_SOCK"
+            printf 'SSH_AGENT_PID=%s\n' "$SSH_AGENT_PID"
+          } >> "$GITHUB_ENV"
       - name: Verify disroot SSH host
         if: ${{ env.DISROOT_KEY != '' }}
         env:
@@ -459,10 +494,17 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: webfactory/ssh-agent@e83874834305fe9a4a2997156cb26c5de65a8555 # v0.10.0
+      # No third-party action or disk-resident private key.
+      - name: Start SSH agent (gitea_key)
         if: ${{ env.GITEA_KEY != '' && env.GITEA_MIRROR_HOST != '' }}
-        with:
-          ssh-private-key: ${{ secrets.GITEA_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          eval "$(ssh-agent -s)" >/dev/null
+          printf '%s\n' "$GITEA_KEY" | ssh-add - >/dev/null
+          {
+            printf 'SSH_AUTH_SOCK=%s\n' "$SSH_AUTH_SOCK"
+            printf 'SSH_AGENT_PID=%s\n' "$SSH_AGENT_PID"
+          } >> "$GITHUB_ENV"
       - name: Verify gitea SSH host
         if: ${{ env.GITEA_KEY != '' && env.GITEA_MIRROR_HOST != '' }}
         env:
@@ -527,11 +569,13 @@ jobs:
           else
             echo 'configured=false' >> "$GITHUB_OUTPUT"
           fi
-      - name: Setup Rust
+      - name: Select runner stable Rust
         if: steps.radicle.outputs.configured == 'true'
-        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
-        with:
-          toolchain: stable
+        run: |
+          set -euo pipefail
+          rustup default stable
+          rustc --version
+          cargo --version
       - name: Install Radicle
         if: steps.radicle.outputs.configured == 'true'
         run: |
