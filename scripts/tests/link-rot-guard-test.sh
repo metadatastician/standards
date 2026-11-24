@@ -22,7 +22,7 @@
 #   4. --prune deletes and lowers, never adds or raises, refuses to hide a new
 #      break, and is idempotent; --print and --list report without judging;
 #      a positional ROOT still works (the Justfile recipe passes one);
-#   5. the suite sees a regression: thirty mutants of the gate are killed;
+#   5. the suite sees a regression: thirty-two mutants of the gate are killed;
 #   6. this repository matches its ledger (exit 0), under its own name and
 #      under a copy named otherwise.
 #
@@ -248,7 +248,7 @@ clean_tree; : > "$WORK/t/docs/a b.md"; : > "$WORK/t/docs/100%.md"; plant docs/c.
 expect "a percent-encoded destination resolves, and a literal percent file too" 0 "none new, none grown, none stale"
 
 clean_tree; plant docs/c.md <<<'A [x](n%20o.md) link.'
-expect "a missing percent-encoded target is reported as written" 1 "broken internal link -> n%20o.md"
+expect "a missing percent-encoded target is reported as written" 0 "BROKEN  docs/c.md -> n%20o.md" "$GATE" --list
 
 # A passthrough inside a macro target is the target; one wrapping a macro is literal.
 clean_tree; plant docs/c.adoc <<<'See link:pass:[missing file.pdf][x].'
@@ -279,7 +279,24 @@ clean_tree; plant docs/c.adoc <<<'See link:../docs/target.adoc[x] and link:./../
 expect "a .. that stays inside the root resolves" 0 "none new, none grown, none stale"
 
 clean_tree; : > "$WORK/outside.txt"; plant docs/c.md <<<'See [x](%2e%2e/%2e%2e/outside.txt).'
-expect "a percent-encoded escape is broken too" 1 "broken internal link -> %2e%2e/%2e%2e/outside.txt"
+expect "a percent-encoded escape is broken too" 0 "BROKEN  docs/c.md -> %2e%2e/%2e%2e/outside.txt" "$GATE" --list
+
+# Text from contributor files is printed into the job log: it must not be able
+# to start a workflow command of its own.
+clean_tree; nm=$'docs/evil\n::error::pwned.adoc'; printf 'link:gone.adoc[x]\n' > "$WORK/t/$nm"
+out="$(bash "$GATE" --root "$WORK/t" 2>&1)"; rc=$?
+if [ "$rc" -eq 1 ] && ! grep -q '^::error::pwned' <<<"$out" && grep -qF 'evil?::error::pwned.adoc' <<<"$out"; then
+  echo "PASS: a newline in a file name cannot start a workflow command"; pass=$((pass + 1))
+else echo "FAIL: a newline in a file name reached the log"; printf '%s\n' "$out" | sed 's/^/      | /'; fail=$((fail + 1)); fi
+
+clean_tree; plant docs/c.adoc <<<'See link:a%0Ab::error::x.adoc[x].'
+expect "% in a target is escaped in the annotation" 1 "::error file=docs/c.adoc::broken internal link -> a%250Ab::error::x.adoc"
+
+clean_tree; plant docs/d,e:f.adoc <<<'See link:gone.adoc[x].'
+expect "a comma and colon in a path are escaped in the annotation property" 1 "::error file=docs/d%2Ce%3Af.adoc::"
+
+clean_tree; ledger <<<$'docs/a.adoc:1\r'
+expect "a carriage return in a ledger line is malformed and shown as ?" 1 "malformed or duplicate ledger entry (want one path:count per file): docs/a.adoc:1?"
 
 # --base: the ledger may not gain a line or a count against the merge base.
 base_repo() { # base_repo <base-ledger-text|-> <head-ledger-text>
@@ -387,6 +404,10 @@ fx_escape() { clean_tree; : > "$WORK/outside.txt"; plant docs/c.adoc <<<'See lin
 fx_pescape() { clean_tree; : > "$WORK/outside.txt"; plant docs/c.md <<<'See [x](%2e%2e/%2e%2e/outside.txt).'; }
 mutant "root containment dropped" 's#if inside_root "\$dir" "\$target"; then#if true; then#' fx_escape 1 "outside.txt"
 mutant "root containment dropped for decoded paths" 's#inside_root "\$dir" "\$decoded" && ##' fx_pescape 1 "outside.txt"
+fx_nl() { clean_tree; nm=$'docs/evil\n::error::pwned.adoc'; printf 'link:gone.adoc[x]\n' > "$WORK/t/$nm"; }
+fx_pct2() { clean_tree; plant docs/c.adoc <<<'See link:a%0Ab.adoc[x].'; }
+mutant "control characters not removed from paths" 's#"\$\{f//\[\[:cntrl:\]\]/\?\}" "\$\{target//\[\[:cntrl:\]\]/\?\}"#"$f" "$target"#' fx_nl 1 "evil?::error::pwned"
+mutant "% not escaped in annotation data" 's#local s=\$\{1//%/%25\}#local s=$1#' fx_pct2 1 "a%250Ab"
 MARGS="--base HEAD" mutant "base comparison dropped" 's#\[ "\$\{allowed\[\$f\]\}" -gt "\$b" \]#false#' fx_base 1 "ledger grew against base"
 
 # ---------------------------------------------------------------- 6. this repo

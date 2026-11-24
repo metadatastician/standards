@@ -249,7 +249,10 @@ scan() {
           if inside_root "$dir" "$decoded" && [ -e "$dir/$decoded" ]; then continue; fi
         fi
       fi
-      printf '%s\t%s\n' "$f" "$target"
+      # Paths and targets come from contributor files and are printed into the
+      # job log: a control character (a newline in a file name) could start a
+      # line of its own and be read as a workflow command. Show it as "?".
+      printf '%s\t%s\n' "${f//[[:cntrl:]]/?}" "${target//[[:cntrl:]]/?}"
     done < <(extract "$f")
   done < <(find . -path ./9-archive -prune -o -path '*/.git' -prune -o -type f \( -name '*.adoc' -o -name '*.asciidoc' -o -name '*.md' \) -print0 | LC_ALL=C sort -z)
 }
@@ -270,6 +273,11 @@ if [ "$MODE" = list ]; then
   exit 0
 fi
 
+# Data in a GitHub workflow command: % is written %25, and in a property
+# (file=...) so are : and ,. Control characters were removed before this point.
+gh_data() { local s=${1//%/%25}; s=${s//$'\r'/%0D}; s=${s//$'\n'/%0A}; printf '%s' "$s"; }
+gh_prop() { local s; s=$(gh_data "$1"); s=${s//:/%3A}; s=${s//,/%2C}; printf '%s' "$s"; }
+
 # ---------------------------------------------------------------- ledger
 LEDGER_SNAPSHOT=
 [ -f "$LEDGER" ] && LEDGER_SNAPSHOT=$(cat -- "$LEDGER")
@@ -277,8 +285,12 @@ lineno=0
 while IFS= read -r entry || [ -n "$entry" ]; do
   lineno=$((lineno + 1))
   case "$entry" in ''|'#'*) continue ;; esac
-  if ! [[ "$entry" =~ ^(.+):([1-9][0-9]*)$ ]] || [ -n "${allowed[${BASH_REMATCH[1]}]:-}" ]; then
-    echo "::error file=$LEDGER,line=$lineno::malformed or duplicate ledger entry (want one path:count per file): $entry"
+  # A control character in a ledger line (a stray CR, say) is malformed, and
+  # keeps every key that is printed later free of them.
+  if [[ "$entry" == *[[:cntrl:]]* ]] \
+     || ! [[ "$entry" =~ ^(.+):([1-9][0-9]*)$ ]] || [ -n "${allowed[${BASH_REMATCH[1]}]:-}" ]; then
+    printf '::error file=%s,line=%s::malformed or duplicate ledger entry (want one path:count per file): %s\n' \
+      "$(gh_prop "$LEDGER")" "$lineno" "$(gh_data "${entry//[[:cntrl:]]/?}")"
     exit 1
   fi
   allowed[${BASH_REMATCH[1]}]=${BASH_REMATCH[2]}; lineof[${BASH_REMATCH[1]}]=$lineno
@@ -291,7 +303,7 @@ if [ -n "$BASE" ] && [ "$MODE" = check ]; then
   case "$LEDGER" in "$ROOT"/*) rel=${LEDGER#"$ROOT"/} ;; esac
   mb=$(git -C "$ROOT" merge-base "$BASE" HEAD 2>/dev/null) || mb=$BASE
   if ! git -C "$ROOT" rev-parse -q --verify "$mb^{commit}" >/dev/null 2>&1; then
-    echo "::error::link-rot: cannot resolve base revision: $BASE"; exit 2
+    printf '::error::link-rot: cannot resolve base revision: %s\n' "$(gh_data "${BASE//[[:cntrl:]]/?}")"; exit 2
   fi
   if base_text=$(git -C "$ROOT" show "$mb:$rel" 2>/dev/null); then
     declare -A baseallowed=()
@@ -331,7 +343,7 @@ VERDICTS=$(verdicts | LC_ALL=C sort -t$'\t' -k2,2)
 show_links() { # show_links <path> — each broken link as a GitHub ::error annotation
   while IFS=$'\t' read -r f target; do
     [ "$f" = "$1" ] || continue
-    echo "::error file=$f::broken internal link -> $target"
+    printf '::error file=%s::broken internal link -> %s\n' "$(gh_prop "$f")" "$(gh_data "$target")"
   done < "$RECORDS"
 }
 
