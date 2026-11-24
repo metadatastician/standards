@@ -437,8 +437,27 @@ ES=$'\x1e'
 # Any other key is unsupported: the condition stays unmet, named, so the file
 # never reaches deletable-now by a condition this tool cannot evaluate.
 declare -A COND=() HOLD=()
+# glob_reaches TOKEN LIT: can the glob TOKEN match a path under LIT? Each
+# component of LIT is matched against the token's components, at any offset (a
+# variable or `..` may precede them). At least one matched component must hold
+# a literal character: `*/x` over `old` would match every directory.
+# shellcheck disable=SC2053  # the right-hand side is a pattern on purpose
+glob_reaches() {
+  local -a tc lc; local s i n m seen
+  IFS=/ read -r -a tc <<< "$1"; IFS=/ read -r -a lc <<< "$2"
+  n=${#lc[@]}; m=${#tc[@]}
+  for (( s = 0; s + n <= m; s++ )); do
+    seen=0
+    for (( i = 0; i < n; i++ )); do
+      [[ ${lc[i]} == ${tc[s+i]} ]] || continue 2
+      if [[ ${tc[s+i]} == *[A-Za-z0-9_]* ]]; then seen=1; fi
+    done
+    [ "$seen" = 1 ] && return 0
+  done
+  return 1
+}
 eval_condition() { # eval_condition ID KEY MATCH [RECORD]
-  local id=$1 key=$2 m=$3 rec=${4:-} lit re holders a sl tgt abs rel pat excl=()
+  local id=$1 key=$2 m=$3 rec=${4:-} lit re holders a sl tgt abs rel gf gt excl=()
   [ -z "${COND[$id]:-}" ] || return 0
   case $key in
     inbound-links-redirected)
@@ -456,7 +475,9 @@ eval_condition() { # eval_condition ID KEY MATCH [RECORD]
       # Bookkeeping that names the path by design: the ledger, the counts file
       # of this run, the rulings files, and the record file this row requires.
       excl=(-e "$LEDGER_REL" -e "$COUNTS_REL" -e "$COUNTS_RUN_REL" -e "$SELF_TOOL" -e "$SELF_TEST")
-      [ -z "$rec" ] || excl+=(-e "$rec")
+      if [ -n "$rec" ]; then   # the record as the file list spells it: ./a/b and a/b are one file
+        rec=$(readlink -m -- "$ROOT_REAL/$rec"); excl+=(-e "${rec#"$ROOT_REAL"/}")
+      fi
       for a in ${RULINGS_REL[@]+"${RULINGS_REL[@]}"}; do excl+=(-e "$a"); done
       re=$(printf '%s' "$lit" | sed 's/[][\.*^$+?(){}|]/\\&/g')
       tr '\0' '\n' < "$T/all" \
@@ -465,19 +486,26 @@ eval_condition() { # eval_condition ID KEY MATCH [RECORD]
         | awk -v lit="$lit/" 'index($0, lit) != 1' > "$T/live.$id" || true
       holders=$(cd "$ROOT" || exit 0; tr '\n' '\0' < "$T/live.$id" \
         | xargs -0 -r grep -I -l -E -- "(^|[^A-Za-z0-9_-])$re(\$|/|[^A-Za-z0-9_.-]|\.(\$|[^A-Za-z0-9_-]))" 2>/dev/null | LC_ALL=C sort -u || true)
-      # A symbolic link is read by its destination, not its contents: one that
-      # points into the prefix (by its text or once resolved) is a live link.
-      pat="(^|[^A-Za-z0-9_-])$re(\$|/|[^A-Za-z0-9_.-]|\.(\$|[^A-Za-z0-9_-]))"
+      # A symbolic link is read by its destination, not its contents: one whose
+      # destination, once resolved, lies in the prefix is a live link. One that
+      # resolves outside the root cannot reach it, whatever its text says.
       while IFS= read -r -d '' sl; do
         [[ $sl == "$lit"/* || $sl == 9-archive/* || $sl == docs/audits/* || $sl == docs/reorg/* ]] && continue
         [[ $sl =~ ^docs/triage/[0-9]{4}-[0-9]{2}-[0-9]{2}/ ]] && continue
         tgt=$(readlink -- "$ROOT/$sl" || true)
         abs=$(readlink -m -- "$(dirname -- "$ROOT_REAL/$sl")/$tgt" || true)
         rel=${abs#"$ROOT_REAL"/}
-        if [[ $rel == "$lit" || $rel == "$lit"/* ]] || grep -qE -- "$pat" <<<"$tgt"; then
+        if [[ $abs == "$ROOT_REAL"/* ]] && [[ $rel == "$lit" || $rel == "$lit"/* ]]; then
           holders+="${holders:+$'\n'}$sl"
         fi
       done < <(find "$ROOT" -type l -not -path '*/.git/*' -printf '%P\0' 2>/dev/null | LC_ALL=C sort -z || true)
+      # A glob in a live file expands into the retired tree: keep every glob
+      # token that can match the prefix at some offset (its root is unknown).
+      while IFS= read -r -d '' gf && IFS= read -r gt; do
+        if glob_reaches "$gt" "$lit"; then holders+="${holders:+$'\n'}$gf"; fi
+      done < <(cd "$ROOT" || exit 0; tr '\n' '\0' < "$T/live.$id" \
+        | xargs -0 -r grep -I -o -H -Z -E -- '[^[:space:]"'"'"'(),;=|&<>:]*[*?[][^[:space:]"'"'"'(),;=|&<>:]*' 2>/dev/null || true)
+      holders=$(printf '%s\n' "$holders" | LC_ALL=C sort -u | grep . || true)
       HOLD[$id]=$holders
       if [ -z "$holders" ]; then COND[$id]=met
       else COND[$id]="unmet: $(printf '%s\n' "$holders" | grep -c .) live file(s) name $lit"; fi ;;

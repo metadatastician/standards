@@ -579,6 +579,36 @@ c_name_escaped_or_quoted_segment_blocks() {
   printf '%s' "$r" | jq -e '.blockers == ["no-mapping-spec"]' >/dev/null
 }
 
+# Review round 3 on #1702 (Codex): P1 glob into the prefix, P2 x2.
+# A glob in a live file expands into the retired tree. Match its components
+# against the prefix (at any offset: its root is unknown); a pattern that is
+# only wildcards over the prefix (`*/config`) would match everything and is not
+# a link.
+c_cond_glob_into_prefix_blocks() {
+  local d r1 r2 r3; d=$(cond_tree condglob); mkdir -p "$d/scripts"
+  printf 'cat zz?/config\ncat */config\n' > "$d/scripts/s.sh"
+  r1=$(RULINGS="$WORK/condglob.jsonl" row "$d" old/x.a2ml)        # controls: other names and bare wildcards
+  printf 'cat ol?/config\n' > "$d/scripts/s.sh"
+  r2=$(RULINGS="$WORK/condglob.jsonl" row "$d" old/x.a2ml)
+  printf 'cat "$ROOT"/[o]ld/*.adoc\n' > "$d/scripts/s.sh"
+  r3=$(RULINGS="$WORK/condglob.jsonl" row "$d" old/x.a2ml)
+  printf '%s' "$r1" | class_is deletable-now \
+    && printf '%s' "$r2" | jq -e '.inbound_links == ["scripts/s.sh"]' >/dev/null \
+    && printf '%s' "$r3" | jq -e '.inbound_links == ["scripts/s.sh"]' >/dev/null
+}
+# A symlink whose destination resolves outside the root cannot reach the prefix,
+# whatever its text says; a record path with a redundant component is the same file.
+c_cond_symlink_outside_and_dotted_record() {
+  local d r1 r2; d=$(cond_tree condout)
+  ln -s ../vendor/old/resource "$d/current"
+  r1=$(RULINGS="$WORK/condout.jsonl" row "$d" old/x.a2ml)
+  d="$WORK/condrec2"; mkdir -p "$d/docs"; plain_record "$d/old/x.a2ml"
+  printf '%s\n' '{"date":"2026-11-17","id":"t-drop","kind":"dropped","match":"^old/","record":"./docs/REMOVED.adoc","recorded":"test","requires":"inbound-links-redirected","summary":"s"}' > "$WORK/condrec2.jsonl"
+  printf '* `old/x.a2ml` held one table\n' > "$d/docs/REMOVED.adoc"
+  r2=$(RULINGS="$WORK/condrec2.jsonl" row "$d" old/x.a2ml)
+  printf '%s' "$r1" | class_is deletable-now && printf '%s' "$r2" | class_is deletable-now
+}
+
 check() { if "$2"; then ok "$1"; else bad "$1"; fi; }
 
 echo "=== the three deletion conditions ==="
@@ -641,6 +671,8 @@ check "a match with an unescaped regex dot fails closed; an escaped dot is suppo
 check "the row's record file and the --counts file are bookkeeping, not inbound links"                 c_cond_ignores_record_and_counts_file
 check "a mention through a symlink, ?, [..] or * blocks; a plain other directory is foreign"          c_name_symlink_or_glob_blocks
 check "a symlink pointing into the prefix is an inbound link (its destination, not its contents)"   c_cond_symlink_into_prefix_blocks
+check "a glob in a live file that can expand into the prefix is an inbound link; bare wildcards are not" c_cond_glob_into_prefix_blocks
+check "a symlink resolving outside the root is no link; a ./record path is the same record file"        c_cond_symlink_outside_and_dotted_record
 check "a segment with a backslash or quotes (mu\\st, mu\"s\"t) is unresolved and blocks"             c_name_escaped_or_quoted_segment_blocks
 
 # ── mutants ────────────────────────────────────────────────────────────────
@@ -683,12 +715,16 @@ mutant 's/^    if \[ -z "\$NSWHY" \]; then rnf+=/    if false; then rnf+=/' "a f
 mutant 's/^    elif \[ "\$tail" = "\$3" \] || \[\[ \$3 == \*\/"\$tail" \]\]; then/    elif false; then/' "a path-suffix mention is called foreign" c_name_path_suffix_blocks
 mutant 's/^    if \[\[ \$tail != \*\/\* \]\]; then/    if false; then/' "a bare name is called foreign" c_name_bare_still_blocks_and_says_why
 mutant 's|\${lit//\\\\\./}|${lit//./}|' "an unescaped regex dot is accepted in a match" c_cond_unescaped_dot_fails_closed
-mutant 's|^      \[ -z "\$rec" \] \|\| excl+=(-e "\$rec")|      :|' "the row's record file counts as an inbound link" c_cond_ignores_record_and_counts_file
 mutant 's|-e "\$COUNTS_REL" -e "\$COUNTS_RUN_REL" > "\$T/cands"|-e "$COUNTS_REL" > "$T/cands"|' "a counts file at another path counts as a reader" c_cond_ignores_record_and_counts_file
 mutant 's|^        \[ -z "\${SYMNAME\[\$seg\]:-}" \] \|\||        true \|\||' "a symlinked directory in a mention is ignored" c_name_symlink_or_glob_blocks
 mutant 's|\\\*\\?\\\[\\\]|\\*|' "? and [..] globs are not treated as unknown prefixes" c_name_symlink_or_glob_blocks
 mutant 's#^        '"''"'|.*tail="" ;;#        '"''"'|.|..|*[\\$\\{\\}\\*\\?\\[\\]\\<\\>~%@\\`]*) tail="" ;;#' "a backslash or quote in a segment is read as a literal directory" c_name_escaped_or_quoted_segment_blocks
-mutant 's#^        if \[\[ \$rel == "\$lit" .*; then$#        if false; then#' "a symlink into the prefix is not an inbound link" c_cond_symlink_into_prefix_blocks
+mutant 's|rec=\$(readlink -m -- "\$ROOT_REAL/\$rec"); excl+=(-e "\${rec#"\$ROOT_REAL"/}")|:|' "the row's record file counts as an inbound link" c_cond_ignores_record_and_counts_file
+mutant 's|rec=\$(readlink -m -- "\$ROOT_REAL/\$rec"); ||' "a ./record path is not the same file as the file list's" c_cond_symlink_outside_and_dotted_record
+mutant 's#^        if \[\[ \$abs == .*; then$#        if false; then#' "a symlink into the prefix is not an inbound link" c_cond_symlink_into_prefix_blocks
+mutant 's#\[\[ \$abs == "\$ROOT_REAL"/\* \]\] && \[\[ \$rel == "\$lit" || \$rel == "\$lit"/\* \]\]#[[ $rel == "$lit" || $rel == "$lit"/* ]] || grep -qE "(^|/)$lit(/|$)" <<<"$tgt"#' "a symlink's text counts even when it resolves outside the root" c_cond_symlink_outside_and_dotted_record
+mutant 's#^        if glob_reaches "\$gt" "\$lit"; then#        if false; then#' "a glob that expands into the prefix is not a link" c_cond_glob_into_prefix_blocks
+mutant 's#^      if \[\[ \${tc\[s+i\]} == \*\[A-Za-z0-9_\]\* \]\]; then seen=1; fi#      seen=1#' "a pure-wildcard pattern counts as a link" c_cond_glob_into_prefix_blocks
 
 # ── this repository ────────────────────────────────────────────────────────
 echo "=== this repository ==="

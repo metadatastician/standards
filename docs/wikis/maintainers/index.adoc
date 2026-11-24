@@ -293,7 +293,7 @@ without its trailing slash counts; a longer name (`older/`) does not. An
 unknown key, or a `match` that is not a literal prefix, stays a named
 `ruling-condition:<key>` blocker: the tool fails closed. `--json` shows each
 condition under `ruling_conditions` (`met`, `why`) and the files that hold it
-under `inbound_links`. A symbolic link is read by its destination: one pointing into the prefix, by its text or once resolved, is a live link.
+under `inbound_links`. A symbolic link is read by its destination: one that resolves into the prefix is a live link, and one that resolves outside the root is not. A glob in a live file (`ol?/config`) is a link when its components can match the prefix at some offset and at least one matched component has a literal character; a pattern of bare wildcards (`*/config`) matches everything and is not. The row's `record` is compared as the file list spells it (`./docs/R.adoc` is `docs/R.adoc`).
 
 *Basename readers.* A `name-reader` names only the basename, so it may read
 another repository's file of that name. The tool cuts each mention (a path
