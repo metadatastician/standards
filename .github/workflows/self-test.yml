@@ -242,7 +242,19 @@ jobs:
       - name: Internal links resolve
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: bash scripts/link-rot-guard.sh --base "${BASE_SHA:-HEAD~1}"
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          # Pull request: its base. Push: the tip before the push, so every
+          # commit of a multi-commit push is compared, not only the last one.
+          # No usable "before" (a new branch is all zeros, a force push can
+          # orphan it): fall back to the previous commit.
+          base=${BASE_SHA:-}
+          if [ -z "$base" ] && [ -n "${PUSH_BEFORE//0/}" ] \
+             && git cat-file -e "${PUSH_BEFORE}^{commit}" 2>/dev/null; then
+            base=$PUSH_BEFORE
+          fi
+          bash scripts/link-rot-guard.sh --base "${base:-HEAD~1}"
 
       # Not part of the offline suite: this one needs real git history, so it
       # cannot live in scripts/tests/*.sh where a contributor runs it on a

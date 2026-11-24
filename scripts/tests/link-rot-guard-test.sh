@@ -22,7 +22,7 @@
 #   4. --prune deletes and lowers, never adds or raises, refuses to hide a new
 #      break, and is idempotent; --print and --list report without judging;
 #      a positional ROOT still works (the Justfile recipe passes one);
-#   5. the suite sees a regression: sixteen mutants of the gate are killed;
+#   5. the suite sees a regression: twenty mutants of the gate are killed;
 #   6. this repository matches its ledger (exit 0), under its own name and
 #      under a copy named otherwise.
 #
@@ -205,6 +205,33 @@ expect "a link after a closed block is still checked" 1 "broken internal link ->
 clean_tree; plant docs/c.md <<<$'```\n[x](gone.md)\n```\n~~~\n[y](gone2.md)\n~~~\n[z](after.md)'
 expect "Markdown fenced blocks are skipped and the fence state resets" 1 "broken internal link -> after.md"
 
+# Attributes follow document order: a later definition wins, an unset removes it.
+clean_tree; plant docs/c.adoc <<<$':d: target.adoc\nlink:{d}[a]\n:d: gone.adoc\nlink:{d}[b]'
+expect "a redefined attribute changes the target from that line on" 1 "broken internal link -> gone.adoc"
+
+clean_tree; plant docs/c.adoc <<<$':d: gone.adoc\n:d!:\nlink:{d}[a]'
+expect "an unset attribute is unresolved and skipped" 0 "none new, none grown, none stale"
+
+# Inline code spans and backslash escapes in Markdown.
+clean_tree; plant docs/c.md <<<'Write `[x](missing.md)` and ``[y](missing2.md)`` as examples.'
+expect "Markdown inline code spans are not links" 0 "none new, none grown, none stale"
+
+clean_tree; plant docs/c.md <<<'`[a](m.md)` then [b](gone.md).'
+expect "a live link after a code span on the same line is checked" 1 "broken internal link -> gone.md"
+
+clean_tree; : > "$WORK/t/docs/a)b.md"; plant docs/c.md <<<'An [ok](a\)b.md) link.'
+expect "an escaped parenthesis stays in the Markdown destination" 0 "none new, none grown, none stale"
+
+# xref: file-bearing cross-references are links, local ids are not.
+clean_tree; plant docs/c.adoc <<<'See xref:gone.adoc[x].'
+expect "an xref to a missing file is reported" 1 "broken internal link -> gone.adoc"
+
+clean_tree; plant docs/c.adoc <<<'See xref:gone.adoc#sec[x].'
+expect "an xref to a missing file with an anchor is reported without it" 1 "broken internal link -> gone.adoc"
+
+clean_tree; plant docs/c.adoc <<<'See xref:target.adoc[a], xref:target.adoc#s[b] and xref:local-id[c].'
+expect "a resolving xref and a local xref pass" 0 "none new, none grown, none stale"
+
 # --base: the ledger may not gain a line or a count against the merge base.
 base_repo() { # base_repo <base-ledger-text|-> <head-ledger-text>
   clean_tree
@@ -268,12 +295,12 @@ mutant "Markdown links not scanned" 's#^    \*\.md\) awk#    *.mdx) awk#' fx_md 
 fx_root() { clean_tree; plant docs/c.adoc <<<'Root-style: link:docs/target.adoc[x]'; }
 fx_title() { clean_tree; plant docs/c.md <<<'A [t](target.adoc "A title").'; }
 fx_img() { clean_tree; plant docs/c.adoc <<<'image::logo.png[Logo]'; }
-fx_attr() { clean_tree; plant docs/c.adoc <<<$':base: target.adoc\nSee link:{base}[x].'; }
+fx_attr() { clean_tree; plant docs/c.adoc <<<$':base: gone.adoc\nSee link:{base}[x].'; }
 fx_base() { base_repo 'docs/c.adoc:1' 'docs/c.adoc:2'; }
 mutant "repo-root fallback restored" 's#if \[ -e "\$dir/\$target" \]; then#if [ -e "$dir/$target" ] || [ -e "$target" ]; then#' fx_root 1 "broken internal link"
 mutant "Markdown title not split off" 's#else if \(c ~ /\[\[:space:\]\]/\) break#else if (0) break#' fx_title 0 "none new"
 mutant "block image keeps its leading colon" 's#\)::\?#):#g' fx_img 0 "none new"
-mutant "document attributes not expanded" 's#target=\$\(resolve_attrs "\$f" "\$target"\) \|\| continue#:#' fx_attr 0 "none new"
+mutant "document attributes not expanded" 's#if \(!\(nm in attr\)\) break#break#' fx_attr 1 "gone.adoc"
 fx_block() { clean_tree; plant docs/c.adoc <<<$'----\nlink:gone.adoc[x]\n----'; }
 fx_fence() { clean_tree; plant docs/c.md <<<$'```\n[x](gone.md)\n```'; }
 fx_idir() { clean_tree; mkdir -p "$WORK/t/docs/assets"; : > "$WORK/t/docs/assets/pic.svg"; plant docs/c.adoc <<<$':imagesdir: assets\nimage::pic.svg[P]'; }
@@ -281,9 +308,17 @@ fx_http() { clean_tree; plant docs/c.md <<<'A [g](http-guide.md).'; }
 fx_paren() { clean_tree; : > "$WORK/t/docs/a(b).md"; plant docs/c.md <<<'A [u](a(b).md).'; }
 mutant "AsciiDoc blocks not skipped" 's#^      blk \{ next \}#      #' fx_block 0 "none new"
 mutant "Markdown fences not skipped" 's#^      fence \{ next \}#      #' fx_fence 0 "none new"
-mutant ":imagesdir: ignored" 's#kind == "image" && imgdir#kind == "x" \&\& imgdir#' fx_idir 0 "none new"
+mutant ":imagesdir: ignored" 's#\("imagesdir" in attr\)#0#' fx_idir 0 "none new"
 mutant "URL scheme matched by filename prefix" 's#\^\[A-Za-z\]\[A-Za-z0-9\+\.-\]\*:#^http#' fx_http 1 "http-guide.md"
 mutant "parentheses not balanced" 's#if \(depth == 0\) break#if (1) break#' fx_paren 0 "none new"
+fx_order() { clean_tree; plant docs/c.adoc <<<$':d: target.adoc\nlink:{d}[a]\n:d: gone.adoc\nlink:{d}[b]'; }
+fx_span() { clean_tree; plant docs/c.md <<<'Write `[x](missing.md)` as an example.'; }
+fx_esc() { clean_tree; : > "$WORK/t/docs/a)b.md"; plant docs/c.md <<<'An [ok](a\)b.md) link.'; }
+fx_xref() { clean_tree; plant docs/c.adoc <<<'See xref:gone.adoc[x].'; }
+mutant "first attribute definition wins" 's#else attr\[tag\] = v#else if (!(tag in attr)) attr[tag] = v#' fx_order 1 "gone.adoc"
+mutant "inline code spans not skipped" 's#gsub\(/`\[\^`\]\*`/, "", s\)#s = s#' fx_span 0 "none new"
+mutant "backslash escapes not honoured" 's#k < length\(s\)\) \{ k\+\+#0) { k++#' fx_esc 0 "none new"
+mutant "xref macros not read" 's#kind == "xref" && m !~#kind == "xref" || m !~#' fx_xref 1 "gone.adoc"
 MARGS="--base HEAD" mutant "base comparison dropped" 's#\[ "\$\{allowed\[\$f\]\}" -gt "\$b" \]#false#' fx_base 1 "ledger grew against base"
 
 # ---------------------------------------------------------------- 6. this repo

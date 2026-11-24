@@ -52,6 +52,12 @@
 # checked statically), not reported. An explicit URI scheme or an absolute path
 # is external; a name that merely starts with "http" is a file.
 #
+# NOT READ (each is a limit, not a promise): Markdown reference-style links
+# ([x]: dest), HTML href and src, AsciiDoc include:: and the <<xref>> shorthand,
+# xref:id[] (local anchors), attributes defined in another file, and the
+# `+literal+` forms of AsciiDoc inline passthrough. A break of these kinds is
+# not caught. xref:file.adoc[] and image macros are read.
+#
 # BASE. A checker that reads only the final tree cannot see a change that adds a
 # broken link and the ledger line that excuses it in the same commit. With
 # --base REV the check also fails when a ledger line is new or higher than in
@@ -98,28 +104,46 @@ trap 'rm -f "$RECORDS"' EXIT
 
 # extract <file> — one link target per line. POSIX awk only (no interval
 # expressions), so it runs under mawk.
-#   AsciiDoc: link:T[ ... ], image:T[ ... ] and the block form image::T[ ... ].
-#     Skipped: comment lines (//), and listing, literal and comment blocks
-#     (----, ...., ////), which a renderer does not turn into links. An image
-#     target is read under the file's :imagesdir: when it sets one.
+#   AsciiDoc: link:T[ ... ], image:T[ ... ], the block form image::T[ ... ] and
+#     xref:T[ ... ] when T names a file (T ends .adoc, .asciidoc or .md, with an
+#     optional #anchor; xref:id[] is local and is not read). Skipped: comment
+#     lines (//), and listing, literal and comment blocks (----, ...., ////),
+#     which a renderer does not turn into links. An image target is read under
+#     the :imagesdir: in effect. {name} is expanded from the attributes in
+#     effect at that line (set by `:name: value`, removed by `:name!:` or
+#     `:!name:`); a reference with no definition stays as {name} and is skipped
+#     by the caller.
 #   Markdown: [text](DEST) with DEST either <angle bracketed> or a bare run with
-#     balanced parentheses ending at whitespace (a title may follow). Fenced
-#     code blocks (``` and ~~~) are skipped.
+#     balanced parentheses ending at whitespace (a title may follow); a
+#     backslash escapes the next character. Fenced code blocks (``` and ~~~)
+#     and inline code spans are skipped.
 extract() {
   case "$1" in
     *.adoc) awk '
       /^\/\/\/\/+[[:space:]]*$/ || /^----+[[:space:]]*$/ || /^\.\.\.\.+[[:space:]]*$/ { blk = !blk; next }
       blk { next }
       /^\/\// { next }
-      /^:imagesdir:/ { d = $0; sub(/^:imagesdir:[[:space:]]*/, "", d); sub(/[[:space:]]+$/, "", d); imgdir = d; next }
+      match($0, /^:!?[A-Za-z0-9_-]+!?:/) {
+        tag = substr($0, 2, RLENGTH - 2); v = substr($0, RLENGTH + 1)
+        sub(/^[[:space:]]+/, "", v); sub(/[[:space:]]+$/, "", v)
+        if (tag ~ /^!/ || tag ~ /!$/) { sub(/^!/, "", tag); sub(/!$/, "", tag); delete attr[tag] }
+        else attr[tag] = v
+        next
+      }
       {
         s = $0
-        while (match(s, /(link|image)::?[^][]+\[/)) {
+        while (match(s, /(link|image|xref)::?[^][]+\[/)) {
           m = substr(s, RSTART, RLENGTH); s = substr(s, RSTART + RLENGTH)
-          kind = (m ~ /^image/) ? "image" : "link"
-          sub(/^(link|image)::?/, "", m); sub(/\[$/, "", m)
-          if (kind == "image" && imgdir != "" && m !~ /^([A-Za-z][A-Za-z0-9+.-]*:|\/)/) {
-            m = imgdir "/" m
+          kind = (m ~ /^image/) ? "image" : ((m ~ /^xref/) ? "xref" : "link")
+          sub(/^(link|image|xref)::?/, "", m); sub(/\[$/, "", m)
+          for (n = 0; n < 20 && match(m, /\{[A-Za-z0-9_-]+\}/); n++) {
+            nm = substr(m, RSTART + 1, RLENGTH - 2)
+            if (!(nm in attr)) break
+            m = substr(m, 1, RSTART - 1) attr[nm] substr(m, RSTART + RLENGTH)
+          }
+          if (kind == "xref" && m !~ /\.(adoc|asciidoc|md)([#?].*)?$/) continue
+          if (kind == "image" && ("imagesdir" in attr) && attr["imagesdir"] != "" && m !~ /^([A-Za-z][A-Za-z0-9+.-]*:|\/|\{)/) {
+            m = attr["imagesdir"] "/" m
           }
           print m
         }
@@ -129,6 +153,7 @@ extract() {
       fence { next }
       {
         s = $0
+        gsub(/``[^`]*``/, "", s); gsub(/`[^`]*`/, "", s)
         while ((i = index(s, "](")) > 0) {
           s = substr(s, i + 2)
           if (substr(s, 1, 1) == "<") {
@@ -138,6 +163,7 @@ extract() {
             depth = 0; out = ""
             for (k = 1; k <= length(s); k++) {
               c = substr(s, k, 1)
+              if (c == "\\" && k < length(s)) { k++; out = out substr(s, k, 1); continue }
               if (c == "(") depth++
               else if (c == ")") { if (depth == 0) break; depth-- }
               else if (c ~ /[[:space:]]/) break
@@ -151,24 +177,6 @@ extract() {
   esac
 }
 
-# resolve_attrs <source> <target> — expand {name} from `:name: value` lines of
-# the same source file. Prints the expanded target. Returns 1 when a reference
-# stays unresolved (an attribute set elsewhere, by include or on the command
-# line): such a target cannot be checked statically and is skipped, not
-# reported as broken.
-resolve_attrs() {
-  local src=$1 t=$2 name val guard=0
-  while [[ "$t" =~ \{([A-Za-z0-9_-]+)\} ]]; do
-    name=${BASH_REMATCH[1]}
-    val=$(sed -n -E "/^:${name}:[[:space:]]/{s/^:${name}:[[:space:]]+//;s/[[:space:]]+\$//;p;q;}" "$src")
-    [ -n "$val" ] || return 1
-    t=${t//\{$name\}/$val}
-    guard=$((guard + 1)); [ "$guard" -lt 20 ] || return 1
-  done
-  case "$t" in *'{'*) return 1 ;; esac
-  printf '%s' "$t"
-}
-
 # Every broken link, as `source TAB target`, source relative to ROOT. Runs from
 # inside ROOT so each path is root-relative and the exclusion is a fixed path.
 # A target resolves only beside its source file, as a renderer resolves it; a
@@ -179,7 +187,9 @@ scan() {
     f=${f#./}
     dir=$(dirname "$f")
     while IFS= read -r target; do
-      target=$(resolve_attrs "$f" "$target") || continue
+      # A reference the extractor could not expand is defined outside this file
+      # (an include, the command line): it cannot be checked statically.
+      case "$target" in *'{'*) continue ;; esac
       target="${target%%#*}"
       target="${target%%\?*}"
       [ -z "$target" ] && continue
