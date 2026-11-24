@@ -609,6 +609,25 @@ c_cond_symlink_outside_and_dotted_record() {
   printf '%s' "$r1" | class_is deletable-now && printf '%s' "$r2" | class_is deletable-now
 }
 
+# Review round 4 on #1702 (Codex): P1 absolute symlink target, P2 newline in a path.
+# An absolute target is used as is; only a relative one is resolved against the
+# link's own directory.
+c_cond_absolute_symlink_target() {
+  local d r; d=$(cond_tree condabs); ln -s "$d/old/x.a2ml" "$d/current"
+  r=$(RULINGS="$WORK/condabs.jsonl" row "$d" old/x.a2ml)
+  printf '%s' "$r" | has_blocker 'ruling-condition:inbound-links-redirected' \
+    && printf '%s' "$r" | jq -e '.inbound_links == ["current"]' >/dev/null
+}
+# The file lists are newline-delimited, so a path holding a newline cannot be
+# searched: the condition fails closed rather than skipping its content.
+c_cond_newline_in_path_fails_closed() {
+  local d r; d=$(cond_tree condnl); mkdir -p "$d/scripts"
+  printf 'cat old/config\n' > "$d/scripts/use"$'\n'"now.sh"
+  r=$(RULINGS="$WORK/condnl.jsonl" row "$d" old/x.a2ml)
+  printf '%s' "$r" | has_blocker 'ruling-condition:inbound-links-redirected' && ! printf '%s' "$r" | class_is deletable-now \
+    && printf '%s' "$r" | jq -e '.ruling_conditions[0].why | test("newline")' >/dev/null
+}
+
 check() { if "$2"; then ok "$1"; else bad "$1"; fi; }
 
 echo "=== the three deletion conditions ==="
@@ -673,6 +692,8 @@ check "a mention through a symlink, ?, [..] or * blocks; a plain other directory
 check "a symlink pointing into the prefix is an inbound link (its destination, not its contents)"   c_cond_symlink_into_prefix_blocks
 check "a glob in a live file that can expand into the prefix is an inbound link; bare wildcards are not" c_cond_glob_into_prefix_blocks
 check "a symlink resolving outside the root is no link; a ./record path is the same record file"        c_cond_symlink_outside_and_dotted_record
+check "an absolute symlink target is used as is, not joined to the link's directory"                  c_cond_absolute_symlink_target
+check "a tracked path with a newline cannot be searched, so the condition fails closed"                c_cond_newline_in_path_fails_closed
 check "a segment with a backslash or quotes (mu\\st, mu\"s\"t) is unresolved and blocks"             c_name_escaped_or_quoted_segment_blocks
 
 # ── mutants ────────────────────────────────────────────────────────────────
@@ -725,6 +746,8 @@ mutant 's#^        if \[\[ \$abs == .*; then$#        if false; then#' "a symlin
 mutant 's#\[\[ \$abs == "\$ROOT_REAL"/\* \]\] && \[\[ \$rel == "\$lit" || \$rel == "\$lit"/\* \]\]#[[ $rel == "$lit" || $rel == "$lit"/* ]] || grep -qE "(^|/)$lit(/|$)" <<<"$tgt"#' "a symlink's text counts even when it resolves outside the root" c_cond_symlink_outside_and_dotted_record
 mutant 's#^        if glob_reaches "\$gt" "\$lit"; then#        if false; then#' "a glob that expands into the prefix is not a link" c_cond_glob_into_prefix_blocks
 mutant 's#^      if \[\[ \${tc\[s+i\]} == \*\[A-Za-z0-9_\]\* \]\]; then seen=1; fi#      seen=1#' "a pure-wildcard pattern counts as a link" c_cond_glob_into_prefix_blocks
+mutant 's#^        if \[\[ \$tgt == /\* \]\]; then#        if false; then#' "an absolute symlink target is joined onto the link's directory" c_cond_absolute_symlink_target
+mutant 's#^      if \[ "\$(tr -cd .*; then$#      if false; then#' "a path with a newline is searched as two bogus paths" c_cond_newline_in_path_fails_closed
 
 # ── this repository ────────────────────────────────────────────────────────
 echo "=== this repository ==="

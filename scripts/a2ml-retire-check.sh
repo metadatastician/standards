@@ -472,6 +472,11 @@ eval_condition() { # eval_condition ID KEY MATCH [RECORD]
         COND[$id]="unsupported: the match is not a literal path prefix, so no link search can be derived from it"; return 0
       fi
       lit=${lit%/}
+      # The file lists below are newline-delimited: a path holding a newline
+      # would be split in two and its content never searched. Fail closed.
+      if [ "$(tr -cd '\0' < "$T/all" | wc -c)" != "$(tr '\0' '\n' < "$T/all" | wc -l)" ]; then
+        COND[$id]="unsupported: a tracked path contains a newline, which the newline-delimited file lists cannot hold"; return 0
+      fi
       # Bookkeeping that names the path by design: the ledger, the counts file
       # of this run, the rulings files, and the record file this row requires.
       excl=(-e "$LEDGER_REL" -e "$COUNTS_REL" -e "$COUNTS_RUN_REL" -e "$SELF_TOOL" -e "$SELF_TEST")
@@ -493,7 +498,8 @@ eval_condition() { # eval_condition ID KEY MATCH [RECORD]
         [[ $sl == "$lit"/* || $sl == 9-archive/* || $sl == docs/audits/* || $sl == docs/reorg/* ]] && continue
         [[ $sl =~ ^docs/triage/[0-9]{4}-[0-9]{2}-[0-9]{2}/ ]] && continue
         tgt=$(readlink -- "$ROOT/$sl" || true)
-        abs=$(readlink -m -- "$(dirname -- "$ROOT_REAL/$sl")/$tgt" || true)
+        if [[ $tgt == /* ]]; then abs=$(readlink -m -- "$tgt" || true)   # absolute: as is
+        else abs=$(readlink -m -- "$(dirname -- "$ROOT_REAL/$sl")/$tgt" || true); fi   # relative: from the link's directory
         rel=${abs#"$ROOT_REAL"/}
         if [[ $abs == "$ROOT_REAL"/* ]] && [[ $rel == "$lit" || $rel == "$lit"/* ]]; then
           holders+="${holders:+$'\n'}$sl"
