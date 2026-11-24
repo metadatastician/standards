@@ -22,7 +22,7 @@
 #   4. --prune deletes and lowers, never adds or raises, refuses to hide a new
 #      break, and is idempotent; --print and --list report without judging;
 #      a positional ROOT still works (the Justfile recipe passes one);
-#   5. the suite sees a regression: eleven mutants of the gate are killed;
+#   5. the suite sees a regression: sixteen mutants of the gate are killed;
 #   6. this repository matches its ledger (exit 0), under its own name and
 #      under a copy named otherwise.
 #
@@ -175,6 +175,36 @@ expect "an attribute that expands to a missing file is broken" 1 "broken interna
 clean_tree; plant docs/c.adoc <<<'See link:{set-elsewhere}[x].'
 expect "an attribute defined outside the file is skipped, not reported" 0 "none new, none grown, none stale"
 
+# Markdown destinations: balanced parentheses and <angle brackets>.
+clean_tree; : > "$WORK/t/docs/a(b).md"; plant docs/c.md <<<'A [t](<a(b).md>) and [u](a(b).md) and [v](<a(b).md> "T").'
+expect "Markdown destinations may hold balanced parentheses" 0 "none new, none grown, none stale"
+
+# A name that starts with "http" is a file, not a URL; real schemes are external.
+clean_tree; plant docs/c.md <<<'A [g](http-guide.md).'
+expect "a missing file named http-guide.md is reported" 1 "broken internal link -> http-guide.md"
+
+clean_tree; plant docs/c.md <<<'[a](https://example.org/x) [b](mailto:a@b.c) [c](irc://example.org/x) [d](#frag)'
+expect "URI schemes and fragments are external" 0 "none new, none grown, none stale"
+
+# :imagesdir: moves image targets, not link targets.
+clean_tree; mkdir -p "$WORK/t/docs/assets"; : > "$WORK/t/docs/assets/pic.svg"
+plant docs/c.adoc <<<$':imagesdir: assets\nimage::pic.svg[P] and image:pic.svg[P]'
+expect "an image resolves under :imagesdir:" 0 "none new, none grown, none stale"
+
+clean_tree; mkdir -p "$WORK/t/docs/assets"; : > "$WORK/t/docs/assets/pic.svg"
+plant docs/c.adoc <<<$':imagesdir: assets\nSee link:pic.svg[P].'
+expect "a link is not moved by :imagesdir:" 1 "broken internal link -> pic.svg"
+
+# Literal and code regions are not links; the state resets when they close.
+clean_tree; plant docs/c.adoc <<<$'----\nlink:gone.adoc[x]\n----\n....\nlink:gone2.adoc[x]\n....\n// link:gone3.adoc[x]\n////\nlink:gone4.adoc[x]\n////\nlink:target.adoc[ok]'
+expect "AsciiDoc listing, literal and comment blocks are skipped" 0 "none new, none grown, none stale"
+
+clean_tree; plant docs/c.adoc <<<$'----\nlink:gone.adoc[x]\n----\nlink:after.adoc[x]'
+expect "a link after a closed block is still checked" 1 "broken internal link -> after.adoc"
+
+clean_tree; plant docs/c.md <<<$'```\n[x](gone.md)\n```\n~~~\n[y](gone2.md)\n~~~\n[z](after.md)'
+expect "Markdown fenced blocks are skipped and the fence state resets" 1 "broken internal link -> after.md"
+
 # --base: the ledger may not gain a line or a count against the merge base.
 base_repo() { # base_repo <base-ledger-text|-> <head-ledger-text>
   clean_tree
@@ -234,16 +264,26 @@ mutant "existence test always true" 's#if \[ -e "\$dir/\$target" \]; then contin
 mutant "stale (gone) verdict dropped" 's#\[ -z "\$\{actual\[\$f\]:-\}" \] &&#false \&\&#' fx_stale 1 "no broken link left"
 mutant "grown verdict dropped" 's#elif \[ "\$n" -gt "\$want" \]#elif false#' fx_grown 1 "GREW"
 mutant "lowered verdict dropped" 's#elif \[ "\$n" -lt "\$want" \]#elif false#' fx_lower 1 "stale ledger entry"
-mutant "Markdown links not scanned" 's#\*\.md\)   grep#*.mdx) grep#' fx_md 1 "new broken link"
+mutant "Markdown links not scanned" 's#^    \*\.md\) awk#    *.mdx) awk#' fx_md 1 "new broken link"
 fx_root() { clean_tree; plant docs/c.adoc <<<'Root-style: link:docs/target.adoc[x]'; }
 fx_title() { clean_tree; plant docs/c.md <<<'A [t](target.adoc "A title").'; }
 fx_img() { clean_tree; plant docs/c.adoc <<<'image::logo.png[Logo]'; }
 fx_attr() { clean_tree; plant docs/c.adoc <<<$':base: target.adoc\nSee link:{base}[x].'; }
 fx_base() { base_repo 'docs/c.adoc:1' 'docs/c.adoc:2'; }
 mutant "repo-root fallback restored" 's#if \[ -e "\$dir/\$target" \]; then#if [ -e "$dir/$target" ] || [ -e "$target" ]; then#' fx_root 1 "broken internal link"
-mutant "Markdown title not split off" 's#^      target=\$\(strip_title "\$target"\)#      target=$target#' fx_title 0 "none new"
+mutant "Markdown title not split off" 's#else if \(c ~ /\[\[:space:\]\]/\) break#else if (0) break#' fx_title 0 "none new"
 mutant "block image keeps its leading colon" 's#\)::\?#):#g' fx_img 0 "none new"
 mutant "document attributes not expanded" 's#target=\$\(resolve_attrs "\$f" "\$target"\) \|\| continue#:#' fx_attr 0 "none new"
+fx_block() { clean_tree; plant docs/c.adoc <<<$'----\nlink:gone.adoc[x]\n----'; }
+fx_fence() { clean_tree; plant docs/c.md <<<$'```\n[x](gone.md)\n```'; }
+fx_idir() { clean_tree; mkdir -p "$WORK/t/docs/assets"; : > "$WORK/t/docs/assets/pic.svg"; plant docs/c.adoc <<<$':imagesdir: assets\nimage::pic.svg[P]'; }
+fx_http() { clean_tree; plant docs/c.md <<<'A [g](http-guide.md).'; }
+fx_paren() { clean_tree; : > "$WORK/t/docs/a(b).md"; plant docs/c.md <<<'A [u](a(b).md).'; }
+mutant "AsciiDoc blocks not skipped" 's#^      blk \{ next \}#      #' fx_block 0 "none new"
+mutant "Markdown fences not skipped" 's#^      fence \{ next \}#      #' fx_fence 0 "none new"
+mutant ":imagesdir: ignored" 's#kind == "image" && imgdir#kind == "x" \&\& imgdir#' fx_idir 0 "none new"
+mutant "URL scheme matched by filename prefix" 's#\^\[A-Za-z\]\[A-Za-z0-9\+\.-\]\*:#^http#' fx_http 1 "http-guide.md"
+mutant "parentheses not balanced" 's#if \(depth == 0\) break#if (1) break#' fx_paren 0 "none new"
 MARGS="--base HEAD" mutant "base comparison dropped" 's#\[ "\$\{allowed\[\$f\]\}" -gt "\$b" \]#false#' fx_base 1 "ledger grew against base"
 
 # ---------------------------------------------------------------- 6. this repo

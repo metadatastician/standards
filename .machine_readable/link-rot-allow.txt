@@ -16,7 +16,6 @@
 0-canon/rsr/RSR-SPEC.adoc:14
 0-canon/rsr/TIERS.adoc:5
 0-canon/rsr/VERSION.adoc:4
-1-formats/k9/GUIDE.adoc:3
 1-formats/k9/README.adoc:1
 1-formats/k9/docs/SECURITY-BEST-PRACTICES.adoc:1
 1-formats/sub-specs/cartridges/CARTRIDGE-FORMAT.adoc:1
@@ -49,7 +48,7 @@ QUICKSTART-DEV.adoc:1
 QUICKSTART-MAINTAINER.adoc:1
 TOPOLOGY.adoc:1
 docs/AUDIT.adoc:1
-docs/README-EXPLAINME-STANDARD.adoc:7
+docs/README-EXPLAINME-STANDARD.adoc:6
 docs/TRUSTED-BASE-REDUCTION-POLICY.adoc:7
 docs/UX-standards/CAPPAUSCRIPTO-RELEASE-GATE-TRACKER.adoc:13
 docs/UX-standards/DUSTFILE-SPECIFICATION.adoc:2

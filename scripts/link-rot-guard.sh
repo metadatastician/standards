@@ -43,10 +43,14 @@
 # rather than change the format: when the ledger reaches zero, the gate is
 # strict and the limit goes with it.
 #
-# SYNTAX. A target resolves beside its source file only. Markdown titles are
-# split off; AsciiDoc `image::` block macros are read; `{name}` is expanded from
-# the same file's `:name: value` lines, and a reference left unresolved is
-# skipped (it cannot be checked statically), not reported.
+# SYNTAX. A target resolves beside its source file only. Read: AsciiDoc link:,
+# image: and image:: (an image under the file's :imagesdir:), and Markdown
+# [text](dest) with <angle> or balanced-parenthesis destinations and an optional
+# title. Not read: comment lines, AsciiDoc listing/literal/comment blocks, and
+# Markdown fenced blocks. `{name}` is expanded from the same file's
+# `:name: value` lines; a reference left unresolved is skipped (it cannot be
+# checked statically), not reported. An explicit URI scheme or an absolute path
+# is external; a name that merely starts with "http" is a file.
 #
 # BASE. A checker that reads only the final tree cannot see a change that adds a
 # broken link and the ledger line that excuses it in the same commit. With
@@ -92,15 +96,59 @@ LEDGER=${LEDGER:-$ROOT/$LEDGER_REL}
 RECORDS=$(mktemp) || exit 2
 trap 'rm -f "$RECORDS"' EXIT
 
-# strip_title <target> — a Markdown destination may carry a title:
-# `target.md "A title"` or `<target.md> 'A title'`. Keep the destination only.
-strip_title() {
-  local t=$1
-  case "$t" in
-    '<'*'>'*) t=${t#<}; t=${t%%>*} ;;
-    *) t=${t%%[[:space:]]*} ;;
+# extract <file> — one link target per line. POSIX awk only (no interval
+# expressions), so it runs under mawk.
+#   AsciiDoc: link:T[ ... ], image:T[ ... ] and the block form image::T[ ... ].
+#     Skipped: comment lines (//), and listing, literal and comment blocks
+#     (----, ...., ////), which a renderer does not turn into links. An image
+#     target is read under the file's :imagesdir: when it sets one.
+#   Markdown: [text](DEST) with DEST either <angle bracketed> or a bare run with
+#     balanced parentheses ending at whitespace (a title may follow). Fenced
+#     code blocks (``` and ~~~) are skipped.
+extract() {
+  case "$1" in
+    *.adoc) awk '
+      /^\/\/\/\/+[[:space:]]*$/ || /^----+[[:space:]]*$/ || /^\.\.\.\.+[[:space:]]*$/ { blk = !blk; next }
+      blk { next }
+      /^\/\// { next }
+      /^:imagesdir:/ { d = $0; sub(/^:imagesdir:[[:space:]]*/, "", d); sub(/[[:space:]]+$/, "", d); imgdir = d; next }
+      {
+        s = $0
+        while (match(s, /(link|image)::?[^][]+\[/)) {
+          m = substr(s, RSTART, RLENGTH); s = substr(s, RSTART + RLENGTH)
+          kind = (m ~ /^image/) ? "image" : "link"
+          sub(/^(link|image)::?/, "", m); sub(/\[$/, "", m)
+          if (kind == "image" && imgdir != "" && m !~ /^([A-Za-z][A-Za-z0-9+.-]*:|\/)/) {
+            m = imgdir "/" m
+          }
+          print m
+        }
+      }' "$1" ;;
+    *.md) awk '
+      /^[[:space:]]*(```|~~~)/ { fence = !fence; next }
+      fence { next }
+      {
+        s = $0
+        while ((i = index(s, "](")) > 0) {
+          s = substr(s, i + 2)
+          if (substr(s, 1, 1) == "<") {
+            j = index(s, ">"); if (j == 0) continue
+            print substr(s, 2, j - 2); s = substr(s, j + 1)
+          } else {
+            depth = 0; out = ""
+            for (k = 1; k <= length(s); k++) {
+              c = substr(s, k, 1)
+              if (c == "(") depth++
+              else if (c == ")") { if (depth == 0) break; depth-- }
+              else if (c ~ /[[:space:]]/) break
+              out = out c
+            }
+            if (out != "") print out
+            s = substr(s, k)
+          }
+        }
+      }' "$1" ;;
   esac
-  printf '%s' "$t"
 }
 
 # resolve_attrs <source> <target> — expand {name} from `:name: value` lines of
@@ -131,22 +179,17 @@ scan() {
     f=${f#./}
     dir=$(dirname "$f")
     while IFS= read -r target; do
-      target=$(strip_title "$target")
       target=$(resolve_attrs "$f" "$target") || continue
       target="${target%%#*}"
       target="${target%%\?*}"
       [ -z "$target" ] && continue
-      case "$target" in
-        http*|https*|mailto:*|/*) continue ;;
-      esac
+      # An explicit URI scheme (https:, mailto:, irc:, ...) or an absolute path
+      # is not a repository-relative link. A name that merely starts with
+      # "http" (http-guide.md) is.
+      if [[ "$target" =~ ^[A-Za-z][A-Za-z0-9+.-]*: ]] || [[ "$target" == /* ]]; then continue; fi
       if [ -e "$dir/$target" ]; then continue; fi
       printf '%s\t%s\n' "$f" "$target"
-    done < <(
-      case "$f" in
-        *.adoc) grep -oE '(link|image)::?[^][]+\[' "$f" 2>/dev/null | sed -E 's/^(link|image)::?//; s/\[$//' ;;
-        *.md)   grep -oE '\]\([^)]+\)' "$f" 2>/dev/null | sed -E 's/^\]\(//; s/\)$//' | grep -vE '^(http|mailto|#|/)' ;;
-      esac
-    )
+    done < <(extract "$f")
   done < <(find . -path ./9-archive -prune -o -path '*/.git' -prune -o -type f \( -name '*.adoc' -o -name '*.md' \) -print0 | LC_ALL=C sort -z)
 }
 (cd "$ROOT" && scan) > "$RECORDS"
