@@ -422,6 +422,97 @@ c_record_line() {
     && printf '%s' "$r3" | class_is deletable-now
 }
 
+# ── ruling conditions are derived from the tree, never asserted ────────────
+# inbound-links-redirected: no live file names or links the row's match prefix.
+# Dated records (9-archive/, docs/triage/<date>/, docs/audits/, docs/reorg/), the
+# rulings files, the ledger and the files under the prefix itself do not count.
+COND_ROW='{"date":"2026-11-17","id":"t-drop","kind":"dropped","match":"^old/","recorded":"test","requires":"inbound-links-redirected","summary":"s"}'
+cond_tree() { # cond_tree NAME -> a tree with one dropped file old/x.a2ml; the rulings row is in $WORK/NAME.jsonl
+  local d="$WORK/$1"; mkdir -p "$d"; plain_record "$d/old/x.a2ml"
+  printf '%s\n' "$COND_ROW" > "$WORK/$1.jsonl"; printf '%s' "$d"
+}
+c_cond_blocks_on_live_link() {
+  local d r1 r2; d=$(cond_tree condlive); mkdir -p "$d/docs"
+  printf 'See old/x.a2ml for the format.\n' > "$d/docs/guide.adoc"
+  r1=$(RULINGS="$WORK/condlive.jsonl" row "$d" old/x.a2ml)
+  printf '%s' "$r1" | jq -e '.blockers == ["ruling-condition:inbound-links-redirected"] and .class == "decision-drops"
+      and .inbound_links == ["docs/guide.adoc"]' >/dev/null || return 1
+  rm "$d/docs/guide.adoc"
+  r2=$(RULINGS="$WORK/condlive.jsonl" row "$d" old/x.a2ml)
+  printf '%s' "$r2" | jq -e '.blockers == [] and .class == "deletable-now" and .inbound_links == []' >/dev/null
+}
+c_cond_ignores_dated_records() {
+  local d r; d=$(cond_tree condrec)
+  mkdir -p "$d/9-archive" "$d/docs/triage/2026-11-17" "$d/docs/audits" "$d/docs/reorg"
+  local f; for f in 9-archive/R.adoc docs/triage/2026-11-17/README.adoc docs/audits/a.adoc docs/reorg/b.adoc; do
+    printf 'was old/x.a2ml, under old/\n' > "$d/$f"
+  done
+  ledger "$d" old/x.a2ml                                    # the ledger is bookkeeping for the file itself
+  cp "$WORK/condrec.jsonl" "$d/.machine_readable/a2ml-retire-rulings.jsonl"   # so is the rulings file
+  r=$(bash "$TOOL" --root "$d" --rulings "$d/.machine_readable/a2ml-retire-rulings.jsonl" --json | jq -c 'select(.path == "old/x.a2ml")')
+  printf '%s' "$r" | jq -e '.class == "deletable-now" and .inbound_links == []' >/dev/null
+}
+c_cond_undated_triage_counts() {
+  local d r; d=$(cond_tree condundated); mkdir -p "$d/docs/triage"
+  printf 'old/x.a2ml\n' > "$d/docs/triage/notes.adoc"        # not docs/triage/<date>/
+  r=$(RULINGS="$WORK/condundated.jsonl" row "$d" old/x.a2ml)
+  printf '%s' "$r" | has_blocker 'ruling-condition:inbound-links-redirected'
+}
+c_cond_names_the_directory() {
+  local d r1 r2; d=$(cond_tree conddir); mkdir -p "$d/docs"
+  printf 'cross-ref: [old](../old)\n' > "$d/docs/a.adoc"
+  r1=$(RULINGS="$WORK/conddir.jsonl" row "$d" old/x.a2ml)
+  printf 'cross-ref: older/thing, bold/x, old-style\n' > "$d/docs/a.adoc"     # longer names are other paths
+  r2=$(RULINGS="$WORK/conddir.jsonl" row "$d" old/x.a2ml)
+  printf '%s' "$r1" | has_blocker 'ruling-condition:inbound-links-redirected' \
+    && printf '%s' "$r2" | class_is deletable-now
+}
+c_cond_unknown_key_fails_closed() {
+  local d r; d=$(cond_tree condunk)
+  sed -i 's/inbound-links-redirected/something-else-entirely/' "$WORK/condunk.jsonl"
+  r=$(RULINGS="$WORK/condunk.jsonl" row "$d" old/x.a2ml)
+  printf '%s' "$r" | jq -e '.blockers == ["ruling-condition:something-else-entirely"] and .class == "decision-drops"' >/dev/null
+}
+c_cond_non_literal_match_fails_closed() {
+  local d r; d=$(cond_tree condre)
+  printf '%s\n' '{"date":"2026-11-17","id":"t-drop","kind":"dropped","match":"^old/.*\\.a2ml$","recorded":"test","requires":"inbound-links-redirected","summary":"s"}' > "$WORK/condre.jsonl"
+  r=$(RULINGS="$WORK/condre.jsonl" row "$d" old/x.a2ml)    # nothing links it, but the prefix cannot be derived
+  printf '%s' "$r" | has_blocker 'ruling-condition:inbound-links-redirected' && ! printf '%s' "$r" | class_is deletable-now
+}
+
+# ── basename readers: can the mention resolve to this file's path? ─────────
+# A mention is a path token ending in the file's basename. Its literal tail
+# (after any variable, glob, `.` or `..` segment) either is bare, or ends the
+# file's path (the mention can resolve here), or does not (another file).
+name_script() { mkdir -p "$1/scripts"; printf '%s\n' "${@:2}" > "$1/scripts/use.sh"; }
+c_name_foreign_does_not_block() {
+  local d r; d=$(deletable_tree namefor)
+  name_script "$d" 'src="$REPO/other/dir/CLADE.a2ml"' 'cp .machine_readable/6a2/CLADE.a2ml /tmp/x'
+  r=$(row "$d" .machine_readable/CLADE.a2ml)
+  printf '%s' "$r" | jq -e '.blockers == [] and .class == "deletable-now" and .readers.name == []
+      and .readers.name_foreign == ["scripts/use.sh"]' >/dev/null
+}
+c_name_bare_still_blocks_and_says_why() {
+  local d r; d=$(deletable_tree namebare)
+  name_script "$d" 'src="$REPO/other/dir/CLADE.a2ml"' 'echo CLADE.a2ml'
+  r=$(row "$d" .machine_readable/CLADE.a2ml)
+  printf '%s' "$r" | jq -e '.blockers == ["name-reader:scripts/use.sh"] and .readers.name_foreign == []
+      and (.readers.name_why["scripts/use.sh"] | test("bare"))' >/dev/null
+}
+c_name_path_suffix_blocks() {
+  local d r1 r2 r3; d="$WORK/namesuf"; mkdir -p "$d"; plain_record "$d/data/must/Mustfile.a2ml"
+  name_script "$d" 'paired = "../must/Mustfile.a2ml"'
+  r1=$(row "$d" data/must/Mustfile.a2ml)
+  name_script "$d" 'paired = "../other/Mustfile.a2ml"'
+  r2=$(row "$d" data/must/Mustfile.a2ml)
+  name_script "$d" "case \$f in '*/must/Mustfile.a2ml') ;; esac"
+  r3=$(row "$d" data/must/Mustfile.a2ml)
+  printf '%s' "$r1" | jq -e '.blockers | index("name-reader:scripts/use.sh") != null' >/dev/null \
+    && printf '%s' "$r1" | jq -e '.readers.name_why["scripts/use.sh"] | test("ends")' >/dev/null \
+    && printf '%s' "$r2" | jq -e '.blockers == ["no-mapping-spec"]' >/dev/null \
+    && printf '%s' "$r3" | jq -e '.blockers | index("name-reader:scripts/use.sh") != null' >/dev/null
+}
+
 check() { if "$2"; then ok "$1"; else bad "$1"; fi; }
 
 echo "=== the three deletion conditions ==="
@@ -469,6 +560,18 @@ check "an id given twice across --rulings files is refused (exit 2)"            
 check "a named --rulings file that does not exist is refused (exit 2)"            c_rulings_missing_file_refused
 check "a record line blocks until the record names the exact path"                c_record_line
 
+echo "=== ruling conditions are derived from the tree ==="
+check "inbound-links-redirected: a live file naming the prefix blocks; removing it clears (deletable-now)" c_cond_blocks_on_live_link
+check "inbound-links-redirected: 9-archive, dated triage/audits/reorg, rulings and ledger do not count"    c_cond_ignores_dated_records
+check "inbound-links-redirected: an undated docs/triage file is live and blocks"                           c_cond_undated_triage_counts
+check "inbound-links-redirected: the bare directory name counts; longer names (older/, bold/) do not"     c_cond_names_the_directory
+check "an unknown requires key fails closed: it stays a named blocker"                                     c_cond_unknown_key_fails_closed
+check "a requires row whose match is not a literal prefix fails closed"                                    c_cond_non_literal_match_fails_closed
+echo "=== basename readers: local or foreign ==="
+check "a reader whose every mention is another file's path does not block (name_foreign)"                  c_name_foreign_does_not_block
+check "a bare mention still blocks, and the reader says why"                                               c_name_bare_still_blocks_and_says_why
+check "a mention whose tail ends the file's path blocks; one that does not, does not"                     c_name_path_suffix_blocks
+
 # ── mutants ────────────────────────────────────────────────────────────────
 # A mutant is a copy of the tool in $WORK. The tool finds deed_lint.js and the
 # mapping specs beside itself, so a copy needs both named explicitly, or every
@@ -501,6 +604,13 @@ mutant 's/if \[ "\${#joined\[@\]}" -gt 0 \]; then/if false; then/' "--base lets 
 mutant 's/^    elif ! jq -e -n --slurpfile a/    elif false && ! jq -e -n --slurpfile a/' "stale counts pass" c_counts_stale_fails
 mutant 's/named_in "\$p" "\$ROOT\/\$rec" ||/true ||/' "a missing record line is ignored" c_record_line
 mutant 's/^      summary_only=1$/      summary_only=1; blockers=()/' "a decided scorecard is waved through with no target" c_scorecard_needs_its_target
+mutant 's/^      if \[ -z "\$holders" \]; then COND\[\$id\]=met/      if true; then COND[$id]=met/' "inbound-links-redirected is always met" c_cond_blocks_on_live_link
+mutant 's/^    \*) COND\[\$id\]="unsupported:.*$/    *) COND[$id]=met ;;/' "an unknown requires key is treated as met" c_cond_unknown_key_fails_closed
+mutant 's/^        COND\[\$id\]="unsupported: the match.*$/        :/' "a non-literal match is searched as if literal" c_cond_non_literal_match_fails_closed
+mutant "s/grep -vE '\^9-archive[^']*'/grep -vE '^\$^'/" "dated records count as live links" c_cond_ignores_dated_records
+mutant 's/^    if \[ -z "\$NSWHY" \]; then rnf+=/    if false; then rnf+=/' "a foreign reader is counted as local" c_name_foreign_does_not_block
+mutant 's/^    elif \[ "\$tail" = "\$3" \] || \[\[ \$3 == \*\/"\$tail" \]\]; then/    elif false; then/' "a path-suffix mention is called foreign" c_name_path_suffix_blocks
+mutant 's/^    if \[\[ \$tail != \*\/\* \]\]; then/    if false; then/' "a bare name is called foreign" c_name_bare_still_blocks_and_says_why
 
 # ── this repository ────────────────────────────────────────────────────────
 echo "=== this repository ==="
