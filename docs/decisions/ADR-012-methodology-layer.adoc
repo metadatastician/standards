@@ -16,7 +16,7 @@ Split, by owner ruling of 2026-11-23 (selector):
 
 | Core: mode, bounds, weights, invariants
 | *Accepted*
-| The field-tested fields of the `(methodology …)` clause of `(bot-directives …)`: `:default-mode`, `:ring-ceiling`, `:wave-cap`, `:spike-required`, `(priority-weights :must :should :could)`, `:unique-strength`, `:divergent-invariants`, `:known-constraints`, `:convergent-budget`. See <<spec-core>>.
+| The field-tested fields of the `(methodology …)` clause of the `(agentic …)` clause: `:default-mode`, `:ring-ceiling`, `:wave-cap`, `:spike-required`, `(priority-weights :must :should :could)`, `:unique-strength`, `:divergent-invariants`, `:known-constraints`, `:convergent-budget`. See <<spec-core>>.
 | Remainder
 | *Proposed*
 | Cross-session coverage and debt persistence (<<spec-persist>>), the agentic-server runtime (<<spec-server>>), contractile tightening (<<spec-contractile>>), and STATE validation (<<spec-state>>).
@@ -73,7 +73,7 @@ types (infrastructure, platform, formal verification) with consistent results.
 == Decision
 
 Declare per-repo methodology preferences, constraints and invariants in the
-`(methodology …)` member of the `(bot-directives …)` clause of
+`(methodology …)` member of the `(agentic …)` clause of
 `<repo>_chora.deed`. Session state (coverage, debt) is a separate, still
 Proposed concern, kept under `.machine_readable/agent_instructions/`.
 
@@ -88,7 +88,7 @@ is in the grammar today; the rest are described here.
 
 [source,lisp]
 ----
-(bot-directives
+(agentic
   (methodology
     :default-mode divergent        ; convergent | divergent | hybrid
     :ring-ceiling 2                ; hard ceiling for ring expansion (default 2)
@@ -99,14 +99,14 @@ is in the grammar today; the rest are described here.
       :description "Formal verification with dependent types"
       :deepen-not-broaden #t
       :language-invariant "idris2")
-    (divergent-invariants
-      "No additional proof languages beyond the repo's recorded provers"
-      "believe_me count must remain zero"
-      "assert_total count must remain zero"
-      "FFI architecture: Idris2 -> RefC -> Zig -> C ABI")
-    (known-constraints
-      "End-to-end build (idris2 --build) has never been verified"
-      "libproven.so does not exist yet: all bindings call stubs")
+    :divergent-invariants
+      ("No additional proof languages beyond the repo's recorded provers"
+       "believe_me count must remain zero"
+       "assert_total count must remain zero"
+       "FFI architecture: Idris2 -> RefC -> Zig -> C ABI")
+    :known-constraints
+      ("End-to-end build (idris2 --build) has never been verified"
+       "libproven.so does not exist yet: all bindings call stubs")
     (convergent-budget :structural 70 :corrective 20 :perfective 10)))
 ----
 
@@ -124,8 +124,18 @@ Field meanings:
 * `(convergent-budget …)`: effort allocation in percent, structural,
   corrective and perfective.
 
-Repos with no `(methodology …)` member fall back to the v3 defaults (hybrid
-mode, 3x/2x/1x weights, Ring 2 ceiling).
+Defaults apply per field, whenever a field is absent, including in a partial
+`(methodology …)` clause (the template fixture carries only `:instructions-dir`
+and `:default-mode`): hybrid mode, 3x/2x/1x weights, `:ring-ceiling 2`,
+`:wave-cap 2`, `:spike-required #t`. A repo with no `(methodology …)` member
+gets all of them.
+
+Location: `(methodology …)` is a member of the `(agentic …)` clause, which is
+where `agentic.abnf` (`ag-methodology`) and the template-repo fixture place it.
+`:divergent-invariants` and `:known-constraints` are keyed list fields,
+because the deed grammar admits only fields and nested clauses as clause
+members, not bare strings. The earlier brief and the first draft of this ADR
+said `(bot-directives (methodology …))`; that was wrong.
 
 NOTE: the original text pinned the proven example's invariant to "no Lean4,
 Coq, Agda". Estate proof policy (`3-practice/PROOF-POLICY.adoc`) now assigns
