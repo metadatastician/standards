@@ -191,6 +191,7 @@ jobs:
           echo "awk -> $(PATH="$shim:$PATH" awk -W version 2>&1 | head -1)"
           PATH="$shim:$PATH" bash scripts/tests/check-lock-sync-test.sh
           PATH="$shim:$PATH" bash scripts/tests/uuid-v8-pragma-test.sh
+          PATH="$shim:$PATH" bash scripts/tests/pin-uses-from-lock-test.sh
 
       # KYAML ratchet (YAML-POLICY Y-3, §5 step 5, standards#1024): every file
       # already converted must stay KYAML. A file joins this list in the PR that
