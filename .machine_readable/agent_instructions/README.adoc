@@ -38,4 +38,4 @@ Methodology-aware configuration for AI agents. Read by any AI agent
 
 == Reference
 
-ADR-002 in `standards/agentic-a2ml/docs/ADR-002-methodology-layer.adoc`
+link:../../docs/decisions/ADR-012-methodology-layer.adoc[ADR-012] (`docs/decisions/ADR-012-methodology-layer.adoc`), re-homed from the retired ADR-002 of the A2ML agentic tree
