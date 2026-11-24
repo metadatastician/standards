@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
 // Copyright (c) 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
-= ADR-012: Methodology Layer for the Chora Deed
+= ADR-012: Methodology Layer for AGENTIC.deed
 :doctype: article
 :toc: left
 :sectnums:
@@ -16,7 +16,7 @@ Split, by owner ruling of 2026-11-23 (selector):
 
 | Core: mode, bounds, weights, invariants
 | *Accepted*
-| The field-tested fields of the `(methodology …)` clause of the `(agentic …)` clause: `:default-mode`, `:ring-ceiling`, `:wave-cap`, `:spike-required`, `(priority-weights :must :should :could)`, `:unique-strength`, `:divergent-invariants`, `:known-constraints`, `:convergent-budget`. See <<spec-core>>.
+| The field-tested members of the top-level `(methodology …)` clause of `AGENTIC.deed`: the fields `:default-mode`, `:ring-ceiling`, `:wave-cap`, `:spike-required`, `:divergent-invariants`, `:known-constraints`, and the clauses `(priority-weights :must :should :could)`, `(unique-strength …)`, `(convergent-budget …)`. See <<spec-core>>.
 | Remainder
 | *Proposed*
 | Cross-session coverage and debt persistence (<<spec-persist>>), the agentic-server runtime (<<spec-server>>), contractile tightening (<<spec-contractile>>), and STATE validation (<<spec-state>>).
@@ -30,20 +30,30 @@ format tree. Re-homed here on 2026-11-23.
 retired A2ML format tree on 2026-11-22 (standards#1696). Its last copy is at
 commit `0ae6d1c7^` (`git show 0ae6d1c7^:1-formats/a2ml/agentic/docs/ADR-002-methodology-layer.adoc`).
 The number changed because ADR-002 here is the cartridge-format ADR, and
-ADR-010 is held by triage item #1059. The edits are confined to where the
-fields now live (the chora deed, not an A2ML file); the evidence, rationale
-and consequences are unchanged.
+ADR-010 is held by triage item #1059. The evidence, rationale and original
+consequences are carried over. The amendments are: (1) the fields now live in
+the top-level `(methodology …)` clause of `AGENTIC.deed`, not an A2ML file;
+(2) the TOML examples are rewritten as deed forms, with list-valued members as
+keyed list fields; (3) per-field defaults, an absent `:default-mode` selecting
+`hybrid`, and semantic ranges for `:ring-ceiling` and `(convergent-budget …)`
+(these make the original defaults and the legacy file's `0-3` range explicit);
+(4) the proven example's invariant no longer pins provers, since estate proof
+policy assigns provers by obligation; (5) the STATE validation procedure gains
+a migration-content check and a `TODO.adoc` fallback; (6) status is split into
+an Accepted core and a Proposed remainder.
 
 *Grammar.* `1-formats/deed/spec/abnf/clauses/agentic.abnf` defines only
 `:instructions-dir`, `:instructions-clause` and `:default-mode` for
-`(methodology …)`. The other fields named here are described by this ADR and
-are not yet checked by `deed_lint`. Defining them in the grammar is a separate
-change (owner ruling 2026-11-23: ADR only now, grammar as a follow-up).
+`(methodology …)`, a closed allowlist. Until the grammar and `deed_lint`
+follow-up lands, `deed_lint --agentic` rejects every other member (for example
+`(methodology …) has no field :ring-ceiling`), so a repo cannot adopt them in
+`AGENTIC.deed` without failing profile validation. Defining them in the
+grammar is a separate change (owner ruling 2026-11-23: ADR only now, grammar
+as a follow-up).
 
 == Context
 
-The `(agentic …)` clause of the chora deed currently defines *operational
-gating*: whether a permitted action may proceed now. It covers entropy
+`AGENTIC.deed` currently defines *operational gating*: whether a permitted action may proceed now. It covers entropy
 budgets, risk thresholds, confirmation requirements, and decision recording.
 
 What it does NOT cover is *how agents should approach work*: methodology
@@ -73,8 +83,8 @@ types (infrastructure, platform, formal verification) with consistent results.
 == Decision
 
 Declare per-repo methodology preferences, constraints and invariants in the
-`(methodology …)` member of the `(agentic …)` clause of
-`<repo>_chora.deed`. Session state (coverage, debt) is a separate, still
+top-level `(methodology …)` clause of the repo's
+`.machine_readable/descriptiles/AGENTIC.deed`. Session state (coverage, debt) is a separate, still
 Proposed concern, kept under `.machine_readable/agent_instructions/`.
 
 == Specification
@@ -88,10 +98,10 @@ is in the grammar today; the rest are described here.
 
 [source,lisp]
 ----
-(agentic
-  (methodology
+; .machine_readable/descriptiles/AGENTIC.deed (top level of the form)
+(methodology
     :default-mode divergent        ; convergent | divergent | hybrid
-    :ring-ceiling 2                ; hard ceiling for ring expansion (default 2)
+    :ring-ceiling 2                ; hard ceiling for ring expansion, 0-3 (default 2)
     :wave-cap 2                    ; max waves before requiring user "keep going" (default 2)
     :spike-required #t             ; every session must ship code (default #t)
     (priority-weights :must 3 :should 2 :could 1)
@@ -107,7 +117,7 @@ is in the grammar today; the rest are described here.
     :known-constraints
       ("End-to-end build (idris2 --build) has never been verified"
        "libproven.so does not exist yet: all bindings call stubs")
-    (convergent-budget :structural 70 :corrective 20 :perfective 10)))
+    (convergent-budget :structural 70 :corrective 20 :perfective 10))
 ----
 
 Field meanings:
@@ -125,18 +135,30 @@ Field meanings:
 * `(convergent-budget …)`: effort allocation in percent, structural,
   corrective and perfective.
 
+Semantic validation (for the follow-up validator; the deed grammar's `integer`
+alone would accept anything):
+
+* `:ring-ceiling` is an integer in `0` to `3`, the domain of the legacy
+  methodology file. `:wave-cap` is a positive integer.
+* each `(convergent-budget …)` member is an integer in `0` to `100`, and
+  `:structural`, `:corrective` and `:perfective` sum to exactly `100`.
+* `(priority-weights …)` members are positive integers.
+
 Defaults apply per field, whenever a field is absent, including in a partial
 `(methodology …)` clause (the template fixture carries only `:instructions-dir`
 and `:default-mode`): hybrid mode, 3x/2x/1x weights, `:ring-ceiling 2`,
 `:wave-cap 2`, `:spike-required #t`. A repo with no `(methodology …)` member
 gets all of them.
 
-Location: `(methodology …)` is a member of the `(agentic …)` clause, which is
-where `agentic.abnf` (`ag-methodology`) and the template-repo fixture place it.
+Location: `(methodology …)` is a top-level clause of `AGENTIC.deed`, where
+`agentic.abnf` (`ag-methodology`, head `descriptile-deed`) scopes it. A chora
+deed's own `(agentic …)` clause is warned about, and refused in strict mode
+(J33, YF05); the template-repo fixture's `(methodology :instructions-dir …
+:default-mode …)` inside the chora `(agentic …)` is that legacy placement.
 `:divergent-invariants` and `:known-constraints` are keyed list fields,
 because the deed grammar admits only fields and nested clauses as clause
-members, not bare strings. The earlier brief and the first draft of this ADR
-said `(bot-directives (methodology …))`; that was wrong.
+members, not bare strings. `(bot-directives …)` is not the home of these
+fields.
 
 NOTE: the original text pinned the proven example's invariant to "no Lean4,
 Coq, Agda". Estate proof policy (`3-practice/PROOF-POLICY.adoc`) now assigns
@@ -158,7 +180,7 @@ provers". The invariant is a per-repo field, not an estate rule.
 
 The original design put the methodology, coverage and debt in three A2ML
 files. A2ML is retired (owner rulings D99, D269c, D312, D313), and the
-methodology fields live in the chora deed above. The deed forms of coverage
+methodology fields live in `AGENTIC.deed` above. The deed forms of coverage
 and debt are not yet defined and no mapping spec in
 `1-formats/deed/mappings/` covers them. The legacy A2ML copies in
 `.machine_readable/agent_instructions/` are awaiting migration; this ADR does
@@ -217,7 +239,7 @@ Agentic Server Architecture:
   └──────────────────┬──────────────────────────────┘
                      │
   ┌──────────────────▼──────────────────────────────┐
-  │  1. READ: (methodology …) in <repo>_chora.deed  │
+  │  1. READ: (methodology …) in AGENTIC.deed        │
   │     → mode, invariants, ring ceiling, weights   │
   ├─────────────────────────────────────────────────┤
   │  2. READ: coverage (agent_instructions/)        │
@@ -297,7 +319,7 @@ Phase 0 reads the repo's STATE first. Field testing found two failure modes:
    tasks, phase or blockers where the pre-migration source (git history or the
    legacy file) had them is an empty migration. Completion = 0% alone does
    not reject a genuine new project.
-5. If validation fails → fall back to TODO.md, ROADMAP.adoc, README.adoc
+5. If validation fails → fall back to TODO.md, TODO.adoc, ROADMAP.adoc, README.adoc
 6. Flag the broken STATE as a P1 MUST in the audit
 ----
 
