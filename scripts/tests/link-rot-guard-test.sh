@@ -22,7 +22,7 @@
 #   4. --prune deletes and lowers, never adds or raises, refuses to hide a new
 #      break, and is idempotent; --print and --list report without judging;
 #      a positional ROOT still works (the Justfile recipe passes one);
-#   5. the suite sees a regression: thirty-two mutants of the gate are killed;
+#   5. the suite sees a regression: thirty-six mutants of the gate are killed;
 #   6. this repository matches its ledger (exit 0), under its own name and
 #      under a copy named otherwise.
 #
@@ -298,6 +298,36 @@ expect "a comma and colon in a path are escaped in the annotation property" 1 ":
 clean_tree; ledger <<<$'docs/a.adoc:1\r'
 expect "a carriage return in a ledger line is malformed and shown as ?" 1 "malformed or duplicate ledger entry (want one path:count per file): docs/a.adoc:1?"
 
+# A block ends only at its own delimiter, character and length.
+clean_tree; plant docs/c.adoc <<<$'----\n....\n----\nlink:after.adoc[x]'
+expect "a different delimiter inside a block does not close it" 1 "broken internal link -> after.adoc"
+
+# A passthrough destination gets the same image directory as any other.
+clean_tree; mkdir -p "$WORK/t/docs/assets"; : > "$WORK/t/docs/assets/pic.svg"
+plant docs/c.adoc <<<$':imagesdir: assets\nimage:pass:[pic.svg][P]'
+expect "an image passthrough destination resolves under :imagesdir:" 0 "none new, none grown, none stale"
+
+# A count too large for the shell's integers would turn every test into "false".
+clean_tree; plant docs/c.adoc <<<'Broken: link:n1.adoc[x]'
+ledger <<<'docs/c.adoc:99999999999999999999999'
+expect "a ledger count beyond the integer range is malformed" 1 "malformed or duplicate ledger entry"
+
+# A document that cannot be extracted is an error, not an empty result.
+clean_tree; plant docs/c.adoc <<<'Broken: link:n1.adoc[x]'
+mkdir -p "$WORK/fakebin"; printf '#!/bin/sh\nexit 2\n' > "$WORK/fakebin/awk"; chmod +x "$WORK/fakebin/awk"
+out="$(PATH="$WORK/fakebin:$PATH" bash "$GATE" --root "$WORK/t" 2>&1)"; rc=$?
+if [ "$rc" -eq 2 ] && grep -qF 'no verdict was drawn' <<<"$out"; then
+  echo "PASS: an extraction failure is exit 2, not a clean result"; pass=$((pass + 1))
+else echo "FAIL: an extraction failure was not reported (exit $rc)"; printf '%s\n' "$out" | sed 's/^/      | /'; fail=$((fail + 1)); fi
+
+# A symlinked directory that leaves the checkout is no way to reach beyond it.
+clean_tree; mkdir -p "$WORK/outdir"; : > "$WORK/outdir/secret.txt"; ln -s "$WORK/outdir" "$WORK/t/docs/ext"
+plant docs/c.adoc <<<'See link:ext/secret.txt[x].'
+expect "a link through a symlink that leaves the root is broken" 1 "broken internal link -> ext/secret.txt"
+
+clean_tree; ln -s ../docs "$WORK/t/docs/self"; plant docs/c.adoc <<<'See link:self/target.adoc[x].'
+expect "a link through a symlink that stays inside the root resolves" 0 "none new, none grown, none stale"
+
 # --base: the ledger may not gain a line or a count against the merge base.
 base_repo() { # base_repo <base-ledger-text|-> <head-ledger-text>
   clean_tree
@@ -318,6 +348,14 @@ base_repo - 'docs/c.adoc:2'
 expect "--base: no ledger at the base is the initial snapshot" 0 "initial snapshot accepted" "$GATE" --base HEAD
 base_repo 'docs/c.adoc:2' 'docs/c.adoc:2'
 expect "--base: an unknown revision is a setup error" 2 "cannot resolve base revision" "$GATE" --base no-such-rev
+
+# --base reads the ledger that is in use, not always the default one.
+base_repo 'docs/c.adoc:2' 'docs/c.adoc:2'
+printf 'docs/c.adoc:1\n' > "$WORK/t/custom.allow"; git -C "$WORK/t" add custom.allow; git -C "$WORK/t" commit -q -m custom
+printf 'docs/c.adoc:2\n' > "$WORK/t/custom.allow"
+expect "--base compares a custom ledger with the same file at the base" 1 "ledger grew against base: docs/c.adoc: 1 -> 2" "$GATE" --ledger "$WORK/t/custom.allow" --base HEAD
+printf 'docs/c.adoc:2\n' > "$WORK/outside.allow"
+expect "--base refuses a ledger outside the repository" 2 "needs a ledger inside the repository" "$GATE" --ledger "$WORK/outside.allow" --base HEAD
 
 # ---------------------------------------------------------------- 5. mutants
 mkdir -p "$WORK/mut/lib"
@@ -372,7 +410,7 @@ fx_fence() { clean_tree; plant docs/c.md <<<$'```\n[x](gone.md)\n```'; }
 fx_idir() { clean_tree; mkdir -p "$WORK/t/docs/assets"; : > "$WORK/t/docs/assets/pic.svg"; plant docs/c.adoc <<<$':imagesdir: assets\nimage::pic.svg[P]'; }
 fx_http() { clean_tree; plant docs/c.md <<<'A [g](http-guide.md).'; }
 fx_paren() { clean_tree; : > "$WORK/t/docs/a(b).md"; plant docs/c.md <<<'A [u](a(b).md).'; }
-mutant "AsciiDoc blocks not skipped" 's#^      blk \{ next \}#      #' fx_block 0 "none new"
+mutant "AsciiDoc blocks not skipped" 's#^      blk != "" \{ next \}#      #' fx_block 0 "none new"
 mutant "Markdown fences not skipped" 's#^      fence \{ next \}#      #' fx_fence 0 "none new"
 mutant ":imagesdir: ignored" 's#\("imagesdir" in attr\)#0#' fx_idir 0 "none new"
 mutant "URL scheme matched by filename prefix" 's#\^\[A-Za-z\]\[A-Za-z0-9\+\.-\]\*:#^http#' fx_http 1 "http-guide.md"
@@ -402,12 +440,20 @@ mutant "fence closes on any fence line" 's#substr\(run, 1, 1\) == fc && length\(
 mutant "bracketless ]( parsed as a link" 's#if \(!opener\) continue##' fx_bare 0 "none new"
 fx_escape() { clean_tree; : > "$WORK/outside.txt"; plant docs/c.adoc <<<'See link:../../outside.txt[x].'; }
 fx_pescape() { clean_tree; : > "$WORK/outside.txt"; plant docs/c.md <<<'See [x](%2e%2e/%2e%2e/outside.txt).'; }
-mutant "root containment dropped" 's#if inside_root "\$dir" "\$target"; then#if true; then#' fx_escape 1 "outside.txt"
-mutant "root containment dropped for decoded paths" 's#inside_root "\$dir" "\$decoded" && ##' fx_pescape 1 "outside.txt"
+mutant "root containment dropped" 's#if contained "\$dir" "\$target"; then#if true; then#' fx_escape 1 "outside.txt"
+mutant "root containment dropped for decoded paths" 's#contained "\$dir" "\$decoded" && ##' fx_pescape 1 "outside.txt"
 fx_nl() { clean_tree; nm=$'docs/evil\n::error::pwned.adoc'; printf 'link:gone.adoc[x]\n' > "$WORK/t/$nm"; }
 fx_pct2() { clean_tree; plant docs/c.adoc <<<'See link:a%0Ab.adoc[x].'; }
 mutant "control characters not removed from paths" 's#"\$\{f//\[\[:cntrl:\]\]/\?\}" "\$\{target//\[\[:cntrl:\]\]/\?\}"#"$f" "$target"#' fx_nl 1 "evil?::error::pwned"
 mutant "% not escaped in annotation data" 's#local s=\$\{1//%/%25\}#local s=$1#' fx_pct2 1 "a%250Ab"
+fx_blk2() { clean_tree; plant docs/c.adoc <<<$'----\n....\n----\nlink:after.adoc[x]'; }
+fx_pimg() { clean_tree; mkdir -p "$WORK/t/docs/assets"; : > "$WORK/t/docs/assets/pic.svg"; plant docs/c.adoc <<<$':imagesdir: assets\nimage:pass:[pic.svg][P]'; }
+fx_huge() { clean_tree; plant docs/c.adoc <<<'Broken: link:n1.adoc[x]'; ledger <<<'docs/c.adoc:99999999999999999999999'; }
+fx_sym() { clean_tree; mkdir -p "$WORK/outdir"; : > "$WORK/outdir/secret.txt"; ln -s "$WORK/outdir" "$WORK/t/docs/ext"; plant docs/c.adoc <<<'See link:ext/secret.txt[x].'; }
+mutant "any delimiter closes an AsciiDoc block" 's#else if \(d == blk\) blk = ""#else blk = ""#' fx_blk2 1 "after.adoc"
+mutant "passthrough image ignores :imagesdir:" 's#(sub\(/\^\(link\|image\|xref\)::\?pass:)#kind = "link"; \1#' fx_pimg 0 "none new"
+mutant "ledger count digits not capped" 's#\{0,14\}#*#g' fx_huge 1 "malformed"
+mutant "symlink containment dropped" 's#\[ "\$HAS_LINKS" = 1 \] \|\| return 0#return 0#' fx_sym 1 "ext/secret.txt"
 MARGS="--base HEAD" mutant "base comparison dropped" 's#\[ "\$\{allowed\[\$f\]\}" -gt "\$b" \]#false#' fx_base 1 "ledger grew against base"
 
 # ---------------------------------------------------------------- 6. this repo

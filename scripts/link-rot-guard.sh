@@ -121,8 +121,26 @@ trap 'rm -f "$RECORDS"' EXIT
 extract() {
   case "$1" in
     *.adoc|*.asciidoc) awk '
-      /^\/\/\/\/+[[:space:]]*$/ || /^----+[[:space:]]*$/ || /^\.\.\.\.+[[:space:]]*$/ { blk = !blk; next }
-      blk { next }
+      # One link target, after attributes and the image directory.
+      function emit(m, kind,   n, nm) {
+        for (n = 0; n < 20 && match(m, /\{[A-Za-z0-9_-]+\}/); n++) {
+          nm = substr(m, RSTART + 1, RLENGTH - 2)
+          if (!(nm in attr)) break
+          m = substr(m, 1, RSTART - 1) attr[nm] substr(m, RSTART + RLENGTH)
+        }
+        if (kind == "xref" && m !~ /\.(adoc|asciidoc|md)([#?].*)?$/) return
+        if (kind == "image" && ("imagesdir" in attr) && attr["imagesdir"] != "" && m !~ /^([A-Za-z][A-Za-z0-9+.-]*:|\/|\{)/) {
+          m = attr["imagesdir"] "/" m
+        }
+        print m
+      }
+      # A delimited block ends only at the same delimiter, character and length.
+      /^(\/\/\/\/+|----+|\.\.\.\.+)[[:space:]]*$/ {
+        d = $0; sub(/[[:space:]]+$/, "", d)
+        if (blk == "") blk = d; else if (d == blk) blk = ""
+        next
+      }
+      blk != "" { next }
       /^\/\// { next }
       match($0, /^:!?[A-Za-z0-9_-]+!?:/) {
         tag = substr($0, 2, RLENGTH - 2); v = substr($0, RLENGTH + 1)
@@ -141,23 +159,15 @@ extract() {
         while (match(s, /(link|image|xref)::?pass:[a-z,]*\[[^]]*\]/)) {
           m = substr(s, RSTART, RLENGTH)
           s = substr(s, 1, RSTART - 1) substr(s, RSTART + RLENGTH)
+          kind = (m ~ /^image/) ? "image" : ((m ~ /^xref/) ? "xref" : "link")
           sub(/^(link|image|xref)::?pass:[a-z,]*\[/, "", m); sub(/\]$/, "", m)
-          print m
+          emit(m, kind)
         }
         while (match(s, /(link|image|xref)::?[^][]+\[/)) {
           m = substr(s, RSTART, RLENGTH); s = substr(s, RSTART + RLENGTH)
           kind = (m ~ /^image/) ? "image" : ((m ~ /^xref/) ? "xref" : "link")
           sub(/^(link|image|xref)::?/, "", m); sub(/\[$/, "", m)
-          for (n = 0; n < 20 && match(m, /\{[A-Za-z0-9_-]+\}/); n++) {
-            nm = substr(m, RSTART + 1, RLENGTH - 2)
-            if (!(nm in attr)) break
-            m = substr(m, 1, RSTART - 1) attr[nm] substr(m, RSTART + RLENGTH)
-          }
-          if (kind == "xref" && m !~ /\.(adoc|asciidoc|md)([#?].*)?$/) continue
-          if (kind == "image" && ("imagesdir" in attr) && attr["imagesdir"] != "" && m !~ /^([A-Za-z][A-Za-z0-9+.-]*:|\/|\{)/) {
-            m = attr["imagesdir"] "/" m
-          }
-          print m
+          emit(m, kind)
         }
       }' "$1" ;;
     *.md) awk '
@@ -224,11 +234,31 @@ inside_root() {
   return 0
 }
 
+# contained <dir> <target> — inside_root, and, when the tree holds a symlink,
+# the canonical path as well: a symlinked directory that points out of the
+# checkout must not let a link reach files beyond it. realpath -m answers the
+# same whether or not the target exists, so it tests for nothing by itself.
+contained() {
+  inside_root "$1" "$2" || return 1
+  [ "$HAS_LINKS" = 1 ] || return 0
+  local p
+  p=$(realpath -m -- "$1/$2") || return 1
+  [[ "$p" == "$ROOT_REAL" || "$p" == "$ROOT_REAL"/* ]]
+}
+
+# scan <filelist> — a failure to list, read or extract is an error (return 2),
+# not an empty result: an unread document must not look like a clean one.
 scan() {
-  local f dir target decoded
+  local f dir target decoded links tmp
+  ROOT_REAL=$(pwd -P) || return 2
+  HAS_LINKS=0
+  links=$(find . -path ./9-archive -prune -o -path '*/.git' -prune -o -type l -print -quit) || return 2
+  [ -z "$links" ] || HAS_LINKS=1
+  tmp=$(mktemp) || return 2
   while IFS= read -r -d '' f; do
     f=${f#./}
     dir=$(dirname "$f")
+    extract "$f" > "$tmp" || { rm -f "$tmp"; return 2; }
     while IFS= read -r target; do
       # A reference the extractor could not expand is defined outside this file
       # (an include, the command line): it cannot be checked statically.
@@ -240,23 +270,31 @@ scan() {
       # is not a repository-relative link. A name that merely starts with
       # "http" (http-guide.md) is.
       if [[ "$target" =~ ^[A-Za-z][A-Za-z0-9+.-]*: ]] || [[ "$target" == /* ]]; then continue; fi
-      if inside_root "$dir" "$target"; then
+      if contained "$dir" "$target"; then
         if [ -e "$dir/$target" ]; then continue; fi
         # A destination is a URL path: a%20b.md names the file "a b.md". The
         # literal name was tried first, so a file called 100%.md still resolves.
         if [[ "$target" =~ %[0-9A-Fa-f][0-9A-Fa-f] ]]; then
           decoded=$(printf '%b' "${target//%/\\x}")
-          if inside_root "$dir" "$decoded" && [ -e "$dir/$decoded" ]; then continue; fi
+          if contained "$dir" "$decoded" && [ -e "$dir/$decoded" ]; then continue; fi
         fi
       fi
       # Paths and targets come from contributor files and are printed into the
       # job log: a control character (a newline in a file name) could start a
       # line of its own and be read as a workflow command. Show it as "?".
       printf '%s\t%s\n' "${f//[[:cntrl:]]/?}" "${target//[[:cntrl:]]/?}"
-    done < <(extract "$f")
-  done < <(find . -path ./9-archive -prune -o -path '*/.git' -prune -o -type f \( -name '*.adoc' -o -name '*.asciidoc' -o -name '*.md' \) -print0 | LC_ALL=C sort -z)
+    done < "$tmp"
+  done < "$1"
+  rm -f "$tmp"
 }
-(cd "$ROOT" && scan) > "$RECORDS"
+FILES=$(mktemp) || exit 2
+trap 'rm -f "$RECORDS" "$FILES"' EXIT
+if ! (cd "$ROOT" && find . -path ./9-archive -prune -o -path '*/.git' -prune -o -type f \( -name '*.adoc' -o -name '*.asciidoc' -o -name '*.md' \) -print0 | LC_ALL=C sort -z) > "$FILES"; then
+  echo "::error::link-rot: could not list the documents" >&2; exit 2
+fi
+if ! (cd "$ROOT" && scan "$FILES") > "$RECORDS"; then
+  echo "::error::link-rot: a document could not be read or parsed; no verdict was drawn" >&2; exit 2
+fi
 
 declare -A actual=() allowed=() lineof=()
 while IFS=$'\t' read -r f target; do
@@ -288,7 +326,7 @@ while IFS= read -r entry || [ -n "$entry" ]; do
   # A control character in a ledger line (a stray CR, say) is malformed, and
   # keeps every key that is printed later free of them.
   if [[ "$entry" == *[[:cntrl:]]* ]] \
-     || ! [[ "$entry" =~ ^(.+):([1-9][0-9]*)$ ]] || [ -n "${allowed[${BASH_REMATCH[1]}]:-}" ]; then
+     || ! [[ "$entry" =~ ^(.+):([1-9][0-9]{0,14})$ ]] || [ -n "${allowed[${BASH_REMATCH[1]}]:-}" ]; then
     printf '::error file=%s,line=%s::malformed or duplicate ledger entry (want one path:count per file): %s\n' \
       "$(gh_prop "$LEDGER")" "$lineno" "$(gh_data "${entry//[[:cntrl:]]/?}")"
     exit 1
@@ -299,8 +337,13 @@ done <<<"$LEDGER_SNAPSHOT"
 # --base: no ledger line may be new or higher than at the merge base.
 basefail=0
 if [ -n "$BASE" ] && [ "$MODE" = check ]; then
-  rel=$LEDGER_REL
-  case "$LEDGER" in "$ROOT"/*) rel=${LEDGER#"$ROOT"/} ;; esac
+  # The ledger in use, as a path inside the repository, so the same file is
+  # read at the base. A ledger outside it has no base to compare with.
+  led_abs=$(realpath -m -- "$LEDGER"); root_abs=$(realpath -- "$ROOT")
+  case "$led_abs" in
+    "$root_abs"/*) rel=${led_abs#"$root_abs"/} ;;
+    *) echo "::error::link-rot: --base needs a ledger inside the repository" >&2; exit 2 ;;
+  esac
   mb=$(git -C "$ROOT" merge-base "$BASE" HEAD 2>/dev/null) || mb=$BASE
   if ! git -C "$ROOT" rev-parse -q --verify "$mb^{commit}" >/dev/null 2>&1; then
     printf '::error::link-rot: cannot resolve base revision: %s\n' "$(gh_data "${BASE//[[:cntrl:]]/?}")"; exit 2
@@ -308,7 +351,7 @@ if [ -n "$BASE" ] && [ "$MODE" = check ]; then
   if base_text=$(git -C "$ROOT" show "$mb:$rel" 2>/dev/null); then
     declare -A baseallowed=()
     while IFS= read -r e; do
-      if [[ "$e" =~ ^(.+):([1-9][0-9]*)$ ]]; then baseallowed[${BASH_REMATCH[1]}]=${BASH_REMATCH[2]}; fi
+      if [[ "$e" =~ ^(.+):([1-9][0-9]{0,14})$ ]]; then baseallowed[${BASH_REMATCH[1]}]=${BASH_REMATCH[2]}; fi
     done <<<"$base_text"
     for f in "${!allowed[@]}"; do
       b=${baseallowed[$f]:-0}
