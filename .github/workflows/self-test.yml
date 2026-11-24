@@ -236,9 +236,13 @@ jobs:
       # Internal links: a broken AsciiDoc/Markdown link outside 9-archive/ fails
       # unless the shrink-only ledger (.machine_readable/link-rot-allow.txt)
       # already names it, and a ledger line that no longer matches fails until
-      # pruned. Fixtures and mutants: scripts/tests/link-rot-guard-test.sh.
+      # pruned. --base also fails a ledger line that is new or higher than at
+      # the merge base, so an allowance cannot be added in the same change as
+      # the break it excuses. Fixtures and mutants: scripts/tests/link-rot-guard-test.sh.
       - name: Internal links resolve
-        run: bash scripts/link-rot-guard.sh
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: bash scripts/link-rot-guard.sh --base "${BASE_SHA:-HEAD~1}"
 
       # Not part of the offline suite: this one needs real git history, so it
       # cannot live in scripts/tests/*.sh where a contributor runs it on a

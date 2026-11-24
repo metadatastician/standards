@@ -65,13 +65,20 @@ trap 'rm -rf "$WORK"' EXIT
 git -c core.quotePath=false diff --cached --name-only --no-renames > "$WORK/staged"
 [ -s "$WORK/staged" ] || exit 0
 
+# Link resolution depends on which paths exist, so the link-rot ledger is judged
+# whenever a path is added or deleted (a new file can fix a ledgered link in an
+# untouched document) or a document is staged.
+git -c core.quotePath=false diff --cached --name-only --no-renames --diff-filter=AD > "$WORK/staged_ad"
+
 relevant=()
 for ledger in "${LEDGERS[@]}"; do
   git cat-file -e ":$ledger" 2>/dev/null || continue
   text="$(git show ":$ledger")"
   if grep -qxF -- "$ledger" "$WORK/staged" \
      || grep -qF -f "$WORK/staged" <<< "$text" \
-     || { [ "${ledger##*/}" = departures.jsonl ] && grep -qF '"glob":' <<< "$text"; }; then
+     || { [ "${ledger##*/}" = departures.jsonl ] && grep -qF '"glob":' <<< "$text"; } \
+     || { [ "${ledger##*/}" = link-rot-allow.txt ] \
+          && { [ -s "$WORK/staged_ad" ] || grep -qE '\.(adoc|md)$' "$WORK/staged"; }; }; then
     relevant+=("$ledger")
   fi
 done

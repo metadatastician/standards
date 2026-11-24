@@ -619,6 +619,19 @@ c_hook_linkrot_fixed() {
     && grep -qx "b.adoc:1" <<< "$(staged_ledger "$d" "$LRG_L")" \
     && bash "$d/scripts/link-rot-guard.sh" --root "$d" >/dev/null
 }
+# A new file fixes a ledgered link in a document the commit does not touch.
+c_hook_linkrot_target_added() {
+  local d; d=$(repo h18)
+  printf "= A\nlink:new.txt[x]\n" > "$d/a.adoc"
+  printf "= B\nlink:gone.adoc[x]\n" > "$d/b.adoc"
+  printf "# ledger\na.adoc:1\nb.adoc:1\n" > "$d/$LRG_L"
+  commit_all "$d"
+  printf "new\n" > "$d/new.txt"; git -C "$d" add new.txt
+  run_hook "$d" || return 1
+  has "prune: delete $LRG_L:2: a.adoc:1" \
+    && ! grep -qx "a.adoc:1" <<< "$(staged_ledger "$d" "$LRG_L")" \
+    && grep -qx "b.adoc:1" <<< "$(staged_ledger "$d" "$LRG_L")"
+}
 
 # drow ID CHECKS_JSON — one canonical departures row.
 drow() {
@@ -669,6 +682,7 @@ echo "== the hook on marker-allow.txt and departures.jsonl =="
 check "hook: citing an issue on a ledgered marker prunes its line"                c_hook_marker_cited
 check "hook: fixing a pipe into a quiet grep prunes its ledger line"            c_hook_pgq_fixed
 check "hook: fixing a broken link prunes its ledger line (index dir is not named standards)" c_hook_linkrot_fixed
+check "hook: adding a missing link target prunes the ledger line of an untouched document" c_hook_linkrot_target_added
 check "hook: departures — fixing a defect removes its row from the commit"        c_hook_departures_commit
 check "hook: departures — a glob row is judged though no path is spelled"         c_hook_departures_glob
 c_hook_departures_history() {
@@ -732,6 +746,8 @@ mutant S_HOOK '/^  .machine_readable\/pipe-grep-q-allow.txt$/d' \
   "the hook forgets the pipe-grep-q ledger" c_hook_pgq_fixed
 mutant S_HOOK '/^  .machine_readable\/link-rot-allow.txt$/d' \
   "the hook forgets the link-rot ledger" c_hook_linkrot_fixed
+mutant S_HOOK 's#-s "\$WORK/staged_ad"#-s /dev/null#' \
+  "the hook ignores added or deleted paths for the link-rot ledger" c_hook_linkrot_target_added
 
 echo
 echo "ledger-prune: $pass passed, $fail failed"

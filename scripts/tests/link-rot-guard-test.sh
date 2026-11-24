@@ -16,10 +16,13 @@
 #      grown count fails, a fixed link with its ledger line left fails until
 #      pruned, a lowered count fails until pruned, a malformed or duplicate
 #      line fails;
+#   4b. link syntax and --base: root-relative targets are broken, Markdown
+#      titles, block images and document attributes parse, and a ledger line
+#      may not be new or higher than at the merge base;
 #   4. --prune deletes and lowers, never adds or raises, refuses to hide a new
 #      break, and is idempotent; --print and --list report without judging;
 #      a positional ROOT still works (the Justfile recipe passes one);
-#   5. the suite sees a regression: six mutants of the gate are killed;
+#   5. the suite sees a regression: eleven mutants of the gate are killed;
 #   6. this repository matches its ledger (exit 0), under its own name and
 #      under a copy named otherwise.
 #
@@ -145,6 +148,54 @@ out="$(cd "$WORK" && bash "$GATE" t 2>&1)"; rc=$?
 if [ "$rc" -eq 1 ]; then echo "PASS: a positional ROOT still works"; pass=$((pass + 1))
 else echo "FAIL: positional ROOT: exit $rc"; fail=$((fail + 1)); fi
 
+# ---------------------------------------------------------------- 4b. syntax
+# A link resolves beside its source, as a renderer resolves it: a repo-root
+# looking target in a nested document is broken.
+clean_tree; plant docs/c.adoc <<<'Root-style: link:docs/target.adoc[x]'
+expect "a repo-root-looking target in a nested document is broken" 1 "broken internal link -> docs/target.adoc"
+
+clean_tree; plant docs/c.md <<<$'A [t](target.adoc "A title") and [u](<target.adoc> \'T\') and [v](target.adoc (T)).'
+expect "Markdown titles are split off the destination" 0 "none new, none grown, none stale"
+
+clean_tree; plant docs/c.md <<<'A [t](nowhere.adoc "A title").'
+expect "a titled Markdown link to a missing file is reported without its title" 1 "broken internal link -> nowhere.adoc"
+
+clean_tree; plant docs/c.adoc <<<'image::logo.png[Logo]'
+expect "an AsciiDoc block image resolves" 0 "none new, none grown, none stale"
+
+clean_tree; plant docs/c.adoc <<<'image::nologo.png[Logo]'
+expect "a broken block image is reported without a leading colon" 1 "broken internal link -> nologo.png"
+
+clean_tree; plant docs/c.adoc <<<$':base: target.adoc\nSee link:{base}[x].'
+expect "a document attribute is expanded before the check" 0 "none new, none grown, none stale"
+
+clean_tree; plant docs/c.adoc <<<$':base: gone.adoc\nSee link:{base}[x].'
+expect "an attribute that expands to a missing file is broken" 1 "broken internal link -> gone.adoc"
+
+clean_tree; plant docs/c.adoc <<<'See link:{set-elsewhere}[x].'
+expect "an attribute defined outside the file is skipped, not reported" 0 "none new, none grown, none stale"
+
+# --base: the ledger may not gain a line or a count against the merge base.
+base_repo() { # base_repo <base-ledger-text|-> <head-ledger-text>
+  clean_tree
+  plant docs/c.adoc <<<'Broken: link:n1.adoc[x] link:n2.adoc[y]'
+  git -C "$WORK/t" init -q . && git -C "$WORK/t" config user.email t@invalid && git -C "$WORK/t" config user.name t \
+    && git -C "$WORK/t" config commit.gpgsign false
+  if [ "$1" != - ]; then printf '%s\n' "$1" > "$WORK/t/$L"; else rm -f "$WORK/t/$L"; fi
+  git -C "$WORK/t" add -A && git -C "$WORK/t" commit -q -m base
+  printf '%s\n' "$2" > "$WORK/t/$L"
+}
+base_repo 'docs/c.adoc:2' 'docs/c.adoc:2'
+expect "--base: an unchanged ledger passes" 0 "none new, none grown, none stale" "$GATE" --base HEAD
+base_repo 'docs/c.adoc:1' 'docs/c.adoc:2'
+expect "--base: a raised count is refused" 1 "ledger grew against base: docs/c.adoc: 1 -> 2" "$GATE" --base HEAD
+base_repo $'docs/z.adoc:1' $'docs/z.adoc:1\ndocs/c.adoc:2'
+expect "--base: a new ledger line is refused" 1 "ledger grew against base: docs/c.adoc: 0 -> 2" "$GATE" --base HEAD
+base_repo - 'docs/c.adoc:2'
+expect "--base: no ledger at the base is the initial snapshot" 0 "initial snapshot accepted" "$GATE" --base HEAD
+base_repo 'docs/c.adoc:2' 'docs/c.adoc:2'
+expect "--base: an unknown revision is a setup error" 2 "cannot resolve base revision" "$GATE" --base no-such-rev
+
 # ---------------------------------------------------------------- 5. mutants
 mkdir -p "$WORK/mut/lib"
 cp "$SCRIPT_DIR/../lib/ledger-prune.sh" "$WORK/mut/lib/"
@@ -159,7 +210,7 @@ mutant() {
     echo "FAIL: mutant '$label' did not change the gate"; fail=$((fail + 1)); return
   fi
   "$fixture"
-  out="$(bash "$WORK/mut/m.sh" --root "$WORK/t" 2>&1)"; rc=$?
+  out="$(bash "$WORK/mut/m.sh" --root "$WORK/t" ${MARGS:-} 2>&1)"; rc=$?
   if [ "$rc" -ne "$want" ] || ! grep -qF -- "$needle" <<<"$out"; then
     echo "PASS: mutant killed — $label"; pass=$((pass + 1))
   else
@@ -179,11 +230,21 @@ fx_md() { clean_tree; plant docs/c.md <<<'Broken: [x](nowhere.md)'; }
 # Each kill reads: the mutant must NOT give the verdict the real gate gives
 # (want-rc and needle describe the real verdict; surviving it is the failure).
 mutant "archive exclusion removed" 's#-path \./9-archive -prune -o ##' fx_archive 0 "none new"
-mutant "existence test always true" 's#if \[ -e "\$dir/\$target" \] \|\| \[ -e "\$target" \]; then continue; fi#if true; then continue; fi#' fx_new 1 "new broken link"
+mutant "existence test always true" 's#if \[ -e "\$dir/\$target" \]; then continue; fi#if true; then continue; fi#' fx_new 1 "new broken link"
 mutant "stale (gone) verdict dropped" 's#\[ -z "\$\{actual\[\$f\]:-\}" \] &&#false \&\&#' fx_stale 1 "no broken link left"
 mutant "grown verdict dropped" 's#elif \[ "\$n" -gt "\$want" \]#elif false#' fx_grown 1 "GREW"
 mutant "lowered verdict dropped" 's#elif \[ "\$n" -lt "\$want" \]#elif false#' fx_lower 1 "stale ledger entry"
 mutant "Markdown links not scanned" 's#\*\.md\)   grep#*.mdx) grep#' fx_md 1 "new broken link"
+fx_root() { clean_tree; plant docs/c.adoc <<<'Root-style: link:docs/target.adoc[x]'; }
+fx_title() { clean_tree; plant docs/c.md <<<'A [t](target.adoc "A title").'; }
+fx_img() { clean_tree; plant docs/c.adoc <<<'image::logo.png[Logo]'; }
+fx_attr() { clean_tree; plant docs/c.adoc <<<$':base: target.adoc\nSee link:{base}[x].'; }
+fx_base() { base_repo 'docs/c.adoc:1' 'docs/c.adoc:2'; }
+mutant "repo-root fallback restored" 's#if \[ -e "\$dir/\$target" \]; then#if [ -e "$dir/$target" ] || [ -e "$target" ]; then#' fx_root 1 "broken internal link"
+mutant "Markdown title not split off" 's#^      target=\$\(strip_title "\$target"\)#      target=$target#' fx_title 0 "none new"
+mutant "block image keeps its leading colon" 's#\)::\?#):#g' fx_img 0 "none new"
+mutant "document attributes not expanded" 's#target=\$\(resolve_attrs "\$f" "\$target"\) \|\| continue#:#' fx_attr 0 "none new"
+MARGS="--base HEAD" mutant "base comparison dropped" 's#\[ "\$\{allowed\[\$f\]\}" -gt "\$b" \]#false#' fx_base 1 "ledger grew against base"
 
 # ---------------------------------------------------------------- 6. this repo
 out="$(bash "$GATE" --root "$REPO_ROOT" 2>&1)"; rc=$?
