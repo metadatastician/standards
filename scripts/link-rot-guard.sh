@@ -204,6 +204,26 @@ extract() {
 # inside ROOT so each path is root-relative and the exclusion is a fixed path.
 # A target resolves only beside its source file, as a renderer resolves it; a
 # repo-root fallback would accept links that are broken where they are read.
+#
+# inside_root <dir> <target> — 0 when dir/target stays inside the root, judged
+# on the text alone (".." never climbs above the root) and before the
+# filesystem is asked anything. A link that leaves the repository is not a
+# repository link, and probing a path outside the checkout would let document
+# text test for files on the machine that runs the gate.
+inside_root() {
+  local -a parts=() out=()
+  local part
+  IFS=/ read -ra parts <<<"$1/$2"
+  for part in "${parts[@]}"; do
+    case "$part" in
+      ''|.) ;;
+      ..) [ "${#out[@]}" -gt 0 ] || return 1; unset 'out[${#out[@]}-1]' ;;
+      *) out+=("$part") ;;
+    esac
+  done
+  return 0
+}
+
 scan() {
   local f dir target decoded
   while IFS= read -r -d '' f; do
@@ -220,12 +240,14 @@ scan() {
       # is not a repository-relative link. A name that merely starts with
       # "http" (http-guide.md) is.
       if [[ "$target" =~ ^[A-Za-z][A-Za-z0-9+.-]*: ]] || [[ "$target" == /* ]]; then continue; fi
-      if [ -e "$dir/$target" ]; then continue; fi
-      # A destination is a URL path: a%20b.md names the file "a b.md". The
-      # literal name was tried first, so a file called 100%.md still resolves.
-      if [[ "$target" =~ %[0-9A-Fa-f][0-9A-Fa-f] ]]; then
-        decoded=$(printf '%b' "${target//%/\\x}")
-        if [ -e "$dir/$decoded" ]; then continue; fi
+      if inside_root "$dir" "$target"; then
+        if [ -e "$dir/$target" ]; then continue; fi
+        # A destination is a URL path: a%20b.md names the file "a b.md". The
+        # literal name was tried first, so a file called 100%.md still resolves.
+        if [[ "$target" =~ %[0-9A-Fa-f][0-9A-Fa-f] ]]; then
+          decoded=$(printf '%b' "${target//%/\\x}")
+          if inside_root "$dir" "$decoded" && [ -e "$dir/$decoded" ]; then continue; fi
+        fi
       fi
       printf '%s\t%s\n' "$f" "$target"
     done < <(extract "$f")

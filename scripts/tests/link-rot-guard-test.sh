@@ -22,7 +22,7 @@
 #   4. --prune deletes and lowers, never adds or raises, refuses to hide a new
 #      break, and is idempotent; --print and --list report without judging;
 #      a positional ROOT still works (the Justfile recipe passes one);
-#   5. the suite sees a regression: twenty-eight mutants of the gate are killed;
+#   5. the suite sees a regression: thirty mutants of the gate are killed;
 #   6. this repository matches its ledger (exit 0), under its own name and
 #      under a copy named otherwise.
 #
@@ -271,6 +271,16 @@ expect "a bare ]( is not a Markdown link" 0 "none new, none grown, none stale"
 clean_tree; plant docs/c.md <<<'An image ![alt](target.adoc) and [t](gone.md).'
 expect "an image and a link after it still parse" 1 "broken internal link -> gone.md"
 
+# A link that leaves the repository is broken without the filesystem being asked.
+clean_tree; : > "$WORK/outside.txt"; plant docs/c.adoc <<<'See link:../../outside.txt[x].'
+expect "a link escaping the root is broken even when the file exists" 1 "broken internal link -> ../../outside.txt"
+
+clean_tree; plant docs/c.adoc <<<'See link:../docs/target.adoc[x] and link:./../docs/target.adoc[y].'
+expect "a .. that stays inside the root resolves" 0 "none new, none grown, none stale"
+
+clean_tree; : > "$WORK/outside.txt"; plant docs/c.md <<<'See [x](%2e%2e/%2e%2e/outside.txt).'
+expect "a percent-encoded escape is broken too" 1 "broken internal link -> %2e%2e/%2e%2e/outside.txt"
+
 # --base: the ledger may not gain a line or a count against the merge base.
 base_repo() { # base_repo <base-ledger-text|-> <head-ledger-text>
   clean_tree
@@ -373,6 +383,10 @@ mutant "passthrough link targets not read" 's#(^ +while \(match\(s, /\(link\|ima
 mutant "passthrough stripped inside macros" 's#\\\[\(link\|image\|xref\):#\\[#' fx_ptarget 1 "missing file.pdf"
 mutant "fence closes on any fence line" 's#substr\(run, 1, 1\) == fc && length\(run\) >= fl && ##' fx_fence4 0 "none new"
 mutant "bracketless ]( parsed as a link" 's#if \(!opener\) continue##' fx_bare 0 "none new"
+fx_escape() { clean_tree; : > "$WORK/outside.txt"; plant docs/c.adoc <<<'See link:../../outside.txt[x].'; }
+fx_pescape() { clean_tree; : > "$WORK/outside.txt"; plant docs/c.md <<<'See [x](%2e%2e/%2e%2e/outside.txt).'; }
+mutant "root containment dropped" 's#if inside_root "\$dir" "\$target"; then#if true; then#' fx_escape 1 "outside.txt"
+mutant "root containment dropped for decoded paths" 's#inside_root "\$dir" "\$decoded" && ##' fx_pescape 1 "outside.txt"
 MARGS="--base HEAD" mutant "base comparison dropped" 's#\[ "\$\{allowed\[\$f\]\}" -gt "\$b" \]#false#' fx_base 1 "ledger grew against base"
 
 # ---------------------------------------------------------------- 6. this repo
