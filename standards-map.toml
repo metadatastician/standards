@@ -33,7 +33,7 @@
 [map]
 repo        = "metadatastician/standards"
 version     = "1.0.0"
-entry_count = 141
+entry_count = 134
 generated   = false   # hand-curated; the district index.adoc files ARE generated
 checked_by  = "scripts/check-standards-map.sh"
 
@@ -297,45 +297,6 @@ gate        = "canon-self-conformance"
 note        = "implementations live in hyperpolymath/k9-ecosystem per this repo's own registry [1-formats district move: relocated to 1-formats/k9/; this path keeps a POINTER.adoc stub]"
 
 [[entry]]
-from        = "meta-a2ml"
-target      = "9-archive/A2ML-REMOVED.adoc (pointer)"
-district    = "1-formats"
-kind        = "format-profile"
-files       = 38
-lifecycle   = "deprecated"
-canonical   = false
-canon_slot  = ""
-canonical_doc = "9-archive/A2ML-REMOVED.adoc"
-gate        = ""
-note        = "a2ml/ evicted 2026-08-28 by 24a12d6f; these 7 profile dirs (191 files) stayed behind. Finish the eviction or revert it. [1-formats district move: relocated to 1-formats/a2ml/, removed 2026-11-21 (W11); this path keeps a POINTER.adoc stub]"
-
-[[entry]]
-from        = "agentic-a2ml"
-target      = "9-archive/A2ML-REMOVED.adoc (pointer)"
-district    = "1-formats"
-kind        = "format-profile"
-files       = 37
-lifecycle   = "deprecated"
-canonical   = false
-canon_slot  = ""
-canonical_doc = "9-archive/A2ML-REMOVED.adoc"
-gate        = ""
-note        = "a2ml/ evicted 2026-08-28 by 24a12d6f; these 7 profile dirs (191 files) stayed behind. Finish the eviction or revert it. [1-formats district move: relocated to 1-formats/a2ml/, removed 2026-11-21 (W11); this path keeps a POINTER.adoc stub]"
-
-[[entry]]
-from        = "state-a2ml"
-target      = "9-archive/A2ML-REMOVED.adoc (pointer)"
-district    = "1-formats"
-kind        = "format-profile"
-files       = 30
-lifecycle   = "deprecated"
-canonical   = false
-canon_slot  = ""
-canonical_doc = "9-archive/A2ML-REMOVED.adoc"
-gate        = ""
-note        = "a2ml/ evicted 2026-08-28 by 24a12d6f; these 7 profile dirs (191 files) stayed behind. Finish the eviction or revert it. [1-formats district move: relocated to 1-formats/a2ml/, removed 2026-11-21 (W11); this path keeps a POINTER.adoc stub]"
-
-[[entry]]
 from        = "1-formats/sub-specs/did-you-actually-do-that/"
 target      = "1-formats/sub-specs/did-you-actually-do-that/"
 district    = "1-formats"
@@ -347,58 +308,6 @@ canon_slot  = ""
 canonical_doc = "1-formats/sub-specs/did-you-actually-do-that/index.adoc"
 gate        = "canon-self-conformance"
 note        = "TRIAGE: <30 files each; none is a district"
-
-[[entry]]
-from        = "anchor-a2ml"
-target      = "9-archive/A2ML-REMOVED.adoc (pointer)"
-district    = "1-formats"
-kind        = "format-profile"
-files       = 25
-lifecycle   = "deprecated"
-canonical   = false
-canon_slot  = ""
-canonical_doc = "9-archive/A2ML-REMOVED.adoc"
-gate        = ""
-note        = "a2ml/ evicted 2026-08-28 by 24a12d6f; these 7 profile dirs (191 files) stayed behind. Finish the eviction or revert it. [1-formats district move: relocated to 1-formats/a2ml/, removed 2026-11-21 (W11); this path keeps a POINTER.adoc stub]"
-
-[[entry]]
-from        = "ecosystem-a2ml"
-target      = "9-archive/A2ML-REMOVED.adoc (pointer)"
-district    = "1-formats"
-kind        = "format-profile"
-files       = 23
-lifecycle   = "deprecated"
-canonical   = false
-canon_slot  = ""
-canonical_doc = "9-archive/A2ML-REMOVED.adoc"
-gate        = ""
-note        = "a2ml/ evicted 2026-08-28 by 24a12d6f; these 7 profile dirs (191 files) stayed behind. Finish the eviction or revert it. [1-formats district move: relocated to 1-formats/a2ml/, removed 2026-11-21 (W11); this path keeps a POINTER.adoc stub]"
-
-[[entry]]
-from        = "neurosym-a2ml"
-target      = "9-archive/A2ML-REMOVED.adoc (pointer)"
-district    = "1-formats"
-kind        = "format-profile"
-files       = 23
-lifecycle   = "deprecated"
-canonical   = false
-canon_slot  = ""
-canonical_doc = "9-archive/A2ML-REMOVED.adoc"
-gate        = ""
-note        = "a2ml/ evicted 2026-08-28 by 24a12d6f; these 7 profile dirs (191 files) stayed behind. Finish the eviction or revert it. [1-formats district move: relocated to 1-formats/a2ml/, removed 2026-11-21 (W11); this path keeps a POINTER.adoc stub]"
-
-[[entry]]
-from        = "playbook-a2ml"
-target      = "9-archive/A2ML-REMOVED.adoc (pointer)"
-district    = "1-formats"
-kind        = "format-profile"
-files       = 15
-lifecycle   = "deprecated"
-canonical   = false
-canon_slot  = ""
-canonical_doc = "9-archive/A2ML-REMOVED.adoc"
-gate        = ""
-note        = "a2ml/ evicted 2026-08-28 by 24a12d6f; these 7 profile dirs (191 files) stayed behind. Finish the eviction or revert it. [1-formats district move: relocated to 1-formats/a2ml/, removed 2026-11-21 (W11); this path keeps a POINTER.adoc stub]"
 
 [[entry]]
 from        = "1-formats/templates/"

@@ -232,6 +232,13 @@ jobs:
           set -euo pipefail
           bash scripts/a2ml-retire-check.sh --check --base "${BASE_SHA:-HEAD~1}"
 
+      # Internal links: a broken AsciiDoc/Markdown link outside 9-archive/ fails
+      # unless the shrink-only ledger (.machine_readable/link-rot-allow.txt)
+      # already names it, and a ledger line that no longer matches fails until
+      # pruned. Fixtures and mutants: scripts/tests/link-rot-guard-test.sh.
+      - name: Internal links resolve
+        run: bash scripts/link-rot-guard.sh
+
       # Not part of the offline suite: this one needs real git history, so it
       # cannot live in scripts/tests/*.sh where a contributor runs it on a
       # shallow or detached tree. On a pull request the comparison is the base
