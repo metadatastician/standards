@@ -256,7 +256,7 @@ while IFS= read -r row; do
   # make every action's identity a commit; a tag-keyed record (measured at
   # fad242d3: `actions/setup-python@v2`) records a moving target.
   if ! printf '%s' "$pin_lc" | grep -Eq '^[0-9a-f]{40}$'; then
-    fail "INVALID ${key}: key ref is not a 40-hex commit — lock keys must be SHA-pinned (canon rule 10)"
+    fail "INVALID ${key}: key ref is not a 40-hex commit — lock keys must be SHA-pinned (canon rule 10); when a workflow still writes this tag, run scripts/pin-uses-from-lock.sh --write, then relock-sha-keys.sh"
   fi
 
   # ── record.uses ──────────────────────────────────────────────────────
