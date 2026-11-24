@@ -633,6 +633,18 @@ c_hook_linkrot_target_added() {
     && grep -qx "b.adoc:1" <<< "$(staged_ledger "$d" "$LRG_L")"
 }
 
+# An unledgered .asciidoc document edited to add a broken link: the hook must
+# run the checker (and refuse), as it does for .adoc and .md.
+c_hook_linkrot_asciidoc_edit() {
+  local d; d=$(repo h19)
+  printf "= B\nlink:gone.adoc[x]\n" > "$d/b.adoc"
+  printf "= A\nno link\n" > "$d/a.asciidoc"
+  printf "# ledger\nb.adoc:1\n" > "$d/$LRG_L"
+  commit_all "$d"
+  printf "= A\nlink:gone2.adoc[x]\n" > "$d/a.asciidoc"; git -C "$d" add a.asciidoc
+  run_hook "$d" && return 1
+  has "prune refused"
+}
 # drow ID CHECKS_JSON — one canonical departures row.
 drow() {
   jq -c -S -n --arg id "$1" --argjson checks "$2" \
@@ -683,6 +695,7 @@ check "hook: citing an issue on a ledgered marker prunes its line"              
 check "hook: fixing a pipe into a quiet grep prunes its ledger line"            c_hook_pgq_fixed
 check "hook: fixing a broken link prunes its ledger line (index dir is not named standards)" c_hook_linkrot_fixed
 check "hook: adding a missing link target prunes the ledger line of an untouched document" c_hook_linkrot_target_added
+check "hook: an edited unledgered .asciidoc document is judged" c_hook_linkrot_asciidoc_edit
 check "hook: departures — fixing a defect removes its row from the commit"        c_hook_departures_commit
 check "hook: departures — a glob row is judged though no path is spelled"         c_hook_departures_glob
 c_hook_departures_history() {
@@ -748,6 +761,8 @@ mutant S_HOOK '/^  .machine_readable\/link-rot-allow.txt$/d' \
   "the hook forgets the link-rot ledger" c_hook_linkrot_fixed
 mutant S_HOOK 's#-s "\$WORK/staged_ad"#-s /dev/null#' \
   "the hook ignores added or deleted paths for the link-rot ledger" c_hook_linkrot_target_added
+mutant S_HOOK 's#(adoc|asciidoc|md)#(adoc|md)#' \
+  "the hook forgets .asciidoc documents for the link-rot ledger" c_hook_linkrot_asciidoc_edit
 
 echo
 echo "ledger-prune: $pass passed, $fail failed"

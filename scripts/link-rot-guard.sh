@@ -54,9 +54,16 @@
 #
 # NOT READ (each is a limit, not a promise): Markdown reference-style links
 # ([x]: dest), HTML href and src, AsciiDoc include:: and the <<xref>> shorthand,
-# xref:id[] (local anchors), attributes defined in another file, and the
-# AsciiDoc files with other extensions. A break of these kinds is
-# not caught. xref:file.adoc[] and image macros are read.
+# xref:id[] (local anchors), attributes defined in another file, and AsciiDoc
+# files with other extensions. A break of these kinds is not caught.
+# xref:file.adoc[] and image macros are read.
+#
+# APPROXIMATE (the other way: a link may be read that a renderer would not).
+# Markdown indented code blocks outside a fence are scanned as text. A fence
+# indented four or more spaces is accepted only after a list marker, and the
+# list ends at the next flush-left paragraph; lazy continuation lines are not
+# tracked. Character references are decoded for ASCII only. Inline code
+# spans are removed per line, so one that spans lines is not.
 #
 # BASE. A checker that reads only the final tree cannot see a change that adds a
 # broken link and the ledger line that excuses it in the same commit. With
@@ -171,18 +178,62 @@ extract() {
         }
       }' "$1" ;;
     *.md) awk '
+      # Replace every f in t by r. No regex, so "&" and "\" need no care.
+      function repl(t, f, r,   p, o) {
+        o = ""
+        while ((p = index(t, f)) > 0) { o = o substr(t, 1, p - 1) r; t = substr(t, p + length(f)) }
+        return o t
+      }
+      function hexval(h,   i, v) {
+        v = 0; h = tolower(h)
+        for (i = 1; i <= length(h); i++) v = v * 16 + index("0123456789abcdef", substr(h, i, 1)) - 1
+        return v
+      }
+      # CommonMark resolves character references in a destination (ASCII ones
+      # here: &amp; &lt; &gt; &quot; &apos; and &#N; / &#xH; below 128).
+      function decode(t,   v) {
+        while (match(t, /&#([1-9]|[1-9][0-9]|1[01][0-9]|12[0-7]);/)) {
+          v = substr(t, RSTART + 2, RLENGTH - 3) + 0
+          t = substr(t, 1, RSTART - 1) sprintf("%c", v) substr(t, RSTART + RLENGTH)
+        }
+        while (match(t, /&#[xX][0-7][0-9A-Fa-f]?;/)) {
+          v = hexval(substr(t, RSTART + 3, RLENGTH - 4))
+          if (v == 0) v = 63
+          t = substr(t, 1, RSTART - 1) sprintf("%c", v) substr(t, RSTART + RLENGTH)
+        }
+        t = repl(t, "&lt;", "<"); t = repl(t, "&gt;", ">"); t = repl(t, "&quot;", "\"")
+        t = repl(t, "&apos;", sprintf("%c", 39))
+        return repl(t, "&amp;", "&")
+      }
+      { t = $0; gsub(/\t/, "    ", t); match(t, /^ */); ind = RLENGTH; blank = (t ~ /^ *$/) }
+      # Context for fences indented four or more spaces: they open a fence only
+      # inside a list item. A list marker sets the context, a flush-left
+      # paragraph ends it (a heuristic; lazy continuation lines are not tracked).
+      !fence && !blank { if (t ~ /^ ? ? ?([-*+]|[0-9]+[.)]) /) inlist = 1; else if (ind == 0) inlist = 0 }
       # A fence closes only on the same marker, at least as long as the opener,
       # with nothing after it (CommonMark): ```` holds ``` as content.
-      match($0, /^[[:space:]]*(```+|~~~+)/) {
-        run = substr($0, RSTART, RLENGTH); sub(/^[[:space:]]*/, "", run)
-        rest = substr($0, RSTART + RLENGTH)
-        if (!fence) { fence = 1; fc = substr(run, 1, 1); fl = length(run) }
-        else if (substr(run, 1, 1) == fc && length(run) >= fl && rest ~ /^[[:space:]]*$/) fence = 0
+      match(t, /^ *(```+|~~~+)/) {
+        run = substr(t, RSTART, RLENGTH); sub(/^ */, "", run)
+        rest = substr(t, RSTART + RLENGTH)
+        if (!fence) {
+          if (ind <= 3 || inlist) { fence = 1; fc = substr(run, 1, 1); fl = length(run); fin = inlist }
+        } else if (substr(run, 1, 1) == fc && length(run) >= fl && rest ~ /^ *$/ && (ind <= 3 || fin)) fence = 0
         next
       }
       fence { next }
       {
         s = $0
+        # HTML comments are not rendered, and one may span lines.
+        if (incomment) {
+          p = index(s, "-->")
+          if (p == 0) next
+          s = substr(s, p + 3); incomment = 0
+        }
+        while ((p = index(s, "<!--")) > 0) {
+          q = index(substr(s, p + 4), "-->")
+          if (q == 0) { s = substr(s, 1, p - 1); incomment = 1; break }
+          s = substr(s, 1, p - 1) substr(s, p + q + 6)
+        }
         gsub(/``[^`]*``/, "", s); gsub(/`[^`]*`/, "", s)
         while ((i = index(s, "](")) > 0) {
           # A link needs an opening bracket before its "](".
@@ -191,7 +242,7 @@ extract() {
           if (!opener) continue
           if (substr(s, 1, 1) == "<") {
             j = index(s, ">"); if (j == 0) continue
-            print substr(s, 2, j - 2); s = substr(s, j + 1)
+            print decode(substr(s, 2, j - 2)); s = substr(s, j + 1)
           } else {
             depth = 0; out = ""
             for (k = 1; k <= length(s); k++) {
@@ -202,7 +253,7 @@ extract() {
               else if (c ~ /[[:space:]]/) break
               out = out c
             }
-            if (out != "") print out
+            if (out != "") print decode(out)
             s = substr(s, k)
           }
         }

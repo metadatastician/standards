@@ -78,7 +78,7 @@ for ledger in "${LEDGERS[@]}"; do
      || grep -qF -f "$WORK/staged" <<< "$text" \
      || { [ "${ledger##*/}" = departures.jsonl ] && grep -qF '"glob":' <<< "$text"; } \
      || { [ "${ledger##*/}" = link-rot-allow.txt ] \
-          && { [ -s "$WORK/staged_ad" ] || grep -qE '\.(adoc|md)$' "$WORK/staged"; }; }; then
+          && { [ -s "$WORK/staged_ad" ] || grep -qE '\.(adoc|asciidoc|md)$' "$WORK/staged"; }; }; then
     relevant+=("$ledger")
   fi
 done

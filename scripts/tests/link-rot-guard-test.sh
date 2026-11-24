@@ -22,7 +22,7 @@
 #   4. --prune deletes and lowers, never adds or raises, refuses to hide a new
 #      break, and is idempotent; --print and --list report without judging;
 #      a positional ROOT still works (the Justfile recipe passes one);
-#   5. the suite sees a regression: thirty-six mutants of the gate are killed;
+#   5. the suite sees a regression: forty-one mutants of the gate are killed;
 #   6. this repository matches its ledger (exit 0), under its own name and
 #      under a copy named otherwise.
 #
@@ -328,6 +328,33 @@ expect "a link through a symlink that leaves the root is broken" 1 "broken inter
 clean_tree; ln -s ../docs "$WORK/t/docs/self"; plant docs/c.adoc <<<'See link:self/target.adoc[x].'
 expect "a link through a symlink that stays inside the root resolves" 0 "none new, none grown, none stale"
 
+# Markdown HTML comments are not rendered, so a link inside one is not a link.
+clean_tree; plant docs/c.md <<<'Text <!-- [x](gone.md) --> end.'
+expect "a link inside a one-line HTML comment is skipped" 0 "none new, none grown, none stale"
+
+clean_tree; plant docs/c.md <<<$'<!--\n[x](gone.md)\n-->\nplain'
+expect "a link inside a multi-line HTML comment is skipped" 0 "none new, none grown, none stale"
+
+clean_tree; plant docs/c.md <<<'<!-- note --> and [y](after.md)'
+expect "a link after an HTML comment on the same line is checked" 1 "broken internal link -> after.md"
+
+# Character references in a destination resolve to the character.
+clean_tree; : > "$WORK/t/docs/a&b.md"; plant docs/c.md <<<'See [a](a&amp;b.md), [b](a&#38;b.md), [c](a&#x26;b.md) and [d](<a&amp;b.md>).'
+expect "named and numeric character references are decoded" 0 "none new, none grown, none stale"
+
+clean_tree; plant docs/c.md <<<'See [x](n&amp;o.md).'
+expect "a missing destination is reported decoded" 0 "BROKEN  docs/c.md -> n&o.md" "$GATE" --list
+
+# A fence indented four or more spaces opens only inside a list item.
+clean_tree; plant docs/c.md <<<$'    ```\n[x](gone.md)'
+expect "an indented fence outside a list does not swallow a real link" 1 "broken internal link -> gone.md"
+
+clean_tree; plant docs/c.md <<<$'- item\n\n    ```\n    [x](gone.md)\n    ```\n[y](after.md)'
+expect "a fence inside a list item is a fence, and the list ends at flush-left text" 1 "broken internal link -> after.md"
+
+clean_tree; plant docs/c.md <<<$'- item\n\n    ```\n    [x](gone.md)\n    ```'
+expect "links inside an indented list fence are skipped" 0 "none new, none grown, none stale"
+
 # --base: the ledger may not gain a line or a count against the merge base.
 base_repo() { # base_repo <base-ledger-text|-> <head-ledger-text>
   clean_tree
@@ -454,6 +481,16 @@ mutant "any delimiter closes an AsciiDoc block" 's#else if \(d == blk\) blk = ""
 mutant "passthrough image ignores :imagesdir:" 's#(sub\(/\^\(link\|image\|xref\)::\?pass:)#kind = "link"; \1#' fx_pimg 0 "none new"
 mutant "ledger count digits not capped" 's#\{0,14\}#*#g' fx_huge 1 "malformed"
 mutant "symlink containment dropped" 's#\[ "\$HAS_LINKS" = 1 \] \|\| return 0#return 0#' fx_sym 1 "ext/secret.txt"
+fx_html() { clean_tree; plant docs/c.md <<<'Text <!-- [x](gone.md) --> end.'; }
+fx_cref() { clean_tree; : > "$WORK/t/docs/a&b.md"; plant docs/c.md <<<'See [a](a&amp;b.md).'; }
+fx_ind() { clean_tree; plant docs/c.md <<<$'    ```\n[x](gone.md)'; }
+fx_lfence() { clean_tree; plant docs/c.md <<<$'- item\n\n    ```\n    [x](gone.md)\n    ```'; }
+fx_awkfail() { clean_tree; plant docs/c.adoc <<<'Broken: link:n1.adoc[x]'; mkdir -p "$WORK/fakebin"; printf '#!/bin/sh\nexit 2\n' > "$WORK/fakebin/awk"; chmod +x "$WORK/fakebin/awk"; }
+mutant "HTML comments not skipped" 's#while \(\(p = index\(s, "<!--"\)\) > 0\)#while (0)#' fx_html 0 "none new"
+mutant "character references not decoded" 's#if \(out != ""\) print decode\(out\)#if (out != "") print out#' fx_cref 0 "none new"
+mutant "any indented fence opens a fence" 's#if \(ind <= 3 \|\| inlist\)#if (1)#' fx_ind 1 "gone.md"
+mutant "list context ignored for indented fences" 's#if \(ind <= 3 \|\| inlist\)#if (ind <= 3)#' fx_lfence 0 "none new"
+PATH="$WORK/fakebin:$PATH" mutant "extraction failure ignored" 's#\|\| \{ rm -f "\$tmp"; return 2; \}#|| true#' fx_awkfail 2 "no verdict was drawn"
 MARGS="--base HEAD" mutant "base comparison dropped" 's#\[ "\$\{allowed\[\$f\]\}" -gt "\$b" \]#false#' fx_base 1 "ledger grew against base"
 
 # ---------------------------------------------------------------- 6. this repo
