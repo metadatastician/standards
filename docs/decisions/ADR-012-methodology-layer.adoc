@@ -113,7 +113,8 @@ is in the grammar today; the rest are described here.
 Field meanings:
 
 * `:default-mode`: the project's default (convergent, divergent or hybrid).
-  Agents infer it if unset, but explicit is better.
+  An absent `:default-mode` selects `hybrid` (per-field defaults, below); a
+  declared mode is always preserved. Explicit is better.
 * `:unique-strength` / `:divergent-invariants`: what makes the project unique,
   and the riverbanks divergent mode must not cross. Agents deepen the strength,
   not broaden it.
@@ -292,8 +293,12 @@ Phase 0 reads the repo's STATE first. Field testing found two failure modes:
 1. Check for {{PLACEHOLDER}} or {{PROJECT}} tokens → template, not real
 2. Check project name matches repo name → not template default
 3. Check last-updated is within 90 days → not stale
-4. If validation fails → fall back to TODO.md, ROADMAP.adoc, README.adoc
-5. Flag the broken STATE as a P1 MUST in the audit
+4. Check content survived migration: a STATE with a recent date but no
+   tasks, phase or blockers where the pre-migration source (git history or the
+   legacy file) had them is an empty migration. Completion = 0% alone does
+   not reject a genuine new project.
+5. If validation fails → fall back to TODO.md, ROADMAP.adoc, README.adoc
+6. Flag the broken STATE as a P1 MUST in the audit
 ----
 
 == Consequences
