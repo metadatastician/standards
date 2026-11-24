@@ -22,7 +22,7 @@
 #   4. --prune deletes and lowers, never adds or raises, refuses to hide a new
 #      break, and is idempotent; --print and --list report without judging;
 #      a positional ROOT still works (the Justfile recipe passes one);
-#   5. the suite sees a regression: twenty mutants of the gate are killed;
+#   5. the suite sees a regression: twenty-four mutants of the gate are killed;
 #   6. this repository matches its ledger (exit 0), under its own name and
 #      under a copy named otherwise.
 #
@@ -232,6 +232,24 @@ expect "an xref to a missing file with an anchor is reported without it" 1 "brok
 clean_tree; plant docs/c.adoc <<<'See xref:target.adoc[a], xref:target.adoc#s[b] and xref:local-id[c].'
 expect "a resolving xref and a local xref pass" 0 "none new, none grown, none stale"
 
+# Inline passthroughs show a macro literally; they are not links.
+clean_tree; plant docs/c.adoc <<<'Show +link:gone.adoc[x]+ and ++link:gone2.adoc[y]++ and pass:[link:gone3.adoc[z]].'
+expect "AsciiDoc inline passthroughs holding a macro are skipped" 0 "none new, none grown, none stale"
+
+clean_tree; plant docs/c.adoc <<<'Show +link:gone.adoc[x]+ then link:real-gone.adoc[y].'
+expect "a real link after a passthrough on the same line is checked" 1 "broken internal link -> real-gone.adoc"
+
+# .asciidoc is an AsciiDoc source too.
+clean_tree; plant docs/c.asciidoc <<<'Broken: link:gone.adoc[x]'
+expect "a .asciidoc source is scanned" 1 "new broken link(s) in docs/c.asciidoc"
+
+# Destinations are URL paths: %20 names a space, but a literal % still resolves.
+clean_tree; : > "$WORK/t/docs/a b.md"; : > "$WORK/t/docs/100%.md"; plant docs/c.md <<<'An [ok](a%20b.md) and [lit](100%.md) link.'
+expect "a percent-encoded destination resolves, and a literal percent file too" 0 "none new, none grown, none stale"
+
+clean_tree; plant docs/c.md <<<'A [x](n%20o.md) link.'
+expect "a missing percent-encoded target is reported as written" 1 "broken internal link -> n%20o.md"
+
 # --base: the ledger may not gain a line or a count against the merge base.
 base_repo() { # base_repo <base-ledger-text|-> <head-ledger-text>
   clean_tree
@@ -319,6 +337,14 @@ mutant "first attribute definition wins" 's#else attr\[tag\] = v#else if (!(tag 
 mutant "inline code spans not skipped" 's#gsub\(/`\[\^`\]\*`/, "", s\)#s = s#' fx_span 0 "none new"
 mutant "backslash escapes not honoured" 's#k < length\(s\)\) \{ k\+\+#0) { k++#' fx_esc 0 "none new"
 mutant "xref macros not read" 's#kind == "xref" && m !~#kind == "xref" || m !~#' fx_xref 1 "gone.adoc"
+fx_pass() { clean_tree; plant docs/c.adoc <<<'Show +link:gone.adoc[x]+ and pass:[link:gone3.adoc[z]].'; }
+fx_pass2() { clean_tree; plant docs/c.adoc <<<'Show pass:[link:gone3.adoc[z]].'; }
+fx_asc() { clean_tree; plant docs/c.asciidoc <<<'Broken: link:gone.adoc[x]'; }
+fx_pct() { clean_tree; : > "$WORK/t/docs/a b.md"; plant docs/c.md <<<'An [ok](a%20b.md) link.'; }
+mutant "+passthrough+ regions not skipped" '/\(link\|image\|xref\):\[/d' fx_pass 0 "none new"
+mutant "pass:[] regions not skipped" 's#gsub\(/pass:#gsub(/NOPE:#' fx_pass2 0 "none new"
+mutant ".asciidoc sources not scanned" 's#-o -name .\*\.asciidoc. ##' fx_asc 1 "c.asciidoc"
+mutant "percent-decoding dropped" 's#if \[\[ "\$target" =~ %\[0-9A-Fa-f\]\[0-9A-Fa-f\] \]\]; then#if false; then#' fx_pct 0 "none new"
 MARGS="--base HEAD" mutant "base comparison dropped" 's#\[ "\$\{allowed\[\$f\]\}" -gt "\$b" \]#false#' fx_base 1 "ledger grew against base"
 
 # ---------------------------------------------------------------- 6. this repo

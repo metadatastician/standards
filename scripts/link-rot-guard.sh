@@ -55,7 +55,7 @@
 # NOT READ (each is a limit, not a promise): Markdown reference-style links
 # ([x]: dest), HTML href and src, AsciiDoc include:: and the <<xref>> shorthand,
 # xref:id[] (local anchors), attributes defined in another file, and the
-# `+literal+` forms of AsciiDoc inline passthrough. A break of these kinds is
+# AsciiDoc files with other extensions. A break of these kinds is
 # not caught. xref:file.adoc[] and image macros are read.
 #
 # BASE. A checker that reads only the final tree cannot see a change that adds a
@@ -107,7 +107,8 @@ trap 'rm -f "$RECORDS"' EXIT
 #   AsciiDoc: link:T[ ... ], image:T[ ... ], the block form image::T[ ... ] and
 #     xref:T[ ... ] when T names a file (T ends .adoc, .asciidoc or .md, with an
 #     optional #anchor; xref:id[] is local and is not read). Skipped: comment
-#     lines (//), and listing, literal and comment blocks (----, ...., ////),
+#     lines (//), inline passthroughs holding a macro (+x+, ++x++, pass:[x]),
+#     and listing, literal and comment blocks (----, ...., ////),
 #     which a renderer does not turn into links. An image target is read under
 #     the :imagesdir: in effect. {name} is expanded from the attributes in
 #     effect at that line (set by `:name: value`, removed by `:name!:` or
@@ -119,7 +120,7 @@ trap 'rm -f "$RECORDS"' EXIT
 #     and inline code spans are skipped.
 extract() {
   case "$1" in
-    *.adoc) awk '
+    *.adoc|*.asciidoc) awk '
       /^\/\/\/\/+[[:space:]]*$/ || /^----+[[:space:]]*$/ || /^\.\.\.\.+[[:space:]]*$/ { blk = !blk; next }
       blk { next }
       /^\/\// { next }
@@ -132,6 +133,10 @@ extract() {
       }
       {
         s = $0
+        # Inline passthroughs that hold a macro show it literally: +link:x[]+,
+        # ++link:x[]++, pass:[link:x[]].
+        gsub(/\+[^+]*(link|image|xref):[^+]*\+/, "", s)
+        gsub(/pass:[a-z,]*\[[^]]*\]/, "", s)
         while (match(s, /(link|image|xref)::?[^][]+\[/)) {
           m = substr(s, RSTART, RLENGTH); s = substr(s, RSTART + RLENGTH)
           kind = (m ~ /^image/) ? "image" : ((m ~ /^xref/) ? "xref" : "link")
@@ -182,7 +187,7 @@ extract() {
 # A target resolves only beside its source file, as a renderer resolves it; a
 # repo-root fallback would accept links that are broken where they are read.
 scan() {
-  local f dir target
+  local f dir target decoded
   while IFS= read -r -d '' f; do
     f=${f#./}
     dir=$(dirname "$f")
@@ -198,9 +203,15 @@ scan() {
       # "http" (http-guide.md) is.
       if [[ "$target" =~ ^[A-Za-z][A-Za-z0-9+.-]*: ]] || [[ "$target" == /* ]]; then continue; fi
       if [ -e "$dir/$target" ]; then continue; fi
+      # A destination is a URL path: a%20b.md names the file "a b.md". The
+      # literal name was tried first, so a file called 100%.md still resolves.
+      if [[ "$target" =~ %[0-9A-Fa-f][0-9A-Fa-f] ]]; then
+        decoded=$(printf '%b' "${target//%/\\x}")
+        if [ -e "$dir/$decoded" ]; then continue; fi
+      fi
       printf '%s\t%s\n' "$f" "$target"
     done < <(extract "$f")
-  done < <(find . -path ./9-archive -prune -o -path '*/.git' -prune -o -type f \( -name '*.adoc' -o -name '*.md' \) -print0 | LC_ALL=C sort -z)
+  done < <(find . -path ./9-archive -prune -o -path '*/.git' -prune -o -type f \( -name '*.adoc' -o -name '*.asciidoc' -o -name '*.md' \) -print0 | LC_ALL=C sort -z)
 }
 (cd "$ROOT" && scan) > "$RECORDS"
 
