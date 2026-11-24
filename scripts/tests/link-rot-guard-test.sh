@@ -22,7 +22,7 @@
 #   4. --prune deletes and lowers, never adds or raises, refuses to hide a new
 #      break, and is idempotent; --print and --list report without judging;
 #      a positional ROOT still works (the Justfile recipe passes one);
-#   5. the suite sees a regression: twenty-four mutants of the gate are killed;
+#   5. the suite sees a regression: twenty-eight mutants of the gate are killed;
 #   6. this repository matches its ledger (exit 0), under its own name and
 #      under a copy named otherwise.
 #
@@ -250,6 +250,27 @@ expect "a percent-encoded destination resolves, and a literal percent file too" 
 clean_tree; plant docs/c.md <<<'A [x](n%20o.md) link.'
 expect "a missing percent-encoded target is reported as written" 1 "broken internal link -> n%20o.md"
 
+# A passthrough inside a macro target is the target; one wrapping a macro is literal.
+clean_tree; plant docs/c.adoc <<<'See link:pass:[missing file.pdf][x].'
+expect "a passthrough link target is checked" 1 "broken internal link -> missing file.pdf"
+
+clean_tree; : > "$WORK/t/docs/a b.pdf"; plant docs/c.adoc <<<'See link:pass:[a b.pdf][x].'
+expect "a passthrough link target that exists resolves" 0 "none new, none grown, none stale"
+
+# Markdown fences close on the same marker, at least as long, with nothing after.
+clean_tree; plant docs/c.md <<<$'````\n```\n[x](gone.md)\n````\n[y](after.md)'
+expect "a longer fence is not closed by a shorter one" 1 "broken internal link -> after.md"
+
+clean_tree; plant docs/c.md <<<$'```\n~~~\n[x](gone.md)\n```'
+expect "a tilde line does not close a backtick fence" 0 "none new, none grown, none stale"
+
+# A link needs an opening bracket before "](".
+clean_tree; plant docs/c.md <<<'This is not a link ](missing.md) at all.'
+expect "a bare ]( is not a Markdown link" 0 "none new, none grown, none stale"
+
+clean_tree; plant docs/c.md <<<'An image ![alt](target.adoc) and [t](gone.md).'
+expect "an image and a link after it still parse" 1 "broken internal link -> gone.md"
+
 # --base: the ledger may not gain a line or a count against the merge base.
 base_repo() { # base_repo <base-ledger-text|-> <head-ledger-text>
   clean_tree
@@ -345,6 +366,13 @@ mutant "+passthrough+ regions not skipped" '/\(link\|image\|xref\):\[/d' fx_pass
 mutant "pass:[] regions not skipped" 's#gsub\(/pass:#gsub(/NOPE:#' fx_pass2 0 "none new"
 mutant ".asciidoc sources not scanned" 's#-o -name .\*\.asciidoc. ##' fx_asc 1 "c.asciidoc"
 mutant "percent-decoding dropped" 's#if \[\[ "\$target" =~ %\[0-9A-Fa-f\]\[0-9A-Fa-f\] \]\]; then#if false; then#' fx_pct 0 "none new"
+fx_ptarget() { clean_tree; plant docs/c.adoc <<<'See link:pass:[missing file.pdf][x].'; }
+fx_fence4() { clean_tree; plant docs/c.md <<<$'````\n```\n[x](gone.md)\n````'; }
+fx_bare() { clean_tree; plant docs/c.md <<<'This is not a link ](gone.md) at all.'; }
+mutant "passthrough link targets not read" 's#(^ +while \(match\(s, /\(link\|image\|xref\)::\?)pass:#\1passX:#' fx_ptarget 1 "missing file.pdf"
+mutant "passthrough stripped inside macros" 's#\\\[\(link\|image\|xref\):#\\[#' fx_ptarget 1 "missing file.pdf"
+mutant "fence closes on any fence line" 's#substr\(run, 1, 1\) == fc && length\(run\) >= fl && ##' fx_fence4 0 "none new"
+mutant "bracketless ]( parsed as a link" 's#if \(!opener\) continue##' fx_bare 0 "none new"
 MARGS="--base HEAD" mutant "base comparison dropped" 's#\[ "\$\{allowed\[\$f\]\}" -gt "\$b" \]#false#' fx_base 1 "ledger grew against base"
 
 # ---------------------------------------------------------------- 6. this repo

@@ -133,10 +133,17 @@ extract() {
       }
       {
         s = $0
-        # Inline passthroughs that hold a macro show it literally: +link:x[]+,
-        # ++link:x[]++, pass:[link:x[]].
-        gsub(/\+[^+]*(link|image|xref):[^+]*\+/, "", s)
-        gsub(/pass:[a-z,]*\[[^]]*\]/, "", s)
+        # A passthrough that wraps a whole macro shows it literally: +link:x[]+,
+        # ++link:x[]++, pass:[link:x[]]. A passthrough inside a macro target
+        # (link:pass:[a b.pdf][x]) is the target itself and is read here.
+        gsub(/\+(link|image|xref):[^+]*\+/, "", s)
+        gsub(/pass:[a-z,]*\[(link|image|xref):[^]]*\]/, "", s)
+        while (match(s, /(link|image|xref)::?pass:[a-z,]*\[[^]]*\]/)) {
+          m = substr(s, RSTART, RLENGTH)
+          s = substr(s, 1, RSTART - 1) substr(s, RSTART + RLENGTH)
+          sub(/^(link|image|xref)::?pass:[a-z,]*\[/, "", m); sub(/\]$/, "", m)
+          print m
+        }
         while (match(s, /(link|image|xref)::?[^][]+\[/)) {
           m = substr(s, RSTART, RLENGTH); s = substr(s, RSTART + RLENGTH)
           kind = (m ~ /^image/) ? "image" : ((m ~ /^xref/) ? "xref" : "link")
@@ -154,13 +161,24 @@ extract() {
         }
       }' "$1" ;;
     *.md) awk '
-      /^[[:space:]]*(```|~~~)/ { fence = !fence; next }
+      # A fence closes only on the same marker, at least as long as the opener,
+      # with nothing after it (CommonMark): ```` holds ``` as content.
+      match($0, /^[[:space:]]*(```+|~~~+)/) {
+        run = substr($0, RSTART, RLENGTH); sub(/^[[:space:]]*/, "", run)
+        rest = substr($0, RSTART + RLENGTH)
+        if (!fence) { fence = 1; fc = substr(run, 1, 1); fl = length(run) }
+        else if (substr(run, 1, 1) == fc && length(run) >= fl && rest ~ /^[[:space:]]*$/) fence = 0
+        next
+      }
       fence { next }
       {
         s = $0
         gsub(/``[^`]*``/, "", s); gsub(/`[^`]*`/, "", s)
         while ((i = index(s, "](")) > 0) {
+          # A link needs an opening bracket before its "](".
+          opener = (substr(s, 1, i - 1) ~ /\[/)
           s = substr(s, i + 2)
+          if (!opener) continue
           if (substr(s, 1, 1) == "<") {
             j = index(s, ">"); if (j == 0) continue
             print substr(s, 2, j - 2); s = substr(s, j + 1)
