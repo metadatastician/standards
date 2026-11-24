@@ -438,7 +438,7 @@ ES=$'\x1e'
 # never reaches deletable-now by a condition this tool cannot evaluate.
 declare -A COND=() HOLD=()
 eval_condition() { # eval_condition ID KEY MATCH [RECORD]
-  local id=$1 key=$2 m=$3 rec=${4:-} lit re holders a excl=()
+  local id=$1 key=$2 m=$3 rec=${4:-} lit re holders a sl tgt abs rel pat excl=()
   [ -z "${COND[$id]:-}" ] || return 0
   case $key in
     inbound-links-redirected)
@@ -465,6 +465,19 @@ eval_condition() { # eval_condition ID KEY MATCH [RECORD]
         | awk -v lit="$lit/" 'index($0, lit) != 1' > "$T/live.$id" || true
       holders=$(cd "$ROOT" || exit 0; tr '\n' '\0' < "$T/live.$id" \
         | xargs -0 -r grep -I -l -E -- "(^|[^A-Za-z0-9_-])$re(\$|/|[^A-Za-z0-9_.-]|\.(\$|[^A-Za-z0-9_-]))" 2>/dev/null | LC_ALL=C sort -u || true)
+      # A symbolic link is read by its destination, not its contents: one that
+      # points into the prefix (by its text or once resolved) is a live link.
+      pat="(^|[^A-Za-z0-9_-])$re(\$|/|[^A-Za-z0-9_.-]|\.(\$|[^A-Za-z0-9_-]))"
+      while IFS= read -r -d '' sl; do
+        [[ $sl == "$lit"/* || $sl == 9-archive/* || $sl == docs/audits/* || $sl == docs/reorg/* ]] && continue
+        [[ $sl =~ ^docs/triage/[0-9]{4}-[0-9]{2}-[0-9]{2}/ ]] && continue
+        tgt=$(readlink -- "$ROOT/$sl" || true)
+        abs=$(readlink -m -- "$(dirname -- "$ROOT_REAL/$sl")/$tgt" || true)
+        rel=${abs#"$ROOT_REAL"/}
+        if [[ $rel == "$lit" || $rel == "$lit"/* ]] || grep -qE -- "$pat" <<<"$tgt"; then
+          holders+="${holders:+$'\n'}$sl"
+        fi
+      done < <(find "$ROOT" -type l -not -path '*/.git/*' -printf '%P\0' 2>/dev/null | LC_ALL=C sort -z || true)
       HOLD[$id]=$holders
       if [ -z "$holders" ]; then COND[$id]=met
       else COND[$id]="unmet: $(printf '%s\n' "$holders" | grep -c .) live file(s) name $lit"; fi ;;
@@ -517,7 +530,7 @@ mention_tokens() { # FILE BASENAME -> the sorted path tokens ending in BASENAME
   local k="$1$S$2" re cls
   if [ -z "${TOKS[$k]+x}" ]; then
     re=$(printf '%s' "$2" | sed 's/[][\.*^$+?(){}|]/\\&/g')
-    cls='[^[:space:]"'"'"'`(),;=|&<>:]*'
+    cls='[^[:space:](),;=|&<>:]*'
     TOKS[$k]=$(cd "$ROOT" || exit 0; grep -I -o -h -w -E -- "(${cls}/)?$re" "$1" 2>/dev/null | LC_ALL=C sort -u || true)
   fi
   printf '%s' "${TOKS[$k]}"
@@ -532,7 +545,7 @@ name_scope() {
     IFS=/ read -r -a segs <<< "$tok"; tail=""
     for seg in "${segs[@]}"; do
       case $seg in
-        ''|.|..|*[\$\{\}\*\?\[\]\<\>~%@\`]*) tail="" ;;
+        ''|.|..|*[\$\{\}\*\?\[\]\<\>~%@\`\\\"\']*) tail="" ;;
         *) tail+="${tail:+/}$seg" ;;
       esac
     done

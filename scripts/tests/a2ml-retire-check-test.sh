@@ -554,6 +554,31 @@ c_name_symlink_or_glob_blocks() {
     && printf '%s' "$r3" | has_blocker 'name-reader:scripts/use.sh' && printf '%s' "$r4" | jq -e '.blockers == ["no-mapping-spec"]' >/dev/null
 }
 
+# Review round 2 on #1702 (Codex), P1 x2. A symbolic link that points into the
+# matched prefix is a live link whose text is its destination, not its contents.
+c_cond_symlink_into_prefix_blocks() {
+  local d r1 r2; d=$(cond_tree condsym)
+  r1=$(RULINGS="$WORK/condsym.jsonl" row "$d" old/x.a2ml)          # control: no link, so met
+  ln -s old/x.a2ml "$d/current"
+  r2=$(RULINGS="$WORK/condsym.jsonl" row "$d" old/x.a2ml)
+  printf '%s' "$r1" | class_is deletable-now \
+    && printf '%s' "$r2" | has_blocker 'ruling-condition:inbound-links-redirected' \
+    && printf '%s' "$r2" | jq -e '.inbound_links == ["current"]' >/dev/null
+}
+# Bash reads `mu\st`, `mu"s"t` and `mu's't` as `must`: a segment with an escape
+# or a quote is unresolved, never a literal other directory.
+c_name_escaped_or_quoted_segment_blocks() {
+  local d r seg; d="$WORK/nameesc"; mkdir -p "$d"; plain_record "$d/data/must/Mustfile.a2ml"
+  for seg in 'mu\st' 'mu"s"t' "mu's't"; do
+    name_script "$d" "cat data/$seg/Mustfile.a2ml"
+    r=$(row "$d" data/must/Mustfile.a2ml)
+    printf '%s' "$r" | has_blocker 'name-reader:scripts/use.sh' || return 1
+  done
+  name_script "$d" 'cat "data/other/Mustfile.a2ml"'               # control: a plain quoted other directory is foreign
+  r=$(row "$d" data/must/Mustfile.a2ml)
+  printf '%s' "$r" | jq -e '.blockers == ["no-mapping-spec"]' >/dev/null
+}
+
 check() { if "$2"; then ok "$1"; else bad "$1"; fi; }
 
 echo "=== the three deletion conditions ==="
@@ -615,6 +640,8 @@ check "a mention whose tail ends the file's path blocks; one that does not, does
 check "a match with an unescaped regex dot fails closed; an escaped dot is supported"                  c_cond_unescaped_dot_fails_closed
 check "the row's record file and the --counts file are bookkeeping, not inbound links"                 c_cond_ignores_record_and_counts_file
 check "a mention through a symlink, ?, [..] or * blocks; a plain other directory is foreign"          c_name_symlink_or_glob_blocks
+check "a symlink pointing into the prefix is an inbound link (its destination, not its contents)"   c_cond_symlink_into_prefix_blocks
+check "a segment with a backslash or quotes (mu\\st, mu\"s\"t) is unresolved and blocks"             c_name_escaped_or_quoted_segment_blocks
 
 # ── mutants ────────────────────────────────────────────────────────────────
 # A mutant is a copy of the tool in $WORK. The tool finds deed_lint.js and the
@@ -660,6 +687,8 @@ mutant 's|^      \[ -z "\$rec" \] \|\| excl+=(-e "\$rec")|      :|' "the row's r
 mutant 's|-e "\$COUNTS_REL" -e "\$COUNTS_RUN_REL" > "\$T/cands"|-e "$COUNTS_REL" > "$T/cands"|' "a counts file at another path counts as a reader" c_cond_ignores_record_and_counts_file
 mutant 's|^        \[ -z "\${SYMNAME\[\$seg\]:-}" \] \|\||        true \|\||' "a symlinked directory in a mention is ignored" c_name_symlink_or_glob_blocks
 mutant 's|\\\*\\?\\\[\\\]|\\*|' "? and [..] globs are not treated as unknown prefixes" c_name_symlink_or_glob_blocks
+mutant 's#^        '"''"'|.*tail="" ;;#        '"''"'|.|..|*[\\$\\{\\}\\*\\?\\[\\]\\<\\>~%@\\`]*) tail="" ;;#' "a backslash or quote in a segment is read as a literal directory" c_name_escaped_or_quoted_segment_blocks
+mutant 's#^        if \[\[ \$rel == "\$lit" .*; then$#        if false; then#' "a symlink into the prefix is not an inbound link" c_cond_symlink_into_prefix_blocks
 
 # ── this repository ────────────────────────────────────────────────────────
 echo "=== this repository ==="
