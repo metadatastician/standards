@@ -529,6 +529,34 @@ RUNS_FILE="$WORK/unordered.rows" SECOND=1 SCOPE="$SC1" PENDING="$P1" expect "cur
 gitq -C "$R" checkout -q -- verification/receipts/t_praxis.deed
 RUNS_FILE="$WORK/scope.rows" SECOND=1 SCOPE="$SC1" PENDING="$P1" expect "and the committed receipt still checks" 0 "PASS: negative control" --check
 
+# RECEIPT_KEEP_LINEAGE_DETAIL: a receipt that is not current keeps what its
+# run read.  Off (the default, or 0) the output is what it always was; on, a
+# superseded receipt carries its digest, its manifest and its axioms.
+RUNS_FILE="$WORK/multi.rows" SECOND=1 SCOPE="$SC1" PENDING="$P1" expect "baseline: the default writes the lineage as it always did" 0 "WROTE" --write
+cp "$R/verification/receipts/t_praxis.deed" "$WORK/lineage-default.deed"
+_q=$(leg_of T-1 rocq | grep -A6 'run/1"' || :); grep -q 'inputs-manifest' <<<"$_q" && bad "the default superseded receipt carries a manifest" || ok "by default a superseded receipt carries no manifest"
+RECEIPT_KEEP_LINEAGE_DETAIL=0 RUNS_FILE="$WORK/multi.rows" SECOND=1 SCOPE="$SC1" PENDING="$P1" expect "the option set to 0 writes" 0 "WROTE" --write
+cmp -s "$R/verification/receipts/t_praxis.deed" "$WORK/lineage-default.deed" && ok "and the receipt is byte-identical to the one without the option" || bad "RECEIPT_KEEP_LINEAGE_DETAIL=0 changed the receipt"
+RECEIPT_KEEP_LINEAGE_DETAIL=2 RUNS_FILE="$WORK/multi.rows" SECOND=1 SCOPE="$SC1" PENDING="$P1" expect "a value other than 0 or 1 is refused" 1 "RECEIPT_KEEP_LINEAGE_DETAIL must be 0 or 1" --write
+RECEIPT_KEEP_LINEAGE_DETAIL=1 RUNS_FILE="$WORK/multi.rows" SECOND=1 SCOPE="$SC1" PENDING="$P1" expect "with the option on, a superseded run writes" 0 "WROTE" --write
+_q=$(leg_of T-1 rocq | awk '/\(receipt :run "https:\/\/ci.example\/run\/1"/{p=1; print; next} /\(receipt :run/{p=0} p' || :)
+OLDDIG=$(awk -F'|' '$1=="rocq" && $2=="https://ci.example/run/1"{print $6}' "$WORK/multi.rows")
+grep -q ":inputs-sha256 \"$OLDDIG\"" <<<"$_q" && ok "the superseded receipt keeps the digest of its ledger row" || bad "the digest of run 1 is missing: $_q"
+grep -q '(inputs-manifest' <<<"$_q" && grep -q '(file :path "legs/rocq/T.v"' <<<"$_q" && ok "and its inputs manifest, rebuilt at its commit" || bad "the manifest of run 1 is missing: $_q"
+grep -q '(axioms' <<<"$_q" && ok "and its axioms" || bad "the axioms of run 1 are missing: $_q"
+grep -q ':reason "replaced by the later run https://ci.example/run/9"' <<<"$_q" && ok "and its state and reason are as before" || bad "the reason of run 1 changed"
+[ "$(leg_of T-1 rocq | grep -c ':state current')" = 1 ] && ok "the current receipt of the leg is untouched" || bad "the current receipt of the leg changed"
+RECEIPT_KEEP_LINEAGE_DETAIL=1 RUNS_FILE="$WORK/multi.rows" SECOND=1 SCOPE="$SC1" PENDING="$P1" expect "the reader and the git checker accept a receipt written with it" 0 "PASS: negative control" --check
+RUNS_FILE="$WORK/multi.rows" SECOND=1 SCOPE="$SC1" PENDING="$P1" expect "checking it without the option reports the mismatch" 1 "does not match the tree and the ledgers" --check
+# A run whose manifest cannot be shown to hash to its digest keeps the digest
+# and axioms and is written without the manifest, with a NOTE naming the run.
+awk -F'|' 'BEGIN{OFS="|"} $1=="rocq" && $2=="https://ci.example/run/1"{$6=sprintf("%064d",7)} {print}' "$WORK/multi.rows" >"$WORK/lineage-moved.rows"
+_out=$(cd "$R" && RECEIPT_KEEP_LINEAGE_DETAIL=1 RUNS_FILE="$WORK/lineage-moved.rows" SECOND=1 SCOPE="$SC1" PENDING="$P1" bash scripts/grade-receipt.sh --write 2>&1) && ok "a run whose manifest does not reproduce still writes" || bad "a moved input set stopped --write: $_out"
+grep -q "NOTE: the rocq receipt of run https://ci.example/run/1 is written without its inputs manifest" <<<"$_out" && ok "and a NOTE names the run" || bad "no NOTE for the run without a manifest: $_out"
+_q=$(leg_of T-1 rocq | grep -A12 'run/1"' || :)
+grep -q ':inputs-sha256 "0000000000000000000000000000000000000000000000000000000000000007"' <<<"$_q" && ! grep -q 'inputs-manifest' <<<"$_q" && ok "it keeps the digest and no manifest" || bad "the unreproducible run is not written as digest only: $_q"
+gitq -C "$R" checkout -q -- verification/receipts/t_praxis.deed
+
 # A later run typed regressed outranks an earlier pass: the leg is left with
 # no current receipt, and the pass is superseded by the failure.
 LATER=$(git -C "$R" rev-parse HEAD)

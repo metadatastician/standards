@@ -71,6 +71,19 @@
 #   RECEIPT_BEHOLDING_CHORA optional: the receipt's :beholding-chora, written
 #                           as given, a #u8"…" or #uuid"…" literal (the
 #                           estate chora's id, as the home chora deed has it)
+#   RECEIPT_KEEP_LINEAGE_DETAIL  optional, 0 (the default) or 1.  With 1, a
+#                           receipt that is not current (superseded,
+#                           regressed or stale) keeps what its run read: its
+#                           :inputs-sha256 and (axioms …) from the ledger row,
+#                           and its (inputs-manifest …), rebuilt at the row's
+#                           commit from the current receipt_inputs hook.  A
+#                           manifest is written only when it hashes to the
+#                           row's digest; when the commit is not here or the
+#                           input set has moved since, the receipt is written
+#                           without it and a NOTE names the run.  Set it the
+#                           same for --write and --check: a receipt written
+#                           with it does not match a check without it.  With
+#                           0 the output is what it was before the option.
 # Functions (each prints to stdout):
 #   receipt_claims          the claim list: id | §5 token of the Agda proof |
 #                           kind | Rocq route | Rocq §2.2 state | Lean route |
@@ -700,8 +713,35 @@ _receipt_emit_imports() {
     printf ')\n'
   done < "$_receipt_manifest_dir/$prover.imports"
 }
+# RECEIPT_KEEP_LINEAGE_DETAIL: the inputs manifest of a receipt that is not
+# current, rebuilt at the row's commit over the input set of the working tree.
+# Prints the path of the manifest file and returns 0 only when it hashes to the
+# row's recorded digest, which is what the reader checks; otherwise returns 1
+# and says once, on stderr, why the receipt is written without it.
+_receipt_lineage_manifest() {
+  local p="$1" run="$2" commit="$3" dig="$4" f a why=
+  local -a paths
+  f="$_receipt_manifest_dir/lineage.$(printf '%s|%s|%s' "$p" "$run" "$commit" | sha256sum | cut -c1-16)"
+  if [[ ! -e "$f" && ! -e "$f.no" ]]; then
+    if ! git cat-file -e "$commit^{commit}" 2>/dev/null; then why="commit ${commit:0:12} is not here"
+    else
+      mapfile -t paths < <(_receipt_inputs "$p")
+      if (( ${#paths[@]} )) && bash "$(_receipt_digest_script)" --manifest "$commit" "${paths[@]}" > "$f.try" 2>/dev/null; then
+        a="$(sha256sum < "$f.try" | cut -d' ' -f1)"
+        if [[ "$a" == "$dig" ]]; then mv -- "$f.try" "$f"
+        else why="the input set has moved since, so the leg's inputs at that commit do not hash to the recorded digest"; fi
+      else why="the leg's current inputs cannot be listed at that commit"; fi
+    fi
+    if [[ ! -e "$f" ]]; then
+      rm -f -- "$f.try"; : > "$f.no"
+      printf 'NOTE: the %s receipt of run %s is written without its inputs manifest: %s\n' "$p" "$run" "$why" >&2
+    fi
+  fi
+  [[ -e "$f" ]] || return 1
+  printf '%s\n' "$f"
+}
 _receipt_emit_receipts() {
-  local prover="$1" row p run commit checker inv dig said state reason axioms imports tb img want
+  local prover="$1" row p run commit checker inv dig said state reason axioms imports tb img want mf
   # Current first, then the lineage in ledger order.
   for want in current other; do
     while IFS= read -r row; do
@@ -720,6 +760,17 @@ _receipt_emit_receipts() {
         printf '               :state current\n'
         _receipt_emit_manifest "$prover"
         _receipt_emit_imports "$prover"
+        _receipt_emit_axioms "$axioms"
+      elif [[ "${RECEIPT_KEEP_LINEAGE_DETAIL:-0}" == 1 ]]; then
+        # What the run read stays on the receipt: the digest and axioms of its
+        # ledger row, and the manifest when it can be shown to hash to it.
+        printf '               :inputs-sha256 "%s"\n' "$dig"
+        printf '               :state %s\n               :reason "%s"\n' "$state" "$reason"
+        if mf="$(_receipt_lineage_manifest "$p" "$run" "$commit" "$dig")"; then
+          printf '               (inputs-manifest'
+          _receipt_emit_files "$mf" '                 '
+          printf ')\n'
+        fi
         _receipt_emit_axioms "$axioms"
       else
         printf '               :state %s\n               :reason "%s")\n' "$state" "$reason"
@@ -1131,6 +1182,10 @@ _receipt_main() {
     [[ "$RECEIPT_BEHOLDING_CHORA" =~ ^#(u8|uuid)\"[^\"\\[:cntrl:]]+\"$ ]] \
       || receipt_die 'RECEIPT_BEHOLDING_CHORA must be a #u8"…" or #uuid"…" literal'
   fi
+  case "${RECEIPT_KEEP_LINEAGE_DETAIL:-0}" in
+    0|1) ;;
+    *) receipt_die 'RECEIPT_KEEP_LINEAGE_DETAIL must be 0 or 1' ;;
+  esac
   for v in receipt_claims receipt_echoes receipt_header receipt_trusted_base receipt_invocation receipt_inputs receipt_status_ids receipt_recorded_legs; do
     declare -F "$v" >/dev/null || receipt_die "the home script must define $v"
   done
