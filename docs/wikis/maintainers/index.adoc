@@ -285,9 +285,9 @@ rulings file's `kyx-family` rows), and `ruling-needed` for the rest.
 *Ruling conditions.* A `dropped` row's `requires` key is evaluated against the
 tree, never trusted. `inbound-links-redirected` is met when no live file names
 or links the row's `match` prefix. The `match` must be `^` and a literal path
-(escaped dots allowed), or the condition is unsupported. Not live: dated
+(only an escaped dot `\.` is a literal; a bare `.` matches any character), or the condition is unsupported. Not live: dated
 records (`9-archive/`, `docs/triage/<date>/`, `docs/audits/`, `docs/reorg/`),
-the rulings files of the run, the legacy ledger, the counts file, the tool and
+the rulings files of the run, the row's own `record` file, the legacy ledger, the counts file (the default one and the one `--counts` names), the tool and
 its test, and files under the prefix itself. A mention of the prefix with or
 without its trailing slash counts; a longer name (`older/`) does not. An
 unknown key, or a `match` that is not a literal prefix, stays a named
@@ -298,15 +298,15 @@ under `inbound_links`.
 *Basename readers.* A `name-reader` names only the basename, so it may read
 another repository's file of that name. The tool cuts each mention (a path
 token ending in the basename) at its last variable, glob, `.`, `..` or empty
-segment. If what remains is the bare name, the directory is unknown and the
+segment (`?` and `[..]` count as globs). If what remains is the bare name, the directory is unknown and the
 reader blocks (`readers.name_why` says "bare name"). If it has a directory and
 that tail ends this file's path (`../must/Mustfile.a2ml` for
 `.../must/Mustfile.a2ml`), the mention can resolve here and blocks. If the
 tail has a directory that does not end the path, the mention names a different
-file under any root. A reader whose every mention is of that kind is foreign:
+file under any root, unless a directory in it is a symbolic link in this tree (it then blocks). A reader whose every mention is of that kind is foreign:
 it is listed in `readers.name_foreign` and does not block. Not decided, so
-kept as blockers: a directory joined to a bare name at run time, symbolic
-links, and whether a template or example is ever run against this tree.
+kept as blockers: a directory joined to a bare name at run time, a symbolic
+link reached by another name, and whether a template or example is ever run against this tree.
 
 *The rulings files.* `.machine_readable/a2ml-retire-rulings.jsonl` (JCS, one
 row per line) holds what the tree cannot show. Each row has `id`, `kind`,

@@ -513,6 +513,47 @@ c_name_path_suffix_blocks() {
     && printf '%s' "$r3" | jq -e '.blockers | index("name-reader:scripts/use.sh") != null' >/dev/null
 }
 
+# Review findings on #1702 (Codex): each case fails against the first push.
+# An unescaped regex dot in `match` matches more than the literal path, so the
+# condition fails closed; an escaped dot is a literal and is supported.
+c_cond_unescaped_dot_fails_closed() {
+  local d r1 r2; d="$WORK/conddot"; mkdir -p "$d/oldXv1" "$d/docs"; plain_record "$d/old.v1/x.a2ml"
+  printf 'live: oldXv1/y\n' > "$d/docs/a.adoc"                  # the regex ^old.v1/ also matches oldXv1/
+  printf '%s\n' '{"date":"2026-11-17","id":"t-drop","kind":"dropped","match":"^old.v1/","recorded":"test","requires":"inbound-links-redirected","summary":"s"}' > "$WORK/conddot.jsonl"
+  r1=$(RULINGS="$WORK/conddot.jsonl" row "$d" old.v1/x.a2ml)
+  printf '%s\n' '{"date":"2026-11-17","id":"t-drop","kind":"dropped","match":"^old\\.v1/","recorded":"test","requires":"inbound-links-redirected","summary":"s"}' > "$WORK/conddot2.jsonl"
+  r2=$(RULINGS="$WORK/conddot2.jsonl" row "$d" old.v1/x.a2ml)
+  printf '%s' "$r1" | has_blocker 'ruling-condition:inbound-links-redirected' && ! printf '%s' "$r1" | class_is deletable-now \
+    && printf '%s' "$r2" | class_is deletable-now
+}
+# The record file a row requires, and the counts file of this run (wherever
+# --counts puts it), name the path by design: they are bookkeeping, not links.
+c_cond_ignores_record_and_counts_file() {
+  local d r; d="$WORK/condrc"; mkdir -p "$d/docs" "$d/meta"; plain_record "$d/old/x.a2ml"
+  printf '%s\n' '{"date":"2026-11-17","id":"t-drop","kind":"dropped","match":"^old/","record":"docs/REMOVED.adoc","recorded":"test","requires":"inbound-links-redirected","summary":"s"}' > "$WORK/condrc.jsonl"
+  printf '* `old/x.a2ml` held one table\n' > "$d/docs/REMOVED.adoc"
+  printf '{"deletable_now":["old/x.a2ml"]}\n' > "$d/meta/counts.json"
+  r=$(bash "$TOOL" --root "$d" --rulings "$WORK/condrc.jsonl" --counts "$d/meta/counts.json" --json | jq -c 'select(.path == "old/x.a2ml")')
+  printf '%s' "$r" | jq -e '.class == "deletable-now" and .inbound_links == []' >/dev/null
+}
+# A mention through a symbolic link, or through a glob of any kind, can reach a
+# file whose literal tail does not end its path: neither may clear a reader.
+c_name_symlink_or_glob_blocks() {
+  local d r1 r2 r3 r4; d="$WORK/namesym"; mkdir -p "$d"; plain_record "$d/data/must/Mustfile.a2ml"
+  ln -s data/must "$d/alias"
+  name_script "$d" 'cat alias/Mustfile.a2ml'
+  r1=$(row "$d" data/must/Mustfile.a2ml)
+  rm "$d/alias"
+  name_script "$d" 'cat data/other?/Mustfile.a2ml'
+  r2=$(row "$d" data/must/Mustfile.a2ml)
+  name_script "$d" 'cat data/[om]ther/Mustfile.a2ml'
+  r3=$(row "$d" data/must/Mustfile.a2ml)
+  name_script "$d" 'cat data/other/Mustfile.a2ml'                     # control: a plain other directory is still foreign
+  r4=$(row "$d" data/must/Mustfile.a2ml)
+  printf '%s' "$r1" | has_blocker 'name-reader:scripts/use.sh' && printf '%s' "$r2" | has_blocker 'name-reader:scripts/use.sh' \
+    && printf '%s' "$r3" | has_blocker 'name-reader:scripts/use.sh' && printf '%s' "$r4" | jq -e '.blockers == ["no-mapping-spec"]' >/dev/null
+}
+
 check() { if "$2"; then ok "$1"; else bad "$1"; fi; }
 
 echo "=== the three deletion conditions ==="
@@ -571,6 +612,9 @@ echo "=== basename readers: local or foreign ==="
 check "a reader whose every mention is another file's path does not block (name_foreign)"                  c_name_foreign_does_not_block
 check "a bare mention still blocks, and the reader says why"                                               c_name_bare_still_blocks_and_says_why
 check "a mention whose tail ends the file's path blocks; one that does not, does not"                     c_name_path_suffix_blocks
+check "a match with an unescaped regex dot fails closed; an escaped dot is supported"                  c_cond_unescaped_dot_fails_closed
+check "the row's record file and the --counts file are bookkeeping, not inbound links"                 c_cond_ignores_record_and_counts_file
+check "a mention through a symlink, ?, [..] or * blocks; a plain other directory is foreign"          c_name_symlink_or_glob_blocks
 
 # ── mutants ────────────────────────────────────────────────────────────────
 # A mutant is a copy of the tool in $WORK. The tool finds deed_lint.js and the
@@ -611,6 +655,11 @@ mutant "s/grep -vE '\^9-archive[^']*'/grep -vE '^\$^'/" "dated records count as 
 mutant 's/^    if \[ -z "\$NSWHY" \]; then rnf+=/    if false; then rnf+=/' "a foreign reader is counted as local" c_name_foreign_does_not_block
 mutant 's/^    elif \[ "\$tail" = "\$3" \] || \[\[ \$3 == \*\/"\$tail" \]\]; then/    elif false; then/' "a path-suffix mention is called foreign" c_name_path_suffix_blocks
 mutant 's/^    if \[\[ \$tail != \*\/\* \]\]; then/    if false; then/' "a bare name is called foreign" c_name_bare_still_blocks_and_says_why
+mutant 's|\${lit//\\\\\./}|${lit//./}|' "an unescaped regex dot is accepted in a match" c_cond_unescaped_dot_fails_closed
+mutant 's|^      \[ -z "\$rec" \] \|\| excl+=(-e "\$rec")|      :|' "the row's record file counts as an inbound link" c_cond_ignores_record_and_counts_file
+mutant 's|-e "\$COUNTS_REL" -e "\$COUNTS_RUN_REL" > "\$T/cands"|-e "$COUNTS_REL" > "$T/cands"|' "a counts file at another path counts as a reader" c_cond_ignores_record_and_counts_file
+mutant 's|^        \[ -z "\${SYMNAME\[\$seg\]:-}" \] \|\||        true \|\||' "a symlinked directory in a mention is ignored" c_name_symlink_or_glob_blocks
+mutant 's|\\\*\\?\\\[\\\]|\\*|' "? and [..] globs are not treated as unknown prefixes" c_name_symlink_or_glob_blocks
 
 # ── this repository ────────────────────────────────────────────────────────
 echo "=== this repository ==="

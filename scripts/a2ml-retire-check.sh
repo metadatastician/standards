@@ -169,6 +169,13 @@ jq -c --arg repo "$REPO" 'select(.repo == null or .repo == $repo)' "$T/rulings.a
 # The rulings files that sit inside the tree, as ROOT-relative paths: they name
 # every match they hold, so they never count as a link to it (see eval_condition).
 ROOT_REAL=$(readlink -f -- "$ROOT"); RULINGS_REL=()
+# The counts file of this run, wherever --counts puts it, if it is inside the tree.
+COUNTS_RUN_REL=""; a=$(readlink -f -m -- "$COUNTS")
+case $a in "$ROOT_REAL"/*) COUNTS_RUN_REL=${a#"$ROOT_REAL"/} ;; esac
+# Names of symbolic links in the tree (tracked or not): a mention through one
+# can reach a file its literal tail does not name.
+declare -A SYMNAME=()
+while IFS= read -r a; do SYMNAME[$a]=1; done < <(find "$ROOT" -type l -not -path '*/.git/*' -printf '%f\n' 2>/dev/null || true)
 for rf in "${RULINGS[@]}"; do
   a=$(readlink -f -- "$rf"); case $a in "$ROOT_REAL"/*) RULINGS_REL+=("${a#"$ROOT_REAL"/}") ;; esac
 done
@@ -225,7 +232,7 @@ while IFS= read -r f; do KYX[$f]=1; done < <(jq -r 'select(.kind == "kyx-family"
 # ── readers: two grep passes over the candidate files ─────────────────────
 tr '\0' '\n' < "$T/all" | grep -vE "$A2ML_RE" \
   | grep -vE '\.(adoc|md|txt|html|jsonl|csv|tsv|svg)$|^9-archive/|^docs/archive/|^\.machine_readable/archive/' \
-  | grep -vxF -e "$SELF_TOOL" -e "$SELF_TEST" -e "$COUNTS_REL" > "$T/cands" || true
+  | grep -vxF -e "$SELF_TOOL" -e "$SELF_TEST" -e "$COUNTS_REL" -e "$COUNTS_RUN_REL" > "$T/cands" || true
 cut -d $'\x1f' -f1 "$T/fam.tsv" > "$T/pat.path"
 awk -F/ '{print $NF}' "$T/pat.path" | LC_ALL=C sort -u > "$T/pat.name"
 : > "$T/exact.tsv"; : > "$T/name.tsv"
@@ -421,29 +428,40 @@ ES=$'\x1e'
 # the files that stop it (newline-separated). Supported keys:
 #   inbound-links-redirected  no live file names or links the row's match
 #     prefix. The prefix is the row's `match`, which must be `^` and a literal
-#     path (dots may be escaped), else the condition is unsupported. A file
+#     path (only an escaped dot is literal), else the condition is unsupported. A file
 #     does not count when it is a dated record (9-archive/, docs/triage/<date>/,
 #     docs/audits/, docs/reorg/), a rulings file of this run, the legacy
-#     ledger, the counts file, this tool or its test, or lies under the prefix.
+#     ledger, the counts file of the run, the row's own record file, this tool or its test, or lies under the prefix.
 #     A mention counts when the prefix, with or without its trailing slash, is
 #     not the tail of a longer name.
 # Any other key is unsupported: the condition stays unmet, named, so the file
 # never reaches deletable-now by a condition this tool cannot evaluate.
 declare -A COND=() HOLD=()
-eval_condition() { # eval_condition ID KEY MATCH
-  local id=$1 key=$2 m=$3 lit re holders
+eval_condition() { # eval_condition ID KEY MATCH [RECORD]
+  local id=$1 key=$2 m=$3 rec=${4:-} lit re holders a excl=()
   [ -z "${COND[$id]:-}" ] || return 0
   case $key in
     inbound-links-redirected)
-      lit=${m#^}; lit=${lit//\\./.}
-      if [ "${m:0:1}" != "^" ] || ! [[ $lit =~ ^[A-Za-z0-9_][A-Za-z0-9_./-]*/$ ]] || [[ $lit == *//* || $lit == */../* ]]; then
+      # Only an escaped dot is a literal: an unescaped one matches any
+      # character, so the regex reaches paths the literal prefix does not.
+      lit=${m#^}
+      if [ "${m:0:1}" != "^" ] || ! [[ ${lit//\\./} =~ ^[A-Za-z0-9_][A-Za-z0-9_/-]*/$ ]]; then
+        COND[$id]="unsupported: the match is not a literal path prefix, so no link search can be derived from it"; return 0
+      fi
+      lit=${lit//\\./.}
+      if [[ $lit == *//* || $lit == */../* || $lit == ../* ]]; then
         COND[$id]="unsupported: the match is not a literal path prefix, so no link search can be derived from it"; return 0
       fi
       lit=${lit%/}
+      # Bookkeeping that names the path by design: the ledger, the counts file
+      # of this run, the rulings files, and the record file this row requires.
+      excl=(-e "$LEDGER_REL" -e "$COUNTS_REL" -e "$COUNTS_RUN_REL" -e "$SELF_TOOL" -e "$SELF_TEST")
+      [ -z "$rec" ] || excl+=(-e "$rec")
+      for a in ${RULINGS_REL[@]+"${RULINGS_REL[@]}"}; do excl+=(-e "$a"); done
       re=$(printf '%s' "$lit" | sed 's/[][\.*^$+?(){}|]/\\&/g')
       tr '\0' '\n' < "$T/all" \
         | grep -vE '^9-archive/|^docs/triage/[0-9]{4}-[0-9]{2}-[0-9]{2}/|^docs/audits/|^docs/reorg/' \
-        | grep -vxF -e "$LEDGER_REL" -e "$COUNTS_REL" -e "$SELF_TOOL" -e "$SELF_TEST" ${RULINGS_REL[@]+"${RULINGS_REL[@]/#/-e}"} \
+        | grep -vxF "${excl[@]}" \
         | awk -v lit="$lit/" 'index($0, lit) != 1' > "$T/live.$id" || true
       holders=$(cd "$ROOT" || exit 0; tr '\n' '\0' < "$T/live.$id" \
         | xargs -0 -r grep -I -l -E -- "(^|[^A-Za-z0-9_-])$re(\$|/|[^A-Za-z0-9_.-]|\.(\$|[^A-Za-z0-9_-]))" 2>/dev/null | LC_ALL=C sort -u || true)
@@ -460,7 +478,7 @@ while IFS=$'\x1f' read -r p id kind key req rec mt; do
   case $kind in
     dropped) DROPPED[$p]=1
              if [ -n "$req" ]; then
-               eval_condition "$id" "$req" "$mt"
+               eval_condition "$id" "$req" "$mt" "$rec"
                RCOND[$p]+="$id$ES$req$S"
                [ "${COND[$id]}" = met ] || REQS[$p]+="ruling-condition:$req$S"
              fi
@@ -514,13 +532,21 @@ name_scope() {
     IFS=/ read -r -a segs <<< "$tok"; tail=""
     for seg in "${segs[@]}"; do
       case $seg in
-        ''|.|..|*[\$\{\}\*\<\>~%@\`]*) tail="" ;;
+        ''|.|..|*[\$\{\}\*\?\[\]\<\>~%@\`]*) tail="" ;;
         *) tail+="${tail:+/}$seg" ;;
       esac
     done
     if [[ $tail != */* ]]; then why="bare name: it resolves from a directory this tool cannot see"
     elif [ "$tail" = "$3" ] || [[ $3 == */"$tail" ]]; then why="the mention $tail ends this file's path"
-    else continue; fi
+    else
+      # A different literal tail names a different file, unless a directory in
+      # it is a symbolic link here (it may then reach this path by another name).
+      IFS=/ read -r -a segs <<< "${tail%/*}"
+      for seg in "${segs[@]}"; do
+        [ -z "${SYMNAME[$seg]:-}" ] || { NSWHY="a directory in the mention ($seg) is a symbolic link in this tree, so it may reach this path"; return 0; }
+      done
+      continue
+    fi
     NSWHY=$why; return 0
   done <<< "$toks"
   return 0
