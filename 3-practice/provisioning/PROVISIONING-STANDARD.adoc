@@ -123,8 +123,26 @@ and exit 0; they are replaced by `doctor: provision::doctor`, not renamed.
   ecosystem gets a *source* package (`copy-build-system`) that says so, because a
   hermetic compiled build needs that ecosystem's dependencies packaged in Guix,
   which they are not. A spec may name an output (`rust:cargo`).
-  At commit ae77aeb Guix does not package idris2, gleam, bun or lychee. For those
+  At commit ae77aeb Guix does not package gleam, bun or lychee. For those
   tools the Guix shell provides mise.
+* *Estate channel* (owner request 2026-11-25): Guix does not package idris2 either, so
+  `channels.scm` carries a second channel, `estate`
+  (`https://github.com/hyperpolymath/guix-channel`, module `(estate packages idris)`,
+  idris2 0.7.0), and `manifest.scm` lists `idris2` for a repository with an `*.ipkg`.
+  Rules for a second channel: it must carry an `(introduction ...)`, so
+  `guix git authenticate` verifies it, and a 40-hex `(commit ...)` pin. The estate pin
+  is canon-controlled: `toolchain-refresh` re-pins only the `guix` channel and never
+  moves `estate`; the pin changes only when the canon `channels.scm` changes, after
+  `guix git authenticate` passes against the introduction. A manifest that names
+  idris2 resolves only under that channel, so `just dev-shell` uses
+  `guix time-machine -C channels.scm`. *Limits, measured*: tested on Guix 1.4.0 only,
+  NOT against the pinned guix `ae77aeb` or `37d0e81`, and not bit-reproducible. Without
+  Guix, Idris2 still comes from pack (doctor accepts either). The deed
+  `provisioning-standard_praxis.deed` is the single source of truth: `provision-lib.sh`
+  reads `:guix-gaps` from it (a tool leaves the gap by leaving the list), and the estate
+  channel's name, introduction, fingerprint and pin are `:guix-estate-*` there;
+  `tests/guix-estate-channel.sh` proves the shell defaults, `channels.scm` and the deed
+  agree. A repository minted without the canon deed uses the shell defaults.
 * *just ≥ 1.42*: a root recipe depending on a module recipe
   (`doctor: provision::doctor`) fails on 1.31, 1.36, 1.40 and 1.41 and works from
   1.42 (measured 2026-09-30). Doctor enforces the floor as PV-E02.
@@ -185,7 +203,7 @@ A repository conforms when, on a fresh clone:
 . `guix.scm`, `manifest.scm` and `channels.scm` are not stubs. The test is positive:
   `guix.scm` must define every package field (name, version, source, build-system,
   home-page, synopsis, description, licence), `manifest.scm` must list
-  specifications and `channels.scm` must pin a 40-hex commit;
+  specifications and `channels.scm` must pin a 40-hex commit for every channel it lists, and, for a repository whose only language is idris2, name the `estate` channel with its introduction commit and fingerprint;
 . no template residue remains (§5);
 . `just doctor` exits 0 once `just setup` has run.
 
