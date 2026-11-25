@@ -12,7 +12,8 @@ set -uo pipefail
 # an ordinary YAML parser keeps the last one and reports success.
 #
 # Needs mikefarah yq v4 and jq. The lint cases need actionlint (ACTIONLINT or
-# PATH); without it they are reported as skipped, and the not_run case still runs.
+# PATH, version 1.7.12 only); without it they are skipped, and the not_run case still runs.
+# There are no exemptions (owner ruling 2026-11-25), so no exemption tests.
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 CHK="$ROOT/scripts/check-workflow-totality.sh"
@@ -130,16 +131,6 @@ run_case "no .github/workflows directory fails" 1 "absence" "$d"
 d=$(repo empty-dir)
 run_case "an empty workflows directory fails" 1 "no workflow files" "$d"
 run_case "--allow-empty lets an empty directory pass" 0 "failed=0" "$d" --allow-empty
-
-echo "== exemptions are typed, dated and bounded =="
-d=$(repo ex-ok); printf 'name: x\non: [push\n' > "$d/.github/workflows/wip.yml"; printf '%s' "$GOOD" > "$d/.github/workflows/ci.yml"
-printf 'wip.yml\twip\tbeing rewritten\t2026-12-31\n' > "$d/.github/workflow-totality-exemptions.tsv"
-if [ -n "$AL" ]; then run_case "a live exemption passes and is reported as exempt" 0 "exempt" "$d" --today 2026-11-25; else skp "live exemption"; fi
-run_case "a lapsed exemption fails" 1 "lapsed on 2026-12-31" "$d" --today 2027-01-01
-printf 'wip.yml\twip\tbeing rewritten\t2027-12-31\n' > "$d/.github/workflow-totality-exemptions.tsv"
-run_case "an exemption past 90 days fails (none is permanent)" 1 "past 90 days" "$d" --today 2026-11-25
-printf 'wip.yml\tforever\tbecause\t2026-12-31\n' > "$d/.github/workflow-totality-exemptions.tsv"
-run_case "an exemption of an unknown kind fails" 1 "malformed" "$d" --today 2026-11-25
 
 echo "== missing tooling is not_run (exit 2), never a pass =="
 d=$(repo no-tool); printf '%s' "$GOOD" > "$d/.github/workflows/ci.yml"
