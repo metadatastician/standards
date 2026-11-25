@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
-= Proposal: make absence block (ratify A3 "no pass on absence" with totality and a workflow-integrity check)
+= Proposal: make absence block (a new spec, proposed id A8: no pass on absence, totality, workflow-integrity check)
 :date: 2026-11-25
-:status: PROPOSED (draft PR; the owner decides, nothing here is enforced)
+:status: PROPOSED; owner decisions of 2026-11-25 applied (section 10); nothing here is enforced
 :scope: estate
-:amends: docs/estate-reconciliation/A3-estate-gate.adoc (v0.2.12-draft), sections 5.3, 6, 7 and 12
+:spec: A8
+:relates-to: docs/estate-reconciliation/A3-estate-gate.adoc (v0.2.12-draft), cited, not amended (owner ruling 2026-11-25)
 :source: hyperpolymath/mathesis draft PR #126, docs/proposals/types-tropes-estate-upkeep.adoc, recommendation 2
 :rollout-home: standards (this PR); rsr-template-repo and proven-cicd (separate PRs, listed in section 9)
 
@@ -52,13 +53,11 @@ of the check table at its pin, the capabilities declared and the capabilities de
 It is never computed from which runs, jobs, contexts or workflow files happen to exist at the head. Removing a
 workflow, a job or a profile entry cannot shrink the set; it can only turn a `passed` row into `not_run`.
 | G8 (new) | Totality. Every file under `.github/workflows` at the head maps to exactly one observation, one of
-`passed`, `failed`, `not_run`, `exempt` or `inert`. A workflow file that cannot start is `failed` (it parses
-badly) or `not_run` (it was not checked); it is never missing from the report. A file mapped to `exempt`
-carries a typed, dated, bounded exemption (section 5).
+`passed`, `failed`, `not_run` or `inert`. A workflow file that cannot start is `failed` (it parses
+badly) or `not_run` (it was not checked); it is never missing from the report. There is no exemption.
 |===
 
-G5 (monotone waiver) is unchanged and is what keeps G8's exemption sound: an exemption only moves one file
-to `exempt`; it never adds a check to the set and never changes another file's state.
+G5 (monotone waiver) is unchanged and is not used by G8: there is no exemption, so a failing file is fixed.
 
 == 4. How the required set is derived
 
@@ -85,7 +84,7 @@ required row. The verdict must change to fail. If it still passes, the set was d
 *Why the new row is `baseline`.* A row `:when baseline` applies to every repo regardless of declared
 capability, so the check "workflow files are live" cannot be dropped by omitting it from a profile.
 
-== 5. The totality rule and its exemptions
+== 5. The totality rule (no exemptions)
 
 For a head commit, let `F` be every file under `.github/workflows`, at any depth. G8 requires a total map
 from `F` to observations:
@@ -98,19 +97,14 @@ from `F` to observations:
 | `failed` | Any of those fails. The detail column names every defect, so one report shows all of them.
 Also: a `.yml` or `.yaml` below the top level of `.github/workflows` (GitHub reads only the top level, so it never runs).
 | `not_run` | A check could not be performed, for example actionlint is not installed. Fails the verdict (G3).
-| `exempt` | A typed, dated, bounded exemption covers the file.
 | `inert` | Not a workflow file (a README, a lock file, `*.yml.disabled`). Reported, never silent.
 |===
 
 An empty or missing workflow directory is `failed` (it is the purest absence), unless the caller passes
 `--allow-empty` for a context where no baseline set applies.
 
-*Exemptions.* `.github/workflow-totality-exemptions.tsv`, one row per file:
-`file<TAB>kind<TAB>reason<TAB>expires`. `kind` is `wip`, `generated` or `upstream`. An exemption lapses on
-its date and may not run more than 90 days ahead of the day the check runs, so none is permanent. A
-malformed, lapsed or over-long exemption is a `failed` row. This is a stopgap store. A3 section 10 and A5
-define the deviation store (`check/<id>` waivers); once A5 lands the exemption moves there under the rule
-`check/workflow-integrity`, and this TSV is retired. That move is an owner decision (section 10).
+*No exemptions (owner ruling 2026-11-25).* There is no exemption file, flag or kind. A file that fails is fixed; the
+verdict stays fail until it is. The earlier draft's dated TSV stopgap was removed from the script and its tests.
 
 *Job-level totality (not in this PR).* The same law applies one level down: every job that backs a required
 row maps to one check run on the head. A3 5.3 already binds each inline job to a name, a workflow path and an
@@ -190,8 +184,8 @@ check that cannot run exits 2 (`not_run`), which also fails the verdict.
 *Negative test.* `scripts/tests/check-workflow-totality-test.sh` plants each failure class. A workflow with a
 duplicate top-level key fails, a duplicate key inside `permissions` fails (the shape found live in `vcl-ut`), one
 dead file among clean ones fails the whole repository, malformed YAML, an empty file, a missing `on`, a missing
-`jobs`, a workflow in a subdirectory, job-level `hashFiles()`, an empty directory, and lapsed, over-long and
-malformed exemptions all fail. Result: 20 passed, 0 failed, 0 skipped (run with actionlint v1.7.12 and mikefarah yq v4.44.3).
+`jobs`, a workflow in a subdirectory, job-level `hashFiles()` and an empty directory all fail, and a missing
+actionlint is `not_run`. Result: 16 passed, 0 failed, 0 skipped (run with actionlint v1.7.12 and mikefarah yq v4.44.3).
 
 The existing `scripts/tests/check-workflow-duplicate-keys-test.sh` passes 17 of 17 with mikefarah yq. With the
 Python `yq` that is on the PATH in this session's container it passes 13 and fails 4, because that program
@@ -209,7 +203,7 @@ mikefarah's, rather than guess.
 | G40 | A repo with an unparseable workflow gets verdict fail, not "no checks, pass" (G3).
 | G41 | A `.yml` below the top level of `.github/workflows` gets verdict fail (G8).
 | G42 | actionlint absent: the row is `not_run` and the verdict is fail (G3), never skipped.
-| G43 | An exemption past 90 days, lapsed, or of an unknown kind is `failed`; a live one is `exempt` and changes nothing else (G5, G8).
+| G43 | An actionlint of any version other than 1.7.12 gives `not_run` (exit 2) and fails the verdict (G3); no exemption exists to cover a file (G8).
 | G44 | The `workflow-integrity` row cannot be removed by editing a profile (it is `baseline`, G4, G7).
 | G45 | The workflow that carries `workflow-integrity` has no `paths` or `paths-ignore` filter and no job-level skip: on a pull request that touches no workflow file it still runs and reports `success` (a skipped or pending required check blocks the PR). Checked by reading the carrying workflow in each repo that adopts the row; the check itself is stateless over the head tree, so it passes unchanged on an unchanged clean repo (suite case "two clean workflows pass").
 |===
@@ -240,9 +234,8 @@ absence (verdict rule c). A profile-level `totality` flag would need schema_vers
 long-term home is A3's table. The same coordinator noted that actionlint 1.7.x flags `gh actions-lock`'s
 `uses: "$/..."` form and `job.workflow_sha`, so a required check needs a pinned actionlint that knows them or an
 allow-list (decision 2 in section 10), and that `rsr-template-repo` `check-lock-sync.sh` already covers
-lock coverage per workflow file, which is not a parse check. A3 collision: this page amends A3 and uses no new
-spec id; whether to amend or fork under a fresh id is the owner's call (the coordinator asked that it be put to
-the owner by selector; it is raised in the PR and the hub card).
+lock coverage per workflow file, which is not a parse check. A3 collision: resolved by the owner on 2026-11-25 (section 10): a separate spec under a new
+id, not an amendment of A3.
 
 *The carrying workflow must always start (mathesis#126 addendum, commit `db1f1c6`).* A required check that is
 path-filtered stays pending on every pull request that touches none of the paths, and blocks them. So the
@@ -263,21 +256,29 @@ workflows are unchanged and clean.
 | P0 | This PR: wording, scripts, tests. No repo changes. | Review of this PR.
 | P1 | `rsr-template-repo` runs the check report-only (separate draft PR, not opened here). Run the `tree` census over a clone of every repo. | Owner approves the template PR.
 | P2 | The row enters the table as `advisory` (A3 5.3 convention: "all other capabilities are advisory in the first table"). | Owner ruling; widening the required set is an owner call (E11).
-| P3 | Row becomes `required`. Existing dead files get 90-day exemptions or are repaired under the standing "correct departures as you meet them" rule. | Owner ruling; lock and ruleset tooling stay tool-owned.
-| P4 | Exemptions move to the A5 deviation store; the TSV is retired. | A5 lands.
+| P3 | Row becomes `required` once standards' own failing workflows are fixed. There are no exemptions; each failure is repaired. | Owner ruling; lock and ruleset tooling stay tool-owned.
 |===
 
-== 10. Decisions for the owner
+== 10. Decisions (owner, 2026-11-25, via the decision desk)
 
-. Ratify G3 (reworded), G7 and G8 into A3, as written in section 3. A3 is not yet ratified as a whole.
-. Which `actionlint` version to pin, and how: a SHA-256 of the release archive, installed by the estate's own
-  tool route. It must be pinned. See section 11, the false-positive rate depends on the version.
-. Whether the exemption TSV stays as a stopgap or the row waits for A5's deviation store.
-. Whether `workflow-integrity` is `advisory` at P2 or goes straight to `required`.
-. Whether the exit-2 `not_run` for a missing actionlint is acceptable in repos that cannot install it, or those
-  repos must carry a dated exemption.
-. Whether shellcheck findings inside `run:` blocks belong here. This PR switches them off so the verdict does not
-  depend on which helper is installed. They belong to a separate, advisory row.
+. *Separate spec, not an in-place amendment of A3.* The reworded G3, G7 and G8 are ratified as their own spec
+  under a new id (this page uses `A8`, the next free id in `docs/estate-reconciliation/README.adoc`, which lists A1 to A7). A3 stays as it is and
+  the new spec cites it. Ratification follows green CI on this PR. Where this page says "amend A3", read
+  "the new spec, which adds to A3's check table and laws by reference".
+. *actionlint is pinned to v1.7.12*, SHA-256 checked. `scripts/actionlint-1.7.12.sha256` is the release's own
+  checksum file (11 platform archives); `actionlint_1.7.12_linux_amd64.tar.gz` was downloaded and hashed in this
+  session and equals the listed `8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8`. The checker treats any other version as not
+  installed (`not_run`, exit 2). Both the archive and its checksum file come from the same release, so this
+  proves integrity of the download, not provenance.
+. *No exemptions file, flag or kind, not even a stopgap.* Every failure is fixed. Where this page or the
+  scripts spoke of an exemption, the mechanism has been removed from the script and its tests.
+. *A repo that cannot install actionlint fails the check* (`not_run`, exit 2, fail closed). The template ships the
+  pinned binary.
+. *shellcheck findings inside `run:` blocks* are a separate advisory row, not part of `workflow-integrity`.
+. *Rollout of the row:* `advisory` first; `required` once standards' own failing workflows are fixed (section 11
+  lists the 17; there are no exemptions to hide behind).
+. *The 521 / 281 figure did not reproduce.* It counted repair commits, not dead files. My searches give 359 to
+  1111 commits across 214 to 341 repos (section 6.1). This is to be recorded in the follow-up of mathesis #126.
 
 == 11. Findings met on the way, and aspects other than the gate
 
