@@ -63,7 +63,8 @@ done
 
 # mikefarah yq v4 is the estate flavour (check-workflow-duplicate-keys.sh uses `yq -P`);
 # another yq parses differently, so refuse rather than guess.
-if ! yq --version 2>/dev/null | grep -q mikefarah; then
+yq_version="$(yq --version 2>/dev/null)"   # capture, then match: no pipe into a quiet grep
+if ! grep -q mikefarah <<<"$yq_version"; then
   printf "not_run\t-\t-\tmikefarah yq v4 is required and missing\n"; exit 2
 fi
 AL="${ACTIONLINT:-$(command -v actionlint || true)}"
