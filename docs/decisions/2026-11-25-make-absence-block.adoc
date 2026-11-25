@@ -231,6 +231,18 @@ The coordinator of the CI/gate work was sent this plan before any of it was buil
 profile field name that a totality or parse-clean requirement should plug into; its answer is recorded in the PR
 thread and not assumed here.
 
+*No-schema-change route (from the CI/gate coordinator, read from suite main `d28d73e`).* The CI/gate profile
+schema v2 is closed (`{checks, repository, schema_version}`, each entry exactly `{job, workflow}`). This proposal
+does not change it and does not touch the suite. Until A3's table replaces CI/gate, a repo gets the check by
+running it as a job in a workflow and listing that job as an ordinary `checks[]` entry; the gate then fails it on
+absence (verdict rule c). A profile-level `totality` flag would need schema_version 3 and is not proposed: the
+long-term home is A3's table. The same coordinator noted that actionlint 1.7.x flags `gh actions-lock`'s
+`uses: "$/..."` form and `job.workflow_sha`, so a required check needs a pinned actionlint that knows them or an
+allow-list (decision 2 in section 10), and that `rsr-template-repo` `check-lock-sync.sh` already covers
+lock coverage per workflow file, which is not a parse check. A3 collision: this page amends A3 and uses no new
+spec id; whether to amend or fork under a fresh id is the owner's call (the coordinator asked that it be put to
+the owner by selector; it is raised in the PR and the hub card).
+
 *Rollout.* Each phase is one owner decision. No phase is started by this PR.
 
 [cols="1,3,2"]
