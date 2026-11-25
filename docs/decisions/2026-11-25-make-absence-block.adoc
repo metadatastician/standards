@@ -211,6 +211,7 @@ mikefarah's, rather than guess.
 | G42 | actionlint absent: the row is `not_run` and the verdict is fail (G3), never skipped.
 | G43 | An exemption past 90 days, lapsed, or of an unknown kind is `failed`; a live one is `exempt` and changes nothing else (G5, G8).
 | G44 | The `workflow-integrity` row cannot be removed by editing a profile (it is `baseline`, G4, G7).
+| G45 | The workflow that carries `workflow-integrity` has no `paths` or `paths-ignore` filter and no job-level skip: on a pull request that touches no workflow file it still runs and reports `success` (a skipped or pending required check blocks the PR). Checked by reading the carrying workflow in each repo that adopts the row; the check itself is stateless over the head tree, so it passes unchanged on an unchanged clean repo (suite case "two clean workflows pass").
 |===
 
 == 9. Interaction with CI/gate profiles, and rollout
@@ -242,6 +243,16 @@ allow-list (decision 2 in section 10), and that `rsr-template-repo` `check-lock-
 lock coverage per workflow file, which is not a parse check. A3 collision: this page amends A3 and uses no new
 spec id; whether to amend or fork under a fresh id is the owner's call (the coordinator asked that it be put to
 the owner by selector; it is raised in the PR and the hub card).
+
+*The carrying workflow must always start (mathesis#126 addendum, commit `db1f1c6`).* A required check that is
+path-filtered stays pending on every pull request that touches none of the paths, and blocks them. So the
+workflow that runs `workflow-integrity` has no `paths:` or `paths-ignore:` filter on `pull_request`,
+`merge_group` or `push`, and it never skips itself at job level. The check is cheap and total (it reads every
+file under `.github/workflows` at the head, whatever the diff touched), so a pull request that changes no
+workflow still gets a real `passed` from a real run, not a skipped job. This PR ships no such workflow:
+`standards` has no `workflow-linter.yml`, and the one in mathesis (which has the filter) is that repo's to fix.
+Test G45 in section 8 covers it, and the totality suite already shows the check passing on a repo whose
+workflows are unchanged and clean.
 
 *Rollout.* Each phase is one owner decision. No phase is started by this PR.
 
