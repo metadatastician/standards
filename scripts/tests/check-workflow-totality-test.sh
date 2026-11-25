@@ -20,6 +20,9 @@ CHK="$ROOT/scripts/check-workflow-totality.sh"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 AL="${ACTIONLINT:-$(command -v actionlint || true)}"
+# Same pin as the checker (1.7.12): any other version counts as unavailable, so the lint cases skip
+# instead of failing on not_run.
+if [ -n "$AL" ]; then v="$("$AL" -version 2>/dev/null | head -n1)"; [ "${v#v}" = "1.7.12" ] || AL=""; fi
 
 pass=0 fail=0 skip=0
 ok()   { echo "  ✅ $1"; pass=$((pass + 1)); }
