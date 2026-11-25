@@ -1,0 +1,300 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+= Proposal: make absence block (ratify A3 "no pass on absence" with totality and a workflow-integrity check)
+:date: 2026-11-25
+:status: PROPOSED (draft PR; the owner decides, nothing here is enforced)
+:scope: estate
+:amends: docs/estate-reconciliation/A3-estate-gate.adoc (v0.2.12-draft), sections 5.3, 6, 7 and 12
+:source: hyperpolymath/mathesis draft PR #126, docs/proposals/types-tropes-estate-upkeep.adoc, recommendation 2
+:rollout-home: standards (this PR); rsr-template-repo and proven-cicd (separate PRs, listed in section 9)
+
+== 1. What this is, and what it is not
+
+A3 already exists. It is the single gate, with law G3 "no pass on absence" (`A3-estate-gate.adoc`
+section 12). This proposal does not build a second gate. It finishes A3 on three points the
+mathesis review found open, and supplies the one check that closes the worst absence:
+
+. the *required set is derived from intent*, and that rule is written down as a law (G7 below);
+. a *totality rule* covers every workflow file (G8);
+. a *`workflow-integrity` check* (actionlint plus a duplicate-key parse) becomes a baseline row of
+  the check table (5.3).
+
+It extends the CI/gate work (`hyperpolymath/proven-cicd-and-workflows` and its profiles). It adds a
+row to the table that A3 5.1 already defines, and it ships the first implementation as scripts in
+`scripts/` that a profile can call. Nothing here edits a ruleset, posts a status, applies a label or
+touches `actions.lock`.
+
+== 2. The finding, and a correction to how it was quoted
+
+A workflow file that does not parse, or has a duplicate key, is rejected by GitHub before any job is
+created. There is no run, no check and no log. A required check that this file would have produced is
+simply absent, and a gate that only inspects the checks that exist reads the absence as success.
+
+The mathesis proposal states the size as "521 repair commits in 281 repositories fixed workflows of
+this kind". The task brief for this work restated it as "521 parse-dead workflows in 281 repos".
+Those are different quantities. The first counts commits that mention a fix; it measures how often
+the fault was found and repaired, not how many files are dead now. This document keeps the two apart
+(section 6) and reports what was run.
+
+== 3. A3 wording (the amendment)
+
+Replace law G3 and add G7 and G8 in A3 section 12. Wording proposed for ratification:
+
+[cols="1,4"]
+|===
+| Law | Statement
+
+| G3 (replaces) | No pass on absence. A required check passes only on an observation that it ran and succeeded. A
+check that did not run, never started, was skipped, was cancelled, was cut off by a timeout, or whose
+workflow file could not start, is `not_run`, and `not_run` fails the verdict. Absence of evidence is a value,
+never a pass.
+| G7 (new) | Intent, not observation, fixes the required set. The set of required checks for a head is a function
+of the check table at its pin, the capabilities declared and the capabilities detected in the tree (A3 section 6).
+It is never computed from which runs, jobs, contexts or workflow files happen to exist at the head. Removing a
+workflow, a job or a profile entry cannot shrink the set; it can only turn a `passed` row into `not_run`.
+| G8 (new) | Totality. Every file under `.github/workflows` at the head maps to exactly one observation, one of
+`passed`, `failed`, `not_run`, `exempt` or `inert`. A workflow file that cannot start is `failed` (it parses
+badly) or `not_run` (it was not checked); it is never missing from the report. A file mapped to `exempt`
+carries a typed, dated, bounded exemption (section 5).
+|===
+
+G5 (monotone waiver) is unchanged and is what keeps G8's exemption sound: an exemption only moves one file
+to `exempt`; it never adds a check to the set and never changes another file's state.
+
+== 4. How the required set is derived
+
+A3 section 6 already says `capabilities(repo) = D union S` and
+`required(repo) = {c in table : c.obligation = required and (c.when = baseline or c.when in capabilities(repo))}`.
+G7 states what this formula must not be fed:
+
+[cols="2,1,3"]
+|===
+| Input | Allowed? | Why
+
+| The check table (`estate-gate_praxis.deed`) at its pin | yes | Intent. Owned by `proven-cicd`.
+| Capabilities declared in the repo's `(profile)` | yes | Intent of the repo author.
+| Capabilities detected from the tree by the row's `:detect` globs | yes | Intent shown by what the repo contains (A3 G4).
+| The contexts the repo's ruleset currently requires | no | A ruleset can be stale or empty; this is the "phantom context" failure.
+| Which check runs appeared on recent heads (observed green) | no | A check that stopped running would then drop out of the set.
+| Which workflow files exist at the head | no | A deleted or dead workflow would shrink the set. Files are *observed*; they never *define* what is required.
+| A profile file that lists expected checks | only as a declaration (D) | The profile is an adapter. The mathesis review showed a check left out of a profile passes by omission. The baseline row below cannot be left out.
+|===
+
+*Deletion test (an acceptance test, section 8).* Take a repo that passes. Delete any workflow that backs a
+required row. The verdict must change to fail. If it still passes, the set was derived from observation.
+
+*Why the new row is `baseline`.* A row `:when baseline` applies to every repo regardless of declared
+capability, so the check "workflow files are live" cannot be dropped by omitting it from a profile.
+
+== 5. The totality rule and its exemptions
+
+For a head commit, let `F` be every file under `.github/workflows`, at any depth. G8 requires a total map
+from `F` to observations:
+
+[cols="1,4"]
+|===
+| Observation | When
+
+| `passed` | Parses, no duplicate key, has `on` and a non-empty `jobs`, and actionlint reports nothing.
+| `failed` | Any of those fails. The detail column names every defect, so one report shows all of them.
+Also: a `.yml` or `.yaml` below the top level of `.github/workflows` (GitHub reads only the top level, so it never runs).
+| `not_run` | A check could not be performed, for example actionlint is not installed. Fails the verdict (G3).
+| `exempt` | A typed, dated, bounded exemption covers the file.
+| `inert` | Not a workflow file (a README, a lock file, `*.yml.disabled`). Reported, never silent.
+|===
+
+An empty or missing workflow directory is `failed` (it is the purest absence), unless the caller passes
+`--allow-empty` for a context where no baseline set applies.
+
+*Exemptions.* `.github/workflow-totality-exemptions.tsv`, one row per file:
+`file<TAB>kind<TAB>reason<TAB>expires`. `kind` is `wip`, `generated` or `upstream`. An exemption lapses on
+its date and may not run more than 90 days ahead of the day the check runs, so none is permanent. A
+malformed, lapsed or over-long exemption is a `failed` row. This is a stopgap store. A3 section 10 and A5
+define the deviation store (`check/<id>` waivers); once A5 lands the exemption moves there under the rule
+`check/workflow-integrity`, and this TSV is retired. That move is an owner decision (section 10).
+
+*Job-level totality (not in this PR).* The same law applies one level down: every job that backs a required
+row maps to one check run on the head. A3 5.3 already binds each inline job to a name, a workflow path and an
+event; G8 adds that a job that is declared and never appears is `not_run`. That needs live check-run data, so
+it belongs in the aggregate (`proven-cicd`), not in a static script.
+
+== 6. What was measured
+
+All numbers below were produced by the scripts in this PR on 2026-11-25. Nothing here is carried over from the
+mathesis report.
+
+=== 6.1 Repair commits ("521 in 281"), rerunnable
+
+Command: `scripts/census-parse-dead-workflows.sh commits OUT.tsv`. It runs GitHub commit search over the
+`hyperpolymath` and `metadatastician` owners for the phrases in the script (duplicate key, never-parsed, invalid
+workflow, workflow file issue, does not parse, unparseable, never ran at all; and `startup_failure` for the broad
+set), deduplicates by SHA, and reports commits and distinct repositories. Search sees only default branches, caps
+a query at 1000 results and cannot see private repositories the token cannot read. The script flags a truncated
+query.
+
+Run on 2026-11-25. Result, commits and distinct repositories, each a deduplicated set:
+
+[cols="3,1,1"]
+|===
+| Selection | Commits | Repos
+
+| Every STRICT phrase (9 queries, 2 owners) | 1111 | 341
+| The same, without the one unquoted query `unparseable workflow` | 662 | 290
+| Only `duplicate key`, `never-parsed`, `never parsed`, `workflow file issue` | 359 | 214
+| Only `duplicate key` | 121 | 70
+| BROAD (strict plus `startup_failure`) | 2097 | 384
+|===
+
+*This does not reproduce 521 / 281.* The figures bracket it (359 to 1111 commits, 214 to 341 repos, depending on
+how strict the phrase list is) and I cannot say which end is right. The search matches the whole commit message,
+body included. A sample of the TSV showed commits that only mention a duplicate key in passing, so every row here
+is an upper bound on parse repairs, and none was checked against the diff for a changed workflow file. The `startup_failure`
+query was cut short by GitHub's secondary rate limit for the `metadatastician` owner (200 of 299 fetched) and
+truncated at 1000 of 2252 for `hyperpolymath`; the BROAD row is therefore a floor on its own query. The script
+was changed after this run to mark such queries `INCOMPLETE`; that edit was syntax-checked and not rerun end to end.
+
+The original query behind "521 / 281" is not in mathesis, so this is a reconstruction of the same kind of count,
+not a reproduction of that figure. The right way to settle the number is the file-level census of 6.2, which does
+not depend on commit wording.
+
+=== 6.2 Files dead now (the count that matters for the gate)
+
+Command: `scripts/census-parse-dead-workflows.sh tree ROOT...` over checkouts. This PR ran it on three
+checkouts only (below). It was *not* run across the estate: that needs a checkout or archive of every repo,
+which is outside this session's read scope. Section 9 lists it as an owner action.
+
+== 7. Pilot
+
+Run with actionlint v1.7.12 (the newest at the time of the run) and mikefarah yq v4.44.3. All cases are
+rerunnable with `scripts/check-workflow-totality.sh ROOT`.
+
+[cols="4,1,1,1,4"]
+|===
+| Repository at commit | Exit | Workflow files | Failed | Failed files (cause)
+
+| `mathesis` at `95e1af0` (head of draft PR 126). Known good. | 0 | 36 | 0 | none
+| `AcceleratorGate.jl` at `f00036e` (default branch, 2026-11-20). Known good. | 0 | 12 | 0 | none
+| `vcl-ut` at `6a78801` (default branch, 2026-11-23). Parse-dead today. | 1 | 27 | 1 | `release.yml` (dupkey: `contents` twice in `permissions`, line 126)
+| `vcl-ut` at `c68eb7e^` (a month-old state, before a repair commit) | 1 | 22 | 7 | `cargo-audit`, `governance`, `hypatia-scan`, `mirror`, `rust-ci`, `secret-scanner` (lint); `dogfood-gate` (parse)
+| `vcl-ut` at `c68eb7e` (that repair commit, "the scanner never ran at all") | 1 | 22 | 6 | the same minus `secret-scanner`: the repair fixed one file and left six dead
+| `AcceleratorGate.jl` at `e4547c5^` (before a repair) | 1 | 9 | 2 | `instant-sync` (parse), `secret-scanner` (lint, job-level `hashFiles`)
+| `AcceleratorGate.jl` at `e4547c5` (the repair) | 1 | 9 | 1 | `instant-sync` (parse, line 12): still dead after a commit titled as a repair
+|===
+
+The three results the gate needs are visible: a known-good repo passes (exit 0, twice), a parse-dead repo
+fails with the file and cause named (exit 1), and a repair commit that fixes one file leaves a repo that still
+fails (so "I repaired a workflow" is not evidence that the set is alive).
+
+*Fails closed.* In every `failed` case above the exit status was 1 and the file is named with its cause. A
+check that cannot run exits 2 (`not_run`), which also fails the verdict.
+
+*Negative test.* `scripts/tests/check-workflow-totality-test.sh` plants each failure class. A workflow with a
+duplicate top-level key fails, a duplicate key inside `permissions` fails (the shape found live in `vcl-ut`), one
+dead file among clean ones fails the whole repository, malformed YAML, an empty file, a missing `on`, a missing
+`jobs`, a workflow in a subdirectory, job-level `hashFiles()`, an empty directory, and lapsed, over-long and
+malformed exemptions all fail. Result: 20 passed, 0 failed, 0 skipped (run with actionlint v1.7.12 and mikefarah yq v4.44.3).
+
+The existing `scripts/tests/check-workflow-duplicate-keys-test.sh` passes 17 of 17 with mikefarah yq. With the
+Python `yq` that is on the PATH in this session's container it passes 13 and fails 4, because that program
+parses flow documents differently. The new script refuses to run (exit 2, `not_run`) under any `yq` that is not
+mikefarah's, rather than guess.
+
+== 8. Acceptance tests proposed for A3 section 13
+
+[cols="1,4"]
+|===
+| Id | Test
+
+| G38 | Deletion test: deleting a workflow that backs a required row flips a passing verdict to fail (G7).
+| G39 | A repo with a workflow containing a duplicate key gets verdict fail, and the report names the file (G8).
+| G40 | A repo with an unparseable workflow gets verdict fail, not "no checks, pass" (G3).
+| G41 | A `.yml` below the top level of `.github/workflows` gets verdict fail (G8).
+| G42 | actionlint absent: the row is `not_run` and the verdict is fail (G3), never skipped.
+| G43 | An exemption past 90 days, lapsed, or of an unknown kind is `failed`; a live one is `exempt` and changes nothing else (G5, G8).
+| G44 | The `workflow-integrity` row cannot be removed by editing a profile (it is `baseline`, G4, G7).
+|===
+
+== 9. Interaction with CI/gate profiles, and rollout
+
+*Profiles.* In `proven-cicd` a profile lists the checks a repo is expected to have. The mathesis review found the
+residual hole: a check left out of the profile passes by omission. This proposal does not fix profiles in general.
+It makes one check, the one every other check depends on (the files that carry them are alive), a `baseline` row
+that no profile can omit. The row is added to the table that A3 5.1 defines, in the same form as the other rows:
+
+----
+(check :id "workflow-integrity" :when baseline :obligation required
+       :runs-on github :timeout 300 :rule "check/workflow-integrity")
+----
+
+Today's home, per the 5.3 convention: `standards` `scripts/check-workflow-totality.sh` with
+`scripts/check-workflow-duplicate-keys.sh`. Exit 0 is `passed`, 1 is `failed`, 2 is `not_run` (A3 section 7).
+The coordinator of the CI/gate work was sent this plan before any of it was built, and was asked for the
+profile field name that a totality or parse-clean requirement should plug into; its answer is recorded in the PR
+thread and not assumed here.
+
+*Rollout.* Each phase is one owner decision. No phase is started by this PR.
+
+[cols="1,3,2"]
+|===
+| Phase | What | Gate
+
+| P0 | This PR: wording, scripts, tests. No repo changes. | Review of this PR.
+| P1 | `rsr-template-repo` runs the check report-only (separate draft PR, not opened here). Run the `tree` census over a clone of every repo. | Owner approves the template PR.
+| P2 | The row enters the table as `advisory` (A3 5.3 convention: "all other capabilities are advisory in the first table"). | Owner ruling; widening the required set is an owner call (E11).
+| P3 | Row becomes `required`. Existing dead files get 90-day exemptions or are repaired under the standing "correct departures as you meet them" rule. | Owner ruling; lock and ruleset tooling stay tool-owned.
+| P4 | Exemptions move to the A5 deviation store; the TSV is retired. | A5 lands.
+|===
+
+== 10. Decisions for the owner
+
+. Ratify G3 (reworded), G7 and G8 into A3, as written in section 3. A3 is not yet ratified as a whole.
+. Which `actionlint` version to pin, and how: a SHA-256 of the release archive, installed by the estate's own
+  tool route. It must be pinned. See section 11, the false-positive rate depends on the version.
+. Whether the exemption TSV stays as a stopgap or the row waits for A5's deviation store.
+. Whether `workflow-integrity` is `advisory` at P2 or goes straight to `required`.
+. Whether the exit-2 `not_run` for a missing actionlint is acceptable in repos that cannot install it, or those
+  repos must carry a dated exemption.
+. Whether shellcheck findings inside `run:` blocks belong here. This PR switches them off so the verdict does not
+  depend on which helper is installed. They belong to a separate, advisory row.
+
+== 11. Findings met on the way, and aspects other than the gate
+
+*Real findings, not fixed in this PR (each in a repo this session does not own or cannot verify):*
+
+* `hyperpolymath/vcl-ut`, `.github/workflows/release.yml` line 126 at default-branch commit `6a78801`
+  (2026-11-23): `contents` is a duplicate key in `permissions`. GitHub rejects the file, so the release workflow
+  does not run. Found by this check, confirmed by actionlint. Needs a fix in that repo.
+* `standards`, the same check run on its own `.github/workflows` (79 files, 17 `failed`): 14 are actionlint
+  v1.7.12 rejecting the property `job.workflow_sha`. I did not verify whether GitHub accepts it; the pattern
+  suggests actionlint is behind GitHub's context list, which is what a version pin and an `.github/actionlint.yaml`
+  ignore are for. 3 look real and are not verified: `check-suite-monitor.yml` lists `check_suite` activity types
+  `requested` and `rerequested` (actionlint says only `completed` exists); `code-coverage.yml` line 137 uses a
+  permission scope `code-quality` that actionlint does not know; `propagate-hooks.yml` reads `inputs.dry_run` and
+  `inputs.repo_count` where the declared inputs are `dry-run` and `target-repo`. These are departures to report,
+  not to fix blind.
+* The duplicate-key scanner and its test were written against mikefarah yq. The container's default `yq` is a
+  Python program. That is an environment departure (a banned language on the PATH) and the reason 4 of 17 tests
+  fail there.
+
+*Alternatives considered, rated.* Elegance is "most correct and elegant"; dependability is "most dependable,
+secure and private". 5 is best.
+
+[cols="3,1,1,3"]
+|===
+| Approach | Elegance | Dependability | Note
+
+| *Chosen:* shell + actionlint + duplicate-key scanner, wired as a baseline row | 3 | 4 | Uses tools the estate already runs; fails closed; no new runtime, no network, nothing leaves the checkout.
+| Observe GitHub itself: treat a workflow run with `conclusion: startup_failure` or zero jobs as `not_run` | 3 | 3 | Reads the truth from the platform, but only after the break and only once a run was attempted; a file never triggered is still silent. Good as the aggregate's runtime half (job totality).
+| Workflows as typed values (the mathesis "workflows as values" idea): parse into a closed schema, print canonically | 5 | 3 | The most elegant, and it makes duplicate keys unrepresentable. Costs a schema and a printer that preserves comments; its own review found it admits history's defects. Worth a trial inside `proven-cicd`'s Idris2 kernel, not instead of this.
+| A hypatia rule that scans for the same defects | 2 | 3 | Reuses a deployed scanner, but findings there are advisory by design and would not block a merge.
+| Prove the membership lemma that ADR-001 lists as open (every file maps to exactly one observation) | 5 | 4 | A natural Idris2 obligation next to the verdict kernel (`Assurance/Verdict.idr`): totality of `F -> Observation` is a total function, and the empty-set and all-exempt cases are the ones A3 section 7 and the kernel disagree on. Recommended as follow-on work; not attempted here.
+|===
+
+*Aspects (cross-cutting).* Security: the check runs no workflow code and needs no secret or token; it reads
+files only. Privacy: nothing leaves the checkout; the census scripts use only public search. Drift: the same
+scanner now has two homes (`standards`, and later `proven-cicd`); keep one and make the other call it (one writer,
+one judge). Cost: a per-file actionlint run on 79 files took under a minute locally.
+
+*Beyond this repository (list to maintain):* `rsr-template-repo` (report-only wiring, separate draft PR);
+`proven-cicd` (table row, aggregate job totality, Idris2 lemma); the actionlint pin and checksum; the estate-wide
+`tree` census over every repo checkout; the `vcl-ut` fix; whether the Python `yq` should be removed from agent
+containers; a hypatia rule so the same defect is also reported advisory.
