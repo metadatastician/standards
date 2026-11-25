@@ -5,7 +5,7 @@
 # A3 law G7, "totality": every file in .github/workflows maps to exactly one
 # observation, and a workflow that cannot start is `failed`, never silent.
 #
-#   check-workflow-totality.sh [--json] [--today YYYY-MM-DD] [--exemptions FILE]
+#   check-workflow-totality.sh [--json]
 #                              [--allow-empty] [ROOT ...]
 #
 # ROOT is a repository checkout (default: the current directory). Its workflow
@@ -21,7 +21,6 @@
 #   passed     parses, no duplicate key, has `on` and `jobs`, actionlint clean
 #   failed     one or more of the checks below failed (detail names them)
 #   not_run    a check could not be performed (actionlint missing)
-#   exempt     covered by a typed, dated exemption that has not expired
 #   inert      not a workflow file (README, .gitkeep, *.disabled): reported only
 #
 # CHECKS per workflow file, each named in the detail column:
@@ -35,13 +34,10 @@
 #                 off so the verdict does not depend on which helpers exist).
 #                 A repo may tune runner labels in .github/actionlint.yaml.
 #
-# EXEMPTIONS: ROOT/.github/workflow-totality-exemptions.tsv, tab separated,
-#   file <TAB> kind <TAB> reason <TAB> expires(YYYY-MM-DD)
-# kind is one of: wip, generated, upstream. An exemption lapses on its expiry
-# date and may not run more than 90 days past --today (so none is permanent).
-# A lapsed or over-long exemption is a `failed` row, not a silent skip.
+# NO EXEMPTIONS (owner ruling 2026-11-25): there is no exemption file, flag or kind.
+# A file that fails is fixed; a file that is not a workflow is `inert`.
 #
-# EXIT: 0 every file passed/exempt/inert; 1 any failed (also when some not_run);
+# EXIT: 0 every file passed or inert; 1 any failed (also when some not_run);
 #       2 nothing failed but a check could not be performed; 64 usage error.
 # This matches the exit-code meaning in A3 section 7 (1 = failed, 2 = not_run).
 #
@@ -52,30 +48,30 @@ set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DUPKEY="$HERE/check-workflow-duplicate-keys.sh"
 
-json=0 allow_empty=0 today="" exfile=""
+json=0 allow_empty=0
 roots=()
 while [ $# -gt 0 ]; do
   case "$1" in
     --json) json=1; shift ;;
     --allow-empty) allow_empty=1; shift ;;
-    --today) today="${2:?--today needs a date}"; shift 2 ;;
-    --exemptions) exfile="${2:?--exemptions needs a file}"; shift 2 ;;
-    -h|--help) sed -n '2,52p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n "2,48p" "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
     --*) echo "unknown option: $1" >&2; exit 64 ;;
     *) roots+=("$1"); shift ;;
   esac
 done
 [ ${#roots[@]} -eq 0 ] && roots=(.)
-[ -z "$today" ] && today="$(date -u +%Y-%m-%d)"
-date -u -d "$today" +%Y-%m-%d >/dev/null 2>&1 || { echo "bad --today: $today" >&2; exit 64; }
 
 # mikefarah yq v4 is the estate flavour (check-workflow-duplicate-keys.sh uses `yq -P`);
 # another yq parses differently, so refuse rather than guess.
-if ! yq --version 2>/dev/null | grep -q mikefarah; then
+yq_version="$(yq --version 2>/dev/null)"   # capture, then match: no pipe into a quiet grep
+if ! grep -q mikefarah <<<"$yq_version"; then
   printf "not_run\t-\t-\tmikefarah yq v4 is required and missing\n"; exit 2
 fi
 AL="${ACTIONLINT:-$(command -v actionlint || true)}"
 [ -n "$AL" ] && [ -x "$(command -v "$AL" 2>/dev/null)" ] || AL=""   # unusable path counts as absent
+# Pinned (owner ruling 2026-11-25): only actionlint 1.7.12 counts. Any other version is "not installed".
+PIN_ACTIONLINT=1.7.12
+if [ -n "$AL" ]; then v="$("$AL" -version 2>/dev/null | head -n1)"; [ "${v#v}" = "$PIN_ACTIONLINT" ] || AL=""; fi
 
 rows="$(mktemp)"; trap 'rm -f "$rows"' EXIT
 n_failed=0 n_notrun=0 n_files=0
@@ -85,7 +81,6 @@ emit() { # state root file detail
   case "$1" in failed) n_failed=$((n_failed+1));; not_run) n_notrun=$((n_notrun+1));; esac
 }
 
-epoch() { date -u -d "$1" +%s 2>/dev/null; }
 
 for root in "${roots[@]}"; do
   dir="$root/.github/workflows"
@@ -93,7 +88,6 @@ for root in "${roots[@]}"; do
     [ "$allow_empty" -eq 1 ] || emit failed "$root" "-" "empty: no .github/workflows directory (absence)"
     continue
   fi
-  ex="${exfile:-$root/.github/workflow-totality-exemptions.tsv}"
 
   # --- enumerate every file, top level and below: totality means we look at all
   mapfile -t all < <(cd "$dir" && find . -type f ! -path './.git/*' | sed 's|^\./||' | LC_ALL=C sort)
@@ -111,27 +105,6 @@ for root in "${roots[@]}"; do
       *.yml|*.yaml) workflow_count=$((workflow_count+1)) ;;
       *) emit inert "$root" "$rel" "not a workflow file"; continue ;;
     esac
-
-    # --- exemption lookup (typed, dated, bounded)
-    if [ -f "$ex" ]; then
-      line="$(awk -F'\t' -v f="$rel" '$1==f {print; exit}' "$ex")"
-      if [ -n "$line" ]; then
-        IFS=$'\t' read -r _ kind reason expires <<<"$line"
-        case "$kind" in wip|generated|upstream) kindok=1 ;; *) kindok=0 ;; esac
-        if [ "$kindok" -ne 1 ] || [ -z "${reason:-}" ] || ! date -u -d "${expires:-x}" +%Y-%m-%d >/dev/null 2>&1; then
-          emit failed "$root" "$rel" "exemption malformed (need file, kind in wip|generated|upstream, reason, expires)"
-          continue
-        fi
-        if [ "$(epoch "$expires")" -lt "$(epoch "$today")" ]; then
-          emit failed "$root" "$rel" "exemption lapsed on $expires (kind $kind)"; continue
-        fi
-        if [ "$(epoch "$expires")" -gt $(( $(epoch "$today") + 90*86400 )) ]; then
-          emit failed "$root" "$rel" "exemption runs past 90 days ($expires); none is permanent"; continue
-        fi
-        emit exempt "$root" "$rel" "$kind until $expires: $reason"
-        continue
-      fi
-    fi
 
     # --- checks, all run so one report names every defect in the file
     problems=()
