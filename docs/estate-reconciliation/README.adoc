@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
-= Estate Reconciliation: specifications A1 to A8
+= Estate Reconciliation: specifications A1 to A7 and ER-A8
 :toc:
 
 Stage A of the Estate Reconciliation Plan. Eight draft specifications. None is ratified as a whole, and nothing in them has been performed in any repo.
@@ -17,7 +17,7 @@ Stage A of the Estate Reconciliation Plan. Eight draft specifications. None is r
 | A5 | link:A5-rules-and-ignore-files.adoc[A5-rules-and-ignore-files.adoc] | 0.2.4 | Rule identifiers, the rule registry, deviation validity, the generated ignore files. Decisions G1 to G14.
 | A6 | link:A6-standards-carve-out.adoc[A6-standards-carve-out.adoc] | 0.2.5 | The change-rate metric, the ordered carve-out rules and the mechanism of a move for this repository. Decisions H1 to H12.
 | A7 | link:A7-contractiles-descriptiles-anchor.adoc[A7-contractiles-descriptiles-anchor.adoc] | 0.2.13 | Edicts (`applies-when` plus `requires`) in Capitalised verb deeds, ALL-CAPS descriptile deeds, the anchor as the `(anchor …)` clause of the chora deed (S1), strictness per verb with `!`, Bust grades, the K9 envelope ABNF, the replacement for each load-bearing A2ML reader and the migration order. Owner rulings W1 to W10 (W6 withdrawn) and S1 to S4; J1 to J22 ruled 2026-11-13, J23 to J33 on 2026-11-14 (J30 to J32 settle `META.deed`, J33 `AGENTIC.deed`), J34 to J39 on 2026-11-15 (J35 to J38 settle `NEUROSYM.deed`, J39 the `(rsr-profile …)` keys).
-| A8 | link:A8-no-pass-on-absence.adoc[A8-no-pass-on-absence.adoc] | 0.1.0-draft | No pass on absence: the required set derived from intent (G7), totality over every workflow file (G8), and the baseline row `workflow-integrity`. A separate spec that cites A3 (owner ruling 2026-11-25). Proposed, not ratified. The id `A8` is also used for an unrelated addendum in `3-practice/LICENCE-POLICY.adoc`; that one is an addendum, not a spec.
+| ER-A8 | link:ER-A8-no-pass-on-absence.adoc[ER-A8-no-pass-on-absence.adoc] | 0.1.0-draft | No pass on absence: the required set derived from intent (G7), totality over every workflow file (G8), and the baseline row `workflow-integrity`. A separate spec that cites A3 (owner ruling 2026-11-25). Proposed, not ratified. The bare id `A8` is also used for an unrelated addendum in `3-practice/LICENCE-POLICY.adoc`; that one is an addendum, not a spec.
 |===
 
 "Approved" means the owner approved the decision as written on 2026-11-10 (U1 on 2026-11-11, U2 to U4 and V8 on 2026-11-12; C9 and C10 amended by V8 the same day; V9, W10 and J15 on 2026-11-13; Q2, Q3, U1a, Q2a, L1 and B1 on 2026-11-14). It does not mean the specification is ratified.

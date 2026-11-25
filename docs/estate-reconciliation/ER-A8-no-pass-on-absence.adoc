@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: CC-BY-SA-4.0
-= Proposal: make absence block (a new spec, proposed id A8: no pass on absence, totality, workflow-integrity check)
+= Proposal: make absence block (a new spec, id ER-A8: no pass on absence, totality, workflow-integrity check)
 :date: 2026-11-25
 :status: PROPOSED; owner decisions of 2026-11-25 applied (section 10); nothing here is enforced
 :scope: estate
-:spec: A8
+:spec: ER-A8
 :relates-to: docs/estate-reconciliation/A3-estate-gate.adoc (v0.2.12-draft), cited, not amended (owner ruling 2026-11-25)
 :source: hyperpolymath/mathesis draft PR #126, docs/proposals/types-tropes-estate-upkeep.adoc, recommendation 2
 :rollout-home: standards (this PR); rsr-template-repo and proven-cicd (separate PRs, listed in section 9)
@@ -262,7 +262,7 @@ workflows are unchanged and clean.
 == 10. Decisions (owner, 2026-11-25, via the decision desk)
 
 . *Separate spec, not an in-place amendment of A3.* The reworded G3, G7 and G8 are ratified as their own spec
-  under a new id (this page uses `A8`, the next free id in `docs/estate-reconciliation/README.adoc`, which lists A1 to A7). A3 stays as it is and
+  under a new id (this page uses `ER-A8`, a prefixed id chosen by the owner on 2026-11-25; the next free spec number in `docs/estate-reconciliation/README.adoc` after A1 to A7; the bare `A8` also names an unrelated addendum in `3-practice/LICENCE-POLICY.adoc`, a separate namespace). A3 stays as it is and
   the new spec cites it. Ratification follows green CI on this PR. Where this page says "amend A3", read
   "the new spec, which adds to A3's check table and laws by reference".
 . *actionlint is pinned to v1.7.12*, SHA-256 checked. `scripts/actionlint-1.7.12.sha256` is the release's own
