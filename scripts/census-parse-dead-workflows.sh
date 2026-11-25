@@ -115,6 +115,7 @@ tree)
       "workflow_files\t" + ((map(select(.state != "inert")) | length) | tostring),
       "failed_files\t" + ($f | length | tostring),
       "failed_repos\t" + ($f | map(.root) | unique | length | tostring),
+      "not_run_files\t" + ((map(select(.state == "not_run")) | length) | tostring),
       ($f | group_by(cause) | .[] | "cause:" + (.[0] | cause) + "\t" + (length | tostring))
   ' "$all"
   ;;
