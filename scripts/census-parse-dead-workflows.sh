@@ -106,7 +106,14 @@ tree)
   [ $# -ge 1 ] || { echo "usage: tree ROOT [ROOT ...]" >&2; exit 64; }
   all="$(mktemp)"; trap 'rm -f "$all"' EXIT
   for r in "$@"; do
-    bash "$HERE/check-workflow-totality.sh" --json "$r" 2>/dev/null | jq -c '.[]' >> "$all" || true
+    # A checker that cannot run (for example no mikefarah yq) prints a TSV row, not JSON. Count that
+    # repository as one not_run row instead of dropping it, so the census never reads as clean.
+    out="$(bash "$HERE/check-workflow-totality.sh" --json "$r" 2>/dev/null)"
+    if rows="$(jq -c '.[]' <<<"$out" 2>/dev/null)" && [ -n "$rows" ]; then
+      printf '%s\n' "$rows" >> "$all"
+    else
+      jq -nc --arg r "$r" '{state:"not_run",root:$r,file:"-",detail:"checker could not run or produced no JSON"}' >> "$all"
+    fi
   done
   jq -s -r '
     def cause: (.detail | capture("^(?<c>[a-z]+):") // {c:"other"} | .c);
