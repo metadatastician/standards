@@ -573,6 +573,10 @@ jobs:
         if: steps.radicle.outputs.configured == 'true'
         run: |
           set -euo pipefail
+          # Fail loudly rather than bootstrap: this reusable runs on GitHub-hosted
+          # runners, which ship rustup. A runner without it is a configuration
+          # error to fix at the runner, not something to curl-install here.
+          command -v rustup >/dev/null || { echo "::error::rustup is not on this runner; the Radicle mirror needs a runner that ships it"; exit 1; }
           rustup default stable
           rustc --version
           cargo --version
