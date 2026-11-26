@@ -45,7 +45,8 @@
 #
 # SYNTAX. A target resolves beside its source file only. Read: AsciiDoc link:,
 # image: and image:: (an image under the file's :imagesdir:), and Markdown
-# [text](dest) with <angle> or balanced-parenthesis destinations and an optional
+# [text](dest) with <angle> or balanced-parenthesis destinations (a backslash
+# escapes the next character, including [ before a link) and an optional
 # title. Not read: comment lines, AsciiDoc listing/literal/comment blocks, and
 # Markdown fenced blocks. `{name}` is expanded from the same file's
 # `:name: value` lines; a reference left unresolved is skipped (it cannot be
@@ -92,9 +93,13 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --root) ROOT=${2:?--root needs a directory}; shift 2 ;;
     --ledger) LEDGER=${2:?--ledger needs a file}; shift 2 ;;
-    --print) MODE=print; shift ;;
-    --list) MODE=list; shift ;;
-    --prune) MODE=prune; shift ;;
+    --print|--list|--prune)
+      # The modes are mutually exclusive: the last one must not silently win
+      # (--print --prune would rewrite the ledger).
+      if [ "$MODE" != check ]; then
+        echo "link-rot-guard: --print, --list and --prune are mutually exclusive" >&2; exit 2
+      fi
+      MODE=${1#--}; shift ;;
     --base) BASE=${2:?--base needs a revision}; shift 2 ;;
     -h|--help) sed -n '2,/^set -uo/p' "$0" | sed '$d; s/^# \{0,1\}//'; exit 0 ;;
     -*) echo "link-rot-guard: unknown argument: $1" >&2; exit 2 ;;
@@ -237,12 +242,23 @@ extract() {
         gsub(/``[^`]*``/, "", s); gsub(/`[^`]*`/, "", s)
         while ((i = index(s, "](")) > 0) {
           # A link needs an opening bracket before its "](".
-          opener = (substr(s, 1, i - 1) ~ /\[/)
+          # An escaped bracket (\[) is text, not an opener.
+          pre = substr(s, 1, i - 1); gsub(/\\./, "", pre)
+          opener = (pre ~ /\[/)
           s = substr(s, i + 2)
           if (!opener) continue
           if (substr(s, 1, 1) == "<") {
-            j = index(s, ">"); if (j == 0) continue
-            print decode(substr(s, 2, j - 2)); s = substr(s, j + 1)
+            # Angle destination: ends at the first unescaped ">"; a backslash
+            # escapes the next character.
+            out = ""; j = 0
+            for (k = 2; k <= length(s); k++) {
+              c = substr(s, k, 1)
+              if (c == "\\" && k < length(s)) { k++; out = out substr(s, k, 1); continue }
+              if (c == ">") { j = k; break }
+              out = out c
+            }
+            if (j == 0) continue
+            print decode(out); s = substr(s, j + 1)
           } else {
             depth = 0; out = ""
             for (k = 1; k <= length(s); k++) {
@@ -308,8 +324,9 @@ scan() {
   tmp=$(mktemp) || return 2
   while IFS= read -r -d '' f; do
     f=${f#./}
-    dir=$(dirname "$f")
-    extract "$f" > "$tmp" || { rm -f "$tmp"; return 2; }
+    # Option-safe operands: a document may be named -v.md.
+    dir=$(dirname -- "$f")
+    extract "./$f" > "$tmp" || { rm -f "$tmp"; return 2; }
     while IFS= read -r target; do
       # A reference the extractor could not expand is defined outside this file
       # (an include, the command line): it cannot be checked statically.

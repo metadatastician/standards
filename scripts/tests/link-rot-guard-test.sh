@@ -81,6 +81,25 @@ expect "new broken Markdown link is refused" 1 "new broken link(s) in docs/c.md"
 clean_tree; plant docs/c.adoc <<<'Broken: link:../nowhere/[x]'
 expect "the break is named in an annotation" 1 "::error file=docs/c.adoc::broken internal link -> ../nowhere/"
 
+
+# 1b. escapes, option-like names, mode exclusivity
+clean_tree; plant docs/c.md <<<'Literal: \[x](nowhere.md)'
+expect "an escaped opening bracket is not a link" 0 "none new"
+
+clean_tree; : > "$WORK/t/docs/a>b.md"; plant docs/c.md <<<'See [ok](<a\>b.md>).'
+expect "an escaped > in an angle destination is read" 0 "none new"
+
+clean_tree; plant docs/c.md <<<'See [x](<nowhere\>.md>).'
+expect "an escaped > is part of the broken target" 1 "nowhere>.md"
+
+clean_tree; plant -v.md <<<'See [x](docs/target.adoc).'
+expect "a document named -v.md is read" 0 "none new"
+
+clean_tree; plant -v.md <<<'See [x](nowhere.md).'
+expect "a broken link in -v.md is found" 1 "new broken link(s) in -v.md"
+
+clean_tree
+expect "--print with --prune is a usage error" 2 "mutually exclusive" "$GATE" --print --prune
 # ---------------------------------------------------------------- 2. archive
 for d in standards other-name index; do
   rm -rf "$WORK/t2"; mkdir -p "$WORK/t2/$d/9-archive/old" "$WORK/t2/$d/docs"
