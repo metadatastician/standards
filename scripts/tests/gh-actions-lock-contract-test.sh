@@ -13,7 +13,7 @@
 #   3. A lockfile newer than the binary is refused loudly, never read as valid.
 #   4. `--verify-local --json=valid,findings` prints one object with a boolean
 #      `valid` and a `findings` array, and names the categories that
-#      scripts/update-actions-lock.sh and reconcile-scorecard-actions-lock.rb
+#      scripts/update-actions-lock.sh and tools/scorecard-lock-reconcile
 #      key on: sha-as-ref, ref-changed, stale (dangling) and stale (a
 #      reusable-workflow dependency the tool cannot see).
 #   5. scripts/update-actions-lock.sh --verify-local, driving the real binary,

@@ -547,10 +547,9 @@ Per-site rollback if only one change misbehaves:
 * A moved tag is invisible to every check here (`close-lock.sh` documents the
   measured tolerance). Remote reachability stays with
   `check-action-pins-resolve.sh` and `lock-selfcheck.sh`'s separate probe.
-* `scorecard-reusable.yml` keeps its path-scoped literal pin
-  (`5a0891e9e58b`, only `scripts/reconcile-scorecard-actions-lock.rb`), which the
-  guard reports as fresh because that file has not changed since 2026-10-06. It
-  passes the freshness predicate and is not churned here.
+* `scorecard-reusable.yml` stages `tools/scorecard-lock-reconcile` (the Rust
+  reconciler that replaced the Ruby script) from `${{ job.workflow_sha }}`, and
+  asserts the checkout is that 40-hex commit before running it.
 * `git clone …standards.git` inside a `run:` body is not seen by the static
   guard (it is neither a checkout step nor a reusable call). The one instance in
   this repository is fixed; a future one is a review question, not a silent pass.
