@@ -83,7 +83,7 @@ jobs:
       - name: Install test dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends ripgrep ruby ruby-minitest
+          sudo apt-get install -y --no-install-recommends ripgrep
 
       # scripts/tests/check-ijson-jcs-test.sh needs the real tool; it exits 2
       # without it. Same pin as ijson-jcs.yml (JSON-POLICY §3).
@@ -270,7 +270,7 @@ jobs:
       - name: Install test dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends ripgrep ruby ruby-minitest
+          sudo apt-get install -y --no-install-recommends ripgrep
 
       # scripts/tests/check-ijson-jcs-test.sh needs the real tool; it exits 2
       # without it. Same pin as ijson-jcs.yml (JSON-POLICY §3).

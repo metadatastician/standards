@@ -152,6 +152,8 @@ jobs:
             name: playbook-to-recipe
           - crate: tools/js-runtimes
             name: js-runtimes
+          - crate: tools/scorecard-lock-reconcile
+            name: scorecard-lock-reconcile
           - crate: tools/uuid-v8
             name: uuid-v8
     steps:

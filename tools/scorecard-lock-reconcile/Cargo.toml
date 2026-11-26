@@ -1,0 +1,30 @@
+# SPDX-License-Identifier: MPL-2.0
+[package]
+name = "scorecard-lock-reconcile"
+version = "0.1.0"
+edition = "2021"
+license = "MPL-2.0"
+description = "Remove Scorecard's inline action-pin findings only where gh actions-lock natively verifies the workflow's pins (replaces the Ruby reconciler)."
+repository = "https://github.com/metadatastician/standards"
+publish = false
+
+[lib]
+name = "scorecard_lock_reconcile"
+path = "src/lib.rs"
+
+[[bin]]
+name = "scorecard-lock-reconcile"
+path = "src/main.rs"
+
+[dependencies]
+regex = "1"
+serde_json = { version = "1", features = ["preserve_order"] }
+yaml-rust2 = "0.10"
+
+[dev-dependencies]
+tempfile = "3"
+
+# Its own workspace root, on purpose. scorecard-reusable.yml checks this crate
+# out inside the caller's checkout; a caller whose root Cargo.toml is a
+# workspace would otherwise claim it as an undeclared member (see js-runtimes).
+[workspace]
