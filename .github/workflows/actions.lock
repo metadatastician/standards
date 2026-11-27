@@ -145,8 +145,6 @@ workflows:
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
     '.github/workflows/mirror-reusable.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8'
-        - 'webfactory/ssh-agent@e83874834305fe9a4a2997156cb26c5de65a8555'
     '.github/workflows/mirror.yml':
         - 'metadatastician/standards@70019048f862250c04346f27e6ca196ff7aa187a'
     '.github/workflows/no-js-scan.yml':

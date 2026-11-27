@@ -175,10 +175,26 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: webfactory/ssh-agent@e83874834305fe9a4a2997156cb26c5de65a8555 # v0.10.0
+      # No third-party action or disk-resident private key.
+      - name: Start SSH agent (gitlab_key)
         if: ${{ env.GITLAB_KEY != '' }}
-        with:
-          ssh-private-key: ${{ secrets.GITLAB_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          eval "$(ssh-agent -s)" >/dev/null
+          # Load every PEM block in the secret (key rotation may concatenate several).
+          added=0
+          while IFS= read -r -d '' block; do
+            printf '%s' "$block" | ssh-add - >/dev/null
+            added=$((added + 1))
+          done < <(printf '%s\n' "$GITLAB_KEY" | awk '/-----BEGIN/{b=""} {b=b $0 "\n"} /-----END/{printf "%s%c", b, 0}')
+          if [ "$added" -eq 0 ]; then
+            echo "::error::No private key block found in the mirror secret"
+            exit 1
+          fi
+          {
+            printf 'SSH_AUTH_SOCK=%s\n' "$SSH_AUTH_SOCK"
+            printf 'SSH_AGENT_PID=%s\n' "$SSH_AGENT_PID"
+          } >> "$GITHUB_ENV"
       - name: Verify gitlab SSH host
         if: ${{ env.GITLAB_KEY != '' }}
         env:
@@ -215,6 +231,11 @@ jobs:
         run: |
           git remote add gitlab "git@gitlab.com:${MIRROR_ORG}/${REPO_NAME}.git" || true
           git push --force gitlab main
+      - name: Stop SSH agent
+        if: ${{ always() }}
+        run: |
+          # Do not leave the deploy key reachable on persistent self-hosted runners.
+          if [ -n "${SSH_AGENT_PID:-}" ]; then kill "$SSH_AGENT_PID" 2>/dev/null || true; fi
       - name: Skipped (GITLAB_SSH_KEY not configured)
         if: ${{ env.GITLAB_KEY == '' }}
         run: |
@@ -236,10 +257,26 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: webfactory/ssh-agent@e83874834305fe9a4a2997156cb26c5de65a8555 # v0.10.0
+      # No third-party action or disk-resident private key.
+      - name: Start SSH agent (bitbucket_key)
         if: ${{ env.BITBUCKET_KEY != '' }}
-        with:
-          ssh-private-key: ${{ secrets.BITBUCKET_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          eval "$(ssh-agent -s)" >/dev/null
+          # Load every PEM block in the secret (key rotation may concatenate several).
+          added=0
+          while IFS= read -r -d '' block; do
+            printf '%s' "$block" | ssh-add - >/dev/null
+            added=$((added + 1))
+          done < <(printf '%s\n' "$BITBUCKET_KEY" | awk '/-----BEGIN/{b=""} {b=b $0 "\n"} /-----END/{printf "%s%c", b, 0}')
+          if [ "$added" -eq 0 ]; then
+            echo "::error::No private key block found in the mirror secret"
+            exit 1
+          fi
+          {
+            printf 'SSH_AUTH_SOCK=%s\n' "$SSH_AUTH_SOCK"
+            printf 'SSH_AGENT_PID=%s\n' "$SSH_AGENT_PID"
+          } >> "$GITHUB_ENV"
       - name: Verify bitbucket SSH host
         if: ${{ env.BITBUCKET_KEY != '' }}
         env:
@@ -270,6 +307,11 @@ jobs:
         run: |
           git remote add bitbucket "git@bitbucket.org:${MIRROR_ORG}/${REPO_NAME}.git" || true
           git push --force bitbucket main
+      - name: Stop SSH agent
+        if: ${{ always() }}
+        run: |
+          # Do not leave the deploy key reachable on persistent self-hosted runners.
+          if [ -n "${SSH_AGENT_PID:-}" ]; then kill "$SSH_AGENT_PID" 2>/dev/null || true; fi
       - name: Skipped (BITBUCKET_SSH_KEY not configured)
         if: ${{ env.BITBUCKET_KEY == '' }}
         run: |
@@ -291,10 +333,26 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: webfactory/ssh-agent@e83874834305fe9a4a2997156cb26c5de65a8555 # v0.10.0
+      # No third-party action or disk-resident private key.
+      - name: Start SSH agent (codeberg_key)
         if: ${{ env.CODEBERG_KEY != '' }}
-        with:
-          ssh-private-key: ${{ secrets.CODEBERG_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          eval "$(ssh-agent -s)" >/dev/null
+          # Load every PEM block in the secret (key rotation may concatenate several).
+          added=0
+          while IFS= read -r -d '' block; do
+            printf '%s' "$block" | ssh-add - >/dev/null
+            added=$((added + 1))
+          done < <(printf '%s\n' "$CODEBERG_KEY" | awk '/-----BEGIN/{b=""} {b=b $0 "\n"} /-----END/{printf "%s%c", b, 0}')
+          if [ "$added" -eq 0 ]; then
+            echo "::error::No private key block found in the mirror secret"
+            exit 1
+          fi
+          {
+            printf 'SSH_AUTH_SOCK=%s\n' "$SSH_AUTH_SOCK"
+            printf 'SSH_AGENT_PID=%s\n' "$SSH_AGENT_PID"
+          } >> "$GITHUB_ENV"
       - name: Verify codeberg SSH host
         if: ${{ env.CODEBERG_KEY != '' }}
         env:
@@ -325,6 +383,11 @@ jobs:
         run: |
           git remote add codeberg "git@codeberg.org:${MIRROR_ORG}/${REPO_NAME}.git" || true
           git push --force codeberg main
+      - name: Stop SSH agent
+        if: ${{ always() }}
+        run: |
+          # Do not leave the deploy key reachable on persistent self-hosted runners.
+          if [ -n "${SSH_AGENT_PID:-}" ]; then kill "$SSH_AGENT_PID" 2>/dev/null || true; fi
       - name: Skipped (CODEBERG_SSH_KEY not configured)
         if: ${{ env.CODEBERG_KEY == '' }}
         run: |
@@ -346,10 +409,26 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: webfactory/ssh-agent@e83874834305fe9a4a2997156cb26c5de65a8555 # v0.10.0
+      # No third-party action or disk-resident private key.
+      - name: Start SSH agent (sourcehut_key)
         if: ${{ env.SOURCEHUT_KEY != '' }}
-        with:
-          ssh-private-key: ${{ secrets.SOURCEHUT_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          eval "$(ssh-agent -s)" >/dev/null
+          # Load every PEM block in the secret (key rotation may concatenate several).
+          added=0
+          while IFS= read -r -d '' block; do
+            printf '%s' "$block" | ssh-add - >/dev/null
+            added=$((added + 1))
+          done < <(printf '%s\n' "$SOURCEHUT_KEY" | awk '/-----BEGIN/{b=""} {b=b $0 "\n"} /-----END/{printf "%s%c", b, 0}')
+          if [ "$added" -eq 0 ]; then
+            echo "::error::No private key block found in the mirror secret"
+            exit 1
+          fi
+          {
+            printf 'SSH_AUTH_SOCK=%s\n' "$SSH_AUTH_SOCK"
+            printf 'SSH_AGENT_PID=%s\n' "$SSH_AGENT_PID"
+          } >> "$GITHUB_ENV"
       - name: Verify sourcehut SSH host
         if: ${{ env.SOURCEHUT_KEY != '' }}
         env:
@@ -380,6 +459,11 @@ jobs:
         run: |
           git remote add sourcehut "git@git.sr.ht:~${MIRROR_ORG}/${REPO_NAME}" || true
           git push --force sourcehut main
+      - name: Stop SSH agent
+        if: ${{ always() }}
+        run: |
+          # Do not leave the deploy key reachable on persistent self-hosted runners.
+          if [ -n "${SSH_AGENT_PID:-}" ]; then kill "$SSH_AGENT_PID" 2>/dev/null || true; fi
       - name: Skipped (SOURCEHUT_SSH_KEY not configured)
         if: ${{ env.SOURCEHUT_KEY == '' }}
         run: |
@@ -401,10 +485,26 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: webfactory/ssh-agent@e83874834305fe9a4a2997156cb26c5de65a8555 # v0.10.0
+      # No third-party action or disk-resident private key.
+      - name: Start SSH agent (disroot_key)
         if: ${{ env.DISROOT_KEY != '' }}
-        with:
-          ssh-private-key: ${{ secrets.DISROOT_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          eval "$(ssh-agent -s)" >/dev/null
+          # Load every PEM block in the secret (key rotation may concatenate several).
+          added=0
+          while IFS= read -r -d '' block; do
+            printf '%s' "$block" | ssh-add - >/dev/null
+            added=$((added + 1))
+          done < <(printf '%s\n' "$DISROOT_KEY" | awk '/-----BEGIN/{b=""} {b=b $0 "\n"} /-----END/{printf "%s%c", b, 0}')
+          if [ "$added" -eq 0 ]; then
+            echo "::error::No private key block found in the mirror secret"
+            exit 1
+          fi
+          {
+            printf 'SSH_AUTH_SOCK=%s\n' "$SSH_AUTH_SOCK"
+            printf 'SSH_AGENT_PID=%s\n' "$SSH_AGENT_PID"
+          } >> "$GITHUB_ENV"
       - name: Verify disroot SSH host
         if: ${{ env.DISROOT_KEY != '' }}
         env:
@@ -435,6 +535,11 @@ jobs:
         run: |
           git remote add disroot "git@git.disroot.org:${MIRROR_ORG}/${REPO_NAME}.git" || true
           git push --force disroot main
+      - name: Stop SSH agent
+        if: ${{ always() }}
+        run: |
+          # Do not leave the deploy key reachable on persistent self-hosted runners.
+          if [ -n "${SSH_AGENT_PID:-}" ]; then kill "$SSH_AGENT_PID" 2>/dev/null || true; fi
       - name: Skipped (DISROOT_SSH_KEY not configured)
         if: ${{ env.DISROOT_KEY == '' }}
         run: |
@@ -459,10 +564,26 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: webfactory/ssh-agent@e83874834305fe9a4a2997156cb26c5de65a8555 # v0.10.0
+      # No third-party action or disk-resident private key.
+      - name: Start SSH agent (gitea_key)
         if: ${{ env.GITEA_KEY != '' && env.GITEA_MIRROR_HOST != '' }}
-        with:
-          ssh-private-key: ${{ secrets.GITEA_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          eval "$(ssh-agent -s)" >/dev/null
+          # Load every PEM block in the secret (key rotation may concatenate several).
+          added=0
+          while IFS= read -r -d '' block; do
+            printf '%s' "$block" | ssh-add - >/dev/null
+            added=$((added + 1))
+          done < <(printf '%s\n' "$GITEA_KEY" | awk '/-----BEGIN/{b=""} {b=b $0 "\n"} /-----END/{printf "%s%c", b, 0}')
+          if [ "$added" -eq 0 ]; then
+            echo "::error::No private key block found in the mirror secret"
+            exit 1
+          fi
+          {
+            printf 'SSH_AUTH_SOCK=%s\n' "$SSH_AUTH_SOCK"
+            printf 'SSH_AGENT_PID=%s\n' "$SSH_AGENT_PID"
+          } >> "$GITHUB_ENV"
       - name: Verify gitea SSH host
         if: ${{ env.GITEA_KEY != '' && env.GITEA_MIRROR_HOST != '' }}
         env:
@@ -493,6 +614,11 @@ jobs:
         run: |
           git remote add gitea "git@${MIRROR_HOST}:${MIRROR_ORG}/${REPO_NAME}.git" || true
           git push --force gitea main
+      - name: Stop SSH agent
+        if: ${{ always() }}
+        run: |
+          # Do not leave the deploy key reachable on persistent self-hosted runners.
+          if [ -n "${SSH_AGENT_PID:-}" ]; then kill "$SSH_AGENT_PID" 2>/dev/null || true; fi
       - name: Skipped (GITEA_SSH_KEY not configured)
         if: ${{ env.GITEA_KEY == '' }}
         run: |
@@ -527,11 +653,17 @@ jobs:
           else
             echo 'configured=false' >> "$GITHUB_OUTPUT"
           fi
-      - name: Setup Rust
+      - name: Select runner stable Rust
         if: steps.radicle.outputs.configured == 'true'
-        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
-        with:
-          toolchain: stable
+        run: |
+          set -euo pipefail
+          # Fail loudly rather than bootstrap: this reusable runs on GitHub-hosted
+          # runners, which ship rustup. A runner without it is a configuration
+          # error to fix at the runner, not something to curl-install here.
+          command -v rustup >/dev/null || { echo "::error::rustup is not on this runner; the Radicle mirror needs a runner that ships it"; exit 1; }
+          rustup default stable
+          rustc --version
+          cargo --version
       - name: Install Radicle
         if: steps.radicle.outputs.configured == 'true'
         run: |
