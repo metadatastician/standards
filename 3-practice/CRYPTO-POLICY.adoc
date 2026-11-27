@@ -150,6 +150,8 @@ instruction.
 `TRUST-DEFAULTS-POLICY.adoc` (ratified 2026-09-02) predates these rulings. Its
 TLS 1.2 minimum, Ed25519 release signatures and DNSSEC algorithm order are
 raised by the follow-up change (standards#1715). Its SSH, DKIM and fallback
-TLS group settings stay, as register rows. Its allowance of RSA certificates
-"for a recorded legacy consumer" conflicts with the RSA ban and awaits an
-owner decision.
+TLS group settings stay, as register rows. Its RSA certificate "for a recorded legacy consumer" is a permanent register
+row (`rsa-cert-legacy-consumer`), by owner ruling 2026-11-27: *"Permanent
+row"*. Every DNS zone is treated as Cloudflare-hosted (*"All on Cloudflare"*),
+so all zones sit on the temporary `trust-defaults-dnssec-ed448` row until
+signing moves to a self-hosted BIND primary with Cloudflare as secondary.
