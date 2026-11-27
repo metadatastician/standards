@@ -4,14 +4,15 @@
 :toc-placement: preamble
 :sectnums:
 
-Every cryptographic choice in the estate starts at the top tier below. A
-lower choice is allowed only through a written exception in the register
-(<<register>>). Status: *ruled by the owner 2026-11-27*, by selector in the
-Head of House session; this document is a draft until the owner merges it.
+Every cryptographic primitive in the estate, including the secondary ones,
+starts at the top tier below. A lower choice is allowed only through a written
+exception in the register (<<register>>). Status: *ruled by the owner
+2026-11-27*, by selector in the Head of House session and in the Canon and
+standards hub; this document is a draft until the owner merges it.
 
-== The ruling
+== The rulings
 
-The owner's answers, verbatim (2026-11-27T11:24Z):
+The owner's answers, verbatim, 2026-11-27:
 
 * To "Top tier everywhere by default, with a written exception only where
   something won't accept it, needs heavy machinery, or is speed-critical.
@@ -22,19 +23,26 @@ The owner's answers, verbatim (2026-11-27T11:24Z):
   *"Adopt as proposed (Recommended)"*.
 * To "This flips the runtime rule from 30 minutes ago (mostly Bun) to Deno by
   default, with Bun only as an exception for speed or tooling. Confirm the
-  flip?": *"Keep mostly Bun"*, whose option text reads "Runtime stays as ruled
-  earlier. Top tier applies to crypto only."
+  flip?": *"Keep mostly Bun"* ("Runtime stays as ruled earlier. Top tier
+  applies to crypto only.").
+* On scope: *"for eveything not secondary so thngs le BLAKE3 and SHAKE-512
+  and so on and so on"*. The top tier covers every primitive, not only
+  signing and key exchange.
+* On the older TRUST-DEFAULTS settings: *"Same, but try DNSSEC Ed448"*, that
+  is: raise what works, use Ed448 for DNSSEC wherever the registrar and DNS
+  host accept it, and log the rest as exceptions.
+* On upgrades: *"where it is permanent do not do, where it is temporary do it
+  and then fix it so all that can be upgraedd is"* (<<permanence>>).
 
-So this policy governs cryptography only. The JavaScript runtime is not
-top-tier by default; it stays as `LANGUAGE-POLICY.adoc` rules it (mostly
-Bun), with Deno and tight permissions for code that is high-security.
+This policy governs cryptography only. The JavaScript runtime stays as
+`LANGUAGE-POLICY.adoc` rules it.
 
 [[tier]]
-== The top tier
+== The top tier, per primitive
 
 [cols="1,2,2",options="header"]
 |===
-| Use | Top tier (default) | Notes
+| Primitive | Top tier (default) | Notes
 
 | Signatures
 | Hybrid *Ed448 + ML-DSA-87*
@@ -44,25 +52,45 @@ Bun), with Deno and tight permissions for code that is high-security.
 | Hybrid *X448 + ML-KEM-1024*
 | The shared secret combines both.
 
-| Symmetric encryption
+| AEAD (symmetric encryption)
 | *XChaCha20-Poly1305* or *AES-256-GCM*
-| AEAD only. Use XChaCha20-Poly1305 where nonces are random.
+| AEAD only. XChaCha20-Poly1305 where nonces are random.
 
-| Hashing
+| Hash
 | *SHA3-512*
-| BLAKE3 is the standing speed exception (<<classes>>, `speed`).
+|
+
+| XOF (extendable output)
+| *SHAKE256* with at least 512 bits of output
+| There is no SHAKE-512; SHAKE256 is the strongest SHAKE.
+
+| Fast hash
+| *BLAKE3*, only under a `speed` exception
+| BLAKE3 sits at the 128-bit security level, below SHA3-512.
+
+| MAC
+| *KMAC256* or *HMAC-SHA3-512*
+|
+
+| KDF
+| *HKDF-SHA3-512*, or a KMAC256-based KDF
+|
 
 | Password hashing
-| *Argon2id*
-|
+| *Argon2id* with strong parameters
+| At least the RFC 9106 first recommended setting (1 pass, 2 GiB memory, 4 lanes); a lower memory cost is a `heavy` exception.
+
+| Random numbers
+| *The operating system CSPRNG only* (`getrandom`, `/dev/urandom`, `crypto.getRandomValues`)
+| No userspace generators seeded by hand.
 
 | Transport
 | *TLS 1.3 only*
 | No TLS 1.2 fallback.
 
-| Forbidden
-| *RSA*, in any role
-| No RSA keys, signatures or key exchange.
+| Forbidden for new security uses
+| *RSA* (any role), *MD5*, *SHA-1*, *SHA-2-256*
+| An existing use of one of these is a register row or a departure.
 |===
 
 [[classes]]
@@ -70,16 +98,28 @@ Bun), with Deno and tight permissions for code that is high-security.
 
 An exception names exactly one reason class:
 
-`not-accepted`:: the thing on the other side will not accept the top tier
-(a platform, protocol, browser or service offers nothing higher).
-`heavy`:: meeting the top tier would need heavy machinery out of proportion
-to the thing protected.
+`not-accepted`:: the other side will not accept the top tier (a platform,
+protocol, browser or service offers nothing higher).
+`heavy`:: meeting the top tier needs heavy machinery out of proportion to the
+thing protected.
 `speed`:: the path is speed-critical and the top tier measurably costs too
 much there.
 
-An exception uses the highest choice the constraint allows, and it carries a
-review date. When the date comes, the exception is checked again; when the
-constraint has lifted, the exception goes and the top tier applies.
+An exception uses the highest choice the constraint allows and carries a
+review date.
+
+[[permanence]]
+== Permanent and temporary exceptions
+
+Each exception is also marked `permanent` or `temporary`:
+
+`permanent`:: the top tier would break something for good, because no
+standard exists or no support is announced (for example DKIM with Ed448, or
+SSH with Ed448 or ML-KEM-1024). The upgrade is *not* made. The row says in
+plain words why, and is rechecked at its review date in case support appears.
+`temporary`:: support exists, but a host, registrar, tool or configuration
+needs work. The upgrade *is* made, the break is fixed, and the row's `fix`
+names the tracked work. The row is removed when the fix lands.
 
 [[register]]
 == The exceptions register
@@ -94,7 +134,9 @@ serialised by JCS (`JSON-POLICY.adoc`). Each record has:
 | `repo` | `owner/name`, or `estate` when the exception is estate-wide.
 | `what` | What falls below the top tier, and what is used instead.
 | `reason_class` | `not-accepted`, `heavy` or `speed`.
-| `reason` | Why, in one or two sentences.
+| `permanence` | `permanent` or `temporary` (<<permanence>>).
+| `reason` | Why, in plain words.
+| `fix` | For a temporary row, the tracked work that removes it; for a permanent row, what would have to change.
 | `review` | Review date, `YYYY-MM-DD`.
 | `added` | Date the row was added, `YYYY-MM-DD`.
 |===
@@ -105,15 +147,9 @@ instruction.
 
 == Where this collides with older text
 
-`TRUST-DEFAULTS-POLICY.adoc` (ratified 2026-09-02) predates this ruling and
-still says, in its TLS section and post-quantum table: TLS 1.2 minimum;
-hybrid Ed25519 + ML-DSA-87 for package and release signatures; the
-`X25519MLKEM768` group; Ed25519 SSH keys; DKIM dual-signed with RSA-2048; and
-DNSSEC with ECDSA P-256 or Ed25519.
-
-Owner ruling 2026-11-27, verbatim: *"where it is permanent do not do, where
-it is temporary do it and then fix it so all that can be upgraedd is"*. So
-each of these items is first logged as an interim register row
-(`trust-defaults-*`); a follow-up change then raises every item that can
-be upgraded and removes its row. Rows whose review date is 2026-12-27 are
-the ones expected to be upgradable.
+`TRUST-DEFAULTS-POLICY.adoc` (ratified 2026-09-02) predates these rulings. Its
+TLS 1.2 minimum, Ed25519 release signatures and DNSSEC algorithm order are
+raised by the follow-up change (standards#1715). Its SSH, DKIM and fallback
+TLS group settings stay, as register rows. Its allowance of RSA certificates
+"for a recorded legacy consumer" conflicts with the RSA ban and awaits an
+owner decision.
