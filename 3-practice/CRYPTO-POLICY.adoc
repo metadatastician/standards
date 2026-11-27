@@ -109,6 +109,11 @@ instruction.
 still says, in its TLS section and post-quantum table: TLS 1.2 minimum;
 hybrid Ed25519 + ML-DSA-87 for package and release signatures; the
 `X25519MLKEM768` group; Ed25519 SSH keys; DKIM dual-signed with RSA-2048; and
-DNSSEC with ECDSA P-256 or Ed25519. Each of these either moves to the top
-tier or becomes a row in the register. Which is an owner decision; this
-draft does not change that file.
+DNSSEC with ECDSA P-256 or Ed25519.
+
+Owner ruling 2026-11-27, verbatim: *"where it is permanent do not do, where
+it is temporary do it and then fix it so all that can be upgraedd is"*. So
+each of these items is first logged as an interim register row
+(`trust-defaults-*`); a follow-up change then raises every item that can
+be upgraded and removes its row. Rows whose review date is 2026-12-27 are
+the ones expected to be upgradable.
