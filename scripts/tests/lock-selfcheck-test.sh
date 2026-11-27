@@ -63,7 +63,7 @@ expect() {
   [ "$rc" -eq "$want" ] || bad="exit $rc"
   for s in "$@"; do
     if [ "$s" = "--" ]; then absent=1; continue; fi
-    if printf '%s' "$out" | /usr/bin/grep -qF -- "$s"; then
+    if /usr/bin/grep -qF -- "$s" <<<"$out"; then
       [ "$absent" -eq 0 ] || bad="${bad:+$bad; }unwanted '$s'"
     else
       [ "$absent" -eq 1 ] || bad="${bad:+$bad; }missing '$s'"

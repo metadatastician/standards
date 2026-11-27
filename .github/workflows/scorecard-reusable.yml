@@ -55,10 +55,12 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: metadatastician/standards
-          ref: 5a0891e9e58b785181a92e141505ca96ca987b42 # per-file reconciliation (#1168)
+          # job.workflow_sha is this reusable's own commit, so the helper is
+          # exactly the one the caller pinned (check-standards-helper-pins.sh).
+          ref: ${{ job.workflow_sha }}
           path: .standards-scorecard
           persist-credentials: false
-          sparse-checkout: scripts/reconcile-scorecard-actions-lock.rb
+          sparse-checkout: tools/scorecard-lock-reconcile
           sparse-checkout-cone-mode: false
       - name: Reconcile native action pins
         id: reconcile
@@ -73,15 +75,20 @@ jobs:
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
+          HELPER_SHA: ${{ job.workflow_sha }}
         run: |
           set -euo pipefail
+          # An empty job.workflow_sha (GitHub Enterprise Server) would have
+          # checked out the default branch: refuse anything but the pinned commit.
+          [[ "$HELPER_SHA" =~ ^[0-9a-f]{40}$ ]] && [ "$(git -C .standards-scorecard rev-parse HEAD)" = "$HELPER_SHA" ] \
+            || { echo "::error::reconciler checkout is not job.workflow_sha"; printf 'rc=2\n' >> "$GITHUB_OUTPUT"; exit 2; }
           gh extension install github/gh-actions-lock --pin v0.2.0
           # Exit 3: the reconciled SARIF was written, but some workflows failed
           # native lock verification and keep their findings. Exit 2: usage or
           # SARIF-structure error, nothing written. The code is passed on so
           # the final step can say which one happened.
           rc=0
-          ruby .standards-scorecard/scripts/reconcile-scorecard-actions-lock.rb \
+          cargo run --quiet --locked --manifest-path .standards-scorecard/tools/scorecard-lock-reconcile/Cargo.toml -- \
             results.sarif results.reconciled.sarif actions-lock-audit.json || rc=$?
           printf 'rc=%s\n' "$rc" >> "$GITHUB_OUTPUT"
           exit "$rc"
@@ -199,10 +206,12 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: metadatastician/standards
-          ref: 5a0891e9e58b785181a92e141505ca96ca987b42 # per-file reconciliation (#1168)
+          # job.workflow_sha is this reusable's own commit, so the helper is
+          # exactly the one the caller pinned (check-standards-helper-pins.sh).
+          ref: ${{ job.workflow_sha }}
           path: .standards-scorecard
           persist-credentials: false
-          sparse-checkout: scripts/reconcile-scorecard-actions-lock.rb
+          sparse-checkout: tools/scorecard-lock-reconcile
           sparse-checkout-cone-mode: false
       - name: Reconcile native action pins
         id: reconcile
@@ -217,15 +226,20 @@ jobs:
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
+          HELPER_SHA: ${{ job.workflow_sha }}
         run: |
           set -euo pipefail
+          # An empty job.workflow_sha (GitHub Enterprise Server) would have
+          # checked out the default branch: refuse anything but the pinned commit.
+          [[ "$HELPER_SHA" =~ ^[0-9a-f]{40}$ ]] && [ "$(git -C .standards-scorecard rev-parse HEAD)" = "$HELPER_SHA" ] \
+            || { echo "::error::reconciler checkout is not job.workflow_sha"; printf 'rc=2\n' >> "$GITHUB_OUTPUT"; exit 2; }
           gh extension install github/gh-actions-lock --pin v0.2.0
           # Exit 3: the reconciled SARIF was written, but some workflows failed
           # native lock verification and keep their findings. Exit 2: usage or
           # SARIF-structure error, nothing written. The code is passed on so
           # the final step can say which one happened.
           rc=0
-          ruby .standards-scorecard/scripts/reconcile-scorecard-actions-lock.rb \
+          cargo run --quiet --locked --manifest-path .standards-scorecard/tools/scorecard-lock-reconcile/Cargo.toml -- \
             results.sarif results.reconciled.sarif actions-lock-audit.json || rc=$?
           printf 'rc=%s\n' "$rc" >> "$GITHUB_OUTPUT"
           exit "$rc"

@@ -13,7 +13,7 @@ checker="$root/scripts/check-pin-comments.sh"
 
 # The checker needs mikefarah yq v4. Without it nothing here can run, and that
 # is exit 2 ("could not run"), not a failure of the checker and not a pass.
-"${YQ_BIN:-yq}" --version 2>/dev/null | grep -q 'mikefarah' || {
+grep -q 'mikefarah' <<<"$("${YQ_BIN:-yq}" --version 2>/dev/null)" || {
   echo "check-pin-comments-test: could not run, mikefarah yq v4 is required (YQ_BIN=${YQ_BIN:-yq})" >&2
   exit 2
 }
@@ -49,7 +49,7 @@ expect() {
     echo "FAIL: $label — expected exit $want, got $rc"; printf '%s\n' "$out" | sed 's/^/      | /'
     fail=$((fail + 1)); return
   fi
-  if [ "$needle" != "-" ] && ! printf '%s' "$out" | grep -qF -- "$needle"; then
+  if [ "$needle" != "-" ] && ! grep -qF -- "$needle" <<<"$out"; then
     echo "FAIL: $label — exit $rc correct, but output lacked '$needle'"; printf '%s\n' "$out" | sed 's/^/      | /'
     fail=$((fail + 1)); return
   fi
@@ -170,6 +170,21 @@ jobs:
       - run: |
           echo "uses: dtolnay/rust-toolchain@$A # stable"
 EOF
+
+# SIGPIPE: the reviewed-ref lookup used to stop awk at the first match while the
+# producer was still writing. With a lock larger than the pipe buffer (64 KiB) and
+# the pin recorded FIRST, printf died of SIGPIPE and pipefail failed the run. The
+# failure needs the producer to outrun the pipe plus awk read-ahead, so the lock is
+# sized (~780 KB of rows) to fail every time rather than now and then.
+cp "$wf/actions.lock" "$tmp/actions.lock.small"
+awk 'BEGIN { for (i = 1; i <= 12000; i++) { h = sprintf("%040x", i); printf "    '\''filler/pad-%d@%s'\'':\n        ref: '\''v1'\''\n        commit: '\''sha1-%s'\''\n", i, h, h } }' >> "$wf/actions.lock"
+expect "a lock far larger than the pipe buffer is read whole (no SIGPIPE)" 0 "1 judged" <<EOF
+jobs:
+  a:
+    steps:
+      - uses: dtolnay/rust-toolchain@$A # v1
+EOF
+cp "$tmp/actions.lock.small" "$wf/actions.lock"
 
 expect "an unparseable workflow is an error, never a pass" 2 "cannot parse" <<EOF
 jobs: [unterminated

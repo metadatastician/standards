@@ -71,6 +71,34 @@ base "$B1"
 base "$B1" push
 [ -s "$B/.tmp/k9-base-grid/report.json" ] && ok "base: a push compares with the commit it replaced" || bad "base push: $(cat "$B/.tmp/base-error" 2>&1)"
 
+
+# enumerate: a declared ledger growth is found however long the messages are.
+# The lane read `git log … | grep -iE '^Ratchet-exception' | grep -qF "$LEDGER"`
+# under pipefail: with the matching line first and more than a pipe buffer of
+# declarations, grep -q exited, the writers died of SIGPIPE, the pipeline
+# reported 141 and a declared growth was annotated as undeclared. Five runs.
+L="$T/l"; mkdir -p "$L/.machine_readable" "$L/.tmp"; git -C "$L" init -q -b main; git -C "$L" config user.email t@t; git -C "$L" config user.name t
+: > "$L/a.k9.ncl"; : > "$L/.machine_readable/k9-contract-debt.txt"; git -C "$L" add -A; git -C "$L" commit -q -m base; L1=$(git -C "$L" rev-parse HEAD)
+echo 'a.k9.ncl' > "$L/.machine_readable/k9-contract-debt.txt"
+{ printf 'grow the k9 ledger\n\n'
+  for i in $(seq 1 3000); do printf 'Ratchet-exception: .machine_readable/k9-contract-debt.txt — declared reason number %d\n' "$i"; done
+} > "$T/long-msg"
+git -C "$L" commit -qa -F "$T/long-msg"; L2=$(git -C "$L" rev-parse HEAD)
+for run in 1 2 3 4 5; do
+  : > "$T/env"
+  (cd "$L" && env RUNNER_TEMP="$L/.tmp" GITHUB_ENV="$T/env" GITHUB_EVENT_NAME=push BASE_SHA="$L1" HEAD_SHA="$L2" \
+      LEDGER=.machine_readable/k9-contract-debt.txt ADVISORY=false bash "$LANE" enumerate >"$T/enum.out" 2>&1); rc=$?
+  { [ $rc -eq 0 ] && grep -qF 'grew by 1 entr(y/ies) under a declared Ratchet-exception' "$T/enum.out" \
+    && [ ! -s "$L/.tmp/ledger-growth" ]; } \
+    && ok "enumerate: a declaration among ~200 KB of declaration lines licenses ledger growth (run $run)" \
+    || bad "enumerate: declared growth read as undeclared (run $run): rc=$rc $(tail -2 "$T/enum.out")"
+done
+git -C "$L" commit -q --amend -m "grow the k9 ledger, undeclared"; L2=$(git -C "$L" rev-parse HEAD); : > "$T/env"
+(cd "$L" && env RUNNER_TEMP="$L/.tmp" GITHUB_ENV="$T/env" GITHUB_EVENT_NAME=push BASE_SHA="$L1" HEAD_SHA="$L2" \
+    LEDGER=.machine_readable/k9-contract-debt.txt ADVISORY=false bash "$LANE" enumerate >"$T/enum.out" 2>&1); rc=$?
+{ [ $rc -eq 0 ] && grep -qF 'with no Ratchet-exception naming it' "$T/enum.out" && [ -s "$L/.tmp/ledger-growth" ]; } \
+  && ok "enumerate: undeclared ledger growth is annotated and exempts nothing (control)" \
+  || bad "enumerate: undeclared growth control: rc=$rc $(tail -2 "$T/enum.out")"
 bash "$LANE" bogus >/dev/null 2>&1; [ $? -eq 2 ] && ok "an unknown subcommand is a usage error (2)" || bad "usage exit status"
 
 # mutant: without the .standards-checkout exclusion the selection control must fail

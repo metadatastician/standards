@@ -37,8 +37,8 @@ verdict() {
   if "$@"; then ok "$label"; else ko "$label"; fi
 }
 # out_has TEXT / out_line LINE: $OUT contains TEXT / has exactly the line LINE.
-out_has() { printf "%s\n" "$OUT" | grep -qF -- "$1"; }
-out_line() { printf "%s\n" "$OUT" | grep -qx -- "$1"; }
+out_has() { grep -qF -- "$1" <<<"$OUT"; }
+out_line() { grep -qx -- "$1" <<<"$OUT"; }
 rc0_and() { [ "$RC" = 0 ] && "$@"; }
 
 # run CMD...: sets OUT (stdout), ERR (stderr) and RC.
@@ -62,7 +62,7 @@ expect_err() {
   local label="$1" needle="$2"
   shift 2
   run "$@"
-  if [ "$RC" = 2 ] && printf '%s' "$ERR" | grep -qF -- "$needle"; then ok "$label"
+  if [ "$RC" = 2 ] && grep -qF -- "$needle" <<<"$ERR"; then ok "$label"
   else ko "$label — expected exit 2 with '$needle', got $RC; stderr: $(printf '%s' "$ERR" | head -3 | tr '\n' '|')"; fi
 }
 
@@ -340,6 +340,44 @@ ledger "$(row 3 '[{"kind":"path-present","path":"x"}]' landed '{"claim":"a <!-- 
 expect_err "claim cannot forge the marker comment" "claim contains an HTML comment delimiter" bash "$IE" validate "$L"
 ledger "$GOOD" "$(row 3 '[{"kind":"path-anywhere","path":"x"}]')"
 expect_err "evaluate refuses an invalid ledger (exit 2)" "path-anywhere" bash "$IE" evaluate "$L"
+
+echo "=== validate: length bounds (comment size, plan size) ==="
+# rep N CHAR: CHAR repeated N times.
+rep() { printf "%${1}s" "" | tr ' ' "$2"; }
+bound_case() { # FIELD LIMIT ROW-AT-LIMIT ROW-OVER-LIMIT NEEDLE
+  ledger "$3"
+  expect_rc "$1 at its bound ($2) validates" 0 bash "$IE" validate "$L"
+  ledger "$4"
+  expect_err "$1 over its bound ($2) is refused" "$5" bash "$IE" validate "$L"
+}
+P1='[{"kind":"path-present","path":"x"}]'
+bound_case claim 1500 "$(row 3 "$P1" landed "{\"claim\":\"$(rep 1500 a)\"}")" \
+  "$(row 3 "$P1" landed "{\"claim\":\"$(rep 1501 a)\"}")" ":1: claim is longer than 1500 characters"
+bound_case "an evidence item" 400 "$(row 3 "$P1" landed "{\"evidence\":[\"$(rep 400 e)\"]}")" \
+  "$(row 3 "$P1" landed "{\"evidence\":[\"$(rep 401 e)\"]}")" ":1: evidence[0] is longer than 400 characters"
+bound_case "the evidence count" 16 "$(row 3 "$P1" landed "$(jq -c -n '{evidence: [range(16) | "e\(.)"]}')")" \
+  "$(row 3 "$P1" landed "$(jq -c -n '{evidence: [range(17) | "e\(.)"]}')")" ":1: evidence has more than 16 items"
+bound_case "the check count" 16 "$(row 3 "$(jq -c -n '[range(16) | {kind: "path-present", path: "p\(.)"}]')")" \
+  "$(row 3 "$(jq -c -n '[range(17) | {kind: "path-present", path: "p\(.)"}]')")" ":1: checks has more than 16 items"
+bound_case "a pattern" 400 "$(row 3 "[{\"kind\":\"grep-present\",\"path\":\"x\",\"pattern\":\"$(rep 400 p)\"}]")" \
+  "$(row 3 "[{\"kind\":\"grep-present\",\"path\":\"x\",\"pattern\":\"$(rep 401 p)\"}]")" "checks[0].pattern is longer than 400 characters"
+bound_case "a path" 256 "$(row 3 "[{\"kind\":\"path-present\",\"path\":\"$(rep 256 q)\"}]")" \
+  "$(row 3 "[{\"kind\":\"path-present\",\"path\":\"$(rep 257 q)\"}]")" "checks[0].path is longer than 256 characters"
+bound_case "a glob" 256 "$(row 3 "[{\"kind\":\"tree-grep-absent\",\"glob\":\"$(rep 256 g)\",\"pattern\":\"x\"}]")" \
+  "$(row 3 "[{\"kind\":\"tree-grep-absent\",\"glob\":\"$(rep 257 g)\",\"pattern\":\"x\"}]")" "checks[0].glob is longer than 256 characters"
+# The bounds keep every comment under GitHub's 65,536-character limit. The
+# worst row: every bound reached with characters that grow when rendered
+# ("@" gains a zero-width space; '"' and "\" are escaped by tojson).
+WORST="$(jq -c -S -n --arg a "$(rep 1500 @)" --arg e "$(rep 400 @)" --arg q "$(rep 256 '"')" \
+  --arg p "$(printf '\\\\%.0s' $(seq 200))" '
+  {issue: 3, repo: "o/r", disposition: "landed", added: "2026-11-17", claim: $a,
+   evidence: [range(16) | $e], checks: [range(16) | {kind: "grep-absent", path: $q, pattern: $p}]}')"
+ledger "$WORST"
+expect_rc "the worst-case row validates" 0 bash "$IE" validate "$L"
+run bash "$IE" render-comment --issue 3 --action reopen "$L"
+chars="$(printf '%s' "$OUT" | jq -R -s length)"
+verdict "the worst-case comment ($chars characters) is under GitHub's 65,536-character limit" \
+  rc0_and [ "${chars:-99999}" -lt 65536 ]
 if command -v ijson-jcs >/dev/null 2>&1; then
   ledger "$GOOD" "$(row 4 '[{"kind":"grep-present","path":"docs/a.adoc","pattern":"é|\\\\d"}]' landed '{"claim":"Ünïcode \" quote"}')"
   bad=0
@@ -428,10 +466,10 @@ EOF
 ledger "$(row 7 '[{"kind":"path-present","path":"docs/a.adoc"}]' landed \
   "$(jq -c -n --arg p "$PAYLOAD" '{claim: ($p + " @owner ; rm -rf /"), evidence: ["@someone #12"]}')")"
 run bash "$IE" render-comment --issue 7 --action close "$L"
-if [ "$RC" = 0 ] && printf '%s' "$OUT" | grep -qF -- "$PAYLOAD" && sentinel_absent; then
+if [ "$RC" = 0 ] && grep -qF -- "$PAYLOAD" <<<"$OUT" && sentinel_absent; then
   ok "claim text is rendered as a literal"
 else ko "claim rendering — rc=$RC"; fi
-if ! printf '%s' "$OUT" | grep -q '@owner\|@someone'; then ok "@mentions in claim and evidence notify nobody"; else ko "an @mention survives rendering"; fi
+if ! grep -q '@owner\|@someone' <<<"$OUT"; then ok "@mentions in claim and evidence notify nobody"; else ko "an @mention survives rendering"; fi
 
 echo "=== decide: the full truth table ==="
 # Evaluate records for issues 11..19, and every issue state.
@@ -556,31 +594,217 @@ verdict "--repo matches case-insensitively" [ "$(printf '%s\n' "$OUT" | grep -c 
 run bash "$IE" evaluate --repo o/other "$L"
 verdict "--repo filters out other repositories' rows" rc0_and [ -z "$OUT" ]
 
+echo "=== script checks apart: --no-scripts, --scripts-only, --script-results ==="
+R2="$WORK/repo2"
+mkdir -p "$R2/scripts" "$R2/docs"
+cd "$R2" || exit 2
+git init -q -b main .
+git config user.email t@example.invalid
+git config user.name test
+git config commit.gpgsign false
+printf 'a\n' >docs/a.adoc
+printf '#!/usr/bin/env bash\nexit 0\n' >scripts/pass.sh
+printf '#!/usr/bin/env bash\nexit 1\n' >scripts/fail.sh
+printf '#!/usr/bin/env bash\nexit 2\n' >scripts/cannot.sh
+printf '#!/usr/bin/env bash\nexit 77\n' >scripts/skip.sh
+# shellcheck disable=SC2016  # the fixture script's own text
+printf '#!/usr/bin/env bash\n: >"${MARK_OUT:?}"\nexit 0\n' >scripts/mark.sh
+printf 'not executable\n' >scripts/plain.sh
+chmod +x scripts/pass.sh scripts/fail.sh scripts/cannot.sh scripts/skip.sh scripts/mark.sh
+git add -A
+git commit -qm fixture
+export MARK_OUT="$WORK/mark-ran"
+L2="$WORK/ledger2.jsonl"
+other_row() { row "$@" | jq -c -S '.repo = "other/r"'; }
+printf '%s\n' \
+  "$(row 10 '[{"kind":"script","path":"scripts/pass.sh"},{"kind":"path-present","path":"docs/a.adoc"}]')" \
+  "$(row 11 '[{"kind":"script","path":"scripts/fail.sh"}]')" \
+  "$(row 12 '[{"kind":"script","path":"scripts/cannot.sh"},{"kind":"script","path":"scripts/skip.sh"}]')" \
+  "$(row 13 '[{"kind":"path-present","path":"docs/a.adoc"},{"kind":"script","path":"scripts/gone.sh"}]')" \
+  "$(row 14 '[{"kind":"script","path":"scripts/plain.sh"}]')" \
+  "$(row 15 '[{"kind":"path-present","path":"docs/a.adoc"}]')" \
+  "$(row 16 '[{"kind":"script","path":"scripts/mark.sh"}]')" \
+  "$(other_row 17 '[{"kind":"script","path":"scripts/pass.sh"}]')" >"$L2"
+run bash "$IE" validate "$L2"
+verdict "the mode fixture ledger validates" rc0_and true
+rec_of() { printf '%s\n' "$OUT" | jq -c --argjson n "$1" 'select(.issue == $n)'; }
+blob_of() { git rev-parse "HEAD:$1"; }
+
+rm -f "$MARK_OUT"
+run bash "$IE" evaluate --no-scripts "$L2"
+verdict "--no-scripts: no script runs" rc0_and [ ! -e "$MARK_OUT" ]
+verdict "--no-scripts: a runnable script check is unevaluated and tagged deferred" \
+  [ "$(rec_of 10)" = '{"deferred":[0],"disposition":"landed","failed":[],"holds":null,"issue":10,"repo":"o/r","unevaluated":[0]}' ]
+verdict "--no-scripts: a script absent at the commit still fails (the tree decides), not deferred" \
+  [ "$(rec_of 13)" = '{"deferred":[],"disposition":"landed","failed":[1],"holds":false,"issue":13,"repo":"o/r","unevaluated":[]}' ]
+verdict "--no-scripts: a script without the executable bit still fails" \
+  [ "$(rec_of 14 | jq -c '[.holds, .failed, .deferred]')" = '[false,[0],[]]' ]
+verdict "--no-scripts: a row without script checks is evaluated as before" \
+  [ "$(rec_of 15 | jq -c '[.holds, .deferred]')" = '[true,[]]' ]
+
+rm -f "$MARK_OUT"
+run bash "$IE" evaluate --scripts-only "$L2"
+verdict "--scripts-only: the scripts run" rc0_and [ -e "$MARK_OUT" ]
+verdict "--scripts-only: one record per runnable script check, nothing else" \
+  [ "$(printf '%s\n' "$OUT" | jq -r '"\(.issue)/\(.check)"' | tr '\n' ' ')" = "10/0 11/0 12/0 12/1 16/0 17/0 " ]
+verdict "--scripts-only: a record is {blob, check, issue, outcome, path, repo} with the blob at the commit" \
+  [ "$(rec_of 10)" = "{\"blob\":\"$(blob_of scripts/pass.sh)\",\"check\":0,\"issue\":10,\"outcome\":\"holds\",\"path\":\"scripts/pass.sh\",\"repo\":\"o/r\"}" ]
+verdict "--scripts-only: exit 1 is failed, exit 2 and 77 are unevaluated" \
+  [ "$(printf '%s\n' "$OUT" | jq -r 'select(.issue == 11 or .issue == 12) | .outcome' | tr '\n' ' ')" = "failed unevaluated unevaluated " ]
+run bash "$IE" evaluate --scripts-only --repo o/r "$L2"
+verdict "--scripts-only --repo: another repository's rows have no record" \
+  rc0_and [ -z "$(printf '%s\n' "$OUT" | jq -r 'select(.repo != "o/r")')" ]
+printf '%s\n' "$OUT" >"$WORK/results.jsonl"
+SR="$WORK/results.jsonl"
+
+# Equivalence: running the scripts in one process and supplying their
+# outcomes to another gives the same verdicts as evaluating normally.
+run bash "$IE" evaluate --repo o/r "$L2"
+normal="$OUT"
+rm -f "$MARK_OUT"
+run bash "$IE" evaluate --repo o/r --script-results "$SR" "$L2"
+verdict "equivalence: evaluate == --scripts-only then --script-results, on every row" rc0_and [ "$OUT" = "$normal" ]
+verdict "--script-results: no script runs" [ ! -e "$MARK_OUT" ]
+verdict "equivalence covers holds, failed and unevaluated rows" \
+  [ "$(printf '%s\n' "$normal" | jq -r '.holds' | sort -u | tr '\n' ' ')" = "false null true " ]
+: >"$WORK/empty.jsonl"
+run bash "$IE" evaluate --repo o/r --script-results "$WORK/empty.jsonl" "$L2"
+verdict "--script-results: a script check with no record is unevaluated" \
+  rc0_and [ "$(rec_of 10 | jq -c '[.holds, .unevaluated]')" = '[null,[0]]' ]
+grep -v '"issue":11' "$SR" >"$WORK/partial.jsonl"
+run bash "$IE" evaluate --repo o/r --script-results "$WORK/partial.jsonl" "$L2"
+verdict "--script-results: only the omitted check becomes unevaluated" \
+  rc0_and [ "$(rec_of 11 | jq -c .holds)/$(rec_of 10 | jq -c .holds)" = "null/true" ]
+sed 's/"issue":11,"outcome":"failed"/"issue":11,"outcome":"holds"/' "$SR" >"$WORK/flipped.jsonl"
+run bash "$IE" evaluate --repo o/r --script-results "$WORK/flipped.jsonl" "$L2"
+verdict "--script-results: a supplied outcome is that check's bit, and only that" \
+  rc0_and [ "$(rec_of 11 | jq -c .holds)" = true ] &&
+  [ "$(printf '%s\n' "$OUT" | grep -v '"issue":11,')" = "$(printf '%s\n' "$normal" | grep -v '"issue":11,')" ]
+
+# The trusted boundary: anything but exact records of real script checks is
+# refused, with exit 2 and nothing on stdout.
+refused() { # LABEL FILE
+  run bash "$IE" evaluate --repo o/r --script-results "$2" "$L2"
+  if [ "$RC" = 2 ] && [ -z "$OUT" ]; then ok "refused: $1"
+  else ko "refused: $1 — rc=$RC out=$(printf '%s' "$OUT" | head -c 120)"; fi
+}
+adv() { # LABEL JQ-ON-ONE-RECORD: a valid results file plus one tampered record
+  { cat "$SR"; jq -c -S "$2" <<<"$(head -n 1 "$SR")"; } >"$WORK/adv.jsonl"
+  refused "$1" "$WORK/adv.jsonl"
+}
+adv "a record for an issue with no row" '.issue = 999'
+adv "a record for a row whose check is not a script (issue 15)" '.issue = 15'
+adv "a record for a script check absent at the commit (issue 13, check 1)" \
+  '.issue = 13 | .check = 1 | .path = "scripts/gone.sh"'
+adv "a record with the wrong check index" '.check = 1'
+adv "a record with the wrong blob" '.blob = "0000000000000000000000000000000000000000"'
+adv "a record with another path" '.path = "scripts/fail.sh"'
+adv "a record of another repository" '.repo = "other/r"'
+adv "an unknown outcome" '.outcome = "pass"'
+adv "an extra field" '. + {note: "x"}'
+adv "a missing field" 'del(.blob)'
+adv "check as a string" '.check = "0"'
+adv "issue as a string" '.issue = "10"'
+{ cat "$SR"; head -n 1 "$SR"; } >"$WORK/dup.jsonl"
+refused "a duplicated record" "$WORK/dup.jsonl"
+head -n 1 "$SR" | sed 's/"issue":10/"issue":10.0/' >"$WORK/float.jsonl"
+refused "issue written as 10.0" "$WORK/float.jsonl"
+head -n 1 "$SR" | jq -c '{repo} + .' >"$WORK/order.jsonl"
+refused "a record that is not JCS (key order)" "$WORK/order.jsonl"
+{ head -n 1 "$SR"; echo; } >"$WORK/blank.jsonl"
+refused "a blank line" "$WORK/blank.jsonl"
+printf 'not json\n' >"$WORK/notjson.jsonl"
+refused "a line that is not JSON" "$WORK/notjson.jsonl"
+jq -c -s . "$SR" >"$WORK/array.jsonl"
+refused "a JSON array instead of JSON Lines" "$WORK/array.jsonl"
+{ cat "$SR"; head -c 70000 /dev/zero | tr '\0' ' '; } >"$WORK/big.jsonl"
+refused "input over 65,536 bytes" "$WORK/big.jsonl"
+printf '\xff\n' >"$WORK/utf8.jsonl"
+refused "invalid UTF-8" "$WORK/utf8.jsonl"
+expect_err "a missing --script-results file is invalid input" "not found" \
+  bash "$IE" evaluate --script-results "$WORK/none.jsonl" "$L2"
+expect_err "--no-scripts and --scripts-only exclude one another" "exclude one another" \
+  bash "$IE" evaluate --no-scripts --scripts-only "$L2"
+expect_err "the script options belong to evaluate only (decide)" "options of evaluate only" \
+  bash "$IE" decide --repo o/r --open "$WORK/open.json" --no-scripts "$L2"
+expect_err "the script options belong to evaluate only (render-comment)" "options of evaluate only" \
+  bash "$IE" render-comment --issue 10 --action close --script-results "$SR" "$L2"
+
+# --scripts-only refuses to emit more than the cap, and refuses before any
+# script runs: 20 rows of 16 checks of a script with a long name would make
+# about 120 KB of records.
+LONG="scripts/$(printf 'l%.0s' {1..200}).sh"
+# shellcheck disable=SC2016  # the fixture script's own text
+printf '#!/usr/bin/env bash\n: >"${MARK_OUT:?}"\nexit 0\n' >"$LONG"
+chmod +x "$LONG"
+git add -A
+git commit -qm "long script name"
+for n in $(seq 100 119); do
+  row "$n" "$(jq -c -n --arg p "$LONG" '[range(16) | {kind: "script", path: $p}]')"
+done >"$WORK/big-ledger.jsonl"
+rm -f "$MARK_OUT"
+run bash "$IE" evaluate --scripts-only "$WORK/big-ledger.jsonl"
+if [ "$RC" = 2 ] && [ -z "$OUT" ] && [ ! -e "$MARK_OUT" ] && grep -qF "over 65536" <<<"$ERR"; then
+  ok "--scripts-only refuses (exit 2, nothing emitted, no script run) above the 65,536-byte cap"
+else ko "--scripts-only cap — rc=$RC stdout bytes=${#OUT}"; fi
+
+echo "=== render-comment --commit (no git repository) ==="
+C2R="$(git rev-parse HEAD)"
+printf '{"disposition":"landed","failed":[],"holds":true,"issue":10,"repo":"o/r","unevaluated":[]}\n' >"$WORK/ev10.jsonl"
+run bash "$IE" render-comment --issue 10 --action close --repo o/r --evaluated "$WORK/ev10.jsonl" "$L2"
+in_repo="$OUT"
+mkdir -p "$WORK/nogit"
+cp "$L2" "$WORK/nogit/ledger.jsonl"
+cd "$WORK/nogit" || exit 2
+run bash "$IE" validate ledger.jsonl
+verdict "validate needs no git repository" rc0_and true
+run bash "$IE" render-comment --issue 10 --action close --repo o/r --commit "$C2R" --evaluated "$WORK/ev10.jsonl" ledger.jsonl
+verdict "render-comment --commit outside a repository equals the in-repository rendering" \
+  rc0_and [ "$OUT" = "$(printf '%s' "$in_repo" | sed "s#$L2#ledger.jsonl#")" ]
+expect_err "render-comment --commit needs --evaluated" "--commit needs --evaluated" \
+  bash "$IE" render-comment --issue 10 --action close --repo o/r --commit "$C2R" ledger.jsonl
+expect_err "render-comment --commit needs a full commit id" "full commit id" \
+  bash "$IE" render-comment --issue 10 --action close --repo o/r --commit HEAD --evaluated "$WORK/ev10.jsonl" ledger.jsonl
+expect_err "--commit belongs to render-comment only" "option of render-comment only" \
+  bash "$IE" evaluate --commit "$C2R" ledger.jsonl
+cd "$R" || exit 2
+unset MARK_OUT
+
 echo "=== the live ledger ==="
 cd "$REPO_ROOT" || exit 2
 expect_rc "the repository's own ledger passes lint (schema, and every script tracked and executable)" 0 bash "$IE" lint .machine_readable/issue-evidence.jsonl
 cd "$R" || exit 2
 
-if [ -z "${ISSUE_EVIDENCE_NEGATIVE_CONTROL:-}" ]; then
-  echo "=== negative control: the suite catches a broken check ==="
-  BROKEN="$WORK/broken-issue-evidence.sh"
-  # Invert grep-absent: on "no match" it now reports "does not hold".
-  cat >"$WORK/invert.sed" <<'EOF'
-s/^    1) \[ "\$1" = grep-absent \] \&\& return 0 || return 1 ;;$/    1) [ "$1" = grep-absent ] \&\& return 1 || return 0 ;;/
-EOF
-  sed -f "$WORK/invert.sed" "$IE" >"$BROKEN"
-  if cmp -s "$IE" "$BROKEN"; then
-    ko "negative control: the mutation did not apply (the check's text changed?)"
-  else
-    nc_rc=0
-    nc_out="$(ISSUE_EVIDENCE_SH="$BROKEN" ISSUE_EVIDENCE_NEGATIVE_CONTROL=1 bash "$SCRIPT_DIR/$(basename "$0")" 2>&1)" || nc_rc=$?
-    nc_fail="$(printf '%s\n' "$nc_out" | grep -c '^FAIL:' || true)"
-    if [ "$nc_rc" -ne 0 ] && [ "$nc_fail" -gt 0 ]; then
-      ok "negative control: inverted grep-absent makes the suite fail ($nc_fail failures, exit $nc_rc)"
-    else
-      ko "negative control: the suite passed against a broken evaluator (exit $nc_rc)"
-    fi
+# negative_control LABEL SEDFILE: the suite, run against a copy of the
+# evaluator mutated by SEDFILE, must report failures.
+negative_control() {
+  local broken="$WORK/broken-issue-evidence.sh" nc_rc=0 nc_out nc_fail
+  sed -f "$2" "$IE" >"$broken"
+  if cmp -s "$IE" "$broken"; then
+    ko "negative control ($1): the mutation did not apply (the text changed?)"
+    return
   fi
+  nc_out="$(ISSUE_EVIDENCE_SH="$broken" ISSUE_EVIDENCE_NEGATIVE_CONTROL=1 bash "$SCRIPT_DIR/$(basename "$0")" 2>&1)" || nc_rc=$?
+  nc_fail="$(printf '%s\n' "$nc_out" | grep -c '^FAIL:' || true)"
+  if [ "$nc_rc" -ne 0 ] && [ "$nc_fail" -gt 0 ]; then
+    ok "negative control: $1 makes the suite fail ($nc_fail failures, exit $nc_rc)"
+  else
+    ko "negative control: the suite passed against an evaluator with $1 (exit $nc_rc)"
+  fi
+}
+if [ -z "${ISSUE_EVIDENCE_NEGATIVE_CONTROL:-}" ]; then
+  echo "=== negative controls: the suite catches a broken evaluator ==="
+  # Invert grep-absent: on "no match" it now reports "does not hold".
+  cat >"$WORK/invert.sed" <<'EOF2'
+s/^    1) \[ "\$1" = grep-absent \] \&\& return 0 || return 1 ;;$/    1) [ "$1" = grep-absent ] \&\& return 1 || return 0 ;;/
+EOF2
+  negative_control "inverted grep-absent" "$WORK/invert.sed"
+  # Open the trusted boundary: a supplied record no longer has to match a
+  # real script check of the ledger at the commit.
+  cat >"$WORK/boundary.sed" <<'EOF2'
+s/^          elif \$want\[.*\] != (\$v | del(\.outcome))$/          elif false/
+EOF2
+  negative_control "an unchecked --script-results boundary" "$WORK/boundary.sed"
 fi
 
 echo

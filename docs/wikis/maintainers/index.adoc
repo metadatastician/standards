@@ -53,6 +53,330 @@ is the thing that decides whether any of the other guardrails can bite.
   promise that the requirement cannot be satisfied; the gate warns when an
   entry goes stale, so it cannot quietly become permanent.
 
+[[ledger-prune]]
+=== Shrink-only ledgers: the prune mode
+
+A shrink-only ledger fails its checker on a new offender and on a stale line,
+so a fix has to remove its line in the same commit. The prune mode does that
+removal, and nothing else (owner decision 2026-11-17).
+
+*The prune contract.* Any prune command that cites this section keeps it.
+
+. *Invariant.* A prune deletes only lines that the checker's own check
+  reports as stale (resolved), and, where a ledger carries `key:count`
+  entries, lowers only a count the check reports as too high, to the value
+  the check measured. It never adds a line, never raises a count, never
+  reorders lines, and copies every other byte unchanged: comment lines, blank
+  lines, a missing final newline. The output is a subsequence of the input
+  lines, apart from lowered counts. The decision comes from the check's own
+  code path, not a second implementation, so check and prune cannot disagree.
+. *Nothing hidden.* If the check finds any problem that is not staleness (a
+  new offender, a grown count, a malformed or duplicated entry), the prune
+  changes nothing and exits 1. A prune never turns a new problem green.
+. *Idempotent.* A second prune changes nothing. After a successful prune the
+  check passes, if staleness was its only finding.
+. *Exit codes.* `0`: nothing was stale, or the stale lines were removed and
+  no other problem remains. `1`: refused; a problem that pruning may not hide
+  is present, and the ledger is unchanged. `2`: usage or setup error; the
+  ledger is unchanged.
+. *Output.* One line on stdout per change, in ledger order, then a summary:
++
+----
+prune: delete <ledger>:<line>: <line as it was> [<reason>]
+prune: lower <ledger>:<line>: <line as it was> -> <new line> [<reason>]
+prune: <ledger>: <d> line(s) deleted, <l> count(s) lowered
+----
++
+`<line>` is the line number in the ledger before the prune; `<reason>` is the
+check's own finding for that line. When nothing is stale the command prints
+`prune: <ledger>: nothing stale`. In a JSON Lines ledger, where a row is long,
+`<line as it was>` is the row's `id` (the stated form for JSON Lines ledgers);
+the line number still names the row exactly.
+
+*Which ledgers have it.* The writer is `scripts/lib/ledger-prune.sh`; each
+checker builds the plan and the writer refuses any plan that breaks the
+invariant.
+
+[cols="2,3,3"]
+|===
+|Ledger |Prune command |Stale means
+
+|`.machine_readable/inline-python-allow.txt`
+|`scripts/check-inline-python.sh --prune`
+|the file has no inline Python left (line deleted), or fewer lines than the
+count (count lowered)
+
+|`.machine_readable/a2ml-legacy-allow.txt`
+|`scripts/check-a2ml-archived.sh --prune`
+|the entry names no A2ML file
+
+|`.machine_readable/k9-contract-debt.txt`
+|`.githooks/validate-k9.sh --prune`
+|a checked file in the ledger now conforms (layer L1 by default). An entry
+whose file is gone is reported by the k9-conformance grid, not by this hook,
+so this prune does not remove it.
+
+|`.machine_readable/marker-allow.txt`
+|`scripts/check-marker-issue-refs.sh --prune`
+|the file has no bare code marker left (line deleted), or fewer than the count
+(count lowered)
+
+|`.machine_readable/pipe-grep-q-allow.txt`
+|`scripts/check-pipe-grep-q.sh --prune`
+|the file has no pipe into a quiet grep left (line deleted), or fewer than the
+count (count lowered)
+
+|`.machine_readable/departures.jsonl` (JSON Lines; the output shows each row's
+`id`)
+|`scripts/departures.sh prune [--ref REV]`
+|some check of the row no longer holds at REV: the departure is gone
+(RESOLVED). A row that could not be evaluated is never pruned.
+|===
+
+`lock-allow.txt`, `pipeline-allow.txt` and `required-contexts-allow.txt` have
+no prune mode. Their lines go stale because of state outside this tree (a
+lockfile on another repository's default branch, a pipeline run in another
+repository, the live rulesets), and an offline prune could only guess.
+
+[[pipe-grep-q]]
+*No pipe into a quiet grep.* Under `set -o pipefail`, `writer | grep -q PATTERN`
+is unsound. `grep -q` exits at its first match; if the writer is still writing
+(more than one write, or more than a pipe buffer) it is killed by SIGPIPE, the
+pipeline reports 141, and a match reads as no match. In a test that is an
+intermittent failure on a loaded machine. In a gate written
+`if writer | grep -q BAD; then fail` it is a fail-open. Capture, then match,
+with no pipe: `out=$(writer); grep -q PATTERN <<<"$out"`. A writer that is a
+single command can sit inside the here-string: `grep -q PATTERN <<<"$(writer)"`.
+That form ignores the writer's exit status, so in a gate use the two-step
+form: under `set -e` a failing writer then stops the script, where the
+here-string form would read it as "no match".
+Two cautions when converting a line. A here-string always carries one line, so
+an empty capture is one empty line, which `grep -v` and an empty pattern match,
+where an empty pipe had no line at all. And `$(...)` drops the trailing
+newlines, so keep a temporary file where the exact bytes matter. The gate is
+`scripts/check-pipe-grep-q.sh`, its test is
+`scripts/tests/check-pipe-grep-q-test.sh`, and its header says what it does
+and does not read. Its shrink-only ledger,
+`.machine_readable/pipe-grep-q-allow.txt` (`path:count`), lists the lines that
+remain, all outside the tests but one; it fails on a new line, on a count
+above the ledger and on a stale line, and `scripts/check-pipe-grep-q.sh --prune`
+lowers or deletes the entries a fix made stale (the pre-commit hook does the
+same).
+
+*Gates fixed on 2026-11-17.* Each of these passed, or skipped a check, when
+the writer's output was larger than a pipe buffer and the match came early;
+each fix has a test with such a fixture. `scripts/check-exemption-ratchet.sh`:
+a `**` on an early line of a large `.hypatia-ignore` was not seen.
+`.githooks/pre-commit`: a commit that staged `actions.lock` among many files
+skipped the lock-closure check. `.github/workflows/spark-theatre-gate.yml`: a
+SPARK_Mode-On unit with a long body after the aspect was skipped.
+`3-practice/provisioning/templates/build/just/provision-lib.sh`: in a
+repository that tracks many files, `lang-run test` reported N/A instead of
+running `bun test`. `scripts/update-actions-lock.sh --verify-local`: a
+`not-pinned` finding was accepted for a workflow with many remote `uses:`.
+`3-practice/release-pre-flight/v1-audit.sh`: a long list of placeholder
+fuzz or bench files printed PASS. `.githooks/validate-lint-format.sh` and the
+ReScript step of `.github/workflows/ci-pipeline.yml`: a `format --help`
+written in several writes skipped the format gate (shown with a stub; the
+real help text is short). The ledger now holds 70 lines, 182 pipes in all.
+
+*The pre-commit hook.* `.githooks/validate-ledger-prune.sh`, run by
+`.githooks/pre-commit` on every commit before the K9 gate, applies the prune
+to what the commit will contain:
+
+* It does nothing unless a staged path (added, changed or deleted) appears
+  in the text of one of the five ledgers, or a ledger itself is staged. A
+  departures ledger with a `glob` check is judged whenever a path is staged,
+  because a glob can match a path it does not spell.
+* It judges the index, not the working tree: the index is checked out into a
+  throwaway repository and the checker runs there.
+* Departures are judged at a commit made from the index in that throwaway
+  repository, with HEAD as its parent, so every tree check and every
+  `commit-on-main` check is decided as the commit will have it. A `script`
+  check is left unevaluated there (the throwaway checkout is not that commit),
+  so a row that only a script would resolve is not pruned at commit time:
+  `departures.sh check`, run by the shell-test suite on the real checkout,
+  reports it.
+* When a line is stale it writes the pruned ledger, stages it, and prints the
+  `prune:` lines, so the deletion is visible and lands in the same commit.
+* It refuses (exit 1), names the stale lines and edits nothing when the
+  ledger has unstaged edits (a partly staged ledger included), when the
+  commit is made as `git commit <path>` (git commits a temporary index then),
+  and when the checker refuses to prune.
+
+Pruning happens only in this hook. The marker gate's own block in
+`.githooks/pre-commit` (`check-marker-issue-refs.sh --cached`) runs later,
+checks the staged copies, and so reads the ledger this hook pruned.
+
+The suite is `scripts/tests/ledger-prune-test.sh`.
+
+[[a2ml-retire-check]]
+=== A2ML retirement: the retire-check
+
+`.claude/CLAUDE.md` lets an `.a2ml` file be deleted only when three
+conditions hold: every fact is in a target deed (or its mapping spec drops
+it), every target deed passes `deed_lint.js`, and nothing reads, writes or
+generates the file. `scripts/a2ml-retire-check.sh` recomputes the three for
+every tracked A2ML file (`*.a2ml`, `*.a2ml.in`, `*.a2ml.template`,
+`*.a2ml.vN.template`) and prints what still blocks each one (owner decision,
+2026-11-17). It reads only; it never deletes or edits an A2ML file or a ledger.
+
+----
+bash scripts/a2ml-retire-check.sh              # table: class, path, blockers
+bash scripts/a2ml-retire-check.sh --summary    # counts per class and blocker, "n of N"
+bash scripts/a2ml-retire-check.sh --json       # one JCS object per file, by path
+bash scripts/a2ml-retire-check.sh --write-counts   # regenerate .machine_readable/a2ml-retire-counts.json
+bash scripts/a2ml-retire-check.sh --check      # the gate (below)
+bash scripts/a2ml-retire-check.sh --check --base origin/main   # the gate plus the ratchet
+bash scripts/a2ml-retire-check.sh --root DIR --repo NAME --rulings FILE [--rulings FILE]... --counts FILE
+----
+
+It needs bash, git, jq and awk, and bun as soon as a target deed exists (it
+runs `deed_lint.js` from this repository); without bun it stops with exit 2.
+
+*What is compared and what is not.* The family and its mapping spec come
+from the path (and, for a root `0-AI-MANIFEST.a2ml`, the `[ai-allocation]`
+shape `ai-manifest-decision.adoc` names). Facts are compared field by field
+only for CLADE (`clade-to-repo-deed.adoc` §3) and, when the rulings file
+carries its decision row, for STATE (phase and maturity). A scorecard under
+its decision row has no fact to compare (nothing is translated), but its
+summary still has a target: the `(assessment)` clause of the chora deed, or
+`rsr-scorecard_praxis.deed` for the RSR scorecard. An absent target is
+`no-target-deed`; a present one is `facts-unchecked:SCORECARD`, because the
+tool does not compare the summary with the record. Either way such a file is
+never `deletable-now` unless a ruling drops it. For any other family whose target deeds
+exist, the tool reports `facts-unchecked:<family>` and never classes the file
+deletable; the kyX front end for that family is what makes it checkable. A
+record that is not TOML-shaped is also `facts-unchecked`. A reader is a
+tracked file that is not prose, data, A2ML or an archive and that names the
+file's exact path, or only its basename; a writer or generator is reported
+as a reader. The tool does not see glob readers or readers in other
+repositories, except those the rulings file names.
+
+*Blockers* (the closed vocabulary; a file with none is `deletable-now`):
+
+[cols="2,5"]
+|===
+|Blocker |Meaning
+
+|`no-mapping-spec` |No mapping spec covers the file. Keep it and report it.
+|`no-target-deed:<deed>` |A target deed the comparison needs is absent; alternatives are joined by `\|`, a clause is `<deed>#<clause>`.
+|`facts-missing:<n>` |`n` facts are not in their target deed (unlisted fields count).
+|`facts-unchecked:<family>` |The comparison for this family is not mechanised, or a target deed or the record cannot be read.
+|`needs-kyx:<family>` |Translation is still owed, and it is kyX's work (D313).
+|`lint-fail:<deed>` |A target deed fails `deed_lint.js` (with its profile and `--root` for a descriptile).
+|`reader:<file>` / `name-reader:<file>` |A file in this tree names the path / only the basename, in a way that can resolve to this path (see "Basename readers" below).
+|`external-reader:<key>` |A reader outside the tree, from the rulings file.
+|`spec-gap:<key>` |The spec lacks rows this file needs (rulings file); shown only while facts are missing.
+|`ruling-needed:<key>` |An open owner question (rulings file).
+|`pending:<key>` |Ruled work not yet done (rulings file).
+|`ruling-condition:<key>` |A `dropped` ruling's precondition is not met by the tree, or the tool has no rule to derive it (see "Ruling conditions" below).
+|`record-missing:<file>` |A `dropped` or `decision` row names a record file of the tree (such as `9-archive/A2ML-REMOVED.adoc`) that does not yet name the path exactly.
+|===
+
+*Classes*, derived from the blockers in this order: `unclassified` (the tool
+cannot class it: several chora deeds, a missing mapping spec), `deletable-now`
+(no blockers), `covered-but-read` (only reader blockers), `decision-drops` (a
+`dropped` or `decision` ruling governs it), `no-mapping-spec`,
+`no-target-deed` (the record's base directory has no chora deed),
+`facts-unchecked`, `needs-kyx-supported` / `needs-kyx-unsupported` (by the
+rulings file's `kyx-family` rows), and `ruling-needed` for the rest.
+
+*Ruling conditions.* A `dropped` row's `requires` key is evaluated against the
+tree, never trusted. `inbound-links-redirected` is met when no live file names
+or links the row's `match` prefix. The `match` must be `^` and a literal path
+(only an escaped dot `\.` is a literal; a bare `.` matches any character), or the condition is unsupported. Not live: dated
+records (`9-archive/`, `docs/triage/<date>/`, `docs/audits/`, `docs/reorg/`),
+the rulings files of the run, the row's own `record` file, the legacy ledger, the counts file (the default one and the one `--counts` names), the tool and
+its test, and files under the prefix itself. A mention of the prefix with or
+without its trailing slash counts; a longer name (`older/`) does not. An
+unknown key, or a `match` that is not a literal prefix, stays a named
+`ruling-condition:<key>` blocker: the tool fails closed. `--json` shows each
+condition under `ruling_conditions` (`met`, `why`) and the files that hold it
+under `inbound_links`. A symbolic link is read by its destination (an absolute target as it stands, a relative one from the link's own directory): one that resolves into the prefix is a live link, and one that resolves outside the root is not. A tracked path that contains a newline fails the condition closed. A glob in a live file (`ol?/config`) is a link when its components can match the prefix at some offset and at least one matched component has a literal character; a pattern of bare wildcards (`*/config`) matches everything and is not. The row's `record` is compared as the file list spells it (`./docs/R.adoc` is `docs/R.adoc`).
+
+*Basename readers.* A `name-reader` names only the basename, so it may read
+another repository's file of that name. The tool cuts each mention (a path
+token ending in the basename) at its last variable, glob, `.`, `..` or empty
+segment (`?`, `[..]`, a backslash and a quote also reset it: the shell reads them as other characters). If what remains is the bare name, the directory is unknown and the
+reader blocks (`readers.name_why` says "bare name"). If it has a directory and
+that tail ends this file's path (`../must/Mustfile.a2ml` for
+`.../must/Mustfile.a2ml`), the mention can resolve here and blocks. If the
+tail has a directory that does not end the path, the mention names a different
+file under any root, unless a directory in it is a symbolic link in this tree (it then blocks). A reader whose every mention is of that kind is foreign:
+it is listed in `readers.name_foreign` and does not block. Not decided, so
+kept as blockers: a directory joined to a bare name at run time, a symbolic
+link reached by another name, and whether a template or example is ever run against this tree.
+
+*The rulings files.* `.machine_readable/a2ml-retire-rulings.jsonl` (JCS, one
+row per line) holds what the tree cannot show. Each row has `id`, `kind`,
+`date`, `recorded` (where the ruling is written), `summary`, and a scope:
+`match` (a regular expression on the path), `family`, or both, and
+optionally `repo`. Kinds: `dropped` (conditions 1 and 2 are settled by the
+ruling; `requires` names a precondition), `decision` (the family's decision
+document governs what is compared), `spec-gap`, `ruling-needed`, `pending`,
+`external-reader` (each with a `key`), and `kyx-family`. A `dropped` or
+`decision` row may carry `record`, a file of the tree that must name the path
+exactly before the file can go. `--rulings FILE` may be given more than once;
+each file adds rows, and with none given the tool reads ROOT's own file. Rows
+never override one another: every row that matches a path applies (a
+`dropped` row clears only the tool's own fact, target and spec blockers, never
+a blocker another row adds), so the order of the files does not matter, and
+an `id` given twice, in one file or two, stops the tool (exit 2), as does a
+malformed row or a named file that is missing. When the owner rules, one row
+changes and the classes move; no ruling is written in the script.
+
+*Tags are not checked.* "Git history is the archive" (owner, 2026-11-17)
+deletes a file once `9-archive/A2ML-REMOVED.adoc` names it and a tag marks
+the last commit that holds it. The record line is a `record` condition the
+tool checks. A tag cannot be seen from a tree checkout (and CI clones often
+fetch no tags), so the tool does not check it; the deletion recipe below
+creates it.
+
+*How a file becomes deletable.* Its blockers fall one by one: kyX emits the
+target deed and the comparison passes, or a ruling drops the file; the target
+deeds lint; each reader is changed to read the deed; the open question is
+answered; the record line is written. When none is left the class is
+`deletable-now`, and `--check` fails and prints the `git rm` and the ledger
+line to delete: this can go, so it must go. `--check` also fails on an
+`unclassified` file. The gate runs on every pull request and on `main` as the
+"A2ML retire-check" step of `.github/workflows/self-test.yml` (light shard),
+with the pull request's base as `--base`. The deletion is its own
+owner-visible commit:
+
+----
+# where a ruling names a record file: add a line naming <path> to it (for
+# example 9-archive/A2ML-REMOVED.adoc), and tag the last commit that holds it:
+git tag <tag-name> HEAD
+git rm -- <path>                                  # the path --check printed
+# delete the ledger line --check printed from .machine_readable/a2ml-legacy-allow.txt
+bash scripts/a2ml-retire-check.sh --write-counts  # the counts move with the deletion
+bash scripts/check-a2ml-archived.sh .
+bash scripts/a2ml-retire-check.sh --check --base HEAD
+bash scripts/tests/a2ml-retire-check-test.sh
+git add .machine_readable/a2ml-legacy-allow.txt .machine_readable/a2ml-retire-counts.json  # and the record file, if any
+git commit                                        # message: the file, and the deed field that holds each fact
+----
+
+*The live counts and the ratchet.* `.machine_readable/a2ml-retire-counts.json`
+(JCS) holds `total`, the count of files in each class, the count of files
+carrying each blocker kind, and the `deletable_now` paths (normally empty).
+`--write-counts` regenerates it; `--check` fails, printing the exact
+command, when it is missing or differs from what the tree gives. With
+`--base REV`, `--check` also fails when an A2ML path joined since REV: every
+path tracked now must have been tracked at REV, or be an unchanged rename
+(git R100) of one, so the total can only fall and a swap (one file leaves,
+another joins) is caught though the total holds. Class counts are not
+ratcheted, because files move between blocked classes legitimately as rulings
+land and readers change. The Debtfile is not used for this measure: it is
+itself a legacy `.a2ml` file to which nothing may be added.
+
+The suite is `scripts/tests/a2ml-retire-check-test.sh`. It also runs the tool
+on this repository and fails when the committed counts file differs from the
+tree, so a change that moves a count regenerates the counts in the same
+commit. `docs/triage/2026-11-17/a2ml-measure-files.jsonl` is a dated record of
+the first measurement; nothing compares against it.
+
 == Learning path
 
 === 1. Drift / staleness automation

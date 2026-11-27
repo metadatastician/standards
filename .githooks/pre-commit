@@ -24,6 +24,12 @@ ERRORS=0
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Verdict at the end: each helper below counts a failure in ERRORS and returns
+# 0. A non-zero return at top level under `set -e` ended the hook at the first
+# failing validator (gitleaks not installed stopped every later check and the
+# summary). The hook still fails when ERRORS > 0: see the end of this file.
+# Test: scripts/tests/pre-commit-continue-test.sh.
+
 default_validator() {
   local pattern="$1" error_msg="$2"
   local STAGED_FILES
@@ -34,7 +40,7 @@ default_validator() {
     echo -e "${RED}[pre-commit] $error_msg${NC}" >&2
     echo "$matching_files" >&2
     ERRORS=$((ERRORS + 1))
-    return 1
+    return 0  # counted in ERRORS; see "Verdict at the end" above
   fi
   return 0
 }
@@ -48,7 +54,7 @@ run_validator() {
   echo -e "${BLUE}[pre-commit]${NC} Running ${label}..."
   if ! INPUT_PATH="$REPO_ROOT" INPUT_STAGED_FILES="$target_files" bash "$HOOK_DIR/$script"; then
     ERRORS=$((ERRORS + 1))
-    return 1
+    return 0  # counted in ERRORS; see "Verdict at the end" above
   fi
   return 0
 }
@@ -66,7 +72,7 @@ run_validator_required() {
     echo -e "${RED}[pre-commit] ($label) REQUIRED validator '$script' is missing — refusing to pass a check that does not exist.${NC}" >&2
     echo "  Restore it from https://github.com/metadatastician/standards/tree/main/.githooks" >&2
     ERRORS=$((ERRORS + 1))
-    return 1
+    return 0  # counted in ERRORS; see "Verdict at the end" above
   fi
   if [ ! -x "$HOOK_DIR/$script" ]; then
     # A hook committed 0644 passes every local run that invokes it via `bash`
@@ -76,7 +82,7 @@ run_validator_required() {
   echo -e "${BLUE}[pre-commit]${NC} Running ${label}..."
   if ! INPUT_PATH="$REPO_ROOT" INPUT_STAGED_FILES="$target_files" bash "$HOOK_DIR/$script"; then
     ERRORS=$((ERRORS + 1))
-    return 1
+    return 0  # counted in ERRORS; see "Verdict at the end" above
   fi
   return 0
 }
@@ -92,6 +98,11 @@ run_validator_required "Staged secret scan (gitleaks)" "validate-gitleaks.sh" "s
 # Ecosystem-scoped lint + format. Read-only; confined to the ecosystems this
 # repo actually has staged.
 run_validator_required "Ecosystem lint + format" "validate-lint-format.sh" "staged"
+
+# Shrink-only ledgers: a staged fix that makes a ledger line stale prunes that
+# line and stages the ledger (owner decision 2026-11-17). Before the K9 gate,
+# which reads the pruned ledger. Scope "always": a deletion-only commit counts.
+run_validator "Shrink-only ledger prune" "validate-ledger-prune.sh" "always"
 
 # Language Policy
 default_validator '\.(ts|tsx)$' "TypeScript files not allowed. Use AffineScript instead."
@@ -124,8 +135,13 @@ run_validator "Bot directives" "validate-bot-directives.sh" "staged"
 # needs a top-level record of its own. Runs where the repository carries
 # scripts/close-lock.sh, like the canonical-names guard below.
 LOCK_REL=".github/workflows/actions.lock"
-if [[ -f "$REPO_ROOT/scripts/close-lock.sh" ]] \
-   && git diff --cached --name-only --diff-filter=ACM 2>/dev/null | grep -qxF "$LOCK_REL"; then
+# The lock is named as a pathspec, not grepped out of the staged list: a pipe
+# into grep -q lost the race to SIGPIPE on a large commit and skipped the check.
+# Under set -e a failing git diff ends the hook instead of reading as "not staged".
+STAGED_LOCK_NAME=""
+[[ -f "$REPO_ROOT/scripts/close-lock.sh" ]] \
+  && STAGED_LOCK_NAME="$(git -C "$REPO_ROOT" diff --cached --name-only --diff-filter=ACM -- "$LOCK_REL")"
+if [[ "$STAGED_LOCK_NAME" == "$LOCK_REL" ]]; then
   echo -e "${BLUE}[pre-commit]${NC} Checking actions.lock closure..."
   STAGED_LOCK="$(mktemp)"
   if ! git show ":$LOCK_REL" > "$STAGED_LOCK" 2>/dev/null \
@@ -150,6 +166,12 @@ if [ -f "$REPO_ROOT/scripts/check-canonical-names.sh" ]; then
     echo -e "${RED}[pre-commit] Deprecated name reintroduced${NC}" >&2
     ERRORS=$((ERRORS + 1))
   fi
+fi
+
+# Code markers cite an issue (standards#955); reads the staged copies.
+if [ -f "$REPO_ROOT/scripts/check-marker-issue-refs.sh" ]; then
+  echo -e "${BLUE}[pre-commit]${NC} Checking code markers cite an issue..."
+  bash "$REPO_ROOT/scripts/check-marker-issue-refs.sh" --root "$REPO_ROOT" --cached || ERRORS=$((ERRORS + 1))
 fi
 
 echo ""

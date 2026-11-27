@@ -14,9 +14,9 @@
 # reporting a vacuous pass.
 #
 # SHARDS: the suite is split so no single job nears its limit. The mutation
-# test tests/test_apply_workflow_pins_remote.sh runs its mutants one after
-# another and takes longer than the rest of the suite together; it runs alone in
-# `tests-heavy`. `tests` keeps the required context name `Repo self-tests` and
+# test tests/test_apply_workflow_pins_remote.sh is still the longest single
+# test (its mutants run concurrently, but its serial sections remain); it runs
+# alone in `tests-heavy`. `tests` keeps the required context name `Repo self-tests` and
 # fails unless both shards pass, so a shard cannot be skipped or forgotten.
 # What belongs in which shard is HEAVY_TESTS in scripts/run-shell-test-suite.sh.
 
@@ -83,7 +83,7 @@ jobs:
       - name: Install test dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends ripgrep ruby ruby-minitest
+          sudo apt-get install -y --no-install-recommends ripgrep
 
       # scripts/tests/check-ijson-jcs-test.sh needs the real tool; it exits 2
       # without it. Same pin as ijson-jcs.yml (JSON-POLICY §3).
@@ -191,6 +191,7 @@ jobs:
           echo "awk -> $(PATH="$shim:$PATH" awk -W version 2>&1 | head -1)"
           PATH="$shim:$PATH" bash scripts/tests/check-lock-sync-test.sh
           PATH="$shim:$PATH" bash scripts/tests/uuid-v8-pragma-test.sh
+          PATH="$shim:$PATH" bash scripts/tests/pin-uses-from-lock-test.sh
 
       # KYAML ratchet (YAML-POLICY Y-3, §5 step 5, standards#1024): every file
       # already converted must stay KYAML. A file joins this list in the PR that
@@ -218,6 +219,20 @@ jobs:
           set -euo pipefail
           bash scripts/check-a2ml-archived.sh --base "${BASE_SHA:-HEAD~1}" .
 
+      # The ledger above only says which A2ML files are known. This step says
+      # what blocks each one from deletion, and fails when: a file meets all
+      # three deletion conditions and is still here (it must go, in a commit
+      # of its own); a file fits no class; the committed counts
+      # (.machine_readable/a2ml-retire-counts.json) are not the ones the tree
+      # gives; or an A2ML path joined since the base. Fixtures and mutants:
+      # scripts/tests/a2ml-retire-check-test.sh. Needs bun (set up above).
+      - name: A2ML retire-check
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          bash scripts/a2ml-retire-check.sh --check --base "${BASE_SHA:-HEAD~1}"
+
       # Not part of the offline suite: this one needs real git history, so it
       # cannot live in scripts/tests/*.sh where a contributor runs it on a
       # shallow or detached tree. On a pull request the comparison is the base
@@ -228,11 +243,10 @@ jobs:
   tests-heavy:
     name: Repo self-tests (heavy)
     runs-on: ubuntu-latest
-    # STOPGAP, NOT THE FIX. The mutation test inside this shard runs its
-    # mutants serially and is still the long pole; this limit only stops it
-    # being killed. The real fix is to run its mutants in parallel (see the
-    # tracking issue linked from the PR that introduced this shard).
-    timeout-minutes: 40
+    # The mutation test inside this shard now runs its mutants concurrently
+    # (MUT_JOBS, default one per core): about 6 minutes on 4 cores, down from
+    # about 11 serially. 20 minutes is an ordinary bound, not a stopgap.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -256,7 +270,7 @@ jobs:
       - name: Install test dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends ripgrep ruby ruby-minitest
+          sudo apt-get install -y --no-install-recommends ripgrep
 
       # scripts/tests/check-ijson-jcs-test.sh needs the real tool; it exits 2
       # without it. Same pin as ijson-jcs.yml (JSON-POLICY §3).

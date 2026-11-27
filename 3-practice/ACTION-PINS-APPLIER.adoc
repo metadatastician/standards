@@ -1,0 +1,122 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+= Action pins applier: contract and the post-pin-bump hook
+:toc:
+
+The action pins applier (`.github/workflows/action-pins-applier.yml`, logic in
+`scripts/regen-dependabot-locks.sh`) is the single writer of third-party `uses:`
+SHAs and of `actions.lock` (owner ruling "single writer", 2026-11-21). This page
+is the contract for the one extension point it offers a repository: the
+post-pin-bump hook (owner-approved "Option A", split phases).
+
+== Why a hook
+
+Some repositories carry files that are derived from their pins: a lock, a
+generated table. If the applier bumped a pin and opened a PR without them, the
+PR would be red or, worse, stale. The repository can say how to regenerate them,
+and the applier runs that. Repository code must never run next to an App token,
+so the work is split.
+
+== The repository's side
+
+* `scripts/post-pin-bump.sh` on the default branch. It is run as
+  `bash scripts/post-pin-bump.sh` with no arguments, from the repository root, on
+  a copy of the tree with the bump already applied, with `POST_PIN_BUMP=1`.
+* `.github/post-pin-bump.paths` on the default branch: the allow-list. One path
+  per line, or a directory prefix ending in `/`. No globs. Blank lines and
+  `#` comments are ignored. An absent or empty file allows nothing.
+
+A repository with no `scripts/post-pin-bump.sh` is unaffected: the applier opens
+its PR exactly as before.
+
+== The three phases
+
+[cols="1,1,3"]
+|===
+| Job | App token | What it does
+
+| `apply` | yes
+| Bumps the pins and relocks. For a repository that has a hook it opens no PR;
+it records the bumped tree and a metadata row (repo, default branch, head sha,
+hash of the pins) in the `hook-defer` artifact. The `deferred` output says
+whether there is anything to do. With nowhere to defer (no `HOOK_DEFER_DIR`) the
+repository is refused as `bump-hook-not-deferred`, never given a PR with stale
+derived files.
+
+| `hook-prepare` | no
+| First, once and before any hook container runs, installs the egress guard (see "The egress guard") and probes it. Then runs each repository's hook in its OWN throwaway container (`docker run --rm --user 65534:65534 --cap-drop ALL --security-opt no-new-privileges --read-only`), with `POST_PIN_BUMP=1`, a timeout (`HOOK_TIMEOUT`, default 300 s) and exactly one thing mounted: a copy of that repository's tree. The container sees no runner state, no credential and no other repository's tree or result. It has outbound network (owner ruling, 2026-11-27: "Allow outbound network"), because a hook may need to fetch from GitHub; see the threat model. The image (`HOOK_IMAGE`) is built in the job from a Debian bookworm-slim base pinned by digest, plus `jq`, `git` and `ca-certificates` from a dated `snapshot.debian.org` archive (see "The hook image"). Records, per deferral, the status, the log, the list of changed paths with their modes, and the changed files, in a result directory named after the deferral. Writes the `hook-result` artifact.
+
+| `hook-apply` | yes
+| Treats the result as untrusted and the `hook-defer` rows written by the token job as the authority: repo, owner and token come from them. Each deferral needs exactly one result directory of the same name whose `meta.tsv` is byte-identical to the deferral's; a result for another row, a missing result, or a result no deferral asked for fails the run. It re-derives the bump and the lock itself from
+the live default branch and uses nothing of the hook phase's tree. It reads the
+allow-list from the default-branch commit, never from the hook's tree, checks
+every changed path, copies only the allow-listed regular files into its own
+checkout, and commits the lot in one Verified commit on the same
+`chore/bump-action-pins` PR.
+|===
+
+== What hook-apply refuses
+
+Every refusal is loud: the outcome is named in the log and the run fails. A
+refusal commits nothing at all, not even the plain bump.
+
+* a hook that failed or timed out (`hook-refused: hook-failed rc=N`, `hook-timeout`);
+* a result whose row differs from its deferral (`hook-result-mismatch`), a deferral with no result (`hook-result-missing`), a result no deferral asked for (`hook-result-extra`);
+* a bump PR that is already open (`bump-pr-open`) or a re-derivation that fails: the hook result is not applied, and the run fails rather than skipping quietly;
+* a malformed deferral row (`hook-bad-meta`);
+* a result for another head than the live default branch (`hook-stale-head`), or
+  for pins that have moved since (`hook-stale-pins`);
+* a path not in `.github/post-pin-bump.paths` on the default branch;
+* any path under `.github/workflows/` or `.github/actions/`, the hook script, or
+  the allow-list itself, whatever the allow-list says; an allow-list that could
+  reach them is itself invalid;
+* a deletion, a symlink, a mode change, a file that is not a regular file or is
+  reached through a symlink, a file over 1 MiB, or more than 200 changed paths.
+
+== Threat model
+
+The hook is code from a repository that other people can push to, so it is treated as hostile. Three things follow.
+
+* *No shared runner.* Running every hook as the runner user, on one runner, would let one repository's hook write another's result, tamper with its tree, or rewrite the runner's own action code (for example the `upload-artifact` JavaScript or `harden-runner`'s post step). A rewritten action runs in the next step with `ACTIONS_RUNTIME_TOKEN`, which is enough to poison this repository's `main` cache, and the governance, hypatia and fork-governance jobs restore that cache next to their tokens. `env -i` does not stop this. The per-deferral container does: it mounts one tree and nothing of the runner, so there is nothing to rewrite and no token to read.
+* *Public artifacts.* `hook-defer` and `hook-result` hold a whole checkout and live in a workflow run of a public repository. A repository that is not public (private, internal, or one whose visibility cannot be read) is refused by name, `hook-refused-nonpublic`, before any hook runs.
+* *Outbound network.* A hook has the default bridge network and can reach the internet. That is acceptable because no credential or Actions runtime token is inside the container (its environment is five fixed variables, none from the runner, and a test asserts no `ACTIONS_*`, `GITHUB_*` or `RUNNER_*` is passed), the trees are public-only (a hook cannot read anything it could not already read), and everything it produces is untrusted and checked against the allow-list in phase 3. The cloud metadata service and the host are blocked (see "The egress guard", owner ruling 2026-11-27 "Block it, then merge"). The remaining risk: a hook can fetch and run arbitrary code inside its own sandbox. That limits only what it can produce for its own repository, as allow-listed regular files, which a reviewer reads in the PR. Other addresses reachable from the runner's network (a private range, for example) are not blocked.
+* *Authority.* Phase 3 trusts nothing the container produced, including its own row.
+
+== The hook image
+
+Inside the container `HOME` is `/tmp/home` and `TMPDIR` is `/tmp`, on a 512 MiB tmpfs (the root is read-only), so a bare `git fetch` of one repository fits.
+A hook may rely on: `bash`, the Debian base utilities (coreutils, grep, sed, awk, find, `sha256sum`, tar, `timeout`), `jq`, `git` and `ca-certificates`. Nothing else is installed: no package manager at run time, no language runtimes. A hook that needs more must say so in a change to this page and the image.
+
+The image is built in `hook-prepare` while the network is up: `FROM` the bookworm-slim digest, then `apt-get install --no-install-recommends jq git ca-certificates` from `snapshot.debian.org/archive/debian/20261101T000000Z/`, tagged `post-pin-bump-hook:local`. A dated snapshot gives the same packages for the same inputs; apt verifies the snapshot's signed Release file (plain http is used because the base has no CA bundle yet). The installed versions are written to the job summary of every run. Moving the snapshot date or the base digest is an ordinary reviewed change. The hook container does not use the build step's apt sources; it runs from the built image with the default network.
+
+== The egress guard
+
+Before any hook container runs, `hook-prepare` reads the default bridge from `docker network inspect bridge` and adds, with `sudo iptables -I` (and `ip6tables` when the bridge has IPv6):
+
+* `DOCKER-USER`: DROP from the bridge subnet to `169.254.0.0/16` (cloud metadata; `fe80::/10` for IPv6);
+* `DOCKER-USER` and `INPUT`: DROP from the bridge subnet to the bridge gateway, which is the host. Traffic to the gateway is delivered to the host and never crosses the forwarding path, so the `INPUT` rule is the one that acts; the `DOCKER-USER` rule is kept as well.
+
+Then a probe container (same image, same flags minus the mount) must resolve `github.com` with `getent hosts` and must fail to connect to `169.254.169.254:80`. A rule that cannot be added, a bridge that cannot be read or has no IPv4 subnet and gateway, a broken DNS probe, or a reachable metadata address stops `hook-prepare` with a named error: the hook does not run without the guard. On the default bridge with a loopback host resolver Docker falls back to public resolvers, so blocking the gateway should not break DNS; the probe is what proves it on each run. The tests stub `iptables` and `docker` and check the rules, their order (rules, probe, first hook) and each refusal; the real effect is proved by the probe on a runner, not by the tests.
+
+== What is not enforced
+
+State these plainly; do not claim more.
+
+* *The container runtime.* Isolation is as strong as Docker's on the hosted runner. A container escape is out of scope; the image is pinned (base by digest, packages by snapshot date), not audited.
+* *Network egress, in the other jobs.* They run on a hosted runner with the egress audit of `step-security/harden-runner` and no block. The hook phase has the internet by ruling, minus link-local and the host (see the egress guard). Other private ranges are not blocked.
+* *The phase-1 `github.token`.* `apply` holds the job's default `contents: read` token. Hook code never runs there.
+* *Byte content within allow-listed files.* The applier checks where a hook wrote
+  and what kind of file it is, not what is in it. Allow-list only files whose
+  content a reviewer will read in the PR.
+
+== Tests
+
+`scripts/tests/post-pin-bump-hook-test.sh` runs the real hook through all three
+phases offline, with `gh` and the repair tools stubbed, and checks every refusal
+above, forged results included. `scripts/tests/regen-dependabot-locks-test.sh`
+covers the unchanged no-hook path. No test runs a real fetching hook (gitbot-fleet'"'"'s, in `POST_PIN_BUMP=1` fetch mode); the first `workflow_dispatch` dry-run on a hook repository is that test. The tests run the hook natively (`HOOK_SANDBOX=none`, refused on a runner) and check the container flags against a stub `docker`; they do not prove the isolation itself, which is Docker's.
+
+The token jobs install `gh-actions-lock` from its release binary, checked against a recorded sha256, not with `gh extension install --pin`: a tag can move.
+
+== Related
+
+* Companion change on the fleet side: `hyperpolymath/gitbot-fleet#717`.

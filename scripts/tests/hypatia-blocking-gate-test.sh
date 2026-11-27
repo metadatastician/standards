@@ -6,32 +6,39 @@ set -euo pipefail
 repo=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
-if command -v ruby >/dev/null 2>&1; then
-  ruby -ryaml -e '
-    workflow = YAML.load_file(ARGV[0])
-    steps = workflow.fetch("jobs").fetch("scan").fetch("steps")
-    scan_runner = steps.find { |step| step["name"] == "Run Hypatia scan" }
-    validator = steps.find { |step| step["id"] == "scan" }
-    gate = steps.find { |step| step["id"] == "blocking-findings" }
-    abort "blocking gate is not opt-in" unless gate.fetch("if") == "inputs.block-on-high || inputs.block-on-critical"
-    panic_gate = steps.find { |step| step["id"] == "blocking-panic" } or abort("missing step: blocking-panic")
-    abort "panic-attack gate is not opt-in" unless panic_gate.fetch("if") == "inputs.block-on-critical"
-    abort "panic-attack gate must follow the scan" unless steps.index(panic_gate) > steps.index { |step| step["id"] == "panic-attack" }
-    ["Relativize finding paths", "Filter SARIF through the baseline before upload", "Upload SARIF to code scanning", "Upload findings artifacts"].each do |name|
-      s = steps.find { |step| step["name"] == name } or abort("missing step: #{name}")
-      abort("#{name} must not use if: always() (standards#1050)") if s["if"].to_s.include?("always()")
-    end
-    pa_install = steps.find { |step| step["id"] == "panic-attack-install" } or abort("missing step: panic-attack-install")
-    pa_run = steps.find { |step| step["id"] == "panic-attack" } or abort("missing step: panic-attack")
-    fetch_filter = steps.index { |step| step["id"] == "fetch_filter" } or abort("missing step: fetch_filter")
-    abort "panic-attack must run before the standards checkout" unless steps.index(pa_run) < fetch_filter
-    File.write(ARGV[1] + "/scan.sh", scan_runner.fetch("run"))
-    File.write(ARGV[1] + "/validate.sh", validator.fetch("run"))
-    File.write(ARGV[1] + "/gate.sh", gate.fetch("run"))
-    File.write(ARGV[1] + "/panic-gate.sh", panic_gate.fetch("run"))
-    File.write(ARGV[1] + "/pa-install.sh", pa_install.fetch("run"))
-    File.write(ARGV[1] + "/pa-run.sh", pa_run.fetch("run"))
-  ' "$repo/.github/workflows/hypatia-scan-reusable.yml" "$tmp"
+if command -v yq >/dev/null 2>&1; then
+  wf="$repo/.github/workflows/hypatia-scan-reusable.yml"
+  steps='.jobs.scan.steps'
+  # idx SELECT: index of the first step matching SELECT, or empty.
+  idx() { yq -r "$steps | to_entries | map(select(.value | $1)) | .[0].key // \"\"" "$wf"; }
+  need() { local i; i=$(idx "$1"); [ -n "$i" ] || { echo "missing step: $2" >&2; exit 1; }; printf '%s' "$i"; }
+  field() { yq -r "$steps[$1].$2 // \"\"" "$wf"; }
+  scan_i=$(need '.name == "Run Hypatia scan"' 'Run Hypatia scan')
+  validate_i=$(need '.id == "scan"' scan)
+  gate_i=$(need '.id == "blocking-findings"' blocking-findings)
+  [ "$(field "$gate_i" if)" = "inputs.block-on-high || inputs.block-on-critical" ] \
+    || { echo "blocking gate is not opt-in" >&2; exit 1; }
+  panic_i=$(need '.id == "blocking-panic"' blocking-panic)
+  [ "$(field "$panic_i" if)" = "inputs.block-on-critical" ] \
+    || { echo "panic-attack gate is not opt-in" >&2; exit 1; }
+  pa_run_i=$(need '.id == "panic-attack"' panic-attack)
+  [ "$panic_i" -gt "$pa_run_i" ] || { echo "panic-attack gate must follow the scan" >&2; exit 1; }
+  for name in "Relativize finding paths" "Filter SARIF through the baseline before upload" \
+              "Upload SARIF to code scanning" "Upload findings artifacts"; do
+    i=$(need ".name == \"$name\"" "$name")
+    case "$(field "$i" if)" in
+      *'always()'*) echo "$name must not use if: always() (standards#1050)" >&2; exit 1 ;;
+    esac
+  done
+  pa_install_i=$(need '.id == "panic-attack-install"' panic-attack-install)
+  fetch_filter_i=$(need '.id == "fetch_filter"' fetch_filter)
+  [ "$pa_run_i" -lt "$fetch_filter_i" ] || { echo "panic-attack must run before the standards checkout" >&2; exit 1; }
+  field "$scan_i" run > "$tmp/scan.sh"
+  field "$validate_i" run > "$tmp/validate.sh"
+  field "$gate_i" run > "$tmp/gate.sh"
+  field "$panic_i" run > "$tmp/panic-gate.sh"
+  field "$pa_install_i" run > "$tmp/pa-install.sh"
+  field "$pa_run_i" run > "$tmp/pa-run.sh"
 else
   awk -v out_dir="$tmp" '
     function flush_step() {

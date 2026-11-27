@@ -281,7 +281,7 @@ REST API.
   (measured on `marches`, `standards`, `anvomidaviser` 2026-09-20; `POST` created a probe
   ruleset that was deleted again, so treat that capability as real and dangerous). Remediation
   therefore ships as reviewable PUT bodies, in the shape
-  `scripts/plan-ruleset-constraint-repair.rb` already
+  `scripts/plan-ruleset-constraint-repair.sh` already
   intends: 96 repo rulesets + the one org ruleset, dry-run validated, each body guarded by a
   re-read of live state so a concurrent owner edit is skipped rather than overwritten.
   `anvomidaviser/Optimus-Branch` (14968878) is *disabled*, so it fails that planner's
@@ -357,7 +357,7 @@ ruling 2026-10-08), and neither is OikosBot:
 
 * `vars.APP_ID` + `secrets.APP_PRIVATE_KEY` — the pin applier (contents,
   workflows and pull-requests write). Read by `apply-workflow-pins.yml` and
-  `dependabot-lock-regen.yml`.
+  `action-pins-applier.yml`.
 * `vars.RULESET_APP_ID` + `secrets.RULESET_APP_PRIVATE_KEY` — the ruleset
   applier (`administration: write`). Read by `tag-ruleset-canon.yml`.
 

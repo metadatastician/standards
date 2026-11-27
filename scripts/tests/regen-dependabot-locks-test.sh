@@ -75,19 +75,28 @@ if [ "$1 $2" = "api --paginate" ] && [[ "$3" == installation/repositories* ]]; t
 fi
 if [ "$1 $2" = "api graphql" ]; then
   cat > "$GH_CAPTURE"
+  [ -n "${GQL_FAIL:-}" ] && exit 1
   echo 2222222222222222222222222222222222222222
   exit 0
 fi
+# An installation token cannot read /user; a PAT can (USER_LOGIN).
+if [ "$1 $2" = "api user" ]; then [ -n "${USER_LOGIN:-}" ] || exit 1; echo "$USER_LOGIN"; exit 0; fi
 # Default-branch repair (REGEN_MAIN=1): repo metadata, heads, refs and PRs.
 if [ "$1" = api ] && [ "$2" = repos/o/r ] && [ "$3" = --jq ]; then echo "${DEFAULT_BRANCH:-main}"; exit 0; fi
 if [ "$1" = api ] && [ "$2" = repos/o/r/commits/chore/regenerate-actions-lock ]; then
   [ -n "${LEFTOVER_MSG:-}" ] || exit 1
-  printf '%s\n' "$LEFTOVER_MSG"; exit 0
+  # --jq selects the field: the commit author login or the message.
+  case "${4:-}" in *author*) printf '%s\n' "${LEFTOVER_AUTHOR-estate-applier[bot]}" ;; *) printf '%s\n' "$LEFTOVER_MSG" ;; esac; exit 0
 fi
-if [ "$1" = api ] && [[ "$2" == repos/o/r/commits/* ]]; then echo "$MAIN_SHA"; exit 0; fi
+if [ "$1" = api ] && [[ "$2" == repos/o/r/commits/* ]]; then
+  case "${4:-}" in *author*) printf '%s\n' "${BRANCH_AUTHOR-estate-applier[bot]}" ;; *) echo "$MAIN_SHA" ;; esac; exit 0
+fi
 if [ "$1 $2 $3" = "api -X POST" ] && [[ "$4" == repos/*/git/refs ]]; then
   echo "POST-REF $*" >> "$GH_LOG"; [ -n "${REF_EXISTS:-}" ] && exit 1; exit 0
 fi
+# The branch head a branch-ref read reports (BRANCH_SHA); unset means the branch is unknown.
+if [ "$1" = api ] && [[ "$2" == repos/*/git/ref/heads/* ]]; then [ -n "${BRANCH_SHA:-}" ] || exit 1; echo "$BRANCH_SHA"; exit 0; fi
+if [ "$1 $2 $3" = "api -X DELETE" ]; then echo "DELETE-REF $*" >> "$GH_LOG"; exit 0; fi
 if [ "$1 $2 $3" = "api -X PATCH" ]; then echo "PATCH-REF $*" >> "$GH_LOG"; exit 0; fi
 if [ "$1 $2 $3" = "api -X POST" ] && [[ "$4" == repos/*/pulls ]]; then
   echo "POST-PR $*" >> "$GH_LOG"; [ -n "${PR_FAIL:-}" ] && exit 1; echo 42; exit 0
@@ -95,7 +104,7 @@ fi
 exit 1
 EOF
 chmod +x "$WORK/gh"
-export GH_BIN="$WORK/gh" REGEN_TOOLS="$TOOLS" GH_CAPTURE="$WORK/payload.json"
+export GH_BIN="$WORK/gh" REGEN_TOOLS="$TOOLS" GH_CAPTURE="$WORK/payload.json" APPLIER_SLUG=estate-applier
 
 # shellcheck source=../regen-dependabot-locks.sh
 source "$TARGET"
@@ -263,6 +272,16 @@ out="$(REF_EXISTS=1 LEFTOVER_MSG="$REPAIR_HEADLINE"$'\n\n'"body" TOOL_ACTION=bum
 expect "a leftover repair branch of ours is reused" "o/r@main	pr-opened #42 ($oid)" "$out"
 expect "…by force-moving it to the default head" 1 "$(grep -c "PATCH-REF .*git/refs/heads/chore/regenerate-actions-lock .*sha=$MAIN_SHA .*force=true" "$GH_LOG")"
 
+# Identity gates reuse: our headline from someone else is never force-moved, and
+# when we cannot tell who we are (no slug, no /user) nothing is reused.
+fresh_main leftover-foreign
+expect "a branch with our headline by another author is not reused" "o/r@main	repair-branch-exists" "$(REF_EXISTS=1 LEFTOVER_AUTHOR=someone LEFTOVER_MSG="$REPAIR_HEADLINE" TOOL_ACTION=bump repair_main o/r '[]' 2>/dev/null)"
+expect "…no PATCH" 0 "$(grep -c PATCH-REF "$GH_LOG")"
+fresh_main leftover-noid
+expect "an unknown identity reuses nothing" "o/r@main	repair-branch-exists" "$(APPLIER_SLUG= REF_EXISTS=1 LEFTOVER_MSG="$REPAIR_HEADLINE" TOOL_ACTION=bump repair_main o/r '[]' 2>/dev/null)"
+fresh_main leftover-pat
+expect "a PAT identity (/user) is honoured when no slug is given" "o/r@main	pr-opened #42 ($oid)" "$(APPLIER_SLUG= USER_LOGIN=estate-applier[bot] REF_EXISTS=1 LEFTOVER_MSG="$REPAIR_HEADLINE" TOOL_ACTION=bump repair_main o/r '[]' 2>/dev/null)"
+
 fresh_main prfail
 expect "a refused PR creation is reported with the commit" "o/r@main	pr-refused ($oid)" "$(PR_FAIL=1 TOOL_ACTION=bump repair_main o/r '[]' 2>/dev/null)"
 
@@ -270,6 +289,102 @@ fresh_main wired
 expect "process_repo runs the default-branch repair only with REGEN_MAIN=1" "o/r@main	pr-opened #42 ($oid)" "$(REGEN_MAIN=1 TOOL_ACTION=bump process_repo o/r t 2>/dev/null)"
 fresh_main unwired
 expect "…and not without it" "" "$(TOOL_ACTION=bump process_repo o/r t 2>/dev/null)"
+
+# --- bump_main: the single writer lands workflow bump + lock in ONE commit ----
+# The bump tool is stubbed; its own suite is bump-action-pins-test.sh.
+cat > "$TOOLS/bump-action-pins.sh" <<'STUB'
+#!/usr/bin/env bash
+cd "$1" || exit 2
+case "${BUMP_ACTION:-none}" in
+  edit) sed -i 's/@1111111111111111111111111111111111111111/@5555555555555555555555555555555555555555/' .github/workflows/ci.yml
+        printf '.github/workflows/ci.yml\ta/b\t111111111111\t555555555555\tbumped\n' ;;
+  evil) echo x > README.md ;;
+  space) printf 'x\n' > ".github/workflows/build checks.yml" ;;
+  fail) exit 1 ;;
+  none) : ;;
+esac
+exit 0
+STUB
+bump_paths() { jq -r '.variables.in.fileChanges.additions | map(.path) | sort | join(",")' "$GH_CAPTURE"; }
+
+fresh_main bump
+out="$(BUMP_ACTION=edit TOOL_ACTION=bump bump_main o/r '[]' 2>/dev/null)"
+expect "a bump opens one PR" "o/r@main	pr-opened #42 ($oid)" "$out"
+expect "…the workflow edit and the lock travel in ONE commit" ".github/workflows/actions.lock,.github/workflows/ci.yml" "$(bump_paths)"
+expect "…the commit file for the workflow carries the bumped SHA" 1 "$(jq -r '.variables.in.fileChanges.additions[] | select(.path==".github/workflows/ci.yml") | .contents' "$GH_CAPTURE" | base64 -d | grep -c '@5555555555555555555555555555555555555555')"
+expect "…on the bump branch, guarded by the default head" "chore/bump-action-pins $MAIN_SHA" "$(jq -r '.variables.in.branch.branchName + " " + .variables.in.expectedHeadOid' "$GH_CAPTURE")"
+expect "…with the bump headline" "$BUMP_PINS_HEADLINE" "$(jq -r .variables.in.message.headline "$GH_CAPTURE")"
+expect "…and the PR goes from the bump branch to the default branch" 1 "$(grep -c 'POST-PR .*head=chore/bump-action-pins .*base=main' "$GH_LOG")"
+
+fresh_main bumpnone
+expect "nothing to bump opens nothing" "o/r@main	current" "$(BUMP_ACTION=none TOOL_ACTION=bump bump_main o/r '[]' 2>/dev/null)"
+expect "…and touches no ref" 0 "$(grep -c . "$GH_LOG")"
+
+fresh_main bumpunver
+expect "a bump whose lock does not verify is not proposed" "o/r@main	bump-unverified" "$(BUMP_ACTION=edit VERIFY_RC=1 TOOL_ACTION=bump bump_main o/r '[]' 2>/dev/null)"
+expect "…and no branch is created" 0 "$(grep -c . "$GH_LOG")"
+
+fresh_main bumpevil
+expect "a bump that changes a path outside .github is refused" "o/r@main	bump-unexpected-path" "$(BUMP_ACTION=evil TOOL_ACTION=bump bump_main o/r '[]' 2>/dev/null)"
+fresh_main bumpfail
+expect "a failing bump tool is reported" "o/r@main	bump-failed" "$(BUMP_ACTION=fail bump_main o/r '[]' 2>/dev/null)"
+fresh_main bumpdry
+expect "DRY_RUN reports the bump" "o/r@main	would-bump 1" "$(DRY_RUN=1 BUMP_ACTION=edit TOOL_ACTION=bump bump_main o/r '[]' 2>/dev/null)"
+expect "…and writes nothing" 0 "$(grep -c . "$GH_LOG")"
+fresh_main bumpmoved
+expect "a default branch that moved under the clone is refused" "o/r@main	moved" "$(MAIN_SHA=4444444444444444444444444444444444444444 BUMP_ACTION=edit bump_main o/r '[]' 2>/dev/null)"
+fresh_main bumpopen
+bopen='[{"number":9,"draft":false,"user":{"login":"estate-applier[bot]"},"head":{"ref":"chore/bump-action-pins","sha":"hhh","repo":{"full_name":"o/r"}},"base":{"repo":{"full_name":"o/r"}}}]'
+expect "an open bump PR is left alone" "o/r@main	bump-pr-open" "$(BUMP_ACTION=edit bump_main o/r "$bopen" 2>/dev/null)"
+
+# A refused commit (e.g. the App lacks Workflows: write) must not strand the
+# branch this run created: the next run has to be able to retry.
+fresh_main refused
+out="$(GQL_FAIL=1 BRANCH_SHA="$MAIN_SHA" BUMP_ACTION=edit TOOL_ACTION=bump bump_main o/r '[]' 2>/dev/null)"
+expect "a refused commit is reported" "o/r@main	commit-refused" "$out"
+expect "…the branch this run created, still at the default head, is deleted" 1 "$(grep -c 'DELETE-REF .*git/refs/heads/chore/bump-action-pins' "$GH_LOG")"
+
+fresh_main refusedmoved
+GQL_FAIL=1 BRANCH_SHA=9999999999999999999999999999999999999999 BUMP_ACTION=edit TOOL_ACTION=bump bump_main o/r '[]' >/dev/null 2>&1
+expect "…a branch that has moved since is never deleted" 0 "$(grep -c DELETE-REF "$GH_LOG")"
+
+fresh_main strandedretry
+out="$(REF_EXISTS=1 BRANCH_SHA="$MAIN_SHA" LEFTOVER_MSG='chore: unrelated default-branch commit' BUMP_ACTION=edit TOOL_ACTION=bump bump_main o/r '[]' 2>/dev/null)"
+expect "a stranded bump branch (still at the default head, no commit of ours) is retried" "o/r@main	pr-opened #42 ($oid)" "$out"
+
+fresh_main strangerbranch
+expect "…but a branch with someone else's commits on it is still never touched" "o/r@main	repair-branch-exists" "$(REF_EXISTS=1 BRANCH_SHA=9999999999999999999999999999999999999999 LEFTOVER_MSG='feat: someone else' BUMP_ACTION=edit TOOL_ACTION=bump bump_main o/r '[]' 2>/dev/null)"
+expect "…no delete, no commit" "0 no" "$(grep -c DELETE-REF "$GH_LOG") $([ -e "$GH_CAPTURE" ] && echo yes || echo no)"
+
+# A workflow whose filename has a space is one path, not two.
+fresh_main spaced
+out="$(BUMP_ACTION=space TOOL_ACTION=bump bump_main o/r '[]' 2>/dev/null)"
+expect "a workflow with a space in its name is accepted" "o/r@main	pr-opened #42 ($oid)" "$out"
+expect "…and travels whole in the commit" ".github/workflows/actions.lock,.github/workflows/build checks.yml" "$(bump_paths)"
+expect "…and is swept, because a bot opened it on the bump branch" "9	chore/bump-action-pins	hhh" "$(printf '%s' "$bopen" | select_prs)"
+expect "…but never a human's PR on that branch name" "" "$(printf '%s' "$bopen" | sed 's/estate-applier\[bot\]/someone/' | select_prs)"
+
+fresh_main wiredbump
+out="$(BUMP_PINS=1 REGEN_MAIN=1 BUMP_ACTION=edit TOOL_ACTION=bump process_repo o/r t 2>/dev/null)"
+expect "process_repo bumps only with BUMP_PINS=1" "o/r@main	pr-opened #42 ($oid)" "$out"
+expect "…and then skips the lock-only repair (one PR, not two)" 1 "$(grep -c 'POST-PR' "$GH_LOG")"
+fresh_main unwiredbump
+expect "…and does not bump without it" "" "$(BUMP_ACTION=edit TOOL_ACTION=bump process_repo o/r t 2>/dev/null)"
+fresh_main repairstill
+out="$(BUMP_PINS=1 REGEN_MAIN=1 BUMP_ACTION=none TOOL_ACTION=bump process_repo o/r t 2>/dev/null)"
+expect "with nothing to bump, the lock-only repair still runs" "o/r@main	current
+o/r@main	pr-opened #42 ($oid)" "$out"
+
+# A repository with no lock gets the bump alone.
+nolock="$WORK/repo-nolock"; rm -rf "$nolock"; mkdir -p "$nolock/.github/workflows"; git -C "$nolock" init --quiet
+printf 'jobs:\n  a:\n    steps:\n      - uses: a/b@1111111111111111111111111111111111111111 # v1\n' > "$nolock/.github/workflows/ci.yml"
+git -C "$nolock" add -A; git -C "$nolock" -c user.name=t -c user.email=t@t commit --quiet -m init
+FIXTURE="$nolock"; MAIN_SHA="$(git -C "$nolock" rev-parse HEAD)"; export MAIN_SHA; : > "$GH_LOG"; rm -f "$GH_CAPTURE"
+out="$(CONTENTS=404 BUMP_PINS=1 BUMP_ACTION=edit process_repo o/r t 2>/dev/null)"
+expect "a repository with no lock gets the bump alone" "o/r@main	pr-opened #42 ($oid)" "$out"
+expect "…the commit holds only the workflow" ".github/workflows/ci.yml" "$(bump_paths)"
+: > "$GH_LOG"
+expect "…and without BUMP_PINS a lockless repository is still skipped" "" "$(CONTENTS=404 BUMP_ACTION=edit process_repo o/r t 2>/dev/null)"
 
 # --- missing credential ----------------------------------------------------
 out="$(REGEN_TOKENS='' main 2>&1)"; rc=$?

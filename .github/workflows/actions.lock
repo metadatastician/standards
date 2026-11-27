@@ -3,6 +3,12 @@
 # Docs: https://gh.io/actions-lockfile
 version: 'v0.0.3'
 workflows:
+    '.github/workflows/action-pins-applier.yml':
+        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
+        - 'actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510'
+        - 'actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333'
+        - 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9'
+        - 'step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a'
     '.github/workflows/actions-lock-gate.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
     '.github/workflows/affinescript-verify.yml':
@@ -60,10 +66,6 @@ workflows:
         - 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9'
         - 'github/codeql-action@b96794f015dfd88f77b49b1c93e0fa7110f94c63'
     '.github/workflows/deep-recon.yml': []
-    '.github/workflows/dependabot-lock-regen.yml':
-        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510'
-        - 'step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a'
     '.github/workflows/doc-format.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
     '.github/workflows/dyadt-verify.yml':
@@ -110,6 +112,9 @@ workflows:
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
     '.github/workflows/instant-sync.yml':
         - 'peter-evans/repository-dispatch@28959ce8df70de7be546dd1250a005dd32156697'
+    '.github/workflows/issue-evidence-reusable.yml':
+        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
+    '.github/workflows/issue-evidence.yml': []
     '.github/workflows/js-runtimes-reusable.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed'

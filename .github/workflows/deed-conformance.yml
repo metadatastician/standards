@@ -149,6 +149,10 @@ jobs:
       - name: rsr-profile fixtures (DRAFT, A7)
         if: github.repository_id == 1116521501 && steps.bun.outcome == 'success'
         run: bun "$T/deed_lint.js" --rsr-profile-fixtures "$T/fixtures/rsr-profile"
+      # (language …) and (identity :thesis) in a chora (clauses/language.abnf; CLADE mapping section 3).
+      - name: chora-language fixtures (DRAFT)
+        if: github.repository_id == 1116521501 && steps.bun.outcome == 'success'
+        run: bun "$T/deed_lint.js" --chora-language-fixtures "$T/fixtures/chora-language"
       # RSR scorecard (owner ruling 2026-11-14, ratified that day with :assessor and :assessed-at;
       # rsr-scorecard.abnf v0.2.0): gated on its own fixtures. The caller-wide lint below also runs the profile.
       - name: rsr-scorecard fixtures

@@ -53,15 +53,17 @@ cat >"$R/scripts/grade-receipt.sh" <<EOF
 set -euo pipefail
 cd -- "\$(dirname -- "\${BASH_SOURCE[0]}")/.."
 export LC_ALL=C.UTF-8
-RECEIPT_STD="$ROOT"
+RECEIPT_STD="\${STD_DIR:-$ROOT}"
 RECEIPT_STANDARDS_COMMIT=0000000000000000000000000000000000000000
 RECEIPT_OUT=verification/receipts/t_praxis.deed
 RECEIPT_REPOSITORY="\${HOME_REPOSITORY:-o/home}"
-RECEIPT_DEFAULT_BRANCH=main
+RECEIPT_DEFAULT_BRANCH="\${DEFAULT_BRANCH:-main}"
 RECEIPT_CANONICAL_NAME=t-proof-receipt
+[ -z "\${BEHOLDING:-}" ] || RECEIPT_BEHOLDING_CHORA="\$BEHOLDING"
 RECEIPT_SCRIPT=scripts/grade-receipt.sh
 SIB="$SIB"
-receipt_claims() { printf '%s\n' 'T-1|proven|theorem|re-proved|RECONCILED|re-proved|RECONCILED||' 'T-2|tested-only|demonstration|n/a|n/a|n/a|n/a||'; }
+receipt_claims() { printf '%s\n' 'T-1|proven|theorem|re-proved|RECONCILED|re-proved|RECONCILED||' 'T-2|tested-only|demonstration|n/a|n/a|n/a|n/a||'; [ -z "\${SECOND:-}" ] || printf '%s\n' 'T-3|proven|theorem|re-proved|RECONCILED|re-proved|RECONCILED||'; [ -z "\${PENDING:-}" ] || printf 'T-4|%s\n' "\$PENDING"; }
+receipt_run_scope() { [ -z "\${SCOPE:-}" ] || printf '%s\n' "\$SCOPE"; }
 receipt_runs() { if [ -n "\${PARTIAL_FAIL:-}" ]; then cat runs.rows; return 3; fi; [ -z "\${FAIL_RUNS:-}" ] || return 4; cat "\${RUNS_FILE:-runs.rows}"; }
 receipt_echoes() { if [ -n "\${ECHO_ROW:-}" ]; then printf "%s\\n" "\$ECHO_ROW"; fi; }
 receipt_header() { printf ';; SPDX-License-Identifier: CC-BY-SA-4.0\n;; test receipt (a comment may say :pwg PWG-1 without moving the control)\n'; }
@@ -85,6 +87,8 @@ receipt_inputs() {
 }
 receipt_imports() {
   local pin; pin="\${IMPORT_COMMIT:-\$(git show "\$2:scripts/sibling.pin")}"
+  # A repin the home inputs do not see: only the hook, asked at HEAD, knows.
+  [ "\$2" != HEAD ] || pin="\${HEAD_IMPORT_COMMIT:-\$pin}"
   case "\$1" in
     agda) receipt_agda_cone src/T/A.agda src "\$SIB/src" | sed -n "s|^\$SIB/||p" \
             | while read -r p; do printf '%s|%s|%s|%s\n' "\${IMPORT_REPOSITORY:-o/sibling}" "\$pin" "\$SIB" "\$p"; done ;;
@@ -92,6 +96,7 @@ receipt_imports() {
 }
 receipt_status_ids() { grep -oE '^\\| T-[0-9]+ ' STATUS.adoc | tr -d '| ' || true; }
 receipt_recorded_legs() { grep -oE '^\\| T-[0-9]+ \\| RECONCILED \\| RECONCILED\$' legs/README.adoc | cut -d" " -f2 || true; }
+[ -z "\${LEDGER:-}" ] || { RECEIPT_LEDGER="\$LEDGER"; unset -f receipt_runs; }
 . "\$RECEIPT_STD/scripts/proof-receipt.sh"
 receipt_main "\$@"
 EOF
@@ -108,26 +113,27 @@ out=$(cd "$R" && bash scripts/grade-receipt.sh --inputs agda)
 # recorded the digest-pinned image its checker ran in.  The same run recorded
 # without --image derives PWG-2ii, and a malformed image is refused.
 IMG="ubuntu:24.04@sha256:$(printf 'a%.0s' $(seq 64))"
+RUN_IMG="$IMG"   # kept: IMG is reused below for an echo image
 for p in agda rocq lean; do
-  (cd "$R" && bash scripts/grade-receipt.sh --run-row "$p" --run "https://ci.example/run/1" --commit "$C" --checker "$p 1" --reported "ok") >>"$WORK/noimgrows" \
+  (cd "$R" && bash scripts/grade-receipt.sh --run-row "$p" --run "https://ci.example/run/1" --commit "$C" --checker "$p 1" --reported "ok" --axioms none) >>"$WORK/noimgrows" \
     || bad "--run-row $p without --image"
 done
 expect "a run recorded without --image derives PWG-2ii, not PWG-1" 0 "T-1  PWG-2ii" --emit-run "$WORK/noimgrows" --out "$WORK/noimg_praxis.deed"
 grep -q ':image ' "$WORK/noimg_praxis.deed" && bad "a run without --image got an :image" || ok "a run without --image carries no :image"
-expect "a run row with a tag-only image is refused" 1 "a row's image must be NAME[:TAG]@sha256" --run-row rocq --run "https://ci.example/run/1" --commit "$C" --checker "rocq 1" --reported ok --image "ubuntu:24.04"
+expect "a run row with a tag-only image is refused" 1 "a row's image must be NAME[:TAG]@sha256" --run-row rocq --run "https://ci.example/run/1" --commit "$C" --checker "rocq 1" --reported ok --axioms none --image "ubuntu:24.04"
 # The generator accepts exactly what the reader accepts, so no row it writes
 # is refused later: a malformed NAME is refused at --run-row, and the same
 # row hand-written into a rows file is refused at --emit-run.
 D64=$(printf 'a%.0s' $(seq 64))
 for bad_img in "a//b@sha256:$D64" "debian:@sha256:$D64" "$(printf 'a%.0s' $(seq 256))@sha256:$D64"; do
-  expect "a run row with image ${bad_img:0:12}… is refused" 1 "a row's image must be NAME[:TAG]@sha256" --run-row rocq --run "https://ci.example/run/1" --commit "$C" --checker "rocq 1" --reported ok --image "$bad_img"
+  expect "a run row with image ${bad_img:0:12}… is refused" 1 "a row's image must be NAME[:TAG]@sha256" --run-row rocq --run "https://ci.example/run/1" --commit "$C" --checker "rocq 1" --reported ok --axioms none --image "$bad_img"
 done
 grep '^rocq|' "$WORK/noimgrows" | sed "s/\$/|||a\/\/b@sha256:$D64/" >"$WORK/badimgrows"
 expect "a rows file with a malformed image is refused at --emit-run" 1 "a row's image must be NAME[:TAG]@sha256" --emit-run "$WORK/badimgrows" --out "$WORK/badimg_praxis.deed"
 
 # Rows for a run that passed at C in a pinned image, then a receipt for it.
 for p in agda rocq lean; do
-  (cd "$R" && bash scripts/grade-receipt.sh --run-row "$p" --run "https://ci.example/run/1" --commit "$C" --checker "$p 1" --reported "ok" --image "$IMG") >>"$WORK/rows" \
+  (cd "$R" && bash scripts/grade-receipt.sh --run-row "$p" --run "https://ci.example/run/1" --commit "$C" --checker "$p 1" --reported "ok" --axioms none --image "$IMG") >>"$WORK/rows" \
     || bad "--run-row $p"
 done
 expect "--emit-run writes a receipt the reader accepts at PWG-1" 0 "T-1  PWG-1" --emit-run "$WORK/rows" --out "$WORK/emitted_praxis.deed"
@@ -145,6 +151,45 @@ gitq -C "$R" add -A; gitq -C "$R" commit -qm receipt
 expect "--check passes: tree, ledgers, git checks with --import, reader, control" 0 "PASS: negative control" --check
 expect "--check runs the shared checker on the import" 0 "import o/sibling: the manifest holds at $SC" --check
 
+# A run row states the axioms its run reported; it never assumes "none".
+expect "a run row without --axioms is refused" 1 "--run-row needs --axioms" --run-row rocq --run "https://ci.example/run/x" --commit "$C" --checker "rocq 1" --reported ok
+expect "a run row with a malformed axiom is refused" 1 "an axiom must be name:c" --run-row rocq --run "https://ci.example/run/x" --commit "$C" --checker "rocq 1" --reported ok --axioms Classical
+out=$(cd "$R" && bash scripts/grade-receipt.sh --run-row rocq --run "https://ci.example/run/x" --commit "$C" --checker "rocq 1" --reported ok --axioms Classical:c 2>&1)
+[ "$(cut -d'|' -f10 <<<"$out")" = Classical:c ] && ok "a run row records the axioms it was given" || bad "the axioms field: $out"
+out=$(cd "$R" && bash scripts/grade-receipt.sh --run-row rocq --run "https://ci.example/run/x" --commit "$C" --checker "rocq 1" --reported ok --axioms none 2>&1)
+[ -z "$(cut -d'|' -f10 <<<"$out")" ] && ok "--axioms none records an empty axioms field" || bad "--axioms none: $out"
+
+# The imported files count toward currency (§8.5.1).  A repin that the home
+# inputs do not see is caught by asking the hook again at HEAD: the commit is
+# another, so the binding moves even though the bytes are the same.
+SCX=$(gitq -C "$SIB" commit-tree "$SC^{tree}" -p "$SC" -m "same tree, another commit")
+HEAD_IMPORT_COMMIT="$SCX" expect "a repin the home inputs do not see makes the receipt stale" 1 "is stale: the leg's imports changed" --check
+# And the sibling checkout must hold the pinned files: one edited since the
+# run is not taken for what the run read.
+printf -- '-- edited\n' >>"$SIB/src/Sib.agda"
+expect "an edited imported checkout makes the receipt stale" 1 "differs from o/sibling at $SC" --check
+gitq -C "$SIB" checkout -q -- src/Sib.agda
+expect "with the checkout restored, --check passes again" 0 "PASS: negative control" --check
+
+# No current run, so nothing is graded and nothing names the :source-commit.
+# HEAD is not taken for it (on a pull request it may not survive the merge):
+# --write needs --commit.
+awk -F'|' 'BEGIN{OFS="|"} {$8="superseded"; $9="by hand"; print}' "$R/runs.rows" >"$WORK/superrows"
+RUNS_FILE="$WORK/superrows" expect "--write with no current run and no --commit is refused" 1 "pass --commit with a commit on main" --write
+RUNS_FILE="$WORK/superrows" expect "--write with no current run takes --commit" 0 "WROTE verification/receipts/t_praxis.deed (source-commit $C)" --write --commit "$C"
+grep -q ':pwg' "$R/verification/receipts/t_praxis.deed" && grep -q ':pwg ungraded' "$R/verification/receipts/t_praxis.deed" \
+  && ok "and grades nothing" || bad "a receipt with no current run carries a grade"
+gitq -C "$R" checkout -q -- verification/receipts/t_praxis.deed
+
+# The git checks run against the default branch only.  A clone without it
+# cannot run them, and a checker that cannot run is exit 2, not a failed check.
+DEFAULT_BRANCH=trunk expect "a clone without the default branch cannot run the git checks (exit 2)" 2 "neither origin/trunk nor trunk" --check
+mkdir -p "$WORK/std/scripts"
+ln -s "$ROOT/1-formats" "$WORK/std/1-formats"
+for s in proof-receipt.sh proof-inputs-sha256.sh; do ln -s "$ROOT/scripts/$s" "$WORK/std/scripts/$s"; done
+printf '#!/usr/bin/env bash\necho "cannot run: jq is not installed" >&2\nexit 2\n' >"$WORK/std/scripts/check-proof-receipt.sh"
+STD_DIR="$WORK/std" expect "a checker that cannot run makes the gate exit 2, not 1" 2 "could not run" --check
+
 # A tampered receipt fails the regeneration diff.
 sed -i 's/:pwg PWG-1/:pwg PWG-2ii/' "$R/verification/receipts/t_praxis.deed"
 expect "a hand-edited grade fails --check" 1 "does not match the tree and the ledgers" --check
@@ -156,7 +201,8 @@ IMPORT_COMMIT=0123456789abcdef0123456789abcdef01234567 expect "an import commit 
 IMPORT_REPOSITORY=not-a-repo expect "an import without OWNER/REPO is refused" 1 "an import needs OWNER/REPO" --write
 FAIL_HOOK=1 expect "a failing hook stops the gate by name" 1 "the hook receipt_trusted_base of scripts/grade-receipt.sh failed" --write
 printf -- '-- moved\n' >>"$R/src/T/B.agda"
-expect "a moved input makes the current receipt stale" 1 "the agda inputs changed since run" --check
+expect "a moved input makes the current receipt stale" 1 "is stale: the leg's inputs changed" --check
+expect "and the committed receipt, which says current, no longer matches" 1 "does not match the tree and the ledgers" --check
 gitq -C "$R" checkout -q -- src/T/B.agda
 printf '| T-1 | RECONCILED | PENDING\n' >"$R/legs/README.adoc"
 expect "a legs record that disagrees with the claim list is refused" 1 "differ from the legs record" --write
@@ -195,7 +241,7 @@ MIXED_CASE=1 expect "an imported repository named in two spellings is refused" 1
 cp "$WORK/grade.orig" "$R/scripts/grade-receipt.sh"
 
 # An invocation hook must print one line, not have its tail dropped.
-TWO_LINES=1 expect "an invocation hook that prints two lines is refused" 1 "must print exactly one line" --run-row rocq --run "https://ci.example/run/2" --commit "$C" --checker "rocq 1" --reported ok
+TWO_LINES=1 expect "an invocation hook that prints two lines is refused" 1 "must print exactly one line" --run-row rocq --run "https://ci.example/run/2" --commit "$C" --checker "rocq 1" --reported ok --axioms none
 
 # A claim typed proven-with-postulates needs the axioms its token names.
 sed -i 's/T-1|proven|theorem/T-1|proven-with-postulates|theorem/' "$R/scripts/grade-receipt.sh"
@@ -225,10 +271,21 @@ expect "--emit-run refuses an empty rows file" 1 "was given no rows" --emit-run 
 mkdir -p "$WORK/adir_praxis.deed"
 expect "a directory as the receipt target is refused" 1 "is a directory" --emit-run "$WORK/rows" --out "$WORK/adir_praxis.deed"
 
-# --write refuses current rows whose inputs have since moved.
+# A current row whose inputs have since moved is derived stale (§8.4): no
+# ledger edit is needed, the receipt says so, and the grade falls to what
+# the receipts that still describe the tree support.  The row is current
+# again once the tree is what the run read.
+cp "$R/verification/receipts/t_praxis.deed" "$WORK/before-stale.deed"
 printf -- '-- moved again\n' >>"$R/src/T/B.agda"
-expect "--write refuses current rows whose inputs moved" 1 "the agda inputs changed since run" --write
+expect "--write derives stale for a current row whose inputs moved" 0 "is stale: the leg's inputs changed" --write
+grep -q ':state stale' "$R/verification/receipts/t_praxis.deed" && ok "the receipt records the stale state" || bad "no :state stale in the receipt"
+grep -q ':reason "the agda leg'"'"'s inputs changed after commit' "$R/verification/receipts/t_praxis.deed" && ok "with a derived reason" || bad "no derived reason"
+grep -q '(claim :id "T-1" :pwg ungraded' "$R/verification/receipts/t_praxis.deed" && ok "and the grade falls: T-1 is ungraded without a current Agda receipt" || bad "T-1 kept a grade: $(grep -o '(claim :id "T-1" :pwg [A-Za-z0-9-]*' "$R/verification/receipts/t_praxis.deed")"
+expect "the stale receipt checks" 0 "PASS: the pinned reader" --check
 gitq -C "$R" checkout -q -- src/T/B.agda
+expect "once the tree is what the run read, the stale receipt no longer matches" 1 "does not match the tree and the ledgers" --check
+expect "and --write makes the row current again" 0 "WROTE" --write
+cmp -s "$R/verification/receipts/t_praxis.deed" "$WORK/before-stale.deed" && ok "the receipt is byte-identical to the one before the change" || bad "the receipt differs after the tree returned"
 
 # A module name with a hyphen is followed whole, not cut at the hyphen.
 printf 'import T.B-x\n' >>"$R/src/T/A.agda"; printf 'module T.B-x where\n' >"$R/src/T/B-x.agda"
@@ -269,11 +326,14 @@ gitq -C "$R" checkout -q -- src/T/A.agda; rm -f "$R/src/T/M.agda"
 grep -q '|o/sibling@'"$SC"'=' "$R/runs.rows" && ok "the recorded Agda row binds the sibling import" || bad "the Agda row carries no import binding"
 printf -- '-- later\n' >>"$SIB/src/Sib.agda"; gitq -C "$SIB" commit -qam later
 SC_LATER=$(git -C "$SIB" rev-parse HEAD)
-IMPORT_COMMIT="$SC_LATER" expect "a hook that now imports something else is refused" 1 "the agda run recorded imports" --write
+IMPORT_COMMIT="$SC_LATER" expect "a hook that now imports something else leaves that run stale" 0 "is stale: the leg's imports changed" --write
+grep -q "o/sibling@$SC=" "$R/runs.rows" && ok "and the recorded binding is not rewritten" || bad "the binding moved"
 # The run row binds the pinned bytes, so the imported clone must hold them:
 # a sibling checked out at another commit is refused at --run-row.
-expect "a run row is refused when the imported clone is not at its pin" 1 "differs from o/sibling at $SC" --run-row agda --run "https://ci.example/run/w" --commit "$C" --checker "agda 1" --reported ok
+expect "a run row is refused when the imported clone is not at its pin" 1 "differs from o/sibling at $SC" --run-row agda --run "https://ci.example/run/w" --commit "$C" --checker "agda 1" --reported ok --axioms none
 gitq -C "$SIB" checkout -q "$SC"
+expect "with the sibling back at its pin the row is current again" 0 "WROTE" --write
+grep -q ':state stale' "$R/verification/receipts/t_praxis.deed" && bad "the receipt still says stale" || ok "and the receipt no longer says stale"
 
 # The gate never reads or rewrites the home EXIT handler, so one holding quotes runs as written.
 sed -i 's/^\. "\$RECEIPT_STD\/scripts\/proof-receipt.sh"$/trap "echo '"'"'it is kept'"'"'" EXIT\n&/' "$R/scripts/grade-receipt.sh"
@@ -282,20 +342,21 @@ cp "$WORK/grade.orig" "$R/scripts/grade-receipt.sh"
 
 # A changed trusted base is earned again (§8.4): the Agda row binds the list
 # its run had, and a list that differs now is refused.
-TB=1 expect "a trusted base the recorded run did not bind is refused" 1 "is earned again (§8.4)" --write
-(cd "$R" && TB=1 bash scripts/grade-receipt.sh --run-row agda --run "https://ci.example/run/3" --commit "$C" --checker "agda 1" --reported ok) >"$WORK/tbrows" || bad "--run-row agda with a trusted base"
+TB=1 expect "a trusted base the recorded run did not bind leaves that run stale" 0 "is stale: the leg's trusted base changed" --write
+expect "and without that trusted base the row is current again" 0 "WROTE" --write
+(cd "$R" && TB=1 bash scripts/grade-receipt.sh --run-row agda --run "https://ci.example/run/3" --commit "$C" --checker "agda 1" --reported ok --axioms none) >"$WORK/tbrows" || bad "--run-row agda with a trusted base"
 [ "$(tr -cd '|' <"$WORK/tbrows" | wc -c)" = 11 ] && ok "an Agda row with a trusted base binds its sha256 as a twelfth field" || bad "the Agda row binds no trusted base: $(cat "$WORK/tbrows")"
 grep -v '^agda|' "$R/runs.rows" >>"$WORK/tbrows"
 TB=1 expect "a run bound to its trusted base writes a receipt" 0 "PASS: the pinned reader" --emit-run "$WORK/tbrows" --out "$WORK/tb_praxis.deed"
 grep -q '(primitive :prover agda :module "Agda.Primitive" :name "Level"' "$WORK/tb_praxis.deed" && ok "that receipt lists the trusted base" || bad "no trusted base in the receipt"
-expect "the same run is refused once the trusted base changes" 1 "is earned again (§8.4)" --emit-run "$WORK/tbrows" --out "$WORK/tb2_praxis.deed"
+expect "the same run is refused by --emit-run once the trusted base changes" 1 "does not describe this tree" --emit-run "$WORK/tbrows" --out "$WORK/tb2_praxis.deed"
 
 # A path a deed string cannot hold is refused, not written.
 printf 'module T.Q where\n' >"$R/src/T/Q\"uote.agda"
 gitq -C "$R" add -A; gitq -C "$R" commit -qm quote
 QC=$(git -C "$R" rev-parse HEAD)
 sed -i 's/^    rocq) printf .legs\/rocq\/T.v\\n. ;;$/    rocq) printf "legs\/rocq\/T.v\\n"; if [ -n "${QUOTE:-}" ]; then printf "src\/T\/Q\\"uote.agda\\n"; fi ;;/' "$R/scripts/grade-receipt.sh"
-(cd "$R" && QUOTE=1 bash scripts/grade-receipt.sh --run-row rocq --run "https://ci.example/run/q" --commit "$QC" --checker "rocq 1" --reported ok) >"$WORK/qrows" 2>/dev/null
+(cd "$R" && QUOTE=1 bash scripts/grade-receipt.sh --run-row rocq --run "https://ci.example/run/q" --commit "$QC" --checker "rocq 1" --reported ok --axioms none) >"$WORK/qrows" 2>/dev/null
 RUNS_FILE="$WORK/qrows" QUOTE=1 expect "an input path holding a double quote is refused" 1 "holds a double quote" --write
 cp "$WORK/grade.orig" "$R/scripts/grade-receipt.sh"
 
@@ -303,14 +364,14 @@ cp "$WORK/grade.orig" "$R/scripts/grade-receipt.sh"
 # leg re-run at a later commit still counts toward PWG-2ii, not PWG-1, and the
 # :source-commit stays the Agda leg's.
 D=$(git -C "$R" rev-parse HEAD)
-(cd "$R" && bash scripts/grade-receipt.sh --run-row rocq --run "https://ci.example/run/d" --commit "$D" --checker "rocq 1" --reported ok) >"$WORK/drows"
+(cd "$R" && bash scripts/grade-receipt.sh --run-row rocq --run "https://ci.example/run/d" --commit "$D" --checker "rocq 1" --reported ok --axioms none) >"$WORK/drows"
 expect "current legs at different commits write a receipt" 0 "T-1  PWG-2ii" --emit-run "$WORK/drows" --out "$WORK/diff_praxis.deed"
 grep -q ":source-commit \"$C\"" "$WORK/diff_praxis.deed" && ok "its :source-commit is the Agda leg's commit" || bad "the :source-commit is not the Agda leg's"
 bash "$ROOT/scripts/check-proof-receipt.sh" --branch refs/heads/main --import "o/sibling=$SIB" "$WORK/diff_praxis.deed" "$R" >/dev/null 2>&1 && ok "the shared checker holds on it" || bad "the shared checker refuses the receipt with legs at different commits"
 
 # A leg outside dependent type theory (§8.3) takes rows like any other, and
 # makes its claim foundation-diverse when it is RECONCILED with a current run.
-(cd "$R" && EXTRA=RECONCILED bash scripts/grade-receipt.sh --run-row isabelle --run "https://ci.example/run/i" --commit "$C" --checker "isabelle 1" --reported ok) >"$WORK/irows" || bad "--run-row isabelle"
+(cd "$R" && EXTRA=RECONCILED bash scripts/grade-receipt.sh --run-row isabelle --run "https://ci.example/run/i" --commit "$C" --checker "isabelle 1" --reported ok --axioms none) >"$WORK/irows" || bad "--run-row isabelle"
 cat "$WORK/rows" >>"$WORK/irows"
 EXTRA=RECONCILED expect "a RECONCILED Isabelle leg makes the claim foundation-diverse" 0 "T-1  PWG-1  foundation-diverse true" --emit-run "$WORK/irows" --out "$WORK/iso_praxis.deed"
 grep -q '(leg :prover isabelle :route re-proved :token proven :state RECONCILED' "$WORK/iso_praxis.deed" && ok "the receipt carries the Isabelle leg" || bad "no Isabelle leg in the receipt"
@@ -329,7 +390,7 @@ RUNS_FILE="$WORK/agda.rows" ECHO_ROW="$C|$D|inputs-sha256|refs/pull/2/head" expe
 cp "$R/verification/receipts/t_praxis.deed" "$WORK/before2_praxis.deed"
 gitq -C "$R" checkout -q -b side; printf 'side\n' >"$R/side.txt"; gitq -C "$R" add -A; gitq -C "$R" commit -qm side
 S=$(git -C "$R" rev-parse HEAD); gitq -C "$R" checkout -q main
-(cd "$R" && bash scripts/grade-receipt.sh --run-row agda --run "https://ci.example/run/s" --commit "$S" --checker "agda 1" --reported ok) >"$WORK/srows"
+(cd "$R" && bash scripts/grade-receipt.sh --run-row agda --run "https://ci.example/run/s" --commit "$S" --checker "agda 1" --reported ok --axioms none) >"$WORK/srows"
 RUNS_FILE="$WORK/srows" expect "--write refuses a receipt whose source is off the default branch" 1 "the git checks of PROOF-POLICY §8.5.3 failed" --write
 cmp -s "$WORK/before2_praxis.deed" "$R/verification/receipts/t_praxis.deed" \
   && ok "and leaves the existing receipt as it was" || bad "a refused --write changed the receipt"
@@ -356,6 +417,207 @@ grep -q ':pwg PWG-3' "$R/verification/receipts/t_praxis.deed" && ok "the receipt
 grep -q '(inputs :prover rocq' "$R/verification/receipts/t_praxis.deed" && bad "the echo carries a witness for a leg with no current receipt" || ok "the echo carries witnesses only for current legs"
 gitq -C "$R" add -A; gitq -C "$R" commit -qm "pwg3 receipt"
 RUNS_FILE="$WORK/agda.rows" ECHO_ROW="$C|$IMG|inputs-sha256|refs/pull/1/head" expect "its --check passes the git checks of the echo" 0 "PASS: negative control" --check
+
+# Run scope (receipt_run_scope): a superseded run that checked only some
+# claims is listed under those claims alone.  T-3 joins T-1 as a theorem
+# with the same legs; run 1 (at C) is superseded by run 9 (at N), and run 1
+# of the Rocq leg is scoped to T-1.
+printf '| T-3 | proven\n' >>"$R/STATUS.adoc"
+printf '| T-3 | RECONCILED | RECONCILED\n' >>"$R/legs/README.adoc"
+gitq -C "$R" add -A; gitq -C "$R" commit -qm "a second theorem"
+git -C "$R" fetch -q origin
+N=$(git -C "$R" rev-parse HEAD)
+sed 's/|current||/|superseded|replaced by run 9|/' "$WORK/rows" >"$WORK/scope.rows"
+for p in agda rocq lean; do
+  (cd "$R" && SECOND=1 bash scripts/grade-receipt.sh --run-row "$p" --run "https://ci.example/run/9" --commit "$N" --checker "$p 1" --reported ok --axioms none --image "$RUN_IMG") >>"$WORK/scope.rows" \
+    || bad "--run-row $p at N"
+done
+# The lines of one leg of one claim in the receipt.
+leg_of() {
+  awk -v c="(claim :id \"$1\"" -v l="(leg :prover $2 " '
+    index($0, "(claim :id") == 3 { inc = (index($0, c) == 3); inl = 0 }
+    inc && index($0, "(leg :prover") == 5 { inl = (index($0, l) == 5) }
+    inc && inl' "$R/verification/receipts/t_praxis.deed"
+}
+RUNS_FILE="$WORK/scope.rows" SECOND=1 expect "two theorems and a superseded run write without a scope" 0 "WROTE" --write
+_q=$(leg_of T-3 rocq || :); grep -q 'run/1"' <<<"$_q" && ok "without a scope, the superseded run is listed under every claim with its leg" || bad "the unscoped run is missing under T-3"
+SC1='rocq|https://ci.example/run/1|T-1'
+RUNS_FILE="$WORK/scope.rows" SECOND=1 SCOPE="$SC1" expect "a run scoped to T-1 writes" 0 "WROTE" --write
+_q=$(leg_of T-1 rocq || :); grep -q 'run/1"' <<<"$_q" && ok "the scoped run is listed under the claim it checked" || bad "the scoped run is missing under T-1"
+_q=$(leg_of T-3 rocq || :); grep -q 'run/1"' <<<"$_q" && bad "the scoped run is listed under a claim it did not check" || ok "and not under a claim it did not check"
+_q=$(leg_of T-3 rocq || :); grep -q 'run/9"' <<<"$_q" && ok "that claim keeps its current receipt" || bad "T-3 lost its current Rocq receipt"
+_q=$(leg_of T-3 agda || :); grep -q 'run/1"' <<<"$_q" && ok "a scope on one leg leaves the other legs' runs alone" || bad "the Agda run 1 is missing under T-3"
+[ "$(grep -c '^  (claim :id "T-[13]" :pwg PWG-1 ' "$R/verification/receipts/t_praxis.deed")" = 2 ] && ok "a scope changes no grade: both theorems derive PWG-1" || bad "a scope moved a grade"
+gitq -C "$R" add -A; gitq -C "$R" commit -qm "scoped receipt"
+git -C "$R" fetch -q origin
+RUNS_FILE="$WORK/scope.rows" SECOND=1 SCOPE="$SC1" expect "--check passes on a scoped receipt" 0 "PASS: negative control" --check
+# A leg whose only run is scoped to another claim has no receipt under this
+# one: the leg is written without receipts, and the reader accepts it.
+{ grep '^agda|https://ci.example/run/9|' "$WORK/scope.rows"; grep '^rocq|https://ci.example/run/1|' "$WORK/scope.rows"; } >"$WORK/scope-only.rows"
+RUNS_FILE="$WORK/scope-only.rows" SECOND=1 SCOPE="$SC1" expect "a leg left with no receipt under a claim writes, and the reader accepts it" 0 "WROTE" --write
+_q=$(leg_of T-3 rocq || :); grep -q '(receipt' <<<"$_q" && bad "T-3's Rocq leg lists a run scoped away from it" || ok "that leg is written with no receipt"
+_q=$(leg_of T-1 rocq || :); grep -q 'run/1"' <<<"$_q" && ok "the claim the run checked still lists it" || bad "T-1 lost its scoped Rocq run"
+gitq -C "$R" checkout -q -- verification/receipts/t_praxis.deed
+RUNS_FILE="$WORK/scope.rows" SECOND=1 SCOPE='rocq|https://ci.example/run/9|T-1' expect "a scope on a current run is refused" 1 "a current run checks every claim with its leg" --check
+RUNS_FILE="$WORK/scope.rows" SECOND=1 SCOPE='rocq|https://ci.example/run/7|T-1' expect "a scope on a run the ledger lacks is refused" 1 "names no run of the rocq ledger" --check
+RUNS_FILE="$WORK/scope.rows" SECOND=1 SCOPE='rocq|https://ci.example/run/1|T-9' expect "a scope naming an unknown claim is refused" 1 "T-9, which is no theorem claim" --check
+RUNS_FILE="$WORK/scope.rows" SECOND=1 SCOPE='rocq|https://ci.example/run/1|T-2' expect "a scope naming a demonstration is refused" 1 "T-2, which is no theorem claim" --check
+RUNS_FILE="$WORK/scope.rows" SECOND=1 SCOPE='rocq|https://ci.example/run/1| ' expect "a scope naming no claim is refused" 1 "a run scope names no claim" --check
+RUNS_FILE="$WORK/scope.rows" SECOND=1 SCOPE='rocq|https://ci.example/run/1' expect "a scope with two fields is refused" 1 "a run scope needs 3 fields" --check
+RUNS_FILE="$WORK/scope.rows" SECOND=1 SCOPE="$SC1"$'\n'"$SC1" expect "two scopes of one run are refused" 1 "a run has two run scopes" --check
+RUNS_FILE="$WORK/scope.rows" SECOND=1 SCOPE='coq|https://ci.example/run/1|T-1' expect "a scope naming an unknown prover is refused" 1 "a run scope names an unknown prover" --check
+RUNS_FILE="$WORK/scope.rows" SECOND=1 expect "dropping the scope makes the receipt stale for --check" 1 "does not match the tree and the ledgers" --check
+
+# A claim with no Agda proof yet, and a recheck leg the kernel accepted whose
+# statement is not reconciled (§2.2: the token and the state are separate).
+# T-4 joins as a theorem claim; its rows are given by PENDING.
+printf '| T-4 | open\n' >>"$R/STATUS.adoc"
+gitq -C "$R" add -A; gitq -C "$R" commit -qm "a claim with no Agda proof"
+git -C "$R" fetch -q origin
+P1='open|theorem|unavailable||re-proved|LEAN-CHECKED|Rocq cannot import the statement|'
+RUNS_FILE="$WORK/scope.rows" SECOND=1 SCOPE="$SC1" PENDING="$P1" expect "a claim with no Agda proof and a LEAN-CHECKED leg writes, and the reader accepts it" 0 "WROTE" --write
+grep -q '^  (claim :id "T-4" :pwg ungraded ' "$R/verification/receipts/t_praxis.deed" && ok "the claim with no Agda proof is ungraded" || bad "T-4 is not ungraded"
+[ "$(leg_of T-4 agda)" = '    (leg :prover agda :route source :token open :state AGDA-PENDING)' ] && ok "its Agda leg is AGDA-PENDING and lists no run" || bad "T-4's Agda leg is not a bare AGDA-PENDING leg: $(leg_of T-4 agda | head -2)"
+_q=$(leg_of T-4 lean || :); grep -q ':token proven :state LEAN-CHECKED' <<<"$_q" && ok "a LEAN-CHECKED leg is proven, not open" || bad "T-4's Lean leg is not proven and LEAN-CHECKED"
+_q=$(leg_of T-4 lean || :); grep -q 'run/9"' <<<"$_q" && ok "and it carries the Lean leg's current receipt" || bad "T-4's Lean leg lost its receipt"
+[ "$(grep -c '^  (claim :id "T-[13]" :pwg PWG-1 ' "$R/verification/receipts/t_praxis.deed")" = 2 ] && ok "the other claims keep their grade" || bad "a pending claim moved another claim's grade"
+gitq -C "$R" add -A; gitq -C "$R" commit -qm "receipt with a pending claim"
+git -C "$R" fetch -q origin
+RUNS_FILE="$WORK/scope.rows" SECOND=1 SCOPE="$SC1" PENDING="$P1" expect "--check passes on it" 0 "PASS: negative control" --check
+P2='proven|theorem|re-proved|COQ-CHECKED|re-proved|LEAN-CHECKED||'
+RUNS_FILE="$WORK/scope.rows" SECOND=1 SCOPE="$SC1" PENDING="$P2" expect "a proven claim with two checked, unreconciled legs writes" 0 "WROTE" --write
+grep -q '^  (claim :id "T-4" :pwg PWG-3 ' "$R/verification/receipts/t_praxis.deed" && ok "unreconciled legs count toward no grade: PWG-3" || bad "T-4 is not PWG-3 with two unreconciled legs"
+_q=$(leg_of T-4 rocq || :); grep -q ':token proven :state COQ-CHECKED' <<<"$_q" && ok "a COQ-CHECKED leg is proven" || bad "T-4's Rocq leg is not proven and COQ-CHECKED"
+_q=$(leg_of T-4 agda || :); grep -q ':state AGDA-VERIFIED' <<<"$_q" && ok "a proven claim's Agda leg stays AGDA-VERIFIED" || bad "T-4's Agda leg is not AGDA-VERIFIED"
+P3='open|theorem|unavailable||re-proved|QUARANTINED|Rocq cannot import the statement|'
+RUNS_FILE="$WORK/scope.rows" SECOND=1 SCOPE="$SC1" PENDING="$P3" expect "a quarantined leg writes" 0 "WROTE" --write
+_q=$(leg_of T-4 lean || :); grep -q ':token open :state QUARANTINED' <<<"$_q" && ok "a leg the kernel did not accept stays open" || bad "a QUARANTINED leg is not open"
+RUNS_FILE="$WORK/scope.rows" SECOND=1 SCOPE="$SC1" PENDING='open|theorem|unavailable||re-proved|COQ-CHECKED|r|' expect "COQ-CHECKED on a Lean leg is refused" 1 "COQ-CHECKED is the state of a Rocq leg" --write
+RUNS_FILE="$WORK/scope.rows" SECOND=1 SCOPE="$SC1" PENDING='open|theorem|re-proved|LEAN-CHECKED|unavailable|||r' expect "LEAN-CHECKED on a Rocq leg is refused" 1 "LEAN-CHECKED is the state of a Lean leg" --write
+gitq -C "$R" checkout -q -- verification/receipts/t_praxis.deed
+
+# :beholding-chora (RECEIPT_BEHOLDING_CHORA): written as given, after
+# :canonical-name, and refused when it is not a #u8 or #uuid literal.
+RUNS_FILE="$WORK/scope.rows" SECOND=1 SCOPE="$SC1" PENDING="$P1" BEHOLDING='#u8"chora:estate/github.com/o"' expect "a receipt with a :beholding-chora writes, and the reader accepts it" 0 "WROTE" --write
+_q=$(grep -A1 '^  :canonical-name ' "$R/verification/receipts/t_praxis.deed" || :); grep -qxF '  :beholding-chora #u8"chora:estate/github.com/o"' <<<"$_q" && ok ":beholding-chora follows :canonical-name" || bad "no :beholding-chora after :canonical-name"
+RUNS_FILE="$WORK/scope.rows" SECOND=1 SCOPE="$SC1" PENDING="$P1" BEHOLDING='chora:estate' expect "a :beholding-chora that is no id literal is refused" 1 "RECEIPT_BEHOLDING_CHORA must be" --write
+RUNS_FILE="$WORK/scope.rows" SECOND=1 SCOPE="$SC1" PENDING="$P1" BEHOLDING='#u5"x"' expect "a #u5 :beholding-chora is refused" 1 "RECEIPT_BEHOLDING_CHORA must be" --write
+RUNS_FILE="$WORK/scope.rows" SECOND=1 SCOPE="$SC1" PENDING="$P1" expect "without it the committed receipt still checks" 1 "does not match the tree and the ledgers" --check
+gitq -C "$R" checkout -q -- verification/receipts/t_praxis.deed
+RUNS_FILE="$WORK/scope.rows" SECOND=1 SCOPE="$SC1" PENDING="$P1" expect "and the committed one, written without it, checks" 0 "PASS: negative control" --check
+
+# Derived states (§8.4).  `stale` is never typed.
+awk -F'|' 'BEGIN{OFS="|"} $1=="rocq" && $8=="current"{$8="stale"; $9="typed by hand"} {print}' "$WORK/scope.rows" >"$WORK/typedstale.rows"
+RUNS_FILE="$WORK/typedstale.rows" SECOND=1 SCOPE="$SC1" PENDING="$P1" expect "a row typed stale is refused" 1 "stale is derived from the tree, never typed" --check
+# Several rows of one leg typed current: the newest by ancestry stays current,
+# and each earlier one is superseded by it, with no reason typed.
+awk -F'|' 'BEGIN{OFS="|"} $1=="rocq" && $2=="https://ci.example/run/1"{$8="current"; $9=""} {print}' "$WORK/scope.rows" >"$WORK/multi.rows"
+[ "$(awk -F'|' '$1=="rocq" && $8=="current"' "$WORK/multi.rows" | wc -l)" = 2 ] && ok "the fixture types two Rocq rows current" || bad "the fixture has not two current Rocq rows"
+RUNS_FILE="$WORK/multi.rows" SECOND=1 SCOPE="$SC1" PENDING="$P1" expect "two current rows of one leg write" 0 "WROTE" --write
+_q=$(leg_of T-1 rocq | grep -A6 'run/1"' || :); grep -q ':reason "replaced by the later run https://ci.example/run/9"' <<<"$_q" && ok "the earlier run is derived superseded by the later one" || bad "run 1 is not derived superseded: $(leg_of T-1 rocq | grep -A5 'run/1"')"
+[ "$(leg_of T-1 rocq | grep -c ':state current')" = 1 ] && ok "and the leg keeps exactly one current receipt" || bad "the Rocq leg has not exactly one current receipt"
+cmp -s "$R/verification/receipts/t_praxis.deed" <(git -C "$R" show HEAD:verification/receipts/t_praxis.deed) \
+  && bad "the derived reason was expected to differ from the typed one" || ok "only the reason differs from the hand-typed ledger"
+# The order of the rows in the ledger does not decide which is newest.
+{ grep -v '^rocq|https://ci.example/run/1|' "$WORK/multi.rows"; grep '^rocq|https://ci.example/run/1|' "$WORK/multi.rows"; } >"$WORK/multi-reordered.rows"
+RUNS_FILE="$WORK/multi-reordered.rows" SECOND=1 SCOPE="$SC1" PENDING="$P1" expect "with the older row last, the newest is still chosen by ancestry" 0 "WROTE" --write
+_q=$(leg_of T-1 rocq | grep -A8 'run/9"' || :); grep -q ':state current' <<<"$_q" && ok "the later run stays current" || bad "run 9 is not current after reordering"
+# Commits git cannot order are refused.
+UNREL=$(gitq -C "$R" commit-tree "HEAD^{tree}" -m "unrelated root")
+awk -F'|' -v u="$UNREL" 'BEGIN{OFS="|"} $1=="rocq" && $2=="https://ci.example/run/1"{$3=u} {print}' "$WORK/multi.rows" >"$WORK/unordered.rows"
+RUNS_FILE="$WORK/unordered.rows" SECOND=1 SCOPE="$SC1" PENDING="$P1" expect "current rows at commits git cannot order are refused" 1 "neither of" --write
+gitq -C "$R" checkout -q -- verification/receipts/t_praxis.deed
+RUNS_FILE="$WORK/scope.rows" SECOND=1 SCOPE="$SC1" PENDING="$P1" expect "and the committed receipt still checks" 0 "PASS: negative control" --check
+
+# RECEIPT_KEEP_LINEAGE_DETAIL: a receipt that is not current keeps what its
+# run read.  Off (the default, or 0) the output is what it always was; on, a
+# superseded receipt carries its digest, its manifest and its axioms.
+RUNS_FILE="$WORK/multi.rows" SECOND=1 SCOPE="$SC1" PENDING="$P1" expect "baseline: the default writes the lineage as it always did" 0 "WROTE" --write
+cp "$R/verification/receipts/t_praxis.deed" "$WORK/lineage-default.deed"
+_q=$(leg_of T-1 rocq | grep -A6 'run/1"' || :); grep -q 'inputs-manifest' <<<"$_q" && bad "the default superseded receipt carries a manifest" || ok "by default a superseded receipt carries no manifest"
+RECEIPT_KEEP_LINEAGE_DETAIL=0 RUNS_FILE="$WORK/multi.rows" SECOND=1 SCOPE="$SC1" PENDING="$P1" expect "the option set to 0 writes" 0 "WROTE" --write
+cmp -s "$R/verification/receipts/t_praxis.deed" "$WORK/lineage-default.deed" && ok "and the receipt is byte-identical to the one without the option" || bad "RECEIPT_KEEP_LINEAGE_DETAIL=0 changed the receipt"
+RECEIPT_KEEP_LINEAGE_DETAIL=2 RUNS_FILE="$WORK/multi.rows" SECOND=1 SCOPE="$SC1" PENDING="$P1" expect "a value other than 0 or 1 is refused" 1 "RECEIPT_KEEP_LINEAGE_DETAIL must be 0 or 1" --write
+RECEIPT_KEEP_LINEAGE_DETAIL=1 RUNS_FILE="$WORK/multi.rows" SECOND=1 SCOPE="$SC1" PENDING="$P1" expect "with the option on, a superseded run writes" 0 "WROTE" --write
+_q=$(leg_of T-1 rocq | awk '/\(receipt :run "https:\/\/ci.example\/run\/1"/{p=1; print; next} /\(receipt :run/{p=0} p' || :)
+OLDDIG=$(awk -F'|' '$1=="rocq" && $2=="https://ci.example/run/1"{print $6}' "$WORK/multi.rows")
+grep -q ":inputs-sha256 \"$OLDDIG\"" <<<"$_q" && ok "the superseded receipt keeps the digest of its ledger row" || bad "the digest of run 1 is missing: $_q"
+grep -q '(inputs-manifest' <<<"$_q" && grep -q '(file :path "legs/rocq/T.v"' <<<"$_q" && ok "and its inputs manifest, rebuilt at its commit" || bad "the manifest of run 1 is missing: $_q"
+grep -q '(axioms' <<<"$_q" && ok "and its axioms" || bad "the axioms of run 1 are missing: $_q"
+grep -q ':reason "replaced by the later run https://ci.example/run/9"' <<<"$_q" && ok "and its state and reason are as before" || bad "the reason of run 1 changed"
+[ "$(leg_of T-1 rocq | grep -c ':state current')" = 1 ] && ok "the current receipt of the leg is untouched" || bad "the current receipt of the leg changed"
+RECEIPT_KEEP_LINEAGE_DETAIL=1 RUNS_FILE="$WORK/multi.rows" SECOND=1 SCOPE="$SC1" PENDING="$P1" expect "the reader and the git checker accept a receipt written with it" 0 "PASS: negative control" --check
+RUNS_FILE="$WORK/multi.rows" SECOND=1 SCOPE="$SC1" PENDING="$P1" expect "checking it without the option reports the mismatch" 1 "does not match the tree and the ledgers" --check
+# A run whose manifest cannot be shown to hash to its digest keeps the digest
+# and axioms and is written without the manifest, with a NOTE naming the run.
+awk -F'|' 'BEGIN{OFS="|"} $1=="rocq" && $2=="https://ci.example/run/1"{$6=sprintf("%064d",7)} {print}' "$WORK/multi.rows" >"$WORK/lineage-moved.rows"
+_out=$(cd "$R" && RECEIPT_KEEP_LINEAGE_DETAIL=1 RUNS_FILE="$WORK/lineage-moved.rows" SECOND=1 SCOPE="$SC1" PENDING="$P1" bash scripts/grade-receipt.sh --write 2>&1) && ok "a run whose manifest does not reproduce still writes" || bad "a moved input set stopped --write: $_out"
+grep -q "NOTE: the rocq receipt of run https://ci.example/run/1 is written without its inputs manifest" <<<"$_out" && ok "and a NOTE names the run" || bad "no NOTE for the run without a manifest: $_out"
+_q=$(leg_of T-1 rocq | grep -A12 'run/1"' || :)
+grep -q ':inputs-sha256 "0000000000000000000000000000000000000000000000000000000000000007"' <<<"$_q" && ! grep -q 'inputs-manifest' <<<"$_q" && ok "it keeps the digest and no manifest" || bad "the unreproducible run is not written as digest only: $_q"
+gitq -C "$R" checkout -q -- verification/receipts/t_praxis.deed
+
+# A later run typed regressed outranks an earlier pass: the leg is left with
+# no current receipt, and the pass is superseded by the failure.
+LATER=$(git -C "$R" rev-parse HEAD)
+{ cat "$WORK/scope.rows"; awk -F'|' -v c="$LATER" 'BEGIN{OFS="|"} $1=="rocq" && $8=="current"{print $1,"https://ci.example/run/10",c,$4,$5,$6,"the gate failed","regressed","the Rocq gate failed at this commit",""}' "$WORK/scope.rows"; } >"$WORK/regressed.rows"
+RUNS_FILE="$WORK/regressed.rows" SECOND=1 SCOPE="$SC1" PENDING="$P1" expect "a later regressed run writes" 0 "WROTE" --write
+_q=$(leg_of T-1 rocq || :); grep -q ':state current' <<<"$_q" && bad "the Rocq leg kept a current receipt after a later regression" || ok "after a later regression the leg has no current receipt"
+_q=$(leg_of T-1 rocq | grep -A6 'run/9"' || :); grep -q ':reason "replaced by the later run https://ci.example/run/10, which regressed"' <<<"$_q" && ok "and the earlier pass is superseded by the failure" || bad "run 9 is not superseded by the regression"
+grep -q '^  (claim :id "T-1" :pwg PWG-1 ' "$R/verification/receipts/t_praxis.deed" && bad "T-1 kept PWG-1 without a current Rocq receipt" || ok "the grade falls with it"
+gitq -C "$R" checkout -q -- verification/receipts/t_praxis.deed
+
+# The run ledger as a data file (RECEIPT_LEDGER): the same rows give the same
+# receipt, the file is append-only against the default branch, and --record
+# is the one call that adds a run.
+cp "$WORK/scope.rows" "$R/runs.ledger"
+gitq -C "$R" add -A; gitq -C "$R" commit -qm "the run ledger as a data file"
+git -C "$R" fetch -q origin
+LEDGER=runs.ledger SECOND=1 SCOPE="$SC1" PENDING="$P1" expect "a ledger file gives the receipt the hook gave" 0 "PASS: negative control" --check
+LEDGER=runs.ledger RUNS_FILE=x SECOND=1 SCOPE="$SC1" PENDING="$P1" expect "a ledger file and no receipt_runs is accepted" 0 "PASS: negative control" --check
+sed -i 's/^\[ -z "\${LEDGER:-}" \] || { RECEIPT_LEDGER="\$LEDGER"; unset -f receipt_runs; }$/[ -z "${LEDGER:-}" ] || RECEIPT_LEDGER="$LEDGER"/' "$R/scripts/grade-receipt.sh"
+LEDGER=runs.ledger SECOND=1 SCOPE="$SC1" PENDING="$P1" expect "a ledger file beside receipt_runs is refused" 1 "the run ledger has one source" --check
+gitq -C "$R" checkout -q -- scripts/grade-receipt.sh
+{ printf '# SPDX-License-Identifier: CC0-1.0\n\n'; cat "$WORK/scope.rows"; } >"$R/runs.ledger"
+LEDGER=runs.ledger SECOND=1 SCOPE="$SC1" PENDING="$P1" expect "comment and empty lines are not rows" 0 "PASS: negative control" --check
+sed '1s/|rocq 1|/|rocq 2|/; 1s/|agda 1|/|agda 2|/; 1s/|lean 1|/|lean 2|/' "$WORK/scope.rows" >"$R/runs.ledger"
+cmp -s "$WORK/scope.rows" "$R/runs.ledger" && bad "the fixture did not edit a ledger row" || ok "the fixture edits the first ledger row"
+LEDGER=runs.ledger SECOND=1 SCOPE="$SC1" PENDING="$P1" expect "an edited row is refused: the ledger is append-only" 1 "is append-only: row 1 of main was changed, moved or removed" --check
+sed '1d' "$WORK/scope.rows" >"$R/runs.ledger"
+LEDGER=runs.ledger SECOND=1 SCOPE="$SC1" PENDING="$P1" expect "a removed row is refused" 1 "is append-only: row 1 of main was changed, moved or removed" --check
+sed '1!G;h;$!d' "$WORK/scope.rows" >"$R/runs.ledger"
+LEDGER=runs.ledger SECOND=1 SCOPE="$SC1" PENDING="$P1" expect "reordered rows are refused" 1 "is append-only" --check
+gitq -C "$R" checkout -q -- runs.ledger
+# --record: a new run of the Rocq leg at the head of main.
+HEADC=$(git -C "$R" rev-parse HEAD)
+(cd "$R" && LEDGER=runs.ledger SECOND=1 SCOPE="$SC1" PENDING="$P1" bash scripts/grade-receipt.sh --run-row rocq --run "https://ci.example/run/11" --commit "$HEADC" --checker "rocq 1" --reported ok --axioms none --image "$RUN_IMG") >"$WORK/newrun.rows" 2>"$WORK/newrun.err" || bad "--run-row with a ledger file: $(cat "$WORK/newrun.err")"
+before=$(grep -c . "$R/runs.ledger")
+LEDGER=runs.ledger SECOND=1 SCOPE="$SC1" PENDING="$P1" expect "--record writes the receipt and appends the run" 0 "RECORDED 1 row(s) in runs.ledger" --record "$WORK/newrun.rows"
+[ "$(grep -c . "$R/runs.ledger")" = $((before + 1)) ] && ok "the ledger file gained exactly one row" || bad "the ledger file has $(grep -c . "$R/runs.ledger") rows, want $((before + 1))"
+[ "$(tail -n1 "$R/runs.ledger")" = "$(cat "$WORK/newrun.rows")" ] && ok "and it is the recorded row, at the end" || bad "the last ledger row is not the recorded one"
+_q=$(leg_of T-1 rocq | grep -A6 'run/9"' || :); grep -q ':reason "replaced by the later run https://ci.example/run/11"' <<<"$_q" && ok "the run it replaces is derived superseded" || bad "run 9 is not superseded by run 11"
+LEDGER=runs.ledger SECOND=1 SCOPE="$SC1" PENDING="$P1" expect "the recorded receipt checks" 0 "PASS: negative control" --check
+LEDGER=runs.ledger SECOND=1 SCOPE="$SC1" PENDING="$P1" expect "recording the same run twice is refused" 1 "already holds this run of the rocq leg" --record "$WORK/newrun.rows"
+[ "$(grep -c . "$R/runs.ledger")" = $((before + 1)) ] && ok "and a refused --record appends nothing" || bad "a refused --record changed the ledger"
+# A run that does not describe the tree is refused, and nothing is written.
+sed 's|run/11|run/12|' "$WORK/newrun.rows" >"$WORK/newrun2.rows"
+printf '(* moved *)\n' >>"$R/legs/rocq/T.v"
+cp "$R/verification/receipts/t_praxis.deed" "$WORK/before-record.deed"
+LEDGER=runs.ledger SECOND=1 SCOPE="$SC1" PENDING="$P1" expect "--record refuses a run that does not describe the tree" 1 "the rocq run being recorded does not describe this tree" --record "$WORK/newrun2.rows"
+[ "$(grep -c . "$R/runs.ledger")" = $((before + 1)) ] && cmp -s "$R/verification/receipts/t_praxis.deed" "$WORK/before-record.deed" && ok "and neither the ledger nor the receipt changed" || bad "a refused --record wrote something"
+gitq -C "$R" checkout -q -- legs/rocq/T.v
+awk -F'|' 'BEGIN{OFS="|"} {$8="superseded"; $9="typed"; print}' "$WORK/newrun2.rows" >"$WORK/newrun3.rows"
+LEDGER=runs.ledger SECOND=1 SCOPE="$SC1" PENDING="$P1" expect "--record takes only rows typed current" 1 "a row given to --record must be current" --record "$WORK/newrun3.rows"
+SECOND=1 SCOPE="$SC1" PENDING="$P1" expect "--record without a ledger file is refused" 1 "the home script must set RECEIPT_LEDGER" --record "$WORK/newrun2.rows"
+# The receipt and the ledger change together: if the ledger cannot be
+# replaced, the receipt is put back as it was.  A stub mv fails on the ledger.
+mkdir -p "$WORK/stubbin"
+printf '#!/usr/bin/env bash\nfor a; do last="$a"; done\ncase "$last" in *runs.ledger) echo "stub mv: refused" >&2; exit 1 ;; esac\nexec /usr/bin/mv "$@"\n' >"$WORK/stubbin/mv"; chmod +x "$WORK/stubbin/mv"
+cp "$R/verification/receipts/t_praxis.deed" "$WORK/before-failed-record.deed"; cp "$R/runs.ledger" "$WORK/before-failed-record.ledger"
+PATH="$WORK/stubbin:$PATH" LEDGER=runs.ledger SECOND=1 SCOPE="$SC1" PENDING="$P1" expect "a ledger that cannot be replaced stops --record" 1 "the receipt was put back as it was" --record "$WORK/newrun2.rows"
+cmp -s "$R/verification/receipts/t_praxis.deed" "$WORK/before-failed-record.deed" && cmp -s "$R/runs.ledger" "$WORK/before-failed-record.ledger" && ok "and the receipt and the ledger are both as they were" || bad "a failed ledger install left the receipt or the ledger changed"
+[ -z "$(find "$R" -name '.ledger.*' -o -name '.receipt-old.*' -o -name '.receipt.*' | head -1)" ] && ok "with no temporary file left behind" || bad "temporary files remain: $(find "$R" -name '.ledger.*' -o -name '.receipt-old.*' -o -name '.receipt.*' | tr '\n' ' ')"
+gitq -C "$R" checkout -q -- runs.ledger verification/receipts/t_praxis.deed
 
 echo "proof-receipt-test: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

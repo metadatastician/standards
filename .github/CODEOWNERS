@@ -2,8 +2,40 @@
 # SPFX-License-Identifier: CC-SA-BY-4.0 (prose)
 # CODEOWNERS for metadatastician/standards.
 #
-# Solo-maintained repository: no owner lines, by policy.
-# See 3-practice/CODEOWNERS-POLICY.adoc, Rule 1 (no catch-all line and no
-# .github/workflows/ line where the only owner is the sole maintainer).
-# Owner ruling of 2026-11-17, recorded on issue #1646: the file yields to
-# the policy. Contribution perimeters are not expressed in this file.
+# Default: maintainer
+* @hyperpolymath
+
+# Security-sensitive files require explicit ownership
+STANDING-RULES.adoc @hyperpolymath
+3-practice/SECURITY.md @hyperpolymath
+.github/workflows/ @hyperpolymath
+.machine_readable/ @hyperpolymath
+1-formats/contractiles/ @hyperpolymath
+
+# License files
+LICENSE @hyperpolymath
+LICENSES/ @hyperpolymath
+
+# Configuration
+.gitignore @hyperpolymath
+.github/ @hyperpolymath
+
+# Documentation
+README* @hyperpolymath
+CONTRIBUTING* @hyperpolymath
+CODE_OF_CONDUCT* @hyperpolymath
+GOVERNANCE* @hyperpolymath
+MAINTAINERS* @hyperpolymath
+CHANGELOG* @hyperpolymath
+ROADMAP* @hyperpolymath
+
+# Build and CI
+Justfile @hyperpolymath
+Makefile @hyperpolymath
+*.sh @hyperpolymath
+
+# K9 worker reach contract (owner ruling Q1, 2026-11-20): owner only.
+# Kept last so no earlier pattern overrides it.
+/coordination.k9 @hyperpolymath
+/.machine_readable/svc/k9/reach/ @hyperpolymath
+/2-protocols/k9-coordination/spec/abnf/ @hyperpolymath

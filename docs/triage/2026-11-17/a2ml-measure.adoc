@@ -1,0 +1,179 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+// SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+= A2ML remainder: what blocks each file (2026-11-17)
+:toc: macro
+
+toc::[]
+
+This page records a read-only measurement of the A2ML files left in
+`metadatastician/standards` and `hyperpolymath/scaffoldia`, made before a
+dedicated kyX session ("measure first, then start it", owner, 2026-11-17).
+The data is `a2ml-measure-files.jsonl` beside this page: one row per file,
+produced by `scripts/a2ml-retire-check.sh` (how it works:
+`docs/wikis/maintainers/index.adoc`, section `[[a2ml-retire-check]]`).
+It is a dated record of that day: nothing reads or compares against it. The
+live numbers are `.machine_readable/a2ml-retire-counts.json`, which the shell
+suite holds to the tree.
+
+== Method
+
+* *Pins.* standards at `f7f32e10` plus the rulings file
+  `.machine_readable/a2ml-retire-rulings.jsonl` added with the tool;
+  scaffoldia at `origin/main` `8c833fbe`, exported with `git archive` and
+  checked with `--root DIR --repo scaffoldia --rulings` (standards' rulings
+  file). Each row carries `repo` and `commit`.
+* *Two passes.* A first, scripted measurement (same day) classed every file
+  by hand-written path rules and judgement about content (fixture, example,
+  registry data). Its class and note are kept in each row as
+  `first_measure`. The `class` field is the tool's, computed from the tree
+  and the rulings file as they stood when this record was made (13 rows;
+  the same day's "git history is the archive" decision changed the rulings
+  file afterwards, and this record was not regenerated). The tool has no
+  `not-metadata` class: whether a file is content or metadata is judgement, so it reports such a file as `no-mapping-spec`
+  unless a ruling drops it.
+* *Controls.* `hyperpolymath/rsr-template-repo` (`origin/main` `0044ad92`)
+  and `hyperpolymath/mathesis` (`e3d30d5c`) track 0 A2ML files, as each claims.
+* *Facts.* Compared field by field only where scripted: CLADE, and STATE
+  (phase, maturity) and the scorecard corpus under their decision rows. In
+  the first pass, kyX (`metadatastician/kyx` `731e63ab`, its built bundle) was
+  run as a dry-run instrument on every `ECOSYSTEM.a2ml`.
+
+== Classes per repository
+
+`jq -r 'select(.repo == "standards") | .class' a2ml-measure-files.jsonl | sort | uniq -c`
+(and `"scaffoldia"`; `.first_measure.class` for the first pass).
+
+[cols="3,1,1,1,1",options="header"]
+|===
+| Class | standards (tool) | standards (first pass) | scaffoldia (tool) | scaffoldia (first pass)
+| deletable-now | 2 | 0 | 71 | 0
+| covered-but-read | 3 | 0 | 11 | 0
+| needs-kyx-supported | 1 | 1 | 0 | 0
+| needs-kyx-unsupported | 3 | 3 | 0 | 0
+| no-target-deed | 0 | 35 | 10 | 10
+| decision-drops | 80 | 37 | 1 | 1
+| not-metadata | — | 54 | — | 8
+| no-mapping-spec | 78 | 30 | 25 | 99
+| unclassified | 0 | 0 | 0 | 0
+| *Total* | *167 of 167* | *160 of 160* | *118 of 118* | *118 of 118*
+|===
+
+Why the two passes differ, row by row
+(`jq -r 'select(.repo == "standards") | [(.first_measure.class // "-"), .class] | @tsv' a2ml-measure-files.jsonl | sort | uniq -c`):
+
+* *Population.* The tool also classes the 7 `1-formats/templates/*.a2ml.template`
+  generators that the legacy ledger lists (167 = 160 + 7); the first pass
+  counted `*.a2ml` only. All 7 are `no-mapping-spec`.
+* *Owner decision, 2026-11-17: the format tree `1-formats/a2ml/` is removed.*
+  Its 42 sub-project records (35 `no-target-deed`, 7 STATE) and 8 examples
+  move to `decision-drops`, blocked only by
+  `ruling-condition:inbound-links-redirected` and by readers.
+* *Owner decision, 2026-11-17: per-directory AI manifests are derived, not
+  stored.* standards: 2 become `deletable-now`
+  (`1-formats/sub-specs/cartridges/0.2-AI-MANIFEST.a2ml`,
+  `docs/wikis/0.2-AI-MANIFEST.a2ml`) and 3 `covered-but-read`. scaffoldia:
+  71 `deletable-now`, 11 `covered-but-read`.
+* *Judgement removed.* The first pass's 54 `not-metadata` standards files
+  are, without a ruling, 45 `no-mapping-spec`, 8 `decision-drops` (the format
+  examples) and 1 `covered-but-read`; scaffoldia's 8 are `no-mapping-spec`.
+
+No file was `deletable-now` before the 2026-11-17 decisions.
+
+== Findings
+
+. *The closest file to deletion without a ruling* is standards
+  `.machine_readable/CLADE.a2ml`: 26 facts, 14 in `standards_chora.deed`, 1
+  dropped by the spec (the legacy uuid), and 11 (`[status]` and its history)
+  only in the chora's legacy `(status …)` clause; their J15 target
+  `STATE.deed` does not exist. Hypatia HYP-S010 still reads the file.
+. *kyX's one family translates none of the 9 ECOSYSTEM files measured.* The
+  8 in standards use an older shape (`[project]`, `[position-in-ecosystem]`)
+  the table does not list; scaffoldia's fits the table but uses five
+  `:relationship` terms outside the closed set of 16 and has no chora deed.
+. *scaffoldia has no `scaffoldia_chora.deed`*, so its 10 spec-governed
+  records wait on the repository's own tooling to create one.
+. *Much of the remainder has no spec*: 78 of 167 files in standards and 25
+  of 118 in scaffoldia. Of those, 39 of the 71 measured standards files and 16
+  of the 25 scaffoldia files are not TOML-shaped (YAML-like, S-expression,
+  `@rule` or markdown), which kyX's reader does not read; the 7 templates
+  were not shape-checked.
+. *Departures beyond "legacy awaiting migration".*
+  Facts added to retired files: scaffoldia `STATE.a2ml` (2026-11-15, #68);
+  standards #1618 (2026-11-16) edited 9 NEUROSYM records; standards
+  `CLADE.a2ml` uuid rewritten (2026-11-12, #1475).
+  Tools that write A2ML: `scripts/run-debtfile.sh --write`;
+  `hooks/playbook-to-recipe` (patched 2026-11-17, #1651);
+  `1-formats/templates/state-migrate-v1-to-v2.sh`;
+  `.machine_readable/svc/k9/examples/setup-repo.k9.ncl`; the 7
+  `*.a2ml.template` files and 12 `STATE-template.a2ml` stubs; scaffoldia's
+  `Justfile` and `build/just/init.just`.
+  Tools that require it: `2-protocols/k9-coordination/tools/k9-init` reads
+  `AGENTIC`/`META`/`NEUROSYM.a2ml`; `readme-derive-reusable.yml` reads
+  `ECOSYSTEM.a2ml`; `.machine_readable/MUST.contractile` requires
+  "0-AI-MANIFEST.a2ml preserved", a file renamed away on 2026-10-17;
+  scaffoldia's `openssf-compliance.yml` fails without `STATE.a2ml`.
+
+== Where CLAUDE.md and the mapping documents disagree
+
+Reported, not resolved, when this record was made. The owner settled the first
+two later the same day ("git history is the archive": CLAUDE.md governs; the
+37 files are deleted with a record in `9-archive/A2ML-REMOVED.adoc` and a tag
+marking the last commit that holds them), and the rulings file now says so.
+
+* `state-v1-decision.adoc` option B archives each v1 journal as an `.a2ml`
+  record; CLAUDE.md (2026-11-13) says archived copies go too
+  (`ruling-needed:state-journal-archive`).
+* `scorecard-corpus-decision.adoc` (R5) keeps the 29 scorecards in
+  `.machine_readable/archive/scorecards-v1/`; the same CLAUDE.md ruling
+  removes archives (`ruling-needed:scorecard-archive`).
+* CLAUDE.md: "anything a mapping spec does not list does not translate", and
+  it names `rsr-template-repo_chora.deed` as the worked model; that deed
+  carries `(bot-directives (methodology)(coverage)(debt))`, `(integrations)`,
+  `(ensaid)`, `(policies)` and `(anchor)` clauses no mapping spec defines.
+* The ledger still files `rsr-criteria-v2.a2ml` under "no mapping spec
+  exists"; its spec was ruled on 2026-11-15.
+* `ai-manifest-decision.adoc` §4 calls a root `0-AI-MANIFEST.deed` the
+  rename-not-translate class; standards keeps one that is a second repo-deed,
+  not the ruled `(manifest …)` clause, against one deed per repo (D312).
+
+== Order of kyX families
+
+By files governed (standards / scaffoldia), counting the first pass's
+spec-governed records; the 2026-11-17 decision on `1-formats/a2ml/` removes 7
+of each of the first five from kyX's work in standards.
+
+[cols="1,2,1,4",options="header"]
+|===
+| # | Family | Files | Remaining blocker besides kyX
+| 1 | META | 9 (8/1) | spec rows for ADR `issue`/`summary`, `@profile`, `metadata.project`
+| 2 | STATE (phase, maturity) | 9 (8/1) | `ruling-needed:state-journal-archive`; scaffoldia phase `design` is outside the taxonomy
+| 3 | AGENTIC | 8 (7/1) | the canon comment block of rule D4-1 is not pinned
+| 4 | NEUROSYM | 8 (7/1) | none in the spec
+| 5 | PLAYBOOK | 8 (7/1) | `[docs-format]` absent from all 8 sources; no `@profile` where P-9 expects one
+| 6 | CLADE | 2 (1/1) | STATE.deed for the 11 status facts; HYP-S010; scaffoldia has no `[status]`
+| 7 | RSR-CRITERIA | 1 (1/0) | no `deed_lint` profile yet; `canon.lock` pin and Hypatia `rsr_score` read it
+| 8 | AI-MANIFEST | 1 (0/1) | scaffoldia's `[project] name` is a placeholder (P-6)
+|===
+
+Not for kyX yet: BOT-DIRECTIVES (§6's table does not fit the three scaffoldia
+files), the scorecard corpus (ruled not translated) and every group with no
+spec (contractiles, Debtfile, CLAIMS, integrations, policies, ANCHOR, Hypatia
+rules, DYADT vectors, readiness grades).
+
+== Spec gaps found
+
+* META: ADR keys `issue` and `summary`, the `@profile` line (standards);
+  `metadata.project` (scaffoldia).
+* ECOSYSTEM: the older `[project]`/`[position-in-ecosystem]` shape (8 files);
+  five relationship terms outside the closed 16 (scaffoldia).
+* PLAYBOOK: whether an absent `[docs-format]` is emitted as an empty slot;
+  P-9 expects a `(profile …)` that no source carries.
+* AGENTIC: D4-1 compares comment blocks with "template canon" but names no
+  canon file or commit.
+* BOT-DIRECTIVES §6: covers per-bot allow/deny/config records only; the
+  methodology, coverage and debt records have no rows.
+* AI-MANIFEST: the agent seen-set (ask 2 of §6) is still open.
+
+Only the META and ECOSYSTEM gaps in standards are rows of the rulings file,
+because only those are recorded elsewhere in this repository (the legacy
+ledger and the chora deed's header comment).

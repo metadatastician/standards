@@ -63,12 +63,12 @@ expect() {
     printf '%s\n' "$out" | sed 's/^/      | /'
     fail=$((fail + 1)); return
   fi
-  if [ "$needle" != "-" ] && ! printf '%s' "$out" | grep -qF -- "$needle"; then
+  if [ "$needle" != "-" ] && ! grep -qF -- "$needle" <<<"$out"; then
     echo "FAIL: $label — exit $rc correct, but output lacked '$needle'"
     printf '%s\n' "$out" | sed 's/^/      | /'
     fail=$((fail + 1)); return
   fi
-  if [ -n "$absent" ] && printf '%s' "$out" | grep -qF -- "$absent"; then
+  if [ -n "$absent" ] && grep -qF -- "$absent" <<<"$out"; then
     echo "FAIL: $label — output must not contain '$absent'"
     printf '%s\n' "$out" | sed 's/^/      | /'
     fail=$((fail + 1)); return
@@ -191,6 +191,35 @@ printf '\n' >> "$WORK/repo/Cargo.toml"
 expect "virtual workspace manifest staged alone → not checked, named, not a failure" 0 \
   "virtual workspace manifest" "m2"
 
+# The package is selected by NAME, read from the manifest's own [package] table,
+# so the answer does not depend on how a given cargo scopes --manifest-path
+# (cargo 1.100 checks every workspace member for it; 1.97 did not). Awkward but
+# valid layouts must still resolve to the root package.
+new_repo
+mkdir -p "$WORK/repo/src" "$WORK/repo/member/src"
+printf '# a leading comment\n[ package ] # the root package\nname = '"'"'quoted_root'"'"' # single quotes, trailing comment\nversion = "0.1.0"\nedition = "2021"\n\n[package.metadata.docs]\nname = "decoy"\n\n[workspace]\nmembers = ["member"]\n' > "$WORK/repo/Cargo.toml"
+printf '%s' "$FORMATTED" > "$WORK/repo/src/lib.rs"
+printf '[package]\nname = "member"\nversion = "0.1.0"\nedition = "2021"\n' > "$WORK/repo/member/Cargo.toml"
+printf '%s' "$UNFORMATTED" > "$WORK/repo/member/src/lib.rs"
+commit_all
+printf '// touch\n' >> "$WORK/repo/src/lib.rs"
+expect "single-quoted name, trailing comments, [package.metadata] decoy → root only, member untouched" 0 \
+  "Rust: .: formatted" "member"
+
+# A virtual manifest must never reach cargo fmt, whatever the cargo version: a
+# cargo that formats every member would report the sibling's formatting.
+new_repo
+mkdir -p "$WORK/repo/m1/src" "$WORK/repo/m2/src"
+printf '[workspace]\nmembers = ["m1", "m2"]\nresolver = "2"\n\n[workspace.package]\nedition = "2021"\n' > "$WORK/repo/Cargo.toml"
+printf '[package]\nname = "m1"\nversion = "0.1.0"\nedition.workspace = true\n' > "$WORK/repo/m1/Cargo.toml"
+printf '[package]\nname = "m2"\nversion = "0.1.0"\nedition.workspace = true\n' > "$WORK/repo/m2/Cargo.toml"
+printf '%s' "$FORMATTED" > "$WORK/repo/m1/src/lib.rs"
+printf '%s' "$UNFORMATTED" > "$WORK/repo/m2/src/lib.rs"
+commit_all
+printf '\n' >> "$WORK/repo/Cargo.toml"
+expect "virtual manifest alone is never handed to cargo fmt (no Diff from a sibling)" 0 \
+  "virtual workspace manifest" "Diff in"
+
 echo
 echo "=== Rust arm: manifests come from the index, not the working tree (B4) ==="
 
@@ -221,6 +250,41 @@ printf '[package]\nname = "sub"\nversion = "0.1.0"\nedition = "2021"\n\n[workspa
 expect_as_staged "untracked nested Cargo.toml skipped → nearest indexed manifest (root) checked" 0 \
   "Rust: .: formatted" "Rust: sub:"
 
+
+echo
+echo "=== ReScript arm: the format -check probe survives a long help text ==="
+
+# The arm probed for `format -check` with `bunx rescript format --help 2>&1 |
+# grep -q -- '-check'` under pipefail. grep -q exits at the match; a CLI still
+# writing its help dies of SIGPIPE, the pipeline reports 141, and the format
+# gate was skipped with a warning. A stub bunx prints `-check` first and then
+# more than a pipe buffer of help; its `format -all -check` reports the
+# sources unformatted, so a gate that runs fails the hook. The real CLI's help
+# is small, so in practice the race needs a help text written in several
+# writes and a slow reader; the stub makes it deterministic.
+STUB="$WORK/stub-bin"; mkdir -p "$STUB"
+cat > "$STUB/bunx" <<'STUBEOF'
+#!/usr/bin/env bash
+case "$*" in
+  "rescript format --help")
+    [ -n "${STUB_NO_CHECK:-}" ] || printf '  -check  Check formatting only\n'
+    for i in $(seq 1 3000); do printf '  -option-%d  a help line long enough to fill the pipe buffer\n' "$i"; done ;;
+  "rescript format -all -check") echo "stub: sources are not formatted"; exit 1 ;;
+  *) exit 0 ;;
+esac
+STUBEOF
+chmod +x "$STUB/bunx"
+new_repo
+printf '{"name":"r"}\n' > "$WORK/repo/rescript.json"
+printf 'let x = 1\n' > "$WORK/repo/A.res"
+commit_all
+printf 'let x = 2\n' > "$WORK/repo/A.res"
+for run in 1 2 3 4 5; do
+  PATH="$STUB:$PATH" expect "modified .res, -check listed before ~180 KB of help → format gate runs and fails (run $run)" 1 \
+    "ReScript: sources are not formatted" "format gate did NOT run"
+done
+PATH="$STUB:$PATH" STUB_NO_CHECK=1 expect "control: a help text without -check → skip warned, not failed" 0 \
+  "format gate did NOT run"
 echo
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

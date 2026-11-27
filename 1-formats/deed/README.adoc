@@ -1,5 +1,5 @@
 = DEED Grammar Specification
-:version: 0.3.0
+:version: 0.3.1
 :status: DRAFT
 :toc:
 :toclevels: 3
@@ -10,6 +10,11 @@
 
 v0.2.0 is a grammar-alignment revision (lexical rules, identity field table,
 normative-vs-informative grammar). It does not ratify the typing chapter.
+
+v0.3.1 records owner ruling 2026-11-18: K-CUT-LOSS is proved upstream in a
+stated fragment, and the caution against resting the estate/repo
+projection relation on it is lifted (typing chapter, Choreographic). No
+grammar change.
 ====
 
 Prepared 2026-09-08. Alignment revision: 0.2.0.
@@ -827,7 +832,7 @@ as machinery that computes anything. Nothing here validates a file.
 
 *Layer:* semantics, and the ANCHOR spec (#22). No grammar change.
 
-==== Choreographic — already the estate/repo split, but its keystone is open
+==== Choreographic — already the estate/repo split, and its keystone is proved in a fragment
 
 `_TYPES _SET/choreographic-types` is not a fourth independent system: it
 fuses the previous two. A global choreographic type `G` is read as a
@@ -844,15 +849,56 @@ it as endpoint projection turns "an operational tool does not read a
 source it is not a party to" from a prose invariant into a statable
 property.
 
-The load-bearing caveat: the repo’s central artefact, K-CUT — "the
-conjecture that grading and transport commute with projection across a
-consistent frontier" — is described by the repo itself as open. This spec
-must not depend on it. Use the vocabulary; do not claim the theorem.
+The keystone is the repo’s central result, K-CUT: grading and transport
+commute with projection across a consistent frontier. Earlier revisions
+of this spec recorded it as an open conjecture. Its loss component is now
+proved. Upstream states the following in `PROOF-STATUS.adoc` of
+`hyperpolymath/choreographic-types` at commit
+`a7c45138ee9ad59d278d26140ae22a96009593f3`:
+
+* *K-1, K-CUT-LOSS.* For every party `p`, global type `G` and cut `c`
+  with `Consistent p c`,
+  `grade↾ p (G ↾ c) ≡ lgrade (proj p G ↾ₗ cutproj p c)`, parametric in
+  the resource algebra. PROVEN (`Choreographic.KCut.kcut-loss`).
+* *K-4.* That proof uses exactly two laws, `𝟙 ⊗ x ≡ x` and `x ⊕ x ≡ x`.
+  TESTED (`scripts/minimal-laws.sh`).
+* *K-5.* `Consistent p c` alone makes the cut prefix projectable.
+  PROVEN (`KCut.cut-projectable`).
+* *K-7.* Both side conditions are needed: without either, the equality
+  fails. TESTED (two refusal fixtures).
+* *Y-2, asynchronous K-CUT-LOSS.* The same equality for every causal cut
+  consistent for `p`, with messages in flight, using the same two laws.
+  PROVEN (`Async.akcut-loss`).
+
+Upstream's gate checks these with
+`agda --safe --without-K --cubical-compatible --no-libraries
+--ignore-interfaces --double-check -W error` on Agda 2.6.4.3 (Debian
+`agda-bin=2.6.4.3-1+b2`), with its sibling libraries pinned by commit.
+
+The limits travel with the claim:
+
+* *Fragment.* Finite global types with messages and binary choice, plain
+  merge, synchronous; Y-2 adds asynchrony over the same fragment. Not
+  covered: recursion, full merge, delegation, queues as data.
+* *Loss only.* What is cited here is the equality (loss) component.
+  The warrant and transport component has its own rows upstream and
+  nothing here relies on it.
+* *No grade claimed.* Upstream records every theorem as `ungraded`: there
+  is no per-theorem PWG-3 receipt and no Rocq or Lean recheck leg
+  (`3-practice/PROOF-POLICY.adoc` §8). This spec cites the theorem by pin,
+  as it cites echo-types. It does not re-prove it and asserts no grade.
+* *Port.* `hyperpolymath/typed-wasm` `src/abi/TypedWasm/ABI/KCut.idr`
+  is an Idris2 port and re-proof, taken from upstream commit `edb784a7`.
+  Its correspondence to the Agda is `ASSUMED`, it does not re-check K-4,
+  and it is not a Rocq or Lean recheck leg.
+
+*Owner ruling, 2026-11-18:* the caution is lifted. The estate/repo
+projection relation may rest on K-CUT-LOSS, within the fragment and
+limits above. A rule derived from it is proposed in
+link:../../docs/decisions/ADR-011-deed-projection-rests-on-k-cut-loss.adoc[ADR-011]. The owner ruled its design points the same day: echo loss as the grade, `G` derived from deeds, the asynchronous form (Y-2), and both rules adopted as advisory. It is not enforced.
 
 *Ruling proposed:* adopt choreography/endpoint-projection as the
 description of the estate/repo relation in the document forms.
-Record K-CUT as an open dependency if any future rule is ever derived
-from commuting projection.
 
 *Layer:* semantics and terminology. No grammar change.
 

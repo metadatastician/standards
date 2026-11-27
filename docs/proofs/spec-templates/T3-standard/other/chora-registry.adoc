@@ -1,0 +1,33 @@
+== Proof Spec: chora-registry
+
+*Repo Path*: `+/var/mnt/eclipse/repos/chora-registry+` *Tier*: T3 —
+Standard *Archetype*: link:../archetypes/cli-tool.md[cli-tool]
+
+=== Theorems
+
+All theorems from archetype `+cli-tool+` apply: - See
+`+~/Desktop/proof-specs/T3-standard/archetypes/cli-tool.md+`
+
+Plus ABI-1 through ABI-5 from rsr-template-repo.
+
+=== Repo-specific
+
+* Custom repo — ABI proofs required. Verify if archetype fits; may need
+bespoke theorems.
+
+=== Verification Commands
+
+[source,bash]
+----
+cd /var/mnt/eclipse/repos/chora-registry
+just proof-check-all
+just proof-scan-dangerous
+----
+
+=== Handoff Checklist
+
+* [ ] Archetype proofs complete
+* [ ] ABI-1..ABI-5 complete
+* [ ] Repo-specific items (if any) complete
+* [ ] `+PROOF-STATUS.md+` updated
+* [ ] Commit: `+proof: complete chora-registry proofs+`

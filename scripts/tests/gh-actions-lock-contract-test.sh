@@ -13,7 +13,7 @@
 #   3. A lockfile newer than the binary is refused loudly, never read as valid.
 #   4. `--verify-local --json=valid,findings` prints one object with a boolean
 #      `valid` and a `findings` array, and names the categories that
-#      scripts/update-actions-lock.sh and reconcile-scorecard-actions-lock.rb
+#      scripts/update-actions-lock.sh and tools/scorecard-lock-reconcile
 #      key on: sha-as-ref, ref-changed, stale (dangling) and stale (a
 #      reusable-workflow dependency the tool cannot see).
 #   5. scripts/update-actions-lock.sh --verify-local, driving the real binary,
@@ -38,7 +38,7 @@ if [ -z "$BIN" ] || [ ! -x "$BIN" ]; then
   echo "gh-actions-lock-contract-test: set GH_ACTIONS_LOCK_BIN to the pinned gh-actions-lock binary" >&2
   exit 2
 fi
-yq --version 2>/dev/null | grep -q 'mikefarah/yq' || {
+grep -q 'mikefarah/yq' <<<"$(yq --version 2>/dev/null)" || {
   echo "gh-actions-lock-contract-test: mikefarah yq v4 is required" >&2; exit 2; }
 
 CHECKOUT=3d3c42e5aac5ba805825da76410c181273ba90b1

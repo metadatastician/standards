@@ -70,7 +70,11 @@ while IFS= read -r -d '' wf; do
     key="$(printf '%s/%s@%s' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}" "${BASH_REMATCH[4]}" | tr '[:upper:]' '[:lower:]')"
     sha="${BASH_REMATCH[4],,}"
     if [ -z "$word" ]; then uncommented=$((uncommented + 1)); continue; fi
-    reviewed="$(printf '%s\n' "$locked" | awk -F'\t' -v k="$key" '$1 == k { print $2; exit }')"
+    # awk reads ALL of its input and keeps the first match. An early `exit` closes
+    # the pipe while printf is still writing; under pipefail that SIGPIPE ("write
+    # error: Broken pipe", status 141) fails the run whenever the lock outgrows
+    # the pipe buffer. A genuine printf or awk failure still fails the pipeline.
+    reviewed="$(printf '%s\n' "$locked" | awk -F'\t' -v k="$key" '$1 == k && !found { print $2; found = 1 }')"
     if [ -z "$reviewed" ] || [ "${reviewed,,}" = "$sha" ]; then
       unrecorded=$((unrecorded + 1)); continue
     fi

@@ -1,0 +1,87 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+= K9 worker reach
+:toc: preamble
+
+This folder holds what the K9 worker reach contract needs beside its
+source. The source is the `reach` section of this repository's
+`coordination.k9` (`2-protocols/k9-coordination/spec/COORDINATION-K9-SPEC.adoc`,
+grammar v1.3.0). Owner rulings by selector, 2026-11-20 (Q1 to Q12).
+
+The contract is not live. There is no `reach` section in `coordination.k9`
+yet, no `reach.json`, no signature and no key. Those come in a later change
+that only the owner makes.
+
+== Contents
+
+[horizontal]
+`reach-hook.sh`:: The PreToolUse hook a worker session runs. It denies any
+  tool call the contract does not allow, and never returns allow. Its header
+  lists the settings it reads.
+
+To come, each added by the owner:
+
+[horizontal]
+`reach.json`:: The compiled contract:
+  `bun 2-protocols/k9-coordination/tools/validate/validate.js --compile-reach coordination.k9`.
+  CI will check it matches the section.
+`reach.sig`:: A detached k9-sign Ed25519 signature over the section bytes,
+  made with a new owner key kept off every cloud environment (ruling Q2).
+`owner-reach.pub`:: That key's public half.
+
+== Who can change what
+
+* This folder, `coordination.k9` and the grammars are owner-only in
+  `.github/CODEOWNERS`. A change needs the owner's review and merge.
+* The hook's settings (ceiling profile, breach floor, window scope floor,
+  the pinned commit and contract hash) sit in the organisation's
+  server-managed settings, which only an Owner or Primary Owner can change.
+  The owner is the sole Owner and Primary Owner (ruling Q11).
+* Settings and the contract can only tighten each other. The hook uses the
+  stricter value.
+
+Pilot settings (ruling Q12): `K9_CEIL_PROFILE=moderate`,
+`K9_BREACH_MIN=deny_and_report`, `K9_WINDOW_SCOPE_MIN=actions`.
+
+== Limits of the hook
+
+* Counters (tool calls, pushes, the wall-clock start) live in a state file
+  inside the worker's container. A worker could edit it, so they are
+  tamper-evident, not tamper-proof. The hub keeps its own clock from spawn
+  time and counts pushes and pull requests on GitHub.
+* It reads `git push`, `gh pr` and `gh api` commands from Bash text. It
+  checks every simple command in a call, and at most one may be a GitHub
+  action. A `gh api` write must map to a granted action (merge, draft PR,
+  comment) on a `repos/OWNER/REPO` path, or it is denied. A `gh pr` command
+  is checked against the repo it selects (`--repo`, or gh's own remote pick).
+  A push is checked against the remote it writes to and each branch it
+  updates, and its files come from the commits it pushes: the net change
+  and every file each commit touched, so a file added and then deleted
+  still counts. Shell quoting is removed before the check, so `'merge'` and
+  `m\erge` read as `merge`, and a call with a backslash escape inside
+  `$'...'` is denied. A push is checked against the destination's real tip,
+  read with `git ls-remote` (the remote's HEAD for a new branch); it is
+  denied if that tip is not in the checkout or the remote cannot be read. A remote with several push URLs must point every
+  one at the same granted repo. A push to a URL is denied while any
+  `url.*.insteadOf` rewrite is set. `GH_REPO` anywhere in a call with a
+  GitHub action is denied; one set in a shell profile is not seen. Any
+  `curl`, `wget`, `http` or `xh` call is denied. Other Bash runs freely, so
+  a worker can build and test.
+* A pull request URL in a `gh pr` command sets the repo it is checked
+  against, and it is denied if `--repo` names another.
+* A deny reason never names a pushed file. Branch names in a deny reason
+  have control characters removed and are cut to 80 characters.
+* Edit paths are resolved (`..` and symlinks) before the path check.
+* One call at a time per session holds a lock on the state file, so two
+  calls cannot both use the last unit of a limit.
+* Bash text rules are not a security boundary. An aliased or obfuscated
+  command can slip past them. The session's GitHub scope, the push-time path
+  check and the hub's GitHub check back them up.
+* It cannot interrupt a session. On `deny_and_interrupt` it tells the worker
+  to report, and the hub stops the session.
+* It has not yet run inside a real cloud session (the throwaway test, Q9).
+
+== Tests
+
+`bash 2-protocols/k9-coordination/tools/reach/test-reach-hook.sh` runs the
+hook against the compiled fixture contracts with a fixed clock. It needs
+bash, git, jq, openssl and flock.

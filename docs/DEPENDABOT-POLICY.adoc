@@ -24,6 +24,18 @@
 Owner ruling *D269* (2026-10-01, recorded on standards#787) supersedes the
 2026-05-29 "dependabot must not open major-version bumps unattended" policy.
 
+[IMPORTANT]
+====
+*Owner ruling 2026-11-18: auto-merge is off estate-wide.* The settings canon
+now has `allow_auto_merge: false` (`config/settings/repo.json`, under
+`owner_rulings`), applied by `scripts/apply-settings-canon.sh`. Until this
+policy is revised, *no update PR is armed*: the arming rule in §1 is suspended,
+and every update lands by a person merging it. Per-repository
+`dependabot-automerge.yml` workflows fail when they try to arm a pull request.
+Everything else here (the gate, changelog lines, rollback, per-repo opt-out)
+still describes the intended pipeline.
+====
+
 == Implementation status
 
 This document specifies the pipeline before all of it exists. Until a row says
@@ -93,6 +105,8 @@ that lands, its update PRs are fixed up and labelled `updates:awaiting-gate`, no
 armed.
 
 === 2. Dependabot proposes; nothing is ignored by default
+
+NOTE: *Superseded for the `github-actions` ecosystem (owner ruling "single writer", 2026-11-21).* Dependabot no longer proposes action bumps: `.github/dependabot.yml` sets `open-pull-requests-limit: 0` for it, and `.github/workflows/action-pins-applier.yml` bumps third-party pins and rewrites `actions.lock` in one commit. Holds that were Dependabot `ignore` entries live in `config/settings/actions-bump-holds.txt`. The rest of this section still describes the other ecosystems.
 
 Dependabot remains the proposer (no Renovate). The estate shape:
 

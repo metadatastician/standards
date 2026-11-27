@@ -33,7 +33,7 @@
 [map]
 repo        = "metadatastician/standards"
 version     = "1.0.0"
-entry_count = 140
+entry_count = 141
 generated   = false   # hand-curated; the district index.adoc files ARE generated
 checked_by  = "scripts/check-standards-map.sh"
 
@@ -298,42 +298,42 @@ note        = "implementations live in hyperpolymath/k9-ecosystem per this repo'
 
 [[entry]]
 from        = "meta-a2ml"
-target      = "1-formats/a2ml/meta/ (pointer)"
+target      = "9-archive/A2ML-REMOVED.adoc (pointer)"
 district    = "1-formats"
 kind        = "format-profile"
 files       = 38
 lifecycle   = "deprecated"
 canonical   = false
 canon_slot  = ""
-canonical_doc = "1-formats/a2ml//index.adoc"
+canonical_doc = "9-archive/A2ML-REMOVED.adoc"
 gate        = ""
-note        = "a2ml/ evicted 2026-08-28 by 24a12d6f; these 7 profile dirs (191 files) stayed behind. Finish the eviction or revert it. [1-formats district move: relocated to 1-formats/a2ml/meta/; this path keeps a POINTER.adoc stub]"
+note        = "a2ml/ evicted 2026-08-28 by 24a12d6f; these 7 profile dirs (191 files) stayed behind. Finish the eviction or revert it. [1-formats district move: relocated to 1-formats/a2ml/, removed 2026-11-21 (W11); this path keeps a POINTER.adoc stub]"
 
 [[entry]]
 from        = "agentic-a2ml"
-target      = "1-formats/a2ml/agentic/ (pointer)"
+target      = "9-archive/A2ML-REMOVED.adoc (pointer)"
 district    = "1-formats"
 kind        = "format-profile"
 files       = 37
 lifecycle   = "deprecated"
 canonical   = false
 canon_slot  = ""
-canonical_doc = "1-formats/a2ml//index.adoc"
+canonical_doc = "9-archive/A2ML-REMOVED.adoc"
 gate        = ""
-note        = "a2ml/ evicted 2026-08-28 by 24a12d6f; these 7 profile dirs (191 files) stayed behind. Finish the eviction or revert it. [1-formats district move: relocated to 1-formats/a2ml/agentic/; this path keeps a POINTER.adoc stub]"
+note        = "a2ml/ evicted 2026-08-28 by 24a12d6f; these 7 profile dirs (191 files) stayed behind. Finish the eviction or revert it. [1-formats district move: relocated to 1-formats/a2ml/, removed 2026-11-21 (W11); this path keeps a POINTER.adoc stub]"
 
 [[entry]]
 from        = "state-a2ml"
-target      = "1-formats/a2ml/state/ (pointer)"
+target      = "9-archive/A2ML-REMOVED.adoc (pointer)"
 district    = "1-formats"
 kind        = "format-profile"
 files       = 30
 lifecycle   = "deprecated"
 canonical   = false
 canon_slot  = ""
-canonical_doc = "1-formats/a2ml//index.adoc"
+canonical_doc = "9-archive/A2ML-REMOVED.adoc"
 gate        = ""
-note        = "a2ml/ evicted 2026-08-28 by 24a12d6f; these 7 profile dirs (191 files) stayed behind. Finish the eviction or revert it. [1-formats district move: relocated to 1-formats/a2ml/state/; this path keeps a POINTER.adoc stub]"
+note        = "a2ml/ evicted 2026-08-28 by 24a12d6f; these 7 profile dirs (191 files) stayed behind. Finish the eviction or revert it. [1-formats district move: relocated to 1-formats/a2ml/, removed 2026-11-21 (W11); this path keeps a POINTER.adoc stub]"
 
 [[entry]]
 from        = "1-formats/sub-specs/did-you-actually-do-that/"
@@ -350,55 +350,55 @@ note        = "TRIAGE: <30 files each; none is a district"
 
 [[entry]]
 from        = "anchor-a2ml"
-target      = "1-formats/a2ml/anchor/ (pointer)"
+target      = "9-archive/A2ML-REMOVED.adoc (pointer)"
 district    = "1-formats"
 kind        = "format-profile"
 files       = 25
 lifecycle   = "deprecated"
 canonical   = false
 canon_slot  = ""
-canonical_doc = "1-formats/a2ml//index.adoc"
+canonical_doc = "9-archive/A2ML-REMOVED.adoc"
 gate        = ""
-note        = "a2ml/ evicted 2026-08-28 by 24a12d6f; these 7 profile dirs (191 files) stayed behind. Finish the eviction or revert it. [1-formats district move: relocated to 1-formats/a2ml/anchor/; this path keeps a POINTER.adoc stub]"
+note        = "a2ml/ evicted 2026-08-28 by 24a12d6f; these 7 profile dirs (191 files) stayed behind. Finish the eviction or revert it. [1-formats district move: relocated to 1-formats/a2ml/, removed 2026-11-21 (W11); this path keeps a POINTER.adoc stub]"
 
 [[entry]]
 from        = "ecosystem-a2ml"
-target      = "1-formats/a2ml/ecosystem/ (pointer)"
+target      = "9-archive/A2ML-REMOVED.adoc (pointer)"
 district    = "1-formats"
 kind        = "format-profile"
 files       = 23
 lifecycle   = "deprecated"
 canonical   = false
 canon_slot  = ""
-canonical_doc = "1-formats/a2ml//index.adoc"
+canonical_doc = "9-archive/A2ML-REMOVED.adoc"
 gate        = ""
-note        = "a2ml/ evicted 2026-08-28 by 24a12d6f; these 7 profile dirs (191 files) stayed behind. Finish the eviction or revert it. [1-formats district move: relocated to 1-formats/a2ml/ecosystem/; this path keeps a POINTER.adoc stub]"
+note        = "a2ml/ evicted 2026-08-28 by 24a12d6f; these 7 profile dirs (191 files) stayed behind. Finish the eviction or revert it. [1-formats district move: relocated to 1-formats/a2ml/, removed 2026-11-21 (W11); this path keeps a POINTER.adoc stub]"
 
 [[entry]]
 from        = "neurosym-a2ml"
-target      = "1-formats/a2ml/neurosym/ (pointer)"
+target      = "9-archive/A2ML-REMOVED.adoc (pointer)"
 district    = "1-formats"
 kind        = "format-profile"
 files       = 23
 lifecycle   = "deprecated"
 canonical   = false
 canon_slot  = ""
-canonical_doc = "1-formats/a2ml//index.adoc"
+canonical_doc = "9-archive/A2ML-REMOVED.adoc"
 gate        = ""
-note        = "a2ml/ evicted 2026-08-28 by 24a12d6f; these 7 profile dirs (191 files) stayed behind. Finish the eviction or revert it. [1-formats district move: relocated to 1-formats/a2ml/neurosym/; this path keeps a POINTER.adoc stub]"
+note        = "a2ml/ evicted 2026-08-28 by 24a12d6f; these 7 profile dirs (191 files) stayed behind. Finish the eviction or revert it. [1-formats district move: relocated to 1-formats/a2ml/, removed 2026-11-21 (W11); this path keeps a POINTER.adoc stub]"
 
 [[entry]]
 from        = "playbook-a2ml"
-target      = "1-formats/a2ml/playbook/ (pointer)"
+target      = "9-archive/A2ML-REMOVED.adoc (pointer)"
 district    = "1-formats"
 kind        = "format-profile"
 files       = 15
 lifecycle   = "deprecated"
 canonical   = false
 canon_slot  = ""
-canonical_doc = "1-formats/a2ml//index.adoc"
+canonical_doc = "9-archive/A2ML-REMOVED.adoc"
 gate        = ""
-note        = "a2ml/ evicted 2026-08-28 by 24a12d6f; these 7 profile dirs (191 files) stayed behind. Finish the eviction or revert it. [1-formats district move: relocated to 1-formats/a2ml/playbook/; this path keeps a POINTER.adoc stub]"
+note        = "a2ml/ evicted 2026-08-28 by 24a12d6f; these 7 profile dirs (191 files) stayed behind. Finish the eviction or revert it. [1-formats district move: relocated to 1-formats/a2ml/, removed 2026-11-21 (W11); this path keeps a POINTER.adoc stub]"
 
 [[entry]]
 from        = "1-formats/templates/"
@@ -1697,6 +1697,19 @@ canon_slot  = ""
 canonical_doc = ""
 gate        = ""
 note        = "GitHub security policy: supported versions (tip of main only) + private vulnerability reporting. Added 2026-09-22 (round 2 maps it)."
+
+[[entry]]
+from        = "STANDING-RULES.adoc"
+target      = "STANDING-RULES.adoc"
+district    = "root"
+kind        = "policy"
+files       = 1
+lifecycle   = "versioned"
+canonical   = false
+canon_slot  = ""
+canonical_doc = ""
+gate        = ""
+note        = "Estate standing rules for agents (SR-*), behind a fail-closed verification gate. Added by #1677; mapped 2026-11-21."
 
 [[entry]]
 from        = "CODE_OF_CONDUCT.md"

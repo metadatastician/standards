@@ -39,7 +39,7 @@ green*.
 
 | 2. Pre-action gating
 | Entropy budgets, intent classification, confirmation for risky ops — *before* an op runs.
-| `1-formats/a2ml/agentic/` (`AGENTIC.a2ml`)
+| the retired AGENTIC format (spec removed 2026-11-21; see `9-archive/A2ML-REMOVED.adoc`)
 
 | 3. In-session invariant gates
 | Contractile MUST/TRUST/BUST/DUST/ADJUST/INTEND — block at session-close / pre-push / pre-merge.

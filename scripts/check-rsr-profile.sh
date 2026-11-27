@@ -233,7 +233,7 @@ esac
 # module's own checker (deed_lint.js --rsr-profile). The awk path checks this
 # copy, which scripts/tests/check-rsr-profile-test.sh holds equal to
 # `deed_lint.js --rsr-profile-keys`.
-RSR_PROFILE_KEYS=":version :spec :declares-against :role :preset :capabilities :add :remove (notes)"
+RSR_PROFILE_KEYS=":version :spec :declares-against :role :preset :capabilities :add :remove (notes) (layout)"
 # deed_subclauses : on stdin one comment-free clause on a single line, as
 # emitted by deed_clause; prints the head of each clause nested directly in
 # it, one per line. A parenthesis right after a :keyword opens that field's
@@ -287,6 +287,121 @@ deed_notes_faults() {
         else { print "a bare value " a; key = "" } } }
     exit }'
 }
+# --- (layout …): where this repo keeps a gated module (owner ruling 2026-11-16,
+# rsr-template-repo#421) ---
+# The gate table names WHAT a capability owes and where it lives by default.
+# Before this clause the defaults were the only locations the checker knew,
+# so a repo that kept its ABI package at src/interface/abi.ipkg (the spine
+# does) was MISSING a root abi.ipkg it was never meant to have, and the only
+# "fixes" were moving the file or editing the canon's table. A
+# (layout (module :gate "<row alternative>" :at ("<path>" …))) binds one row to
+# the paths this tree uses, so the layout and the check cannot drift apart:
+#   * declared capability: every :at path must exist (MISSING otherwise); the
+#     row's default locations are not consulted, the deed is authoritative;
+#   * undeclared capability: a present :at path, like a present default, is
+#     VESTIGIAL ([carrier] still exempts a spine), and an absent one is STALE,
+#     because a binding that names nothing is the drift this clause removes;
+#   * an :at path is the same kind of artefact as the row names: the same file
+#     name (a matching one for a glob row), and a directory for a directory row.
+#     A binding that names no [gates] row, a [baseline] row, or a row twice is a
+#     profile defect (exit 2), like an unknown preset.
+#
+# layout_bindings : on stdin one comment-free (rsr-profile …) clause on a
+# single line, as emitted by deed_clause; prints "B<TAB>gate<TAB>path" for each
+# :at path of each (module …) in its (layout …), in order, or one
+# "F<TAB>reason" line for the first structural fault (the AST path asks the
+# module, deed_lint.js --rsr-profile, for the same refusals). Strings decode
+# only \" and \\, as deed_fields does; another escape stays literal and then
+# fails layout_path_fault, as its decoded form does on the AST path.
+layout_bindings() {
+  awk 'BEGIN { dq = sprintf("%c", 34); bs = sprintf("%c", 92); OFS = "\t" }
+  function fault(m) { print "F", m; exit }
+  { s = $0; n = length(s); nt = 0; i = 1
+    while (i <= n) { c = substr(s, i, 1)
+      if (c ~ /[[:space:]]/) { i++; continue }
+      if (c == "(" || c == ")") { tok[++nt] = c; i++; continue }
+      if (c == dq) { v = ""; i++
+        while (i <= n) { e = substr(s, i, 1)
+          if (e == bs) { x = substr(s, i + 1, 1); v = v ((x == dq || x == bs) ? x : e x); i += 2; continue }
+          if (e == dq) { i++; break }
+          v = v e; i++ }
+        tok[++nt] = "S" v; continue }
+      v = ""; while (i <= n) { e = substr(s, i, 1); if (e ~ /[[:space:]()]/ || e == dq) break; v = v e; i++ }
+      tok[++nt] = "A" v }
+    # tok[1] "(" tok[2] "Arsr-profile"; walk its members at depth 1.
+    t = 3; layouts = 0
+    while (t <= nt && tok[t] != ")") {
+      if (tok[t] == "(") {
+        if (tok[t + 1] != "Alayout") { t = endof(t) + 1; continue }
+        if (++layouts > 1) fault("(rsr-profile …) carries (layout …) once")
+        t += 2; modules = 0
+        while (t <= nt && tok[t] != ")") {
+          if (tok[t] != "(" || tok[t + 1] != "Amodule") fault("(rsr-profile (layout …)) holds (module …) clauses only (J39: an unknown key refuses the clause)")
+          t += 2; modules++; gate = ""; hasgate = 0; hasat = 0; na = 0; split("", at)
+          while (t <= nt && tok[t] != ")") {
+            k = tok[t]
+            if (k == "A:gate") {
+              if (hasgate++) fault("(rsr-profile (layout (module …))) carries :gate once")
+              if (substr(tok[t + 1], 1, 1) != "S" || tok[t + 1] == "S") fault("(rsr-profile (layout (module :gate))) must be a non-empty string")
+              gate = substr(tok[t + 1], 2); t += 2; continue }
+            if (k == "A:at") {
+              if (hasat++) fault("(rsr-profile (layout (module …))) carries :at once")
+              if (tok[t + 1] != "(") fault("(rsr-profile (layout (module :at))) must be a non-empty list of strings")
+              t += 2
+              while (t <= nt && tok[t] != ")") {
+                if (substr(tok[t], 1, 1) != "S") fault("(rsr-profile (layout (module :at))) must be a non-empty list of strings")
+                p = substr(tok[t], 2)
+                for (q = 1; q <= na; q++) if (at[q] == p) fault("(rsr-profile (layout (module :at))) names \"" p "\" once")
+                at[++na] = p; t++ }
+              if (na == 0) fault("(rsr-profile (layout (module :at))) must be a non-empty list of strings")
+              t++; continue }
+            if (k == "(") fault("(rsr-profile (layout (module …))) holds :gate and :at only")
+            fault("(rsr-profile (layout (module …))) has no field " substr(k, 2) " (J39: an unknown key refuses the clause)") }
+          if (!hasgate) fault("(rsr-profile (layout (module …))) is missing :gate")
+          if (!hasat) fault("(rsr-profile (layout (module …))) is missing :at")
+          if (gate in seen) fault("(rsr-profile (layout …)) binds :gate \"" gate "\" once")
+          seen[gate] = 1
+          for (q = 1; q <= na; q++) out[++no] = gate OFS at[q]
+          t++ }
+        if (!modules) fault("(rsr-profile (layout …)) binds at least one (module …)")
+        t++; continue }
+      # A keyword then its value; a list value is skipped whole.
+      if (tok[t + 1] == "(") { t = endof(t + 1) + 1 } else t += 2 }
+    for (q = 1; q <= no; q++) print "B", out[q]
+    exit }
+  function endof(u,   d) { d = 0
+    for (; u <= nt; u++) { if (tok[u] == "(") d++; else if (tok[u] == ")") { d--; if (d == 0) return u } }
+    return nt }'
+}
+# layout_bindings_ast : the same "B" lines from the validated AST, whose
+# structure deed_lint.js --rsr-profile has already checked.
+layout_bindings_ast() {
+  printf '%s' "$DEED_AST" | jq -r '
+    def s: gsub("\n"; "\\n") | gsub("\t"; "\\t");
+    [.. | arrays | select(.[0] == "clause" and .[1] == "rsr-profile")][0][2][]
+    | select(.[0] == "clause" and .[1] == "layout") | .[2][]
+    | select(.[0] == "clause" and .[1] == "module") | .[2] as $m
+    | ([$m[] | select(.[0] == "field" and .[1] == "gate")][0][2][1]) as $g
+    | [$m[] | select(.[0] == "field" and .[1] == "at")][0][2][1][]
+    | "B\t\($g | s)\t\(.[1] | s)"'
+}
+# layout_path_fault <path> : why an :at path is not a concrete repo-relative
+# path, or nothing. The same rule as deed_lint.js layoutPathFault.
+layout_path_fault() {
+  local p="$1" seg
+  [ -n "$p" ] || { echo "is empty"; return; }
+  case "$p" in /*) echo "is absolute"; return ;; esac
+  case "$p" in *[\*\?\[\]\|]*) echo "is a pattern, not a path (no *, ?, [, ] or |)"; return ;; esac
+  if [[ "$p" == *[[:cntrl:]]* || "$p" == *\\* ]]; then echo "holds a control character or a backslash"; return; fi
+  local -a segs
+  IFS='/' read -r -a segs <<< "${p%/}"
+  [[ "${p%/}" == */ || "${p%/}" == *//* ]] && { echo "has an empty segment"; return; }
+  for seg in "${segs[@]}"; do
+    [ -n "$seg" ] || { echo "has an empty segment"; return; }
+    case "$seg" in .|..) echo "has a . or .. segment"; return ;; esac
+  done
+}
+
 # rsr_profile_closed : refuse the clause on any key outside the module's set.
 rsr_profile_closed() {
   local out tooldir deed k
@@ -315,7 +430,7 @@ rsr_profile_closed() {
   return 0
 }
 
-DEED=""; DEED_PROFILE=""; DEED_AST=""
+DEED=""; DEED_PROFILE=""; DEED_AST=""; LAYOUT=""
 _deeds=()
 # estate_chora.deed is the estate-deed (deed.abnf filename dispatch reserves
 # that exact stem), never a second repo deed, so it does not count here.
@@ -350,6 +465,15 @@ elif [ "${#_deeds[@]}" -eq 1 ]; then
     rsr_profile_closed || exit 2
     DEED_PROFILE="$_fields"
     [ -n "$DEED_PROFILE" ] || DEED_PROFILE=" "   # a clause with no fields is still a clause
+    if [ "$DEED_PARSER" = ast ]; then
+      LAYOUT="$(layout_bindings_ast)" || { echo "ERROR: $DEED: (rsr-profile (layout …)) could not be read from the AST" >&2; exit 2; }
+    else
+      LAYOUT="$(printf '%s\n' "$_clauses" | head -1 | layout_bindings)"
+    fi
+    _fault="$(printf '%s\n' "$LAYOUT" | awk -F '\t' '$1 == "F" { print $2; exit }')"
+    if [ -n "$_fault" ]; then
+      echo "ERROR: $DEED: $_fault" >&2; exit 2
+    fi
   fi
 fi
 if [ -z "$DEED_PROFILE" ] && [ ! -f "$PROFILE" ]; then
@@ -461,6 +585,68 @@ present() {
   esac
 }
 
+# present_at <path> <cap> : presence of one (layout …)-bound path. The shape
+# obligations the table's literal rows carry in present() follow the artefact,
+# not its location: a Containerfile is non-empty wherever it lives, and a
+# formal-proofs directory holds prover sources wherever it lives.
+present_at() {
+  local p="$1" cap="$2" base="${1%/}"
+  base="${base##*/}"
+  if [ "$cap" = formal-proofs ] && [[ "$p" == */ ]]; then proof_sources_present "$p"
+  elif [ "$base" = Containerfile ]; then [ -s "$REPO/$p" ]
+  elif [[ "$p" == */ ]]; then [ -d "$REPO/${p%/}" ]
+  else [ -f "$REPO/$p" ]; fi
+}
+
+# --- resolve (layout …) bindings against the gate table ---
+# BOUND_AT[<row key>] holds the row's :at paths, one per line; BOUND_GATE[<row
+# key>] the alternative the deed named it by.
+declare -A BOUND_AT=() BOUND_GATE=()
+if [ -n "$LAYOUT" ]; then
+  _gate_rows="$(section gates "$GATES" | while IFS= read -r _l; do
+    _k="$(printf '%s' "$_l" | grep -oE '"[^"]+"' | sed -n 1p | tr -d '"')"
+    [ -n "$_k" ] && printf '%s\n' "$_k"; done)"
+  _baseline_rows="$(section baseline "$GATES" | array_on_key paths)"
+  while IFS=$'\t' read -r _kind _gate _at; do
+    [ "$_kind" = B ] || continue
+    _why="$(layout_path_fault "$_at")"
+    [ -z "$_why" ] || { echo "ERROR: $DEED: (rsr-profile (layout (module :at))) path \"$_at\" $_why" >&2; exit 2; }
+    _row=""
+    while IFS= read -r _k; do
+      [ -n "$_k" ] || continue
+      IFS='|' read -r -a _alts <<< "$_k"
+      for _a in "${_alts[@]}"; do [ "$_a" = "$_gate" ] && { _row="$_k"; break 2; }; done
+    done <<< "$_gate_rows"
+    if [ -z "$_row" ]; then
+      if printf '%s\n' "$_baseline_rows" | tr '|' '\n' | grep -qxF -- "$_gate"; then
+        echo "ERROR: $DEED: (layout (module :gate \"$_gate\")) names a [baseline] row; only capability-gated [gates] rows are bound by (layout …)" >&2
+      else
+        echo "ERROR: $DEED: (layout (module :gate \"$_gate\")) names no [gates] row of $GATES; :gate is one alternative of a row, written as the table writes it" >&2
+      fi
+      exit 2
+    fi
+    if [ -n "${BOUND_GATE[$_row]+x}" ] && [ "${BOUND_GATE[$_row]}" != "$_gate" ]; then
+      echo "ERROR: $DEED: (layout …) binds the row \"${_row//|/ or }\" twice (as \"${BOUND_GATE[$_row]}\" and \"$_gate\")" >&2; exit 2
+    fi
+    # Same kind of artefact: a directory for a directory alternative, a file
+    # for a file one, and a name the alternative's last segment matches.
+    _gb="${_gate%/}"; _gb="${_gb##*/}"; _ab="${_at%/}"; _ab="${_ab##*/}"
+    _gk="file"; [[ "$_gate" == */ ]] && _gk="directory"
+    _ak="file"; [[ "$_at" == */ ]] && _ak="directory"
+    if [ "$_gk" != "$_ak" ]; then
+      echo "ERROR: $DEED: (layout (module :gate \"$_gate\")) binds \"$_at\": a $_gk row is bound to a $_gk path (a directory path ends in /)" >&2
+      exit 2
+    fi
+    # shellcheck disable=SC2053  # the row's last segment is a pattern on purpose
+    if [[ "$_ab" != $_gb ]]; then
+      echo "ERROR: $DEED: (layout (module :gate \"$_gate\")) binds \"$_at\", whose name does not match \"$_gb\": a binding moves a module, it never renames what the row asks for" >&2
+      exit 2
+    fi
+    BOUND_GATE[$_row]="$_gate"
+    BOUND_AT[$_row]+="$_at"$'\n'
+  done <<< "$LAYOUT"
+fi
+
 # Folded baseline metadata is recognized from validated native AST nodes,
 # never from a basename, a quoted example or an empty metadata directory.
 # The legacy awk profile reader is retained, but it is not a DEED validator
@@ -502,6 +688,7 @@ echo "repo:    $REPO"
 echo "profile: ${PRESET:+preset=$PRESET }${DIRECT:+direct-capabilities} <- $SOURCE"
 echo "role:    ${ROLE:-unset}"
 echo "effective capabilities: $(printf '%s\n' "$EFFECTIVE" | paste -sd ' ' -)"
+echo "layout bindings: $(printf '%s\n' "$LAYOUT" | awk -F '\t' '$1 == "B" { n++ } END { print n + 0 }')"
 echo
 
 # A spine (template) repo legitimately carries capability-gated modules it does
@@ -562,6 +749,39 @@ while IFS= read -r line; do
   path="$(printf '%s' "$line" | grep -oE '"[^"]+"' | sed -n 1p | tr -d '"')"
   cap="$(printf '%s' "$line" | grep -oE '"[^"]+"' | sed -n 2p | tr -d '"')"
   [ -n "$path" ] && [ -n "$cap" ] || continue
+  if [ -n "${BOUND_GATE[$path]+x}" ]; then
+    # A row the deed's (layout …) binds. The binding is a claim about THIS tree,
+    # so no carrier exemption excuses a bound path that is not there.
+    while IFS= read -r at; do
+      [ -n "$at" ] || continue
+      if has_cap "$cap"; then
+        if present_at "$at" "$cap"; then
+          echo "  bound by (layout): $(row_label "$path") -> $at"
+        else
+          echo "  MISSING ($cap): $at (bound by (layout) for $(row_label "$path"))"; fail=1
+        fi
+      elif ! present_at "$at" "$cap"; then
+        echo "  STALE (layout): $at is bound for $(row_label "$path") but this tree does not carry it"; fail=1
+      fi
+    done <<< "${BOUND_AT[$path]}"
+    # Undeclared capability: a present bound path or default is VESTIGIAL, as
+    # it is for an unbound row; a binding never hides the table's defaults.
+    if ! has_cap "$cap"; then
+      _vest=""
+      present "$path" && _vest="$(row_label "$path")"
+      while IFS= read -r at; do
+        [ -n "$at" ] && present_at "$at" "$cap" && _vest="${_vest:+$_vest, }$at"
+      done <<< "${BOUND_AT[$path]}"
+      if [ -n "$_vest" ]; then
+        if is_carrier "$path"; then
+          echo "  carried for downstream (no '$cap' capability, spine): $_vest"
+        else
+          echo "  VESTIGIAL (no '$cap' capability): $_vest"; fail=1
+        fi
+      fi
+    fi
+    continue
+  fi
   if has_cap "$cap"; then
     if ! present "$path"; then
       # A carrier path is a gate the repo SERVES, not one it runs (the spine
@@ -629,6 +849,9 @@ Fix one of:
     legacy .machine_readable/rsr-profile.a2ml is still read where no clause
     exists; add a [rationale] line there), OR
   * add the missing module, OR
+  * when the module exists elsewhere in the tree, bind its real location in
+    the deed's (rsr-profile (layout (module :gate "<row>" :at ("<path>"))));
+    a STALE binding names a path the tree no longer carries: fix or drop it, OR
   * for a MISSING BASELINE row, add the file (the table's [baseline].paths
     lists the estate spellings that conform; a district path only conforms if
     the table names it).

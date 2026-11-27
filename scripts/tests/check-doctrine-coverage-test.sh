@@ -44,8 +44,8 @@ case_() {
   printf '%s\n' "$body" > "$WORK/docs/RULES.adoc"
   local out rc
   out="$(run "$WORK" --path docs)"; rc=$?
-  if [ "$rc" -eq "$want_rc" ] && printf '%s' "$out" | grep -qF "$want" \
-    && { [ -z "$summary" ] || printf '%s' "$out" | grep -qF "$summary"; }; then
+  if [ "$rc" -eq "$want_rc" ] && grep -qF "$want" <<<"$out" \
+    && { [ -z "$summary" ] || grep -qF "$summary" <<<"$out"; }; then
     ok "$name"
   else
     bad "$name (rc=$rc, wanted $want_rc / '$want')"
@@ -63,7 +63,7 @@ cat > "$WORK/docs/RULES.adoc" <<'EOF'
 Text with no tag at all.
 EOF
 out="$(run "$WORK" --path docs)"; rc=$?
-if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q '0 document(s) opted in'; then
+if [ "$rc" -eq 0 ] && grep -q '0 document(s) opted in' <<<"$out"; then
   ok "a document without the opt-in marker is not scanned"
 else
   bad "un-opted document should be ignored (rc=$rc)"; printf '%s\n' "$out"
@@ -253,7 +253,7 @@ Text.'
 rm -rf "$WORK/docs"; mkdir -p "$WORK/docs"
 printf '= Rules\n// doctrine-coverage: on\n\n== Never do the bad thing\n\nText.\n' > "$WORK/docs/RULES.adoc"
 out="$(run "$WORK" --path docs --report)"; rc=$?
-if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'report-only'; then
+if [ "$rc" -eq 0 ] && grep -q 'report-only' <<<"$out"; then
   ok "--report reports without failing"
 else
   bad "--report should exit 0 with a note (rc=$rc)"; printf '%s\n' "$out"
@@ -262,7 +262,7 @@ fi
 # --list and --path=VALUE work together with a single file.
 printf '= Rules\n// doctrine-coverage: on\n\n== Never do the bad thing\n// Enforced-by: scripts/gate.sh\n' > "$WORK/docs/RULES.adoc"
 out="$(run "$WORK" --list --path=docs/RULES.adoc)"; rc=$?
-if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -qF $'docs/RULES.adoc:4\tnever-do-the-bad-thing\tenforced-by=scripts/gate.sh'; then
+if [ "$rc" -eq 0 ] && grep -qF $'docs/RULES.adoc:4\tnever-do-the-bad-thing\tenforced-by=scripts/gate.sh' <<<"$out"; then
   ok "--list with --path=VALUE lists the selected invariant"
 else
   bad "--list and --path=VALUE should select and list the file (rc=$rc)"; printf '%s\n' "$out"

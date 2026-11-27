@@ -62,10 +62,10 @@ assert() { # label want-status needle cmd...
   out="$("$@" 2>&1)"; status=$?
   if [ "$status" != "$want" ]; then
     echo "FAIL: $label — expected exit $want, got $status"
-    echo "      $(printf '%s' "$out" | grep -E '^  |FAIL' | head -3 | tr '\n' '|')"
+    echo "      $(grep -E '^  |FAIL' <<<"$out" | head -3 | tr '\n' '|')"
     fail=$((fail + 1)); return
   fi
-  if [ "$needle" != "-" ] && ! printf '%s' "$out" | grep -qF -- "$needle"; then
+  if [ "$needle" != "-" ] && ! grep -qF -- "$needle" <<<"$out"; then
     echo "FAIL: $label — exit ok, output lacked '$needle'"
     echo "      $(printf '%s' "$out" | tr '\n' '|')"
     fail=$((fail + 1)); return
@@ -306,6 +306,82 @@ if command -v bun >/dev/null 2>&1 && [ -f "$_lint" ]; then
     echo "FAIL: the checker's key set differs from the module's: script '$_script', module '$_module'"; fail=$((fail + 1))
   fi
 fi
+
+echo "=== (layout …): the deed declares where a gated module lives (owner ruling 2026-11-16) ==="
+# abi_repo <name> <profile-body>: a conforming rust scaffold that also carries
+# an ABI the spine's way, with its package in src/interface/, not the root.
+abi_repo() {
+  local d; d="$(repo_deed "$1" "$2")"
+  mkdir -p "$d/src/interface/Abi" "$d/src/interface/generated"
+  : > "$d/src/interface/abi.ipkg"; : > "$d/src/interface/Abi/Types.idr"
+  printf '%s' "$d"
+}
+ABI_CAPS=':version "1.0.0" :capabilities ("rust" "abi")'
+d=$(abi_repo layoutnone "  (rsr-profile $ABI_CAPS)")
+assert "control: without a binding the table's root abi.ipkg is MISSING (rsr-template-repo#421)" 1 "MISSING (abi): abi.ipkg" bash "$CHECK" "$d"
+d=$(abi_repo layoutok "  (rsr-profile $ABI_CAPS (layout (module :gate \"abi.ipkg\" :at (\"src/interface/abi.ipkg\"))))")
+assert "a bound abi.ipkg in src/interface/ satisfies the abi row" 0 "bound by (layout): abi.ipkg -> src/interface/abi.ipkg" bash "$CHECK" "$d"
+assert "…and the scaffold passes" 0 "rsr-profile check: OK" bash "$CHECK" "$d"
+d=$(abi_repo layoutgone "  (rsr-profile $ABI_CAPS (layout (module :gate \"abi.ipkg\" :at (\"src/interface/abi.ipkg\"))))")
+rm "$d/src/interface/abi.ipkg"
+assert "a declared path that is missing fails loudly" 1 "MISSING (abi): src/interface/abi.ipkg (bound by (layout)" bash "$CHECK" "$d"
+: > "$d/abi.ipkg"
+assert "…and the table's default does not stand in for it: the deed is authoritative" 1 "MISSING (abi): src/interface/abi.ipkg" bash "$CHECK" "$d"
+d=$(abi_repo layouttwoat "  (rsr-profile $ABI_CAPS (layout (module :gate \"abi.ipkg\" :at (\"src/interface/abi.ipkg\" \"pkg/abi.ipkg\"))))")
+assert "every :at path is owed, not any one of them" 1 "MISSING (abi): pkg/abi.ipkg" bash "$CHECK" "$d"
+d=$(abi_repo layoutvest '  (rsr-profile :version "1.0.0" :capabilities ("rust") (layout (module :gate "abi.ipkg" :at ("src/interface/abi.ipkg"))))')
+rm -rf "$d/src/interface/Abi" "$d/src/interface/generated"
+assert "a bound path present without its capability is VESTIGIAL" 1 "VESTIGIAL (no 'abi' capability): src/interface/abi.ipkg" bash "$CHECK" "$d"
+rm "$d/src/interface/abi.ipkg"
+assert "a binding that names a path the tree no longer carries is STALE" 1 "STALE (layout): src/interface/abi.ipkg" bash "$CHECK" "$d"
+d=$(abi_repo layoutspine '  (rsr-profile :version "1.0.0" :role "spine" :capabilities ("rust") (layout (module :gate ".github/workflows/rust-ci.yml" :at ("ci/rust-ci.yml"))))')
+assert "a spine's [carrier] row does not excuse a missing bound path" 1 "MISSING (rust): ci/rust-ci.yml" bash "$CHECK" "$d"
+d=$(repo_deed layoutglob '  (rsr-profile :version "1.0.0" :capabilities ("rust") (layout (module :gate "**/src/**/*.rs" :at ("src/main.rs"))))')
+assert "a glob row binds to a path its last segment matches" 0 "bound by (layout): **/src/**/*.rs -> src/main.rs" bash "$CHECK" "$d"
+d=$(repo_deed layoutglobkind '  (rsr-profile :version "1.0.0" :capabilities ("rust") (layout (module :gate "**/src/**/*.rs" :at ("src/main.c"))))')
+: > "$d/src/main.c"
+assert "…and refuses one it does not" 2 "does not match \"*.rs\"" bash "$CHECK" "$d"
+d=$(repo_deed layoutcf '  (rsr-profile :version "1.0.0" :capabilities ("rust" "container") (layout (module :gate "Containerfile" :at ("deploy/Containerfile"))))')
+mkdir -p "$d/deploy"; : > "$d/deploy/Containerfile"
+assert "an empty bound Containerfile is MISSING: the shape follows the artefact, not its row" 1 "MISSING (container): deploy/Containerfile" bash "$CHECK" "$d"
+echo 'FROM scratch' > "$d/deploy/Containerfile"
+assert "…and a non-empty one satisfies it" 0 "bound by (layout): build/container/Containerfile or container/Containerfile or Containerfile -> deploy/Containerfile" bash "$CHECK" "$d"
+d=$(repo_deed layoutproof '  (rsr-profile :version "1.0.0" :capabilities ("rust" "formal-proofs") (layout (module :gate "proofs/agda/" :at ("theory/agda/"))))')
+mkdir -p "$d/theory/agda"; echo prose > "$d/theory/agda/README.adoc"
+assert "a bound proof directory of prose only is MISSING" 1 "MISSING (formal-proofs): theory/agda/" bash "$CHECK" "$d"
+echo "module T where" > "$d/theory/agda/T.agda"
+assert "…and one with a prover source satisfies it" 0 "rsr-profile check: OK" bash "$CHECK" "$d"
+# A binding the gate table cannot place is a profile defect (exit 2).
+d=$(abi_repo layoutnorow "  (rsr-profile $ABI_CAPS (layout (module :gate \"abi.toml\" :at (\"src/interface/abi.toml\"))))")
+assert "a :gate that names no [gates] row is refused" 2 "names no [gates] row" bash "$CHECK" "$d"
+d=$(abi_repo layoutbase "  (rsr-profile $ABI_CAPS (layout (module :gate \"LICENSE\" :at (\"docs/LICENSE\"))))")
+assert "a [baseline] row is not bindable" 2 "names a [baseline] row" bash "$CHECK" "$d"
+d=$(abi_repo layoutrename "  (rsr-profile $ABI_CAPS (layout (module :gate \"abi.ipkg\" :at (\"src/interface/other.ipkg\"))))")
+: > "$d/src/interface/other.ipkg"
+assert "a binding cannot rename what the row asks for" 2 "does not match \"abi.ipkg\"" bash "$CHECK" "$d"
+d=$(abi_repo layoutkind "  (rsr-profile $ABI_CAPS (layout (module :gate \"src/interface/generated/\" :at (\"src/interface/gen\"))))")
+: > "$d/src/interface/gen"
+assert "a directory row is bound to a directory" 2 "a directory row is bound to a directory path" bash "$CHECK" "$d"
+d=$(abi_repo layoutrowtwice "  (rsr-profile $ABI_CAPS (layout (module :gate \"src/interface/abi/\" :at (\"src/interface/Abi/\")) (module :gate \"src/interface/Abi/\" :at (\"src/interface/Abi/\"))))")
+assert "one row bound twice, by two of its alternatives, is refused" 2 "twice" bash "$CHECK" "$d"
+d=$(abi_repo layoutgatetwice "  (rsr-profile $ABI_CAPS (layout (module :gate \"abi.ipkg\" :at (\"src/interface/abi.ipkg\")) (module :gate \"abi.ipkg\" :at (\"x/abi.ipkg\"))))")
+assert "one :gate bound twice is refused" 2 "once" bash "$CHECK" "$d"
+d=$(abi_repo layoutdotdot "  (rsr-profile $ABI_CAPS (layout (module :gate \"abi.ipkg\" :at (\"../abi.ipkg\"))))")
+assert "an :at path outside the repo is refused" 2 ". or .. segment" bash "$CHECK" "$d"
+d=$(abi_repo layoutpattern "  (rsr-profile $ABI_CAPS (layout (module :gate \"abi.ipkg\" :at (\"src/*/abi.ipkg\"))))")
+assert "an :at pattern is refused: a binding names a path" 2 "is a pattern" bash "$CHECK" "$d"
+d=$(abi_repo layoutesc "  (rsr-profile $ABI_CAPS (layout (module :gate \"abi.ipkg\" :at (\"src\\\\ninterface/abi.ipkg\"))))")
+assert "an escape in an :at path is refused on either parser" 2 "control character or a backslash" bash "$CHECK" "$d"
+d=$(abi_repo layoutfield "  (rsr-profile $ABI_CAPS (layout (module :gate \"abi.ipkg\" :at (\"src/interface/abi.ipkg\") :why \"x\")))")
+assert "an unknown (module …) field refuses the clause (J39)" 2 "J39" bash "$CHECK" "$d"
+d=$(abi_repo layoutother "  (rsr-profile $ABI_CAPS (layout (path :gate \"abi.ipkg\" :at (\"src/interface/abi.ipkg\"))))")
+assert "a (layout …) member other than (module …) refuses the clause (J39)" 2 "(module …) clauses only" bash "$CHECK" "$d"
+d=$(abi_repo layoutempty "  (rsr-profile $ABI_CAPS (layout))")
+assert "an empty (layout) is refused" 2 "at least one (module" bash "$CHECK" "$d"
+d=$(abi_repo layoutnoat "  (rsr-profile $ABI_CAPS (layout (module :gate \"abi.ipkg\")))")
+assert "a (module …) without :at is refused" 2 "missing :at" bash "$CHECK" "$d"
+d=$(abi_repo layoutprose "  (rsr-profile $ABI_CAPS :declares-against \"(layout (module :gate \\\\\"abi.ipkg\\\\\" :at (\\\\\"src/interface/abi.ipkg\\\\\")))\")")
+assert "layout-shaped text in a string binds nothing" 1 "MISSING (abi): abi.ipkg" bash "$CHECK" "$d"
 
 echo "=== setup errors ==="
 assert "no profile → 2" 2 "no profile at" bash "$CHECK" "$WORK/does-not-exist"

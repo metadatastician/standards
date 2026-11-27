@@ -72,7 +72,7 @@ set -e
 row() { printf '%s\n' "$out" | awk -F'\t' -v r="$1" -v k="$2" '$1==r && $2==k'; }
 
 n=$(row narrowed actions.patterns_allowed)
-if [ -n "$n" ] && printf '%s' "$n" | grep -q 'missing 2: editorconfig-checker/action-editorconfig-checker@\*, haskell-actions/setup@\*'; then
+if [ -n "$n" ] && grep -q 'missing 2: editorconfig-checker/action-editorconfig-checker@\*, haskell-actions/setup@\*' <<<"$n"; then
   pass "a narrowed list is reported, naming both missing canonical patterns"
 else
   bad "a narrowed list was not reported with its missing patterns: '${n}'"
@@ -85,7 +85,7 @@ else
 fi
 
 e=$(row empty actions.patterns_allowed)
-if [ "$(printf '%s\n' "$e" | grep -c .)" = 1 ] && printf '%s' "$e" | grep -q EMPTY; then
+if [ "$(printf '%s\n' "$e" | grep -c .)" = 1 ] && grep -q EMPTY <<<"$e"; then
   pass "an empty list is reported once, as EMPTY"
 else
   bad "an empty list should give exactly one EMPTY row, got: '${e}'"

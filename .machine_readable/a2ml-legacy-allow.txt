@@ -77,66 +77,14 @@ hypatia-rules/workflow-allowlist-gap.a2ml
 .machine_readable/descriptiles/STATE.a2ml
 
 # ── 0-AI-MANIFEST: decision open (1-formats/deed/mappings/ai-manifest-decision.adoc) ──
-1-formats/sub-specs/cartridges/0.2-AI-MANIFEST.a2ml
 1-formats/sub-specs/ensaid-config/0-AI-MANIFEST.a2ml
 2-protocols/0-ai-gatekeeper/0-AI-MANIFEST.a2ml
 2-protocols/0-ai-gatekeeper/examples/0-AI-MANIFEST.a2ml
-docs/wikis/0.2-AI-MANIFEST.a2ml
 
 # ── The A2ML format family ──
 # The retired format's own grammar, specs and examples. It describes every
 # live file in this ledger, so it retires with the last of them. The
 # templates wait on the same STATE decision as STATE.a2ml.
-1-formats/a2ml/agentic/.machine_readable/descriptiles/AGENTIC.a2ml
-1-formats/a2ml/agentic/.machine_readable/descriptiles/ECOSYSTEM.a2ml
-1-formats/a2ml/agentic/.machine_readable/descriptiles/META.a2ml
-1-formats/a2ml/agentic/.machine_readable/descriptiles/NEUROSYM.a2ml
-1-formats/a2ml/agentic/.machine_readable/descriptiles/PLAYBOOK.a2ml
-1-formats/a2ml/agentic/.machine_readable/descriptiles/STATE.a2ml
-1-formats/a2ml/agentic/examples/comprehensive.a2ml
-1-formats/a2ml/agentic/examples/minimal.a2ml
-1-formats/a2ml/anchor/.machine_readable/descriptiles/AGENTIC.a2ml
-1-formats/a2ml/anchor/.machine_readable/descriptiles/ECOSYSTEM.a2ml
-1-formats/a2ml/anchor/.machine_readable/descriptiles/META.a2ml
-1-formats/a2ml/anchor/.machine_readable/descriptiles/NEUROSYM.a2ml
-1-formats/a2ml/anchor/.machine_readable/descriptiles/PLAYBOOK.a2ml
-1-formats/a2ml/anchor/.machine_readable/descriptiles/STATE.a2ml
-1-formats/a2ml/ecosystem/.machine_readable/descriptiles/AGENTIC.a2ml
-1-formats/a2ml/ecosystem/.machine_readable/descriptiles/ECOSYSTEM.a2ml
-1-formats/a2ml/ecosystem/.machine_readable/descriptiles/META.a2ml
-1-formats/a2ml/ecosystem/.machine_readable/descriptiles/NEUROSYM.a2ml
-1-formats/a2ml/ecosystem/.machine_readable/descriptiles/PLAYBOOK.a2ml
-1-formats/a2ml/ecosystem/.machine_readable/descriptiles/STATE.a2ml
-1-formats/a2ml/meta/.machine_readable/descriptiles/AGENTIC.a2ml
-1-formats/a2ml/meta/.machine_readable/descriptiles/ECOSYSTEM.a2ml
-1-formats/a2ml/meta/.machine_readable/descriptiles/META.a2ml
-1-formats/a2ml/meta/.machine_readable/descriptiles/NEUROSYM.a2ml
-1-formats/a2ml/meta/.machine_readable/descriptiles/PLAYBOOK.a2ml
-1-formats/a2ml/meta/.machine_readable/descriptiles/STATE.a2ml
-1-formats/a2ml/meta/examples/comprehensive.a2ml
-1-formats/a2ml/meta/examples/minimal.a2ml
-1-formats/a2ml/neurosym/.machine_readable/descriptiles/AGENTIC.a2ml
-1-formats/a2ml/neurosym/.machine_readable/descriptiles/ECOSYSTEM.a2ml
-1-formats/a2ml/neurosym/.machine_readable/descriptiles/META.a2ml
-1-formats/a2ml/neurosym/.machine_readable/descriptiles/NEUROSYM.a2ml
-1-formats/a2ml/neurosym/.machine_readable/descriptiles/PLAYBOOK.a2ml
-1-formats/a2ml/neurosym/.machine_readable/descriptiles/STATE.a2ml
-1-formats/a2ml/neurosym/examples/comprehensive.a2ml
-1-formats/a2ml/neurosym/examples/minimal.a2ml
-1-formats/a2ml/playbook/.machine_readable/descriptiles/AGENTIC.a2ml
-1-formats/a2ml/playbook/.machine_readable/descriptiles/ECOSYSTEM.a2ml
-1-formats/a2ml/playbook/.machine_readable/descriptiles/META.a2ml
-1-formats/a2ml/playbook/.machine_readable/descriptiles/NEUROSYM.a2ml
-1-formats/a2ml/playbook/.machine_readable/descriptiles/PLAYBOOK.a2ml
-1-formats/a2ml/playbook/.machine_readable/descriptiles/STATE.a2ml
-1-formats/a2ml/playbook/examples/comprehensive.a2ml
-1-formats/a2ml/playbook/examples/minimal.a2ml
-1-formats/a2ml/state/.machine_readable/descriptiles/AGENTIC.a2ml
-1-formats/a2ml/state/.machine_readable/descriptiles/ECOSYSTEM.a2ml
-1-formats/a2ml/state/.machine_readable/descriptiles/META.a2ml
-1-formats/a2ml/state/.machine_readable/descriptiles/NEUROSYM.a2ml
-1-formats/a2ml/state/.machine_readable/descriptiles/PLAYBOOK.a2ml
-1-formats/a2ml/state/.machine_readable/descriptiles/STATE.a2ml
 1-formats/templates/AGENTIC.a2ml.template
 1-formats/templates/ECOSYSTEM.a2ml.template
 1-formats/templates/META.a2ml.template

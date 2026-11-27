@@ -25,6 +25,8 @@
 set -uo pipefail
 
 PROVISION_LIB_VERSION="0.6.0"
+LIB_DIR=$(cd -- "${BASH_SOURCE[0]%/*}" 2>/dev/null && pwd)
+STANDARD_DEED="${PROVISION_STANDARD_DEED:-$LIB_DIR/../../../provisioning-standard_praxis.deed}"
 ROOT="${PROVISION_ROOT:-$(pwd)}"
 cd "$ROOT" || exit 2
 DEED=".machine_readable/descriptiles/provisioning_praxis.deed"
@@ -139,7 +141,8 @@ done < <(detect_langs)
 # Binaries each language needs, and how each is obtained.
 # mise registry gaps (verified 2026-09-30 against mise 2026.7.5): ocaml, haskell,
 # idris2 and guile are NOT mise tools. They come from opam / ghcup / pack / the
-# system package manager (or Guix), and the doctor probes the binary itself.
+# system package manager (or Guix: idris2 from the estate channel), and the doctor
+# probes the binary itself.
 lang_tools() {
   case "$1" in
     rust)    echo "cargo rustc" ;;
@@ -157,7 +160,7 @@ lang_tools() {
   esac
 }
 # Guix package specs per language (verified 2026-09-30 against guix ae77aeb in
-# docker.io/metacall/guix). Guix has NO idris2, gleam, bun or lychee, and its
+# docker.io/metacall/guix). Guix has NO gleam, bun or lychee, and its
 # julia is 1.8.5: those come from mise, which Guix itself ships ("mise"). deno
 # and pnpm come from mise as well (their Guix packages were not measured).
 GUIX_BASE="git bash coreutils nss-certs just mise shellcheck"
@@ -165,7 +168,10 @@ GUIX_BASE="git bash coreutils nss-certs just mise shellcheck"
 lang_guix() {
   case "$1" in
     rust)    echo "rust rust:cargo gcc-toolchain pkg-config" ;;
-    idris2)  echo "chez-scheme gmp gcc-toolchain" ;;
+    # idris2 is not in Guix: it comes from the estate channel (channels.scm,
+    # module (estate packages idris), idris2 0.7.0), so this manifest only
+    # resolves under that channel: use the time-machine, see cmd_dev_shell.
+    idris2)  echo "idris2 chez-scheme gmp gcc-toolchain" ;;
     zig)     echo "zig" ;;
     elixir)  echo "elixir erlang" ;;
     gleam)   echo "erlang" ;;
@@ -175,11 +181,36 @@ lang_guix() {
     julia|bun) echo "" ;;
   esac
 }
-# Tools a Guix shell cannot supply, so mise (inside that shell) does.
+# The canon deed is the single source of truth for the Guix gaps and the estate
+# channel. It sits three levels above this script in the standards repository;
+# a minted repository does not carry it, so the built-in values below (kept equal
+# to the deed by tests/guix-estate-channel.sh) apply there.
+# Print the value of `:KEY "value"` in the canon deed, else $2.
+std_deed() {
+  local v=""
+  [ -f "$STANDARD_DEED" ] && v=$(grep -oE "^[[:space:]]*:$1[[:space:]]+\"[^\"]*\"" "$STANDARD_DEED" 2>/dev/null | head -1 | sed -E 's/^[^"]*"//; s/"$//')
+  printf '%s' "${v:-$2}"
+}
+# Print the words of the list `:KEY ("a" "b")` in the canon deed, else the words of $2.
+std_deed_list() {
+  local v=""
+  [ -f "$STANDARD_DEED" ] && v=$(grep -oE "^[[:space:]]*:$1[[:space:]]+\\([^)]*\\)" "$STANDARD_DEED" 2>/dev/null | head -1 | sed -E 's/^[^(]*\(//; s/\)$//; s/"//g')
+  printf '%s' "${v:-$2}"
+}
+ESTATE_NAME=$(std_deed guix-estate-name estate)
+ESTATE_INTRO=$(std_deed guix-estate-introduction 4b91d37a4bbb4bc8c16de791eb5bd2241fb26f4b)
+ESTATE_FPR=$(std_deed guix-estate-fingerprint "E0B3 6C1B 28F6 E9E0 A460  3F47 FE6E 34E9 F311 0F92")
+# Tools a Guix shell cannot supply, so mise (inside that shell) does: the language's
+# candidate tools that the deed's :guix-gaps names. A tool leaves the gap by leaving
+# the deed list.
+GUIX_GAPS_LISTED=$(std_deed_list guix-gaps "gleam bun deno pnpm lychee julia")
 lang_guix_gap() {
+  local cands t gl=""
   case "$1" in
-    idris2) echo "idris2 (via pack)" ;; julia) echo julia ;; gleam) echo gleam ;; bun) echo "bun deno pnpm" ;; docs) echo lychee ;;
+    julia) cands=julia ;; gleam) cands=gleam ;; bun) cands="bun deno pnpm" ;; docs) cands=lychee ;; idris2) cands=idris2 ;; *) cands="" ;;
   esac
+  for t in $cands; do case " $GUIX_GAPS_LISTED " in *" $t "*) gl="$gl${gl:+ }$t" ;; esac; done
+  printf '%s\n' "$gl"
 }
 # Print deduplicated base and detected-language Guix package specifications.
 guix_specs() {
@@ -223,7 +254,7 @@ mise_tools() {
 lang_remedy() {
   case "$1" in
     rust)    echo "mise use rust@latest  (or rustup: https://rustup.rs)" ;;
-    idris2)  echo "install pack: https://github.com/stefan-hoeck/idris2-pack#installation, then: pack install-app idris2" ;;
+    idris2)  echo "with Guix: add the estate channel from channels.scm and run: guix time-machine -C channels.scm -- shell idris2  (else install pack: https://github.com/stefan-hoeck/idris2-pack#installation, then: pack install-app idris2)" ;;
     julia)   echo "mise use julia@latest  (or: https://julialang.org/install/ — juliaup)" ;;
     zig)     echo "mise use zig@latest" ;;
     elixir)  echo "mise use erlang@latest elixir@latest  (erlang builds from source: allow ~10 min)" ;;
@@ -311,8 +342,10 @@ lang_cmd() { # $1 lang, $2 verb  -> prints a shell command, or nothing (= N/A)
     bun:deps)  [ -f bun.lock ] || [ -f bun.lockb ] && echo "bun install --frozen-lockfile" || echo "bun install" ;;
     bun:build) grep -qs '"build"[[:space:]]*:' package.json && echo "bun run build" ;;
     # `bun test` exits 0 when it finds no test files, so it runs only when some exist.
+    # The listing is captured, not piped: grep -q in a pipe let git die of SIGPIPE
+    # on a large repository (status 141) and the test step was reported N/A.
     bun:test)  if grep -qs '"test"[[:space:]]*:' package.json; then echo "bun run test"
-               elif git ls-files 2>/dev/null | grep -qE '(\.|_)(test|spec)\.(js|mjs|cjs|jsx)$'; then echo "bun test"; fi ;;
+               elif grep -qE '(\.|_)(test|spec)\.(js|mjs|cjs|jsx)$' <<<"$(git ls-files 2>/dev/null)"; then echo "bun test"; fi ;;
     bun:bench) grep -qs '"bench"[[:space:]]*:' package.json && echo "bun run bench" ;;
     bun:lint)  grep -qs '"lint"[[:space:]]*:' package.json && echo "bun run lint" ;;
     bun:fmt)   grep -qs '"fmt"[[:space:]]*:' package.json && echo "bun run fmt" ;;
@@ -450,13 +483,26 @@ mise_lock_gaps() {
 # not evaluate Scheme or verify that the package builds. Callers inspect stdout.
 # For example, `(package (name "x") (source (local-file ".")))` is a stub.
 guix_stub_reason() {
-  local f=$1 k miss=""
+  local f=$1 k miss="" body
   [ -f "$f" ] || { echo "missing"; return; }
   grep -qE '\{\{|__[A-Z][A-Z_]*__' "$f" && { echo "unfilled template slots"; return; }
   grep -qE '\(inputs \(list\)\)|\(source #f\)' "$f" && { echo "empty inputs or no source"; return; }
   case "${f##*/}" in
     manifest.scm) grep -q 'specifications->manifest' "$f" || echo "lists no specifications"; return ;;
-    channels.scm) grep -qE '\(commit "[0-9a-f]{40}"\)' "$f" || echo "pins no commit"; return ;;
+    channels.scm)
+      grep -qE '\(commit "[0-9a-f]{40}"\)' "$f" || { echo "pins no commit"; return; }
+      # every channel needs its own pin, so a second channel cannot ride on the first
+      [ "$(grep -cE '^[^;]*\(channel([[:space:]]|$)' "$f")" -le "$(grep -cE '\(commit "[0-9a-f]{40}"\)' "$f")" ] || { echo "a channel pins no commit"; return; }
+      # A repository whose only language is idris2 gets idris2 from the estate
+      # channel alone, so its channels.scm must name that channel and carry its
+      # introduction (commit and fingerprint). Other repositories are not checked.
+      if [ "${#LANGS[@]}" -eq 1 ] && [ "${LANGS[0]}" = idris2 ]; then
+        body=$(sed "s/;.*//" "$f")
+        grep -qE "\\(name .?$ESTATE_NAME\\)" <<<"$body" || { echo "idris2 repository: no estate channel ($ESTATE_NAME)"; return; }
+        grep -qF "\"$ESTATE_INTRO\"" <<<"$body" || { echo "idris2 repository: estate channel introduction commit missing"; return; }
+        grep -qF "\"$ESTATE_FPR\"" <<<"$body" || echo "idris2 repository: estate channel fingerprint missing"
+      fi
+      return ;;
   esac
   for k in name version source build-system home-page synopsis description license; do
     grep -qE "\\(${k}[[:space:]]" "$f" || miss="$miss$k "
@@ -668,7 +714,7 @@ cmd_setup() {
   local l
   for l in "${LANGS[@]}"; do
     case "$l" in
-      idris2) have pack || warn "pack not found — Idris2 comes from pack, not mise: $(lang_remedy idris2)" ;;
+      idris2) have idris2 || have pack || warn "idris2 not found — Idris2 comes from the estate Guix channel or pack, not mise: $(lang_remedy idris2)" ;;
       haskell) have ghcup || have ghc || warn "ghc not found — $(lang_remedy haskell)" ;;
       ocaml) have opam && { opam switch show >/dev/null 2>&1 || opam init -y --bare; } ;;
     esac
@@ -716,6 +762,12 @@ cmd_heal() {
 cmd_dev_shell() {
   local gm; gm=$(gpath manifest.scm)
   if have guix && [ -f "$gm" ] && ! grep -q '{{' "$gm"; then
+    local gc; gc=$(gpath channels.scm)
+    if grep -qE '^[^;]*\bidris2\b' "$gm" && [ -f "$gc" ] && ! grep -q '\{\{' "$gc"; then
+      # idris2 is only in the estate channel, so a plain `guix shell` cannot resolve it.
+      info "entering: guix time-machine -C $gc -- shell -m $gm  (exit to leave)"
+      exec guix time-machine -C "$gc" -- shell -m "$gm"
+    fi
     info "entering: guix shell -m $gm  (exit to leave)"
     exec guix shell -m "$gm"
   elif have mise; then
@@ -729,7 +781,8 @@ cmd_dev_shell() {
 # Print the 40-hex commit of the `guix` channel in a channels list read from
 # stdin (`guix describe --format=channels`), or nothing when there is none.
 guix_channel_commit() {
-  awk '/\(name .guix\)/ { g = 1 }
+  awk '/\(name .guix\)/ { g = 1; next }
+       /\(name / { g = 0 }
        g && match($0, /\(commit "[0-9a-f]{40}"\)/) { print substr($0, RSTART + 9, 40); exit }'
 }
 
@@ -741,6 +794,7 @@ repin_guix_channel() {
   tmp=$(mktemp) || return 1
   if awk -v pin="$pin" '
        /\(name .guix\)/ { g = 1 }
+       /\(name / && !/\(name .guix\)/ { g = 0 }
        g && !done && sub(/\(commit "[0-9a-f]{40}"\)/, "(commit \"" pin "\")") { done = 1 }
        { print }
        END { exit !done }' "$ch" > "$tmp"; then
@@ -750,7 +804,8 @@ repin_guix_channel() {
   fi
 }
 
-# Weekly toolchain refresh: bump mise pins and the lock, re-pin the Guix channel,
+# Weekly toolchain refresh: bump mise pins and the lock, re-pin the `guix` channel only
+# (the `estate` channel pin is canon-controlled, PROVISIONING-STANDARD §4),
 # regenerate build/guix/crates.scm when guix.scm loads it, then show the diff
 # for a signed commit.
 # Return 1 for missing mise or failed mise update, locking or crate regeneration.
@@ -770,7 +825,7 @@ cmd_toolchain_refresh() {
       if [ -z "$pin" ]; then
         warn "could not read the current guix channel commit — $ch left unchanged"
       elif repin_guix_channel "$ch" "$pin"; then
-        info "$ch: guix channel re-pinned to $pin"
+        info "$ch: guix channel re-pinned to $pin (the estate channel pin is canon-controlled and not moved here)"
       else
         warn "$ch has no (name 'guix) channel with a commit — left unchanged"
       fi

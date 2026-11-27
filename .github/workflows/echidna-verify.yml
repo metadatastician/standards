@@ -34,6 +34,7 @@ on:
       - '2-protocols/avow/avow-lib/src/abi/*.idr'
       - '1-formats/k9/spec/proofs/**'
       - '2-protocols/k9-coordination/tools/validate/proofs/**'
+      - '3-practice/fork-governance/proofs/**'
       - '.github/workflows/echidna-verify.yml'
   # NO path filter on pull_request, deliberately. It once existed because
   # `Idris2 - a2ml proofs` was recorded as a REQUIRED context; that is STALE —
@@ -84,7 +85,7 @@ jobs:
           base="${{ github.event.pull_request.base.sha }}"
           head="${{ github.event.pull_request.head.sha }}"
           changed=$(git diff --name-only "$base" "$head" 2>/dev/null || true)
-          if printf '%s\n' "$changed" | grep -qE '^(lol/proofs/|2-protocols/avow/avow-lib/src/abi/.*\.idr$|1-formats/k9/spec/proofs/|2-protocols/k9-coordination/tools/validate/proofs/|\.github/workflows/echidna-verify\.yml$)'; then
+          if printf '%s\n' "$changed" | grep -qE '^(lol/proofs/|2-protocols/avow/avow-lib/src/abi/.*\.idr$|1-formats/k9/spec/proofs/|2-protocols/k9-coordination/tools/validate/proofs/|3-practice/fork-governance/proofs/|\.github/workflows/echidna-verify\.yml$)'; then
             echo "proofs=true" >> "$GITHUB_OUTPUT"
           else
             echo "proofs=false" >> "$GITHUB_OUTPUT"
@@ -267,6 +268,7 @@ jobs:
       PROOFS: >-
         1-formats/k9/spec/proofs:HuntGate.idr
         2-protocols/k9-coordination/tools/validate/proofs:GrammarExtension.idr
+        3-practice/fork-governance/proofs:ReportBack.idr
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -340,6 +342,23 @@ jobs:
               echo "::error file=$dir/$file::idris2 reported an error but exited 0"; exit 1
             fi
           done
+
+      # The renderer is tied to ReportBack.idr by an exhaustive differential
+      # test (scripts/tests/report-back-model-test.sh) over the committed case
+      # table. That table must be what the proved model prints, so it is
+      # regenerated here from the model and compared byte for byte.
+      - name: Case table matches the ReportBack model
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd 3-practice/fork-governance/proofs
+          idris2 ReportBack.idr --exec main > "$RUNNER_TEMP/report-back-cases.tsv"
+          if ! cmp -s "$RUNNER_TEMP/report-back-cases.tsv" report-back-cases.tsv; then
+            echo "::error file=3-practice/fork-governance/proofs/report-back-cases.tsv::differs from what ReportBack.idr prints; regenerate it with: idris2 ReportBack.idr --exec main > report-back-cases.tsv"
+            diff "$RUNNER_TEMP/report-back-cases.tsv" report-back-cases.tsv | head -20
+            exit 1
+          fi
+          echo "report-back-cases.tsv: $(wc -l < report-back-cases.tsv) cases, as the model prints them" | tee -a "$GITHUB_WORKSPACE/idris2-standards.log"
 
       - name: Upload log
         if: always()

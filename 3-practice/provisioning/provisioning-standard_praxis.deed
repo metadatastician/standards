@@ -107,7 +107,13 @@
     :just-floor     "1.42.0"
     :guix-channels  "channels.scm"
     :guix-package   (rust "cargo-build-system" other "copy-build-system source package")
-    :guix-gaps      ("idris2" "gleam" "bun" "deno" "pnpm" "lychee"))
+    :guix-gaps      ("gleam" "bun" "deno" "pnpm" "lychee" "julia")
+    ;; idris2 comes from the estate Guix channel (channels.scm), pinned by canon.
+    :guix-estate-channel "https://github.com/hyperpolymath/guix-channel.git"
+    :guix-estate-name "estate"
+    :guix-estate-introduction "4b91d37a4bbb4bc8c16de791eb5bd2241fb26f4b"
+    :guix-estate-fingerprint "E0B3 6C1B 28F6 E9E0 A460  3F47 FE6E 34E9 F311 0F92"
+    :guix-estate-pin "d4c84bde7a728a4a5bbc6bf865ed45e983d01c6d")
 
   ;; ------------------------------------------------------------- slot tiers
   (slots
