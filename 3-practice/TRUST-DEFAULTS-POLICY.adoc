@@ -189,7 +189,7 @@ the rows marked *added* are the very likely companions.
 |===
 | Server | Role | Hardening baseline
 | Caddy | Default edge for small sites; automatic ACME | TLS 1.3, ECH, HTTP/3, headers via a shared snippet, `admin off` or loopback
-| Nginx | Reverse proxy and static origin | `server_tokens off`, TLS 1.2 minimum, OCSP stapling, `limit_req`, no `autoindex`
+| Nginx | Reverse proxy and static origin | `server_tokens off`, TLS 1.3 only, OCSP stapling, `limit_req`, no `autoindex`
 | Apache httpd | Legacy and PHP origins | `ServerTokens Prod`, `ServerSignature Off`, `mod_security` with the OWASP Core Rule Set, `AllowOverride None`
 | OpenLiteSpeed | High-throughput PHP origin | admin console on loopback only, LSAPI as non-root, same headers snippet
 | Cowboy / Bandit | Erlang and Elixir origins (Phoenix, boj-server MK2) | Bandit preferred for HTTP/2 and WebSocket; TLS by the proxy; `max_header_value_length` and request limits set
@@ -214,7 +214,7 @@ and toolchain surfaces are offered through `boj-server` with cartridges
 [cols="2,4", options="header"]
 |===
 | Record | Default
-| DNSSEC | Signed. Algorithm 13 (ECDSAP256SHA256) today; algorithm 15 (Ed25519) where the registrar accepts the DS. NSEC3 with opt-out off, or NSEC with minimal responses. DS published at the registrar; CDS/CDNSKEY on for automated rollover
+| DNSSEC | Signed. Algorithm 16 (Ed448) wherever the registrar and DNS host accept it. Every estate zone is Cloudflare-hosted, and Cloudflare signs with algorithm 13 (ECDSAP256SHA256) only, so all zones sit on the temporary register row `trust-defaults-dnssec-ed448` until signing moves to a self-hosted BIND 9 primary (algorithm 16) with Cloudflare as secondary. NSEC3 with opt-out off, or NSEC with minimal responses. DS published at the registrar; CDS/CDNSKEY on for automated rollover
 | ZONEMD | RFC 8976 digest in the apex, regenerated on every zone change (`zonemd: enabled`)
 | CAA | `issue` for the chosen CA with `accounturi` (ACME account binding) and `validationmethods`; `issuewild ";"` unless wildcards are designed in; `iodef mailto:` to the security contact
 | TLSA | DANE for every TLS service: `_443._tcp` usage 3 selector 1 matching 1 (current key) plus a usage 2 anchor for rollover; `_25._tcp` for MX hosts
@@ -310,7 +310,7 @@ detected by drift comparison.
 * *Token.* A scoped API token per zone with `Zone:DNS:Edit` and
   `Zone:Zone Settings:Edit` only, held as a CI secret, never in the repo.
 * *Edge settings under control.* Always Use HTTPS, HSTS (with preload),
-  minimum TLS 1.2, TLS 1.3 on, ECH on, HTTP/3 on, 0-RTT off unless measured
+  minimum TLS 1.3 (TLS 1.3 only), ECH on, HTTP/3 on, 0-RTT off unless measured
   safe, Opportunistic Encryption off (HTTPS-only makes it moot), Universal
   SSL with the ECDSA certificate first, Authenticated Origin Pulls, WAF
   managed rules plus the OWASP Core Rule Set, Bot Fight Mode, Email Routing
@@ -328,8 +328,8 @@ detected by drift comparison.
 [[tls]]
 == TLS, certificates and keys
 
-* TLS 1.3 preferred, 1.2 minimum, no CBC suites, no RSA key exchange.
-* Certificates are ECDSA P-256 (RSA only for a recorded legacy consumer);
+* TLS 1.3 only (CRYPTO-POLICY.adoc), no CBC suites, no RSA key exchange. Endpoints that still accept TLS 1.2 are registered as `trust-defaults-tls12-endpoints` until each is raised.
+* Certificates are ECDSA P-256 only (no RSA; CRYPTO-POLICY.adoc and the crypto exceptions register row `tls-certificates-ecdsa-p256`). Cloudflare Universal SSL also issues an RSA certificate, so zones on it are registered as `trust-defaults-universal-ssl-rsa` until they move to an ECDSA-only advanced or custom certificate. Certificates are
   issued by ACME with DNS-01 as the primary challenge (a scoped token that
   can write only `_acme-challenge`) and HTTP-01 as the fallback; CAA
   `accounturi` binds issuance to the ACME account; must-staple and OCSP
@@ -351,9 +351,9 @@ detected by drift comparison.
 | Protocol | Post-quantum position today | Trustfile status
 | TLS 1.3 | Hybrid `X25519MLKEM768` key exchange; certificates remain ECDSA (no CA issues ML-DSA certificates yet) | verified (config grep)
 | SSH | Hybrid `mlkem768x25519-sha256` or `sntrup761x25519-sha512` | verified (config grep)
-| Signatures on packages and releases | Hybrid Ed25519 + ML-DSA-87 (opsm already does this); SLSA provenance | verified where opsm is used
+| Signatures on packages and releases | Hybrid Ed448 + ML-DSA-87 (CRYPTO-POLICY.adoc); SLSA provenance. opsm signs Ed25519 + ML-DSA-87 today, and the exemplar Trustfile sets Ed25519 release keys; both move to Ed448 (`trust-defaults-release-signing-ed25519`) | declared until opsm and cerro-sign sign with Ed448
 | Encryption at rest | ML-KEM-1024 hybrid envelopes (opsm) | verified where opsm is used
-| DNSSEC | No deployed PQ algorithm; Ed25519 or ECDSA P-256 | declared
+| DNSSEC | No deployed PQ algorithm; Ed448 where accepted, else Ed25519 or ECDSA P-256 | declared
 | DKIM | No PQ algorithm; Ed25519 + RSA | declared
 | SSHFP, TLSA, CAA | Hashes of the above; no PQ change needed | n/a
 | WireGuard / VPN | Pre-shared key layer as the PQ hedge until a hybrid handshake ships | declared
@@ -796,8 +796,8 @@ default in opsm:
   same authority-watch approval path as standards changes, so a
   vulnerability in a dependency and a deprecation of an algorithm arrive at
   the owner through one queue;
-* hybrid Ed25519 + ML-DSA-87 signatures on every release artefact (opsm
-  already does this; the robustifier makes it available to any repo).
+* hybrid Ed448 + ML-DSA-87 signatures on every release artefact (opsm
+  signs Ed25519 + ML-DSA-87 today and moves to Ed448; the robustifier makes it available to any repo).
 
 [[robustifier]]
 == `rsr-robustifier`: the bolt-on module
