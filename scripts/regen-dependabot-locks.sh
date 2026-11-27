@@ -494,13 +494,16 @@ hook_sandbox_run() {
   [ -n "${HOOK_IMAGE:-}" ] || { echo "hook-prepare: HOOK_IMAGE is not set"; return 125; }
   chmod -R a+rwX "$tree" 2>/dev/null
   cname="hook-${name//[^A-Za-z0-9_.-]/_}-$$"
+  # The container's own scratch dir (its tmpfs), not a host path.
+  # hypatia: allow content_patterns/hardcoded_tmp -- path inside the hook container, mounted as a private tmpfs
+  local ctmp=/tmp
   # shellcheck disable=SC2016
   "${DOCKER_BIN:-docker}" run --rm --name "$cname" \
       --user 65534:65534 --cap-drop ALL \
       --security-opt no-new-privileges --pids-limit 512 --memory 2g \
       --read-only --tmpfs /tmp:rw,exec,size=512m \
       -v "$tree:/work:rw" -w /work \
-      -e POST_PIN_BUMP=1 -e HOME=/tmp/home -e TMPDIR=/tmp -e LANG=C.UTF-8 \
+      -e POST_PIN_BUMP=1 -e "HOME=$ctmp/home" -e "TMPDIR=$ctmp" -e LANG=C.UTF-8 \
       -e PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
       "$HOOK_IMAGE" \
       sh -c 'umask 0; mkdir -p "$HOME"; exec timeout --kill-after=10 "$0" bash "$1"' "$HOOK_TIMEOUT" "$HOOK_SCRIPT" \
