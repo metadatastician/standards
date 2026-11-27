@@ -356,6 +356,37 @@ has "a missing HOOK_IMAGE is an error, not an unsandboxed run" "HOOK_IMAGE is no
 out="$(GITHUB_ACTIONS=true HOOK_SANDBOX=none HOOK_DEFER_DIR="$DEFER" HOOK_RESULT_DIR="$WORK/res-sb4" hook_prepare 2>&1)"
 has "HOOK_SANDBOX=none is refused on a runner" "refused on a runner" "$(cat "$WORK"/res-sb4/*/hook.log 2>/dev/null)$out"
 
+# --- host git must not be steered by the runner's config or the hook's tree ---
+# A hook leaves files git cannot add (mode 000 owned by another uid on a runner;
+# simulated here, since the test may run as root): the add fails, and that must
+# be hook-error, not an ok with an empty change list.
+eval "$(declare -f hook_git | sed '1s/hook_git/hook_git_orig/')"
+GITADD_N=0
+hook_git() { if [ "$1" = add ]; then GITADD_N=$((GITADD_N + 1)); [ "$GITADD_N" -ge 2 ] && return 1; fi; hook_git_orig "$@"; }
+pipeline gadd "$GOOD_HOOK" "$ALLOW"
+expect "a failing git add after the hook is hook-error" "hook-error" "$(cat "$(res1)/status")"
+expect "…with no change list at all" no "$([ -s "$(res1)/changed.nul" ] && echo yes || echo no)"
+out="$(phase3)"; rc=$?
+has "…and phase 3 refuses it" "hook-refused: hook-error" "$out"
+expect "…failing the run" 1 "$rc"
+expect "…with nothing committed" yes "$(nothing_committed && echo yes || echo no)"
+eval "$(declare -f hook_git_orig | sed '1s/hook_git_orig/hook_git/')"; unset -f hook_git_orig
+
+# git is run with no global/system config, no hooks and no lfs filters.
+GITLOG="$WORK/git-env.log"; : > "$GITLOG"
+git() { { echo "GLOBAL=${GIT_CONFIG_GLOBAL:-unset} NOSYS=${GIT_CONFIG_NOSYSTEM:-unset} ARGS=$*"; } >> "$GITLOG"; command git "$@"; }
+export HOME_BAK="$HOME"
+pipeline gcfg "$GOOD_HOOK" "$ALLOW" >/dev/null
+unset -f git
+gl="$(cat "$GITLOG")"
+has "host git ignores the global config" "GLOBAL=/dev/null" "$gl"
+has "…and the system config" "NOSYS=1" "$gl"
+has "…runs no hooks" "core.hooksPath=/dev/null" "$gl"
+has "…and no lfs filter" "filter.lfs.clean=" "$gl"
+case "$(grep -c 'ARGS=.* add ' "$GITLOG")" in 0) bad "git add was not observed" ;; *) ok "…on every add" ;; esac
+n_bare="$(grep -c 'GLOBAL=unset.*ARGS=.*\(add -A -f\|diff --cached\)' "$GITLOG")"
+expect "…no add or diff ran with the runner's config" 0 "$n_bare"
+
 # --- credentials -----------------------------------------------------------
 forge t1
 out="$(REGEN_TOKENS="other=tok" HOOK_DEFER_DIR="$DEFER" HOOK_RESULT_DIR="$RES" hook_apply_main 2>&1)"; rc=$?

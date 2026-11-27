@@ -43,7 +43,7 @@ repository is refused as `bump-hook-not-deferred`, never given a PR with stale
 derived files.
 
 | `hook-prepare` | no
-| Runs each repository's hook in its OWN throwaway container (`docker run --rm --network none --user 65534:65534 --cap-drop ALL --security-opt no-new-privileges --read-only`), with `POST_PIN_BUMP=1`, a timeout (`HOOK_TIMEOUT`, default 300 s) and exactly one thing mounted: a copy of that repository's tree. The container sees no runner state, no other repository's tree or result, and no network. The image (`HOOK_IMAGE`) is pinned by digest and provides bash and coreutils only, so a hook may use nothing else. Records, per deferral, the status, the log, the list of changed paths with their modes, and the changed files, in a result directory named after the deferral. Writes the `hook-result` artifact.
+| Runs each repository's hook in its OWN throwaway container (`docker run --rm --network none --user 65534:65534 --cap-drop ALL --security-opt no-new-privileges --read-only`), with `POST_PIN_BUMP=1`, a timeout (`HOOK_TIMEOUT`, default 300 s) and exactly one thing mounted: a copy of that repository's tree. The container sees no runner state, no other repository's tree or result, and no network. The image (`HOOK_IMAGE`) is built in the job from a Debian bookworm-slim base pinned by digest, plus `jq`, `git` and `ca-certificates` from a dated `snapshot.debian.org` archive (see "The hook image"). Records, per deferral, the status, the log, the list of changed paths with their modes, and the changed files, in a result directory named after the deferral. Writes the `hook-result` artifact.
 
 | `hook-apply` | yes
 | Treats the result as untrusted and the `hook-defer` rows written by the token job as the authority: repo, owner and token come from them. Each deferral needs exactly one result directory of the same name whose `meta.tsv` is byte-identical to the deferral's; a result for another row, a missing result, or a result no deferral asked for fails the run. It re-derives the bump and the lock itself from
@@ -80,11 +80,17 @@ The hook is code from a repository that other people can push to, so it is treat
 * *Public artifacts.* `hook-defer` and `hook-result` hold a whole checkout and live in a workflow run of a public repository. A repository that is not public (private, internal, or one whose visibility cannot be read) is refused by name, `hook-refused-nonpublic`, before any hook runs.
 * *Authority.* Phase 3 trusts nothing the container produced, including its own row.
 
+== The hook image
+
+A hook may rely on: `bash`, the Debian base utilities (coreutils, grep, sed, awk, find, `sha256sum`, tar, `timeout`), `jq`, `git` and `ca-certificates`. Nothing else is installed: no network, no package manager at run time, no language runtimes. A hook that needs more must say so in a change to this page and the image.
+
+The image is built in `hook-prepare` while the network is up: `FROM` the bookworm-slim digest, then `apt-get install --no-install-recommends jq git ca-certificates` from `snapshot.debian.org/archive/debian/20261101T000000Z/`, tagged `post-pin-bump-hook:local`. A dated snapshot gives the same packages for the same inputs; apt verifies the snapshot's signed Release file (plain http is used because the base has no CA bundle yet). The installed versions are written to the job summary of every run. Moving the snapshot date or the base digest is an ordinary reviewed change. The hook container itself still runs with `--network none`.
+
 == What is not enforced
 
 State these plainly; do not claim more.
 
-* *The container runtime.* Isolation is as strong as Docker's on the hosted runner. A container escape is out of scope; the image is pinned by digest, not audited.
+* *The container runtime.* Isolation is as strong as Docker's on the hosted runner. A container escape is out of scope; the image is pinned (base by digest, packages by snapshot date), not audited.
 * *Network egress, in the other jobs.* They run on a hosted runner with the egress audit of `step-security/harden-runner` and no block. Only the hook phase is network-less.
 * *The phase-1 `github.token`.* `apply` holds the job's default `contents: read` token. Hook code never runs there.
 * *Byte content within allow-listed files.* The applier checks where a hook wrote

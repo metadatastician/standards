@@ -189,13 +189,37 @@ jobs:
         with:
           name: hook-defer
           path: ${{ runner.temp }}/hook-defer
+      # The hook image: the pinned Debian digest plus jq, git and ca-certificates
+      # from a dated snapshot.debian.org archive, so the same inputs give the same
+      # packages. Built here, while the network is up, and tagged locally. Apt
+      # verifies the snapshot's signed Release file against Debian's archive
+      # keyring, so plain http is fine (the image has no CA bundle yet). No
+      # repository code runs in this step; the hook container itself has no network.
+      - name: Build the hook image (pinned base, snapshot.debian.org packages)
+        run: |
+          set -euo pipefail
+          docker build --tag post-pin-bump-hook:local - <<'DOCKERFILE'
+          FROM public.ecr.aws/docker/library/debian@sha256:e67eeead736ff7bbe258ef088bff683635c561b1fcfefad0806c1df4ab49ce0e
+          RUN set -eux; \
+              printf 'Types: deb\nURIs: http://snapshot.debian.org/archive/debian/20261101T000000Z/\nSuites: bookworm\nComponents: main\nSigned-By: /usr/share/keyrings/debian-archive-keyring.gpg\n' > /etc/apt/sources.list.d/debian.sources; \
+              apt-get -o Acquire::Check-Valid-Until=false update; \
+              apt-get install -y --no-install-recommends jq git ca-certificates; \
+              rm -rf /var/lib/apt/lists/*; \
+              dpkg-query -W jq git ca-certificates
+          DOCKERFILE
+          {
+            echo '### Hook image packages'
+            echo '```'
+            docker run --rm --network none post-pin-bump-hook:local dpkg-query -W jq git ca-certificates
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
       - name: Run each repository's post-pin-bump hook (no App token in this job)
         env:
           HOOK_PHASE: prepare
           # Each hook runs in its own throwaway container: no network, no
           # capabilities, one tree mounted, none of this runner's state. The image
-          # is pinned by digest (Debian bookworm-slim: bash and coreutils only).
-          HOOK_IMAGE: public.ecr.aws/docker/library/debian@sha256:e67eeead736ff7bbe258ef088bff683635c561b1fcfefad0806c1df4ab49ce0e
+          # is the one built above.
+          HOOK_IMAGE: post-pin-bump-hook:local
           HOOK_DEFER_DIR: ${{ runner.temp }}/hook-defer
           HOOK_RESULT_DIR: ${{ runner.temp }}/hook-result
         run: bash scripts/regen-dependabot-locks.sh

@@ -476,8 +476,8 @@ defer_hook() {
 # what keeps a hostile hook from touching another repository's result, from
 # rewriting the runner's action code, and from reaching ACTIONS_RUNTIME_TOKEN
 # (and so the shared cache). $2 names the deferral. Exit status is the hook's;
-# 124/137 mean timed out. The image is $HOOK_IMAGE (pinned by digest in the
-# workflow); it provides bash and coreutils only, so a hook may use nothing else.
+# 124/137 mean timed out. The image is $HOOK_IMAGE (built in the workflow from a
+# digest-pinned base plus snapshot packages): bash, coreutils, jq, git, ca-certificates.
 # HOOK_SANDBOX=none runs the hook on the host and exists ONLY for the offline
 # tests: it is refused under GITHUB_ACTIONS.
 hook_sandbox_run() {
@@ -513,6 +513,16 @@ hook_sandbox_run() {
   return "$rc"
 }
 
+# git on a tree a hook has written: nothing from the runner's git config or the
+# tree itself may steer it (no global or system config, no hooks, no lfs
+# filters, no fsmonitor, no external attributes file).
+hook_git() {
+  GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 git \
+    -c core.hooksPath=/dev/null -c core.fsmonitor=false -c core.attributesFile=/dev/null \
+    -c filter.lfs.process= -c filter.lfs.smudge= -c filter.lfs.clean= -c filter.lfs.required=false \
+    "$@"
+}
+
 # PHASE 2 (hook-prepare): holds NO App token, and the job must not either. For
 # each deferral in $HOOK_DEFER_DIR, run the repository's hook on a copy of its
 # tree inside its own container (hook_sandbox_run; no network, one tree, no
@@ -545,8 +555,8 @@ hook_prepare() {
     # The baseline lives outside the tree, so the hook cannot rewrite what it is
     # compared against by editing the tree.
     export GIT_DIR="$t/git" GIT_WORK_TREE="$t/tree"
-    if ! { git init -q && git -c core.fsmonitor=false add -A -f \
-             && git -c user.name=x -c user.email=x@localhost commit -q -m base; }; then
+    if ! { hook_git init -q && hook_git add -A -f \
+             && hook_git -c user.name=x -c user.email=x@localhost commit -q -m base; }; then
       unset GIT_DIR GIT_WORK_TREE; echo "hook-error" > "$o/status"; rm -rf "$t"; continue
     fi
     hook_sandbox_run "$t/tree" "$(basename -- "${d%/}")" > "$t/hook.log" 2>&1
@@ -559,7 +569,13 @@ hook_prepare() {
     esac
     echo "$status" > "$o/status"
     if [ "$status" = ok ]; then
-      git -c core.fsmonitor=false add -A -f 2>/dev/null
+      # Fail closed: a hook can leave files git cannot read (mode 000, owned by
+      # another uid). A failed add or diff must not look like "no changes".
+      if ! hook_git add -A -f >/dev/null 2>"$t/git.err" \
+         || ! hook_git diff --cached --raw -z --no-renames HEAD > "$t/diff.raw" 2>>"$t/git.err"; then
+        echo "hook-error" > "$o/status"; head -c 2000 "$t/git.err" >> "$o/hook.log"
+        unset GIT_DIR GIT_WORK_TREE; rm -rf "$t"; continue
+      fi
       : > "$o/changed.nul"
       while IFS= read -r -d '' meta && IFS= read -r -d '' path; do
         mode="${meta#:* }"; mode="${mode%% *}"
@@ -569,7 +585,7 @@ hook_prepare() {
             mkdir -p "$o/files/$(dirname -- "$path")" && cp -- "$t/tree/$path" "$o/files/$path"
           fi ;;
         esac
-      done < <(git diff --cached --raw -z --no-renames HEAD)
+      done < "$t/diff.raw"
     fi
     unset GIT_DIR GIT_WORK_TREE
     rm -rf "$t"
