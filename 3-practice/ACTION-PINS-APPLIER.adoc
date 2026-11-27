@@ -43,13 +43,10 @@ repository is refused as `bump-hook-not-deferred`, never given a PR with stale
 derived files.
 
 | `hook-prepare` | no
-| Runs each repository's hook under `env -i` (a handful of variables, none from
-the job), `POST_PIN_BUMP=1`, a timeout (`HOOK_TIMEOUT`, default 300 s) and the
-tree as a copy. Records, per repository, the status, the log, the list of changed
-paths with their modes, and the changed files. Writes the `hook-result` artifact.
+| Runs each repository's hook in its OWN throwaway container (`docker run --rm --network none --user 65534:65534 --cap-drop ALL --security-opt no-new-privileges --read-only`), with `POST_PIN_BUMP=1`, a timeout (`HOOK_TIMEOUT`, default 300 s) and exactly one thing mounted: a copy of that repository's tree. The container sees no runner state, no other repository's tree or result, and no network. The image (`HOOK_IMAGE`) is pinned by digest and provides bash and coreutils only, so a hook may use nothing else. Records, per deferral, the status, the log, the list of changed paths with their modes, and the changed files, in a result directory named after the deferral. Writes the `hook-result` artifact.
 
 | `hook-apply` | yes
-| Treats the result as untrusted. It re-derives the bump and the lock itself from
+| Treats the result as untrusted and the `hook-defer` rows written by the token job as the authority: repo, owner and token come from them. Each deferral needs exactly one result directory of the same name whose `meta.tsv` is byte-identical to the deferral's; a result for another row, a missing result, or a result no deferral asked for fails the run. It re-derives the bump and the lock itself from
 the live default branch and uses nothing of the hook phase's tree. It reads the
 allow-list from the default-branch commit, never from the hook's tree, checks
 every changed path, copies only the allow-listed regular files into its own
@@ -63,7 +60,9 @@ Every refusal is loud: the outcome is named in the log and the run fails. A
 refusal commits nothing at all, not even the plain bump.
 
 * a hook that failed or timed out (`hook-refused: hook-failed rc=N`, `hook-timeout`);
-* a malformed result row (`hook-bad-meta`);
+* a result whose row differs from its deferral (`hook-result-mismatch`), a deferral with no result (`hook-result-missing`), a result no deferral asked for (`hook-result-extra`);
+* a bump PR that is already open (`bump-pr-open`) or a re-derivation that fails: the hook result is not applied, and the run fails rather than skipping quietly;
+* a malformed deferral row (`hook-bad-meta`);
 * a result for another head than the live default branch (`hook-stale-head`), or
   for pins that have moved since (`hook-stale-pins`);
 * a path not in `.github/post-pin-bump.paths` on the default branch;
@@ -73,15 +72,21 @@ refusal commits nothing at all, not even the plain bump.
 * a deletion, a symlink, a mode change, a file that is not a regular file or is
   reached through a symlink, a file over 1 MiB, or more than 200 changed paths.
 
+== Threat model
+
+The hook is code from a repository that other people can push to, so it is treated as hostile. Three things follow.
+
+* *No shared runner.* Running every hook as the runner user, on one runner, would let one repository's hook write another's result, tamper with its tree, or rewrite the runner's own action code (for example the `upload-artifact` JavaScript or `harden-runner`'s post step). A rewritten action runs in the next step with `ACTIONS_RUNTIME_TOKEN`, which is enough to poison this repository's `main` cache, and the governance, hypatia and fork-governance jobs restore that cache next to their tokens. `env -i` does not stop this. The per-deferral container does: it mounts one tree and nothing of the runner, so there is nothing to rewrite and no token to read.
+* *Public artifacts.* `hook-defer` and `hook-result` hold a whole checkout and live in a workflow run of a public repository. A repository that is not public (private, internal, or one whose visibility cannot be read) is refused by name, `hook-refused-nonpublic`, before any hook runs.
+* *Authority.* Phase 3 trusts nothing the container produced, including its own row.
+
 == What is not enforced
 
 State these plainly; do not claim more.
 
-* *Network egress.* The hook phase runs on a hosted runner with the egress audit
-  of `step-security/harden-runner` and no block. A hook can reach the network.
-* *The phase-1 `github.token`.* `apply` and the hook phase hold the job's default
-  `contents: read` token. Hook code does not see it (`env -i`, and the checkout
-  keeps no credentials), but the runner is not a sandbox.
+* *The container runtime.* Isolation is as strong as Docker's on the hosted runner. A container escape is out of scope; the image is pinned by digest, not audited.
+* *Network egress, in the other jobs.* They run on a hosted runner with the egress audit of `step-security/harden-runner` and no block. Only the hook phase is network-less.
+* *The phase-1 `github.token`.* `apply` holds the job's default `contents: read` token. Hook code never runs there.
 * *Byte content within allow-listed files.* The applier checks where a hook wrote
   and what kind of file it is, not what is in it. Allow-list only files whose
   content a reviewer will read in the PR.
@@ -91,7 +96,9 @@ State these plainly; do not claim more.
 `scripts/tests/post-pin-bump-hook-test.sh` runs the real hook through all three
 phases offline, with `gh` and the repair tools stubbed, and checks every refusal
 above, forged results included. `scripts/tests/regen-dependabot-locks-test.sh`
-covers the unchanged no-hook path.
+covers the unchanged no-hook path. The tests run the hook natively (`HOOK_SANDBOX=none`, refused on a runner) and check the container flags against a stub `docker`; they do not prove the isolation itself, which is Docker's.
+
+The token jobs install `gh-actions-lock` from its release binary, checked against a recorded sha256, not with `gh extension install --pin`: a tag can move.
 
 == Related
 

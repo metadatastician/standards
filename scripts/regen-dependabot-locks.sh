@@ -80,13 +80,14 @@
 # ---------------------------------------------------------------------
 # A repository with scripts/post-pin-bump.sh is not given a bump PR by the main
 # phase: bump_main DEFERS it (HOOK_DEFER_DIR). HOOK_PHASE=prepare runs the hook
-# with no token; HOOK_PHASE=apply treats the result as untrusted, re-derives the
+# with no token, one container per deferral; HOOK_PHASE=apply takes the deferrals as
+# the authority (one result each, identical row), treats the result as untrusted, re-derives the
 # bump, and commits only the paths .github/post-pin-bump.paths allows. Every
 # refusal is loud and fails the run. See 3-practice/ACTION-PINS-APPLIER.adoc.
 #
 # Usage: regen-dependabot-locks.sh [owner/repo]     (default: every repo the
 #        installations can see).  DRY_RUN=1 regenerates but never commits.
-# Env:   REGEN_TOKENS, DRY_RUN, REGEN_MAIN, BUMP_PINS, HOOK_DEFER_DIR, HOOK_RESULT_DIR, GH_BIN (test stub), REGEN_TOOLS (dir
+# Env:   REGEN_TOKENS, DRY_RUN, REGEN_MAIN, BUMP_PINS, HOOK_DEFER_DIR, HOOK_RESULT_DIR, HOOK_IMAGE, HOOK_SANDBOX (none: tests only), DOCKER_BIN, GH_BIN (test stub), REGEN_TOOLS (dir
 #        holding the repair scripts; default: this script's directory).
 set -uo pipefail
 
@@ -333,7 +334,8 @@ BUMP_PINS_HEADLINE="chore(deps): bump third-party action pins and actions.lock t
 # App token exists, so a hook repo is split across three jobs:
 #   apply         (token, no repo code)   bumps and relocks, then DEFERS the repo:
 #                                         tree + meta go into $HOOK_DEFER_DIR.
-#   hook-prepare  (NO token)              runs the hook under `env -i`, with a
+#   hook-prepare  (NO token)              runs each hook in its own network-less
+#                                         container (hook_sandbox_run), with a
 #                                         timeout, POST_PIN_BUMP=1 and no args, and
 #                                         writes what it changed to $HOOK_RESULT_DIR.
 #   hook-apply    (token, no repo code)   treats that result as UNTRUSTED: re-derives
@@ -407,7 +409,7 @@ derive_bump() {
 # is deferred to the hook phases instead of getting a PR here. Prints
 # "repo@branch<TAB>outcome".
 bump_main() {
-  local repo="$1" prs="$2" outcome body p
+  local repo="$1" prs="$2" outcome body p vis
   local -a paths=()
   if printf '%s' "$prs" | jq -e --arg b "$BUMP_PR_BRANCH" \
        'any(.[]; .head.ref == $b and .head.repo.full_name == .base.repo.full_name)' >/dev/null; then
@@ -418,6 +420,15 @@ bump_main() {
     # A hook repo never gets a PR from this phase: its derived files must be
     # regenerated first. Without a deferral directory that cannot happen, so
     # say so rather than open a PR whose derived files are stale.
+    # The deferral is the whole checkout in a workflow artifact of this PUBLIC
+    # repository. Only a public repository may be deferred; a private or
+    # internal one (or one whose visibility cannot be read) is refused by name.
+    vis="$("$GH_BIN" api "repos/$repo" --jq .visibility 2>/dev/null)" || vis=unknown
+    if [ "$vis" != public ]; then
+      echo "::error::hook-refused-nonpublic: $repo is not public; its hook was NOT run and no PR was opened"
+      printf '%s@%s\thook-refused-nonpublic: visibility is %s; its tree would be published in a public artifact\n' "$repo" "$DB_BASE" "${vis:-unknown}"
+      rm -rf "$DB_WORK"; return 0
+    fi
     if [ "${DRY_RUN:-0}" = 1 ]; then
       printf '%s@%s\twould-bump %s (hook: deferred)\n' "$repo" "$DB_BASE" "$DB_N"
     elif [ -z "${HOOK_DEFER_DIR:-}" ]; then
@@ -458,10 +469,55 @@ defer_hook() {
   rm -rf "$d"; return 1
 }
 
+# Run one repository's hook in its own throwaway container. The container sees
+# ONLY the copy of that one tree ($1, mounted at /work): no network, no
+# capabilities, no setuid escalation, an unprivileged uid, no runner state
+# ($RUNNER_TEMP, _actions, other deferrals, the Actions runtime token). That is
+# what keeps a hostile hook from touching another repository's result, from
+# rewriting the runner's action code, and from reaching ACTIONS_RUNTIME_TOKEN
+# (and so the shared cache). $2 names the deferral. Exit status is the hook's;
+# 124/137 mean timed out. The image is $HOOK_IMAGE (pinned by digest in the
+# workflow); it provides bash and coreutils only, so a hook may use nothing else.
+# HOOK_SANDBOX=none runs the hook on the host and exists ONLY for the offline
+# tests: it is refused under GITHUB_ACTIONS.
+hook_sandbox_run() {
+  local tree="$1" name="$2" cname rc
+  if [ "${HOOK_SANDBOX:-docker}" = none ]; then
+    if [ "${GITHUB_ACTIONS:-}" = true ]; then
+      echo "hook-prepare: HOOK_SANDBOX=none is refused on a runner"; return 125
+    fi
+    ( cd "$tree" && env -i PATH=/usr/local/bin:/usr/bin:/bin HOME="$tree/.." LANG=C.UTF-8 POST_PIN_BUMP=1 \
+        timeout --kill-after=10 "$HOOK_TIMEOUT" bash "$HOOK_SCRIPT" </dev/null )
+    return $?
+  fi
+  [ -n "${HOOK_IMAGE:-}" ] || { echo "hook-prepare: HOOK_IMAGE is not set"; return 125; }
+  chmod -R a+rwX "$tree" 2>/dev/null
+  cname="hook-${name//[^A-Za-z0-9_.-]/_}-$$"
+  # shellcheck disable=SC2016
+  "${DOCKER_BIN:-docker}" run --rm --name "$cname" \
+      --network none --user 65534:65534 --cap-drop ALL \
+      --security-opt no-new-privileges --pids-limit 512 --memory 2g \
+      --read-only --tmpfs /tmp:rw,exec,size=512m \
+      -v "$tree:/work:rw" -w /work \
+      -e POST_PIN_BUMP=1 -e HOME=/tmp -e LANG=C.UTF-8 \
+      -e PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+      "$HOOK_IMAGE" \
+      sh -c 'umask 0; exec timeout --kill-after=10 "$0" bash "$1"' "$HOOK_TIMEOUT" "$HOOK_SCRIPT" \
+      </dev/null &
+  local pid=$!
+  # Outer guard: if the container ignores its own timeout, remove it.
+  ( sleep $((HOOK_TIMEOUT + 30)); "${DOCKER_BIN:-docker}" rm -f "$cname" >/dev/null 2>&1 ) &
+  local guard=$!
+  wait "$pid"; rc=$?
+  kill "$guard" 2>/dev/null; wait "$guard" 2>/dev/null
+  return "$rc"
+}
+
 # PHASE 2 (hook-prepare): holds NO App token, and the job must not either. For
 # each deferral in $HOOK_DEFER_DIR, run the repository's hook on a copy of its
-# tree under `env -i` (PATH, HOME, LANG and POST_PIN_BUMP=1 only; no arguments;
-# $HOOK_TIMEOUT seconds) and write to $HOOK_RESULT_DIR/<n>/:
+# tree inside its own container (hook_sandbox_run; no network, one tree, no
+# arguments; $HOOK_TIMEOUT seconds) and write to $HOOK_RESULT_DIR/<deferral>/,
+# named after the deferral directory:
 #   meta.tsv    the deferral's meta, copied
 #   status      ok | no-hook | hook-failed rc=N | hook-timeout | hook-error
 #   hook.log    the hook's output, truncated
@@ -476,7 +532,7 @@ hook_prepare() {
   mkdir -p "$out" || return 1
   for d in "$in"/*/; do
     [ -d "$d" ] || continue
-    n=$((n + 1)); o="$out/$n"; mkdir -p "$o/files"
+    n=$((n + 1)); o="$out/$(basename -- "${d%/}")"; mkdir -p "$o/files"
     if [ ! -f "$d/meta.tsv" ] || [ ! -f "$d/tree.tar" ]; then
       echo "hook-error" > "$o/status"; echo "hook-prepare: deferral $d is malformed"; continue
     fi
@@ -493,8 +549,7 @@ hook_prepare() {
              && git -c user.name=x -c user.email=x@localhost commit -q -m base; }; then
       unset GIT_DIR GIT_WORK_TREE; echo "hook-error" > "$o/status"; rm -rf "$t"; continue
     fi
-    ( cd "$t/tree" && env -i PATH=/usr/local/bin:/usr/bin:/bin HOME="$t/home" LANG=C.UTF-8 POST_PIN_BUMP=1 \
-        timeout --kill-after=10 "$HOOK_TIMEOUT" bash "$HOOK_SCRIPT" </dev/null ) > "$t/hook.log" 2>&1
+    hook_sandbox_run "$t/tree" "$(basename -- "${d%/}")" > "$t/hook.log" 2>&1
     rc=$?
     head -c 20000 "$t/hook.log" > "$o/hook.log"
     case "$rc" in
@@ -604,12 +659,16 @@ hook_allowed() {
 # GH_TOKEN. Prints "repo@branch<TAB>outcome" and returns 1 when the outcome is a
 # refusal that must fail the run.
 hook_apply_repo() {
-  local res="$1" repo base sha pins status prs allow n=0 mode path root size tmode want outcome body
+  local def="$1" res="$2" repo base sha pins status prs allow n=0 mode path root size tmode want outcome body
   local -a paths=() hookpaths=()
-  IFS=$'\t' read -r repo base sha pins < "$res/meta.tsv" || { printf 'unknown\thook-bad-meta\n'; return 1; }
+  # The deferral row is authoritative; the result row must be byte-identical.
+  IFS=$'\t' read -r repo base sha pins < "$def/meta.tsv" || { printf 'unknown\thook-bad-meta\n'; return 1; }
   if ! { [[ "$repo" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] && [[ "$sha" =~ ^[0-9a-f]{40}$ ]] \
          && [[ "$pins" =~ ^[0-9a-f]{64}$ ]]; }; then
     printf 'unknown\thook-bad-meta\n'; return 1
+  fi
+  if ! cmp -s "$def/meta.tsv" "$res/meta.tsv"; then
+    printf '%s\thook-result-mismatch: the result row differs from the deferral\n' "$repo"; return 1
   fi
   status="$(head -c 100 "$res/status" 2>/dev/null)"
   if [ "$status" != ok ]; then printf '%s\thook-refused: %s\n' "$repo" "${status:-no status}"; return 1; fi
@@ -619,10 +678,10 @@ hook_apply_repo() {
   prs="$(printf '%s' "$prs" | jq -s 'add // []')"
   if printf '%s' "$prs" | jq -e --arg b "$BUMP_PR_BRANCH" \
        'any(.[]; .head.ref == $b and .head.repo.full_name == .base.repo.full_name)' >/dev/null; then
-    printf '%s@%s\tbump-pr-open\n' "$repo" "$base"; return 0
+    printf '%s@%s\tbump-pr-open: a bump PR is already open, so the hook result was NOT applied\n' "$repo" "$base"; return 1
   fi
   # Re-derive. Nothing of the hook phase's tree is used: only its result files.
-  derive_bump "$repo" || { printf '%s\n' "$DB_OUT"; return 0; }
+  derive_bump "$repo" || { printf '%s\n' "$DB_OUT"; return 1; }
   root="$DB_WORK/r"
   if [ "$DB_SHA" != "$sha" ]; then
     printf '%s@%s\thook-stale-head\n' "$repo" "$DB_BASE"; rm -rf "$DB_WORK"; return 1
@@ -702,25 +761,46 @@ $(printf -- '- %s\n' "${hookpaths[@]}")"
   case "$outcome" in pr-opened*) return 0 ;; *) return 1 ;; esac
 }
 
-# PHASE 3 driver: every result under $HOOK_RESULT_DIR, each with its owner's
-# token from REGEN_TOKENS. Any refusal is printed as an ::error:: and makes the
-# run fail; nothing partial is ever pushed.
+# PHASE 3 driver. The deferral directories in $HOOK_DEFER_DIR (downloaded from
+# the token job's own artifact) are the authority: repo, owner and token come
+# from them, never from a result. Each deferral needs exactly one result
+# directory of the same name whose meta.tsv is byte-identical; a missing,
+# duplicate (a result name that is not a deferral, or a second result for one)
+# or extra result is a loud failure. Any refusal is printed as an ::error:: and
+# makes the run fail; nothing partial is ever pushed.
 hook_apply_main() {
-  local res tokens="${REGEN_TOKENS:-}" pair repo owner token failed=0 n=0 line
-  local -A tok=()
-  local out="${HOOK_RESULT_DIR:?HOOK_RESULT_DIR is not set}"
+  local def res name tokens="${REGEN_TOKENS:-}" pair repo owner token failed=0 n=0 line r
+  local -A tok=() want=()
+  local in="${HOOK_DEFER_DIR:?HOOK_DEFER_DIR is not set}" out="${HOOK_RESULT_DIR:?HOOK_RESULT_DIR is not set}"
   for pair in $tokens; do [ -n "${pair#*=}" ] && tok["${pair%%=*}"]="${pair#*=}"; done
-  for res in "$out"/*/; do
-    [ -d "$res" ] || continue
-    n=$((n + 1))
-    repo="$(cut -f1 "$res/meta.tsv" 2>/dev/null | head -c 200)"
+  for def in "$in"/*/; do
+    [ -d "$def" ] || continue
+    want["$(basename -- "${def%/}")"]=1
+  done
+  # Anything in the result that no deferral asked for.
+  for r in "$out"/* "$out"/.[!.]*; do
+    [ -e "$r" ] || [ -L "$r" ] || continue
+    name="$(basename -- "$r")"
+    if [ -z "${want[$name]:-}" ]; then
+      echo "::error::hook-apply: hook-result-extra: result '${name//[^A-Za-z0-9_.-]/?}' matches no deferral"
+      failed=1
+    fi
+  done
+  for def in "$in"/*/; do
+    [ -d "$def" ] || continue
+    n=$((n + 1)); name="$(basename -- "${def%/}")"; res="$out/$name"
+    repo="$(cut -f1 "$def/meta.tsv" 2>/dev/null | head -c 200)"
     owner="${repo%%/*}"; token="${tok[$owner]:-}"
+    if [ -L "$res" ] || [ ! -d "$res" ]; then
+      echo "::error::hook-apply: hook-result-missing: no result for deferral '$name' (${repo//[[:cntrl:]]/?})"
+      failed=1; continue
+    fi
     if [ -z "$token" ]; then
       echo "::error::hook-apply: no installation token for '${owner//[[:cntrl:]]/?}'; ${repo//[[:cntrl:]]/?} NOT processed"
       failed=1; continue
     fi
     export GH_TOKEN="$token"
-    line="$(hook_apply_repo "${res%/}")" || { failed=1; echo "::error::hook-apply: $line"; continue; }
+    line="$(hook_apply_repo "${def%/}" "$res")" || { failed=1; echo "::error::hook-apply: $line"; continue; }
     printf '%s\n' "$line"
   done
   echo "hook-apply: $n deferral(s) examined"

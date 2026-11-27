@@ -57,9 +57,9 @@ STUB
 cat > "$WORK/gh" <<'EOF'
 #!/usr/bin/env bash
 if [ "$1" = actions-lock ]; then echo "  - 'a/b@v2'" >> .github/workflows/actions.lock; exit 0; fi
-if [ "$1 $2" = "api --paginate" ] && [[ "$3" == repos/*/pulls\?* ]]; then echo '[]'; exit 0; fi
+if [ "$1 $2" = "api --paginate" ] && [[ "$3" == repos/*/pulls\?* ]]; then echo "${PRS_JSON:-[]}"; exit 0; fi
 if [ "$1 $2" = "api graphql" ]; then cat > "$GH_CAPTURE"; echo "graphql" >> "$GH_LOG"; echo 2222222222222222222222222222222222222222; exit 0; fi
-if [ "$1" = api ] && [ "$2" = repos/o/r ] && [ "$3" = --jq ]; then echo main; exit 0; fi
+if [ "$1" = api ] && [ "$2" = repos/o/r ] && [ "$3" = --jq ]; then case "$4" in .visibility) echo "${VIS:-public}" ;; *) echo main ;; esac; exit 0; fi
 if [ "$1" = api ] && [[ "$2" == repos/o/r/commits/* ]]; then
   case "${4:-}" in *author*) echo 'estate-applier[bot]' ;; *) echo "$MAIN_SHA" ;; esac; exit 0
 fi
@@ -69,6 +69,7 @@ exit 1
 EOF
 chmod +x "$WORK/gh"
 export GH_BIN="$WORK/gh" REGEN_TOOLS="$TOOLS" GH_CAPTURE="$WORK/payload.json" GH_LOG="$WORK/gh.log" APPLIER_SLUG=estate-applier
+export HOOK_SANDBOX=none
 
 # shellcheck source=../regen-dependabot-locks.sh
 source "$TARGET"
@@ -108,7 +109,8 @@ pipeline() {
   HOOK_DEFER_DIR="$DEFER" HOOK_RESULT_DIR="$RES" hook_prepare >/dev/null 2>&1
 }
 # phase3 [env...]: run phase 3 on $RES with a token for owner o.
-phase3() { ( for a in "$@"; do export "${a?}"; done; REGEN_TOKENS="o=tok" HOOK_RESULT_DIR="$RES" hook_apply_main 2>&1 ); }
+res1() { find "$RES" -mindepth 1 -maxdepth 1 -type d | head -1; }
+phase3() { ( for a in "$@"; do export "${a?}"; done; REGEN_TOKENS="o=tok" HOOK_DEFER_DIR="$DEFER" HOOK_RESULT_DIR="$RES" hook_apply_main 2>&1 ); }
 commit_paths() { jq -r '.variables.in.fileChanges.additions | map(.path) | sort | join(",")' "$GH_CAPTURE" 2>/dev/null; }
 n_calls() { grep -c "^$1\$" "$GH_LOG" 2>/dev/null || true; }
 nothing_committed() { [ ! -e "$GH_CAPTURE" ] && [ "$(n_calls graphql)" = 0 ] && [ "$(n_calls POST-PR)" = 0 ]; }
@@ -143,7 +145,7 @@ ENVHOOK='{ echo "argc=$#"; echo "pbb=${POST_PIN_BUMP:-}"; echo "tok=${GH_TOKEN:-
 export SECRET_THING=leak GH_TOKEN=leak GITHUB_TOKEN=leak
 pipeline p2 "$ENVHOOK" "$ALLOW"
 unset SECRET_THING GH_TOKEN GITHUB_TOKEN
-r1="$RES/1"
+r1="$(res1)"
 expect "the hook ran and was ok" ok "$(cat "$r1/status")"
 got="$(cat "$r1/files/deps.lock")"
 has "the hook got POST_PIN_BUMP=1" "pbb=1" "$got"
@@ -154,7 +156,7 @@ expect "…its whole environment is a handful of variables" yes "$([ "$(tail -1 
 expect "a changed path is recorded with its mode" "100644 deps.lock" "$(tr '\0' ' ' < "$r1/changed.nul" | sed 's/ $//')"
 
 pipeline p2fail 'echo oops; exit 3' "$ALLOW"
-expect "a failing hook is recorded, with its code" "hook-failed rc=3" "$(cat "$RES/1/status")"
+expect "a failing hook is recorded, with its code" "hook-failed rc=3" "$(cat "$(res1)/status")"
 out="$(phase3)"; rc=$?
 has "…and phase 3 refuses it loudly" "hook-refused: hook-failed rc=3" "$out"
 expect "…failing the run" 1 "$rc"
@@ -162,12 +164,12 @@ expect "…with nothing committed" yes "$(nothing_committed && echo yes || echo 
 
 pipeline p2slow 'sleep 20' "$ALLOW" >/dev/null
 HOOK_TIMEOUT=1 HOOK_DEFER_DIR="$DEFER" HOOK_RESULT_DIR="$WORK/res-p2slow-b" hook_prepare >/dev/null 2>&1
-expect "a hook that runs too long is killed and recorded" "hook-timeout" "$(cat "$WORK/res-p2slow-b/1/status")"
+expect "a hook that runs too long is killed and recorded" "hook-timeout" "$(cat "$(find "$WORK/res-p2slow-b" -mindepth 2 -maxdepth 2 -name status | head -1)")"
 
 pipeline p2mix 'echo n > deps.lock; echo created > docs/new.txt; rm docs/keep.txt; ln -s /etc/passwd link; chmod +x deps.lock' "$ALLOW"
 expect "adds, edits, deletions and symlinks are all recorded" "000000 docs/keep.txt|100644 docs/new.txt|100755 deps.lock|120000 link" \
-  "$(tr '\0' '\n' < "$RES/1/changed.nul" | paste -d' ' - - | sort | paste -sd'|')"
-expect "…a symlink's target is never copied into the result" no "$([ -e "$RES/1/files/link" ] && echo yes || echo no)"
+  "$(tr '\0' '\n' < "$(res1)/changed.nul" | paste -d' ' - - | sort | paste -sd'|')"
+expect "…a symlink's target is never copied into the result" no "$([ -e "$(res1)/files/link" ] && echo yes || echo no)"
 
 # === phase 3: hook-apply ====================================================
 pipeline ok "$GOOD_HOOK" "$ALLOW"
@@ -222,32 +224,32 @@ has "…but not a sibling that merely shares the name" "not in .github/post-pin-
 forge() { # forge <name>: a good result to tamper with
   pipeline "$1" "$GOOD_HOOK" "$ALLOW"; : > "$GH_LOG"; rm -f "$GH_CAPTURE"
 }
-forge f1; printf '100644\0../escape\0' > "$RES/1/changed.nul"; echo pwn > "$RES/escape"
+forge f1; printf '100644\0../escape\0' > "$(res1)/changed.nul"; echo pwn > "$RES/escape"
 out="$(phase3)"
 has "a forged traversal path is refused" "path not allowed" "$out"
 expect "…and nothing committed" yes "$(nothing_committed && echo yes || echo no)"
 
-forge f2; rm "$RES/1/files/deps.lock"; ln -s /etc/hostname "$RES/1/files/deps.lock"
+forge f2; rm "$(res1)/files/deps.lock"; ln -s /etc/hostname "$(res1)/files/deps.lock"
 out="$(phase3)"
 has "a symlink planted in the result files is refused" "unreadable or symlinked: deps.lock" "$out"
 expect "…and nothing committed" yes "$(nothing_committed && echo yes || echo no)"
 
-forge f3; rm -rf "$RES/1/files"; mkdir -p "$WORK/elsewhere"; echo big > "$WORK/elsewhere/deps.lock"; ln -s "$WORK/elsewhere" "$RES/1/files"
+forge f3; rm -rf "$(res1)/files"; mkdir -p "$WORK/elsewhere"; echo big > "$WORK/elsewhere/deps.lock"; ln -s "$WORK/elsewhere" "$(res1)/files"
 out="$(phase3)"
 has "a symlinked files/ directory is refused" "unreadable or symlinked: deps.lock" "$out"
 
-forge f4; printf '100644\0docs/injected.txt\0' > "$RES/1/changed.nul"; mkdir -p "$RES/1/files/docs"; echo i > "$RES/1/files/docs/injected.txt"
+forge f4; printf '100644\0docs/injected.txt\0' > "$(res1)/changed.nul"; mkdir -p "$(res1)/files/docs"; echo i > "$(res1)/files/docs/injected.txt"
 out="$(phase3)"
 has "a path the allow-list on the default branch does not name is refused, whatever the result says" "not in .github/post-pin-bump.paths: docs/injected.txt" "$out"
 
-forge f5; echo "ok" > "$RES/1/status"; printf 'o/r\tmain\t%s\tnothex\n' "$MAIN_SHA" > "$RES/1/meta.tsv"
+forge f5; echo "ok" > "$(res1)/status"; printf 'o/r\tmain\t%s\tnothex\n' "$MAIN_SHA" | tee "$DEFER"/*/meta.tsv > "$(res1)/meta.tsv"
 out="$(phase3)"
 has "a malformed meta row is refused" "hook-bad-meta" "$out"
-forge f5b; printf 'o/r; rm -rf /\tmain\t%s\t%s\n' "$MAIN_SHA" "$(printf '0%.0s' $(seq 64))" > "$RES/1/meta.tsv"
+forge f5b; printf 'o/r; rm -rf /\tmain\t%s\t%s\n' "$MAIN_SHA" "$(printf '0%.0s' $(seq 64))" | tee "$DEFER"/*/meta.tsv > "$(res1)/meta.tsv"
 out="$(phase3)"
 has "a repo name with shell metacharacters is refused" "hook-bad-meta" "$out"
 
-forge f6; sed -i "s/$MAIN_SHA/3333333333333333333333333333333333333333/" "$RES/1/meta.tsv"
+forge f6; sed -i "s/$MAIN_SHA/3333333333333333333333333333333333333333/" "$(res1)/meta.tsv" "$DEFER"/*/meta.tsv
 out="$(phase3)"
 has "a result for another head is stale" "hook-stale-head" "$out"
 expect "…and nothing committed" yes "$(nothing_committed && echo yes || echo no)"
@@ -257,13 +259,106 @@ out="$(phase3 BUMP_ACTION=edit2)"
 has "a result for pins that have since moved is stale" "hook-stale-pins" "$out"
 expect "…and nothing committed" yes "$(nothing_committed && echo yes || echo no)"
 
-forge f8; : > "$RES/1/status"
+forge f8; : > "$(res1)/status"
 out="$(phase3)"
 has "a result with no status is refused" "hook-refused" "$out"
 
+# --- reconciliation against the authoritative deferral ----------------------
+forge s1; d_a="$(find "$DEFER" -mindepth 1 -maxdepth 1 -type d | head -1)"; d_b="$DEFER/d.OTHER"
+mkdir -p "$d_b"; cp "$d_a/tree.tar" "$d_b/"; sed 's#^o/r#o/s#' "$d_a/meta.tsv" > "$d_b/meta.tsv"
+cp "$d_b/meta.tsv" "$(res1)/meta.tsv"
+out="$(phase3)"; rc=$?
+has "a result carrying another deferred repo's row is refused" "hook-result-mismatch" "$out"
+has "…and the deferral without a result is named" "hook-result-missing" "$out"
+expect "…failing the run" 1 "$rc"
+expect "…with nothing committed" yes "$(nothing_committed && echo yes || echo no)"
+
+forge s2; rm -rf "$(res1)"
+out="$(phase3)"; rc=$?
+has "a missing result is a loud failure" "hook-result-missing" "$out"
+expect "…failing the run" 1 "$rc"
+expect "…with nothing committed" yes "$(nothing_committed && echo yes || echo no)"
+
+forge s3; rr="$(res1)"; mkdir -p "$RES/0"; cp "$rr/meta.tsv" "$RES/0/meta.tsv"
+out="$(phase3)"; rc=$?
+has "an extra result (a name no deferral asked for) is named" "hook-result-extra: result '0'" "$out"
+expect "…and fails the run" 1 "$rc"
+
+forge s4; rr="$(res1)"; cp -r "$rr" "$RES/dup"
+out="$(phase3)"; rc=$?
+has "a duplicate of a real result under another name is extra" "hook-result-extra: result 'dup'" "$out"
+expect "…and fails the run" 1 "$rc"
+
+forge s5; rr="$(res1)"; ln -s "$rr" "$RES/linked"
+out="$(phase3)"; rc=$?
+has "a symlinked result entry is extra" "hook-result-extra: result 'linked'" "$out"
+
+forge s6; mv "$(res1)" "$RES/0"
+out="$(phase3)"; rc=$?
+has "a result named 0 does not stand in for a deferral" "hook-result-missing" "$out"
+has "…and is itself extra" "hook-result-extra: result '0'" "$out"
+
+forge s7
+out="$(phase3 PRS_JSON='[{"head":{"ref":"'"$BUMP_PR_BRANCH"'","repo":{"full_name":"o/r"}},"base":{"repo":{"full_name":"o/r"}}}]')"; rc=$?
+has "an already-open bump PR is a loud failure, not a quiet skip" "bump-pr-open: a bump PR is already open" "$out"
+expect "…failing the run" 1 "$rc"
+
+forge s8
+out="$(phase3 BUMP_ACTION=none)"; rc=$?
+expect "a re-derivation that finds nothing to bump fails the run" 1 "$rc"
+
+# --- a private or internal repository is never deferred ----------------------
+for v in private internal unknownvalue; do
+  FIXTURE="$(fixture priv "$GOOD_HOOK" "$ALLOW")"; MAIN_SHA="$(git -C "$FIXTURE" rev-parse HEAD)"; export MAIN_SHA
+  : > "$GH_LOG"; rm -f "$GH_CAPTURE"; rm -rf "$WORK/defer-priv"; mkdir -p "$WORK/defer-priv"
+  out="$(VIS=$v HOOK_DEFER_DIR="$WORK/defer-priv" bump_main o/r '[]' 2>&1)"
+  has "a $v repository with a hook is refused by name" "hook-refused-nonpublic: visibility is $v" "$out"
+  expect "…nothing was deferred ($v)" 0 "$(find "$WORK/defer-priv" -mindepth 1 | wc -l | tr -d ' ')"
+  expect "…and nothing committed ($v)" yes "$(nothing_committed && echo yes || echo no)"
+done
+
+# --- the sandbox: what the container is allowed to see ----------------------
+cat > "$WORK/docker" <<'EOS'
+#!/usr/bin/env bash
+# Stub: log argv, then run the in-container command natively on the mounted tree.
+printf '%s\n' "$@" > "$DOCKER_LOG"
+[ "$1" = run ] || exit 0
+src=""; args=("$@"); i=0
+while [ $i -lt ${#args[@]} ]; do
+  [ "${args[$i]}" = -v ] && src="${args[$((i+1))]%%:*}"
+  i=$((i+1))
+done
+cd "$src" || exit 125
+# the command is everything after the image
+img=""; for i in "${!args[@]}"; do case "${args[$i]}" in "$HOOK_IMAGE") img=$i ;; esac; done
+rest=("${args[@]:$((img+1))}")
+exec env -i PATH=/usr/bin:/bin POST_PIN_BUMP=1 HOME=/tmp "${rest[@]}"
+EOS
+chmod +x "$WORK/docker"
+export DOCKER_LOG="$WORK/docker.log"
+pipeline sb "$GOOD_HOOK" "$ALLOW" >/dev/null
+rm -rf "$WORK/res-sb2"
+HOOK_SANDBOX=docker DOCKER_BIN="$WORK/docker" HOOK_IMAGE="img@sha256:$(printf 'a%.0s' $(seq 64))" HOOK_DEFER_DIR="$DEFER" HOOK_RESULT_DIR="$WORK/res-sb2" hook_prepare >/dev/null 2>&1
+dl="$(tr '\n' ' ' < "$DOCKER_LOG" 2>/dev/null)"
+has "the hook runs in a container" "run --rm" "$dl"
+has "…with no network" "--network none" "$dl"
+has "…as an unprivileged uid" "--user 65534:65534" "$dl"
+has "…with every capability dropped" "--cap-drop ALL" "$dl"
+has "…and no privilege escalation" "--security-opt no-new-privileges" "$dl"
+has "…and a read-only root" "--read-only" "$dl"
+mounts="$(grep -c '^-v$' "$DOCKER_LOG")"
+expect "…with exactly one mount" 1 "$mounts"
+case "$dl" in *"${RUNNER_TEMP:-/nonexistent-runner}"*|*_actions*|*"$DEFER"*|*docker.sock*) bad "…the mount list leaks runner state" ;; *) ok "…which is one tree copy, not the runner's state or the deferrals" ;; esac
+case "$dl" in *--privileged*|*"--network host"*|*docker.sock*) bad "…no privileged or host-network flags" ;; *) ok "…no privileged or host-network flags" ;; esac
+expect "…and the result is the same as an unsandboxed run" "new from @555555555555" "$(cat "$(find "$WORK/res-sb2" -name deps.lock | head -1)")"
+out="$(HOOK_SANDBOX=docker DOCKER_BIN="$WORK/docker" HOOK_DEFER_DIR="$DEFER" HOOK_RESULT_DIR="$WORK/res-sb3" hook_prepare 2>&1)"
+has "a missing HOOK_IMAGE is an error, not an unsandboxed run" "HOOK_IMAGE is not set" "$(cat "$WORK"/res-sb3/*/hook.log 2>/dev/null)$out"
+out="$(GITHUB_ACTIONS=true HOOK_SANDBOX=none HOOK_DEFER_DIR="$DEFER" HOOK_RESULT_DIR="$WORK/res-sb4" hook_prepare 2>&1)"
+has "HOOK_SANDBOX=none is refused on a runner" "refused on a runner" "$(cat "$WORK"/res-sb4/*/hook.log 2>/dev/null)$out"
+
 # --- credentials -----------------------------------------------------------
 forge t1
-out="$(REGEN_TOKENS="other=tok" HOOK_RESULT_DIR="$RES" hook_apply_main 2>&1)"; rc=$?
+out="$(REGEN_TOKENS="other=tok" HOOK_DEFER_DIR="$DEFER" HOOK_RESULT_DIR="$RES" hook_apply_main 2>&1)"; rc=$?
 has "a result for an owner with no installation token is named" "no installation token for 'o'" "$out"
 expect "…and fails the run" 1 "$rc"
 expect "…with nothing committed" yes "$(nothing_committed && echo yes || echo no)"
