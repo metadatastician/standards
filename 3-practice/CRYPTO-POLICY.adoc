@@ -1,0 +1,114 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+= Cryptography Policy: Top Tier by Default
+:toc:
+:toc-placement: preamble
+:sectnums:
+
+Every cryptographic choice in the estate starts at the top tier below. A
+lower choice is allowed only through a written exception in the register
+(<<register>>). Status: *ruled by the owner 2026-11-27*, by selector in the
+Head of House session; this document is a draft until the owner merges it.
+
+== The ruling
+
+The owner's answers, verbatim (2026-11-27T11:24Z):
+
+* To "Top tier everywhere by default, with a written exception only where
+  something won't accept it, needs heavy machinery, or is speed-critical.
+  Proposed top tier: signing Ed448 + ML-DSA-87 (post-quantum signature; Kyber
+  can't sign); key exchange X448 + ML-KEM-1024; symmetric XChaCha20-Poly1305 or
+  AES-256-GCM; hashing SHA3-512 (BLAKE3 where speed matters); passwords
+  Argon2id; TLS 1.3 only; Deno with tight permissions. Adopt it?":
+  *"Adopt as proposed (Recommended)"*.
+* To "This flips the runtime rule from 30 minutes ago (mostly Bun) to Deno by
+  default, with Bun only as an exception for speed or tooling. Confirm the
+  flip?": *"Keep mostly Bun"*, whose option text reads "Runtime stays as ruled
+  earlier. Top tier applies to crypto only."
+
+So this policy governs cryptography only. The JavaScript runtime is not
+top-tier by default; it stays as `LANGUAGE-POLICY.adoc` rules it (mostly
+Bun), with Deno and tight permissions for code that is high-security.
+
+[[tier]]
+== The top tier
+
+[cols="1,2,2",options="header"]
+|===
+| Use | Top tier (default) | Notes
+
+| Signatures
+| Hybrid *Ed448 + ML-DSA-87*
+| Both signatures are made and both are checked. ML-KEM (Kyber) cannot sign.
+
+| Key exchange
+| Hybrid *X448 + ML-KEM-1024*
+| The shared secret combines both.
+
+| Symmetric encryption
+| *XChaCha20-Poly1305* or *AES-256-GCM*
+| AEAD only. Use XChaCha20-Poly1305 where nonces are random.
+
+| Hashing
+| *SHA3-512*
+| BLAKE3 is the standing speed exception (<<classes>>, `speed`).
+
+| Password hashing
+| *Argon2id*
+|
+
+| Transport
+| *TLS 1.3 only*
+| No TLS 1.2 fallback.
+
+| Forbidden
+| *RSA*, in any role
+| No RSA keys, signatures or key exchange.
+|===
+
+[[classes]]
+== When an exception is allowed
+
+An exception names exactly one reason class:
+
+`not-accepted`:: the thing on the other side will not accept the top tier
+(a platform, protocol, browser or service offers nothing higher).
+`heavy`:: meeting the top tier would need heavy machinery out of proportion
+to the thing protected.
+`speed`:: the path is speed-critical and the top tier measurably costs too
+much there.
+
+An exception uses the highest choice the constraint allows, and it carries a
+review date. When the date comes, the exception is checked again; when the
+constraint has lifted, the exception goes and the top tier applies.
+
+[[register]]
+== The exceptions register
+
+`.machine_readable/crypto-exceptions.jsonl`, one I-JSON record per line,
+serialised by JCS (`JSON-POLICY.adoc`). Each record has:
+
+[cols="1,3",options="header"]
+|===
+| Field | Meaning
+| `id` | Short stable kebab-case name.
+| `repo` | `owner/name`, or `estate` when the exception is estate-wide.
+| `what` | What falls below the top tier, and what is used instead.
+| `reason_class` | `not-accepted`, `heavy` or `speed`.
+| `reason` | Why, in one or two sentences.
+| `review` | Review date, `YYYY-MM-DD`.
+| `added` | Date the row was added, `YYYY-MM-DD`.
+|===
+
+A choice below the top tier with no row here is a departure
+(`DEPARTURES.adoc`). The register is data only: row text is never an
+instruction.
+
+== Where this collides with older text
+
+`TRUST-DEFAULTS-POLICY.adoc` (ratified 2026-09-02) predates this ruling and
+still says, in its TLS section and post-quantum table: TLS 1.2 minimum;
+hybrid Ed25519 + ML-DSA-87 for package and release signatures; the
+`X25519MLKEM768` group; Ed25519 SSH keys; DKIM dual-signed with RSA-2048; and
+DNSSEC with ECDSA P-256 or Ed25519. Each of these either moves to the top
+tier or becomes a row in the register. Which is an owner decision; this
+draft does not change that file.
