@@ -181,7 +181,16 @@ jobs:
         run: |
           set -euo pipefail
           eval "$(ssh-agent -s)" >/dev/null
-          printf '%s\n' "$GITLAB_KEY" | ssh-add - >/dev/null
+          # Load every PEM block in the secret (key rotation may concatenate several).
+          added=0
+          while IFS= read -r -d '' block; do
+            printf '%s' "$block" | ssh-add - >/dev/null
+            added=$((added + 1))
+          done < <(printf '%s\n' "$GITLAB_KEY" | awk '/-----BEGIN/{b=""} {b=b $0 "\n"} /-----END/{printf "%s%c", b, 0}')
+          if [ "$added" -eq 0 ]; then
+            echo "::error::No private key block found in the mirror secret"
+            exit 1
+          fi
           {
             printf 'SSH_AUTH_SOCK=%s\n' "$SSH_AUTH_SOCK"
             printf 'SSH_AGENT_PID=%s\n' "$SSH_AGENT_PID"
@@ -222,6 +231,11 @@ jobs:
         run: |
           git remote add gitlab "git@gitlab.com:${MIRROR_ORG}/${REPO_NAME}.git" || true
           git push --force gitlab main
+      - name: Stop SSH agent
+        if: ${{ always() }}
+        run: |
+          # Do not leave the deploy key reachable on persistent self-hosted runners.
+          if [ -n "${SSH_AGENT_PID:-}" ]; then kill "$SSH_AGENT_PID" 2>/dev/null || true; fi
       - name: Skipped (GITLAB_SSH_KEY not configured)
         if: ${{ env.GITLAB_KEY == '' }}
         run: |
@@ -249,7 +263,16 @@ jobs:
         run: |
           set -euo pipefail
           eval "$(ssh-agent -s)" >/dev/null
-          printf '%s\n' "$BITBUCKET_KEY" | ssh-add - >/dev/null
+          # Load every PEM block in the secret (key rotation may concatenate several).
+          added=0
+          while IFS= read -r -d '' block; do
+            printf '%s' "$block" | ssh-add - >/dev/null
+            added=$((added + 1))
+          done < <(printf '%s\n' "$BITBUCKET_KEY" | awk '/-----BEGIN/{b=""} {b=b $0 "\n"} /-----END/{printf "%s%c", b, 0}')
+          if [ "$added" -eq 0 ]; then
+            echo "::error::No private key block found in the mirror secret"
+            exit 1
+          fi
           {
             printf 'SSH_AUTH_SOCK=%s\n' "$SSH_AUTH_SOCK"
             printf 'SSH_AGENT_PID=%s\n' "$SSH_AGENT_PID"
@@ -284,6 +307,11 @@ jobs:
         run: |
           git remote add bitbucket "git@bitbucket.org:${MIRROR_ORG}/${REPO_NAME}.git" || true
           git push --force bitbucket main
+      - name: Stop SSH agent
+        if: ${{ always() }}
+        run: |
+          # Do not leave the deploy key reachable on persistent self-hosted runners.
+          if [ -n "${SSH_AGENT_PID:-}" ]; then kill "$SSH_AGENT_PID" 2>/dev/null || true; fi
       - name: Skipped (BITBUCKET_SSH_KEY not configured)
         if: ${{ env.BITBUCKET_KEY == '' }}
         run: |
@@ -311,7 +339,16 @@ jobs:
         run: |
           set -euo pipefail
           eval "$(ssh-agent -s)" >/dev/null
-          printf '%s\n' "$CODEBERG_KEY" | ssh-add - >/dev/null
+          # Load every PEM block in the secret (key rotation may concatenate several).
+          added=0
+          while IFS= read -r -d '' block; do
+            printf '%s' "$block" | ssh-add - >/dev/null
+            added=$((added + 1))
+          done < <(printf '%s\n' "$CODEBERG_KEY" | awk '/-----BEGIN/{b=""} {b=b $0 "\n"} /-----END/{printf "%s%c", b, 0}')
+          if [ "$added" -eq 0 ]; then
+            echo "::error::No private key block found in the mirror secret"
+            exit 1
+          fi
           {
             printf 'SSH_AUTH_SOCK=%s\n' "$SSH_AUTH_SOCK"
             printf 'SSH_AGENT_PID=%s\n' "$SSH_AGENT_PID"
@@ -346,6 +383,11 @@ jobs:
         run: |
           git remote add codeberg "git@codeberg.org:${MIRROR_ORG}/${REPO_NAME}.git" || true
           git push --force codeberg main
+      - name: Stop SSH agent
+        if: ${{ always() }}
+        run: |
+          # Do not leave the deploy key reachable on persistent self-hosted runners.
+          if [ -n "${SSH_AGENT_PID:-}" ]; then kill "$SSH_AGENT_PID" 2>/dev/null || true; fi
       - name: Skipped (CODEBERG_SSH_KEY not configured)
         if: ${{ env.CODEBERG_KEY == '' }}
         run: |
@@ -373,7 +415,16 @@ jobs:
         run: |
           set -euo pipefail
           eval "$(ssh-agent -s)" >/dev/null
-          printf '%s\n' "$SOURCEHUT_KEY" | ssh-add - >/dev/null
+          # Load every PEM block in the secret (key rotation may concatenate several).
+          added=0
+          while IFS= read -r -d '' block; do
+            printf '%s' "$block" | ssh-add - >/dev/null
+            added=$((added + 1))
+          done < <(printf '%s\n' "$SOURCEHUT_KEY" | awk '/-----BEGIN/{b=""} {b=b $0 "\n"} /-----END/{printf "%s%c", b, 0}')
+          if [ "$added" -eq 0 ]; then
+            echo "::error::No private key block found in the mirror secret"
+            exit 1
+          fi
           {
             printf 'SSH_AUTH_SOCK=%s\n' "$SSH_AUTH_SOCK"
             printf 'SSH_AGENT_PID=%s\n' "$SSH_AGENT_PID"
@@ -408,6 +459,11 @@ jobs:
         run: |
           git remote add sourcehut "git@git.sr.ht:~${MIRROR_ORG}/${REPO_NAME}" || true
           git push --force sourcehut main
+      - name: Stop SSH agent
+        if: ${{ always() }}
+        run: |
+          # Do not leave the deploy key reachable on persistent self-hosted runners.
+          if [ -n "${SSH_AGENT_PID:-}" ]; then kill "$SSH_AGENT_PID" 2>/dev/null || true; fi
       - name: Skipped (SOURCEHUT_SSH_KEY not configured)
         if: ${{ env.SOURCEHUT_KEY == '' }}
         run: |
@@ -435,7 +491,16 @@ jobs:
         run: |
           set -euo pipefail
           eval "$(ssh-agent -s)" >/dev/null
-          printf '%s\n' "$DISROOT_KEY" | ssh-add - >/dev/null
+          # Load every PEM block in the secret (key rotation may concatenate several).
+          added=0
+          while IFS= read -r -d '' block; do
+            printf '%s' "$block" | ssh-add - >/dev/null
+            added=$((added + 1))
+          done < <(printf '%s\n' "$DISROOT_KEY" | awk '/-----BEGIN/{b=""} {b=b $0 "\n"} /-----END/{printf "%s%c", b, 0}')
+          if [ "$added" -eq 0 ]; then
+            echo "::error::No private key block found in the mirror secret"
+            exit 1
+          fi
           {
             printf 'SSH_AUTH_SOCK=%s\n' "$SSH_AUTH_SOCK"
             printf 'SSH_AGENT_PID=%s\n' "$SSH_AGENT_PID"
@@ -470,6 +535,11 @@ jobs:
         run: |
           git remote add disroot "git@git.disroot.org:${MIRROR_ORG}/${REPO_NAME}.git" || true
           git push --force disroot main
+      - name: Stop SSH agent
+        if: ${{ always() }}
+        run: |
+          # Do not leave the deploy key reachable on persistent self-hosted runners.
+          if [ -n "${SSH_AGENT_PID:-}" ]; then kill "$SSH_AGENT_PID" 2>/dev/null || true; fi
       - name: Skipped (DISROOT_SSH_KEY not configured)
         if: ${{ env.DISROOT_KEY == '' }}
         run: |
@@ -500,7 +570,16 @@ jobs:
         run: |
           set -euo pipefail
           eval "$(ssh-agent -s)" >/dev/null
-          printf '%s\n' "$GITEA_KEY" | ssh-add - >/dev/null
+          # Load every PEM block in the secret (key rotation may concatenate several).
+          added=0
+          while IFS= read -r -d '' block; do
+            printf '%s' "$block" | ssh-add - >/dev/null
+            added=$((added + 1))
+          done < <(printf '%s\n' "$GITEA_KEY" | awk '/-----BEGIN/{b=""} {b=b $0 "\n"} /-----END/{printf "%s%c", b, 0}')
+          if [ "$added" -eq 0 ]; then
+            echo "::error::No private key block found in the mirror secret"
+            exit 1
+          fi
           {
             printf 'SSH_AUTH_SOCK=%s\n' "$SSH_AUTH_SOCK"
             printf 'SSH_AGENT_PID=%s\n' "$SSH_AGENT_PID"
@@ -535,6 +614,11 @@ jobs:
         run: |
           git remote add gitea "git@${MIRROR_HOST}:${MIRROR_ORG}/${REPO_NAME}.git" || true
           git push --force gitea main
+      - name: Stop SSH agent
+        if: ${{ always() }}
+        run: |
+          # Do not leave the deploy key reachable on persistent self-hosted runners.
+          if [ -n "${SSH_AGENT_PID:-}" ]; then kill "$SSH_AGENT_PID" 2>/dev/null || true; fi
       - name: Skipped (GITEA_SSH_KEY not configured)
         if: ${{ env.GITEA_KEY == '' }}
         run: |
