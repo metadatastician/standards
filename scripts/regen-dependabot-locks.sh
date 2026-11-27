@@ -87,7 +87,7 @@
 #
 # Usage: regen-dependabot-locks.sh [owner/repo]     (default: every repo the
 #        installations can see).  DRY_RUN=1 regenerates but never commits.
-# Env:   REGEN_TOKENS, DRY_RUN, REGEN_MAIN, BUMP_PINS, HOOK_DEFER_DIR, HOOK_RESULT_DIR, HOOK_IMAGE, HOOK_SANDBOX (none: tests only), DOCKER_BIN, GH_BIN (test stub), REGEN_TOOLS (dir
+# Env:   REGEN_TOKENS, DRY_RUN, REGEN_MAIN, BUMP_PINS, HOOK_DEFER_DIR, HOOK_RESULT_DIR, HOOK_IMAGE, HOOK_SANDBOX (none: tests only), DOCKER_BIN, IPTABLES_BIN/IP6TABLES_BIN (tests), GH_BIN (test stub), REGEN_TOOLS (dir
 #        holding the repair scripts; default: this script's directory).
 set -uo pipefail
 
@@ -527,6 +527,67 @@ hook_git() {
     "$@"
 }
 
+# The hook container has the default bridge and the internet (owner ruling,
+# 2026-11-27), but not the host or the cloud's metadata service. Before any hook
+# container runs, drop its subnet's traffic to link-local (169.254.0.0/16, and
+# fe80::/10 when the bridge has IPv6) and to the bridge gateway, which is the
+# host itself. DOCKER-USER is the FORWARD-path hook Docker leaves for operators:
+# it stops link-local. Traffic to the gateway address is delivered to the host,
+# so it never crosses FORWARD; that rule is also placed in INPUT, where it acts.
+# Then a probe container checks the result: DNS must still resolve and the
+# metadata address must not connect. Any rule that cannot be added, or a wrong
+# probe, stops hook-prepare: the hook must not run without this.
+hook_fw_add() {
+  local -a c=()
+  while [ "$1" != -- ]; do c+=("$1"); shift; done
+  shift
+  local chain="$1"; shift
+  "${c[@]}" -C "$chain" "$@" >/dev/null 2>&1 && return 0
+  "${c[@]}" -I "$chain" "$@"
+}
+
+hook_egress_guard() {
+  local d="${DOCKER_BIN:-docker}" net sub gw v4=0 rc
+  local -a ipt ip6t
+  if [ -n "${IPTABLES_BIN:-}" ]; then ipt=("$IPTABLES_BIN"); else ipt=(sudo iptables); fi
+  if [ -n "${IP6TABLES_BIN:-}" ]; then ip6t=("$IP6TABLES_BIN"); else ip6t=(sudo ip6tables); fi
+  net="$("$d" network inspect bridge --format '{{range .IPAM.Config}}{{.Subnet}} {{.Gateway}}{{"\n"}}{{end}}' 2>&1)" \
+    || { echo "hook-prepare: egress-guard: cannot read the docker bridge: $net"; return 1; }
+  while read -r sub gw; do
+    [ -n "$sub" ] || continue
+    case "$sub" in *[!0-9a-fA-F:./]*|*/*/*|*/) echo "hook-prepare: egress-guard: odd bridge subnet '$sub'"; return 1 ;; esac
+    case "$gw" in *[!0-9a-fA-F:.]*) echo "hook-prepare: egress-guard: odd bridge gateway '$gw'"; return 1 ;; esac
+    if [ "${sub#*:}" != "$sub" ]; then
+      hook_fw_add "${ip6t[@]}" -- DOCKER-USER -s "$sub" -d fe80::/10 -j DROP \
+        || { echo "hook-prepare: egress-guard: cannot add the fe80::/10 rule"; return 1; }
+      [ -z "$gw" ] || { hook_fw_add "${ip6t[@]}" -- DOCKER-USER -s "$sub" -d "$gw" -j DROP \
+        && hook_fw_add "${ip6t[@]}" -- INPUT -s "$sub" -d "$gw" -j DROP; } \
+        || { echo "hook-prepare: egress-guard: cannot add the IPv6 gateway rule"; return 1; }
+    else
+      [ -n "$gw" ] || { echo "hook-prepare: egress-guard: the bridge has no gateway"; return 1; }
+      v4=1
+      { hook_fw_add "${ipt[@]}" -- DOCKER-USER -s "$sub" -d 169.254.0.0/16 -j DROP \
+        && hook_fw_add "${ipt[@]}" -- DOCKER-USER -s "$sub" -d "$gw" -j DROP \
+        && hook_fw_add "${ipt[@]}" -- INPUT -s "$sub" -d "$gw" -j DROP; } \
+        || { echo "hook-prepare: egress-guard: cannot add the IPv4 rules"; return 1; }
+    fi
+  done <<< "$net"
+  [ "$v4" = 1 ] || { echo "hook-prepare: egress-guard: no IPv4 subnet on the docker bridge"; return 1; }
+  [ -n "${HOOK_IMAGE:-}" ] || { echo "hook-prepare: HOOK_IMAGE is not set"; return 125; }
+  # shellcheck disable=SC2016
+  "$d" run --rm --user 65534:65534 --cap-drop ALL --security-opt no-new-privileges \
+      --read-only --pids-limit 64 --memory 256m "$HOOK_IMAGE" \
+      bash -c 'getent hosts github.com >/dev/null || exit 10
+               if timeout 5 bash -c ": </dev/tcp/169.254.169.254/80" 2>/dev/null; then exit 11; fi' </dev/null
+  rc=$?
+  case "$rc" in
+    0) echo "hook-prepare: egress-guard: rules in place; DNS works, metadata is unreachable" ;;
+    10) echo "hook-prepare: egress-guard: DNS broke after the rules (getent github.com failed)"; return 1 ;;
+    11) echo "hook-prepare: egress-guard: 169.254.169.254:80 is still reachable"; return 1 ;;
+    *) echo "hook-prepare: egress-guard: probe failed rc=$rc"; return 1 ;;
+  esac
+}
+
 # PHASE 2 (hook-prepare): holds NO App token, and the job must not either. For
 # each deferral in $HOOK_DEFER_DIR, run the repository's hook on a copy of its
 # tree inside its own container (hook_sandbox_run; outbound network, one tree, no
@@ -544,6 +605,10 @@ hook_prepare() {
   local in="${HOOK_DEFER_DIR:?HOOK_DEFER_DIR is not set}" out="${HOOK_RESULT_DIR:?HOOK_RESULT_DIR is not set}"
   local d n=0 o t rc mode path status
   mkdir -p "$out" || return 1
+  # Before any hook container: block link-local and the host, then probe (see hook_egress_guard).
+  if [ "${HOOK_SANDBOX:-docker}" != none ] && compgen -G "$in/*/" >/dev/null; then
+    hook_egress_guard || return 1
+  fi
   for d in "$in"/*/; do
     [ -d "$d" ] || continue
     n=$((n + 1)); o="$out/$(basename -- "${d%/}")"; mkdir -p "$o/files"

@@ -321,6 +321,9 @@ done
 cat > "$WORK/docker" <<'EOS'
 #!/usr/bin/env bash
 # Stub: log argv, then run the in-container command natively on the mounted tree.
+if [ "$1" = network ]; then echo "docker network" >> "$ORDER_LOG"; printf '%s\n' "${NET_OUT-172.17.0.0/16 172.17.0.1}"; exit ${NET_RC:-0}; fi
+case "$*" in *getent*) echo "docker probe" >> "$ORDER_LOG"; exit ${PROBE_RC:-0} ;; esac
+echo "docker hook" >> "$ORDER_LOG"
 printf '%s\n' "$@" > "$DOCKER_LOG"
 [ "$1" = run ] || exit 0
 src=""; args=("$@"); i=0
@@ -335,6 +338,15 @@ rest=("${args[@]:$((img+1))}")
 exec env -i PATH=/usr/bin:/bin POST_PIN_BUMP=1 HOME=/tmp "${rest[@]}"
 EOS
 chmod +x "$WORK/docker"
+cat > "$WORK/iptables" <<'EOI'
+#!/usr/bin/env bash
+case "$1" in -C) exit 1 ;; esac
+echo "$(basename "$0") $*" >> "$ORDER_LOG"
+[ "${IPT_FAIL:-0}" = 1 ] && exit 1
+exit 0
+EOI
+chmod +x "$WORK/iptables"; cp "$WORK/iptables" "$WORK/ip6tables"
+export ORDER_LOG="$WORK/order.log" IPTABLES_BIN="$WORK/iptables" IP6TABLES_BIN="$WORK/ip6tables"
 export DOCKER_LOG="$WORK/docker.log"
 pipeline sb "$GOOD_HOOK" "$ALLOW" >/dev/null
 rm -rf "$WORK/res-sb2"
@@ -363,6 +375,53 @@ out="$(HOOK_SANDBOX=docker DOCKER_BIN="$WORK/docker" HOOK_DEFER_DIR="$DEFER" HOO
 has "a missing HOOK_IMAGE is an error, not an unsandboxed run" "HOOK_IMAGE is not set" "$(cat "$WORK"/res-sb3/*/hook.log 2>/dev/null)$out"
 out="$(GITHUB_ACTIONS=true HOOK_SANDBOX=none HOOK_DEFER_DIR="$DEFER" HOOK_RESULT_DIR="$WORK/res-sb4" hook_prepare 2>&1)"
 has "HOOK_SANDBOX=none is refused on a runner" "refused on a runner" "$(cat "$WORK"/res-sb4/*/hook.log 2>/dev/null)$out"
+
+# --- the egress guard: no metadata, no host, checked before any hook runs ----
+IMG="img@sha256:$(printf 'a%.0s' $(seq 64))"
+refused() { if [ "$GUARD_RC" != 0 ]; then ok "$1"; else bad "$1"; fi; }
+guard() { # name [VAR=value...]; runs hook_prepare under the stubs with a fresh order log
+  local n="$1" kv; shift
+  : > "$ORDER_LOG"; rm -rf "$WORK/res-$n"
+  # shellcheck disable=SC2163  # export of "NAME=value" is intended
+  GUARD_OUT="$( ( for kv in "$@"; do export "$kv"; done
+                  export HOOK_SANDBOX=docker DOCKER_BIN="$WORK/docker" HOOK_IMAGE="$IMG" HOOK_DEFER_DIR="$DEFER" HOOK_RESULT_DIR="$WORK/res-$n"
+                  hook_prepare ) 2>&1)"; GUARD_RC=$?
+  OL="$(cat "$ORDER_LOG")"
+}
+guard eg1
+expect "guard: a normal run succeeds" 0 "$GUARD_RC"
+has "guard: link-local is dropped from the bridge subnet" "iptables -I DOCKER-USER -s 172.17.0.0/16 -d 169.254.0.0/16 -j DROP" "$OL"
+has "guard: the gateway is dropped in DOCKER-USER" "iptables -I DOCKER-USER -s 172.17.0.0/16 -d 172.17.0.1 -j DROP" "$OL"
+has "guard: …and in INPUT, where host-bound traffic is filtered" "iptables -I INPUT -s 172.17.0.0/16 -d 172.17.0.1 -j DROP" "$OL"
+first_hook="$(grep -n '^docker hook$' "$ORDER_LOG" | head -1 | cut -d: -f1)"
+last_rule="$(grep -n 'tables -I' "$ORDER_LOG" | tail -1 | cut -d: -f1)"
+probe_at="$(grep -n '^docker probe$' "$ORDER_LOG" | head -1 | cut -d: -f1)"
+if [ -n "$last_rule" ] && [ -n "$probe_at" ] && [ -n "$first_hook" ] && [ "$last_rule" -lt "$probe_at" ] && [ "$probe_at" -lt "$first_hook" ]; then
+  ok "guard: rules, then the probe, then the first hook"
+else
+  bad "guard: rules, then the probe, then the first hook ($last_rule/$probe_at/$first_hook)"
+fi
+guard eg2 "NET_OUT=172.17.0.0/16 172.17.0.1
+fd00:1::/64 fd00:1::1"
+has "guard: an IPv6 bridge gets the fe80::/10 rule" "ip6tables -I DOCKER-USER -s fd00:1::/64 -d fe80::/10 -j DROP" "$OL"
+has "guard: …and its gateway rule" "ip6tables -I INPUT -s fd00:1::/64 -d fd00:1::1 -j DROP" "$OL"
+guard eg3 IPT_FAIL=1
+refused "guard: a rule that cannot be added fails hook-prepare"
+has "guard: …loudly" "cannot add" "$GUARD_OUT"
+case "$OL" in *"docker hook"*|*"docker probe"*) bad "guard: …and no probe or hook runs" ;; *) ok "guard: …and no probe or hook runs" ;; esac
+guard eg4 PROBE_RC=11
+refused "guard: reachable metadata fails hook-prepare"
+has "guard: …and says so" "169.254.169.254:80 is still reachable" "$GUARD_OUT"
+case "$OL" in *"docker hook"*) bad "guard: …before any hook runs" ;; *) ok "guard: …before any hook runs" ;; esac
+guard eg5 PROBE_RC=10
+refused "guard: broken DNS fails hook-prepare"
+has "guard: …and says so" "DNS broke" "$GUARD_OUT"
+guard eg6 NET_RC=1 NET_OUT=boom
+refused "guard: an unreadable bridge fails hook-prepare"
+guard eg7 "NET_OUT=172.17.0.0/16;rm 172.17.0.1"
+refused "guard: an odd subnet string is refused"
+guard eg8 NET_OUT=172.17.0.0/16
+refused "guard: a bridge with no gateway is refused"
 
 # --- host git must not be steered by the runner's config or the hook's tree ---
 # A hook leaves files git cannot add (mode 000 owned by another uid on a runner;
