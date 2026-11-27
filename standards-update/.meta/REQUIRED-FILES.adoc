@@ -55,5 +55,5 @@ the repo
 * https://github.com/hyperpolymath/rhodium-standard-repositories[RSR
 (Rhodium Standard Repositories)]
 * https://github.com/hyperpolymath/mustfile[Mustfile Specification]
-* https://github.com/metadatastician/standards/tree/main/meta-a2ml[A2ML
-Format Family]
+* https://github.com/metadatastician/standards/blob/main/9-archive/A2ML-REMOVED.adoc[A2ML
+Format Family (removed; archive record)]

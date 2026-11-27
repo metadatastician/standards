@@ -19,7 +19,7 @@ action = "tighten + validate licensing"
 
 [repos.meta-a2ml]
 identity = "shadow"
-official_home = "standards/meta-a2ml"
+official_home = "9-archive/A2ML-REMOVED.adoc"
 visibility_target = "archive"
 tier = "C"
 reason = "Absorbed into standards monorepo"

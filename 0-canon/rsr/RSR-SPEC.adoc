@@ -90,13 +90,13 @@ RSR integrates with related specifications:
 |===
 | Satellite | Purpose
 
-| link:../satellites/META.scm[META.scm satellite] (legacy .scm) / link:../../meta-a2ml/[meta-a2ml] (current A2ML)
+| link:../satellites/META.scm[META.scm satellite] (legacy .scm) / link:../../9-archive/A2ML-REMOVED.adoc[meta-a2ml (removed)] (retired A2ML)
 | Architecture decisions format specification
 
-| link:../satellites/ECOSYSTEM.scm[ECOSYSTEM.scm satellite] (legacy .scm) / link:../../state-a2ml/[state-a2ml] (A2ML ecosystem)
+| link:../satellites/ECOSYSTEM.scm[ECOSYSTEM.scm satellite] (legacy .scm) / link:../../9-archive/A2ML-REMOVED.adoc[state-a2ml (removed)] (retired A2ML)
 | Project ecosystem relationships format
 
-| link:../satellites/state.scm[state.scm satellite] (legacy .scm) / link:../../state-a2ml/[state-a2ml] (current A2ML)
+| link:../satellites/state.scm[state.scm satellite] (legacy .scm) / link:../../9-archive/A2ML-REMOVED.adoc[state-a2ml (removed)] (retired A2ML)
 | Project state tracking format
 
 | link:../satellites/palimpsest-license[Palimpsest License]

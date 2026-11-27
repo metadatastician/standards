@@ -15,6 +15,7 @@
 #   k9-contract-debt.txt     .githooks/validate-k9.sh --prune (staged K9 files)
 #   marker-allow.txt         scripts/check-marker-issue-refs.sh --prune
 #   pipe-grep-q-allow.txt    scripts/check-pipe-grep-q.sh --prune
+#   link-rot-allow.txt        scripts/link-rot-guard.sh --prune
 #   departures.jsonl         scripts/departures.sh prune --ref <the index as a commit>
 # lock-allow.txt, pipeline-allow.txt and required-contexts-allow.txt have no
 # prune: what makes their lines stale lives on GitHub, not in the tree.
@@ -50,6 +51,7 @@ LEDGERS=(
   .machine_readable/k9-contract-debt.txt
   .machine_readable/marker-allow.txt
   .machine_readable/pipe-grep-q-allow.txt
+  .machine_readable/link-rot-allow.txt
   .machine_readable/departures.jsonl
 )
 
@@ -63,13 +65,20 @@ trap 'rm -rf "$WORK"' EXIT
 git -c core.quotePath=false diff --cached --name-only --no-renames > "$WORK/staged"
 [ -s "$WORK/staged" ] || exit 0
 
+# Link resolution depends on which paths exist, so the link-rot ledger is judged
+# whenever a path is added or deleted (a new file can fix a ledgered link in an
+# untouched document) or a document is staged.
+git -c core.quotePath=false diff --cached --name-only --no-renames --diff-filter=AD > "$WORK/staged_ad"
+
 relevant=()
 for ledger in "${LEDGERS[@]}"; do
   git cat-file -e ":$ledger" 2>/dev/null || continue
   text="$(git show ":$ledger")"
   if grep -qxF -- "$ledger" "$WORK/staged" \
      || grep -qF -f "$WORK/staged" <<< "$text" \
-     || { [ "${ledger##*/}" = departures.jsonl ] && grep -qF '"glob":' <<< "$text"; }; then
+     || { [ "${ledger##*/}" = departures.jsonl ] && grep -qF '"glob":' <<< "$text"; } \
+     || { [ "${ledger##*/}" = link-rot-allow.txt ] \
+          && { [ -s "$WORK/staged_ad" ] || grep -qE '\.(adoc|asciidoc|md)$' "$WORK/staged"; }; }; then
     relevant+=("$ledger")
   fi
 done
@@ -129,6 +138,9 @@ for ledger in "${relevant[@]}"; do
     *pipe-grep-q-allow.txt)
       [ -f scripts/check-pipe-grep-q.sh ] || { echo "[ledger-prune] $ledger: no checker here, skipped"; continue; }
       cmd=(bash "$REPO_ROOT/scripts/check-pipe-grep-q.sh" --root "$T" --prune) ;;
+    *link-rot-allow.txt)
+      [ -f scripts/link-rot-guard.sh ] || { echo "[ledger-prune] $ledger: no checker here, skipped"; continue; }
+      cmd=(bash "$REPO_ROOT/scripts/link-rot-guard.sh" --root "$T" --prune) ;;
     *departures.jsonl)
       [ -f scripts/departures.sh ] || { echo "[ledger-prune] $ledger: no checker here, skipped"; continue; }
       cmd=(bash "$REPO_ROOT/scripts/departures.sh" prune --ref "$(index_commit)" "$ledger") ;;
