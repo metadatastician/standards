@@ -214,7 +214,7 @@ and toolchain surfaces are offered through `boj-server` with cartridges
 [cols="2,4", options="header"]
 |===
 | Record | Default
-| DNSSEC | Signed. Algorithm 16 (Ed448) wherever the registrar and DNS host accept it. Every estate zone is Cloudflare-hosted, and Cloudflare signs with algorithm 13 (ECDSAP256SHA256) only, so all zones sit on the temporary register row `trust-defaults-dnssec-ed448` until signing moves to a self-hosted BIND 9 primary (algorithm 16) with Cloudflare as secondary. NSEC3 with opt-out off, or NSEC with minimal responses. DS published at the registrar; CDS/CDNSKEY on for automated rollover
+| DNSSEC | Signed. Algorithm 16 (Ed448) wherever the registrar and DNS host accept it. Every estate zone is Cloudflare-hosted, and Cloudflare signs with algorithm 13 (ECDSAP256SHA256) only, so all zones sit on the temporary register row `trust-defaults-dnssec-ed448` until signing moves to a self-hosted BIND 9 primary (algorithm 16) with Cloudflare as secondary. That move is per zone: pre-signed secondary DNS serves every record DNS-only and drops Secondary DNS Overrides, so the Cloudflare proxy, WAF and CDN stop for that zone; live or multi-signer signing keeps them but signs with algorithm 13. A zone with proxied records moves only on the conditions in the row's `fix` (a partial CNAME setup, an origin that accepts direct traffic, or the owner accepting the loss), and otherwise keeps the row. Even an Ed448 zone has no ML-DSA component (`dnssec-no-pq-signature`). NSEC3 with opt-out off, or NSEC with minimal responses. DS published at the registrar; CDS/CDNSKEY on for automated rollover
 | ZONEMD | RFC 8976 digest in the apex, regenerated on every zone change (`zonemd: enabled`)
 | CAA | `issue` for the chosen CA with `accounturi` (ACME account binding) and `validationmethods`; `issuewild ";"` unless wildcards are designed in; `iodef mailto:` to the security contact
 | TLSA | DANE for every TLS service: `_443._tcp` usage 3 selector 1 matching 1 (current key) plus a usage 2 anchor for rollover; `_25._tcp` for MX hosts
@@ -328,8 +328,8 @@ detected by drift comparison.
 [[tls]]
 == TLS, certificates and keys
 
-* TLS 1.3 only (CRYPTO-POLICY.adoc), no CBC suites, no RSA key exchange. Endpoints that still accept TLS 1.2 are registered as `trust-defaults-tls12-endpoints` until each is raised.
-* Certificates are ECDSA P-256 only (no RSA; CRYPTO-POLICY.adoc and the crypto exceptions register row `tls-certificates-ecdsa-p256`). Cloudflare Universal SSL also issues an RSA certificate, so zones on it are registered as `trust-defaults-universal-ssl-rsa` until they move to an ECDSA-only advanced or custom certificate. Certificates are
+* TLS 1.3 only (CRYPTO-POLICY.adoc), no CBC suites, no RSA key exchange. Endpoints that still accept TLS 1.2 are registered as `trust-defaults-tls12-endpoints` until each is raised. Cloudflare Pages hostnames (`*.pages.dev` and Pages custom domains, such as `axel-protocol.org`) cannot set a minimum TLS version, so each Pages project moves to a Worker with a Custom Domain, where the zone setting applies.
+* Certificates are ECDSA only, no RSA: P-384 wherever the CA offers it, P-256 on Cloudflare-managed edge certificates (CRYPTO-POLICY.adoc and the crypto exceptions register row `tls-certificates-ecdsa-p256`). On Pro, Business and Enterprise zones, Cloudflare Universal SSL also issues an RSA certificate, so those zones are registered as `trust-defaults-universal-ssl-rsa` until they move to an ECDSA-only advanced or custom certificate. Free-plan zones receive ECDSA only and are not on that row. Certificates are
   issued by ACME with DNS-01 as the primary challenge (a scoped token that
   can write only `_acme-challenge`) and HTTP-01 as the fallback; CAA
   `accounturi` binds issuance to the ACME account; must-staple and OCSP
