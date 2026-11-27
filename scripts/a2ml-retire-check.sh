@@ -33,6 +33,14 @@
 #     the tool does not tell readers and writers apart. Files under
 #     scripts/tests/ count for an exact path only. Readers outside the tree
 #     come from the rulings file (`external-reader:`).
+#     A `name-reader` that cannot resolve to the file's path (every mention
+#     names another file, by its literal path tail) is `readers.name_foreign`
+#     and does not block; one that can, or whose bare name this tool cannot
+#     place, blocks, with the reason in `readers.name_why`.
+#   * A `dropped` row's `requires` key is derived from the tree
+#     (`ruling_conditions`, `inbound_links`): `inbound-links-redirected` is met
+#     when no live file names the row's literal `match` prefix. An unknown key,
+#     or a match that is not a literal prefix, stays a named blocker.
 #   * Rulings that the tree cannot show (owner decisions, known spec gaps,
 #     open questions, readers in other repositories, which families kyX
 #     translates) come from rulings files: each --rulings FILE adds its rows,
@@ -158,6 +166,19 @@ dups=$(jq -r '.id' "$T/rulings.all" | sort | uniq -d)
 [ -z "$dups" ] || bad="${bad}${bad:+$'\n'}id(s) given twice: $dups"
 [ -z "$bad" ] || die "rulings: $bad"
 jq -c --arg repo "$REPO" 'select(.repo == null or .repo == $repo)' "$T/rulings.all" > "$T/rulings"
+# The rulings files that sit inside the tree, as ROOT-relative paths: they name
+# every match they hold, so they never count as a link to it (see eval_condition).
+ROOT_REAL=$(readlink -f -- "$ROOT"); RULINGS_REL=()
+# The counts file of this run, wherever --counts puts it, if it is inside the tree.
+COUNTS_RUN_REL=""; a=$(readlink -f -m -- "$COUNTS")
+case $a in "$ROOT_REAL"/*) COUNTS_RUN_REL=${a#"$ROOT_REAL"/} ;; esac
+# Names of symbolic links in the tree (tracked or not): a mention through one
+# can reach a file its literal tail does not name.
+declare -A SYMNAME=()
+while IFS= read -r a; do SYMNAME[$a]=1; done < <(find "$ROOT" -type l -not -path '*/.git/*' -printf '%f\n' 2>/dev/null || true)
+for rf in "${RULINGS[@]}"; do
+  a=$(readlink -f -- "$rf"); case $a in "$ROOT_REAL"/*) RULINGS_REL+=("${a#"$ROOT_REAL"/}") ;; esac
+done
 if [ "${#RULINGS[@]}" -gt 0 ]; then
   RULINGS_NOTE="$(grep -c . "$T/rulings" || true) of $(grep -c . "$T/rulings.all" || true) rulings rows apply to '$REPO'"
 else
@@ -204,14 +225,14 @@ done < "$T/a2ml"
 jq -R -r --slurpfile R "$T/rulings" '
   split("\u001f") as [$p, $f] | $R[] | . as $row
   | select(($row.match == null or ($p | test($row.match))) and ($row.family == null or $row.family == $f))
-  | [$p, .id, .kind, (.key // ""), (.requires // ""), (.record // "")] | join("\u001f")' < <(cut -d $'\x1f' -f1,2 "$T/fam.tsv") > "$T/rul.tsv"
+  | [$p, .id, .kind, (.key // ""), (.requires // ""), (.record // ""), (.match // "")] | join("\u001f")' < <(cut -d $'\x1f' -f1,2 "$T/fam.tsv") > "$T/rul.tsv"
 declare -A KYX=()
 while IFS= read -r f; do KYX[$f]=1; done < <(jq -r 'select(.kind == "kyx-family") | .family' "$T/rulings")
 
 # ── readers: two grep passes over the candidate files ─────────────────────
 tr '\0' '\n' < "$T/all" | grep -vE "$A2ML_RE" \
   | grep -vE '\.(adoc|md|txt|html|jsonl|csv|tsv|svg)$|^9-archive/|^docs/archive/|^\.machine_readable/archive/' \
-  | grep -vxF -e "$SELF_TOOL" -e "$SELF_TEST" -e "$COUNTS_REL" > "$T/cands" || true
+  | grep -vxF -e "$SELF_TOOL" -e "$SELF_TEST" -e "$COUNTS_REL" -e "$COUNTS_RUN_REL" > "$T/cands" || true
 cut -d $'\x1f' -f1 "$T/fam.tsv" > "$T/pat.path"
 awk -F/ '{print $NF}' "$T/pat.path" | LC_ALL=C sort -u > "$T/pat.name"
 : > "$T/exact.tsv"; : > "$T/name.tsv"
@@ -399,11 +420,115 @@ JQ_STATE='
 
 # ── pass 2: targets, conditions, blockers, class ──────────────────────────
 S=$'\x1f'
-declare -A RULIDS=() DROPPED=() DECIDED=() REQS=() RECS=() RBLOCK=()
-while IFS=$'\x1f' read -r p id kind key req rec; do
+ES=$'\x1e'
+
+# ── ruling conditions: derived from the tree, never asserted ─────────────
+# A `dropped` row may carry `requires: <key>`. A condition is met only when
+# this tree shows it. COND[id] is "met", or the reason it is not; HOLD[id] is
+# the files that stop it (newline-separated). Supported keys:
+#   inbound-links-redirected  no live file names or links the row's match
+#     prefix. The prefix is the row's `match`, which must be `^` and a literal
+#     path (only an escaped dot is literal), else the condition is unsupported. A file
+#     does not count when it is a dated record (9-archive/, docs/triage/<date>/,
+#     docs/audits/, docs/reorg/), a rulings file of this run, the legacy
+#     ledger, the counts file of the run, the row's own record file, this tool or its test, or lies under the prefix.
+#     A mention counts when the prefix, with or without its trailing slash, is
+#     not the tail of a longer name.
+# Any other key is unsupported: the condition stays unmet, named, so the file
+# never reaches deletable-now by a condition this tool cannot evaluate.
+declare -A COND=() HOLD=()
+# glob_reaches TOKEN LIT: can the glob TOKEN match a path under LIT? Each
+# component of LIT is matched against the token's components, at any offset (a
+# variable or `..` may precede them). At least one matched component must hold
+# a literal character: `*/x` over `old` would match every directory.
+# shellcheck disable=SC2053  # the right-hand side is a pattern on purpose
+glob_reaches() {
+  local -a tc lc; local s i n m seen
+  IFS=/ read -r -a tc <<< "$1"; IFS=/ read -r -a lc <<< "$2"
+  n=${#lc[@]}; m=${#tc[@]}
+  for (( s = 0; s + n <= m; s++ )); do
+    seen=0
+    for (( i = 0; i < n; i++ )); do
+      [[ ${lc[i]} == ${tc[s+i]} ]] || continue 2
+      if [[ ${tc[s+i]} == *[A-Za-z0-9_]* ]]; then seen=1; fi
+    done
+    [ "$seen" = 1 ] && return 0
+  done
+  return 1
+}
+eval_condition() { # eval_condition ID KEY MATCH [RECORD]
+  local id=$1 key=$2 m=$3 rec=${4:-} lit re holders a sl tgt abs rel gf gt excl=()
+  [ -z "${COND[$id]:-}" ] || return 0
+  case $key in
+    inbound-links-redirected)
+      # Only an escaped dot is a literal: an unescaped one matches any
+      # character, so the regex reaches paths the literal prefix does not.
+      lit=${m#^}
+      if [ "${m:0:1}" != "^" ] || ! [[ ${lit//\\./} =~ ^[A-Za-z0-9_][A-Za-z0-9_/-]*/$ ]]; then
+        COND[$id]="unsupported: the match is not a literal path prefix, so no link search can be derived from it"; return 0
+      fi
+      lit=${lit//\\./.}
+      if [[ $lit == *//* || $lit == */../* || $lit == ../* ]]; then
+        COND[$id]="unsupported: the match is not a literal path prefix, so no link search can be derived from it"; return 0
+      fi
+      lit=${lit%/}
+      # The file lists below are newline-delimited: a path holding a newline
+      # would be split in two and its content never searched. Fail closed.
+      if [ "$(tr -cd '\0' < "$T/all" | wc -c)" != "$(tr '\0' '\n' < "$T/all" | wc -l)" ]; then
+        COND[$id]="unsupported: a tracked path contains a newline, which the newline-delimited file lists cannot hold"; return 0
+      fi
+      # Bookkeeping that names the path by design: the ledger, the counts file
+      # of this run, the rulings files, and the record file this row requires.
+      excl=(-e "$LEDGER_REL" -e "$COUNTS_REL" -e "$COUNTS_RUN_REL" -e "$SELF_TOOL" -e "$SELF_TEST")
+      if [ -n "$rec" ]; then   # the record as the file list spells it: ./a/b and a/b are one file
+        rec=$(readlink -m -- "$ROOT_REAL/$rec"); excl+=(-e "${rec#"$ROOT_REAL"/}")
+      fi
+      for a in ${RULINGS_REL[@]+"${RULINGS_REL[@]}"}; do excl+=(-e "$a"); done
+      re=$(printf '%s' "$lit" | sed 's/[][\.*^$+?(){}|]/\\&/g')
+      tr '\0' '\n' < "$T/all" \
+        | grep -vE '^9-archive/|^docs/triage/[0-9]{4}-[0-9]{2}-[0-9]{2}/|^docs/audits/|^docs/reorg/' \
+        | grep -vxF "${excl[@]}" \
+        | awk -v lit="$lit/" 'index($0, lit) != 1' > "$T/live.$id" || true
+      holders=$(cd "$ROOT" || exit 0; tr '\n' '\0' < "$T/live.$id" \
+        | xargs -0 -r grep -I -l -E -- "(^|[^A-Za-z0-9_-])$re(\$|/|[^A-Za-z0-9_.-]|\.(\$|[^A-Za-z0-9_-]))" 2>/dev/null | LC_ALL=C sort -u || true)
+      # A symbolic link is read by its destination, not its contents: one whose
+      # destination, once resolved, lies in the prefix is a live link. One that
+      # resolves outside the root cannot reach it, whatever its text says.
+      while IFS= read -r -d '' sl; do
+        [[ $sl == "$lit"/* || $sl == 9-archive/* || $sl == docs/audits/* || $sl == docs/reorg/* ]] && continue
+        [[ $sl =~ ^docs/triage/[0-9]{4}-[0-9]{2}-[0-9]{2}/ ]] && continue
+        tgt=$(readlink -- "$ROOT/$sl" || true)
+        if [[ $tgt == /* ]]; then abs=$(readlink -m -- "$tgt" || true)   # absolute: as is
+        else abs=$(readlink -m -- "$(dirname -- "$ROOT_REAL/$sl")/$tgt" || true); fi   # relative: from the link's directory
+        rel=${abs#"$ROOT_REAL"/}
+        if [[ $abs == "$ROOT_REAL"/* ]] && [[ $rel == "$lit" || $rel == "$lit"/* ]]; then
+          holders+="${holders:+$'\n'}$sl"
+        fi
+      done < <(find "$ROOT" -type l -not -path '*/.git/*' -printf '%P\0' 2>/dev/null | LC_ALL=C sort -z || true)
+      # A glob in a live file expands into the retired tree: keep every glob
+      # token that can match the prefix at some offset (its root is unknown).
+      while IFS= read -r -d '' gf && IFS= read -r gt; do
+        if glob_reaches "$gt" "$lit"; then holders+="${holders:+$'\n'}$gf"; fi
+      done < <(cd "$ROOT" || exit 0; tr '\n' '\0' < "$T/live.$id" \
+        | xargs -0 -r grep -I -o -H -Z -E -- '[^[:space:]"'"'"'(),;=|&<>:]*[*?[][^[:space:]"'"'"'(),;=|&<>:]*' 2>/dev/null || true)
+      holders=$(printf '%s\n' "$holders" | LC_ALL=C sort -u | grep . || true)
+      HOLD[$id]=$holders
+      if [ -z "$holders" ]; then COND[$id]=met
+      else COND[$id]="unmet: $(printf '%s\n' "$holders" | grep -c .) live file(s) name $lit"; fi ;;
+    *) COND[$id]="unsupported: no rule derives the condition '$key' from the tree" ;;
+  esac
+}
+
+declare -A RULIDS=() DROPPED=() DECIDED=() REQS=() RECS=() RBLOCK=() RCOND=()
+while IFS=$'\x1f' read -r p id kind key req rec mt; do
   RULIDS[$p]+="$id$S"
   case $kind in
-    dropped) DROPPED[$p]=1; [ -n "$req" ] && REQS[$p]+="ruling-condition:$req$S"
+    dropped) DROPPED[$p]=1
+             if [ -n "$req" ]; then
+               eval_condition "$id" "$req" "$mt" "$rec"
+               RCOND[$p]+="$id$ES$req$S"
+               [ "${COND[$id]}" = met ] || REQS[$p]+="ruling-condition:$req$S"
+             fi
              [ -n "$rec" ] && RECS[$p]+="$rec$S" ;;
     decision) DECIDED[$p]=1; [ -n "$rec" ] && RECS[$p]+="$rec$S" ;;
     spec-gap) RBLOCK[$p]+="gap:spec-gap:$key$S" ;;
@@ -421,6 +546,58 @@ named_in() {
   grep -qE "(^|[^A-Za-z0-9_./-])$re([^A-Za-z0-9_./-]|$)" "$2"
 }
 has() { local x; for x in "${blockers[@]}"; do case $x in "$1"*) return 0 ;; esac; done; return 1; }
+
+# ── basename readers: can the mention resolve to this file's path? ────────
+# A name-reader names only the basename as a word, so it may read another
+# repository's file of that name (a template, an estate scanner). Each mention
+# is a path token ending in the basename. Cut it at its last variable, glob,
+# `.`, `..` or empty segment: what follows is its literal tail. The mention can
+# resolve to this file only if the tail is the bare name (the directory is
+# unknown to this tool) or ends this file's path. A tail with a directory that
+# does not end the path names a different file, whatever the root. A reader
+# whose every mention names a different file is foreign and does not block;
+# every other reader keeps blocking, with the reason in name_why.
+# Not decided: text built at run time (a directory joined to a bare name),
+# symbolic links, and whether a template is ever run against this tree.
+declare -A TOKS=()
+mention_tokens() { # FILE BASENAME -> the sorted path tokens ending in BASENAME
+  local k="$1$S$2" re cls
+  if [ -z "${TOKS[$k]+x}" ]; then
+    re=$(printf '%s' "$2" | sed 's/[][\.*^$+?(){}|]/\\&/g')
+    cls='[^[:space:](),;=|&<>:]*'
+    TOKS[$k]=$(cd "$ROOT" || exit 0; grep -I -o -h -w -E -- "(${cls}/)?$re" "$1" 2>/dev/null | LC_ALL=C sort -u || true)
+  fi
+  printf '%s' "${TOKS[$k]}"
+}
+# name_scope FILE BASENAME PATH -> NSWHY: "" when no mention can resolve to PATH
+name_scope() {
+  local tok seg tail segs=() why="" toks
+  NSWHY=""
+  toks=$(mention_tokens "$1" "$2")
+  if [ -z "$toks" ]; then NSWHY="no mention of the name could be read back from the file"; return 0; fi
+  while IFS= read -r tok; do
+    IFS=/ read -r -a segs <<< "$tok"; tail=""
+    for seg in "${segs[@]}"; do
+      case $seg in
+        ''|.|..|*[\$\{\}\*\?\[\]\<\>~%@\`\\\"\']*) tail="" ;;
+        *) tail+="${tail:+/}$seg" ;;
+      esac
+    done
+    if [[ $tail != */* ]]; then why="bare name: it resolves from a directory this tool cannot see"
+    elif [ "$tail" = "$3" ] || [[ $3 == */"$tail" ]]; then why="the mention $tail ends this file's path"
+    else
+      # A different literal tail names a different file, unless a directory in
+      # it is a symbolic link here (it may then reach this path by another name).
+      IFS=/ read -r -a segs <<< "${tail%/*}"
+      for seg in "${segs[@]}"; do
+        [ -z "${SYMNAME[$seg]:-}" ] || { NSWHY="a directory in the mention ($seg) is a symbolic link in this tree, so it may reach this path"; return 0; }
+      done
+      continue
+    fi
+    NSWHY=$why; return 0
+  done <<< "$toks"
+  return 0
+}
 : > "$T/out.tsv"
 while IFS=$'\x1f' read -r p fam spec base uncl; do
   family=$fam; blockers=(); targets=(); facts=null; note=""; ftruth=null; ltruth=null; summary_only=""
@@ -551,7 +728,7 @@ while IFS=$'\x1f' read -r p fam spec base uncl; do
   fi
 
   # Condition 3: readers in this tree.
-  bn=${p##*/}; rx=""; rn=""
+  bn=${p##*/}; rx=""; rn=""; rnf=""; rnw=""
   while IFS= read -r r; do
     [ -n "$r" ] || continue
     blockers+=("reader:$r"); rx+="$r$S"
@@ -559,8 +736,22 @@ while IFS=$'\x1f' read -r p fam spec base uncl; do
   while IFS= read -r r; do
     [ -n "$r" ] || continue
     case "$S$rx" in *"$S$r$S"*) continue ;; esac
-    blockers+=("name-reader:$r"); rn+="$r$S"
+    name_scope "$r" "$bn" "$p"
+    if [ -z "$NSWHY" ]; then rnf+="$r$S"; continue; fi
+    blockers+=("name-reader:$r"); rn+="$r$S"; rnw+="$r$ES$NSWHY$S"
   done <<< "${RN[$bn]:-}"
+
+  # The ruling conditions this file's dropped rows require, and what holds each.
+  rc=""; inb=""
+  if [ -n "${RCOND[$p]:-}" ]; then
+    IFS="$S" read -r -a extra <<< "${RCOND[$p]}"
+    for e in "${extra[@]}"; do
+      cid=${e%%"$ES"*}; ck=${e#*"$ES"}
+      met=false; [ "${COND[$cid]}" = met ] && met=true
+      rc+="$cid$ES$ck$ES$met$ES${COND[$cid]}$S"
+      while IFS= read -r h; do if [ -n "$h" ]; then inb+="$h$S"; fi; done <<< "${HOLD[$cid]:-}"
+    done
+  fi
 
   # Class, from the blockers.
   mapfile -t blockers < <(printf '%s\n' "${blockers[@]}" | grep . | LC_ALL=C sort -u || true)
@@ -585,7 +776,7 @@ while IFS=$'\x1f' read -r p fam spec base uncl; do
         + (if .[3] != "" then {lint: .[3]} else {} end))')
   bj=$(printf '%s\n' "${blockers[@]}" | jq -R -s -c 'split("\n") | map(select(length > 0))')
   printf '%s\t' "$p" "$bytes" "$fam" "$spec" "$chora" "$class" "$note" "$ftruth" "$ltruth" "$rtruth" \
-    "$(printf '%s' "${RULIDS[$p]:-}" | tr "$S" '\n' | grep . | LC_ALL=C sort -u | tr '\n' "$S")" "$rx" "$rn" "$facts" "$tj" >> "$T/out.tsv"
+    "$(printf '%s' "${RULIDS[$p]:-}" | tr "$S" '\n' | grep . | LC_ALL=C sort -u | tr '\n' "$S")" "$rx" "$rn" "$facts" "$tj" "$rnf" "$rnw" "$rc" "$inb" >> "$T/out.tsv"
   printf '%s\n' "$bj" >> "$T/out.tsv"
 done < "$T/fam.tsv"
 
@@ -597,8 +788,12 @@ jq -R -c -S 'split("\t") as $c
    base_chora: (if $c[4] == "" then null else $c[4] end),
    class: $c[5], note: (if $c[6] == "" then null else $c[6] end),
    conditions: {facts: tri($c[7]), lint: tri($c[8]), readers: tri($c[9])},
-   rulings: lst($c[10]), readers: {path: lst($c[11]), name: lst($c[12])},
-   facts: ($c[13] | fromjson), target_deeds: ($c[14] | fromjson), blockers: ($c[15] | fromjson)}' \
+   rulings: lst($c[10]),
+   readers: {path: lst($c[11]), name: lst($c[12]), name_foreign: lst($c[15]),
+             name_why: (lst($c[16]) | map(split("\u001e") | {key: .[0], value: .[1]}) | from_entries)},
+   ruling_conditions: (lst($c[17]) | map(split("\u001e") | {id: .[0], key: .[1], met: (.[2] == "true"), why: .[3]})),
+   inbound_links: (lst($c[18]) | unique),
+   facts: ($c[13] | fromjson), target_deeds: ($c[14] | fromjson), blockers: ($c[19] | fromjson)}' \
   "$T/out.tsv" > "$T/out.jsonl"
 
 # ── output ────────────────────────────────────────────────────────────────
