@@ -121,8 +121,9 @@ d1="$(find "$DEFER" -mindepth 1 -maxdepth 1 -type d | head -1)"
 expect "…the deferral carries a tree and a meta row" "yes" "$([ -f "$d1/tree.tar" ] && [ -f "$d1/meta.tsv" ] && echo yes || echo no)"
 expect "…the meta row names repo, branch, head and a 64-hex pin hash" "o/r main $MAIN_SHA 1" \
   "$(awk -F'\t' '{print $1, $2, $3, ($4 ~ /^[0-9a-f]{64}$/)}' "$d1/meta.tsv")"
-expect "…the tree holds the relocked lock, the bumped workflow and no .git" "yes" \
-  "$(if tar -tf "$d1/tree.tar" | grep -q "^./.git/"; then echo no; elif tar -xOf "$d1/tree.tar" ./.github/workflows/actions.lock | grep -q "a/b@v2" && tar -xOf "$d1/tree.tar" ./.github/workflows/ci.yml | grep -q 5555; then echo yes; else echo no; fi)"
+tree_list="$(tar -tf "$d1/tree.tar")"; tree_lock="$(tar -xOf "$d1/tree.tar" ./.github/workflows/actions.lock)"; tree_ci="$(tar -xOf "$d1/tree.tar" ./.github/workflows/ci.yml)"
+tree_ok=no; case "$tree_list" in *./.git/*) ;; *) case "$tree_lock" in *a/b@v2*) case "$tree_ci" in *5555*) tree_ok=yes ;; esac ;; esac ;; esac
+expect "…the tree holds the relocked lock, the bumped workflow and no .git" "yes" "$tree_ok"
 
 FIXTURE="$(fixture p1plain - -)"; MAIN_SHA="$(git -C "$FIXTURE" rev-parse HEAD)"; export MAIN_SHA; : > "$GH_LOG"; rm -f "$GH_CAPTURE"
 out="$(HOOK_DEFER_DIR="$WORK/defer-plain" bump_main o/r '[]' 2>/dev/null)"
