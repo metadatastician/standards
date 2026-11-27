@@ -828,6 +828,16 @@ writes and checks the receipt they give, and only then appends them. What a
 recorder writes with it is a proposal: the gate (`--check`) and a review
 accept it, and a stored row never stands for the fact it records.
 
+By default a receipt that is not current (`superseded`, `regressed` or
+`stale`) is written as its state and reason only. A home script may set
+`RECEIPT_KEEP_LINEAGE_DETAIL=1`, and then such a receipt keeps what its run
+read: the `:inputs-sha256` and `(axioms …)` of its ledger row, and its
+`(inputs-manifest …)`, rebuilt at the row's commit and written only when it
+hashes to that digest. A run whose manifest cannot be shown to hash to its
+digest (the commit is not here, or the input set has moved) is written
+without the manifest, and the generator says so. None of it counts toward a
+grade (§8.4). The setting must be the same for `--write` and `--check`.
+
 `scripts/tests/proof-receipt-test.sh` tests the generator, including
 an `(import …)` of a pinned sibling. Using it is a convenience, not a rule:
 the reader decides what a receipt is.

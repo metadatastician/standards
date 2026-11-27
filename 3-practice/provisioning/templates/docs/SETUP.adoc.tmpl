@@ -134,7 +134,9 @@ guix time-machine -C __GUIX_PREFIX__channels.scm -- shell -m __GUIX_PREFIX__mani
 guix build -f __GUIX_PREFIX__guix.scm   # the package
 ----
 
-Tools Guix does not package: __GUIX_GAPS__. The Guix shell includes mise, so inside
+Tools Guix does not package: __GUIX_GAPS__. Idris2 is not one of them: it comes from the
+estate Guix channel pinned in `channels.scm`, so use the `guix time-machine` form above
+(`just dev-shell` does). The Guix shell includes mise, so inside
 it run `mise install` for those. `just dev-shell` picks Guix when it is present and mise
 when it is not.
 

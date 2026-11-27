@@ -65,6 +65,8 @@ permissions:
 
 jobs:
   apply:
+    outputs:
+      deferred: ${{ steps.defer.outputs.deferred }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -105,12 +107,20 @@ jobs:
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
           owner: catachresis-colloquium
 
-      - name: Install the lock tooling (same pin as the governance gate)
-        env:
-          GH_TOKEN: ${{ github.token }}
+      # Not `gh extension install --pin v0.2.0`: a tag can be moved, and this job
+      # holds App tokens. The release binary is verified against a recorded
+      # sha256 (the same one self-test.yml checks) and installed as the extension.
+      - name: Install the lock tooling (hash-verified release, same pin as the governance gate)
         run: |
+          set -euo pipefail
           sudo apt-get install -y -qq gawk >/dev/null
-          gh extension install github/gh-actions-lock --pin v0.2.0
+          ext="${XDG_DATA_HOME:-$HOME/.local/share}/gh/extensions/gh-actions-lock"
+          mkdir -p "$ext"
+          curl -sSfL --proto '=https' --proto-redir '=https' --tlsv1.2 --retry 3 -o "$ext/gh-actions-lock" https://github.com/github/gh-actions-lock/releases/download/v0.2.0/linux-amd64
+          echo "79ec84c191667fd935a277e6fd3662cf5d3669cccc9e99998731d8f306f373b6  $ext/gh-actions-lock" | sha256sum --check
+          chmod u+x "$ext/gh-actions-lock"
+          printf 'owner: github\nname: gh-actions-lock\nhost: github.com\ntag: v0.2.0\nispinned: true\npath: %s\n' "$ext/gh-actions-lock" > "$ext/manifest.yml"
+          gh actions-lock --help >/dev/null
 
       - name: Bump pins, regenerate locks, repair
         env:
@@ -125,7 +135,9 @@ jobs:
           REGEN_MAIN: ${{ (github.event.schedule == '41 4 * * *' || github.event.schedule == '17 5 * * 1' || inputs.main-repair) && '1' || '0' }}
           BUMP_PINS: ${{ (github.event.schedule == '17 5 * * 1' || inputs.bump) && '1' || '0' }}
           ONLY_REPO: ${{ inputs.repo }}
+          HOOK_DEFER_DIR: ${{ runner.temp }}/hook-defer
         run: |
+          mkdir -p "$HOOK_DEFER_DIR"
           # A token is an empty string when the App is absent or not installed
           # on that owner; the script names each owner it did NOT examine.
           bash scripts/regen-dependabot-locks.sh ${ONLY_REPO:+"$ONLY_REPO"} | tee "$RUNNER_TEMP/applier.txt"
@@ -133,5 +145,175 @@ jobs:
             echo '### Action pins applier'
             echo '```'
             cat "$RUNNER_TEMP/applier.txt"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Were any repositories deferred to the hook phases?
+        id: defer
+        if: ${{ !cancelled() }}
+        run: |
+          if [ -n "$(find "$RUNNER_TEMP/hook-defer" -mindepth 1 -maxdepth 1 2>/dev/null | head -1)" ]; then
+            echo deferred=true >> "$GITHUB_OUTPUT"
+          else
+            echo deferred=false >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() && steps.defer.outputs.deferred == 'true' }}
+        with:
+          name: hook-defer
+          path: ${{ runner.temp }}/hook-defer
+          retention-days: 1
+
+  # ---- POST-PIN-BUMP HOOK (contract: 3-practice/ACTION-PINS-APPLIER.adoc) ------
+  # A repository that carries scripts/post-pin-bump.sh has files DERIVED from its
+  # pins (a lock, a generated table). `apply` does not open a PR for it; it
+  # defers the bumped tree. `hook-prepare` runs the repository's hook with NO App
+  # token. `hook-apply` treats that result as untrusted, re-derives the bump and
+  # commits only the paths .github/post-pin-bump.paths allows, into the same PR.
+  hook-prepare:
+    needs: apply
+    if: ${{ !cancelled() && needs.apply.outputs.deferred == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - name: Harden runner (egress audit)
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: hook-defer
+          path: ${{ runner.temp }}/hook-defer
+      # The hook image: the pinned Debian digest plus jq, git and ca-certificates
+      # from a dated snapshot.debian.org archive, so the same inputs give the same
+      # packages. Built here, while the network is up, and tagged locally. Apt
+      # verifies the snapshot's signed Release file against Debian's archive
+      # keyring, so plain http is fine (the image has no CA bundle yet). No
+      # repository code runs in this step; the hook container has outbound network but no credential.
+      - name: Build the hook image (pinned base, snapshot.debian.org packages)
+        run: |
+          set -euo pipefail
+          docker build --tag post-pin-bump-hook:local - <<'DOCKERFILE'
+          FROM public.ecr.aws/docker/library/debian@sha256:e67eeead736ff7bbe258ef088bff683635c561b1fcfefad0806c1df4ab49ce0e
+          RUN set -eux; \
+              printf 'Types: deb\nURIs: http://snapshot.debian.org/archive/debian/20261101T000000Z/\nSuites: bookworm\nComponents: main\nSigned-By: /usr/share/keyrings/debian-archive-keyring.gpg\n' > /etc/apt/sources.list.d/debian.sources; \
+              apt-get -o Acquire::Check-Valid-Until=false update; \
+              apt-get install -y --no-install-recommends jq git ca-certificates; \
+              rm -rf /var/lib/apt/lists/*; \
+              dpkg-query -W jq git ca-certificates
+          RUN set -eux; for t in bash git jq awk sha256sum cmp grep find tar timeout sed; do command -v "$t" >/dev/null || { echo "hook image lacks $t" >&2; exit 1; }; done
+          DOCKERFILE
+          {
+            echo '### Hook image packages'
+            echo '```'
+            docker run --rm post-pin-bump-hook:local dpkg-query -W jq git ca-certificates
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Run each repository's post-pin-bump hook (no App token in this job)
+        env:
+          HOOK_PHASE: prepare
+          # Each hook runs in its own throwaway container: default outbound network (no credential in reach), no
+          # capabilities, one tree mounted, none of this runner's state. The image
+          # is the one built above.
+          HOOK_IMAGE: post-pin-bump-hook:local
+          HOOK_DEFER_DIR: ${{ runner.temp }}/hook-defer
+          HOOK_RESULT_DIR: ${{ runner.temp }}/hook-result
+        run: bash scripts/regen-dependabot-locks.sh
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: hook-result
+          path: ${{ runner.temp }}/hook-result
+          retention-days: 1
+          if-no-files-found: error
+
+  hook-apply:
+    needs: [apply, hook-prepare]
+    if: ${{ !cancelled() && needs.hook-prepare.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Harden runner (egress audit)
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The token job's own deferral rows are the authority: repo, owner and
+      # token come from them, never from the (untrusted) result.
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: hook-defer
+          path: ${{ runner.temp }}/hook-defer
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: hook-result
+          path: ${{ runner.temp }}/hook-result
+
+      - name: Mint an App installation token for hyperpolymath
+        id: tok-user
+        if: vars.APP_ID != ''
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        continue-on-error: true
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: hyperpolymath
+      - name: Mint an App installation token for metadatastician
+        id: tok-org
+        if: vars.APP_ID != ''
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        continue-on-error: true
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: metadatastician
+      - name: Mint an App installation token for catachresis-colloquium
+        id: tok-cc
+        if: vars.APP_ID != ''
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        continue-on-error: true
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: catachresis-colloquium
+
+      # Not `gh extension install --pin v0.2.0`: a tag can be moved, and this job
+      # holds App tokens. The release binary is verified against a recorded
+      # sha256 (the same one self-test.yml checks) and installed as the extension.
+      - name: Install the lock tooling (hash-verified release, same pin as the governance gate)
+        run: |
+          set -euo pipefail
+          sudo apt-get install -y -qq gawk >/dev/null
+          ext="${XDG_DATA_HOME:-$HOME/.local/share}/gh/extensions/gh-actions-lock"
+          mkdir -p "$ext"
+          curl -sSfL --proto '=https' --proto-redir '=https' --tlsv1.2 --retry 3 -o "$ext/gh-actions-lock" https://github.com/github/gh-actions-lock/releases/download/v0.2.0/linux-amd64
+          echo "79ec84c191667fd935a277e6fd3662cf5d3669cccc9e99998731d8f306f373b6  $ext/gh-actions-lock" | sha256sum --check
+          chmod u+x "$ext/gh-actions-lock"
+          printf 'owner: github\nname: gh-actions-lock\nhost: github.com\ntag: v0.2.0\nispinned: true\npath: %s\n' "$ext/gh-actions-lock" > "$ext/manifest.yml"
+          gh actions-lock --help >/dev/null
+
+      - name: Re-derive each bump and commit the hook's allow-listed files
+        env:
+          HOOK_PHASE: apply
+          HOOK_DEFER_DIR: ${{ runner.temp }}/hook-defer
+          HOOK_RESULT_DIR: ${{ runner.temp }}/hook-result
+          REGEN_TOKENS: >-
+            hyperpolymath=${{ steps.tok-user.outputs.token }}
+            metadatastician=${{ steps.tok-org.outputs.token }}
+            catachresis-colloquium=${{ steps.tok-cc.outputs.token }}
+          APPLIER_SLUG: ${{ steps.tok-org.outputs.app-slug || steps.tok-user.outputs.app-slug || steps.tok-cc.outputs.app-slug }}
+          DRY_RUN: ${{ inputs.dry-run && '1' || '0' }}
+        run: |
+          bash scripts/regen-dependabot-locks.sh | tee "$RUNNER_TEMP/hook-apply.txt"
+          {
+            echo '### Action pins applier: hook-apply'
+            echo '```'
+            cat "$RUNNER_TEMP/hook-apply.txt"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"

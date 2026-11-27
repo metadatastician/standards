@@ -1,0 +1,53 @@
+// SPDX-License-Identifier: MPL-2.0
+= scorecard-lock-reconcile
+
+Removes Scorecard's "GitHubAction not pinned by hash" findings, but only
+where native `gh actions-lock` verification of that workflow passes. Every
+other finding stays. It replaces `scripts/reconcile-scorecard-actions-lock.rb`
+(Ruby is banned in the estate) and keeps its behaviour and exit codes.
+
+`.github/workflows/scorecard-reusable.yml` stages this directory from
+`${{ job.workflow_sha }}` and runs it with `cargo run --locked`.
+
+== Use
+
+----
+scorecard-lock-reconcile INPUT OUTPUT AUDIT_JSON [ROOT]
+----
+
+[cols="1,4",options="header"]
+|===
+| Exit | Meaning
+| 0 | Every eligible workflow verified. OUTPUT and AUDIT_JSON are written.
+| 3 | OUTPUT and AUDIT_JSON are written, but at least one workflow failed native verification. Only that workflow keeps its findings. Callers treat this as failure.
+| 2 | Usage or SARIF structure error. OUTPUT is not written.
+|===
+
+A finding is removed only when all of these hold:
+
+* the run's tool is Scorecard, the rule is `PinnedDependenciesID`, and the
+  message is the action-pin message;
+* it has one location, a regular file (not a symlink) under
+  `ROOT/.github/workflows/`, and `actions.lock` exists there;
+* the line is a remote `uses:` entry in that workflow;
+* `gh actions-lock <workflow> --verify --no-interactive --json=valid,findings`
+  accepts the workflow, and every job-level reusable ref is in `actions.lock`
+  (standards#1036, arm D).
+
+One failing workflow never stops the others from being reconciled.
+
+== Tests
+
+`cargo test --locked` runs the binary against a stub `gh` (the cases ported
+from the Ruby minitest suite). `scripts/tests/reconcile-scorecard-actions-lock-test.sh`
+is the self-test entry point.
+
+== Verification status
+
+Rust in the estate is verified with Creusot (Pearlite contracts) and Verus
+(`3-practice/PROOF-POLICY.adoc` §1.2). Neither is scoped yet for this tool:
+both are PENDING. The obligations to scope first are that a finding is
+removed only when `verification_accepted` holds for its workflow, and that
+`reconcile` never adds or reorders findings. Third-party crates (`regex`,
+`serde_json`, `yaml-rust2`) are an ASSUMED boundary. Today the evidence is
+the test suite only.
