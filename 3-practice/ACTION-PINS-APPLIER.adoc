@@ -43,7 +43,7 @@ repository is refused as `bump-hook-not-deferred`, never given a PR with stale
 derived files.
 
 | `hook-prepare` | no
-| Runs each repository's hook in its OWN throwaway container (`docker run --rm --network none --user 65534:65534 --cap-drop ALL --security-opt no-new-privileges --read-only`), with `POST_PIN_BUMP=1`, a timeout (`HOOK_TIMEOUT`, default 300 s) and exactly one thing mounted: a copy of that repository's tree. The container sees no runner state, no other repository's tree or result, and no network. The image (`HOOK_IMAGE`) is built in the job from a Debian bookworm-slim base pinned by digest, plus `jq`, `git` and `ca-certificates` from a dated `snapshot.debian.org` archive (see "The hook image"). Records, per deferral, the status, the log, the list of changed paths with their modes, and the changed files, in a result directory named after the deferral. Writes the `hook-result` artifact.
+| Runs each repository's hook in its OWN throwaway container (`docker run --rm --user 65534:65534 --cap-drop ALL --security-opt no-new-privileges --read-only`), with `POST_PIN_BUMP=1`, a timeout (`HOOK_TIMEOUT`, default 300 s) and exactly one thing mounted: a copy of that repository's tree. The container sees no runner state, no credential and no other repository's tree or result. It has outbound network (owner ruling, 2026-11-27: "Allow outbound network"), because a hook may need to fetch from GitHub; see the threat model. The image (`HOOK_IMAGE`) is built in the job from a Debian bookworm-slim base pinned by digest, plus `jq`, `git` and `ca-certificates` from a dated `snapshot.debian.org` archive (see "The hook image"). Records, per deferral, the status, the log, the list of changed paths with their modes, and the changed files, in a result directory named after the deferral. Writes the `hook-result` artifact.
 
 | `hook-apply` | yes
 | Treats the result as untrusted and the `hook-defer` rows written by the token job as the authority: repo, owner and token come from them. Each deferral needs exactly one result directory of the same name whose `meta.tsv` is byte-identical to the deferral's; a result for another row, a missing result, or a result no deferral asked for fails the run. It re-derives the bump and the lock itself from
@@ -78,20 +78,22 @@ The hook is code from a repository that other people can push to, so it is treat
 
 * *No shared runner.* Running every hook as the runner user, on one runner, would let one repository's hook write another's result, tamper with its tree, or rewrite the runner's own action code (for example the `upload-artifact` JavaScript or `harden-runner`'s post step). A rewritten action runs in the next step with `ACTIONS_RUNTIME_TOKEN`, which is enough to poison this repository's `main` cache, and the governance, hypatia and fork-governance jobs restore that cache next to their tokens. `env -i` does not stop this. The per-deferral container does: it mounts one tree and nothing of the runner, so there is nothing to rewrite and no token to read.
 * *Public artifacts.* `hook-defer` and `hook-result` hold a whole checkout and live in a workflow run of a public repository. A repository that is not public (private, internal, or one whose visibility cannot be read) is refused by name, `hook-refused-nonpublic`, before any hook runs.
+* *Outbound network.* A hook has the default bridge network and can reach the internet. That is acceptable because no credential or Actions runtime token is inside the container (its environment is five fixed variables, none from the runner, and a test asserts no `ACTIONS_*`, `GITHUB_*` or `RUNNER_*` is passed), the trees are public-only (a hook cannot read anything it could not already read), and everything it produces is untrusted and checked against the allow-list in phase 3. The remaining risk: a hook can fetch and run arbitrary code inside its own sandbox. That limits only what it can produce for its own repository, as allow-listed regular files, which a reviewer reads in the PR; it can still use the runner's network position (for example to reach services only the runner can).
 * *Authority.* Phase 3 trusts nothing the container produced, including its own row.
 
 == The hook image
 
-A hook may rely on: `bash`, the Debian base utilities (coreutils, grep, sed, awk, find, `sha256sum`, tar, `timeout`), `jq`, `git` and `ca-certificates`. Nothing else is installed: no network, no package manager at run time, no language runtimes. A hook that needs more must say so in a change to this page and the image.
+Inside the container `HOME` is `/tmp/home` and `TMPDIR` is `/tmp`, on a 512 MiB tmpfs (the root is read-only), so a bare `git fetch` of one repository fits.
+A hook may rely on: `bash`, the Debian base utilities (coreutils, grep, sed, awk, find, `sha256sum`, tar, `timeout`), `jq`, `git` and `ca-certificates`. Nothing else is installed: no package manager at run time, no language runtimes. A hook that needs more must say so in a change to this page and the image.
 
-The image is built in `hook-prepare` while the network is up: `FROM` the bookworm-slim digest, then `apt-get install --no-install-recommends jq git ca-certificates` from `snapshot.debian.org/archive/debian/20261101T000000Z/`, tagged `post-pin-bump-hook:local`. A dated snapshot gives the same packages for the same inputs; apt verifies the snapshot's signed Release file (plain http is used because the base has no CA bundle yet). The installed versions are written to the job summary of every run. Moving the snapshot date or the base digest is an ordinary reviewed change. The hook container itself still runs with `--network none`.
+The image is built in `hook-prepare` while the network is up: `FROM` the bookworm-slim digest, then `apt-get install --no-install-recommends jq git ca-certificates` from `snapshot.debian.org/archive/debian/20261101T000000Z/`, tagged `post-pin-bump-hook:local`. A dated snapshot gives the same packages for the same inputs; apt verifies the snapshot's signed Release file (plain http is used because the base has no CA bundle yet). The installed versions are written to the job summary of every run. Moving the snapshot date or the base digest is an ordinary reviewed change. The hook container does not use the build step's apt sources; it runs from the built image with the default network.
 
 == What is not enforced
 
 State these plainly; do not claim more.
 
 * *The container runtime.* Isolation is as strong as Docker's on the hosted runner. A container escape is out of scope; the image is pinned (base by digest, packages by snapshot date), not audited.
-* *Network egress, in the other jobs.* They run on a hosted runner with the egress audit of `step-security/harden-runner` and no block. Only the hook phase is network-less.
+* *Network egress, in the other jobs.* They run on a hosted runner with the egress audit of `step-security/harden-runner` and no block. The hook phase has the network too, by ruling (see the threat model).
 * *The phase-1 `github.token`.* `apply` holds the job's default `contents: read` token. Hook code never runs there.
 * *Byte content within allow-listed files.* The applier checks where a hook wrote
   and what kind of file it is, not what is in it. Allow-list only files whose
@@ -102,7 +104,7 @@ State these plainly; do not claim more.
 `scripts/tests/post-pin-bump-hook-test.sh` runs the real hook through all three
 phases offline, with `gh` and the repair tools stubbed, and checks every refusal
 above, forged results included. `scripts/tests/regen-dependabot-locks-test.sh`
-covers the unchanged no-hook path. The tests run the hook natively (`HOOK_SANDBOX=none`, refused on a runner) and check the container flags against a stub `docker`; they do not prove the isolation itself, which is Docker's.
+covers the unchanged no-hook path. No test runs a real fetching hook (gitbot-fleet'"'"'s, in `POST_PIN_BUMP=1` fetch mode); the first `workflow_dispatch` dry-run on a hook repository is that test. The tests run the hook natively (`HOOK_SANDBOX=none`, refused on a runner) and check the container flags against a stub `docker`; they do not prove the isolation itself, which is Docker's.
 
 The token jobs install `gh-actions-lock` from its release binary, checked against a recorded sha256, not with `gh extension install --pin`: a tag can move.
 

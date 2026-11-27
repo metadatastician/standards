@@ -338,10 +338,13 @@ chmod +x "$WORK/docker"
 export DOCKER_LOG="$WORK/docker.log"
 pipeline sb "$GOOD_HOOK" "$ALLOW" >/dev/null
 rm -rf "$WORK/res-sb2"
-HOOK_SANDBOX=docker DOCKER_BIN="$WORK/docker" HOOK_IMAGE="img@sha256:$(printf 'a%.0s' $(seq 64))" HOOK_DEFER_DIR="$DEFER" HOOK_RESULT_DIR="$WORK/res-sb2" hook_prepare >/dev/null 2>&1
+ACTIONS_RUNTIME_TOKEN=leak GITHUB_TOKEN=leak RUNNER_TEMP="${RUNNER_TEMP:-/x}" HOOK_SANDBOX=docker DOCKER_BIN="$WORK/docker" HOOK_IMAGE="img@sha256:$(printf 'a%.0s' $(seq 64))" HOOK_DEFER_DIR="$DEFER" HOOK_RESULT_DIR="$WORK/res-sb2" hook_prepare >/dev/null 2>&1
 dl="$(tr '\n' ' ' < "$DOCKER_LOG" 2>/dev/null)"
 has "the hook runs in a container" "run --rm" "$dl"
-has "…with no network" "--network none" "$dl"
+case "$dl" in *"--network"*) bad "…on the default bridge network (no --network flag)" ;; *) ok "…on the default bridge network (no --network flag)" ;; esac
+has "…HOME and TMPDIR point at the tmpfs" "HOME=/tmp/home" "$dl"
+has "…and TMPDIR is /tmp" "TMPDIR=/tmp" "$dl"
+has "…with a tmpfs big enough for a fetch" "--tmpfs /tmp:rw,exec,size=512m" "$dl"
 has "…as an unprivileged uid" "--user 65534:65534" "$dl"
 has "…with every capability dropped" "--cap-drop ALL" "$dl"
 has "…and no privilege escalation" "--security-opt no-new-privileges" "$dl"
@@ -349,6 +352,11 @@ has "…and a read-only root" "--read-only" "$dl"
 mounts="$(grep -c '^-v$' "$DOCKER_LOG")"
 expect "…with exactly one mount" 1 "$mounts"
 case "$dl" in *"${RUNNER_TEMP:-/nonexistent-runner}"*|*_actions*|*"$DEFER"*|*docker.sock*) bad "…the mount list leaks runner state" ;; *) ok "…which is one tree copy, not the runner's state or the deferrals" ;; esac
+# Nothing from the runner reaches the container: the only -e flags are the five below, and no
+# ACTIONS_*, GITHUB_*, RUNNER_* or token variable is named (docker never inherits the host env).
+envs="$(awk '/^-e$/{getline; print}' "$DOCKER_LOG" | cut -d= -f1 | sort | paste -sd,)"
+expect "…the container env is exactly these variables" "HOME,LANG,PATH,POST_PIN_BUMP,TMPDIR" "$envs"
+case "$dl" in *ACTIONS_*|*GITHUB_*|*RUNNER_*|*TOKEN*|*--env-file*) bad "…no runner or token variable, no env file" ;; *) ok "…no ACTIONS_/GITHUB_/RUNNER_/token variable and no env file" ;; esac
 case "$dl" in *--privileged*|*"--network host"*|*docker.sock*) bad "…no privileged or host-network flags" ;; *) ok "…no privileged or host-network flags" ;; esac
 expect "…and the result is the same as an unsandboxed run" "new from @555555555555" "$(cat "$(find "$WORK/res-sb2" -name deps.lock | head -1)")"
 out="$(HOOK_SANDBOX=docker DOCKER_BIN="$WORK/docker" HOOK_DEFER_DIR="$DEFER" HOOK_RESULT_DIR="$WORK/res-sb3" hook_prepare 2>&1)"

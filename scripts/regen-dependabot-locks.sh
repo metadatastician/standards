@@ -334,7 +334,7 @@ BUMP_PINS_HEADLINE="chore(deps): bump third-party action pins and actions.lock t
 # App token exists, so a hook repo is split across three jobs:
 #   apply         (token, no repo code)   bumps and relocks, then DEFERS the repo:
 #                                         tree + meta go into $HOOK_DEFER_DIR.
-#   hook-prepare  (NO token)              runs each hook in its own network-less
+#   hook-prepare  (NO token)              runs each hook in its own throwaway
 #                                         container (hook_sandbox_run), with a
 #                                         timeout, POST_PIN_BUMP=1 and no args, and
 #                                         writes what it changed to $HOOK_RESULT_DIR.
@@ -470,7 +470,8 @@ defer_hook() {
 }
 
 # Run one repository's hook in its own throwaway container. The container sees
-# ONLY the copy of that one tree ($1, mounted at /work): no network, no
+# ONLY the copy of that one tree ($1, mounted at /work): default outbound network only (no credential, runner token or
+# runner file is in reach), no
 # capabilities, no setuid escalation, an unprivileged uid, no runner state
 # ($RUNNER_TEMP, _actions, other deferrals, the Actions runtime token). That is
 # what keeps a hostile hook from touching another repository's result, from
@@ -495,14 +496,14 @@ hook_sandbox_run() {
   cname="hook-${name//[^A-Za-z0-9_.-]/_}-$$"
   # shellcheck disable=SC2016
   "${DOCKER_BIN:-docker}" run --rm --name "$cname" \
-      --network none --user 65534:65534 --cap-drop ALL \
+      --user 65534:65534 --cap-drop ALL \
       --security-opt no-new-privileges --pids-limit 512 --memory 2g \
       --read-only --tmpfs /tmp:rw,exec,size=512m \
       -v "$tree:/work:rw" -w /work \
-      -e POST_PIN_BUMP=1 -e HOME=/tmp -e LANG=C.UTF-8 \
+      -e POST_PIN_BUMP=1 -e HOME=/tmp/home -e TMPDIR=/tmp -e LANG=C.UTF-8 \
       -e PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
       "$HOOK_IMAGE" \
-      sh -c 'umask 0; exec timeout --kill-after=10 "$0" bash "$1"' "$HOOK_TIMEOUT" "$HOOK_SCRIPT" \
+      sh -c 'umask 0; mkdir -p "$HOME"; exec timeout --kill-after=10 "$0" bash "$1"' "$HOOK_TIMEOUT" "$HOOK_SCRIPT" \
       </dev/null &
   local pid=$!
   # Outer guard: if the container ignores its own timeout, remove it.
@@ -525,7 +526,7 @@ hook_git() {
 
 # PHASE 2 (hook-prepare): holds NO App token, and the job must not either. For
 # each deferral in $HOOK_DEFER_DIR, run the repository's hook on a copy of its
-# tree inside its own container (hook_sandbox_run; no network, one tree, no
+# tree inside its own container (hook_sandbox_run; outbound network, one tree, no
 # arguments; $HOOK_TIMEOUT seconds) and write to $HOOK_RESULT_DIR/<deferral>/,
 # named after the deferral directory:
 #   meta.tsv    the deferral's meta, copied
