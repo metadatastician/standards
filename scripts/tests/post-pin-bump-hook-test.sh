@@ -70,6 +70,9 @@ EOF
 chmod +x "$WORK/gh"
 export GH_BIN="$WORK/gh" REGEN_TOOLS="$TOOLS" GH_CAPTURE="$WORK/payload.json" GH_LOG="$WORK/gh.log" APPLIER_SLUG=estate-applier
 export HOOK_SANDBOX=none
+# The tests are offline and run the hook natively; a CI runner sets GITHUB_ACTIONS=true,
+# which makes the script refuse HOOK_SANDBOX=none. The one test of that refusal sets it itself.
+unset GITHUB_ACTIONS
 
 # shellcheck source=../regen-dependabot-locks.sh
 source "$TARGET"
