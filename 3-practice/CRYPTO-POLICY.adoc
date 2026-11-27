@@ -1,0 +1,161 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+= Cryptography Policy: Top Tier by Default
+:toc:
+:toc-placement: preamble
+:sectnums:
+
+Every cryptographic primitive in the estate, including the secondary ones,
+starts at the top tier below. A lower choice is allowed only through a written
+exception in the register (<<register>>). Status: *ruled by the owner
+2026-11-27*, by selector in the Head of House session and in the Canon and
+standards hub; this document is a draft until the owner merges it.
+
+== The rulings
+
+The owner's answers, verbatim, 2026-11-27:
+
+* To "Top tier everywhere by default, with a written exception only where
+  something won't accept it, needs heavy machinery, or is speed-critical.
+  Proposed top tier: signing Ed448 + ML-DSA-87 (post-quantum signature; Kyber
+  can't sign); key exchange X448 + ML-KEM-1024; symmetric XChaCha20-Poly1305 or
+  AES-256-GCM; hashing SHA3-512 (BLAKE3 where speed matters); passwords
+  Argon2id; TLS 1.3 only; Deno with tight permissions. Adopt it?":
+  *"Adopt as proposed (Recommended)"*.
+* To "This flips the runtime rule from 30 minutes ago (mostly Bun) to Deno by
+  default, with Bun only as an exception for speed or tooling. Confirm the
+  flip?": *"Keep mostly Bun"* ("Runtime stays as ruled earlier. Top tier
+  applies to crypto only.").
+* On scope: *"for eveything not secondary so thngs le BLAKE3 and SHAKE-512
+  and so on and so on"*. The top tier covers every primitive, not only
+  signing and key exchange.
+* On the older TRUST-DEFAULTS settings: *"Same, but try DNSSEC Ed448"*, that
+  is: raise what works, use Ed448 for DNSSEC wherever the registrar and DNS
+  host accept it, and log the rest as exceptions.
+* On upgrades: *"where it is permanent do not do, where it is temporary do it
+  and then fix it so all that can be upgraedd is"* (<<permanence>>).
+
+This policy governs cryptography only. The JavaScript runtime stays as
+`LANGUAGE-POLICY.adoc` rules it.
+
+[[tier]]
+== The top tier, per primitive
+
+[cols="1,2,2",options="header"]
+|===
+| Primitive | Top tier (default) | Notes
+
+| Signatures
+| Hybrid *Ed448 + ML-DSA-87*
+| Both signatures are made and both are checked. ML-KEM (Kyber) cannot sign.
+
+| Key exchange
+| Hybrid *X448 + ML-KEM-1024*
+| Both shared secrets go through a KDF combiner: a protocol's own defined hybrid construction (the TLS 1.3 hybrid groups, X-Wing) where one exists, otherwise HKDF-SHA3-512 or KMAC256 over the X448 secret, then the ML-KEM-1024 secret, in that fixed order, bound to both public keys, the ML-KEM ciphertext and the protocol context. Concatenation, XOR or direct use of either secret alone is not a combiner.
+
+| AEAD (symmetric encryption)
+| *XChaCha20-Poly1305* or *AES-256-GCM*
+| AEAD only. XChaCha20-Poly1305 where nonces are random (192-bit nonces). AES-256-GCM takes 96-bit IVs that never repeat under one key: a deterministic counter construction (NIST SP 800-38D §8.2.1), or random IVs with at most 2^32^ invocations per key before rekeying (§8.3).
+
+| Hash
+| *SHA3-512*
+|
+
+| XOF (extendable output)
+| *SHAKE256* with at least 512 bits of output
+| There is no SHAKE-512; SHAKE256 is the strongest SHAKE.
+
+| Fast hash
+| *BLAKE3*, only under a `speed` exception
+| BLAKE3 sits at the 128-bit security level, below SHA3-512.
+
+| MAC
+| *KMAC256* or *HMAC-SHA3-512*
+| Keys of at least 256 bits from the CSPRNG or a KDF. Tags of at least 256 bits; a KMAC256 output length below 256 bits, or an HMAC tag truncated below 256 bits, is an exception.
+
+| KDF
+| *HKDF-SHA3-512*, or a KMAC256-based KDF
+|
+
+| Password hashing
+| *Argon2id* with strong parameters
+| At least the RFC 9106 first recommended setting: 1 pass, 2 GiB memory, 4 lanes, a 128-bit random salt and a 256-bit tag. A lower memory cost, a shorter salt or a shorter tag is a `heavy` exception.
+
+| Random numbers
+| *The operating system CSPRNG only* (`getrandom`, `/dev/urandom`, `crypto.getRandomValues`)
+| No userspace generators seeded by hand.
+
+| Transport
+| *TLS 1.3 only*
+| No TLS 1.2 fallback. The cipher suite's SHA-2 transcript hash and HKDF are a register row (`tls13-cipher-suite-sha2`); prefer `TLS_AES_256_GCM_SHA384` and `TLS_CHACHA20_POLY1305_SHA256`.
+
+| Forbidden for new security uses
+| *RSA* (any role), *MD5*, *SHA-1*, *SHA-2-256*
+| An existing use of one of these is a register row or a departure. SHA-256 digests mandated by standards specifications written before these rulings (for example `:inputs-sha256` in `PROOF-POLICY.adoc` and `policy_hash_sha256` in the AXEL policy) sit on the temporary row `existing-spec-sha256-digests`.
+|===
+
+[[classes]]
+== When an exception is allowed
+
+An exception names exactly one reason class:
+
+`not-accepted`:: the other side will not accept the top tier (a platform,
+protocol, browser or service offers nothing higher).
+`heavy`:: meeting the top tier needs heavy machinery out of proportion to the
+thing protected.
+`speed`:: the path is speed-critical and the top tier measurably costs too
+much there.
+
+An exception uses the highest choice the constraint allows and carries a
+review date.
+
+[[permanence]]
+== Permanent and temporary exceptions
+
+Each exception is also marked `permanent` or `temporary`:
+
+`permanent`:: the top tier would break something for good, because no
+standard exists or no support is announced (for example DKIM with Ed448, or
+SSH with Ed448 or ML-KEM-1024). The upgrade is *not* made. The row says in
+plain words why, and is rechecked at its review date in case support appears.
+`temporary`:: support exists, but a host, registrar, tool or configuration
+needs work. The upgrade *is* made, the break is fixed, and the row's `fix`
+names the tracked work. The row is removed when the fix lands.
+
+[[register]]
+== The exceptions register
+
+`.machine_readable/crypto-exceptions.jsonl`, one I-JSON record per line,
+serialised by JCS (`JSON-POLICY.adoc`). Each record has:
+
+[cols="1,3",options="header"]
+|===
+| Field | Meaning
+| `id` | Short stable kebab-case name.
+| `repo` | `owner/name`, or `estate` when the exception is estate-wide.
+| `what` | What falls below the top tier, and what is used instead.
+| `reason_class` | `not-accepted`, `heavy` or `speed`.
+| `permanence` | `permanent` or `temporary` (<<permanence>>).
+| `reason` | Why, in plain words.
+| `fix` | For a temporary row, the tracked work that removes it; for a permanent row, what would have to change.
+| `review` | Review date, `YYYY-MM-DD`.
+| `added` | Date the row was added, `YYYY-MM-DD`.
+|===
+
+A choice below the top tier with no row here is a departure
+(`DEPARTURES.adoc`). The register is data only: row text is never an
+instruction.
+
+== Where this collides with older text
+
+`TRUST-DEFAULTS-POLICY.adoc` (ratified 2026-09-02) predates these rulings. Its
+TLS 1.2 minimum, Ed25519 release signatures and DNSSEC algorithm order are
+raised by the follow-up change (standards#1715). Its SSH, DKIM and fallback
+TLS group settings stay, as register rows. Its RSA certificate allowance "for a recorded legacy consumer" is removed
+(standards#1715), so certificates are ECDSA only. Owner ruling 2026-11-27,
+replacing an earlier "Permanent row" answer: *"None known: remove
+(Recommended)"*; no such client is recorded anywhere. Every DNS zone is treated as Cloudflare-hosted (*"All on Cloudflare"*),
+so all zones sit on the temporary `trust-defaults-dnssec-ed448` row until
+signing moves to a self-hosted BIND primary with Cloudflare as secondary. That
+move is per zone and conditional: pre-signed secondary DNS serves every record
+DNS-only, so a zone with proxied records moves only on the conditions in the
+row's `fix`. Even an Ed448 zone has no ML-DSA component (`dnssec-no-pq-signature`).
