@@ -1,0 +1,406 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+// Copyright (c) 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+= ADR-012: Methodology Layer for the Agentic Descriptiles
+:doctype: article
+:toc: left
+:sectnums:
+:icons: font
+
+== Status
+
+Split, by owner ruling of 2026-11-23 (selector):
+
+[cols="2,1,4",options="header"]
+|===
+| Part | Status | Scope
+
+| Core: mode, bounds, weights, budget, invariants
+| *Accepted*
+| The meaning of the field-tested members: the fields `:default-mode`, `:ring-ceiling`, `:wave-cap`, `:spike-required`, `:divergent-invariants`, `:known-constraints`, and the clauses `(priority-weights :must :should :could)`, `(unique-strength …)`, `(convergent-budget …)`, with their defaults and ranges. See <<spec-core>>.
+| Location
+| *Proposed*
+| A dedicated `METHODOLOGY.deed` descriptile (owner ruling 2026-11-24, selector), so `AGENTIC.deed` stays a gating profile. It needs a descriptile head, grammar and lint, which do not exist yet. Until then no deed file is a valid home for these members.
+| Remainder
+| *Proposed*
+| Cross-session coverage and debt persistence (<<spec-persist>>), the agentic-server runtime (<<spec-server>>), contractile tightening (<<spec-contractile>>), and STATE validation (<<spec-state>>).
+|===
+
+Original status: Proposed (2026-03-23), as ADR-002 of the former A2ML agentic
+format tree. Re-homed here on 2026-11-23.
+
+*Provenance.* This ADR carries the text of
+`1-formats/a2ml/agentic/docs/ADR-002-methodology-layer.adoc`, deleted with the
+retired A2ML format tree on 2026-11-22 (standards#1696). Its last copy is at
+commit `0ae6d1c7^` (`git show 0ae6d1c7^:1-formats/a2ml/agentic/docs/ADR-002-methodology-layer.adoc`).
+The number changed because ADR-002 here is the cartridge-format ADR, and
+ADR-010 is held by triage item #1059. The evidence, rationale and original
+consequences are carried over. The amendments are: (1) the fields are
+re-homed from an A2ML file to a proposed `METHODOLOGY.deed` descriptile;
+(2) the TOML examples are rewritten as deed forms, with list-valued members as
+keyed list fields; (3) per-field defaults, an absent `:default-mode` selecting
+`hybrid`, and semantic ranges for `:ring-ceiling` and `(convergent-budget …)`
+(these make the original defaults and the legacy file's `0-3` range explicit);
+(4) the proven example's invariant no longer pins provers, since estate proof
+policy assigns provers by obligation; (5) the STATE validation procedure gains
+a migration-content check, retargeted to the lifecycle `STATE.deed` and the
+journal in `docs/status/ROADMAP.adoc`, and a `TODO.adoc` fallback; (6) status is
+split into an Accepted core and a Proposed remainder; (7) enforceable
+invariants are not stored here but as `(rule …)` in `Mustfile.deed`; (8) the
+convergent budget has a default.
+
+*Grammar.* `1-formats/deed/spec/abnf/clauses/agentic.abnf` defines only
+`:instructions-dir`, `:instructions-clause` and `:default-mode` for
+`(methodology …)`, a closed allowlist, and `deed_lint --agentic` rejects every
+other member (for example `(methodology …) has no field :ring-ceiling`). So
+today a repo cannot adopt the new members in `AGENTIC.deed`, and the
+`METHODOLOGY.deed` descriptile that is to hold them is not defined. Defining
+that descriptile (head, grammar, lint) is a follow-up, outside this ADR-only
+change (owner rulings 2026-11-23 and 2026-11-24).
+
+== Context
+
+The agentic layer currently defines *operational gating*: whether a permitted
+action may proceed now. In the retired A2ML form it covered entropy budgets,
+risk thresholds, confirmation requirements and decision recording; `AGENTIC.deed`
+carries what survived (see `1-formats/deed/mappings/`).
+
+What it does NOT cover is *how agents should approach work*: methodology
+selection, constraint identification, coverage tracking, and divergent
+invariant preservation. This gap has been measured:
+
+* v2 meandering on ambientops used 296K tokens across 5 bots, found the
+  critical constraint accidentally in wave 2, and visited only 21% of components
+* v3 constraint-first on the same target used 89K tokens across 2 bots,
+  identified the constraint in Phase 0, and achieved 100% component visibility
+* A 70% token reduction with better outcomes
+
+The methodology layer has been field-tested across 6+ sessions on 3 project
+types (infrastructure, platform, formal verification) with consistent results.
+
+=== Evidence: Cross-Project Validation
+
+[options="header"]
+|===
+| Project | Type | Mode | Constraint Found | v3 Score
+
+| ambientops | Infrastructure (Rust/Elixir/V) | Convergent | Evidence Envelope flow broken | 8/10
+| burble | Platform (Elixir voice) | Convergent | Missing deps = silent fallbacks | 7/10
+| proven | Research (Idris2 proofs) | Divergent | Build pipeline never verified | 8/10
+|===
+
+== Decision
+
+Declare per-repo methodology preferences, constraints and invariants in a
+`(methodology …)` clause of a dedicated `METHODOLOGY.deed` descriptile
+(`.machine_readable/descriptiles/METHODOLOGY.deed`, proposed). Enforceable
+invariants are `(rule …)` entries in `Mustfile.deed`; the methodology clause
+holds the descriptive declaration and references them. Session state (coverage,
+debt) is a separate, still Proposed concern, kept under
+`.machine_readable/agent_instructions/`.
+
+== Specification
+
+[[spec-core]]
+=== The `(methodology …)` clause (Accepted)
+
+Illustrative deed form. Member names follow the deed conventions: `(` is the
+only bracket, enums are symbols, booleans are `#t`/`#f`. No grammar defines
+this clause yet (see the Grammar note above); it is described here.
+
+[source,lisp]
+----
+; .machine_readable/descriptiles/METHODOLOGY.deed (proposed; top level of the form)
+(methodology
+    :default-mode divergent        ; convergent | divergent | hybrid
+    :ring-ceiling 2                ; hard ceiling for ring expansion, 0-3 (default 2)
+    :wave-cap 2                    ; max waves before requiring user "keep going" (default 2)
+    :spike-required #t             ; every session must ship code (default #t)
+    (priority-weights :must 3 :should 2 :could 1)
+    (unique-strength
+      :description "Formal verification with dependent types"
+      :deepen-not-broaden #t)
+    :divergent-invariants          ; descriptive; enforced by the named Mustfile.deed rules
+      ("No additional proof languages beyond the repo's recorded provers"
+       "believe_me count must remain zero"
+       "assert_total count must remain zero"
+       "FFI architecture: Idris2 -> RefC -> Zig -> C ABI")
+    :known-constraints
+      ("End-to-end build (idris2 --build) has never been verified"
+       "libproven.so does not exist yet: all bindings call stubs")
+    (convergent-budget :structural 70 :corrective 20 :perfective 10))
+----
+
+Field meanings:
+
+* `:default-mode`: the project's default (convergent, divergent or hybrid).
+  An absent `:default-mode` selects `hybrid` (per-field defaults, below); a
+  declared mode is always preserved. Explicit is better.
+* `:unique-strength` / `:divergent-invariants`: what makes the project unique,
+  and the riverbanks divergent mode must not cross. Agents deepen the strength,
+  not broaden it.
+* `:known-constraints`: hints that help Phase 0 find the critical chain faster.
+* `:ring-ceiling`, `:wave-cap`, `:spike-required`: bounds on expansion, waves
+  and sessions that ship nothing.
+* `(priority-weights …)`: importance weighting (MUST 3x).
+* `(convergent-budget …)`: effort allocation in percent, structural,
+  corrective and perfective.
+
+Semantic validation (for the follow-up validator; the deed grammar's `integer`
+alone would accept anything):
+
+* `:ring-ceiling` is an integer in `0` to `3`, the domain of the legacy
+  methodology file. `:wave-cap` is a positive integer.
+* each `(convergent-budget …)` member is an integer in `0` to `100`, and
+  `:structural`, `:corrective` and `:perfective` sum to exactly `100`.
+* `(priority-weights …)` members are positive integers.
+
+Defaults apply per field, whenever a field is absent, including in a partial
+`(methodology …)` clause: hybrid mode, 3x/2x/1x weights, `:ring-ceiling 2`,
+`:wave-cap 2`, `:spike-required #t`, and a `(convergent-budget :structural 70
+:corrective 20 :perfective 10)`, so the runtime budget check of the
+<<spec-server,server section>> has an allocation to check. A repo with no
+`(methodology …)` clause gets all of them.
+
+Location: the clause is for `METHODOLOGY.deed`, a descriptile that does not
+exist yet (owner ruling 2026-11-24). It is not `AGENTIC.deed`: that profile's
+`ag-methodology` is a closed allowlist (`:instructions-dir`,
+`:instructions-clause`, `:default-mode`), and it forbids language allow or ban
+lists and `(rule …)` (YL3, YF02). A chora deed's own `(agentic …)` clause is
+warned about, and refused in strict mode (J33, YF05); the template-repo
+fixture's `(methodology :instructions-dir … :default-mode …)` inside it is
+that legacy placement. `(bot-directives …)` is not the home of these fields
+either.
+
+Enforceable invariants are not stored here. A language restriction
+(`:language-invariant` in the original) and zero-count ceilings such as
+`believe_me` and `assert_total` are edicts, so they are `(rule …)` entries in
+`Mustfile.deed` (YL3). `:divergent-invariants` is the descriptive statement of
+the riverbanks, and each entry is meant to name the rule that enforces it.
+`:divergent-invariants` and `:known-constraints` are keyed list fields,
+because the deed grammar admits only fields and nested clauses as clause
+members, not bare strings.
+
+NOTE: the original text pinned the proven example's invariant to "no Lean4,
+Coq, Agda". Estate proof policy (`3-practice/PROOF-POLICY.adoc`) now assigns
+provers by obligation, so the example above says "the repo's recorded
+provers". The invariant is a per-repo field, not an estate rule.
+
+[[spec-persist]]
+=== Session state directory (Proposed)
+
+[source]
+----
+.machine_readable/
+├── descriptiles/            # existing: descriptive anchors
+├── bot_directives/          # existing: gitbot-fleet rules
+├── agent_instructions/      # methodology-aware session state
+│   ├── (coverage)           # session coverage tracking
+│   └── (debt)               # meander debt from last session
+----
+
+The original design put the methodology, coverage and debt in three A2ML
+files. A2ML is retired (owner rulings D99, D269c, D312, D313), and the
+methodology fields are described above for `METHODOLOGY.deed`. The deed forms of coverage
+and debt are not yet defined and no mapping spec in
+`1-formats/deed/mappings/` covers them. The legacy A2ML copies in
+`.machine_readable/agent_instructions/` are awaiting migration; this ADR does
+not extend them.
+
+The data model is unchanged from the original. Coverage persists, at session
+end:
+
+* `last-session` date, `total-components`, `visited-components`,
+  `coverage-percent`;
+* per visited component, the session date and ring reached;
+* per skipped component with known MUSTs, the reason (for example
+  `session-sentinel`: "P0: 56 SIGABRTs, D-Bus race").
+
+Debt is the meander debt list persisted between sessions: per entry a
+component, an issue, `effort` (easy | medium | hard), `impact`
+(low | medium | high) and a MUST | SHOULD | COULD class.
+
+=== Relationship to the retired agentic sections
+
+The original table related the methodology members to sections of the retired
+A2ML agentic file. Their present homes differ, and only some have an
+`AGENTIC.deed` member:
+
+[options="header"]
+|===
+| Retired A2ML section | Where it is now | Methodology member | Relationship
+
+| agent permissions
+| `(permissions …)` in `AGENTIC.deed`
+| `(methodology …)`
+| Permissions say WHAT agents can do. Methodology says HOW.
+
+| agent constraints
+| `(rule …)` in `Mustfile.deed`, not `AGENTIC.deed` (agentic mapping §3, YL3)
+| `:divergent-invariants`
+| Constraints are universal (never do X) and enforceable. Divergent invariants
+are the mode-specific, descriptive riverbanks (in divergent mode, don't broaden).
+
+| entropy budget
+| no `AGENTIC.deed` member today
+| `(convergent-budget …)`
+| Entropy budget tracks risk accumulation. Convergent budget tracks
+effort allocation (70/20/10 structural/corrective/perfective).
+
+| risk thresholds
+| no `AGENTIC.deed` member today
+| `(priority-weights …)`
+| Risk classifies danger. Priority classifies importance (MUST 3x).
+|===
+
+[[spec-server]]
+=== How This Informs the Agentic Server (Proposed)
+
+The agentic server is the runtime that reads and enforces these declarations.
+Its architecture maps to the methodology framework:
+
+[source]
+----
+Agentic Server Architecture:
+
+  ┌─────────────────────────────────────────────────┐
+  │  Agent Request ("work on this repo")            │
+  └──────────────────┬──────────────────────────────┘
+                     │
+  ┌──────────────────▼──────────────────────────────┐
+  │  1. READ: (methodology …) in METHODOLOGY.deed   │
+  │     → mode, invariants, ring ceiling, weights   │
+  ├─────────────────────────────────────────────────┤
+  │  2. READ: coverage (agent_instructions/)        │
+  │     → what was visited, what has MUSTs          │
+  ├─────────────────────────────────────────────────┤
+  │  3. READ: debt (agent_instructions/)            │
+  │     → carried debt from last session            │
+  ├─────────────────────────────────────────────────┤
+  │  4. READ: repo state (STATE)                    │
+  │     → P1 items, current phase, blockers         │
+  │     ⚠ VALIDATE: not a template placeholder      │
+  ├─────────────────────────────────────────────────┤
+  │  5. IDENTIFY CONSTRAINT                         │
+  │     → Build dependency graph from state + debt  │
+  │     → Find critical chain                       │
+  │     → Locate first unresolved link              │
+  ├─────────────────────────────────────────────────┤
+  │  6. SELECT AGENT ROLE(S)                        │
+  │     ┌──────────────┐                            │
+  │     │ convergent?  │→ Converge agent            │
+  │     │ divergent?   │→ Diverge agent             │
+  │     │ hybrid?      │→ TSDM navigator + worker   │
+  │     │ complex?     │→ 3-agent (ex-ADR-001)      │
+  │     └──────────────┘                            │
+  ├─────────────────────────────────────────────────┤
+  │  7. ENFORCE AT RUNTIME                          │
+  │     → Check divergent invariants before edits   │
+  │     → Check convergent budget (70/20/10)        │
+  │     → Check ring ceiling before expansion       │
+  │     → Validate bot claims before commit         │
+  ├─────────────────────────────────────────────────┤
+  │  8. PERSIST                                     │
+  │     → Update coverage                           │
+  │     → Update debt                               │
+  │     → Feed outcomes to Hypatia learning loop    │
+  └─────────────────────────────────────────────────┘
+----
+
+[[spec-contractile]]
+=== Contractile Tightening (Proposed)
+
+The contractile system (Mustfile/Trustfile/Dustfile/Intentfile/K9) should
+enforce methodology constraints, and this is where enforceable invariants
+live: `(rule …)` entries in `Mustfile.deed` (YL3). In the original, the
+Mustfile carried a methodology section (`mode`, `language-invariant`,
+`believe-me-ceiling`, `assert-total-ceiling`) and a K9 validator,
+`k9/methodology-guard.k9.ncl`, checked that no commit introduces:
+
+* files in languages violating the divergent invariant;
+* `believe_me` or `assert_total` above the ceiling;
+* changes to `agent_instructions/` without user approval.
+
+This turns methodology constraints from "things Claude reads in a prompt"
+into "things any CI system can enforce." The ceilings should be read from the
+deed's `(methodology …)` clause, cited and never restated in the contract
+(see the derivation invariant of ADR-010, once written).
+
+[[spec-state]]
+=== State File Validation (Proposed, from field testing)
+
+Phase 0 reads the repo's state first. Field testing, on the A2ML-era STATE
+file, found two failure modes:
+
+1. *Template placeholder* (burble): STATE was never customised from
+   rsr-template-repo. Project name = "rsr-template-repo", completion = 95%.
+   Agent would start with completely wrong data.
+
+2. *Empty after migration* (proven): STATE was migrated from `.scm`
+   but the content didn't carry over. Completion = 0%, no tasks.
+
+`STATE.deed` now holds only the lifecycle `(status …)` and `(maturity …)`
+(`state.abnf`, J3); there is no project name, completion, task list or
+blocker in it. The journal (last and next action) stays in
+`docs/status/ROADMAP.adoc`. The checks are therefore split by where the data
+now is.
+
+*Required validation before trusting the state (Proposed):*
+
+[source]
+----
+STATE.deed (lifecycle):
+1. Check for {{PLACEHOLDER}} or {{PROJECT}} tokens → template, not real
+2. Check :of-chora names this repo's chora id → not a copied template
+3. Check every date in (status …) / (maturity …) is real and within
+   90 days → not stale (a genuine new project at an early maturity is valid)
+docs/status/ROADMAP.adoc (journal):
+4. Check the journal exists and has a last and next action; a STATE.deed
+   with a recent date but an empty or missing journal where the pre-migration
+   source (git history or the legacy file) had content is an empty migration
+5. If validation fails → fall back to TODO.md, TODO.adoc, ROADMAP.adoc, README.adoc
+6. Flag the broken state as a P1 MUST in the audit
+----
+
+The original project-name, completion-percentage and task checks have no
+`STATE.deed` field to inspect. They were checks on the A2ML file and are
+dropped, not ported.
+
+== Consequences
+
+=== Positive
+
+* Methodology becomes a protocol, not a prompt: any agent server can implement it
+* Divergent invariants are machine-enforceable, not trust-based
+* Coverage tracking persists across sessions: no more starting blind
+* Meander debt survives session boundaries: nothing discovered is lost
+* Contractile K9 validators can block invariant violations in CI
+* Hypatia learning loop gets structured methodology outcome data
+
+=== Negative
+
+* More declarations per repo (the methodology clause, plus coverage and debt
+  state once their deed forms exist)
+* Initial setup cost: every repo needs its methodology clause configured
+* Risk of over-specification: some projects don't need methodology config
+* The agentic server is a new runtime to build and maintain
+* Until the `METHODOLOGY.deed` descriptile (head, grammar, lint) is defined, no
+  deed file is a valid home for the new members, and `deed_lint` cannot check
+  them (owner rulings 2026-11-23 and 2026-11-24: follow-up)
+
+=== Mitigations
+
+* `rsr-template-repo` provides sensible defaults (hybrid mode, standard weights)
+* The `just init` recipe can generate the methodology clause from project type
+* Repos without a methodology clause fall back to v3 defaults (hybrid, 3x/2x/1x, Ring 2 ceiling)
+* The agentic server can start as a BoJ cartridge before becoming standalone
+
+== References
+
+* "ADR-001: Three-Agent Architecture (Diverge/Converge/TSDM)", of the former
+  A2ML agentic tree. It is not this repository's
+  `docs/ADR-001-k9-relocation-to-svc.adoc`, and no copy of it is held here.
+* Productive Meandering v3-v5 prompt (methodologies repo)
+* `1-formats/deed/spec/abnf/clauses/agentic.abnf`, the `ag-methodology` rule
+* Field reports: ambientops, burble, proven evaluations (methodologies repo)
+* Hypatia learning loop: `hypatia/lib/learning_scheduler.ex`
+* Provenance: `git show 0ae6d1c7^:1-formats/a2ml/agentic/docs/ADR-002-methodology-layer.adoc`
