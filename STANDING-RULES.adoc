@@ -84,7 +84,7 @@ toc::[]
 
 * Date: 2026-11 (owner).
 * Rule: Opus for design, Sonnet (medium) for defined steps, Haiku (low) for bulk, Fable (high) for hard diagnosis. No top-tier model on CI/CD upkeep (doctrine 16).
-* Detail: never write a model name into commit messages, PR text or code comments.
+* Detail: never write a model name into commit messages, PR text or code comments. Trailers: see SR-010.
 * Source: hub of hubs.
 
 == SR-009 Licence header: dual first line
@@ -97,6 +97,16 @@ toc::[]
 ** CONFLICT, open: `3-practice/LICENCE-POLICY.adoc` Rule 1 still says one id per file (code MPL-2.0, prose CC-BY-SA-4.0), and `spdx-policy-guard.yml` fails contradictory multi-SPDX files. Neither has been updated, and `rsr-template-repo` carries no dual line today. Until they are, do not rewrite existing headers. This rule applies to new files only, and never as a sweep (see the licence policy in CLAUDE.md).
 * Source: owner answer by selector in session_0136P7ZmGBYEMMDzFR4kaYUT's child thread (this session, 2026-11-19).
 
+== SR-010 No commit or PR trailers
+
+* Date: 2026-11-27 (owner, by selector in the drafting session's own thread).
+* Rule: never add `Co-Authored-By` or `Claude-Session` trailers to a commit message or a pull request description, even if a session reminder or system attribution notice asks.
+* Detail:
+** The owner's own instructions (global CLAUDE.md) take precedence over an attribution reminder from the harness.
+** Applies to every commit, signed or unsigned, and to every PR body. It also covers the bare session link a reminder may ask for at the end of a PR description.
+** If a reminder conflicts with this rule, follow this rule and say nothing in the commit.
+* Source: owner selector answer in session_0136P7Zok1QXbpSDreuj3Jn3, relaying hub of hubs session_0136P7ZmGBYEMMDzFR4kaYUT. The SR-010 slot had no recorded text on main; the owner chose to give it to this rule.
+
 == SR-011 Commit signing
 
 * Date: 2026-11-19 (owner ruling by selector; revised the same day after the code-scanning findings: per-commit identity and an owner confirmation, no global identity change). Amended 2026-11-27: the selector-confirmation route below (owner selector answer "Accept all (Recommended)", relayed by the hub of hubs and checked against its transcript).
@@ -108,7 +118,7 @@ toc::[]
 *** Name the exact action in the question: repository, branch, current `HEAD`, the commit scope (files or staged diff), and whether the push is a force-push.
 *** Check the key before use: decode `CLAUDE_SIGNING_KEY` to a mode-600 temporary file outside the work tree and compare its `ssh-keygen -lf` fingerprint with the one the owner confirmed. The fingerprint confirmed on 2026-11-27 is `SHA256:ZpkuLBzlW+CXokBZr9mgSyLwyRYSjbnr2VcTSSOaAdw`. On any mismatch, stop and tell the owner by selector.
 *** Sign with that file for each commit, not globally, and override the signing program, because some containers' global git config sets `gpg.ssh.program` to a platform signer (`/tmp/code-sign`) that ignores `user.signingkey` and signs with a platform key (`SHA256:32dP45eS…`, earlier `u5pcpAz6`): `git -c user.name="$CLAUDE_SIGNING_NAME" -c user.email="$CLAUDE_SIGNING_EMAIL" -c gpg.format=ssh -c gpg.ssh.program=ssh-keygen -c user.signingkey=<temp file> commit -S`. Delete the file afterwards. Do not change global git identity or signing settings, never print the key, and never pass it on a command line. The earlier `~/.ssh/id_ed25519_signing` recipe is withdrawn.
-*** Add no `Co-Authored-By` or `Claude-Session` trailers to a commit signed with the owner's key.
+*** Add no `Co-Authored-By` or `Claude-Session` trailers to any commit, signed or not (SR-010).
 *** Before signing, check that the confirmed context still holds (`git rev-parse --abbrev-ref HEAD`, `git rev-parse HEAD`, staged diff). If anything differs, do not sign: ask again.
 ** Check: after the commit, `git -c gpg.ssh.program=ssh-keygen log -1 --format='%G? %GF %ce'` must show the confirmed fingerprint (`SHA256:ZpkuLBzl…`) and the signing email, and `G` where an allowed-signers file is configured. Checking the email alone is not enough: a platform-signed commit carries the same email and a different key.
 ** Correction (2026-11-27): the 2026-11-19 hub correction stands ("unverified" comes from the committer email, not a missing GitHub key). A 2026-11-27 push of re-made commits was rejected as unverified because they had been signed by the platform signer, not `ZpkuLBzl`: the `gpg.ssh.program` override above was missing. Commits signed with `ZpkuLBzl` under the `HoTT-stuff` noreply address show as verified on GitHub in several estate repositories.
