@@ -1,0 +1,98 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+= Action pins applier: contract and the post-pin-bump hook
+:toc:
+
+The action pins applier (`.github/workflows/action-pins-applier.yml`, logic in
+`scripts/regen-dependabot-locks.sh`) is the single writer of third-party `uses:`
+SHAs and of `actions.lock` (owner ruling "single writer", 2026-11-21). This page
+is the contract for the one extension point it offers a repository: the
+post-pin-bump hook (owner-approved "Option A", split phases).
+
+== Why a hook
+
+Some repositories carry files that are derived from their pins: a lock, a
+generated table. If the applier bumped a pin and opened a PR without them, the
+PR would be red or, worse, stale. The repository can say how to regenerate them,
+and the applier runs that. Repository code must never run next to an App token,
+so the work is split.
+
+== The repository's side
+
+* `scripts/post-pin-bump.sh` on the default branch. It is run as
+  `bash scripts/post-pin-bump.sh` with no arguments, from the repository root, on
+  a copy of the tree with the bump already applied, with `POST_PIN_BUMP=1`.
+* `.github/post-pin-bump.paths` on the default branch: the allow-list. One path
+  per line, or a directory prefix ending in `/`. No globs. Blank lines and
+  `#` comments are ignored. An absent or empty file allows nothing.
+
+A repository with no `scripts/post-pin-bump.sh` is unaffected: the applier opens
+its PR exactly as before.
+
+== The three phases
+
+[cols="1,1,3"]
+|===
+| Job | App token | What it does
+
+| `apply` | yes
+| Bumps the pins and relocks. For a repository that has a hook it opens no PR;
+it records the bumped tree and a metadata row (repo, default branch, head sha,
+hash of the pins) in the `hook-defer` artifact. The `deferred` output says
+whether there is anything to do. With nowhere to defer (no `HOOK_DEFER_DIR`) the
+repository is refused as `bump-hook-not-deferred`, never given a PR with stale
+derived files.
+
+| `hook-prepare` | no
+| Runs each repository's hook under `env -i` (a handful of variables, none from
+the job), `POST_PIN_BUMP=1`, a timeout (`HOOK_TIMEOUT`, default 300 s) and the
+tree as a copy. Records, per repository, the status, the log, the list of changed
+paths with their modes, and the changed files. Writes the `hook-result` artifact.
+
+| `hook-apply` | yes
+| Treats the result as untrusted. It re-derives the bump and the lock itself from
+the live default branch and uses nothing of the hook phase's tree. It reads the
+allow-list from the default-branch commit, never from the hook's tree, checks
+every changed path, copies only the allow-listed regular files into its own
+checkout, and commits the lot in one Verified commit on the same
+`chore/bump-action-pins` PR.
+|===
+
+== What hook-apply refuses
+
+Every refusal is loud: the outcome is named in the log and the run fails. A
+refusal commits nothing at all, not even the plain bump.
+
+* a hook that failed or timed out (`hook-refused: hook-failed rc=N`, `hook-timeout`);
+* a malformed result row (`hook-bad-meta`);
+* a result for another head than the live default branch (`hook-stale-head`), or
+  for pins that have moved since (`hook-stale-pins`);
+* a path not in `.github/post-pin-bump.paths` on the default branch;
+* any path under `.github/workflows/` or `.github/actions/`, the hook script, or
+  the allow-list itself, whatever the allow-list says; an allow-list that could
+  reach them is itself invalid;
+* a deletion, a symlink, a mode change, a file that is not a regular file or is
+  reached through a symlink, a file over 1 MiB, or more than 200 changed paths.
+
+== What is not enforced
+
+State these plainly; do not claim more.
+
+* *Network egress.* The hook phase runs on a hosted runner with the egress audit
+  of `step-security/harden-runner` and no block. A hook can reach the network.
+* *The phase-1 `github.token`.* `apply` and the hook phase hold the job's default
+  `contents: read` token. Hook code does not see it (`env -i`, and the checkout
+  keeps no credentials), but the runner is not a sandbox.
+* *Byte content within allow-listed files.* The applier checks where a hook wrote
+  and what kind of file it is, not what is in it. Allow-list only files whose
+  content a reviewer will read in the PR.
+
+== Tests
+
+`scripts/tests/post-pin-bump-hook-test.sh` runs the real hook through all three
+phases offline, with `gh` and the repair tools stubbed, and checks every refusal
+above, forged results included. `scripts/tests/regen-dependabot-locks-test.sh`
+covers the unchanged no-hook path.
+
+== Related
+
+* Companion change on the fleet side: `hyperpolymath/gitbot-fleet#717`.

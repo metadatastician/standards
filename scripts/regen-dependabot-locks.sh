@@ -1,10 +1,3 @@
-  # Who "we" are. An App installation token cannot call GET /user (403), so the
-  # workflow passes the App slug as APPLIER_SLUG; a PAT falls back to /user.
-  if [ -n "${APPLIER_SLUG:-}" ]; then
-    actor="${APPLIER_SLUG}[bot]"
-  else
-    actor="$("$GH_BIN" api user --jq .login 2>/dev/null || true)"
-  fi
 #!/usr/bin/env bash
 # SPDX-License-Identifier: MPL-2.0
 #
@@ -83,9 +76,17 @@
 # the bump opened a PR, the lock-only repair is skipped for that repository. The
 # App must hold Workflows: write for the push to be accepted.
 #
+# POST-PIN-BUMP HOOK (HOOK_PHASE=prepare|apply; owner-approved Option A)
+# ---------------------------------------------------------------------
+# A repository with scripts/post-pin-bump.sh is not given a bump PR by the main
+# phase: bump_main DEFERS it (HOOK_DEFER_DIR). HOOK_PHASE=prepare runs the hook
+# with no token; HOOK_PHASE=apply treats the result as untrusted, re-derives the
+# bump, and commits only the paths .github/post-pin-bump.paths allows. Every
+# refusal is loud and fails the run. See 3-practice/ACTION-PINS-APPLIER.adoc.
+#
 # Usage: regen-dependabot-locks.sh [owner/repo]     (default: every repo the
 #        installations can see).  DRY_RUN=1 regenerates but never commits.
-# Env:   REGEN_TOKENS, DRY_RUN, REGEN_MAIN, BUMP_PINS, GH_BIN (test stub), REGEN_TOOLS (dir
+# Env:   REGEN_TOKENS, DRY_RUN, REGEN_MAIN, BUMP_PINS, HOOK_DEFER_DIR, HOOK_RESULT_DIR, GH_BIN (test stub), REGEN_TOOLS (dir
 #        holding the repair scripts; default: this script's directory).
 set -uo pipefail
 
@@ -325,65 +326,405 @@ repair_main() {
 BUMP_PR_BRANCH="${BUMP_PR_BRANCH:-chore/bump-action-pins}"
 BUMP_PINS_HEADLINE="chore(deps): bump third-party action pins and actions.lock together"
 
+# POST-PIN-BUMP HOOK (Option A, three phases; contract in
+# 3-practice/ACTION-PINS-APPLIER.adoc). A repository may carry
+# scripts/post-pin-bump.sh to regenerate files DERIVED from its pins (a
+# lockfile, a generated table). Running repository code is never done where an
+# App token exists, so a hook repo is split across three jobs:
+#   apply         (token, no repo code)   bumps and relocks, then DEFERS the repo:
+#                                         tree + meta go into $HOOK_DEFER_DIR.
+#   hook-prepare  (NO token)              runs the hook under `env -i`, with a
+#                                         timeout, POST_PIN_BUMP=1 and no args, and
+#                                         writes what it changed to $HOOK_RESULT_DIR.
+#   hook-apply    (token, no repo code)   treats that result as UNTRUSTED: re-derives
+#                                         the bump and the lock itself, reads the
+#                                         allow-list from the DEFAULT branch, and
+#                                         commits only allow-listed files, in the
+#                                         same single commit, into the same PR.
+HOOK_SCRIPT="scripts/post-pin-bump.sh"
+HOOK_PATHS=".github/post-pin-bump.paths"
+HOOK_TIMEOUT="${HOOK_TIMEOUT:-300}"
+HOOK_MAX_FILES=200
+HOOK_MAX_BYTES=1048576
+
+# Hash of every file under .github/workflows and .github/actions in checkout $1:
+# what the bump and the lock decided, so hook-apply can tell a stale hook result
+# from a current one.
+pin_hash() {
+  (cd "$1" && { find .github/workflows .github/actions -type f -print0 2>/dev/null \
+                  | LC_ALL=C sort -z | xargs -0 -r sha256sum; } | sha256sum | cut -d' ' -f1)
+}
+
+# Derive the bump of repo $1 on its default branch, in the shell (no subshell, so
+# the outputs survive): DB_BASE, DB_SHA, DB_WORK (a temp dir whose r/ is the
+# bumped and relocked checkout), DB_ROWS and DB_N. Returns 0, or returns 1 with
+# DB_OUT set to the "repo@branch<TAB>outcome" line and nothing left on disk.
+# Refusals: any verdict regen_lock gives other than changed/current/no-lock, and
+# any changed path outside .github/workflows or .github/actions. A repository
+# with no lock gets the bump alone.
+derive_bump() {
+  local repo="$1" outcome p
+  local -a paths=()
+  DB_BASE=main; DB_SHA=; DB_WORK=; DB_ROWS=; DB_N=0; DB_OUT=
+  _db_fail() { printf -v DB_OUT '%s@%s\t%s' "$repo" "$DB_BASE" "$1"; [ -z "$DB_WORK" ] || rm -rf "$DB_WORK"; DB_WORK=; return 1; }
+  if ! DB_BASE="$("$GH_BIN" api "repos/$repo" --jq .default_branch)" || [ -z "$DB_BASE" ] \
+     || ! DB_SHA="$("$GH_BIN" api "repos/$repo/commits/$DB_BASE" --jq .sha)"; then
+    DB_BASE=main; _db_fail api-error; return 1
+  fi
+  DB_WORK="$(mktemp -d)"
+  clone_branch "$DB_WORK/r" "$repo" "$DB_BASE" || { _db_fail clone-failed; return 1; }
+  [ "$(git -C "$DB_WORK/r" rev-parse HEAD)" = "$DB_SHA" ] || { _db_fail moved; return 1; }
+  DB_ROWS="$(bash "$REGEN_TOOLS/bump-action-pins.sh" "$DB_WORK/r" 2>/dev/null)" || { _db_fail bump-failed; return 1; }
+  DB_N="$(printf '%s\n' "$DB_ROWS" | grep -c '	bumped$')"
+  [ -n "$(git -C "$DB_WORK/r" status --porcelain)" ] || { _db_fail current; return 1; }
+  if ! { git -C "$DB_WORK/r" add -A && git -C "$DB_WORK/r" -c user.name=pin-applier -c user.email=pin-applier@localhost \
+           commit --quiet -m "bump"; }; then
+    _db_fail bump-failed; return 1
+  fi
+  outcome="$(regen_lock "$DB_WORK/r")"
+  case "$outcome" in
+    changed|current|no-lock) ;;
+    *) _db_fail "bump-$outcome"; return 1 ;;
+  esac
+  # Everything now differing from the default head, bump and lock together.
+  # NUL-delimited into an array, so a path with a space stays one path and
+  # nothing is glob-expanded.
+  mapfile -d '' -t paths < <(git -C "$DB_WORK/r" diff --name-only -z "$DB_SHA")
+  for p in "${paths[@]}"; do
+    case "$p" in
+      .github/workflows/*|.github/actions/*) ;;
+      *) _db_fail bump-unexpected-path; return 1 ;;
+    esac
+  done
+  return 0
+}
+
 # Bump third-party action pins on the default branch of repo $1 (open PRs: JSON
 # array $2) and rewrite actions.lock in the SAME commit. This is the single
 # writer: Dependabot's github-actions ecosystem is off, so nothing else moves
 # a `uses:` SHA, and the lock is regenerated on top of the bump before anything
-# is pushed. The bump is committed locally first so regen_lock's "restore every
-# file except the lock" step keeps the bumped workflows. Refusals: any verdict
-# regen_lock gives other than changed/current/no-lock, and any changed path
-# outside .github/workflows or .github/actions. A repository with no lock gets
-# the bump alone. Prints "repo@branch<TAB>outcome".
+# is pushed (see derive_bump). A repository that carries scripts/post-pin-bump.sh
+# is deferred to the hook phases instead of getting a PR here. Prints
+# "repo@branch<TAB>outcome".
 bump_main() {
-  local repo="$1" prs="$2" base sha work outcome rows n p body
+  local repo="$1" prs="$2" outcome body p
   local -a paths=()
   if printf '%s' "$prs" | jq -e --arg b "$BUMP_PR_BRANCH" \
        'any(.[]; .head.ref == $b and .head.repo.full_name == .base.repo.full_name)' >/dev/null; then
     printf '%s@main\tbump-pr-open\n' "$repo"; return 0
   fi
-  if ! base="$("$GH_BIN" api "repos/$repo" --jq .default_branch)" || [ -z "$base" ] \
-     || ! sha="$("$GH_BIN" api "repos/$repo/commits/$base" --jq .sha)"; then
-    printf '%s@main\tapi-error\n' "$repo"; return 0
+  derive_bump "$repo" || { printf '%s\n' "$DB_OUT"; return 0; }
+  if [ -f "$DB_WORK/r/$HOOK_SCRIPT" ]; then
+    # A hook repo never gets a PR from this phase: its derived files must be
+    # regenerated first. Without a deferral directory that cannot happen, so
+    # say so rather than open a PR whose derived files are stale.
+    if [ "${DRY_RUN:-0}" = 1 ]; then
+      printf '%s@%s\twould-bump %s (hook: deferred)\n' "$repo" "$DB_BASE" "$DB_N"
+    elif [ -z "${HOOK_DEFER_DIR:-}" ]; then
+      printf '%s@%s\tbump-hook-not-deferred\n' "$repo" "$DB_BASE"
+    elif defer_hook "$repo" "$DB_BASE" "$DB_SHA" "$DB_WORK/r"; then
+      printf '%s@%s\thook-deferred\n' "$repo" "$DB_BASE"
+    else
+      printf '%s@%s\thook-defer-failed\n' "$repo" "$DB_BASE"
+    fi
+    rm -rf "$DB_WORK"; return 0
   fi
-  work="$(mktemp -d)"
-  if ! clone_branch "$work/r" "$repo" "$base"; then
-    printf '%s@%s\tclone-failed\n' "$repo" "$base"; rm -rf "$work"; return 0
+  if [ "${DRY_RUN:-0}" = 1 ]; then
+    printf '%s@%s\twould-bump %s\n' "$repo" "$DB_BASE" "$DB_N"; rm -rf "$DB_WORK"; return 0
   fi
-  if [ "$(git -C "$work/r" rev-parse HEAD)" != "$sha" ]; then
-    printf '%s@%s\tmoved\n' "$repo" "$base"; rm -rf "$work"; return 0
+  mapfile -d '' -t paths < <(git -C "$DB_WORK/r" diff --name-only -z "$DB_SHA")
+  body="$(bump_body "$DB_ROWS")"
+  outcome="$(open_branch_pr "$repo" "$DB_BASE" "$DB_SHA" "$DB_WORK/r" "$BUMP_PR_BRANCH" "$BUMP_PINS_HEADLINE" "$body" "${paths[@]}")"
+  printf '%s@%s\t%s\n' "$repo" "$DB_BASE" "$outcome"
+  rm -rf "$DB_WORK"
+}
+
+# The PR body for the bump rows $1 (TSV from bump-action-pins.sh).
+bump_body() {
+  printf '%s\n\n%s' "Third-party action pins moved to their latest release, and actions.lock rewritten in the same commit by the single-writer applier (scripts/bump-action-pins.sh and scripts/regen-dependabot-locks.sh, BUMP_PINS=1, in metadatastician/standards). Verified with update-actions-lock.sh --verify-local, check-lock-sync.sh and check-lock-pin-contract.sh where the repository has a lock." \
+    "$(printf '%s\n' "$1" | awk -F'\t' '$5=="bumped"{printf "- %s: %s -> %s (%s)\n", $2, $3, $4, $1}' | head -n 40)"
+}
+
+# PHASE 1 (apply): leave repo $1's bumped, relocked checkout $4 (default branch
+# $2 at $3) in $HOOK_DEFER_DIR for the hook phase: tree.tar without .git, and
+# meta.tsv (repo, base, head sha, pin hash). No repository code runs here.
+defer_hook() {
+  local repo="$1" base="$2" sha="$3" dir="$4" d
+  d="$(mktemp -d "$HOOK_DEFER_DIR/d.XXXXXX")" || return 1
+  if tar -C "$dir" --exclude=./.git -cf "$d/tree.tar" . \
+     && printf '%s\t%s\t%s\t%s\n' "$repo" "$base" "$sha" "$(pin_hash "$dir")" > "$d/meta.tsv"; then
+    return 0
   fi
-  rows="$(bash "$REGEN_TOOLS/bump-action-pins.sh" "$work/r" 2>/dev/null)" || {
-    printf '%s@%s\tbump-failed\n' "$repo" "$base"; rm -rf "$work"; return 0; }
-  n="$(printf '%s\n' "$rows" | grep -c '	bumped$')"
-  if [ -z "$(git -C "$work/r" status --porcelain)" ]; then
-    printf '%s@%s\tcurrent\n' "$repo" "$base"; rm -rf "$work"; return 0
-  fi
-  git -C "$work/r" add -A && git -C "$work/r" -c user.name=pin-applier -c user.email=pin-applier@localhost \
-    commit --quiet -m "bump" || { printf '%s@%s\tbump-failed\n' "$repo" "$base"; rm -rf "$work"; return 0; }
-  outcome="$(regen_lock "$work/r")"
-  case "$outcome" in
-    changed|current|no-lock) ;;
-    *) printf '%s@%s\tbump-%s\n' "$repo" "$base" "$outcome"; rm -rf "$work"; return 0 ;;
+  rm -rf "$d"; return 1
+}
+
+# PHASE 2 (hook-prepare): holds NO App token, and the job must not either. For
+# each deferral in $HOOK_DEFER_DIR, run the repository's hook on a copy of its
+# tree under `env -i` (PATH, HOME, LANG and POST_PIN_BUMP=1 only; no arguments;
+# $HOOK_TIMEOUT seconds) and write to $HOOK_RESULT_DIR/<n>/:
+#   meta.tsv    the deferral's meta, copied
+#   status      ok | no-hook | hook-failed rc=N | hook-timeout | hook-error
+#   hook.log    the hook's output, truncated
+#   changed.nul NUL-separated (mode, path) pairs for every added, modified or
+#               deleted path; mode 000000 means deleted
+#   files/      the new bytes of each added or modified regular file
+# EVERYTHING written here is untrusted: the hook ran as this user and may have
+# done anything to it. hook-apply re-checks all of it.
+hook_prepare() {
+  local in="${HOOK_DEFER_DIR:?HOOK_DEFER_DIR is not set}" out="${HOOK_RESULT_DIR:?HOOK_RESULT_DIR is not set}"
+  local d n=0 o t rc mode path status
+  mkdir -p "$out" || return 1
+  for d in "$in"/*/; do
+    [ -d "$d" ] || continue
+    n=$((n + 1)); o="$out/$n"; mkdir -p "$o/files"
+    if [ ! -f "$d/meta.tsv" ] || [ ! -f "$d/tree.tar" ]; then
+      echo "hook-error" > "$o/status"; echo "hook-prepare: deferral $d is malformed"; continue
+    fi
+    cp "$d/meta.tsv" "$o/meta.tsv"
+    t="$(mktemp -d)"; mkdir -p "$t/tree" "$t/home"
+    if ! tar -C "$t/tree" -xf "$d/tree.tar" --no-same-owner 2>/dev/null \
+       || [ ! -f "$t/tree/$HOOK_SCRIPT" ]; then
+      echo "no-hook" > "$o/status"; rm -rf "$t"; continue
+    fi
+    # The baseline lives outside the tree, so the hook cannot rewrite what it is
+    # compared against by editing the tree.
+    export GIT_DIR="$t/git" GIT_WORK_TREE="$t/tree"
+    if ! { git init -q && git -c core.fsmonitor=false add -A -f \
+             && git -c user.name=x -c user.email=x@localhost commit -q -m base; }; then
+      unset GIT_DIR GIT_WORK_TREE; echo "hook-error" > "$o/status"; rm -rf "$t"; continue
+    fi
+    ( cd "$t/tree" && env -i PATH=/usr/local/bin:/usr/bin:/bin HOME="$t/home" LANG=C.UTF-8 POST_PIN_BUMP=1 \
+        timeout --kill-after=10 "$HOOK_TIMEOUT" bash "$HOOK_SCRIPT" </dev/null ) > "$t/hook.log" 2>&1
+    rc=$?
+    head -c 20000 "$t/hook.log" > "$o/hook.log"
+    case "$rc" in
+      0) status=ok ;;
+      124|137) status=hook-timeout ;;
+      *) status="hook-failed rc=$rc" ;;
+    esac
+    echo "$status" > "$o/status"
+    if [ "$status" = ok ]; then
+      git -c core.fsmonitor=false add -A -f 2>/dev/null
+      : > "$o/changed.nul"
+      while IFS= read -r -d '' meta && IFS= read -r -d '' path; do
+        mode="${meta#:* }"; mode="${mode%% *}"
+        printf '%s\0%s\0' "$mode" "$path" >> "$o/changed.nul"
+        case "$mode" in 100644|100755)
+          if [ -f "$t/tree/$path" ] && [ ! -L "$t/tree/$path" ]; then
+            mkdir -p "$o/files/$(dirname -- "$path")" && cp -- "$t/tree/$path" "$o/files/$path"
+          fi ;;
+        esac
+      done < <(git diff --cached --raw -z --no-renames HEAD)
+    fi
+    unset GIT_DIR GIT_WORK_TREE
+    rm -rf "$t"
+  done
+  echo "hook-prepare: $n deferral(s) processed"
+}
+
+# A path a hook may ever be allowed to write: relative, clean, no control
+# characters, nothing inside .git.
+hook_path_safe() {
+  case "$1" in
+    ''|/*|*//*|./*|../*|*/./*|*/../*|*/.|*/..|.|..|.git|.git/*|*/.git|*/.git/*) return 1 ;;
   esac
-  # Everything now differing from the default head, bump and lock together.
-  # NUL-delimited into an array, so a path with a space stays one path and
-  # nothing is glob-expanded.
-  mapfile -d '' -t paths < <(git -C "$work/r" diff --name-only -z "$sha")
-  for p in "${paths[@]}"; do
-    case "$p" in
+  case "$1" in *[[:cntrl:]]*) return 1 ;; esac
+  return 0
+}
+
+# Reserved: the applier re-derives these itself, and a hook may not rewrite its
+# own script or its own allow-list.
+hook_path_reserved() {
+  case "$1" in
+    .github/workflows/*|.github/actions/*|"$HOOK_SCRIPT"|"$HOOK_PATHS") return 0 ;;
+  esac
+  return 1
+}
+
+# True when root $1 holds relative path $2 as a regular file reached through no
+# symlink at any component.
+plain_file() {
+  local root="$1" rel="$2" cur="$1" part
+  local -a parts
+  IFS=/ read -r -a parts <<< "$rel"
+  for part in "${parts[@]}"; do
+    cur="$cur/$part"
+    [ ! -L "$cur" ] || return 1
+  done
+  [ -f "$cur" ]
+}
+
+# True when no component of relative path $2 below root $1 is a symlink (the
+# last one may be missing).
+no_symlink_parents() {
+  local cur="$1" part
+  local -a parts
+  IFS=/ read -r -a parts <<< "$2"
+  for part in "${parts[@]}"; do
+    cur="$cur/$part"
+    [ ! -L "$cur" ] || return 1
+  done
+  return 0
+}
+
+# Read allow-list lines from stdin and print the valid ones; print nothing and
+# return 1 on the first invalid line. A line is a file path, or a directory
+# prefix ending in `/`. No globs. Blank lines and `#` comments are ignored. A
+# pattern that could reach a reserved path is invalid.
+hook_allowlist() {
+  local line bare r
+  while IFS= read -r line || [ -n "$line" ]; do
+    line="${line%$'\r'}"
+    case "$line" in ''|'#'*) continue ;; esac
+    bare="${line%/}"
+    hook_path_safe "$bare" || return 1
+    case "$line" in
+      */) for r in .github/workflows/x .github/actions/x "$HOOK_SCRIPT" "$HOOK_PATHS"; do
+            case "$r" in "$line"*) return 1 ;; esac
+          done ;;
+      *) ! hook_path_reserved "$line" || return 1 ;;
+    esac
+    printf '%s\n' "$line"
+  done
+}
+
+# Whether path $1 is covered by the allow-list lines in $2.
+hook_allowed() {
+  local path="$1" pat
+  while IFS= read -r pat; do
+    case "$pat" in
+      */) case "$path" in "$pat"*) return 0 ;; esac ;;
+      *)  [ "$path" = "$pat" ] && return 0 ;;
+    esac
+  done <<< "$2"
+  return 1
+}
+
+# PHASE 3, one repository: result directory $1 (untrusted), token already in
+# GH_TOKEN. Prints "repo@branch<TAB>outcome" and returns 1 when the outcome is a
+# refusal that must fail the run.
+hook_apply_repo() {
+  local res="$1" repo base sha pins status prs allow n=0 mode path root size tmode want outcome body
+  local -a paths=() hookpaths=()
+  IFS=$'\t' read -r repo base sha pins < "$res/meta.tsv" || { printf 'unknown\thook-bad-meta\n'; return 1; }
+  if ! { [[ "$repo" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] && [[ "$sha" =~ ^[0-9a-f]{40}$ ]] \
+         && [[ "$pins" =~ ^[0-9a-f]{64}$ ]]; }; then
+    printf 'unknown\thook-bad-meta\n'; return 1
+  fi
+  status="$(head -c 100 "$res/status" 2>/dev/null)"
+  if [ "$status" != ok ]; then printf '%s\thook-refused: %s\n' "$repo" "${status:-no status}"; return 1; fi
+  if ! prs="$("$GH_BIN" api --paginate "repos/$repo/pulls?state=open&per_page=100")"; then
+    printf '%s\tapi-error\n' "$repo"; return 1
+  fi
+  prs="$(printf '%s' "$prs" | jq -s 'add // []')"
+  if printf '%s' "$prs" | jq -e --arg b "$BUMP_PR_BRANCH" \
+       'any(.[]; .head.ref == $b and .head.repo.full_name == .base.repo.full_name)' >/dev/null; then
+    printf '%s@%s\tbump-pr-open\n' "$repo" "$base"; return 0
+  fi
+  # Re-derive. Nothing of the hook phase's tree is used: only its result files.
+  derive_bump "$repo" || { printf '%s\n' "$DB_OUT"; return 0; }
+  root="$DB_WORK/r"
+  if [ "$DB_SHA" != "$sha" ]; then
+    printf '%s@%s\thook-stale-head\n' "$repo" "$DB_BASE"; rm -rf "$DB_WORK"; return 1
+  fi
+  if [ "$(pin_hash "$root")" != "$pins" ]; then
+    printf '%s@%s\thook-stale-pins\n' "$repo" "$DB_BASE"; rm -rf "$DB_WORK"; return 1
+  fi
+  if ! git -C "$root" cat-file -e "$sha:$HOOK_SCRIPT" 2>/dev/null; then
+    printf '%s@%s\thook-refused: the default branch has no %s\n' "$repo" "$DB_BASE" "$HOOK_SCRIPT"; rm -rf "$DB_WORK"; return 1
+  fi
+  # Read the allow-list from the default-branch commit, never from the tree the
+  # hook ran in.
+  allow="$(git -C "$root" show "$sha:$HOOK_PATHS" 2>/dev/null)" || allow=""
+  if ! allow="$(printf '%s\n' "$allow" | hook_allowlist)"; then
+    printf '%s@%s\thook-refused: invalid %s\n' "$repo" "$DB_BASE" "$HOOK_PATHS"; rm -rf "$DB_WORK"; return 1
+  fi
+  [ -f "$res/changed.nul" ] || : > "$res/changed.nul"
+  while IFS= read -r -d '' mode && IFS= read -r -d '' path; do
+    n=$((n + 1))
+    if [ "$n" -gt "$HOOK_MAX_FILES" ]; then
+      printf '%s@%s\thook-refused: more than %s changed paths\n' "$repo" "$DB_BASE" "$HOOK_MAX_FILES"; rm -rf "$DB_WORK"; return 1
+    fi
+    if ! hook_path_safe "$path" || hook_path_reserved "$path"; then
+      printf '%s@%s\thook-refused: path not allowed: %s\n' "$repo" "$DB_BASE" "${path//[[:cntrl:]]/?}"; rm -rf "$DB_WORK"; return 1
+    fi
+    if [ -z "$allow" ] || ! hook_allowed "$path" "$allow"; then
+      printf '%s@%s\thook-refused: not in %s: %s\n' "$repo" "$DB_BASE" "$HOOK_PATHS" "$path"; rm -rf "$DB_WORK"; return 1
+    fi
+    case "$mode" in
+      100644|100755) ;;
+      000000) printf '%s@%s\thook-refused: deletion: %s\n' "$repo" "$DB_BASE" "$path"; rm -rf "$DB_WORK"; return 1 ;;
+      *) printf '%s@%s\thook-refused: not a regular file (mode %s): %s\n' "$repo" "$DB_BASE" "$mode" "$path"; rm -rf "$DB_WORK"; return 1 ;;
+    esac
+    # The mode cannot be set through createCommitOnBranch: an existing file
+    # keeps its own, and a new file is 100644.
+    tmode="$(git -C "$root" ls-tree "$sha" -- "$path" | awk '{print $1}')"
+    if [ -n "$tmode" ]; then want="$tmode"; else want=100644; fi
+    if [ "$mode" != "$want" ]; then
+      printf '%s@%s\thook-refused: file mode change: %s\n' "$repo" "$DB_BASE" "$path"; rm -rf "$DB_WORK"; return 1
+    fi
+    if [ -L "$res/files" ] || ! plain_file "$res/files" "$path" || ! no_symlink_parents "$root" "$path"; then
+      printf '%s@%s\thook-refused: unreadable or symlinked: %s\n' "$repo" "$DB_BASE" "$path"; rm -rf "$DB_WORK"; return 1
+    fi
+    size="$(stat -c %s "$res/files/$path")"
+    if [ "$size" -gt "$HOOK_MAX_BYTES" ]; then
+      printf '%s@%s\thook-refused: over %s bytes: %s\n' "$repo" "$DB_BASE" "$HOOK_MAX_BYTES" "$path"; rm -rf "$DB_WORK"; return 1
+    fi
+    hookpaths+=("$path")
+  done < "$res/changed.nul"
+  for path in "${hookpaths[@]}"; do
+    if ! { mkdir -p "$root/$(dirname -- "$path")" && cp -- "$res/files/$path" "$root/$path"; }; then
+      printf '%s@%s\thook-refused: cannot place: %s\n' "$repo" "$DB_BASE" "$path"; rm -rf "$DB_WORK"; return 1
+    fi
+  done
+  mapfile -d '' -t paths < <(git -C "$root" diff --name-only -z "$sha"; git -C "$root" ls-files -z --others --exclude-standard)
+  for path in "${paths[@]}"; do
+    case "$path" in
       .github/workflows/*|.github/actions/*) ;;
-      *) printf '%s@%s\tbump-unexpected-path\n' "$repo" "$base"; rm -rf "$work"; return 0 ;;
+      *) if hook_path_reserved "$path" || ! hook_allowed "$path" "$allow"; then
+           printf '%s@%s\thook-refused: unexpected path: %s\n' "$repo" "$DB_BASE" "$path"; rm -rf "$DB_WORK"; return 1
+         fi ;;
     esac
   done
   if [ "${DRY_RUN:-0}" = 1 ]; then
-    printf '%s@%s\twould-bump %s\n' "$repo" "$base" "$n"; rm -rf "$work"; return 0
+    printf '%s@%s\twould-bump %s (+%s hook file(s))\n' "$repo" "$DB_BASE" "$DB_N" "${#hookpaths[@]}"; rm -rf "$DB_WORK"; return 0
   fi
-  body="Third-party action pins moved to their latest release, and actions.lock rewritten in the same commit by the single-writer applier (scripts/bump-action-pins.sh and scripts/regen-dependabot-locks.sh, BUMP_PINS=1, in metadatastician/standards). Verified with update-actions-lock.sh --verify-local, check-lock-sync.sh and check-lock-pin-contract.sh where the repository has a lock.
+  body="$(bump_body "$DB_ROWS")"
+  if [ "${#hookpaths[@]}" -gt 0 ]; then
+    body="$body
 
-$(printf '%s\n' "$rows" | awk -F'\t' '$5=="bumped"{printf "- %s: %s -> %s (%s)\n", $2, $3, $4, $1}' | head -n 40)"
-  outcome="$(open_branch_pr "$repo" "$base" "$sha" "$work/r" "$BUMP_PR_BRANCH" "$BUMP_PINS_HEADLINE" "$body" "${paths[@]}")"
-  printf '%s@%s\t%s\n' "$repo" "$base" "$outcome"
-  rm -rf "$work"
+Regenerated by the repository's own scripts/post-pin-bump.sh in a token-less job, and accepted only because $HOOK_PATHS on the default branch allows them:
+$(printf -- '- %s\n' "${hookpaths[@]}")"
+  fi
+  outcome="$(open_branch_pr "$repo" "$DB_BASE" "$DB_SHA" "$root" "$BUMP_PR_BRANCH" "$BUMP_PINS_HEADLINE" "$body" "${paths[@]}")"
+  printf '%s@%s\t%s\n' "$repo" "$DB_BASE" "$outcome"
+  rm -rf "$DB_WORK"
+  case "$outcome" in pr-opened*) return 0 ;; *) return 1 ;; esac
+}
+
+# PHASE 3 driver: every result under $HOOK_RESULT_DIR, each with its owner's
+# token from REGEN_TOKENS. Any refusal is printed as an ::error:: and makes the
+# run fail; nothing partial is ever pushed.
+hook_apply_main() {
+  local res tokens="${REGEN_TOKENS:-}" pair repo owner token failed=0 n=0 line
+  local -A tok=()
+  local out="${HOOK_RESULT_DIR:?HOOK_RESULT_DIR is not set}"
+  for pair in $tokens; do [ -n "${pair#*=}" ] && tok["${pair%%=*}"]="${pair#*=}"; done
+  for res in "$out"/*/; do
+    [ -d "$res" ] || continue
+    n=$((n + 1))
+    repo="$(cut -f1 "$res/meta.tsv" 2>/dev/null | head -c 200)"
+    owner="${repo%%/*}"; token="${tok[$owner]:-}"
+    if [ -z "$token" ]; then
+      echo "::error::hook-apply: no installation token for '${owner//[[:cntrl:]]/?}'; ${repo//[[:cntrl:]]/?} NOT processed"
+      failed=1; continue
+    fi
+    export GH_TOKEN="$token"
+    line="$(hook_apply_repo "${res%/}")" || { failed=1; echo "::error::hook-apply: $line"; continue; }
+    printf '%s\n' "$line"
+  done
+  echo "hook-apply: $n deferral(s) examined"
+  return "$failed"
 }
 
 # Process every candidate PR of repo $1 with token $2; print one
@@ -486,5 +827,10 @@ main() {
 }
 
 if [ "${BASH_SOURCE[0]}" = "$0" ]; then
-  main "$@"
+  case "${HOOK_PHASE:-}" in
+    '')      main "$@" ;;
+    prepare) hook_prepare ;;
+    apply)   hook_apply_main ;;
+    *)       echo "::error::unknown HOOK_PHASE '${HOOK_PHASE}' (want prepare or apply)"; exit 2 ;;
+  esac
 fi
