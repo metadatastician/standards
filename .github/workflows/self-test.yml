@@ -46,15 +46,31 @@ jobs:
     needs: [tests-light, tests-heavy]
     if: ${{ always() }}
     timeout-minutes: 5
+    # pull-requests: read is for the superseded-run lookup below, on this job only.
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
+      # Only the decision script is needed, not the tree.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: scripts/self-test-rollup.sh
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      # A cancelled shard is a test result unless the run was superseded by a
+      # newer push (the PR head moved). Then it is noise and this passes with a
+      # "superseded by <sha>" line. On the current head, cancelled stays red.
+      # Logic and fixtures: scripts/self-test-rollup.sh, scripts/tests/self-test-rollup-test.sh.
       - name: Both shards passed
         env:
           LIGHT: ${{ needs.tests-light.result }}
           HEAVY: ${{ needs.tests-heavy.result }}
-        run: |
-          echo "tests-light: $LIGHT"
-          echo "tests-heavy: $HEAVY"
-          [ "$LIGHT" = success ] && [ "$HEAVY" = success ]
+          EVENT_NAME: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          RUN_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/self-test-rollup.sh
 
   tests-light:
     name: Repo self-tests (light)
