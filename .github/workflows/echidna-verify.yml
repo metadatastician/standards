@@ -184,7 +184,7 @@ jobs:
             ${{ runner.os }}-idris2-pack-
 
       - name: Install Idris2 via pack
-        # PROOF-POLICY §6 deviation, recorded in 3-practice/PROOF-NEEDS.adoc
+        # PROOF-POLICY §6 deviation, recorded in 3-practice/PROOF-STATUS.adoc
         # (toolchain-deviations): installed outside Guix and the container, with
         # no pinned version or digest yet. State: open.
         run: |
@@ -246,16 +246,16 @@ jobs:
           if-no-files-found: ignore
 
   idris2-standards:
-    # This repository's own Idris2 proofs (3-practice/PROOF-NEEDS.adoc, the proof-status file).
+    # This repository's own Idris2 proofs (3-practice/PROOF-STATUS.adoc, the proof-status file).
     # Unlike the evicted corpora above there is no presence guard: the files
     # live here, so a missing file is a failure, not a notice.
     # 2-protocols/overlay/src/abi/OverlayProtocol.idr is deliberately absent:
     # under the overlay's KEEP-SPEC-DEFER-IMPL decision it stays unchecked in
-    # CI until a consumer appears (3-practice/PROOF-NEEDS.adoc, standards#1436).
+    # CI until a consumer appears (3-practice/PROOF-STATUS.adoc, standards#1436).
     # Toolchain deviation (PROOF-POLICY section 6), state open: Idris2 comes from
     # idris2-pack, not guix.scm (which provides none) or a container. The
     # type-check step logs the version and the SHA-256 of the executable it
-    # ran; 3-practice/PROOF-NEEDS.adoc carries the full record.
+    # ran; 3-practice/PROOF-STATUS.adoc carries the full record.
     name: Idris2 — this repository's proofs
     needs: detect-proof-changes
     if: needs.detect-proof-changes.outputs.proofs == 'true'
