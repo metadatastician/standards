@@ -801,15 +801,15 @@ gate        = "canon-self-conformance"
 note        = "SPDX/licence policy is owner-only, flag-never-edit"
 
 [[entry]]
-from        = "3-practice/PROOF-NEEDS.adoc"
-target      = "3-practice/PROOF-NEEDS.adoc"
+from        = "3-practice/PROOF-STATUS.adoc"
+target      = "3-practice/PROOF-STATUS.adoc"
 district    = "3-practice"
 kind        = "policy"
 files       = 1
 lifecycle   = "versioned"
 canonical   = true
 canon_slot  = ""
-canonical_doc = "3-practice/PROOF-NEEDS.adoc"
+canonical_doc = "3-practice/PROOF-STATUS.adoc"
 gate        = "canon-self-conformance"
 note        = "SPDX/licence policy is owner-only, flag-never-edit"
 
